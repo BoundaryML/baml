@@ -1,0 +1,1289 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Native Bench 324030d93402</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{--bg:#fbfaf7;--fg:#1f2420;--muted:#5e665f;--line:#e2e1da;--grid:#ebeae3;--accent:#2a78d6;--ink-bar:#8a8f98;--good:#1f6f4a;--bad:#b23b3b;
+--font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#161a17;--fg:#e6e8e3;--muted:#9ba39c;--line:#2d332e;--grid:#242a26;--accent:#3987e5;--ink-bar:#646a73;--good:#7fc4a6;--bad:#e66767;color-scheme:dark}}
+:root[data-theme=dark]{--bg:#161a17;--fg:#e6e8e3;--muted:#9ba39c;--line:#2d332e;--grid:#242a26;--accent:#3987e5;--ink-bar:#646a73;--good:#7fc4a6;--bad:#e66767;color-scheme:dark}
+html,body{margin:0}body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.5;padding-block:32px 64px;padding-inline:16px}
+main{max-width:1320px;margin:0 auto}h1{font-size:1.5rem;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}p.sub{color:var(--muted);margin:0 0 20px;max-width:90ch}
+h2{font-size:.78rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:32px 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(640px,1fr));gap:18px 24px}@media (max-width:700px){.grid{grid-template-columns:1fr}}
+.cell{min-width:0;overflow-x:auto}svg.chart{max-width:100%;height:auto;display:block}
+.ttl{font:600 13px var(--font);fill:var(--fg)}.sub{font:11px var(--font);fill:var(--muted)}.tick,.val{font:11px var(--font);fill:var(--muted)}.lbl{font:11px var(--font);fill:var(--fg)}.val{font-family:var(--mono);font-variant-numeric:tabular-nums}
+line.grid{stroke:var(--grid);stroke-width:1}rect.bar{fill:var(--ink-bar)}rect.bar-native{fill:var(--accent)}rect.bar-control{fill:none;stroke:var(--accent);stroke-width:1.5}line.range{stroke:var(--fg);stroke-width:1.5;opacity:.7}
+.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.86rem}th,td{text-align:left;padding:5px 10px 5px 0;border-bottom:1px solid var(--line);vertical-align:top;white-space:nowrap}
+th{font-weight:600;font-size:.74rem;letter-spacing:.04em;color:var(--muted)}td.n{font-family:var(--mono);font-size:.8rem;font-variant-numeric:tabular-nums;text-align:right}
+td.good{color:var(--good);font-weight:500}td.bad{color:var(--bad);font-weight:500}td.muted{color:var(--muted)}p.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.8rem;color:var(--muted);margin:0 0 8px}
+.sw{display:inline-block;width:12px;height:12px;vertical-align:-1px;margin-right:6px;box-sizing:border-box}.env{font-family:var(--mono);font-size:.78rem;color:var(--muted);white-space:pre-wrap}
+</style></head><body><main>
+<h1>Native Bench 324030d93402</h1><p class="sub">ci: native bench on an ephemeral Freestyle VM. Protocol tier-a on bench-x86-v1: one pinned core, one worker, fresh process per trial, 20 shuffled trials, oracle on every trial. Medians; ranges are observed min–max, not confidence intervals. Lower is better.</p>
+<h2>Headline</h2><div class="tbl"><table><tr><th>scenario</th><th>native</th><th>VM medium</th><th>VM medium / native</th><th>Rust</th><th>native / Rust</th><th>Go</th><th>Go / native</th><th>Node</th><th>Node / native</th><th>RSS native MiB</th><th>RSS VM</th><th>RSS Go</th><th>fails</th></tr>
+<tr><td>startup</td><td class="n">3.747 µs</td><td class="n">79.9 µs</td><td class="n">21×</td><td class="n">3.732 µs</td><td class="n">1.0×</td><td class="n">3.596 µs</td><td class="n">0.96×</td><td class="n">50.9 µs</td><td class="n">14×</td><td class="n">2.1</td><td class="n">30.1</td><td class="n">3.0</td><td class="n"></td></tr>
+<tr><td>array-empty</td><td class="n">0.078 µs</td><td class="n">56.5 µs</td><td class="n">725×</td><td class="n">0.023 µs</td><td class="n">3.4×</td><td class="n">0.007 µs</td><td class="n">0.09×</td><td class="n">0.825 µs</td><td class="n">11×</td><td class="n">2.1</td><td class="n">46.9</td><td class="n">3.0</td><td class="n"></td></tr>
+<tr><td>array-small</td><td class="n">0.237 µs</td><td class="n">125.7 µs</td><td class="n">529×</td><td class="n">0.045 µs</td><td class="n">5.3×</td><td class="n">0.117 µs</td><td class="n">0.49×</td><td class="n">1.960 µs</td><td class="n">8.3×</td><td class="n">2.1</td><td class="n">47.2</td><td class="n">3.1</td><td class="n"></td></tr>
+<tr><td>array-iterator</td><td class="n">8.342 µs</td><td class="n">4.50 ms</td><td class="n">539×</td><td class="n">1.288 µs</td><td class="n">6.5×</td><td class="n">2.946 µs</td><td class="n">0.35×</td><td class="n">112.7 µs</td><td class="n">14×</td><td class="n">2.7</td><td class="n">31.0</td><td class="n">3.5</td><td class="n"></td></tr>
+<tr><td>array-indexed</td><td class="n">8.094 µs</td><td class="n">498.7 µs</td><td class="n">62×</td><td class="n">1.250 µs</td><td class="n">6.5×</td><td class="n">5.388 µs</td><td class="n">0.67×</td><td class="n">11.6 µs</td><td class="n">1.4×</td><td class="n">2.7</td><td class="n">30.8</td><td class="n">3.5</td><td class="n"></td></tr>
+<tr><td>array-build</td><td class="n">27.7 µs</td><td class="n">6.76 ms</td><td class="n">244×</td><td class="n">8.268 µs</td><td class="n">3.3×</td><td class="n">43.2 µs</td><td class="n">1.6×</td><td class="n">155.0 µs</td><td class="n">5.6×</td><td class="n">2.7</td><td class="n">39.3</td><td class="n">7.8</td><td class="n"></td></tr>
+<tr><td>merge-random</td><td class="n">62.8 µs</td><td class="n">2.83 ms</td><td class="n">45×</td><td class="n">35.2 µs</td><td class="n">1.8×</td><td class="n">94.2 µs</td><td class="n">1.5×</td><td class="n">337.7 µs</td><td class="n">5.4×</td><td class="n">2.2</td><td class="n">31.7</td><td class="n">5.5</td><td class="n"></td></tr>
+<tr><td>merge-sorted</td><td class="n">53.5 µs</td><td class="n">2.56 ms</td><td class="n">48×</td><td class="n">27.7 µs</td><td class="n">1.9×</td><td class="n">80.9 µs</td><td class="n">1.5×</td><td class="n">308.3 µs</td><td class="n">5.8×</td><td class="n">2.2</td><td class="n">31.6</td><td class="n">5.5</td><td class="n"></td></tr>
+<tr><td>merge-reverse</td><td class="n">52.7 µs</td><td class="n">2.62 ms</td><td class="n">50×</td><td class="n">27.2 µs</td><td class="n">1.9×</td><td class="n">82.7 µs</td><td class="n">1.6×</td><td class="n">317.8 µs</td><td class="n">6.0×</td><td class="n">2.2</td><td class="n">31.5</td><td class="n">5.5</td><td class="n"></td></tr>
+<tr><td>merge-duplicates</td><td class="n">57.8 µs</td><td class="n">2.77 ms</td><td class="n">48×</td><td class="n">26.2 µs</td><td class="n">2.2×</td><td class="n">78.3 µs</td><td class="n">1.4×</td><td class="n">320.4 µs</td><td class="n">5.5×</td><td class="n">2.2</td><td class="n">31.4</td><td class="n">5.0</td><td class="n"></td></tr>
+<tr><td>quick-random</td><td class="n">64.6 µs</td><td class="n">3.04 ms</td><td class="n">47×</td><td class="n">31.3 µs</td><td class="n">2.1×</td><td class="n">74.3 µs</td><td class="n">1.1×</td><td class="n">621.6 µs</td><td class="n">9.6×</td><td class="n">2.2</td><td class="n">31.4</td><td class="n">4.7</td><td class="n"></td></tr>
+<tr><td>quick-sorted</td><td class="n">54.4 µs</td><td class="n">2.68 ms</td><td class="n">49×</td><td class="n">23.7 µs</td><td class="n">2.3×</td><td class="n">68.4 µs</td><td class="n">1.3×</td><td class="n">485.9 µs</td><td class="n">8.9×</td><td class="n">2.2</td><td class="n">31.3</td><td class="n">4.7</td><td class="n"></td></tr>
+<tr><td>quick-reverse</td><td class="n">53.6 µs</td><td class="n">2.63 ms</td><td class="n">49×</td><td class="n">26.2 µs</td><td class="n">2.0×</td><td class="n">71.1 µs</td><td class="n">1.3×</td><td class="n">478.0 µs</td><td class="n">8.9×</td><td class="n">2.2</td><td class="n">31.3</td><td class="n">4.7</td><td class="n"></td></tr>
+<tr><td>quick-duplicates</td><td class="n">23.8 µs</td><td class="n">1.48 ms</td><td class="n">62×</td><td class="n">13.6 µs</td><td class="n">1.7×</td><td class="n">41.3 µs</td><td class="n">1.7×</td><td class="n">373.6 µs</td><td class="n">16×</td><td class="n">2.2</td><td class="n">31.1</td><td class="n">4.2</td><td class="n"></td></tr>
+<tr><td>json-aggregate</td><td class="n">755.7 µs</td><td class="n">22.74 ms</td><td class="n">30×</td><td class="n">449.0 µs</td><td class="n">1.7×</td><td class="n">1.77 ms</td><td class="n">2.3×</td><td class="n">404.5 µs</td><td class="n">0.54×</td><td class="n">2.9</td><td class="n">71.5</td><td class="n">8.6</td><td class="n"></td></tr>
+<tr><td>allocation-low-retention</td><td class="n">16.50 ms</td><td class="n">355 ms</td><td class="n">22×</td><td class="n">8.36 ms</td><td class="n">2.0×</td><td class="n">17.85 ms</td><td class="n">1.1×</td><td class="n">13.91 ms</td><td class="n">0.84×</td><td class="n">3.8</td><td class="n">70.8</td><td class="n">9.3</td><td class="n"></td></tr>
+<tr><td>allocation-high-retention</td><td class="n">22.51 ms</td><td class="n">482 ms</td><td class="n">21×</td><td class="n">14.13 ms</td><td class="n">1.6×</td><td class="n">23.83 ms</td><td class="n">1.1×</td><td class="n">22.74 ms</td><td class="n">1.0×</td><td class="n">23.5</td><td class="n">232.4</td><td class="n">31.1</td><td class="n"></td></tr>
+<tr><td>calls-empty</td><td class="n">0.056 µs</td><td class="n">46.8 µs</td><td class="n">843×</td><td class="n">0.020 µs</td><td class="n">2.7×</td><td class="n">0.026 µs</td><td class="n">0.47×</td><td class="n">0.754 µs</td><td class="n">14×</td><td class="n">2.1</td><td class="n">44.2</td><td class="n">3.0</td><td class="n"></td></tr>
+<tr><td>calls</td><td class="n">0.147 µs</td><td class="n">64.0 µs</td><td class="n">435×</td><td class="n">0.021 µs</td><td class="n">6.9×</td><td class="n">0.130 µs</td><td class="n">0.88×</td><td class="n">1.058 µs</td><td class="n">7.2×</td><td class="n">2.1</td><td class="n">44.2</td><td class="n">3.0</td><td class="n"></td></tr>
+<tr><td>json-hello</td><td class="n">0.073 µs</td><td class="n">56.6 µs</td><td class="n">779×</td><td class="n">0.040 µs</td><td class="n">1.8×</td><td class="n">0.277 µs</td><td class="n">3.8×</td><td class="n">0.840 µs</td><td class="n">12×</td><td class="n">2.0</td><td class="n">46.5</td><td class="n">3.2</td><td class="n"></td></tr>
+<tr><td>generate-sort</td><td class="n">282.6 µs</td><td class="n">4.43 ms</td><td class="n">16×</td><td class="n">212.6 µs</td><td class="n">1.3×</td><td class="n">824.6 µs</td><td class="n">2.9×</td><td class="n">2.31 ms</td><td class="n">8.2×</td><td class="n">2.4</td><td class="n">37.7</td><td class="n">7.7</td><td class="n"></td></tr>
+</table></div>
+<h2>Execution wall per job</h2><p class="legend"><span><span class="sw" style="background:var(--accent)"></span>BAML native, the candidate</span><span><span class="sw" style="border:1.5px solid var(--accent)"></span>control: frozen native, host drift</span><span><span class="sw" style="background:var(--ink-bar)"></span>other implementations, named on the row</span><span>hairline = min–max</span></p>
+<h2>Startup</h2><div class="grid">
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="startup: execution wall per job">
+<text class="ttl" x="168" y="16">startup</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">1 µs</text>
+<line class="grid" x1="294.7" x2="294.7" y1="28" y2="296"/>
+<text class="tick" x="294.7" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="421.3" x2="421.3" y1="28" y2="296"/>
+<text class="tick" x="421.3" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">1.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="72.7" height="12"><title>BAML native, telemetry off: median 3.747 µs, min 2.926 µs, max 4.588 µs, n=20</title></rect>
+<line class="range" x1="227.1" x2="251.8" y1="40.0" y2="40.0"/>
+<text class="val" x="257.8" y="44.0">3.747 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="80.0" height="12"><title>control (frozen native): median 4.283 µs, min 3.246 µs, max 19.4 µs, n=20</title></rect>
+<line class="range" x1="232.8" x2="331.2" y1="64.0" y2="64.0"/>
+<text class="val" x="337.2" y="68.0">4.283 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="214.0" height="12"><title>BAML VM, telemetry off: median 48.9 µs, min 24.9 µs, max 63.2 µs, n=20</title></rect>
+<line class="range" x1="344.8" x2="396.1" y1="88.0" y2="88.0"/>
+<text class="val" x="402.1" y="92.0">48.9 µs</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="233.1" height="12"><title>BAML VM, low: median 69.2 µs, min 57.6 µs, max 96.1 µs, n=20</title></rect>
+<line class="range" x1="391.0" x2="419.2" y1="112.0" y2="112.0"/>
+<text class="val" x="425.2" y="116.0">69.2 µs</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="241.0" height="12"><title>BAML VM, medium: median 79.9 µs, min 67.4 µs, max 112.3 µs, n=20</title></rect>
+<line class="range" x1="399.7" x2="427.7" y1="136.0" y2="136.0"/>
+<text class="val" x="433.7" y="140.0">79.9 µs</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="232.1" height="12"><title>BAML VM, high: median 68.0 µs, min 59.4 µs, max 83.9 µs, n=20</title></rect>
+<line class="range" x1="392.7" x2="411.7" y1="160.0" y2="160.0"/>
+<text class="val" x="417.7" y="164.0">68.0 µs</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="72.4" height="12"><title>Rust: median 3.732 µs, min 2.866 µs, max 9.638 µs, n=20</title></rect>
+<line class="range" x1="225.9" x2="292.6" y1="184.0" y2="184.0"/>
+<text class="val" x="298.6" y="188.0">3.732 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="70.4" height="12"><title>Go: median 3.596 µs, min 3.356 µs, max 15.2 µs, n=20</title></rect>
+<line class="range" x1="234.6" x2="317.7" y1="208.0" y2="208.0"/>
+<text class="val" x="323.7" y="212.0">3.596 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="216.2" height="12"><title>Node: median 50.9 µs, min 47.7 µs, max 83.4 µs, n=20</title></rect>
+<line class="range" x1="380.6" x2="411.3" y1="232.0" y2="232.0"/>
+<text class="val" x="417.3" y="236.0">50.9 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="204.3" height="12"><title>Bun: median 41.0 µs, min 37.2 µs, max 74.5 µs, n=20</title></rect>
+<line class="range" x1="366.9" x2="405.1" y1="256.0" y2="256.0"/>
+<text class="val" x="411.1" y="260.0">41.0 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="121.0" height="12"><title>Python: median 9.017 µs, min 8.145 µs, max 22.5 µs, n=20</title></rect>
+<line class="range" x1="283.4" x2="339.2" y1="280.0" y2="280.0"/>
+<text class="val" x="345.2" y="284.0">9.017 µs</text>
+</svg></div>
+</div>
+<h2>Array traversal</h2><div class="grid">
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="array-empty: execution wall per job">
+<text class="ttl" x="168" y="16">array-empty</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">0.001 µs</text>
+<line class="grid" x1="244.0" x2="244.0" y1="28" y2="296"/>
+<text class="tick" x="244.0" y="310" text-anchor="middle">0.010 µs</text>
+<line class="grid" x1="320.0" x2="320.0" y1="28" y2="296"/>
+<text class="tick" x="320.0" y="310" text-anchor="middle">0.100 µs</text>
+<line class="grid" x1="396.0" x2="396.0" y1="28" y2="296"/>
+<text class="tick" x="396.0" y="310" text-anchor="middle">1 µs</text>
+<line class="grid" x1="472.0" x2="472.0" y1="28" y2="296"/>
+<text class="tick" x="472.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">100 µs</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="143.8" height="12"><title>BAML native, telemetry off: median 0.078 µs, min 0.070 µs, max 0.113 µs, n=20</title></rect>
+<line class="range" x1="308.1" x2="324.2" y1="40.0" y2="40.0"/>
+<text class="val" x="330.2" y="44.0">0.078 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="147.4" height="12"><title>control (frozen native): median 0.087 µs, min 0.071 µs, max 0.102 µs, n=20</title></rect>
+<line class="range" x1="308.8" x2="320.7" y1="64.0" y2="64.0"/>
+<text class="val" x="326.7" y="68.0">0.087 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="339.8" height="12"><title>BAML VM, telemetry off: median 29.6 µs, min 24.5 µs, max 32.6 µs, n=20</title></rect>
+<line class="range" x1="501.6" x2="511.0" y1="88.0" y2="88.0"/>
+<text class="val" x="517.0" y="92.0">29.6 µs</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="355.8" height="12"><title>BAML VM, low: median 48.1 µs, min 46.7 µs, max 59.4 µs, n=20</title></rect>
+<line class="range" x1="522.8" x2="530.8" y1="112.0" y2="112.0"/>
+<text class="val" x="536.8" y="116.0">48.1 µs</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="361.1" height="12"><title>BAML VM, medium: median 56.5 µs, min 54.8 µs, max 59.7 µs, n=20</title></rect>
+<line class="range" x1="528.2" x2="531.0" y1="136.0" y2="136.0"/>
+<text class="val" x="537.0" y="140.0">56.5 µs</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="356.5" height="12"><title>BAML VM, high: median 49.0 µs, min 47.8 µs, max 57.2 µs, n=20</title></rect>
+<line class="range" x1="523.7" x2="529.6" y1="160.0" y2="160.0"/>
+<text class="val" x="535.6" y="164.0">49.0 µs</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="103.7" height="12"><title>Rust: median 0.023 µs, min 0.021 µs, max 0.034 µs, n=20</title></rect>
+<line class="range" x1="268.9" x2="284.8" y1="184.0" y2="184.0"/>
+<text class="val" x="290.8" y="188.0">0.023 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="64.3" height="12"><title>Go: median 0.007 µs, min 0.006 µs, max 0.009 µs, n=20</title></rect>
+<line class="range" x1="225.9" x2="239.2" y1="208.0" y2="208.0"/>
+<text class="val" x="245.2" y="212.0">0.007 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="221.6" height="12"><title>Node: median 0.825 µs, min 0.775 µs, max 0.978 µs, n=20</title></rect>
+<line class="range" x1="387.6" x2="395.3" y1="232.0" y2="232.0"/>
+<text class="val" x="401.3" y="236.0">0.825 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="217.9" height="12"><title>Bun: median 0.737 µs, min 0.699 µs, max 1.197 µs, n=20</title></rect>
+<line class="range" x1="384.2" x2="401.9" y1="256.0" y2="256.0"/>
+<text class="val" x="407.9" y="260.0">0.737 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="198.3" height="12"><title>Python: median 0.406 µs, min 0.383 µs, max 0.436 µs, n=20</title></rect>
+<line class="range" x1="364.3" x2="368.6" y1="280.0" y2="280.0"/>
+<text class="val" x="374.6" y="284.0">0.406 µs</text>
+</svg></div>
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="array-small: execution wall per job">
+<text class="ttl" x="168" y="16">array-small</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">0.010 µs</text>
+<line class="grid" x1="244.0" x2="244.0" y1="28" y2="296"/>
+<text class="tick" x="244.0" y="310" text-anchor="middle">0.100 µs</text>
+<line class="grid" x1="320.0" x2="320.0" y1="28" y2="296"/>
+<text class="tick" x="320.0" y="310" text-anchor="middle">1 µs</text>
+<line class="grid" x1="396.0" x2="396.0" y1="28" y2="296"/>
+<text class="tick" x="396.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="472.0" x2="472.0" y1="28" y2="296"/>
+<text class="tick" x="472.0" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">1.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="104.5" height="12"><title>BAML native, telemetry off: median 0.237 µs, min 0.159 µs, max 0.306 µs, n=20</title></rect>
+<line class="range" x1="259.3" x2="280.9" y1="40.0" y2="40.0"/>
+<text class="val" x="286.9" y="44.0">0.237 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="97.0" height="12"><title>control (frozen native): median 0.189 µs, min 0.157 µs, max 0.239 µs, n=20</title></rect>
+<line class="range" x1="258.8" x2="272.7" y1="64.0" y2="64.0"/>
+<text class="val" x="278.7" y="68.0">0.189 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="300.7" height="12"><title>BAML VM, telemetry off: median 90.4 µs, min 88.8 µs, max 103.2 µs, n=20</title></rect>
+<line class="range" x1="468.1" x2="473.0" y1="88.0" y2="88.0"/>
+<text class="val" x="479.0" y="92.0">90.4 µs</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="309.5" height="12"><title>BAML VM, low: median 118.0 µs, min 114.0 µs, max 137.1 µs, n=20</title></rect>
+<line class="range" x1="476.3" x2="482.4" y1="112.0" y2="112.0"/>
+<text class="val" x="488.4" y="116.0">118.0 µs</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="311.5" height="12"><title>BAML VM, medium: median 125.7 µs, min 123.2 µs, max 131.9 µs, n=20</title></rect>
+<line class="range" x1="478.9" x2="481.1" y1="136.0" y2="136.0"/>
+<text class="val" x="487.1" y="140.0">125.7 µs</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="310.2" height="12"><title>BAML VM, high: median 120.7 µs, min 118.0 µs, max 129.7 µs, n=20</title></rect>
+<line class="range" x1="477.5" x2="480.6" y1="160.0" y2="160.0"/>
+<text class="val" x="486.6" y="164.0">120.7 µs</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="49.5" height="12"><title>Rust: median 0.045 µs, min 0.034 µs, max 0.074 µs, n=20</title></rect>
+<line class="range" x1="208.3" x2="233.9" y1="184.0" y2="184.0"/>
+<text class="val" x="239.9" y="188.0">0.045 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="81.1" height="12"><title>Go: median 0.117 µs, min 0.087 µs, max 0.148 µs, n=20</title></rect>
+<line class="range" x1="239.5" x2="256.9" y1="208.0" y2="208.0"/>
+<text class="val" x="262.9" y="212.0">0.117 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="174.2" height="12"><title>Node: median 1.960 µs, min 1.802 µs, max 3.482 µs, n=20</title></rect>
+<line class="range" x1="339.4" x2="361.2" y1="232.0" y2="232.0"/>
+<text class="val" x="367.2" y="236.0">1.960 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="197.0" height="12"><title>Bun: median 3.911 µs, min 3.163 µs, max 4.673 µs, n=20</title></rect>
+<line class="range" x1="358.0" x2="370.9" y1="256.0" y2="256.0"/>
+<text class="val" x="376.9" y="260.0">3.911 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="184.9" height="12"><title>Python: median 2.709 µs, min 2.626 µs, max 3.861 µs, n=20</title></rect>
+<line class="range" x1="351.9" x2="364.6" y1="280.0" y2="280.0"/>
+<text class="val" x="370.6" y="284.0">2.709 µs</text>
+</svg></div>
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="array-iterator: execution wall per job">
+<text class="ttl" x="168" y="16">array-iterator</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">0.100 µs</text>
+<line class="grid" x1="244.0" x2="244.0" y1="28" y2="296"/>
+<text class="tick" x="244.0" y="310" text-anchor="middle">1 µs</text>
+<line class="grid" x1="320.0" x2="320.0" y1="28" y2="296"/>
+<text class="tick" x="320.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="396.0" x2="396.0" y1="28" y2="296"/>
+<text class="tick" x="396.0" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="472.0" x2="472.0" y1="28" y2="296"/>
+<text class="tick" x="472.0" y="310" text-anchor="middle">1.00 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">10.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="146.0" height="12"><title>BAML native, telemetry off: median 8.342 µs, min 5.268 µs, max 12.9 µs, n=20</title></rect>
+<line class="range" x1="298.8" x2="328.4" y1="40.0" y2="40.0"/>
+<text class="val" x="334.4" y="44.0">8.342 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="133.8" height="12"><title>control (frozen native): median 5.761 µs, min 5.168 µs, max 9.383 µs, n=20</title></rect>
+<line class="range" x1="298.2" x2="317.9" y1="64.0" y2="64.0"/>
+<text class="val" x="323.9" y="68.0">5.761 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="347.9" height="12"><title>BAML VM, telemetry off: median 3.78 ms, min 3.73 ms, max 3.84 ms, n=20</title></rect>
+<line class="range" x1="515.4" x2="516.4" y1="88.0" y2="88.0"/>
+<text class="val" x="522.4" y="92.0">3.78 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="352.9" height="12"><title>BAML VM, low: median 4.40 ms, min 4.35 ms, max 4.68 ms, n=20</title></rect>
+<line class="range" x1="520.5" x2="523.0" y1="112.0" y2="112.0"/>
+<text class="val" x="529.0" y="116.0">4.40 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="353.6" height="12"><title>BAML VM, medium: median 4.50 ms, min 4.35 ms, max 4.83 ms, n=20</title></rect>
+<line class="range" x1="520.6" x2="524.0" y1="136.0" y2="136.0"/>
+<text class="val" x="530.0" y="140.0">4.50 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="353.0" height="12"><title>BAML VM, high: median 4.42 ms, min 4.32 ms, max 4.64 ms, n=20</title></rect>
+<line class="range" x1="520.3" x2="522.6" y1="160.0" y2="160.0"/>
+<text class="val" x="528.6" y="164.0">4.42 ms</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="84.4" height="12"><title>Rust: median 1.288 µs, min 0.743 µs, max 2.201 µs, n=20</title></rect>
+<line class="range" x1="234.2" x2="270.0" y1="184.0" y2="184.0"/>
+<text class="val" x="276.0" y="188.0">1.288 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="111.7" height="12"><title>Go: median 2.946 µs, min 2.616 µs, max 4.642 µs, n=20</title></rect>
+<line class="range" x1="275.7" x2="294.7" y1="208.0" y2="208.0"/>
+<text class="val" x="300.7" y="212.0">2.946 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="232.0" height="12"><title>Node: median 112.7 µs, min 103.8 µs, max 122.8 µs, n=20</title></rect>
+<line class="range" x1="397.2" x2="402.8" y1="232.0" y2="232.0"/>
+<text class="val" x="408.8" y="236.0">112.7 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="236.3" height="12"><title>Bun: median 128.4 µs, min 102.2 µs, max 144.1 µs, n=20</title></rect>
+<line class="range" x1="396.7" x2="408.1" y1="256.0" y2="256.0"/>
+<text class="val" x="414.1" y="260.0">128.4 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="251.3" height="12"><title>Python: median 202.7 µs, min 191.2 µs, max 272.0 µs, n=20</title></rect>
+<line class="range" x1="417.4" x2="429.0" y1="280.0" y2="280.0"/>
+<text class="val" x="435.0" y="284.0">202.7 µs</text>
+</svg></div>
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="array-indexed: execution wall per job">
+<text class="ttl" x="168" y="16">array-indexed</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">0.100 µs</text>
+<line class="grid" x1="263.0" x2="263.0" y1="28" y2="296"/>
+<text class="tick" x="263.0" y="310" text-anchor="middle">1 µs</text>
+<line class="grid" x1="358.0" x2="358.0" y1="28" y2="296"/>
+<text class="tick" x="358.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="453.0" x2="453.0" y1="28" y2="296"/>
+<text class="tick" x="453.0" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">1.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="181.3" height="12"><title>BAML native, telemetry off: median 8.094 µs, min 5.186 µs, max 13.1 µs, n=20</title></rect>
+<line class="range" x1="330.9" x2="369.2" y1="40.0" y2="40.0"/>
+<text class="val" x="375.2" y="44.0">8.094 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="165.3" height="12"><title>control (frozen native): median 5.490 µs, min 5.175 µs, max 8.435 µs, n=20</title></rect>
+<line class="range" x1="330.8" x2="351.0" y1="64.0" y2="64.0"/>
+<text class="val" x="357.0" y="68.0">5.490 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="348.7" height="12"><title>BAML VM, telemetry off: median 468.1 µs, min 458.6 µs, max 489.5 µs, n=20</title></rect>
+<line class="range" x1="515.8" x2="518.5" y1="88.0" y2="88.0"/>
+<text class="val" x="524.5" y="92.0">468.1 µs</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="350.0" height="12"><title>BAML VM, low: median 482.8 µs, min 478.1 µs, max 520.2 µs, n=20</title></rect>
+<line class="range" x1="517.6" x2="521.0" y1="112.0" y2="112.0"/>
+<text class="val" x="527.0" y="116.0">482.8 µs</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="351.3" height="12"><title>BAML VM, medium: median 498.7 µs, min 487.3 µs, max 624.5 µs, n=20</title></rect>
+<line class="range" x1="518.3" x2="528.6" y1="136.0" y2="136.0"/>
+<text class="val" x="534.6" y="140.0">498.7 µs</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="350.4" height="12"><title>BAML VM, high: median 487.7 µs, min 478.7 µs, max 569.5 µs, n=20</title></rect>
+<line class="range" x1="517.6" x2="524.8" y1="160.0" y2="160.0"/>
+<text class="val" x="530.8" y="164.0">487.7 µs</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="104.2" height="12"><title>Rust: median 1.250 µs, min 0.760 µs, max 2.140 µs, n=20</title></rect>
+<line class="range" x1="251.7" x2="294.4" y1="184.0" y2="184.0"/>
+<text class="val" x="300.4" y="188.0">1.250 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="164.5" height="12"><title>Go: median 5.388 µs, min 5.136 µs, max 7.022 µs, n=20</title></rect>
+<line class="range" x1="330.5" x2="343.4" y1="208.0" y2="208.0"/>
+<text class="val" x="349.4" y="212.0">5.388 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="196.1" height="12"><title>Node: median 11.6 µs, min 11.2 µs, max 25.1 µs, n=20</title></rect>
+<line class="range" x1="362.6" x2="396.0" y1="232.0" y2="232.0"/>
+<text class="val" x="402.0" y="236.0">11.6 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="288.2" height="12"><title>Bun: median 108.1 µs, min 81.4 µs, max 143.2 µs, n=20</title></rect>
+<line class="range" x1="444.5" x2="467.8" y1="256.0" y2="256.0"/>
+<text class="val" x="473.8" y="260.0">108.1 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="351.4" height="12"><title>Python: median 500.0 µs, min 481.6 µs, max 530.5 µs, n=20</title></rect>
+<line class="range" x1="517.9" x2="521.8" y1="280.0" y2="280.0"/>
+<text class="val" x="527.8" y="284.0">500.0 µs</text>
+</svg></div>
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="array-build: execution wall per job">
+<text class="ttl" x="168" y="16">array-build</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">1 µs</text>
+<line class="grid" x1="263.0" x2="263.0" y1="28" y2="296"/>
+<text class="tick" x="263.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="358.0" x2="358.0" y1="28" y2="296"/>
+<text class="tick" x="358.0" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="453.0" x2="453.0" y1="28" y2="296"/>
+<text class="tick" x="453.0" y="310" text-anchor="middle">1.00 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">10.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="137.0" height="12"><title>BAML native, telemetry off: median 27.7 µs, min 25.0 µs, max 37.2 µs, n=20</title></rect>
+<line class="range" x1="300.8" x2="317.2" y1="40.0" y2="40.0"/>
+<text class="val" x="323.2" y="44.0">27.7 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="137.8" height="12"><title>control (frozen native): median 28.2 µs, min 25.1 µs, max 39.9 µs, n=20</title></rect>
+<line class="range" x1="300.9" x2="320.1" y1="64.0" y2="64.0"/>
+<text class="val" x="326.1" y="68.0">28.2 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="360.4" height="12"><title>BAML VM, telemetry off: median 6.21 ms, min 6.12 ms, max 7.89 ms, n=20</title></rect>
+<line class="range" x1="527.7" x2="538.2" y1="88.0" y2="88.0"/>
+<text class="val" x="544.2" y="92.0">6.21 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="364.0" height="12"><title>BAML VM, low: median 6.78 ms, min 6.69 ms, max 7.51 ms, n=20</title></rect>
+<line class="range" x1="531.4" x2="536.2" y1="112.0" y2="112.0"/>
+<text class="val" x="542.2" y="116.0">6.78 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="363.8" height="12"><title>BAML VM, medium: median 6.76 ms, min 6.69 ms, max 6.99 ms, n=20</title></rect>
+<line class="range" x1="531.4" x2="533.2" y1="136.0" y2="136.0"/>
+<text class="val" x="539.2" y="140.0">6.76 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="363.9" height="12"><title>BAML VM, high: median 6.77 ms, min 6.68 ms, max 7.03 ms, n=20</title></rect>
+<line class="range" x1="531.3" x2="533.5" y1="160.0" y2="160.0"/>
+<text class="val" x="539.5" y="164.0">6.77 ms</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="87.2" height="12"><title>Rust: median 8.268 µs, min 6.698 µs, max 14.9 µs, n=20</title></rect>
+<line class="range" x1="246.5" x2="279.5" y1="184.0" y2="184.0"/>
+<text class="val" x="285.5" y="188.0">8.268 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="155.4" height="12"><title>Go: median 43.2 µs, min 40.0 µs, max 47.5 µs, n=20</title></rect>
+<line class="range" x1="320.2" x2="327.3" y1="208.0" y2="208.0"/>
+<text class="val" x="333.3" y="212.0">43.2 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="208.1" height="12"><title>Node: median 155.0 µs, min 148.0 µs, max 278.0 µs, n=20</title></rect>
+<line class="range" x1="374.2" x2="400.2" y1="232.0" y2="232.0"/>
+<text class="val" x="406.2" y="236.0">155.0 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="212.5" height="12"><title>Bun: median 172.6 µs, min 159.6 µs, max 290.6 µs, n=20</title></rect>
+<line class="range" x1="377.3" x2="402.0" y1="256.0" y2="256.0"/>
+<text class="val" x="408.0" y="260.0">172.6 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="278.9" height="12"><title>Python: median 862.2 µs, min 841.4 µs, max 899.6 µs, n=20</title></rect>
+<line class="range" x1="445.9" x2="448.6" y1="280.0" y2="280.0"/>
+<text class="val" x="454.6" y="284.0">862.2 µs</text>
+</svg></div>
+</div>
+<h2>Merge sort</h2><div class="grid">
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="merge-random: execution wall per job">
+<text class="ttl" x="168" y="16">merge-random</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="294.7" x2="294.7" y1="28" y2="296"/>
+<text class="tick" x="294.7" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="421.3" x2="421.3" y1="28" y2="296"/>
+<text class="tick" x="421.3" y="310" text-anchor="middle">1.00 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">10.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="101.1" height="12"><title>BAML native, telemetry off: median 62.8 µs, min 57.2 µs, max 109.9 µs, n=20</title></rect>
+<line class="range" x1="263.9" x2="299.8" y1="40.0" y2="40.0"/>
+<text class="val" x="305.8" y="44.0">62.8 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="106.3" height="12"><title>control (frozen native): median 69.1 µs, min 60.1 µs, max 100.8 µs, n=20</title></rect>
+<line class="range" x1="266.7" x2="295.1" y1="64.0" y2="64.0"/>
+<text class="val" x="301.1" y="68.0">69.1 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="308.3" height="12"><title>BAML VM, telemetry off: median 2.72 ms, min 2.67 ms, max 2.78 ms, n=20</title></rect>
+<line class="range" x1="475.4" x2="477.6" y1="88.0" y2="88.0"/>
+<text class="val" x="483.6" y="92.0">2.72 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="310.8" height="12"><title>BAML VM, low: median 2.84 ms, min 2.77 ms, max 3.60 ms, n=20</title></rect>
+<line class="range" x1="477.5" x2="491.8" y1="112.0" y2="112.0"/>
+<text class="val" x="497.8" y="116.0">2.84 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="310.5" height="12"><title>BAML VM, medium: median 2.83 ms, min 2.78 ms, max 3.41 ms, n=20</title></rect>
+<line class="range" x1="477.6" x2="488.8" y1="136.0" y2="136.0"/>
+<text class="val" x="494.8" y="140.0">2.83 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="310.4" height="12"><title>BAML VM, high: median 2.82 ms, min 2.78 ms, max 3.42 ms, n=20</title></rect>
+<line class="range" x1="477.5" x2="489.0" y1="160.0" y2="160.0"/>
+<text class="val" x="495.0" y="164.0">2.82 ms</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="69.3" height="12"><title>Rust: median 35.2 µs, min 33.1 µs, max 61.9 µs, n=20</title></rect>
+<line class="range" x1="233.9" x2="268.2" y1="184.0" y2="184.0"/>
+<text class="val" x="274.2" y="188.0">35.2 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="123.4" height="12"><title>Go: median 94.2 µs, min 86.1 µs, max 179.0 µs, n=20</title></rect>
+<line class="range" x1="286.4" x2="326.7" y1="208.0" y2="208.0"/>
+<text class="val" x="332.7" y="212.0">94.2 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="193.6" height="12"><title>Node: median 337.7 µs, min 323.3 µs, max 384.3 µs, n=20</title></rect>
+<line class="range" x1="359.2" x2="368.7" y1="232.0" y2="232.0"/>
+<text class="val" x="374.7" y="236.0">337.7 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="226.1" height="12"><title>Bun: median 609.3 µs, min 333.7 µs, max 713.3 µs, n=20</title></rect>
+<line class="range" x1="361.0" x2="402.8" y1="256.0" y2="256.0"/>
+<text class="val" x="408.8" y="260.0">609.3 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="256.3" height="12"><title>Python: median 1.06 ms, min 1.04 ms, max 1.14 ms, n=20</title></rect>
+<line class="range" x1="423.6" x2="428.4" y1="280.0" y2="280.0"/>
+<text class="val" x="434.4" y="284.0">1.06 ms</text>
+</svg></div>
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="merge-sorted: execution wall per job">
+<text class="ttl" x="168" y="16">merge-sorted</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="294.7" x2="294.7" y1="28" y2="296"/>
+<text class="tick" x="294.7" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="421.3" x2="421.3" y1="28" y2="296"/>
+<text class="tick" x="421.3" y="310" text-anchor="middle">1.00 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">10.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="92.2" height="12"><title>BAML native, telemetry off: median 53.5 µs, min 46.6 µs, max 61.7 µs, n=20</title></rect>
+<line class="range" x1="252.6" x2="268.1" y1="40.0" y2="40.0"/>
+<text class="val" x="274.1" y="44.0">53.5 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="96.6" height="12"><title>control (frozen native): median 57.9 µs, min 45.9 µs, max 65.0 µs, n=20</title></rect>
+<line class="range" x1="251.8" x2="271.0" y1="64.0" y2="64.0"/>
+<text class="val" x="277.0" y="68.0">57.9 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="301.8" height="12"><title>BAML VM, telemetry off: median 2.41 ms, min 2.40 ms, max 2.51 ms, n=20</title></rect>
+<line class="range" x1="469.4" x2="472.1" y1="88.0" y2="88.0"/>
+<text class="val" x="478.1" y="92.0">2.41 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="305.0" height="12"><title>BAML VM, low: median 2.56 ms, min 2.52 ms, max 2.95 ms, n=20</title></rect>
+<line class="range" x1="472.1" x2="480.8" y1="112.0" y2="112.0"/>
+<text class="val" x="486.8" y="116.0">2.56 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="305.1" height="12"><title>BAML VM, medium: median 2.56 ms, min 2.53 ms, max 2.80 ms, n=20</title></rect>
+<line class="range" x1="472.4" x2="478.0" y1="136.0" y2="136.0"/>
+<text class="val" x="484.0" y="140.0">2.56 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="304.6" height="12"><title>BAML VM, high: median 2.54 ms, min 2.52 ms, max 2.72 ms, n=20</title></rect>
+<line class="range" x1="472.1" x2="476.4" y1="160.0" y2="160.0"/>
+<text class="val" x="482.4" y="164.0">2.54 ms</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="56.1" height="12"><title>Rust: median 27.7 µs, min 23.5 µs, max 31.2 µs, n=20</title></rect>
+<line class="range" x1="215.0" x2="230.6" y1="184.0" y2="184.0"/>
+<text class="val" x="236.6" y="188.0">27.7 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="115.0" height="12"><title>Go: median 80.9 µs, min 73.8 µs, max 100.1 µs, n=20</title></rect>
+<line class="range" x1="278.0" x2="294.7" y1="208.0" y2="208.0"/>
+<text class="val" x="300.7" y="212.0">80.9 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="188.6" height="12"><title>Node: median 308.3 µs, min 301.8 µs, max 335.5 µs, n=20</title></rect>
+<line class="range" x1="355.4" x2="361.3" y1="232.0" y2="232.0"/>
+<text class="val" x="367.3" y="236.0">308.3 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="224.6" height="12"><title>Bun: median 593.0 µs, min 326.0 µs, max 1.23 ms, n=20</title></rect>
+<line class="range" x1="359.7" x2="432.6" y1="256.0" y2="256.0"/>
+<text class="val" x="438.6" y="260.0">593.0 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="245.8" height="12"><title>Python: median 872.2 µs, min 855.5 µs, max 2.02 ms, n=20</title></rect>
+<line class="range" x1="412.7" x2="460.0" y1="280.0" y2="280.0"/>
+<text class="val" x="466.0" y="284.0">872.2 µs</text>
+</svg></div>
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="merge-reverse: execution wall per job">
+<text class="ttl" x="168" y="16">merge-reverse</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="294.7" x2="294.7" y1="28" y2="296"/>
+<text class="tick" x="294.7" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="421.3" x2="421.3" y1="28" y2="296"/>
+<text class="tick" x="421.3" y="310" text-anchor="middle">1.00 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">10.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="91.5" height="12"><title>BAML native, telemetry off: median 52.7 µs, min 44.9 µs, max 86.2 µs, n=20</title></rect>
+<line class="range" x1="250.7" x2="286.5" y1="40.0" y2="40.0"/>
+<text class="val" x="292.5" y="44.0">52.7 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="94.1" height="12"><title>control (frozen native): median 55.3 µs, min 48.2 µs, max 79.4 µs, n=20</title></rect>
+<line class="range" x1="254.6" x2="282.0" y1="64.0" y2="64.0"/>
+<text class="val" x="288.0" y="68.0">55.3 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="303.5" height="12"><title>BAML VM, telemetry off: median 2.49 ms, min 2.45 ms, max 2.75 ms, n=20</title></rect>
+<line class="range" x1="470.6" x2="477.0" y1="88.0" y2="88.0"/>
+<text class="val" x="483.0" y="92.0">2.49 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="306.2" height="12"><title>BAML VM, low: median 2.62 ms, min 2.57 ms, max 4.07 ms, n=20</title></rect>
+<line class="range" x1="473.3" x2="498.6" y1="112.0" y2="112.0"/>
+<text class="val" x="504.6" y="116.0">2.62 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="306.3" height="12"><title>BAML VM, medium: median 2.62 ms, min 2.58 ms, max 2.68 ms, n=20</title></rect>
+<line class="range" x1="473.6" x2="475.6" y1="136.0" y2="136.0"/>
+<text class="val" x="481.6" y="140.0">2.62 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="306.1" height="12"><title>BAML VM, high: median 2.61 ms, min 2.58 ms, max 3.08 ms, n=20</title></rect>
+<line class="range" x1="473.5" x2="483.2" y1="160.0" y2="160.0"/>
+<text class="val" x="489.2" y="164.0">2.61 ms</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="55.1" height="12"><title>Rust: median 27.2 µs, min 23.8 µs, max 37.3 µs, n=20</title></rect>
+<line class="range" x1="215.8" x2="240.4" y1="184.0" y2="184.0"/>
+<text class="val" x="246.4" y="188.0">27.2 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="116.2" height="12"><title>Go: median 82.7 µs, min 75.2 µs, max 104.1 µs, n=20</title></rect>
+<line class="range" x1="279.0" x2="296.9" y1="208.0" y2="208.0"/>
+<text class="val" x="302.9" y="212.0">82.7 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="190.3" height="12"><title>Node: median 317.8 µs, min 300.8 µs, max 376.3 µs, n=20</title></rect>
+<line class="range" x1="355.2" x2="367.6" y1="232.0" y2="232.0"/>
+<text class="val" x="373.6" y="236.0">317.8 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="221.7" height="12"><title>Bun: median 562.9 µs, min 307.7 µs, max 705.7 µs, n=20</title></rect>
+<line class="range" x1="356.5" x2="402.2" y1="256.0" y2="256.0"/>
+<text class="val" x="408.2" y="260.0">562.9 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="248.1" height="12"><title>Python: median 908.8 µs, min 897.5 µs, max 1.19 ms, n=20</title></rect>
+<line class="range" x1="415.4" x2="431.1" y1="280.0" y2="280.0"/>
+<text class="val" x="437.1" y="284.0">908.8 µs</text>
+</svg></div>
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="merge-duplicates: execution wall per job">
+<text class="ttl" x="168" y="16">merge-duplicates</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="294.7" x2="294.7" y1="28" y2="296"/>
+<text class="tick" x="294.7" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="421.3" x2="421.3" y1="28" y2="296"/>
+<text class="tick" x="421.3" y="310" text-anchor="middle">1.00 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">10.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="96.5" height="12"><title>BAML native, telemetry off: median 57.8 µs, min 49.5 µs, max 72.3 µs, n=20</title></rect>
+<line class="range" x1="255.9" x2="276.9" y1="40.0" y2="40.0"/>
+<text class="val" x="282.9" y="44.0">57.8 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="97.3" height="12"><title>control (frozen native): median 58.6 µs, min 51.2 µs, max 98.4 µs, n=20</title></rect>
+<line class="range" x1="257.8" x2="293.8" y1="64.0" y2="64.0"/>
+<text class="val" x="299.8" y="68.0">58.6 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="306.6" height="12"><title>BAML VM, telemetry off: median 2.63 ms, min 2.60 ms, max 2.81 ms, n=20</title></rect>
+<line class="range" x1="473.9" x2="478.2" y1="88.0" y2="88.0"/>
+<text class="val" x="484.2" y="92.0">2.63 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="309.2" height="12"><title>BAML VM, low: median 2.76 ms, min 2.72 ms, max 2.93 ms, n=20</title></rect>
+<line class="range" x1="476.3" x2="480.5" y1="112.0" y2="112.0"/>
+<text class="val" x="486.5" y="116.0">2.76 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="309.3" height="12"><title>BAML VM, medium: median 2.77 ms, min 2.73 ms, max 3.29 ms, n=20</title></rect>
+<line class="range" x1="476.5" x2="486.9" y1="136.0" y2="136.0"/>
+<text class="val" x="492.9" y="140.0">2.77 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="308.9" height="12"><title>BAML VM, high: median 2.74 ms, min 2.71 ms, max 3.24 ms, n=20</title></rect>
+<line class="range" x1="476.3" x2="485.9" y1="160.0" y2="160.0"/>
+<text class="val" x="491.9" y="164.0">2.74 ms</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="52.9" height="12"><title>Rust: median 26.2 µs, min 24.7 µs, max 36.3 µs, n=20</title></rect>
+<line class="range" x1="217.7" x2="238.9" y1="184.0" y2="184.0"/>
+<text class="val" x="244.9" y="188.0">26.2 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="113.2" height="12"><title>Go: median 78.3 µs, min 64.8 µs, max 85.1 µs, n=20</title></rect>
+<line class="range" x1="270.8" x2="285.8" y1="208.0" y2="208.0"/>
+<text class="val" x="291.8" y="212.0">78.3 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="190.7" height="12"><title>Node: median 320.4 µs, min 301.8 µs, max 411.7 µs, n=20</title></rect>
+<line class="range" x1="355.4" x2="372.5" y1="232.0" y2="232.0"/>
+<text class="val" x="378.5" y="236.0">320.4 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="222.5" height="12"><title>Bun: median 570.7 µs, min 338.4 µs, max 686.1 µs, n=20</title></rect>
+<line class="range" x1="361.7" x2="400.6" y1="256.0" y2="256.0"/>
+<text class="val" x="406.6" y="260.0">570.7 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="251.0" height="12"><title>Python: median 957.9 µs, min 944.8 µs, max 1.00 ms, n=20</title></rect>
+<line class="range" x1="418.2" x2="421.5" y1="280.0" y2="280.0"/>
+<text class="val" x="427.5" y="284.0">957.9 µs</text>
+</svg></div>
+</div>
+<h2>Quick sort</h2><div class="grid">
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="quick-random: execution wall per job">
+<text class="ttl" x="168" y="16">quick-random</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="294.7" x2="294.7" y1="28" y2="296"/>
+<text class="tick" x="294.7" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="421.3" x2="421.3" y1="28" y2="296"/>
+<text class="tick" x="421.3" y="310" text-anchor="middle">1.00 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">10.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="102.6" height="12"><title>BAML native, telemetry off: median 64.6 µs, min 58.4 µs, max 73.9 µs, n=20</title></rect>
+<line class="range" x1="265.1" x2="278.0" y1="40.0" y2="40.0"/>
+<text class="val" x="284.0" y="44.0">64.6 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="104.0" height="12"><title>control (frozen native): median 66.2 µs, min 56.8 µs, max 112.1 µs, n=20</title></rect>
+<line class="range" x1="263.5" x2="300.9" y1="64.0" y2="64.0"/>
+<text class="val" x="306.9" y="68.0">66.2 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="312.0" height="12"><title>BAML VM, telemetry off: median 2.91 ms, min 2.85 ms, max 3.39 ms, n=20</title></rect>
+<line class="range" x1="479.0" x2="488.4" y1="88.0" y2="88.0"/>
+<text class="val" x="494.4" y="92.0">2.91 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="314.4" height="12"><title>BAML VM, low: median 3.03 ms, min 3.00 ms, max 3.27 ms, n=20</title></rect>
+<line class="range" x1="481.8" x2="486.6" y1="112.0" y2="112.0"/>
+<text class="val" x="492.6" y="116.0">3.03 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="314.6" height="12"><title>BAML VM, medium: median 3.04 ms, min 2.99 ms, max 3.21 ms, n=20</title></rect>
+<line class="range" x1="481.6" x2="485.5" y1="136.0" y2="136.0"/>
+<text class="val" x="491.5" y="140.0">3.04 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="314.2" height="12"><title>BAML VM, high: median 3.02 ms, min 2.99 ms, max 3.66 ms, n=20</title></rect>
+<line class="range" x1="481.5" x2="492.7" y1="160.0" y2="160.0"/>
+<text class="val" x="498.7" y="164.0">3.02 ms</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="62.8" height="12"><title>Rust: median 31.3 µs, min 26.5 µs, max 44.3 µs, n=20</title></rect>
+<line class="range" x1="221.6" x2="249.8" y1="184.0" y2="184.0"/>
+<text class="val" x="255.8" y="188.0">31.3 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="110.3" height="12"><title>Go: median 74.3 µs, min 66.5 µs, max 117.9 µs, n=20</title></rect>
+<line class="range" x1="272.2" x2="303.7" y1="208.0" y2="208.0"/>
+<text class="val" x="309.7" y="212.0">74.3 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="227.2" height="12"><title>Node: median 621.6 µs, min 570.2 µs, max 761.0 µs, n=20</title></rect>
+<line class="range" x1="390.4" x2="406.3" y1="232.0" y2="232.0"/>
+<text class="val" x="412.3" y="236.0">621.6 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="247.2" height="12"><title>Bun: median 895.3 µs, min 647.6 µs, max 1.07 ms, n=20</title></rect>
+<line class="range" x1="397.4" x2="425.2" y1="256.0" y2="256.0"/>
+<text class="val" x="431.2" y="260.0">895.3 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="265.2" height="12"><title>Python: median 1.24 ms, min 1.21 ms, max 1.39 ms, n=20</title></rect>
+<line class="range" x1="431.9" x2="439.6" y1="280.0" y2="280.0"/>
+<text class="val" x="445.6" y="284.0">1.24 ms</text>
+</svg></div>
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="quick-sorted: execution wall per job">
+<text class="ttl" x="168" y="16">quick-sorted</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="294.7" x2="294.7" y1="28" y2="296"/>
+<text class="tick" x="294.7" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="421.3" x2="421.3" y1="28" y2="296"/>
+<text class="tick" x="421.3" y="310" text-anchor="middle">1.00 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">10.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="93.2" height="12"><title>BAML native, telemetry off: median 54.4 µs, min 49.7 µs, max 83.8 µs, n=20</title></rect>
+<line class="range" x1="256.3" x2="284.9" y1="40.0" y2="40.0"/>
+<text class="val" x="290.9" y="44.0">54.4 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="92.0" height="12"><title>control (frozen native): median 53.3 µs, min 49.4 µs, max 75.9 µs, n=20</title></rect>
+<line class="range" x1="255.9" x2="279.5" y1="64.0" y2="64.0"/>
+<text class="val" x="285.5" y="68.0">53.3 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="304.1" height="12"><title>BAML VM, telemetry off: median 2.52 ms, min 2.48 ms, max 2.67 ms, n=20</title></rect>
+<line class="range" x1="471.4" x2="475.4" y1="88.0" y2="88.0"/>
+<text class="val" x="481.4" y="92.0">2.52 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="306.7" height="12"><title>BAML VM, low: median 2.64 ms, min 2.60 ms, max 2.97 ms, n=20</title></rect>
+<line class="range" x1="473.9" x2="481.2" y1="112.0" y2="112.0"/>
+<text class="val" x="487.2" y="116.0">2.64 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="307.6" height="12"><title>BAML VM, medium: median 2.68 ms, min 2.60 ms, max 3.47 ms, n=20</title></rect>
+<line class="range" x1="474.0" x2="489.8" y1="136.0" y2="136.0"/>
+<text class="val" x="495.8" y="140.0">2.68 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="306.8" height="12"><title>BAML VM, high: median 2.64 ms, min 2.59 ms, max 2.88 ms, n=20</title></rect>
+<line class="range" x1="473.7" x2="479.5" y1="160.0" y2="160.0"/>
+<text class="val" x="485.5" y="164.0">2.64 ms</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="47.6" height="12"><title>Rust: median 23.7 µs, min 22.6 µs, max 43.1 µs, n=20</title></rect>
+<line class="range" x1="212.9" x2="248.3" y1="184.0" y2="184.0"/>
+<text class="val" x="254.3" y="188.0">23.7 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="105.8" height="12"><title>Go: median 68.4 µs, min 62.2 µs, max 80.6 µs, n=20</title></rect>
+<line class="range" x1="268.5" x2="282.8" y1="208.0" y2="208.0"/>
+<text class="val" x="288.8" y="212.0">68.4 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="213.6" height="12"><title>Node: median 485.9 µs, min 468.2 µs, max 594.2 µs, n=20</title></rect>
+<line class="range" x1="379.6" x2="392.7" y1="232.0" y2="232.0"/>
+<text class="val" x="398.7" y="236.0">485.9 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="247.5" height="12"><title>Bun: median 899.1 µs, min 641.3 µs, max 1.18 ms, n=20</title></rect>
+<line class="range" x1="396.9" x2="430.3" y1="256.0" y2="256.0"/>
+<text class="val" x="436.3" y="260.0">899.1 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="250.1" height="12"><title>Python: median 943.7 µs, min 929.2 µs, max 1.03 ms, n=20</title></rect>
+<line class="range" x1="417.3" x2="423.1" y1="280.0" y2="280.0"/>
+<text class="val" x="429.1" y="284.0">943.7 µs</text>
+</svg></div>
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="quick-reverse: execution wall per job">
+<text class="ttl" x="168" y="16">quick-reverse</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="294.7" x2="294.7" y1="28" y2="296"/>
+<text class="tick" x="294.7" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="421.3" x2="421.3" y1="28" y2="296"/>
+<text class="tick" x="421.3" y="310" text-anchor="middle">1.00 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">10.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="92.4" height="12"><title>BAML native, telemetry off: median 53.6 µs, min 49.9 µs, max 60.5 µs, n=20</title></rect>
+<line class="range" x1="256.4" x2="267.0" y1="40.0" y2="40.0"/>
+<text class="val" x="273.0" y="44.0">53.6 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="93.0" height="12"><title>control (frozen native): median 54.3 µs, min 48.5 µs, max 70.5 µs, n=20</title></rect>
+<line class="range" x1="254.9" x2="275.4" y1="64.0" y2="64.0"/>
+<text class="val" x="281.4" y="68.0">54.3 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="304.2" height="12"><title>BAML VM, telemetry off: median 2.52 ms, min 2.49 ms, max 2.64 ms, n=20</title></rect>
+<line class="range" x1="471.5" x2="474.8" y1="88.0" y2="88.0"/>
+<text class="val" x="480.8" y="92.0">2.52 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="306.4" height="12"><title>BAML VM, low: median 2.63 ms, min 2.61 ms, max 3.12 ms, n=20</title></rect>
+<line class="range" x1="474.1" x2="484.0" y1="112.0" y2="112.0"/>
+<text class="val" x="490.0" y="116.0">2.63 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="306.6" height="12"><title>BAML VM, medium: median 2.63 ms, min 2.61 ms, max 2.70 ms, n=20</title></rect>
+<line class="range" x1="474.0" x2="475.9" y1="136.0" y2="136.0"/>
+<text class="val" x="481.9" y="140.0">2.63 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="306.7" height="12"><title>BAML VM, high: median 2.64 ms, min 2.60 ms, max 2.87 ms, n=20</title></rect>
+<line class="range" x1="473.9" x2="479.3" y1="160.0" y2="160.0"/>
+<text class="val" x="485.3" y="164.0">2.64 ms</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="53.1" height="12"><title>Rust: median 26.2 µs, min 22.9 µs, max 38.0 µs, n=20</title></rect>
+<line class="range" x1="213.6" x2="241.4" y1="184.0" y2="184.0"/>
+<text class="val" x="247.4" y="188.0">26.2 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="107.9" height="12"><title>Go: median 71.1 µs, min 61.6 µs, max 82.9 µs, n=20</title></rect>
+<line class="range" x1="268.1" x2="284.3" y1="208.0" y2="208.0"/>
+<text class="val" x="290.3" y="212.0">71.1 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="212.7" height="12"><title>Node: median 478.0 µs, min 452.3 µs, max 626.5 µs, n=20</title></rect>
+<line class="range" x1="377.7" x2="395.6" y1="232.0" y2="232.0"/>
+<text class="val" x="401.6" y="236.0">478.0 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="229.3" height="12"><title>Bun: median 645.6 µs, min 501.7 µs, max 888.9 µs, n=20</title></rect>
+<line class="range" x1="383.4" x2="414.9" y1="256.0" y2="256.0"/>
+<text class="val" x="420.9" y="260.0">645.6 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="250.5" height="12"><title>Python: median 950.1 µs, min 934.0 µs, max 1.21 ms, n=20</title></rect>
+<line class="range" x1="417.6" x2="431.7" y1="280.0" y2="280.0"/>
+<text class="val" x="437.7" y="284.0">950.1 µs</text>
+</svg></div>
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="quick-duplicates: execution wall per job">
+<text class="ttl" x="168" y="16">quick-duplicates</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="294.7" x2="294.7" y1="28" y2="296"/>
+<text class="tick" x="294.7" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="421.3" x2="421.3" y1="28" y2="296"/>
+<text class="tick" x="421.3" y="310" text-anchor="middle">1.00 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">10.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="47.8" height="12"><title>BAML native, telemetry off: median 23.8 µs, min 19.6 µs, max 39.2 µs, n=20</title></rect>
+<line class="range" x1="205.0" x2="243.1" y1="40.0" y2="40.0"/>
+<text class="val" x="249.1" y="44.0">23.8 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="39.6" height="12"><title>control (frozen native): median 20.5 µs, min 19.4 µs, max 28.7 µs, n=20</title></rect>
+<line class="range" x1="204.4" x2="226.1" y1="64.0" y2="64.0"/>
+<text class="val" x="232.1" y="68.0">20.5 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="269.7" height="12"><title>BAML VM, telemetry off: median 1.35 ms, min 1.32 ms, max 1.49 ms, n=20</title></rect>
+<line class="range" x1="436.7" x2="443.4" y1="88.0" y2="88.0"/>
+<text class="val" x="449.4" y="92.0">1.35 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="274.1" height="12"><title>BAML VM, low: median 1.46 ms, min 1.43 ms, max 1.64 ms, n=20</title></rect>
+<line class="range" x1="441.1" x2="448.4" y1="112.0" y2="112.0"/>
+<text class="val" x="454.4" y="116.0">1.46 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="274.8" height="12"><title>BAML VM, medium: median 1.48 ms, min 1.45 ms, max 1.54 ms, n=20</title></rect>
+<line class="range" x1="441.6" x2="445.2" y1="136.0" y2="136.0"/>
+<text class="val" x="451.2" y="140.0">1.48 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="274.1" height="12"><title>BAML VM, high: median 1.46 ms, min 1.43 ms, max 1.57 ms, n=20</title></rect>
+<line class="range" x1="440.9" x2="446.1" y1="160.0" y2="160.0"/>
+<text class="val" x="452.1" y="164.0">1.46 ms</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="17.1" height="12"><title>Rust: median 13.6 µs, min 12.9 µs, max 26.6 µs, n=20</title></rect>
+<line class="range" x1="182.0" x2="221.9" y1="184.0" y2="184.0"/>
+<text class="val" x="227.9" y="188.0">13.6 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="78.0" height="12"><title>Go: median 41.3 µs, min 34.9 µs, max 59.9 µs, n=20</title></rect>
+<line class="range" x1="236.8" x2="266.5" y1="208.0" y2="208.0"/>
+<text class="val" x="272.5" y="212.0">41.3 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="199.2" height="12"><title>Node: median 373.6 µs, min 168.2 µs, max 482.9 µs, n=20</title></rect>
+<line class="range" x1="323.3" x2="381.3" y1="232.0" y2="232.0"/>
+<text class="val" x="387.3" y="236.0">373.6 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="229.8" height="12"><title>Bun: median 652.3 µs, min 617.0 µs, max 731.2 µs, n=20</title></rect>
+<line class="range" x1="394.8" x2="404.1" y1="256.0" y2="256.0"/>
+<text class="val" x="410.1" y="260.0">652.3 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="178.8" height="12"><title>Python: median 257.9 µs, min 254.0 µs, max 381.4 µs, n=20</title></rect>
+<line class="range" x1="345.9" x2="368.3" y1="280.0" y2="280.0"/>
+<text class="val" x="374.3" y="284.0">257.9 µs</text>
+</svg></div>
+</div>
+<h2>JSON aggregate</h2><div class="grid">
+<div class="cell"><svg class="chart" viewBox="0 0 640 298" width="640" height="298" role="img" aria-label="json-aggregate: execution wall per job">
+<text class="ttl" x="168" y="16">json-aggregate</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="272"/>
+<text class="tick" x="168.0" y="286" text-anchor="middle">100 µs</text>
+<line class="grid" x1="294.7" x2="294.7" y1="28" y2="272"/>
+<text class="tick" x="294.7" y="286" text-anchor="middle">1.00 ms</text>
+<line class="grid" x1="421.3" x2="421.3" y1="28" y2="272"/>
+<text class="tick" x="421.3" y="286" text-anchor="middle">10.00 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="272"/>
+<text class="tick" x="548.0" y="286" text-anchor="middle">100 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="111.3" height="12"><title>BAML native, telemetry off: median 755.7 µs, min 743.7 µs, max 787.5 µs, n=20</title></rect>
+<line class="range" x1="278.4" x2="281.5" y1="40.0" y2="40.0"/>
+<text class="val" x="287.5" y="44.0">755.7 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="58.0" width="296.3" height="12"><title>BAML VM, telemetry off: median 21.83 ms, min 21.61 ms, max 22.41 ms, n=20</title></rect>
+<line class="range" x1="463.7" x2="465.7" y1="64.0" y2="64.0"/>
+<text class="val" x="471.7" y="68.0">21.83 ms</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="82.0" width="297.5" height="12"><title>BAML VM, low: median 22.31 ms, min 21.80 ms, max 23.08 ms, n=20</title></rect>
+<line class="range" x1="464.2" x2="467.4" y1="88.0" y2="88.0"/>
+<text class="val" x="473.4" y="92.0">22.31 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="106.0" width="298.5" height="12"><title>BAML VM, medium: median 22.74 ms, min 22.30 ms, max 27.91 ms, n=20</title></rect>
+<line class="range" x1="465.5" x2="477.8" y1="112.0" y2="112.0"/>
+<text class="val" x="483.8" y="116.0">22.74 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="130.0" width="301.9" height="12"><title>BAML VM, high: median 24.16 ms, min 23.44 ms, max 25.42 ms, n=20</title></rect>
+<line class="range" x1="468.2" x2="472.6" y1="136.0" y2="136.0"/>
+<text class="val" x="478.6" y="140.0">24.16 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="154.0" width="82.6" height="12"><title>Rust: median 449.0 µs, min 442.0 µs, max 467.1 µs, n=20</title></rect>
+<line class="range" x1="249.7" x2="252.8" y1="160.0" y2="160.0"/>
+<text class="val" x="258.8" y="164.0">449.0 µs</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="178.0" width="158.1" height="12"><title>Go: median 1.77 ms, min 1.72 ms, max 1.84 ms, n=20</title></rect>
+<line class="range" x1="324.4" x2="328.4" y1="184.0" y2="184.0"/>
+<text class="val" x="334.4" y="188.0">1.77 ms</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="202.0" width="76.9" height="12"><title>Node: median 404.5 µs, min 390.5 µs, max 427.6 µs, n=20</title></rect>
+<line class="range" x1="242.9" x2="247.9" y1="208.0" y2="208.0"/>
+<text class="val" x="253.9" y="212.0">404.5 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="226.0" width="97.6" height="12"><title>Bun: median 589.3 µs, min 547.4 µs, max 683.8 µs, n=20</title></rect>
+<line class="range" x1="261.5" x2="273.8" y1="232.0" y2="232.0"/>
+<text class="val" x="279.8" y="236.0">589.3 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="250.0" width="113.7" height="12"><title>Python: median 790.5 µs, min 778.3 µs, max 829.1 µs, n=20</title></rect>
+<line class="range" x1="280.9" x2="284.4" y1="256.0" y2="256.0"/>
+<text class="val" x="290.4" y="260.0">790.5 µs</text>
+</svg></div>
+</div>
+<h2>Allocation and retention</h2><div class="grid">
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="allocation-low-retention: execution wall per job">
+<text class="ttl" x="168" y="16">allocation-low-retention</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">1.00 ms</text>
+<line class="grid" x1="294.7" x2="294.7" y1="28" y2="296"/>
+<text class="tick" x="294.7" y="310" text-anchor="middle">10.00 ms</text>
+<line class="grid" x1="421.3" x2="421.3" y1="28" y2="296"/>
+<text class="tick" x="421.3" y="310" text-anchor="middle">100 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">1,000 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="154.2" height="12"><title>BAML native, telemetry off: median 16.50 ms, min 16.34 ms, max 18.22 ms, n=20</title></rect>
+<line class="range" x1="321.7" x2="327.7" y1="40.0" y2="40.0"/>
+<text class="val" x="333.7" y="44.0">16.50 ms</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="154.5" height="12"><title>control (frozen native): median 16.59 ms, min 16.30 ms, max 17.01 ms, n=20</title></rect>
+<line class="range" x1="321.5" x2="323.9" y1="64.0" y2="64.0"/>
+<text class="val" x="329.9" y="68.0">16.59 ms</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="319.3" height="12"><title>BAML VM, telemetry off: median 332 ms, min 325 ms, max 348 ms, n=20</title></rect>
+<line class="range" x1="486.2" x2="489.9" y1="88.0" y2="88.0"/>
+<text class="val" x="495.9" y="92.0">332 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="323.3" height="12"><title>BAML VM, low: median 357 ms, min 349 ms, max 375 ms, n=20</title></rect>
+<line class="range" x1="490.1" x2="494.1" y1="112.0" y2="112.0"/>
+<text class="val" x="500.1" y="116.0">357 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="323.0" height="12"><title>BAML VM, medium: median 355 ms, min 349 ms, max 370 ms, n=20</title></rect>
+<line class="range" x1="490.0" x2="493.4" y1="136.0" y2="136.0"/>
+<text class="val" x="499.4" y="140.0">355 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="322.9" height="12"><title>BAML VM, high: median 354 ms, min 348 ms, max 387 ms, n=20</title></rect>
+<line class="range" x1="489.9" x2="495.8" y1="160.0" y2="160.0"/>
+<text class="val" x="501.8" y="164.0">354 ms</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="116.8" height="12"><title>Rust: median 8.36 ms, min 8.28 ms, max 8.88 ms, n=20</title></rect>
+<line class="range" x1="284.3" x2="288.1" y1="184.0" y2="184.0"/>
+<text class="val" x="294.1" y="188.0">8.36 ms</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="158.5" height="12"><title>Go: median 17.85 ms, min 17.37 ms, max 20.61 ms, n=20</title></rect>
+<line class="range" x1="325.0" x2="334.4" y1="208.0" y2="208.0"/>
+<text class="val" x="340.4" y="212.0">17.85 ms</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="144.8" height="12"><title>Node: median 13.91 ms, min 13.00 ms, max 18.66 ms, n=20</title></rect>
+<line class="range" x1="309.1" x2="329.0" y1="232.0" y2="232.0"/>
+<text class="val" x="335.0" y="236.0">13.91 ms</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="125.6" height="12"><title>Bun: median 9.81 ms, min 9.41 ms, max 10.76 ms, n=20</title></rect>
+<line class="range" x1="291.3" x2="298.7" y1="256.0" y2="256.0"/>
+<text class="val" x="304.7" y="260.0">9.81 ms</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="266.6" height="12"><title>Python: median 127 ms, min 125 ms, max 138 ms, n=20</title></rect>
+<line class="range" x1="433.4" x2="438.9" y1="280.0" y2="280.0"/>
+<text class="val" x="444.9" y="284.0">127 ms</text>
+</svg></div>
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="allocation-high-retention: execution wall per job">
+<text class="ttl" x="168" y="16">allocation-high-retention</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">10.00 ms</text>
+<line class="grid" x1="358.0" x2="358.0" y1="28" y2="296"/>
+<text class="tick" x="358.0" y="310" text-anchor="middle">100 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">1,000 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="66.9" height="12"><title>BAML native, telemetry off: median 22.51 ms, min 20.53 ms, max 25.66 ms, n=20</title></rect>
+<line class="range" x1="227.4" x2="245.7" y1="40.0" y2="40.0"/>
+<text class="val" x="251.7" y="44.0">22.51 ms</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="64.1" height="12"><title>control (frozen native): median 21.74 ms, min 20.34 ms, max 27.01 ms, n=20</title></rect>
+<line class="range" x1="226.6" x2="250.0" y1="64.0" y2="64.0"/>
+<text class="val" x="256.0" y="68.0">21.74 ms</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="314.6" height="12"><title>BAML VM, telemetry off: median 453 ms, min 439 ms, max 482 ms, n=20</title></rect>
+<line class="range" x1="480.1" x2="487.7" y1="88.0" y2="88.0"/>
+<text class="val" x="493.7" y="92.0">453 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="319.7" height="12"><title>BAML VM, low: median 482 ms, min 471 ms, max 496 ms, n=20</title></rect>
+<line class="range" x1="485.9" x2="490.1" y1="112.0" y2="112.0"/>
+<text class="val" x="496.1" y="116.0">482 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="319.7" height="12"><title>BAML VM, medium: median 482 ms, min 472 ms, max 536 ms, n=20</title></rect>
+<line class="range" x1="486.0" x2="496.6" y1="136.0" y2="136.0"/>
+<text class="val" x="502.6" y="140.0">482 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="319.8" height="12"><title>BAML VM, high: median 482 ms, min 474 ms, max 516 ms, n=20</title></rect>
+<line class="range" x1="486.3" x2="493.4" y1="160.0" y2="160.0"/>
+<text class="val" x="499.4" y="164.0">482 ms</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="28.5" height="12"><title>Rust: median 14.13 ms, min 13.37 ms, max 16.20 ms, n=20</title></rect>
+<line class="range" x1="192.0" x2="207.8" y1="184.0" y2="184.0"/>
+<text class="val" x="213.8" y="188.0">14.13 ms</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="71.6" height="12"><title>Go: median 23.83 ms, min 22.73 ms, max 25.33 ms, n=20</title></rect>
+<line class="range" x1="235.8" x2="244.7" y1="208.0" y2="208.0"/>
+<text class="val" x="250.7" y="212.0">23.83 ms</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="67.8" height="12"><title>Node: median 22.74 ms, min 19.89 ms, max 30.39 ms, n=20</title></rect>
+<line class="range" x1="224.7" x2="259.7" y1="232.0" y2="232.0"/>
+<text class="val" x="265.7" y="236.0">22.74 ms</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="62.1" height="12"><title>Bun: median 21.22 ms, min 19.89 ms, max 26.11 ms, n=20</title></rect>
+<line class="range" x1="224.7" x2="247.2" y1="256.0" y2="256.0"/>
+<text class="val" x="253.2" y="260.0">21.22 ms</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="238.8" height="12"><title>Python: median 181 ms, min 174 ms, max 234 ms, n=20</title></rect>
+<line class="range" x1="403.5" x2="428.3" y1="280.0" y2="280.0"/>
+<text class="val" x="434.3" y="284.0">181 ms</text>
+</svg></div>
+</div>
+<h2>Function calls</h2><div class="grid">
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="calls-empty: execution wall per job">
+<text class="ttl" x="168" y="16">calls-empty</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">0.010 µs</text>
+<line class="grid" x1="263.0" x2="263.0" y1="28" y2="296"/>
+<text class="tick" x="263.0" y="310" text-anchor="middle">0.100 µs</text>
+<line class="grid" x1="358.0" x2="358.0" y1="28" y2="296"/>
+<text class="tick" x="358.0" y="310" text-anchor="middle">1 µs</text>
+<line class="grid" x1="453.0" x2="453.0" y1="28" y2="296"/>
+<text class="tick" x="453.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">100 µs</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="70.7" height="12"><title>BAML native, telemetry off: median 0.056 µs, min 0.051 µs, max 0.081 µs, n=20</title></rect>
+<line class="range" x1="235.3" x2="254.1" y1="40.0" y2="40.0"/>
+<text class="val" x="260.1" y="44.0">0.056 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="69.5" height="12"><title>control (frozen native): median 0.054 µs, min 0.051 µs, max 0.075 µs, n=20</title></rect>
+<line class="range" x1="235.4" x2="251.3" y1="64.0" y2="64.0"/>
+<text class="val" x="257.3" y="68.0">0.054 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="318.7" height="12"><title>BAML VM, telemetry off: median 22.6 µs, min 17.9 µs, max 24.9 µs, n=20</title></rect>
+<line class="range" x1="477.1" x2="490.6" y1="88.0" y2="88.0"/>
+<text class="val" x="496.6" y="92.0">22.6 µs</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="341.1" height="12"><title>BAML VM, low: median 39.0 µs, min 37.0 µs, max 53.7 µs, n=20</title></rect>
+<line class="range" x1="506.9" x2="522.3" y1="112.0" y2="112.0"/>
+<text class="val" x="528.3" y="116.0">39.0 µs</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="348.6" height="12"><title>BAML VM, medium: median 46.8 µs, min 43.5 µs, max 49.8 µs, n=20</title></rect>
+<line class="range" x1="513.7" x2="519.3" y1="136.0" y2="136.0"/>
+<text class="val" x="525.3" y="140.0">46.8 µs</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="342.7" height="12"><title>BAML VM, high: median 40.5 µs, min 39.5 µs, max 42.8 µs, n=20</title></rect>
+<line class="range" x1="509.7" x2="513.0" y1="160.0" y2="160.0"/>
+<text class="val" x="519.0" y="164.0">40.5 µs</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="29.5" height="12"><title>Rust: median 0.020 µs, min 0.019 µs, max 0.055 µs, n=20</title></rect>
+<line class="range" x1="194.0" x2="238.0" y1="184.0" y2="184.0"/>
+<text class="val" x="244.0" y="188.0">0.020 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="40.0" height="12"><title>Go: median 0.026 µs, min 0.023 µs, max 0.043 µs, n=20</title></rect>
+<line class="range" x1="202.0" x2="228.2" y1="208.0" y2="208.0"/>
+<text class="val" x="234.2" y="212.0">0.026 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="178.4" height="12"><title>Node: median 0.754 µs, min 0.724 µs, max 0.894 µs, n=20</title></rect>
+<line class="range" x1="344.7" x2="353.4" y1="232.0" y2="232.0"/>
+<text class="val" x="359.4" y="236.0">0.754 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="166.9" height="12"><title>Bun: median 0.572 µs, min 0.545 µs, max 0.639 µs, n=20</title></rect>
+<line class="range" x1="333.0" x2="339.5" y1="256.0" y2="256.0"/>
+<text class="val" x="345.5" y="260.0">0.572 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="153.5" height="12"><title>Python: median 0.413 µs, min 0.403 µs, max 0.483 µs, n=20</title></rect>
+<line class="range" x1="320.6" x2="327.9" y1="280.0" y2="280.0"/>
+<text class="val" x="333.9" y="284.0">0.413 µs</text>
+</svg></div>
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="calls: execution wall per job">
+<text class="ttl" x="168" y="16">calls</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">0.010 µs</text>
+<line class="grid" x1="244.0" x2="244.0" y1="28" y2="296"/>
+<text class="tick" x="244.0" y="310" text-anchor="middle">0.100 µs</text>
+<line class="grid" x1="320.0" x2="320.0" y1="28" y2="296"/>
+<text class="tick" x="320.0" y="310" text-anchor="middle">1 µs</text>
+<line class="grid" x1="396.0" x2="396.0" y1="28" y2="296"/>
+<text class="tick" x="396.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="472.0" x2="472.0" y1="28" y2="296"/>
+<text class="tick" x="472.0" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">1.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="88.8" height="12"><title>BAML native, telemetry off: median 0.147 µs, min 0.131 µs, max 0.206 µs, n=20</title></rect>
+<line class="range" x1="253.0" x2="267.9" y1="40.0" y2="40.0"/>
+<text class="val" x="273.9" y="44.0">0.147 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="83.7" height="12"><title>control (frozen native): median 0.126 µs, min 0.116 µs, max 0.184 µs, n=20</title></rect>
+<line class="range" x1="249.0" x2="264.2" y1="64.0" y2="64.0"/>
+<text class="val" x="270.2" y="68.0">0.126 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="267.9" height="12"><title>BAML VM, telemetry off: median 33.5 µs, min 31.8 µs, max 42.7 µs, n=20</title></rect>
+<line class="range" x1="434.1" x2="443.9" y1="88.0" y2="88.0"/>
+<text class="val" x="449.9" y="92.0">33.5 µs</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="281.8" height="12"><title>BAML VM, low: median 51.1 µs, min 49.8 µs, max 54.6 µs, n=20</title></rect>
+<line class="range" x1="449.0" x2="452.0" y1="112.0" y2="112.0"/>
+<text class="val" x="458.0" y="116.0">51.1 µs</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="289.3" height="12"><title>BAML VM, medium: median 64.0 µs, min 62.4 µs, max 68.8 µs, n=20</title></rect>
+<line class="range" x1="456.5" x2="459.6" y1="136.0" y2="136.0"/>
+<text class="val" x="465.6" y="140.0">64.0 µs</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="301.7" height="12"><title>BAML VM, high: median 93.2 µs, min 88.7 µs, max 98.2 µs, n=20</title></rect>
+<line class="range" x1="468.0" x2="471.4" y1="160.0" y2="160.0"/>
+<text class="val" x="477.4" y="164.0">93.2 µs</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="24.9" height="12"><title>Rust: median 0.021 µs, min 0.019 µs, max 0.058 µs, n=20</title></rect>
+<line class="range" x1="188.5" x2="225.9" y1="184.0" y2="184.0"/>
+<text class="val" x="231.9" y="188.0">0.021 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="84.6" height="12"><title>Go: median 0.130 µs, min 0.113 µs, max 0.196 µs, n=20</title></rect>
+<line class="range" x1="248.0" x2="266.2" y1="208.0" y2="208.0"/>
+<text class="val" x="272.2" y="212.0">0.130 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="153.9" height="12"><title>Node: median 1.058 µs, min 1.010 µs, max 1.331 µs, n=20</title></rect>
+<line class="range" x1="320.3" x2="329.4" y1="232.0" y2="232.0"/>
+<text class="val" x="335.4" y="236.0">1.058 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="195.4" height="12"><title>Bun: median 3.730 µs, min 3.421 µs, max 5.104 µs, n=20</title></rect>
+<line class="range" x1="360.6" x2="373.8" y1="256.0" y2="256.0"/>
+<text class="val" x="379.8" y="260.0">3.730 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="203.0" height="12"><title>Python: median 4.694 µs, min 4.611 µs, max 5.045 µs, n=20</title></rect>
+<line class="range" x1="370.5" x2="373.4" y1="280.0" y2="280.0"/>
+<text class="val" x="379.4" y="284.0">4.694 µs</text>
+</svg></div>
+</div>
+<h2>JSON hello</h2><div class="grid">
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="json-hello: execution wall per job">
+<text class="ttl" x="168" y="16">json-hello</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">0.010 µs</text>
+<line class="grid" x1="263.0" x2="263.0" y1="28" y2="296"/>
+<text class="tick" x="263.0" y="310" text-anchor="middle">0.100 µs</text>
+<line class="grid" x1="358.0" x2="358.0" y1="28" y2="296"/>
+<text class="tick" x="358.0" y="310" text-anchor="middle">1 µs</text>
+<line class="grid" x1="453.0" x2="453.0" y1="28" y2="296"/>
+<text class="tick" x="453.0" y="310" text-anchor="middle">10 µs</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">100 µs</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="81.8" height="12"><title>BAML native, telemetry off: median 0.073 µs, min 0.061 µs, max 0.133 µs, n=20</title></rect>
+<line class="range" x1="242.4" x2="274.8" y1="40.0" y2="40.0"/>
+<text class="val" x="280.8" y="44.0">0.073 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="76.1" height="12"><title>control (frozen native): median 0.063 µs, min 0.062 µs, max 0.081 µs, n=20</title></rect>
+<line class="range" x1="243.2" x2="254.3" y1="64.0" y2="64.0"/>
+<text class="val" x="260.3" y="68.0">0.063 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="330.0" height="12"><title>BAML VM, telemetry off: median 29.8 µs, min 26.3 µs, max 35.5 µs, n=20</title></rect>
+<line class="range" x1="492.9" x2="505.2" y1="88.0" y2="88.0"/>
+<text class="val" x="511.2" y="92.0">29.8 µs</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="349.4" height="12"><title>BAML VM, low: median 47.6 µs, min 46.1 µs, max 50.7 µs, n=20</title></rect>
+<line class="range" x1="516.1" x2="520.0" y1="112.0" y2="112.0"/>
+<text class="val" x="526.0" y="116.0">47.6 µs</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="356.6" height="12"><title>BAML VM, medium: median 56.6 µs, min 55.0 µs, max 65.0 µs, n=20</title></rect>
+<line class="range" x1="523.3" x2="530.2" y1="136.0" y2="136.0"/>
+<text class="val" x="536.2" y="140.0">56.6 µs</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="351.3" height="12"><title>BAML VM, high: median 49.8 µs, min 47.2 µs, max 57.7 µs, n=20</title></rect>
+<line class="range" x1="517.1" x2="525.3" y1="160.0" y2="160.0"/>
+<text class="val" x="531.3" y="164.0">49.8 µs</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="56.8" height="12"><title>Rust: median 0.040 µs, min 0.032 µs, max 0.057 µs, n=20</title></rect>
+<line class="range" x1="216.4" x2="240.2" y1="184.0" y2="184.0"/>
+<text class="val" x="246.2" y="188.0">0.040 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="137.0" height="12"><title>Go: median 0.277 µs, min 0.240 µs, max 0.394 µs, n=20</title></rect>
+<line class="range" x1="299.2" x2="319.6" y1="208.0" y2="208.0"/>
+<text class="val" x="325.6" y="212.0">0.277 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="182.8" height="12"><title>Node: median 0.840 µs, min 0.789 µs, max 1.167 µs, n=20</title></rect>
+<line class="range" x1="348.2" x2="364.4" y1="232.0" y2="232.0"/>
+<text class="val" x="370.4" y="236.0">0.840 µs</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="173.5" height="12"><title>Bun: median 0.671 µs, min 0.650 µs, max 0.863 µs, n=20</title></rect>
+<line class="range" x1="340.2" x2="351.9" y1="256.0" y2="256.0"/>
+<text class="val" x="357.9" y="260.0">0.671 µs</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="223.6" height="12"><title>Python: median 2.256 µs, min 2.201 µs, max 2.739 µs, n=20</title></rect>
+<line class="range" x1="390.6" x2="399.6" y1="280.0" y2="280.0"/>
+<text class="val" x="405.6" y="284.0">2.256 µs</text>
+</svg></div>
+</div>
+<h2>Generate and sort</h2><div class="grid">
+<div class="cell"><svg class="chart" viewBox="0 0 640 322" width="640" height="322" role="img" aria-label="generate-sort: execution wall per job">
+<text class="ttl" x="168" y="16">generate-sort</text>
+<text class="sub" x="548" y="16" text-anchor="end">wall µs per job, median of n, min–max, log axis</text>
+<line class="grid" x1="168.0" x2="168.0" y1="28" y2="296"/>
+<text class="tick" x="168.0" y="310" text-anchor="middle">100 µs</text>
+<line class="grid" x1="358.0" x2="358.0" y1="28" y2="296"/>
+<text class="tick" x="358.0" y="310" text-anchor="middle">1.00 ms</text>
+<line class="grid" x1="548.0" x2="548.0" y1="28" y2="296"/>
+<text class="tick" x="548.0" y="310" text-anchor="middle">10.00 ms</text>
+<text class="lbl" x="160" y="44.0" text-anchor="end">BAML native, telemetry off</text>
+<rect class="bar" x="168.0" y="34.0" width="85.7" height="12"><title>BAML native, telemetry off: median 282.6 µs, min 271.5 µs, max 466.8 µs, n=20</title></rect>
+<line class="range" x1="250.4" x2="295.1" y1="40.0" y2="40.0"/>
+<text class="val" x="301.1" y="44.0">282.6 µs</text>
+<text class="lbl" x="160" y="68.0" text-anchor="end">control (frozen native)</text>
+<rect class="bar-control" x="168.0" y="58.0" width="84.2" height="12"><title>control (frozen native): median 277.3 µs, min 272.9 µs, max 302.9 µs, n=20</title></rect>
+<line class="range" x1="250.8" x2="259.5" y1="64.0" y2="64.0"/>
+<text class="val" x="265.5" y="68.0">277.3 µs</text>
+<text class="lbl" x="160" y="92.0" text-anchor="end">BAML VM, telemetry off</text>
+<rect class="bar" x="168.0" y="82.0" width="312.8" height="12"><title>BAML VM, telemetry off: median 4.43 ms, min 4.33 ms, max 5.47 ms, n=20</title></rect>
+<line class="range" x1="478.9" x2="498.2" y1="88.0" y2="88.0"/>
+<text class="val" x="504.2" y="92.0">4.43 ms</text>
+<text class="lbl" x="160" y="116.0" text-anchor="end">BAML VM, low</text>
+<rect class="bar" x="168.0" y="106.0" width="312.6" height="12"><title>BAML VM, low: median 4.42 ms, min 4.36 ms, max 4.51 ms, n=20</title></rect>
+<line class="range" x1="479.5" x2="482.4" y1="112.0" y2="112.0"/>
+<text class="val" x="488.4" y="116.0">4.42 ms</text>
+<text class="lbl" x="160" y="140.0" text-anchor="end">BAML VM, medium</text>
+<rect class="bar" x="168.0" y="130.0" width="312.8" height="12"><title>BAML VM, medium: median 4.43 ms, min 4.36 ms, max 4.66 ms, n=20</title></rect>
+<line class="range" x1="479.5" x2="485.0" y1="136.0" y2="136.0"/>
+<text class="val" x="491.0" y="140.0">4.43 ms</text>
+<text class="lbl" x="160" y="164.0" text-anchor="end">BAML VM, high</text>
+<rect class="bar" x="168.0" y="154.0" width="312.9" height="12"><title>BAML VM, high: median 4.43 ms, min 4.34 ms, max 5.07 ms, n=20</title></rect>
+<line class="range" x1="479.2" x2="491.9" y1="160.0" y2="160.0"/>
+<text class="val" x="497.9" y="164.0">4.43 ms</text>
+<text class="lbl" x="160" y="188.0" text-anchor="end">Rust</text>
+<rect class="bar" x="168.0" y="178.0" width="62.2" height="12"><title>Rust: median 212.6 µs, min 204.6 µs, max 229.0 µs, n=20</title></rect>
+<line class="range" x1="227.1" x2="236.4" y1="184.0" y2="184.0"/>
+<text class="val" x="242.4" y="188.0">212.6 µs</text>
+<text class="lbl" x="160" y="212.0" text-anchor="end">Go</text>
+<rect class="bar" x="168.0" y="202.0" width="174.1" height="12"><title>Go: median 824.6 µs, min 794.5 µs, max 950.5 µs, n=20</title></rect>
+<line class="range" x1="339.0" x2="353.8" y1="208.0" y2="208.0"/>
+<text class="val" x="359.8" y="212.0">824.6 µs</text>
+<text class="lbl" x="160" y="236.0" text-anchor="end">Node</text>
+<rect class="bar" x="168.0" y="226.0" width="259.0" height="12"><title>Node: median 2.31 ms, min 2.26 ms, max 2.50 ms, n=20</title></rect>
+<line class="range" x1="425.2" x2="433.5" y1="232.0" y2="232.0"/>
+<text class="val" x="439.5" y="236.0">2.31 ms</text>
+<text class="lbl" x="160" y="260.0" text-anchor="end">Bun</text>
+<rect class="bar" x="168.0" y="250.0" width="256.1" height="12"><title>Bun: median 2.23 ms, min 2.18 ms, max 2.58 ms, n=20</title></rect>
+<line class="range" x1="422.3" x2="436.2" y1="256.0" y2="256.0"/>
+<text class="val" x="442.2" y="260.0">2.23 ms</text>
+<text class="lbl" x="160" y="284.0" text-anchor="end">Python</text>
+<rect class="bar" x="168.0" y="274.0" width="244.6" height="12"><title>Python: median 1.94 ms, min 1.88 ms, max 2.13 ms, n=20</title></rect>
+<line class="range" x1="409.9" x2="420.4" y1="280.0" y2="280.0"/>
+<text class="val" x="426.4" y="284.0">1.94 ms</text>
+</svg></div>
+</div>
+<h2>Native builds and artifacts</h2><div class="tbl"><table><tr><th>case</th><th>status</th><th>clean build s</th><th>stripped bytes</th><th>bytes</th><th>bytecode bytes</th></tr>
+<tr><td>00_startup</td><td>ok</td><td class="n">26.977</td><td class="n">473,872</td><td class="n">586,464</td><td class="n">2,942,361</td></tr>
+<tr><td>01_array_traversal</td><td>ok</td><td class="n">26.133</td><td class="n">480,768</td><td class="n">594,632</td><td class="n">2,945,009</td></tr>
+<tr><td>02_merge_sort</td><td>ok</td><td class="n">25.598</td><td class="n">480,768</td><td class="n">594,888</td><td class="n">2,946,971</td></tr>
+<tr><td>03_json_aggregate</td><td>ok</td><td class="n">25.383</td><td class="n">527,872</td><td class="n">652,992</td><td class="n">2,950,036</td></tr>
+<tr><td>04_allocation_retention</td><td>ok</td><td class="n">24.206</td><td class="n">486,128</td><td class="n">601,008</td><td class="n">2,948,745</td></tr>
+<tr><td>07_function_calls</td><td>ok</td><td class="n">24.58</td><td class="n">474,768</td><td class="n">587,496</td><td class="n">2,943,410</td></tr>
+<tr><td>09_json_hello</td><td>ok</td><td class="n">24.048</td><td class="n">435,384</td><td class="n">545,824</td><td class="n">2,942,474</td></tr>
+<tr><td>10_quick_sort</td><td>ok</td><td class="n">24.381</td><td class="n">482,192</td><td class="n">596,312</td><td class="n">2,948,599</td></tr>
+<tr><td>11_generate_sort</td><td>ok</td><td class="n">24.17</td><td class="n">484,456</td><td class="n">599,400</td><td class="n">2,943,614</td></tr>
+</table></div>
+<h2>Provenance</h2><div class="env">{
+ &quot;candidate_sha&quot;: &quot;324030d9340201c3596bdbf8aef6ba8738093932&quot;,
+ &quot;candidate_branch&quot;: &quot;HEAD&quot;,
+ &quot;candidate_dirty_files&quot;: 0,
+ &quot;machine&quot;: &quot;bench-x86-v1&quot;,
+ &quot;host&quot;: {
+  &quot;sha256&quot;: &quot;b6204e5374984e2c6326eb507cd3aeaab56087be53df5ef0b46f1dbc7647b52a&quot;,
+  &quot;bytes&quot;: 34213704,
+  &quot;path&quot;: &quot;artifacts/host&quot;,
+  &quot;source&quot;: &quot;bex_engine instrumentation example at 3e3d3c7f26&quot;
+ },
+ &quot;rustc&quot;: &quot;rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1&quot;,
+ &quot;go&quot;: &quot;go version go1.27.1 linux/amd64&quot;,
+ &quot;node&quot;: &quot;v26.10.0&quot;,
+ &quot;python&quot;: &quot;Python 3.14.7&quot;,
+ &quot;glibc&quot;: &quot;ldd (Ubuntu GLIBC 2.39-0ubuntu8.9) 2.39&quot;,
+ &quot;kernel&quot;: &quot;6.1.102&quot;,
+ &quot;cpu&quot;: 3,
+ &quot;loadavg_start&quot;: &quot;0.38 0.10 0.03 2/145 94393&quot;,
+ &quot;loadavg_end&quot;: &quot;1.18 1.17 1.05 1/142 130814&quot;,
+ &quot;protocol_sha256&quot;: &quot;aeaf75db1c0926366d4c2a00638a08c05b071550f1ccedf1af388798044cd88d&quot;,
+ &quot;machine_sha256&quot;: &quot;963f1a6062538a8e399ab93589046cc24dca5c9ffedaeee627ff41df62f4a330&quot;
+}</div></main></body></html>

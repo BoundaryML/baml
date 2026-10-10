@@ -1,0 +1,77 @@
+19:34:37 execute bench-x86-v1 tier-a -> /home/ubuntu/ship/results
+19:34:39 source 324030d9340201c3596bdbf8aef6ba8738093932
+19:34:43 00_startup bytecode 2942361 bytes
+19:34:44 01_array_traversal bytecode 2945009 bytes
+19:34:45 02_merge_sort bytecode 2946971 bytes
+19:34:46 03_json_aggregate bytecode 2950036 bytes
+19:34:47 04_allocation_retention bytecode 2948745 bytes
+19:34:48 07_function_calls bytecode 2943410 bytes
+19:34:49 09_json_hello bytecode 2942474 bytes
+19:34:50 10_quick_sort bytecode 2948599 bytes
+19:34:51 11_generate_sort bytecode 2943614 bytes
+19:35:18 00_startup native: 27.0s, 473872 bytes stripped
+19:35:45 01_array_traversal native: 26.1s, 480768 bytes stripped
+19:36:10 02_merge_sort native: 25.6s, 480768 bytes stripped
+19:36:36 03_json_aggregate native: 25.4s, 527872 bytes stripped
+19:37:00 04_allocation_retention native: 24.2s, 486128 bytes stripped
+19:37:25 07_function_calls native: 24.6s, 474768 bytes stripped
+19:37:49 09_json_hello native: 24.0s, 435384 bytes stripped
+19:38:14 10_quick_sort native: 24.4s, 482192 bytes stripped
+19:38:38 11_generate_sort native: 24.2s, 484456 bytes stripped
+19:38:40 verify 00_startup: 11 trials, 0 failed
+19:38:54 verify 01_array_traversal: 176 trials, 0 failed
+19:39:13 verify 02_merge_sort: 231 trials, 0 failed
+19:39:38 verify 03_json_aggregate: 280 trials, 0 failed
+19:39:45 verify 04_allocation_retention: 77 trials, 0 failed
+19:39:48 verify 07_function_calls: 44 trials, 0 failed
+19:39:52 verify 09_json_hello: 44 trials, 0 failed
+19:40:11 verify 10_quick_sort: 231 trials, 0 failed
+19:40:25 verify 11_generate_sort: 176 trials, 0 failed
+19:40:35 4600 trials scheduled; load ['0.96', '1.22', '0.64']
+19:41:15 100/4600
+19:41:54 200/4600
+19:42:21 300/4600
+19:42:47 400/4600
+19:43:16 500/4600
+19:43:41 600/4600
+19:44:17 700/4600
+19:44:45 800/4600
+19:45:23 900/4600
+19:46:14 1000/4600
+19:46:50 1100/4600
+19:47:28 1200/4600
+19:47:55 1300/4600
+19:48:28 1400/4600
+19:49:12 1500/4600
+19:49:41 1600/4600
+19:50:18 1700/4600
+19:50:46 1800/4600
+19:51:11 1900/4600
+19:51:47 2000/4600
+19:52:13 2100/4600
+19:52:33 2200/4600
+19:53:05 2300/4600
+19:53:33 2400/4600
+19:54:04 2500/4600
+19:54:27 2600/4600
+19:54:56 2700/4600
+19:55:17 2800/4600
+19:55:48 2900/4600
+19:56:16 3000/4600
+19:56:37 3100/4600
+19:57:21 3200/4600
+19:58:01 3300/4600
+19:58:31 3400/4600
+19:59:14 3500/4600
+19:59:46 3600/4600
+20:00:14 3700/4600
+20:01:07 3800/4600
+20:01:45 3900/4600
+20:02:20 4000/4600
+20:02:33 4100/4600
+20:03:01 4200/4600
+20:03:42 4300/4600
+20:04:09 4400/4600
+20:04:48 4500/4600
+20:05:29 4600/4600
+20:05:29 done: 4600 trials, 0 failed
