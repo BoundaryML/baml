@@ -294,3 +294,147 @@ pub fn user_use_method(mut _1: Int63) -> Result<Int63, Thrown> {
     _0 = user_Counter_bump(_2.clone(), int::lit(1))?;
     Ok(_0)
 }
+/// BAML function `user.grow`.
+pub fn user_grow(
+    mut _1: Int63,
+    __arg_2: Option<Int63>,
+    __arg_3: Option<Int63>,
+) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _2: Int63;
+    let mut _3: Int63;
+    let mut _0: Int63;
+    let mut _4: bool;
+    let mut _5: bool;
+    let mut _6: Int63;
+    'bb2: {
+        _4 = __arg_2.is_none();
+        if _4 {
+            _2 = int::add(_1, int::lit(1))?;
+            break 'bb2;
+        } else {
+            _2 = __arg_2.expect("an argument tested as provided");
+            break 'bb2;
+        }
+    }
+    'bb4: {
+        _5 = __arg_3.is_none();
+        if _5 {
+            _3 = int::mul(_2, int::lit(2))?;
+            break 'bb4;
+        } else {
+            _3 = __arg_3.expect("an argument tested as provided");
+            break 'bb4;
+        }
+    }
+    _6 = int::add(_1, _2)?;
+    _0 = int::add(_6, _3)?;
+    Ok(_0)
+}
+/// BAML function `user.risky`.
+pub fn user_risky(mut _1: Int63, __arg_2: Option<Int63>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _2: Int63;
+    let mut _0: Int63;
+    let mut _3: bool;
+    'bb2: {
+        _3 = __arg_2.is_none();
+        if _3 {
+            _2 = int::div(int::lit(10), _1)?;
+            break 'bb2;
+        } else {
+            _2 = __arg_2.expect("an argument tested as provided");
+            break 'bb2;
+        }
+    }
+    _0 = int::add(_1, _2)?;
+    Ok(_0)
+}
+/// BAML lambda `.<lambda(captured_default, 0)>`.
+pub fn user_captured_default__lambda0(_c0: &cell::Cell<Int63>) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    let mut _1: Int63;
+    _1 = cell::get(_c0)?;
+    {
+        let value = int::add(_1, int::lit(1))?;
+        cell::set(_c0, value);
+    }
+    _0 = cell::get(_c0)?;
+    Ok(_0)
+}
+/// BAML function `user.captured_default`.
+pub fn user_captured_default(
+    mut _1: Int63,
+    __arg_2: Option<Int63>,
+) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _2: cell::Cell<Int63> = cell::fresh();
+    let mut _0: Int63;
+    let mut _3: bool;
+    let mut _4: Rc<dyn Fn() -> Result<Int63, Thrown>>;
+    let mut _5: Int63;
+    let mut _7: Int63;
+    'bb2: {
+        _3 = __arg_2.is_none();
+        if _3 {
+            {
+                let value = int::mul(_1, int::lit(3))?;
+                cell::set(&_2, value);
+            }
+            break 'bb2;
+        } else {
+            cell::set(&_2, __arg_2.expect("an argument tested as provided"));
+            break 'bb2;
+        }
+    }
+    _4 = {
+        let __cell0 = cell::Cell::clone(&_2);
+        let __closure: Rc<dyn Fn() -> Result<Int63, Thrown>> = Rc::new(move || {
+            user_captured_default__lambda0(&__cell0)
+        });
+        __closure
+    };
+    _5 = (_4)()?;
+    _7 = (_4)()?;
+    _0 = int::add(_5, _7)?;
+    Ok(_0)
+}
+/// BAML function `user.use_computed`.
+pub fn user_use_computed(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    let mut _2: Int63;
+    let mut _3: Int63;
+    let mut _4: Int63;
+    let mut _5: Int63;
+    let mut _6: Int63;
+    let mut _7: Int63;
+    let mut _8: Int63;
+    let mut _9: Int63;
+    let mut _10: Int63;
+    let mut _11: Int63;
+    _6 = user_grow(_1, None, None)?;
+    _7 = user_grow(_1, Some(int::lit(1)), None)?;
+    _5 = int::add(_6, _7)?;
+    _8 = user_grow(_1, None, Some(int::lit(5)))?;
+    _4 = int::add(_5, _8)?;
+    _9 = user_grow(_1, Some(int::lit(2)), Some(int::lit(3)))?;
+    _3 = int::add(_4, _9)?;
+    _10 = user_captured_default(_1, None)?;
+    _2 = int::add(_3, _10)?;
+    _11 = user_captured_default(_1, Some(int::lit(100)))?;
+    _0 = int::add(_2, _11)?;
+    Ok(_0)
+}
+/// BAML function `user.use_risky`.
+pub fn user_use_risky(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    let mut _2: Int63;
+    let mut _3: Int63;
+    _2 = user_risky(_1, None)?;
+    _3 = user_risky(_1, Some(int::lit(7)))?;
+    _0 = int::add(_2, _3)?;
+    Ok(_0)
+}

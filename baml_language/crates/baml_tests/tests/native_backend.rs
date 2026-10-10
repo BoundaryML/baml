@@ -1602,16 +1602,21 @@ function g(a: int | Odd) -> bool { a == Odd.X }
 /// names a slot the MIR does not tie to a class; the binding form is
 /// admitted.
 #[test]
-fn rejects_field_read_on_a_narrowed_union() {
-    let rejection = reject(
+fn field_access_through_a_narrowed_union_matches_the_member() {
+    let module = compile_entry(
         r"
 class A { n: int }
-class B { s: string }
-function f(v: A | B) -> int { if (v is A) { v.n } else { 0 } }
+class B { s: string, n: int }
+function f(v: A | B) -> int { if (v is A) { v.n = v.n + 1; v.n } else { 0 } }
 ",
         "f",
     );
-    assert_unsupported(&rejection, "field read on a narrowed `user.A | user.B`");
+    let source = &module.rust_source;
+    // The slot is read from whichever member has it, `Unreachable` otherwise.
+    assert_contains(source, "Union_user_A_or_user_B::user_A(__object) => {");
+    assert_contains(source, "__object.borrow().n.clone()");
+    assert_contains(source, "__object.borrow_mut().n = value;");
+    assert_contains(source, "Thrown::from(Panic::Unreachable)");
 }
 
 /// A type test on a value of one closed type is a constant: the static
@@ -2194,18 +2199,27 @@ function g(n: int) -> int { f(n) + f(n, by = 4) + f(n, opt = 1) }
 }
 
 #[test]
-fn rejects_computed_default() {
-    let rejection = reject(
+fn computed_defaults_are_option_inputs_filled_by_the_prologue() {
+    let module = compile_entry(
         "function f(a: int, b: int = a + 1) -> int { a + b }
-function g(a: int) -> int { f(a) }",
+function g(a: int) -> int { f(a) + f(a, b = 2) }",
         "g",
     );
-    assert_unsupported(
-        &rejection,
-        "callee `user.f` default of parameter `b` is not a constant",
+    let source = &module.rust_source;
+    // The parameter is an `Option` input; its local is filled on both paths.
+    assert_contains(
+        source,
+        "pub fn user_f(mut _1: Int63, __arg_2: Option<Int63>)",
     );
-    let rejection = reject("function f(a: int, b: int = a + 1) -> int { a + b }", "f");
-    assert_unsupported(&rejection, "default of parameter `b` is not a constant");
+    assert_contains(source, "let mut _2: Int63;");
+    assert_contains(source, "= __arg_2.is_none();");
+    assert_contains(
+        source,
+        "_2 = __arg_2.expect(\"an argument tested as provided\");",
+    );
+    // Call sites pass `None` or `Some(value)`.
+    assert_contains(source, "user_f(_1, None)?");
+    assert_contains(source, "user_f(_1, Some(int::lit(2)))?");
 }
 
 #[test]

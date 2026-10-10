@@ -173,3 +173,19 @@ function count_ok(n: int) -> int {
 function thrown_payload(n: int) -> int {
     throw Report { outcome: outcome(n), label: label(n) }
 }
+
+// A field read and written through a union the checker narrowed: the slot is
+// read from whichever member the value holds, as the VM reads the instance.
+class Cat { legs: int, name: string }
+class Fish { fins: int, name: string }
+
+function narrowed_fields(n: int) -> string {
+    let pet: Cat | Fish = if (n > 0) { Cat { legs: n, name: "tom" } } else { Fish { fins: n, name: "nemo" } };
+    if (pet is Cat) {
+        pet.legs = pet.legs + 1;
+        pet.name + ":" + pet.legs.to_string()
+    } else {
+        pet.name = pet.name + "!";
+        pet.name + ":" + pet.fins.to_string()
+    }
+}

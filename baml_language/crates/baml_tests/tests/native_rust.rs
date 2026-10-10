@@ -531,6 +531,7 @@ async fn class_unions_match_vm() {
         check!(o, not_big(n) => user_not_big(int(n)));
         check!(o, variant_arm(n) => user_variant_arm(int(n)));
         check!(o, literal_arm(n) => user_literal_arm(int(n)));
+        check!(o, narrowed_fields(n) => user_narrowed_fields(int(n)));
         check!(o, render(n) => user_render(int(n)));
         check!(o, json_out(n) => user_json_out(int(n)));
         check!(o, carry(n) => user_carry(int(n)));
@@ -918,6 +919,13 @@ async fn defaults_match_vm() {
     }
     for x in [0.0, 1.5, -8.0, f64::INFINITY, f64::NAN] {
         check!(o, use_float(x) => user_use_float(x));
+    }
+    // Computed defaults: filled in the callee, from the other parameters;
+    // a throwing default throws in the callee, and a captured one lives in
+    // its cell.
+    for n in [0, 1, 4, -3] {
+        check!(o, use_computed(n) => user_use_computed(int(n)));
+        check!(o, use_risky(n) => user_use_risky(int(n)));
     }
     // Explicit arguments still reach a defaulted parameter unchanged.
     check!(o, scale(5, 2, 1) => user_scale(int(5), int(2), int(1)));

@@ -525,6 +525,150 @@ impl bex_aot::Readable for user_Carrier {
         )
     }
 }
+/// BAML class `user.Cat`.
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
+pub struct user_Cat {
+    pub legs: Int63,
+    pub name: Str,
+}
+impl bex_aot::json::FromJson for user_Cat {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Cat")?;
+        Ok(Self {
+            legs: bex_aot::json::field(object, "legs", false)?,
+            name: bex_aot::json::field(object, "name", false)?,
+        })
+    }
+}
+impl ToBaml for user_Cat {
+    fn render(&self, out: &mut String, _nested: bool) {
+        bex_aot::render::class(
+            out,
+            "Cat",
+            &[("legs", &self.legs as &dyn ToBaml), ("name", &self.name as &dyn ToBaml)],
+        );
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.legs as &dyn ToBaml, &self.name as &dyn ToBaml],
+        );
+    }
+}
+impl bex_aot::render::Overridable for user_Cat {}
+impl bex_aot::eq::EqHandle for user_Cat {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().legs.clone(), b.borrow().legs.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().name.clone(), b.borrow().name.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
+impl bex_aot::ErrorClass for user_Cat {
+    const CLASS_FQN: &'static str = "user.Cat";
+    fn readable_fields(&self) -> Vec<(&'static str, String)> {
+        Vec::from([
+            ("legs", bex_aot::Readable::readable(&self.legs)),
+            ("name", bex_aot::Readable::readable(&self.name)),
+        ])
+    }
+}
+impl bex_aot::Readable for user_Cat {
+    fn readable(&self) -> String {
+        bex_aot::readable::class(
+            <Self as bex_aot::ErrorClass>::CLASS_FQN,
+            &bex_aot::ErrorClass::readable_fields(self),
+        )
+    }
+}
+/// BAML class `user.Fish`.
+#[derive(Debug, bex_aot::serde::Serialize)]
+#[serde(crate = "bex_aot::serde")]
+pub struct user_Fish {
+    pub fins: Int63,
+    pub name: Str,
+}
+impl bex_aot::json::FromJson for user_Fish {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        let object = bex_aot::json::object(json, "Fish")?;
+        Ok(Self {
+            fins: bex_aot::json::field(object, "fins", false)?,
+            name: bex_aot::json::field(object, "name", false)?,
+        })
+    }
+}
+impl ToBaml for user_Fish {
+    fn render(&self, out: &mut String, _nested: bool) {
+        bex_aot::render::class(
+            out,
+            "Fish",
+            &[("fins", &self.fins as &dyn ToBaml), ("name", &self.name as &dyn ToBaml)],
+        );
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.fins as &dyn ToBaml, &self.name as &dyn ToBaml],
+        );
+    }
+}
+impl bex_aot::render::Overridable for user_Fish {}
+impl bex_aot::eq::EqHandle for user_Fish {
+    fn fields_eq(
+        a: &Shared<Self>,
+        b: &Shared<Self>,
+        cx: &mut bex_aot::eq::EqCx,
+    ) -> Result<bool, Thrown> {
+        {
+            let (x, y) = (a.borrow().fins.clone(), b.borrow().fins.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        {
+            let (x, y) = (a.borrow().name.clone(), b.borrow().name.clone());
+            if !bex_aot::BamlEq::baml_eq(&x, &y, cx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
+impl bex_aot::ErrorClass for user_Fish {
+    const CLASS_FQN: &'static str = "user.Fish";
+    fn readable_fields(&self) -> Vec<(&'static str, String)> {
+        Vec::from([
+            ("fins", bex_aot::Readable::readable(&self.fins)),
+            ("name", bex_aot::Readable::readable(&self.name)),
+        ])
+    }
+}
+impl bex_aot::Readable for user_Fish {
+    fn readable(&self) -> String {
+        bex_aot::readable::class(
+            <Self as bex_aot::ErrorClass>::CLASS_FQN,
+            &bex_aot::ErrorClass::readable_fields(self),
+        )
+    }
+}
 /// BAML union `user.Err | user.Ok`.
 #[derive(Clone, Debug)]
 pub enum Union_user_Err_or_user_Ok {
@@ -974,6 +1118,79 @@ impl bex_aot::BamlEq for Union_user_Ok_or_user_Err {
         match (self, other) {
             (Self::user_Ok(a), Self::user_Ok(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
             (Self::user_Err(a), Self::user_Err(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            _ => Ok(false),
+        }
+    }
+}
+/// BAML union `user.Cat | user.Fish`.
+#[derive(Clone, Debug)]
+pub enum Union_user_Cat_or_user_Fish {
+    user_Cat(Shared<user_Cat>),
+    user_Fish(Shared<user_Fish>),
+}
+impl ToBaml for Union_user_Cat_or_user_Fish {
+    fn render(&self, out: &mut String, nested: bool) {
+        match self {
+            Self::user_Cat(value) => value.render(out, nested),
+            Self::user_Fish(value) => value.render(out, nested),
+        }
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::user_Cat(value) => value.collect(out),
+            Self::user_Fish(value) => value.collect(out),
+        }
+    }
+}
+impl bex_aot::Readable for Union_user_Cat_or_user_Fish {
+    fn readable(&self) -> String {
+        match self {
+            Self::user_Cat(value) => bex_aot::Readable::readable(value),
+            Self::user_Fish(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::serde::Serialize for Union_user_Cat_or_user_Fish {
+    fn serialize<S: bex_aot::serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::user_Cat(value) => {
+                bex_aot::serde::Serialize::serialize(value, serializer)
+            }
+            Self::user_Fish(value) => {
+                bex_aot::serde::Serialize::serialize(value, serializer)
+            }
+        }
+    }
+}
+impl bex_aot::json::FromJson for Union_user_Cat_or_user_Fish {
+    fn from_json(
+        json: &bex_aot::json::Json,
+    ) -> Result<Self, bex_aot::json::DecodeError> {
+        bex_aot::json::union(
+            json,
+            &[
+                |json| {
+                    <Shared<user_Cat> as bex_aot::json::FromJson>::from_json(json)
+                        .map(Self::user_Cat)
+                },
+                |json| {
+                    <Shared<user_Fish> as bex_aot::json::FromJson>::from_json(json)
+                        .map(Self::user_Fish)
+                },
+            ],
+        )
+    }
+}
+impl bex_aot::BamlEq for Union_user_Cat_or_user_Fish {
+    fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+        match (self, other) {
+            (Self::user_Cat(a), Self::user_Cat(b)) => bex_aot::BamlEq::baml_eq(a, b, cx),
+            (Self::user_Fish(a), Self::user_Fish(b)) => {
+                bex_aot::BamlEq::baml_eq(a, b, cx)
+            }
             _ => Ok(false),
         }
     }
@@ -1917,4 +2134,163 @@ pub fn user_thrown_payload(mut _1: Int63) -> Result<Int63, Thrown> {
         label: _4,
     });
     Err(Thrown::error(_2.clone()))
+}
+/// BAML function `user.narrowed_fields`.
+pub fn user_narrowed_fields(mut _1: Int63) -> Result<Str, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Str;
+    let mut _2: Union_user_Cat_or_user_Fish;
+    let mut _3: bool;
+    let mut _4: bool;
+    let mut _5: bool;
+    let mut _6: Int63;
+    let mut _7: Str;
+    let mut _8: Str;
+    let mut _9: Str;
+    let mut _10: Int63;
+    let mut _12: Str;
+    let mut _13: Str;
+    let mut _14: Str;
+    let mut _15: Str;
+    let mut _16: Int63;
+    'bb3: {
+        _3 = _1 > int::lit(0);
+        if _3 {
+            _2 = Union_user_Cat_or_user_Fish::user_Cat(
+                shared(user_Cat {
+                    legs: _1,
+                    name: string::from_literal("tom"),
+                }),
+            );
+            break 'bb3;
+        } else {
+            _2 = Union_user_Cat_or_user_Fish::user_Fish(
+                shared(user_Fish {
+                    fins: _1,
+                    name: string::from_literal("nemo"),
+                }),
+            );
+            break 'bb3;
+        }
+    }
+    'bb6: {
+        _5 = matches!(& _2, Union_user_Cat_or_user_Fish::user_Cat(_));
+        if _5 {
+            _4 = true;
+            break 'bb6;
+        } else {
+            _4 = false;
+            break 'bb6;
+        }
+    }
+    'bb11: {
+        if _4 {
+            _6 = match &_2 {
+                Union_user_Cat_or_user_Fish::user_Cat(__object) => {
+                    __object.borrow().legs.clone()
+                }
+                Union_user_Cat_or_user_Fish::user_Fish(__object) => {
+                    __object.borrow().fins.clone()
+                }
+                _ => {
+                    return Err(Thrown::from(Panic::Unreachable));
+                }
+            };
+            {
+                let value = int::add(_6, int::lit(1))?;
+                match &_2 {
+                    Union_user_Cat_or_user_Fish::user_Cat(__object) => {
+                        __object.borrow_mut().legs = value;
+                    }
+                    Union_user_Cat_or_user_Fish::user_Fish(__object) => {
+                        __object.borrow_mut().fins = value;
+                    }
+                    _ => {
+                        return Err(Thrown::from(Panic::Unreachable));
+                    }
+                }
+            }
+            _8 = match &_2 {
+                Union_user_Cat_or_user_Fish::user_Cat(__object) => {
+                    __object.borrow().name.clone()
+                }
+                Union_user_Cat_or_user_Fish::user_Fish(__object) => {
+                    __object.borrow().name.clone()
+                }
+                _ => {
+                    return Err(Thrown::from(Panic::Unreachable));
+                }
+            };
+            _7 = string::concat(&_8, &string::from_literal(":"));
+            _10 = match &_2 {
+                Union_user_Cat_or_user_Fish::user_Cat(__object) => {
+                    __object.borrow().legs.clone()
+                }
+                Union_user_Cat_or_user_Fish::user_Fish(__object) => {
+                    __object.borrow().fins.clone()
+                }
+                _ => {
+                    return Err(Thrown::from(Panic::Unreachable));
+                }
+            };
+            bex_aot::depth::probe(0)?;
+            _9 = bex_aot::render::to_string(&_10)?;
+            _0 = string::concat(&_7, &_9);
+            break 'bb11;
+        } else {
+            _12 = match &_2 {
+                Union_user_Cat_or_user_Fish::user_Cat(__object) => {
+                    __object.borrow().name.clone()
+                }
+                Union_user_Cat_or_user_Fish::user_Fish(__object) => {
+                    __object.borrow().name.clone()
+                }
+                _ => {
+                    return Err(Thrown::from(Panic::Unreachable));
+                }
+            };
+            {
+                let value = string::concat(&_12, &string::from_literal("!"));
+                match &_2 {
+                    Union_user_Cat_or_user_Fish::user_Cat(__object) => {
+                        __object.borrow_mut().name = value;
+                    }
+                    Union_user_Cat_or_user_Fish::user_Fish(__object) => {
+                        __object.borrow_mut().name = value;
+                    }
+                    _ => {
+                        return Err(Thrown::from(Panic::Unreachable));
+                    }
+                }
+            }
+            _14 = match &_2 {
+                Union_user_Cat_or_user_Fish::user_Cat(__object) => {
+                    __object.borrow().name.clone()
+                }
+                Union_user_Cat_or_user_Fish::user_Fish(__object) => {
+                    __object.borrow().name.clone()
+                }
+                _ => {
+                    return Err(Thrown::from(Panic::Unreachable));
+                }
+            };
+            _13 = string::concat(&_14, &string::from_literal(":"));
+            _16 = match &_2 {
+                Union_user_Cat_or_user_Fish::user_Cat(__object) => {
+                    __object.borrow().legs.clone()
+                }
+                Union_user_Cat_or_user_Fish::user_Fish(__object) => {
+                    __object.borrow().fins.clone()
+                }
+                _ => {
+                    return Err(Thrown::from(Panic::Unreachable));
+                }
+            };
+            bex_aot::depth::probe(0)?;
+            _15 = bex_aot::render::to_string(&_16)?;
+            _0 = string::concat(&_13, &_15);
+            break 'bb11;
+        }
+    }
+    Ok(_0)
 }
