@@ -1,0 +1,34 @@
+{
+ "schema": 1,
+ "name": "smoke",
+ "purpose": "Plumbing check on this machine: two scenarios, three trials. Never a published number.",
+ "rows": [
+  "native-off",
+  "control",
+  "vm-off",
+  "vm-medium",
+  "rust",
+  "go",
+  "node",
+  "bun",
+  "python"
+ ],
+ "trials": 3,
+ "seed": 1729,
+ "cpu": 2,
+ "workers": 1,
+ "timeout_s": 600,
+ "cases": [
+  "02_merge_sort",
+  "07_function_calls"
+ ],
+ "regression": {
+  "threshold_percent": 5,
+  "net_of_control": true,
+  "require_disjoint_ranges": true
+ },
+ "scenarios": [
+  {"name": "merge-random", "case": "02_merge_sort", "size": 1024, "variant": "random", "jobs": 32, "warmup": 4},
+  {"name": "calls", "case": "07_function_calls", "size": 128, "jobs": 4096, "warmup": 16}
+ ]
+}

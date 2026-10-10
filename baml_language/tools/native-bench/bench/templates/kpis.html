@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Native Bench</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* One page, one grid. Header strip, nine tiles (one per charted KPI), nine boxes three across, then the KPIs not measured
+   yet as a strip, the reasons, the method. Every box has the same anatomy: title and question on the left, native's number
+   and its ratios on the right, the workload selector, one chart with every implementation as a bar, one sentence on what
+   was timed, then the table and the source at the bottom edge. Column counts are fixed per breakpoint so rows stay even. */
+:root{--bg:#fbfaf7;--fg:#1f2420;--muted:#5e665f;--line:#e2e1da;--grid:#ebeae3;--tint:#f2f1ec;--accent:#2a78d6;--good:#1f6f4a;--bad:#b23b3b;
+--c-native:#2a78d6;--c-vm:#8a8f98;--c-rust:#6250d6;--c-go:#eb6834;--c-node:#1baf7a;--c-bun:#e87ba4;--c-python:#eda100;
+--font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#161a17;--fg:#e6e8e3;--muted:#9ba39c;--line:#2d332e;--grid:#242a26;--tint:#1d221e;--accent:#3987e5;--good:#7fc4a6;--bad:#e66767;
+--c-native:#3987e5;--c-vm:#7c828c;--c-rust:#9085e9;--c-go:#d95926;--c-node:#199e70;--c-bun:#d55181;--c-python:#c98500;color-scheme:dark}}
+:root[data-theme=dark]{--bg:#161a17;--fg:#e6e8e3;--muted:#9ba39c;--line:#2d332e;--grid:#242a26;--tint:#1d221e;--accent:#3987e5;--good:#7fc4a6;--bad:#e66767;
+--c-native:#3987e5;--c-vm:#7c828c;--c-rust:#9085e9;--c-go:#d95926;--c-node:#199e70;--c-bun:#d55181;--c-python:#c98500;color-scheme:dark}
+html,body{margin:0}body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.45;padding:24px 16px 48px}
+main{max-width:1480px;margin:0 auto}a{color:var(--accent)}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 20px;margin:0 0 16px}h1{font-size:1.35rem;font-weight:600;margin:0;letter-spacing:-.01em}
+.facts{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--muted);font-size:.84rem}.facts b{color:var(--fg);font-weight:500}.facts code{font-family:var(--mono);font-size:.8rem}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.74rem;font-weight:500;border:1px solid var(--line)}.pill.ok{color:var(--good);border-color:var(--good)}.pill.bad{color:var(--bad);border-color:var(--bad)}
+.tiles{display:grid;grid-template-columns:repeat(9,1fr);gap:8px;margin:0 0 16px}
+.tile{background:var(--tint);border-radius:4px;padding:10px 12px;min-width:0;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:2px}.tile:hover{outline:1px solid var(--accent)}
+.tile .k{font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .v{font-size:1.25rem;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.2}.tile .s{font-size:.72rem;color:var(--muted);line-height:1.3}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.box{background:var(--tint);border-radius:6px;padding:16px;min-width:0;display:flex;flex-direction:column;gap:10px}
+.hd{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;min-height:58px}.tl{min-width:0;flex:1}
+.box h2{font-size:1.05rem;font-weight:600;margin:0;line-height:1.3}.q{margin:2px 0 0;color:var(--muted);font-size:.84rem}
+.idx{text-align:right;flex:none;max-width:55%}.idx .n{font-size:1.55rem;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}.idx .t{font-size:.72rem;color:var(--muted);line-height:1.35}
+.ctl{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--muted);min-height:26px}
+select{font:inherit;font-size:.8rem;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:2px 6px;max-width:100%}
+.body{display:flex;flex-direction:column;gap:10px;flex:1}.more{margin-top:auto;display:flex;flex-wrap:wrap;gap:4px 18px}
+.chart{display:block;width:100%;height:auto}.zoom{cursor:zoom-in}.row:hover rect{opacity:.85}
+.fam{font:600 10.5px var(--font);fill:var(--muted);letter-spacing:.06em}.lbl{font:12px var(--font);fill:var(--fg)}.lbl.hi{font-weight:600}.lbl.dim{fill:var(--muted)}
+.val{font:11.5px var(--mono);fill:var(--muted)}.val.hi{fill:var(--fg);font-weight:500}.note{font:11px var(--font);fill:var(--muted);font-style:italic}
+.tick{font:10px var(--font);fill:var(--muted)}line.grid{stroke:var(--grid);stroke-width:1}line.sep{stroke:var(--line);stroke-width:1}.axis{stroke:var(--line);stroke-width:1}
+.ny{fill:none;stroke:var(--muted);stroke-dasharray:3 3;stroke-width:1}.dir{font:600 10.5px var(--font);fill:var(--muted);letter-spacing:.04em}
+.measure{margin:0;font-size:.8rem;color:var(--muted)}
+details{font-size:.8rem;color:var(--muted);min-width:0}summary{cursor:pointer;user-select:none;list-style:none}summary::-webkit-details-marker{display:none}
+summary::before{content:"▸ ";font-size:.7rem}details[open]>summary::before{content:"▾ "}details[open]{flex-basis:100%}
+table{border-collapse:collapse;width:100%;margin-top:6px;font-variant-numeric:tabular-nums}th,td{text-align:right;padding:2px 6px;border-bottom:1px solid var(--line);white-space:nowrap;font-family:var(--mono);font-size:.74rem}th:first-child,td:first-child{text-align:left;font-family:var(--font)}td.n{text-align:left;font-style:italic}
+pre{font-family:var(--mono);font-size:.72rem;line-height:1.35;margin:6px 0 0;white-space:pre-wrap;color:var(--fg);max-height:260px;overflow:auto}
+.pending{margin-top:16px;display:flex;flex-direction:column;gap:8px}.strip{background:var(--tint);border-radius:6px;padding:14px 16px;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 24px}
+.strip h2{font-size:1.05rem;font-weight:600;margin:0}.strip .q{flex:1;min-width:200px}.strip .r{font-size:.8rem;color:var(--muted);flex-basis:100%}
+dialog{border:0;border-radius:8px;background:var(--tint);color:var(--fg);padding:18px 22px 14px;max-width:min(96vw,1240px);width:96vw;box-shadow:0 20px 60px rgba(0,0,0,.35)}dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog h2{margin:0 0 2px;font-size:1.2rem;padding-right:60px}dialog .measure{margin-bottom:10px}dialog .chart{cursor:default}
+.dlg-x{position:absolute;right:14px;top:12px;background:none;border:0;color:var(--muted);font:600 13px var(--font);cursor:pointer}.dlg-x:hover{color:var(--fg)}
+.why{margin-top:16px;font-size:.8rem;color:var(--muted)}.why b{color:var(--fg);font-weight:500}
+footer{margin-top:16px;color:var(--muted);font-size:.8rem}footer ol{margin:4px 0 0;padding-left:1.2em}footer code{font-family:var(--mono)}
+@media (max-width:1240px){.tiles{grid-template-columns:repeat(3,1fr)}.grid{grid-template-columns:repeat(2,1fr)}.box:last-child:nth-child(odd){grid-column:1/-1}}
+@media (max-width:820px){.grid{grid-template-columns:1fr}.box:last-child:nth-child(odd){grid-column:auto}.hd{min-height:0}}
+</style>
+</head>
+<body>
+<main>
+<header id="hd"></header>
+<nav class="tiles" id="tiles" aria-label="summary"></nav>
+<section class="grid" id="grid"></section>
+<section class="pending" id="pending"></section>
+<section class="why" id="why"></section>
+<footer id="ft"></footer>
+<dialog id="dlg"><button class="dlg-x" id="dlg-x" aria-label="close">close ×</button><div id="dlg-body"></div></dialog>
+<noscript><p>This page draws its charts from the embedded <code>kpis.json</code> with JavaScript. Without it, the data is still here: every number is in the JSON block at the end of the page, and in <a href="kpis.json">kpis.json</a> beside it.</p></noscript>
+</main>
+<script id="data" type="application/json">/*__KPIS__*/null</script>
+<script>
+(() => {
+const D = JSON.parse(document.getElementById('data').textContent);
+if (!D) return;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const COLOR = k => k.startsWith('native') ? 'var(--c-native)' : k.startsWith('vm') ? 'var(--c-vm)' : `var(--c-${k})`;
+const fmtN = v => v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v >= 1e4 ? Math.round(v/1e3)+'K' : v >= 1e3 ? (v/1e3).toFixed(1)+'K' : v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toFixed(2);
+const fmtU = v => v >= 100000 ? Math.round(v/1000).toLocaleString()+' ms' : v >= 1000 ? (v/1000).toFixed(2)+' ms' : v >= 10 ? v.toFixed(1)+' µs' : v.toFixed(3)+' µs';
+const fmt = (v, unit) => v == null ? '—' : unit === 'ops/s' ? fmtN(v)+'/s' : unit === 'MiB' ? v.toFixed(1)+' MiB' : unit === 'ms' ? v.toFixed(2)+' ms' : unit === 'KB' ? Math.round(v).toLocaleString()+' KB' : unit === 's' ? v.toFixed(1)+' s' : String(v);
+const fmtR = r => r == null ? '—' : r >= 10 ? r.toFixed(0)+'×' : r >= 2 ? r.toFixed(1)+'×' : r.toFixed(2)+'×';
+const charted = D.kpis.filter(k => k.scenarios.length), pending = D.kpis.filter(k => !k.scenarios.length);
+const entryOf = k => k.scenarios.find(s => s.name === k.default) || k.scenarios[0];
+const has = st => st && st.median != null;
+
+// header
+const c = D.candidate, r = D.run, ok = r.trials_failed === 0 && !r.verify_failures;
+document.getElementById('hd').innerHTML = `<h1>Native Bench</h1><div class="facts">
+ <span><b>candidate</b> <code>${esc((c.sha||'').slice(0,12))}</code> ${esc(c.branch||'')}</span>
+ <span><b>machine</b> ${esc(D.machine.name)} · ${esc(D.machine.cpu)} · kernel ${esc(D.machine.kernel)}</span>
+ <span><b>protocol</b> ${esc(D.protocol.name)} · ${D.protocol.trials} trials per bar · one pinned core · one worker</span>
+ <span><b>run</b> ${r.trials_total} trials, ${r.trials_failed} failed <span class="pill ${ok?'ok':'bad'}">${ok?'every trial passed the oracle':'failures present'}</span></span></div>`;
+
+// native's number for one entry, and how it stands against Node and Go
+function standing(k, e) {
+  const n = e && e.values['native-off'], h = e && e.headline || {};
+  const rel = x => x == null ? null : (k.better === 'higher' ? x : 1 / x);
+  const word = k.better === 'higher' ? 'faster than' : 'less than', back = k.better === 'higher' ? 'faster' : 'leaner';
+  const vs = (x, name) => x == null ? null : x >= 1 ? `${fmtR(x)} ${word} ${name}` : `${name} is ${fmtR(1 / x)} ${back}`;
+  const short = (x, name) => x == null ? null : x >= 1 ? `${fmtR(x)} vs ${name}` : `${name} ${fmtR(1 / x)} ahead`;
+  return {n: has(n) ? fmt(n.median, k.unit) : '—',
+          long: has(n) ? [vs(rel(h.node), 'Node'), vs(rel(h.go), 'Go')].filter(Boolean).join(' · ') : '',
+          short: has(n) ? [short(rel(h.node), 'Node'), short(rel(h.go), 'Go')].filter(Boolean).map(esc).join('<br>') : 'no native row'};
+}
+
+// tiles: one per charted KPI, native's number for the default workload
+document.getElementById('tiles').innerHTML = charted.map(k => {
+  const s = standing(k, entryOf(k));
+  return `<a class="tile" href="#${k.key}"><div class="k">${esc(k.title)}</div><div class="v">${s.n}</div><div class="s">${s.short}</div></a>`;
+}).join('');
+
+function niceStep(max) { const p = Math.pow(10, Math.floor(Math.log10(max))); const q = max / p; return q >= 5 ? p : q >= 2 ? p / 2 : p / 5; }
+function placeholder(rw, st) {
+  if (st && st.note) return {text: st.note, why: st.note, note: true};
+  if (rw.status === 'unsupported') return {text: 'not yet', why: D.reasons.unsupported};
+  if (rw.status === 'not_run') return {text: 'next run', why: D.reasons.not_run};
+  return {text: 'no data', why: 'this row produced no value in this run'};
+}
+function chart(k, e, big) {
+  const W = big ? 1180 : 560, LEFT = big ? 190 : 150, LABEL = big ? 90 : 72, TOP = 4, BAR = big ? 16 : 11, GAP = big ? 5 : 3, FGAP = 12, RIGHT = 8, AX = 30;
+  const plotW = W - LEFT - RIGHT - LABEL;
+  const vals = D.rows.map(rw => (e.values[rw.key] || {}).median).filter(v => v != null && v > 0);
+  const max = Math.max(...vals) || 1, min = Math.min(...vals) || 1;
+  const log = max / min > 30;
+  const lo = log ? Math.pow(10, Math.floor(Math.log10(min))) : 0;
+  const hi = log ? Math.pow(10, Math.ceil(Math.log10(max))) : Math.ceil(max / niceStep(max)) * niceStep(max);
+  const x = v => LEFT + (log ? (Math.log10(v) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo)) : v / hi) * plotW;
+  const fams = [...new Set(D.rows.map(rw => rw.family))];
+  let H = TOP; fams.forEach(f => { H += 14 + D.rows.filter(rw => rw.family === f).length * (BAR + GAP) + FGAP; }); H += AX;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(k.title)}: ${esc(e.label)}">`, y = TOP;
+  const ticks = log ? Array.from({length: Math.round(Math.log10(hi) - Math.log10(lo)) + 1}, (_, i) => lo * Math.pow(10, i)) : Array.from({length: Math.round(hi / niceStep(max)) + 1}, (_, i) => i * niceStep(max));
+  ticks.forEach(tv => { if (tv > 0 || !log) s += `<line class="grid" x1="${x(tv).toFixed(1)}" x2="${x(tv).toFixed(1)}" y1="${TOP}" y2="${H - AX + 2}"/>`; });
+  fams.forEach((f, fi) => {
+    s += `<text class="fam" x="${LEFT - 8}" y="${y + 10}" text-anchor="end">${esc(f.toUpperCase())}</text>`; y += 14;
+    D.rows.filter(rw => rw.family === f).forEach(rw => {
+      const st = e.values[rw.key], hi2 = rw.key === 'native-off';
+      s += `<g class="row"><text class="lbl ${hi2?'hi':''} ${has(st)?'':'dim'}" x="${LEFT - 8}" y="${y + BAR - 2}" text-anchor="end">${esc(rw.label)}</text>`;
+      if (has(st)) {
+        const w = Math.max(1.5, x(st.median) - LEFT);
+        s += `<rect x="${LEFT}" y="${y}" width="${w.toFixed(1)}" height="${BAR}" fill="${COLOR(rw.key)}"><title>${esc(rw.label)}: ${fmt(st.median, k.unit)}${st.us_per_job != null ? ' (' + fmtU(st.us_per_job) + ' per job)' : ''}${st.n ? ', n=' + st.n : ''}${st.min != null ? ', range ' + fmt(st.min, k.unit) + ' to ' + fmt(st.max, k.unit) : ''}</title></rect>`;
+        s += `<text class="val ${hi2?'hi':''}" x="${LEFT + w + 5}" y="${y + BAR - 2}">${fmt(st.median, k.unit)}</text>`;
+      } else {
+        const p = placeholder(rw, st);
+        if (p.note) s += `<text class="note" x="${LEFT + 2}" y="${y + BAR - 2}"><title>${esc(p.why)}</title>${esc(p.text)}</text>`;
+        else s += `<rect class="ny" x="${LEFT}" y="${y}" width="46" height="${BAR}"><title>${esc(p.why)}</title></rect><text class="val" x="${LEFT + 52}" y="${y + BAR - 2}">${esc(p.text)}</text>`;
+      }
+      s += `</g>`; y += BAR + GAP;
+    });
+    y += FGAP; if (fi < fams.length - 1) s += `<line class="sep" x1="${LEFT}" x2="${W - RIGHT}" y1="${y - FGAP / 2}" y2="${y - FGAP / 2}"/>`;
+  });
+  const ay = H - AX + 2;
+  s += `<line class="axis" x1="${LEFT}" x2="${LEFT + plotW}" y1="${ay}" y2="${ay}"/>`;
+  ticks.forEach(tv => { if (tv > 0 || !log) s += `<text class="tick" x="${x(tv).toFixed(1)}" y="${ay + 12}" text-anchor="middle">${fmt(tv, k.unit)}</text>`; });
+  s += `<text class="dir" x="${LEFT}" y="${ay + 25}">${esc(k.unit)}</text>`;
+  s += `<text class="dir" x="${LEFT + plotW}" y="${ay + 25}" text-anchor="end">${k.better === 'higher' ? 'HIGHER IS BETTER →' : '← LOWER IS BETTER'}${log ? ' · LOG SCALE' : ''}</text>`;
+  return s + '</svg>';
+}
+function table(k, e) {
+  const t = k.unit === 'ops/s';
+  return `<table><tr><th>implementation</th><th>${esc(k.unit)}</th>${t ? '<th>per job</th><th>min</th><th>max</th>' : ''}<th>n</th></tr>` + D.rows.map(rw => {
+    const st = e.values[rw.key];
+    if (!has(st)) return `<tr><td>${esc(rw.label)}</td><td class="n" colspan="${t ? 5 : 2}">${esc(placeholder(rw, st).text)}</td></tr>`;
+    return `<tr><td>${esc(rw.label)}</td><td>${fmt(st.median, k.unit)}</td>${t ? `<td>${fmtU(st.us_per_job)}</td><td>${fmt(st.min, k.unit)}</td><td>${fmt(st.max, k.unit)}</td>` : ''}<td>${st.n || ''}</td></tr>`;
+  }).join('') + '</table>';
+}
+function idx(k, e) {
+  const s = standing(k, e);
+  return `<div class="n">${s.n}</div><div class="t">BAML native, telemetry off</div>${s.long ? `<div class="t">${esc(s.long)}</div>` : ''}`;
+}
+function body(k, e) {
+  return `<div class="zoom" data-zoom="${k.key}" title="click to enlarge">${chart(k, e)}</div><p class="measure">${esc(k.measure || '')}</p>
+    <div class="more"><details><summary>table</summary>${table(k, e)}</details>${e.source ? `<details><summary>BAML source</summary><pre>${esc(e.source)}</pre></details>` : ''}</div>`;
+}
+document.getElementById('grid').innerHTML = charted.map(k => {
+  const e = entryOf(k);
+  const sel = k.scenarios.length > 1 ? `<label for="sel-${k.key}">workload</label><select id="sel-${k.key}" data-kpi="${k.key}">${k.scenarios.map(s => `<option value="${esc(s.name)}">${esc(s.label)}</option>`).join('')}</select>` : esc(e.label);
+  return `<article class="box" id="${k.key}"><div class="hd"><div class="tl"><h2>${esc(k.title)}</h2><p class="q">${esc(k.question)}</p></div><div class="idx" id="idx-${k.key}">${idx(k, e)}</div></div>
+    <div class="ctl">${sel}</div><div class="body" id="body-${k.key}">${body(k, e)}</div></article>`;
+}).join('');
+document.getElementById('pending').innerHTML = pending.map(k =>
+  `<div class="strip" id="${k.key}"><h2>${esc(k.title)}</h2><p class="q">${esc(k.question)}</p><div class="r"><b>Not measured in this run.</b> ${esc(k.pending || 'no data')}. ${esc(k.measure || '')}</div></div>`).join('');
+function current(k) { const sel = document.getElementById('sel-' + k.key); return k.scenarios.find(s => s.name === (sel ? sel.value : k.default)) || k.scenarios[0]; }
+document.querySelectorAll('select[data-kpi]').forEach(s => s.addEventListener('change', () => {
+  const k = D.kpis.find(x => x.key === s.dataset.kpi), e = current(k);
+  document.getElementById('idx-' + k.key).innerHTML = idx(k, e);
+  document.getElementById('body-' + k.key).innerHTML = body(k, e);
+}));
+
+// click a chart to enlarge it; ?zoom=<kpi> opens one on load
+const dlg = document.getElementById('dlg'), dlgBody = document.getElementById('dlg-body');
+function enlarge(key) {
+  const k = D.kpis.find(x => x.key === key); if (!k) return; const e = current(k); if (!e) return;
+  dlgBody.innerHTML = `<h2>${esc(k.title)}: ${esc(e.label)}</h2><p class="measure">${esc(k.measure || '')}</p>${chart(k, e, true)}`;
+  if (!dlg.open) dlg.showModal();
+}
+document.getElementById('grid').addEventListener('click', ev => { const z = ev.target.closest('[data-zoom]'); if (z) enlarge(z.dataset.zoom); });
+document.getElementById('dlg-x').addEventListener('click', () => dlg.close());
+dlg.addEventListener('click', ev => { if (ev.target === dlg) dlg.close(); });
+const want = new URLSearchParams(location.search).get('zoom'); if (want) enlarge(want);
+
+document.getElementById('why').innerHTML = `<b>Why some rows are empty.</b> Native at low, medium and high: ${esc(D.reasons.unsupported)}. Rows marked next run: ${esc(D.reasons.not_run)}. Rows in italics do not apply to that implementation and say why. ${pending.length ? pending.map(k => esc(k.title) + ': ' + esc(k.pending)).join('. ') + '. ' : ''}An empty row is drawn, never dropped, so the comparison a reader expects is visibly missing rather than silently absent.`;
+const dm = D.drift.length ? D.drift.map(d => Math.abs(d.ratio - 1) * 100).sort((a, b) => a - b)[Math.floor(D.drift.length / 2)] : null;
+document.getElementById('ft').innerHTML = `<details><summary>How this was produced</summary>
+ <ol><li>Stage: emit <code>run</code> and <code>prepare</code> of nine BAML programs through <code>baml __emit-rust</code>; archive <code>baml_language</code> at HEAD.</li>
+ <li>Boot an ephemeral VM from the <code>${esc(D.machine.name)}</code> snapshot: identical bits every time, idle guest, ${esc(D.machine.cpu)}.</li>
+ <li>Build every native executable from a clean target in release (fat LTO, ${esc(D.machine.rustc)}); compile bytecode with the pinned VM host; freeze the snapshot's native executables as a control row.</li>
+ <li>Verify every implementation on every program's edge-case inputs against an independent oracle; stop on any failure.</li>
+ <li>Run ${D.run.trials_total} trials: ${D.protocol.trials} per bar, shuffled with a fixed seed, one pinned core, a fresh process each, the timed region inside the process, peak RSS from wait4. BAML rows set <code>BAML_TELEMETRY</code> per bar; levels other than off must produce a recording.</li>
+ <li>Summarize, write <code>kpis.json</code>, render this page from it, delete the VM.</li></ol>
+ <p>Host drift this run: the frozen native control moved a median ${dm == null ? '—' : dm.toFixed(1) + '%'} against the candidate across ${D.drift.length} workloads. Started ${esc(D.run.started)}, finished ${esc(D.run.finished)}; load ${esc(D.run.loadavg_start)} → ${esc(D.run.loadavg_end)}; glibc ${esc(D.machine.glibc)}; protocol <code>${esc((D.protocol.sha256||'').slice(0,16))}</code>. Data: <a href="kpis.json">kpis.json</a>; every trial: <code>results/trials.csv</code>.</p></details>`;
+})();
+</script>
+</body>
+</html>

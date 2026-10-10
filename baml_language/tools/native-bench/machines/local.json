@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "name": "local",
+  "provider": "local",
+  "bench_root": "~/.cache/baml-bench/local",
+  "python": "python3",
+  "description": "This machine, shared and unpinned; for smoke runs, never for a published number.",
+  "host": {"path": "artifacts/host", "source": "build with `bench host` from the candidate checkout"},
+  "control": {"path": null},
+  "tools": {"go": "go", "python": "python3", "node": "node", "bun": "bun"},
+  "references": "ref"
+}
