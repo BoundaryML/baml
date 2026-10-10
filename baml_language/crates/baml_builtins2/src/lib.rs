@@ -267,6 +267,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("vercel", "ns_internal/images.baml"),
     builtin!("claude_code", "cli.baml"),
     builtin!("claude_code", "ns_internal/cli.baml"),
+    builtin!("claude_code", "ns_internal/content.baml"),
     // ai.mcp: MCP servers as ordinary ai tools (part of the ai package).
     builtin!("ai", "ns_mcp/mcp.baml"),
     builtin!("ai", "ns_internal/mcp.baml"),
