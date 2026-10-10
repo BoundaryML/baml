@@ -3,6 +3,7 @@ pub mod dev;
 pub(crate) mod dotenv;
 pub mod dump_intermediate;
 pub mod generate;
+pub mod import;
 pub mod init;
 pub mod init_ui;
 pub mod optimize;
