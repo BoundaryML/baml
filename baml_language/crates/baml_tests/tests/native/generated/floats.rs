@@ -76,7 +76,7 @@ pub fn user_fmix(mut _1: f64) -> Result<Str, Thrown> {
     _3 = _1 * 2.5_f64;
     _2 = _3 - 1.0_f64;
     bex_aot::depth::probe(0)?;
-    _0 = ToBaml::to_baml(&_2);
+    _0 = bex_aot::render::to_string(&_2)?;
     Ok(_0)
 }
 /// BAML function `user.ffloor`.

@@ -44,7 +44,14 @@ impl ToBaml for user_State {
             &[("count", &self.count as &dyn ToBaml), ("seed", &self.seed as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.count as &dyn ToBaml, &self.seed as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_State {}
 impl bex_aot::ErrorClass for user_State {
     const CLASS_FQN: &'static str = "user.State";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -103,7 +110,7 @@ pub fn user_run(mut _1: Shared<user_State>) -> Result<Str, Thrown> {
         }
     }
     bex_aot::depth::probe(0)?;
-    _0 = ToBaml::to_baml(&_2);
+    _0 = bex_aot::render::to_string(&_2)?;
     Ok(_0)
 }
 /// BAML function `user.sort_kernel`.

@@ -44,7 +44,14 @@ impl ToBaml for user_Tagged {
             &[("tag", &self.tag as &dyn ToBaml), ("level", &self.level as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.tag as &dyn ToBaml, &self.level as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Tagged {}
 impl bex_aot::ErrorClass for user_Tagged {
     const CLASS_FQN: &'static str = "user.Tagged";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -282,13 +289,13 @@ pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
         level: _4,
     });
     bex_aot::depth::probe(0)?;
-    _8 = ToBaml::to_baml(&_2);
+    _8 = bex_aot::render::to_string(&_2)?;
     _7 = string::concat(&_8, &string::from_literal(" "));
     _6 = string::concat(&_7, &_2.borrow().tag);
     _5 = string::concat(&_6, &string::from_literal(" "));
     _11 = _2.borrow().level;
     bex_aot::depth::probe(0)?;
-    _10 = ToBaml::to_baml(&_11);
+    _10 = bex_aot::render::to_string(&_11)?;
     _0 = string::concat(&_5, &_10);
     Ok(_0)
 }

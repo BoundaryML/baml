@@ -39,7 +39,11 @@ impl ToBaml for user_Box {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Box", &[("n", &self.n as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.n as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Box {}
 impl bex_aot::ErrorClass for user_Box {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -69,7 +73,14 @@ impl ToBaml for user_Pt {
             &[("x", &self.x as &dyn ToBaml), ("y", &self.y as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.x as &dyn ToBaml, &self.y as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Pt {}
 impl bex_aot::ErrorClass for user_Pt {
     const CLASS_FQN: &'static str = "user.Pt";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -641,7 +652,7 @@ pub fn user_use_strings(mut _1: Str) -> Result<Str, Thrown> {
     _26 = string::concat(&_27, &_8);
     _25 = string::concat(&_26, &_11);
     bex_aot::depth::probe(0)?;
-    _32 = ToBaml::to_baml(&_16);
+    _32 = bex_aot::render::to_string(&_16)?;
     _24 = string::concat(&_25, &_32);
     _36 = int::lit(1);
     _34 = array::get(&_20, _36)?;
@@ -1127,7 +1138,7 @@ pub fn user_render__int(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _3: Str;
     let mut _4: Str;
     bex_aot::depth::probe(0)?;
-    _3 = ToBaml::to_baml(&_1);
+    _3 = bex_aot::render::to_string(&_1)?;
     _2 = string::concat(&_3, &string::from_literal("/"));
     bex_aot::depth::probe(1)?;
     _4 = json::to_string(&_1)?;
@@ -1142,7 +1153,7 @@ pub fn user_render__string(mut _1: Str) -> Result<Str, Thrown> {
     let mut _3: Str;
     let mut _4: Str;
     bex_aot::depth::probe(0)?;
-    _3 = ToBaml::to_baml(&_1);
+    _3 = bex_aot::render::to_string(&_1)?;
     _2 = string::concat(&_3, &string::from_literal("/"));
     bex_aot::depth::probe(1)?;
     _4 = json::to_string(&_1)?;
@@ -1157,7 +1168,7 @@ pub fn user_render__user_Box(mut _1: Shared<user_Box>) -> Result<Str, Thrown> {
     let mut _3: Str;
     let mut _4: Str;
     bex_aot::depth::probe(0)?;
-    _3 = ToBaml::to_baml(&_1);
+    _3 = bex_aot::render::to_string(&_1)?;
     _2 = string::concat(&_3, &string::from_literal("/"));
     bex_aot::depth::probe(1)?;
     _4 = json::to_string(&_1)?;
@@ -1172,7 +1183,7 @@ pub fn user_render__int_array(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown>
     let mut _3: Str;
     let mut _4: Str;
     bex_aot::depth::probe(0)?;
-    _3 = ToBaml::to_baml(&_1);
+    _3 = bex_aot::render::to_string(&_1)?;
     _2 = string::concat(&_3, &string::from_literal("/"));
     bex_aot::depth::probe(1)?;
     _4 = json::to_string(&_1)?;
@@ -1187,7 +1198,7 @@ pub fn user_render__bool(mut _1: bool) -> Result<Str, Thrown> {
     let mut _3: Str;
     let mut _4: Str;
     bex_aot::depth::probe(0)?;
-    _3 = ToBaml::to_baml(&_1);
+    _3 = bex_aot::render::to_string(&_1)?;
     _2 = string::concat(&_3, &string::from_literal("/"));
     bex_aot::depth::probe(1)?;
     _4 = json::to_string(&_1)?;

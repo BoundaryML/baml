@@ -110,7 +110,11 @@ impl ToBaml for user_Err {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Err", &[("message", &self.message as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.message as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Err {}
 impl bex_aot::ErrorClass for user_Err {
     const CLASS_FQN: &'static str = "user.Err";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -135,7 +139,11 @@ impl ToBaml for user_Ok {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Ok", &[("value", &self.value as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.value as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Ok {}
 impl bex_aot::ErrorClass for user_Ok {
     const CLASS_FQN: &'static str = "user.Ok";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -158,7 +166,11 @@ impl ToBaml for user_Skip {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Skip", &[]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[]);
+    }
 }
+impl bex_aot::render::Overridable for user_Skip {}
 impl bex_aot::ErrorClass for user_Skip {
     const CLASS_FQN: &'static str = "user.Skip";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -188,7 +200,14 @@ impl ToBaml for user_Warn {
             &[("code", &self.code as &dyn ToBaml), ("note", &self.note as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.code as &dyn ToBaml, &self.note as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Warn {}
 impl bex_aot::ErrorClass for user_Warn {
     const CLASS_FQN: &'static str = "user.Warn";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -224,7 +243,14 @@ impl ToBaml for user_Report {
             ],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.outcome as &dyn ToBaml, &self.label as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Report {}
 impl bex_aot::ErrorClass for user_Report {
     const CLASS_FQN: &'static str = "user.Report";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -259,7 +285,11 @@ impl ToBaml for user_Reversed {
             &[("outcome", &self.outcome as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.outcome as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Reversed {}
 impl bex_aot::ErrorClass for user_Reversed {
     const CLASS_FQN: &'static str = "user.Reversed";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -291,7 +321,11 @@ impl ToBaml for user_Carrier {
             &[("payload", &self.payload as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.payload as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Carrier {}
 impl bex_aot::ErrorClass for user_Carrier {
     const CLASS_FQN: &'static str = "user.Carrier";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -317,6 +351,12 @@ impl ToBaml for Union_user_Err_or_user_Ok {
         match self {
             Self::user_Err(value) => value.render(out, nested),
             Self::user_Ok(value) => value.render(out, nested),
+        }
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::user_Err(value) => value.collect(out),
+            Self::user_Ok(value) => value.collect(out),
         }
     }
 }
@@ -377,6 +417,14 @@ impl ToBaml for Union_user_Err_or_user_Ok_or_user_Skip_or_user_Warn {
             Self::user_Ok(value) => value.render(out, nested),
             Self::user_Skip(value) => value.render(out, nested),
             Self::user_Warn(value) => value.render(out, nested),
+        }
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::user_Err(value) => value.collect(out),
+            Self::user_Ok(value) => value.collect(out),
+            Self::user_Skip(value) => value.collect(out),
+            Self::user_Warn(value) => value.collect(out),
         }
     }
 }
@@ -456,6 +504,12 @@ impl ToBaml for Union_user_Color_or_user_Size {
             Self::user_Size(value) => value.render(out, nested),
         }
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::user_Color(value) => value.collect(out),
+            Self::user_Size(value) => value.collect(out),
+        }
+    }
 }
 impl bex_aot::Readable for Union_user_Color_or_user_Size {
     fn readable(&self) -> String {
@@ -521,6 +575,12 @@ impl ToBaml for Union_int_or_user_Color {
             Self::user_Color(value) => value.render(out, nested),
         }
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::int(value) => value.collect(out),
+            Self::user_Color(value) => value.collect(out),
+        }
+    }
 }
 impl bex_aot::Readable for Union_int_or_user_Color {
     fn readable(&self) -> String {
@@ -584,6 +644,12 @@ impl ToBaml for Union_int_or_string {
             Self::string(value) => value.render(out, nested),
         }
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::int(value) => value.collect(out),
+            Self::string(value) => value.collect(out),
+        }
+    }
 }
 impl bex_aot::Readable for Union_int_or_string {
     fn readable(&self) -> String {
@@ -645,6 +711,12 @@ impl ToBaml for Union_user_Ok_or_user_Err {
         match self {
             Self::user_Ok(value) => value.render(out, nested),
             Self::user_Err(value) => value.render(out, nested),
+        }
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::user_Ok(value) => value.collect(out),
+            Self::user_Err(value) => value.collect(out),
         }
     }
 }
@@ -735,7 +807,7 @@ pub fn user_describe(mut _1: Int63) -> Result<Str, Thrown> {
             _6 = _4.borrow().value;
             _10 = string::from_literal("ok ");
             bex_aot::depth::probe(0)?;
-            _5 = ToBaml::to_baml(&_6);
+            _5 = bex_aot::render::to_string(&_6)?;
             _0 = string::concat(&_10, &_5);
             break 'bb5;
         } else {
@@ -915,7 +987,7 @@ pub fn user_fields(mut _1: Int63) -> Result<Str, Thrown> {
             };
             _5 = _4.borrow().value;
             bex_aot::depth::probe(0)?;
-            _0 = ToBaml::to_baml(&_5);
+            _0 = bex_aot::render::to_string(&_5)?;
             break 'bb9;
         } else {
             _7 = _2.clone();
@@ -948,7 +1020,7 @@ pub fn user_fields(mut _1: Int63) -> Result<Str, Thrown> {
                     };
                     _12 = _10.borrow().code;
                     bex_aot::depth::probe(0)?;
-                    _11 = ToBaml::to_baml(&_12);
+                    _11 = bex_aot::render::to_string(&_12)?;
                     _0 = string::concat(&_11, &_10.borrow().note);
                     break 'bb9;
                 } else {
@@ -1058,7 +1130,7 @@ pub fn user_label_name(mut _1: Int63) -> Result<Str, Thrown> {
             };
             _8 = string::from_literal("color ");
             bex_aot::depth::probe(0)?;
-            _5 = ToBaml::to_baml(&_4);
+            _5 = bex_aot::render::to_string(&_4)?;
             _0 = string::concat(&_8, &_5);
             break 'bb6;
         } else {
@@ -1070,7 +1142,7 @@ pub fn user_label_name(mut _1: Int63) -> Result<Str, Thrown> {
             };
             _9 = string::from_literal("size ");
             bex_aot::depth::probe(0)?;
-            _7 = ToBaml::to_baml(&_6);
+            _7 = bex_aot::render::to_string(&_6)?;
             _0 = string::concat(&_9, &_7);
             break 'bb6;
         }
@@ -1256,10 +1328,10 @@ pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
     });
     _9 = user_outcome(_1)?;
     bex_aot::depth::probe(0)?;
-    _8 = ToBaml::to_baml(&_9);
+    _8 = bex_aot::render::to_string(&_9)?;
     _7 = string::concat(&_8, &string::from_literal(" | "));
     bex_aot::depth::probe(0)?;
-    _10 = ToBaml::to_baml(&_2);
+    _10 = bex_aot::render::to_string(&_2)?;
     _6 = string::concat(&_7, &_10);
     _5 = string::concat(&_6, &string::from_literal(" | "));
     _13 = user_outcome(_1)?;
@@ -1267,7 +1339,7 @@ pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
     _14 = user_outcome(_15)?;
     _12 = array::new::<Union_user_Err_or_user_Ok>(Vec::from([_13.clone(), _14.clone()]));
     bex_aot::depth::probe(0)?;
-    _11 = ToBaml::to_baml(&_12);
+    _11 = bex_aot::render::to_string(&_12)?;
     _0 = string::concat(&_5, &_11);
     Ok(_0)
 }
@@ -1326,7 +1398,7 @@ pub fn user_describe_outcome(mut _1: Union_user_Err_or_user_Ok) -> Result<Str, T
             _5 = _3.borrow().value;
             _9 = string::from_literal("ok ");
             bex_aot::depth::probe(0)?;
-            _4 = ToBaml::to_baml(&_5);
+            _4 = bex_aot::render::to_string(&_5)?;
             _0 = string::concat(&_9, &_4);
             break 'bb4;
         } else {
@@ -1398,7 +1470,7 @@ pub fn user_label_text(mut _1: Union_user_Color_or_user_Size) -> Result<Str, Thr
                 }
             };
             bex_aot::depth::probe(0)?;
-            _0 = ToBaml::to_baml(&_3);
+            _0 = bex_aot::render::to_string(&_3)?;
             break 'bb3;
         } else {
             _4 = match _1 {
@@ -1408,7 +1480,7 @@ pub fn user_label_text(mut _1: Union_user_Color_or_user_Size) -> Result<Str, Thr
                 }
             };
             bex_aot::depth::probe(0)?;
-            _0 = ToBaml::to_baml(&_4);
+            _0 = bex_aot::render::to_string(&_4)?;
             break 'bb3;
         }
     }

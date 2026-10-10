@@ -669,7 +669,7 @@ function run(state: State) -> string {
         "run",
     );
     let source = &module.rust_source;
-    assert_contains(source, "= ToBaml::to_baml(&_");
+    assert_contains(source, "= bex_aot::render::to_string(&_");
     assert_contains(source, "= json::to_string(&_");
     assert_contains(source, "mut _1: Shared<user_State>");
 }
@@ -690,7 +690,7 @@ function render(n: int) -> string {
     );
     let source = &module.rust_source;
     assert_eq!(
-        source.matches("= ToBaml::to_baml(&_").count(),
+        source.matches("= bex_aot::render::to_string(&_").count(),
         4,
         "{source}"
     );
@@ -699,8 +699,8 @@ function render(n: int) -> string {
 }
 
 #[test]
-fn rejects_to_string_on_a_class_with_its_own_to_string() {
-    let rejection = reject(
+fn to_string_on_a_class_with_its_own_to_string_is_a_static_call() {
+    let module = compile_entry(
         r#"
 class Named {
     name: string
@@ -712,8 +712,47 @@ function f(x: Named) -> string { x.to_string() }
 "#,
         "f",
     );
-    assert_unsupported(&rejection, "to_string");
-    assert_unsupported(&rejection, "user.Named");
+    let source = &module.rust_source;
+    // The receiver's own block: a direct call, as a class's own `cmp` is.
+    assert_contains(
+        source,
+        "_0 = user___user_Named_as_baml_ToString___to_string(_1.clone())?;",
+    );
+    // Not reached by a structural walk, so it is not an override there.
+    assert_contains(
+        source,
+        "impl bex_aot::render::Overridable for user_Named {}",
+    );
+}
+
+#[test]
+fn to_string_overrides_below_a_value_are_compiled_and_spliced() {
+    let module = compile_entry(
+        r#"
+class Tag {
+    name: string
+    implements baml.ToString {
+        function to_string(self) -> string { "<" + self.name + ">" }
+    }
+}
+class Holder { tags: Tag[], label: string }
+function f(h: Holder) -> string { h.to_string() }
+"#,
+        "f",
+    );
+    let source = &module.rust_source;
+    // The walk honors `Tag`'s override two levels down, through the
+    // class's fields, so the override is compiled and the class is marked.
+    assert_contains(source, "= bex_aot::render::to_string(&_1)?;");
+    assert_contains(source, "const OVERRIDES: bool = true;");
+    assert_contains(
+        source,
+        "user___user_Tag_as_baml_ToString___to_string(this.clone())",
+    );
+    assert_contains(
+        source,
+        "impl bex_aot::render::Overridable for user_Holder {}",
+    );
 }
 
 #[test]
@@ -811,10 +850,7 @@ function main(n: int, verbose: bool, name: string, ratio: float) -> string {
         &shim,
         "native_main::user_main(value_0, value_1, value_2, value_3)",
     );
-    assert_contains(
-        &shim,
-        "let rendered = bex_aot::render::ToBaml::to_baml(&value);",
-    );
+    assert_contains(&shim, "match bex_aot::render::to_string(&value) {");
     assert_contains(&shim, "uncaught throw");
     assert_contains(&shim, "thrown.exit_code()");
     assert_contains(
@@ -950,7 +986,7 @@ fn bench_00_startup() {
         "class State {{ value: int }}\n{PREPARE}\
          function run(state: State) -> string {{ state.value.to_string() }}"
     ));
-    assert_contains(&module.rust_source, "= ToBaml::to_baml(&_2);");
+    assert_contains(&module.rust_source, "= bex_aot::render::to_string(&_2)?;");
 }
 
 #[test]
@@ -1358,8 +1394,8 @@ fn enum_variants_named_like_keywords_are_renamed_for_serde() {
 }
 
 #[test]
-fn rejects_to_string_on_an_enum_with_its_own_to_string() {
-    let rejection = reject(
+fn to_string_on_an_enum_with_its_own_to_string_is_a_static_call() {
+    let module = compile_entry(
         r#"
 enum Color { Red, Blue }
 implement baml.ToString for Color { function to_string(self) -> string { "c" } }
@@ -1367,9 +1403,9 @@ function f(c: Color) -> string { c.to_string() }
 "#,
         "f",
     );
-    assert_unsupported(
-        &rejection,
-        "`to_string` on a `user.Color`: `user.Color` implements its own `baml.ToString`",
+    assert_contains(
+        &module.rust_source,
+        "_0 = user___user_Color_as_baml_ToString___to_string(_1)?;",
     );
 }
 

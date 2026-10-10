@@ -42,7 +42,11 @@ impl ToBaml for user_Counter {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Counter", &[("n", &self.n as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.n as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Counter {}
 impl bex_aot::ErrorClass for user_Counter {
     const CLASS_FQN: &'static str = "user.Counter";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {

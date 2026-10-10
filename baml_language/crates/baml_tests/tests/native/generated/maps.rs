@@ -47,7 +47,14 @@ impl ToBaml for user_Inventory {
             &[("stock", &self.stock as &dyn ToBaml), ("name", &self.name as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.stock as &dyn ToBaml, &self.name as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Inventory {}
 impl bex_aot::ErrorClass for user_Inventory {
     const CLASS_FQN: &'static str = "user.Inventory";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -123,15 +130,15 @@ pub fn user_tally(mut _1: Int63) -> Result<Str, Thrown> {
         _25 = _24.is_none();
         if _25 {
             bex_aot::depth::probe(0)?;
-            _35 = ToBaml::to_baml(&_2);
+            _35 = bex_aot::render::to_string(&_2)?;
             _34 = string::concat(&_35, &string::from_literal(" "));
             bex_aot::depth::probe(0)?;
-            _37 = ToBaml::to_baml(&_19);
+            _37 = bex_aot::render::to_string(&_19)?;
             _33 = string::concat(&_34, &_37);
             _32 = string::concat(&_33, &string::from_literal(" "));
             _40 = map::len(&_2);
             bex_aot::depth::probe(0)?;
-            _39 = ToBaml::to_baml(&_40);
+            _39 = bex_aot::render::to_string(&_40)?;
             _0 = string::concat(&_32, &_39);
             return Ok(_0);
         } else {
@@ -210,11 +217,11 @@ pub fn user_flags(mut _1: bool) -> Result<Str, Thrown> {
     bex_aot::depth::probe(0)?;
     _16 = map::has(&_2, &_1);
     bex_aot::depth::probe(0)?;
-    _15 = ToBaml::to_baml(&_16);
+    _15 = bex_aot::render::to_string(&_16)?;
     _12 = string::concat(&_13, &_15);
     _11 = string::concat(&_12, &string::from_literal(" "));
     bex_aot::depth::probe(0)?;
-    _20 = ToBaml::to_baml(&_2);
+    _20 = bex_aot::render::to_string(&_2)?;
     _0 = string::concat(&_11, &_20);
     Ok(_0)
 }
@@ -269,12 +276,12 @@ pub fn user_json_in(mut _1: Str) -> Result<Str, Thrown> {
     _6 = string::concat(&_2.borrow().name, &string::from_literal(" "));
     _9 = _2.borrow().stock.clone();
     bex_aot::depth::probe(0)?;
-    _8 = ToBaml::to_baml(&_9);
+    _8 = bex_aot::render::to_string(&_9)?;
     _5 = string::concat(&_6, &_8);
     _4 = string::concat(&_5, &string::from_literal(" "));
     _12 = map::len(&_2.borrow().stock);
     bex_aot::depth::probe(0)?;
-    _11 = ToBaml::to_baml(&_12);
+    _11 = bex_aot::render::to_string(&_12)?;
     _0 = string::concat(&_4, &_11);
     Ok(_0)
 }
@@ -336,19 +343,19 @@ pub fn user_get_or_insert(mut _1: Int63) -> Result<Str, Thrown> {
     bex_aot::depth::probe(0)?;
     _14 = map::clear(&_2);
     bex_aot::depth::probe(0)?;
-    _22 = ToBaml::to_baml(&_4);
+    _22 = bex_aot::render::to_string(&_4)?;
     _21 = string::concat(&_22, &string::from_literal(" "));
     bex_aot::depth::probe(0)?;
-    _24 = ToBaml::to_baml(&_7);
+    _24 = bex_aot::render::to_string(&_7)?;
     _20 = string::concat(&_21, &_24);
     _19 = string::concat(&_20, &string::from_literal(" "));
     bex_aot::depth::probe(0)?;
-    _26 = ToBaml::to_baml(&_11);
+    _26 = bex_aot::render::to_string(&_11)?;
     _18 = string::concat(&_19, &_26);
     _17 = string::concat(&_18, &string::from_literal(" "));
     _29 = map::len(&_2);
     bex_aot::depth::probe(0)?;
-    _28 = ToBaml::to_baml(&_29);
+    _28 = bex_aot::render::to_string(&_29)?;
     _0 = string::concat(&_17, &_28);
     Ok(_0)
 }

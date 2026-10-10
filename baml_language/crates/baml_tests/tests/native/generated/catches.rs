@@ -46,7 +46,11 @@ impl ToBaml for user_Invalid {
             &[("message", &self.message as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.message as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Invalid {}
 impl bex_aot::ErrorClass for user_Invalid {
     const CLASS_FQN: &'static str = "user.Invalid";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -79,7 +83,14 @@ impl ToBaml for user_Coded {
             ],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.code as &dyn ToBaml, &self.message as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Coded {}
 impl bex_aot::ErrorClass for user_Coded {
     const CLASS_FQN: &'static str = "user.Coded";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -114,7 +125,11 @@ impl ToBaml for baml_errors_InvalidArgument {
             &[("message", &self.message as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.message as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for baml_errors_InvalidArgument {}
 impl bex_aot::ErrorClass for baml_errors_InvalidArgument {
     const CLASS_FQN: &'static str = "baml.errors.InvalidArgument";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -142,7 +157,11 @@ impl ToBaml for baml_panics_Exit {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Exit", &[("code", &self.code as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.code as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for baml_panics_Exit {}
 impl bex_aot::ErrorClass for baml_panics_Exit {
     const CLASS_FQN: &'static str = "baml.panics.Exit";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -282,7 +301,13 @@ pub fn user_catch_bind(mut _1: Int63) -> Result<Str, Thrown> {
                     break 'bb2;
                 }
             };
-            _0 = ToBaml::to_baml(&_4);
+            _0 = match bex_aot::render::to_string(&_4) {
+                Ok(value) => value,
+                Err(error) => {
+                    _2 = Thrown::from(error);
+                    break 'bb2;
+                }
+            };
             break 'bb8;
         }
         if let Some(value) = bex_aot::thrown::downcast::<Shared<user_Invalid>>(&_2) {
@@ -295,7 +320,7 @@ pub fn user_catch_bind(mut _1: Int63) -> Result<Str, Thrown> {
                 _10 = _7.borrow().message.clone();
                 _12 = _7.borrow().code;
                 bex_aot::depth::probe(0)?;
-                _11 = ToBaml::to_baml(&_12);
+                _11 = bex_aot::render::to_string(&_12)?;
                 _0 = string::concat(&_10, &_11);
                 break 'bb8;
             } else {
@@ -587,7 +612,13 @@ pub fn user_catch_panics(mut _1: Int63) -> Result<Int63, Thrown> {
                     break 'bb19;
                 }
             };
-            _29 = ToBaml::to_baml(&_1);
+            _29 = match bex_aot::render::to_string(&_1) {
+                Ok(value) => value,
+                Err(error) => {
+                    _26 = Thrown::from(error);
+                    break 'bb19;
+                }
+            };
             match bex_aot::depth::probe(0) {
                 Ok(value) => value,
                 Err(error) => {

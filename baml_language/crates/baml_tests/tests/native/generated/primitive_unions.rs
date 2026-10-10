@@ -47,7 +47,14 @@ impl ToBaml for user_Row {
             ],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.amount as &dyn ToBaml, &self.note as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Row {}
 impl bex_aot::ErrorClass for user_Row {
     const CLASS_FQN: &'static str = "user.Row";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -76,6 +83,12 @@ impl ToBaml for Union_int_or_float {
         match self {
             Self::int(value) => value.render(out, nested),
             Self::float(value) => value.render(out, nested),
+        }
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::int(value) => value.collect(out),
+            Self::float(value) => value.collect(out),
         }
     }
 }
@@ -139,6 +152,13 @@ impl ToBaml for Union_int_or_float_or_string {
             Self::int(value) => value.render(out, nested),
             Self::float(value) => value.render(out, nested),
             Self::string(value) => value.render(out, nested),
+        }
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::int(value) => value.collect(out),
+            Self::float(value) => value.collect(out),
+            Self::string(value) => value.collect(out),
         }
     }
 }
@@ -213,6 +233,14 @@ impl ToBaml for Union_int_or_float_or_string_or_bool {
             Self::float(value) => value.render(out, nested),
             Self::string(value) => value.render(out, nested),
             Self::bool(value) => value.render(out, nested),
+        }
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::int(value) => value.collect(out),
+            Self::float(value) => value.collect(out),
+            Self::string(value) => value.collect(out),
+            Self::bool(value) => value.collect(out),
         }
     }
 }
@@ -292,6 +320,12 @@ impl ToBaml for Union_int_or_bigint {
             Self::bigint(value) => value.render(out, nested),
         }
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::int(value) => value.collect(out),
+            Self::bigint(value) => value.collect(out),
+        }
+    }
 }
 impl bex_aot::Readable for Union_int_or_bigint {
     fn readable(&self) -> String {
@@ -353,6 +387,12 @@ impl ToBaml for Union_int_or_bool {
         match self {
             Self::int(value) => value.render(out, nested),
             Self::bool(value) => value.render(out, nested),
+        }
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::int(value) => value.collect(out),
+            Self::bool(value) => value.collect(out),
         }
     }
 }
@@ -762,7 +802,7 @@ pub fn user_wide_match(mut _1: Int63) -> Result<Str, Thrown> {
             };
             _20 = string::from_literal("i");
             bex_aot::depth::probe(0)?;
-            _8 = ToBaml::to_baml(&_7);
+            _8 = bex_aot::render::to_string(&_7)?;
             _0 = string::concat(&_20, &_8);
             break 'bb17;
         } else {
@@ -776,7 +816,7 @@ pub fn user_wide_match(mut _1: Int63) -> Result<Str, Thrown> {
                 };
                 _21 = string::from_literal("f");
                 bex_aot::depth::probe(0)?;
-                _12 = ToBaml::to_baml(&_11);
+                _12 = bex_aot::render::to_string(&_11)?;
                 _0 = string::concat(&_21, &_12);
                 break 'bb17;
             } else {
@@ -799,7 +839,7 @@ pub fn user_wide_match(mut _1: Int63) -> Result<Str, Thrown> {
                     };
                     _22 = string::from_literal("b");
                     bex_aot::depth::probe(0)?;
-                    _18 = ToBaml::to_baml(&_17);
+                    _18 = bex_aot::render::to_string(&_17)?;
                     _0 = string::concat(&_22, &_18);
                     break 'bb17;
                 }
@@ -968,10 +1008,10 @@ pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
     _2 = shared(user_Row { amount: _3, note: None });
     _8 = user_make(_1)?;
     bex_aot::depth::probe(0)?;
-    _7 = ToBaml::to_baml(&_8);
+    _7 = bex_aot::render::to_string(&_8)?;
     _6 = string::concat(&_7, &string::from_literal(" "));
     bex_aot::depth::probe(0)?;
-    _9 = ToBaml::to_baml(&_2);
+    _9 = bex_aot::render::to_string(&_2)?;
     _5 = string::concat(&_6, &_9);
     _4 = string::concat(&_5, &string::from_literal(" "));
     _12 = user_make(_1)?;
@@ -979,7 +1019,7 @@ pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
     _13 = user_make(_14)?;
     _11 = array::new::<Union_int_or_float>(Vec::from([_12, _13]));
     bex_aot::depth::probe(0)?;
-    _10 = ToBaml::to_baml(&_11);
+    _10 = bex_aot::render::to_string(&_11)?;
     _0 = string::concat(&_4, &_10);
     Ok(_0)
 }
@@ -1022,7 +1062,7 @@ pub fn user_json_in(mut _1: Str) -> Result<Str, Thrown> {
     _5 = user_kind(_6)?;
     _4 = string::concat(&_5, &string::from_literal(":"));
     bex_aot::depth::probe(0)?;
-    _7 = ToBaml::to_baml(&_2);
+    _7 = bex_aot::render::to_string(&_2)?;
     _0 = string::concat(&_4, &_7);
     Ok(_0)
 }
@@ -1049,7 +1089,7 @@ pub fn user_json_rows(mut _1: Str) -> Result<Str, Thrown> {
         _8 = _7.is_none();
         if _8 {
             bex_aot::depth::probe(0)?;
-            _0 = ToBaml::to_baml(&_4);
+            _0 = bex_aot::render::to_string(&_4)?;
             return Ok(_0);
         } else {
             _9 = _7.clone().expect("non-null by the checker's narrowing");
@@ -1164,7 +1204,7 @@ pub fn user_doubled(mut _1: Int63) -> Result<Str, Thrown> {
     _3 = user_make(_1)?;
     _2 = user_double(_3)?;
     bex_aot::depth::probe(0)?;
-    _0 = ToBaml::to_baml(&_2);
+    _0 = bex_aot::render::to_string(&_2)?;
     Ok(_0)
 }
 /// BAML function `user.coalesce`.
@@ -1227,7 +1267,7 @@ pub fn user_coalesce_union(mut _1: Int63) -> Result<Str, Thrown> {
     }
     _2 = _3;
     bex_aot::depth::probe(0)?;
-    _0 = ToBaml::to_baml(&_2);
+    _0 = bex_aot::render::to_string(&_2)?;
     Ok(_0)
 }
 /// BAML function `user.big`.
@@ -1266,7 +1306,7 @@ pub fn user_big(mut _1: Int63) -> Result<Str, Thrown> {
             };
             _11 = string::from_literal("int ");
             bex_aot::depth::probe(0)?;
-            _6 = ToBaml::to_baml(&_5);
+            _6 = bex_aot::render::to_string(&_5)?;
             _0 = string::concat(&_11, &_6);
             break 'bb8;
         } else {
@@ -1278,7 +1318,7 @@ pub fn user_big(mut _1: Int63) -> Result<Str, Thrown> {
             };
             _12 = string::from_literal("bigint ");
             bex_aot::depth::probe(0)?;
-            _9 = ToBaml::to_baml(&_8);
+            _9 = bex_aot::render::to_string(&_8)?;
             _0 = string::concat(&_12, &_9);
             break 'bb8;
         }
@@ -1330,7 +1370,7 @@ pub fn user_flag(mut _1: Int63) -> Result<Str, Thrown> {
                 }
             };
             bex_aot::depth::probe(0)?;
-            _0 = ToBaml::to_baml(&_7);
+            _0 = bex_aot::render::to_string(&_7)?;
             break 'bb8;
         }
     }

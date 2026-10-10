@@ -48,6 +48,7 @@ const FIXTURES: &[&str] = &[
     "matching",
     "methods",
     "nullable",
+    "overrides",
     "primitive_unions",
     "recursion",
     "strings",
@@ -126,6 +127,7 @@ generated_module!(higher_order, "native/generated/higher_order.rs");
 generated_module!(generics, "native/generated/generics.rs");
 generated_module!(generic_classes, "native/generated/generic_classes.rs");
 generated_module!(interfaces, "native/generated/interfaces.rs");
+generated_module!(overrides, "native/generated/overrides.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -697,6 +699,21 @@ async fn classes_match_vm() {
         r#"not json"#,
     ] {
         check!(o, roundtrip(raw) => user_roundtrip(text(raw)));
+    }
+}
+
+#[tokio::test]
+async fn overrides_match_vm() {
+    use overrides::*;
+    let o = Oracle::new("overrides");
+    for n in [0, 1, 7] {
+        check!(o, top(n) => user_top(int(n)));
+        check!(o, plain(n) => user_plain(int(n)));
+        check!(o, nested(n) => user_nested(int(n)));
+        check!(o, in_array(n) => user_in_array(int(n)));
+    }
+    for n in [0, 3, 251, 252, 253, 254, 255, 256] {
+        check!(o, deep_override(n) => user_deep_override(int(n)));
     }
 }
 

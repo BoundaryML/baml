@@ -39,7 +39,11 @@ impl ToBaml for user_Box__int {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Box", &[("value", &self.value as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.value as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Box__int {}
 impl bex_aot::ErrorClass for user_Box__int {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -64,7 +68,11 @@ impl ToBaml for user_Box__string {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Box", &[("value", &self.value as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.value as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Box__string {}
 impl bex_aot::ErrorClass for user_Box__string {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -89,7 +97,11 @@ impl ToBaml for user_Box__user_Box__int {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Box", &[("value", &self.value as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.value as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Box__user_Box__int {}
 impl bex_aot::ErrorClass for user_Box__user_Box__int {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -122,7 +134,14 @@ impl ToBaml for user_Pair__int__string {
             ],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.first as &dyn ToBaml, &self.second as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Pair__int__string {}
 impl bex_aot::ErrorClass for user_Pair__int__string {
     const CLASS_FQN: &'static str = "user.Pair";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -158,7 +177,14 @@ impl ToBaml for user_Pair__string__int {
             ],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.first as &dyn ToBaml, &self.second as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Pair__string__int {}
 impl bex_aot::ErrorClass for user_Pair__string__int {
     const CLASS_FQN: &'static str = "user.Pair";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -194,7 +220,14 @@ impl ToBaml for user_Pair__user_Pt__string_array {
             ],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.first as &dyn ToBaml, &self.second as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Pair__user_Pt__string_array {}
 impl bex_aot::ErrorClass for user_Pair__user_Pt__string_array {
     const CLASS_FQN: &'static str = "user.Pair";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -227,7 +260,14 @@ impl ToBaml for user_Pt {
             &[("x", &self.x as &dyn ToBaml), ("y", &self.y as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.x as &dyn ToBaml, &self.y as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Pt {}
 impl bex_aot::ErrorClass for user_Pt {
     const CLASS_FQN: &'static str = "user.Pt";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -255,7 +295,11 @@ impl ToBaml for user_Stack__int {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Stack", &[("items", &self.items as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.items as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Stack__int {}
 impl bex_aot::ErrorClass for user_Stack__int {
     const CLASS_FQN: &'static str = "user.Stack";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -280,7 +324,11 @@ impl ToBaml for user_Stack__string {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Stack", &[("items", &self.items as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.items as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Stack__string {}
 impl bex_aot::ErrorClass for user_Stack__string {
     const CLASS_FQN: &'static str = "user.Stack";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -305,7 +353,11 @@ impl ToBaml for user_Box__user_Box__user_Box__int {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Box", &[("value", &self.value as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.value as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Box__user_Box__user_Box__int {}
 impl bex_aot::ErrorClass for user_Box__user_Box__user_Box__int {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -338,7 +390,14 @@ impl ToBaml for user_Pair__string__user_Box__int {
             ],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.first as &dyn ToBaml, &self.second as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Pair__string__user_Box__int {}
 impl bex_aot::ErrorClass for user_Pair__string__user_Box__int {
     const CLASS_FQN: &'static str = "user.Pair";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -369,6 +428,13 @@ impl ToBaml for Union_int_or_user_Box__int_or_user_Box__string {
             Self::int(value) => value.render(out, nested),
             Self::user_Box__int(value) => value.render(out, nested),
             Self::user_Box__string(value) => value.render(out, nested),
+        }
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::int(value) => value.collect(out),
+            Self::user_Box__int(value) => value.collect(out),
+            Self::user_Box__string(value) => value.collect(out),
         }
     }
 }
@@ -530,7 +596,7 @@ pub fn user_boxes__lambda0(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _5: Str;
     _5 = string::from_literal("<");
     bex_aot::depth::probe(0)?;
-    _3 = ToBaml::to_baml(&_1);
+    _3 = bex_aot::render::to_string(&_1)?;
     _2 = string::concat(&_5, &_3);
     _0 = string::concat(&_2, &string::from_literal(">"));
     Ok(_0)
@@ -652,11 +718,11 @@ pub fn user_pairs(mut _1: Int63, mut _2: Str) -> Result<Str, Thrown> {
     _12 = _4.borrow().first.clone();
     _14 = _3.borrow().first;
     bex_aot::depth::probe(0)?;
-    _13 = ToBaml::to_baml(&_14);
+    _13 = bex_aot::render::to_string(&_14)?;
     _11 = string::concat(&_12, &_13);
     _17 = _7.borrow().first.borrow().x;
     bex_aot::depth::probe(0)?;
-    _16 = ToBaml::to_baml(&_17);
+    _16 = bex_aot::render::to_string(&_17)?;
     _10 = string::concat(&_11, &_16);
     _21 = int::lit(0);
     _19 = array::get(&_7.borrow().second, _21)?;
@@ -935,10 +1001,10 @@ pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
     bex_aot::depth::probe(1)?;
     _7 = json::deserialize::<Shared<user_Pair__string__user_Box__int>>(&_5)?;
     bex_aot::depth::probe(0)?;
-    _15 = ToBaml::to_baml(&_2);
+    _15 = bex_aot::render::to_string(&_2)?;
     _14 = string::concat(&_15, &string::from_literal("|"));
     bex_aot::depth::probe(0)?;
-    _16 = ToBaml::to_baml(&_3);
+    _16 = bex_aot::render::to_string(&_3)?;
     _13 = string::concat(&_14, &_16);
     _12 = string::concat(&_13, &string::from_literal("|"));
     _11 = string::concat(&_12, &_5);
@@ -946,7 +1012,7 @@ pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
     _20 = _7.borrow().second.clone();
     _19 = user_Box_get__int(_20.clone())?;
     bex_aot::depth::probe(0)?;
-    _18 = ToBaml::to_baml(&_19);
+    _18 = bex_aot::render::to_string(&_19)?;
     _0 = string::concat(&_10, &_18);
     Ok(_0)
 }

@@ -83,7 +83,14 @@ impl ToBaml for user_Item {
             ],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.name as &dyn ToBaml, &self.weight as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Item {}
 impl bex_aot::ErrorClass for user_Item {
     const CLASS_FQN: &'static str = "user.Item";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -134,7 +141,7 @@ pub fn user_labels__lambda0(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _4: Str;
     _4 = string::from_literal("n");
     bex_aot::depth::probe(0)?;
-    _2 = ToBaml::to_baml(&_1);
+    _2 = bex_aot::render::to_string(&_1)?;
     _0 = string::concat(&_4, &_2);
     Ok(_0)
 }
@@ -253,7 +260,7 @@ pub fn user_joined__lambda0(mut _1: Str, mut _2: Int63) -> Result<Str, Thrown> {
     let mut _3: Str;
     let mut _4: Str;
     bex_aot::depth::probe(0)?;
-    _4 = ToBaml::to_baml(&_2);
+    _4 = bex_aot::render::to_string(&_2)?;
     _3 = string::concat(&_1, &_4);
     _0 = string::concat(&_3, &string::from_literal(","));
     Ok(_0)
@@ -686,7 +693,7 @@ pub fn user_sorted_by_name(
             _14 = string::concat(&_15, &string::from_literal(":"));
             _19 = _11.borrow().weight;
             bex_aot::depth::probe(0)?;
-            _18 = ToBaml::to_baml(&_19);
+            _18 = bex_aot::render::to_string(&_19)?;
             _13 = string::concat(&_14, &_18);
             _7 = string::concat(&_13, &string::from_literal(" "));
             continue 'bb2;
@@ -766,11 +773,11 @@ pub fn user_comparison_log__lambda0(
     let mut _9: Str;
     _6 = cell::get(_c0)?;
     bex_aot::depth::probe(0)?;
-    _7 = ToBaml::to_baml(&_1);
+    _7 = bex_aot::render::to_string(&_1)?;
     _5 = string::concat(&_6, &_7);
     _4 = string::concat(&_5, &string::from_literal("/"));
     bex_aot::depth::probe(0)?;
-    _9 = ToBaml::to_baml(&_2);
+    _9 = bex_aot::render::to_string(&_2)?;
     _3 = string::concat(&_4, &_9);
     {
         let value = string::concat(&_3, &string::from_literal(" "));
@@ -922,11 +929,11 @@ pub fn user_throwing_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
         }
     }
     bex_aot::depth::probe(0)?;
-    _11 = ToBaml::to_baml(&_3);
+    _11 = bex_aot::render::to_string(&_3)?;
     _10 = string::concat(&_11, &string::from_literal(" after "));
     _14 = cell::get(&_2)?;
     bex_aot::depth::probe(0)?;
-    _13 = ToBaml::to_baml(&_14);
+    _13 = bex_aot::render::to_string(&_14)?;
     _0 = string::concat(&_10, &_13);
     Ok(_0)
 }
@@ -980,7 +987,7 @@ pub fn user_mutating_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
     _2 = cell::get(&_1)?;
     _6 = cell::get(&_1)?;
     bex_aot::depth::probe(0)?;
-    _0 = ToBaml::to_baml(&_6);
+    _0 = bex_aot::render::to_string(&_6)?;
     Ok(_0)
 }
 /// BAML lambda `.<lambda(reading_comparator, 0)>`.
@@ -1002,7 +1009,7 @@ pub fn user_reading_comparator__lambda0(
     _7 = int::lit(0);
     _5 = array::get(&_6, _7)?;
     bex_aot::depth::probe(0)?;
-    _4 = ToBaml::to_baml(&_5);
+    _4 = bex_aot::render::to_string(&_5)?;
     {
         let value = string::concat(&_3, &_4);
         cell::set(_c0, value);
@@ -1055,7 +1062,7 @@ pub fn user_reading_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown
     _3 = cell::get(&_1)?;
     _9 = cell::get(&_1)?;
     bex_aot::depth::probe(0)?;
-    _8 = ToBaml::to_baml(&_9);
+    _8 = bex_aot::render::to_string(&_9)?;
     _7 = string::concat(&_8, &string::from_literal(" saw "));
     _11 = cell::get(&_2)?;
     _0 = string::concat(&_7, &_11);
@@ -1117,7 +1124,7 @@ pub fn user_throwing_key(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
         }
     }
     bex_aot::depth::probe(0)?;
-    _0 = ToBaml::to_baml(&_2);
+    _0 = bex_aot::render::to_string(&_2)?;
     Ok(_0)
 }
 /// BAML lambda `.<lambda(pushing_map, 0)>`.
@@ -1159,10 +1166,10 @@ pub fn user_pushing_map(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
     };
     _9 = cell::get(&_1)?;
     bex_aot::depth::probe(0)?;
-    _8 = ToBaml::to_baml(&_9);
+    _8 = bex_aot::render::to_string(&_9)?;
     _7 = string::concat(&_8, &string::from_literal(" "));
     bex_aot::depth::probe(0)?;
-    _11 = ToBaml::to_baml(&_2);
+    _11 = bex_aot::render::to_string(&_2)?;
     _0 = string::concat(&_7, &_11);
     Ok(_0)
 }
@@ -1309,7 +1316,7 @@ pub fn user_nullable_mapped(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
         array::map(&_1, __callback)?
     };
     bex_aot::depth::probe(0)?;
-    _0 = ToBaml::to_baml(&_2);
+    _0 = bex_aot::render::to_string(&_2)?;
     Ok(_0)
 }
 /// BAML function `user.cmp_ints`.
@@ -1415,46 +1422,46 @@ pub fn user_render(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
     let mut _42: Shared<Vec<Int63>>;
     _18 = user_doubled(_1.clone())?;
     bex_aot::depth::probe(0)?;
-    _17 = ToBaml::to_baml(&_18);
+    _17 = bex_aot::render::to_string(&_18)?;
     _16 = string::concat(&_17, &string::from_literal(" "));
     _21 = user_evens(_1.clone())?;
     bex_aot::depth::probe(0)?;
-    _20 = ToBaml::to_baml(&_21);
+    _20 = bex_aot::render::to_string(&_21)?;
     _15 = string::concat(&_16, &_20);
     _14 = string::concat(&_15, &string::from_literal(" "));
     _24 = user_halves(_1.clone())?;
     bex_aot::depth::probe(0)?;
-    _23 = ToBaml::to_baml(&_24);
+    _23 = bex_aot::render::to_string(&_24)?;
     _13 = string::concat(&_14, &_23);
     _12 = string::concat(&_13, &string::from_literal(" "));
     _27 = user_pairs(_1.clone())?;
     bex_aot::depth::probe(0)?;
-    _26 = ToBaml::to_baml(&_27);
+    _26 = bex_aot::render::to_string(&_27)?;
     _11 = string::concat(&_12, &_26);
     _10 = string::concat(&_11, &string::from_literal(" "));
     _30 = user_sorted_desc(_1.clone())?;
     bex_aot::depth::probe(0)?;
-    _29 = ToBaml::to_baml(&_30);
+    _29 = bex_aot::render::to_string(&_30)?;
     _9 = string::concat(&_10, &_29);
     _8 = string::concat(&_9, &string::from_literal(" "));
     _33 = user_sorted_by_abs(_1.clone())?;
     bex_aot::depth::probe(0)?;
-    _32 = ToBaml::to_baml(&_33);
+    _32 = bex_aot::render::to_string(&_33)?;
     _7 = string::concat(&_8, &_32);
     _6 = string::concat(&_7, &string::from_literal(" "));
     _36 = user_labels(_1.clone())?;
     bex_aot::depth::probe(0)?;
-    _35 = ToBaml::to_baml(&_36);
+    _35 = bex_aot::render::to_string(&_36)?;
     _5 = string::concat(&_6, &_35);
     _4 = string::concat(&_5, &string::from_literal(" "));
     _39 = user_named_callback(_1.clone())?;
     bex_aot::depth::probe(0)?;
-    _38 = ToBaml::to_baml(&_39);
+    _38 = bex_aot::render::to_string(&_39)?;
     _3 = string::concat(&_4, &_38);
     _2 = string::concat(&_3, &string::from_literal(" "));
     _42 = user_with_capture(_1.clone(), int::lit(7))?;
     bex_aot::depth::probe(0)?;
-    _41 = ToBaml::to_baml(&_42);
+    _41 = bex_aot::render::to_string(&_42)?;
     _0 = string::concat(&_2, &_41);
     Ok(_0)
 }
@@ -1630,7 +1637,7 @@ pub fn user_suite(mut _1: Int63) -> Result<Str, Thrown> {
     _37 = string::concat(&_38, &string::from_literal(" | "));
     _41 = user_total(_2.clone())?;
     bex_aot::depth::probe(0)?;
-    _40 = ToBaml::to_baml(&_41);
+    _40 = bex_aot::render::to_string(&_41)?;
     _36 = string::concat(&_37, &_40);
     _35 = string::concat(&_36, &string::from_literal(" "));
     _44 = user_joined(_2.clone())?;
@@ -1638,43 +1645,43 @@ pub fn user_suite(mut _1: Int63) -> Result<Str, Thrown> {
     _33 = string::concat(&_34, &string::from_literal(" "));
     _47 = user_summed(_2.clone())?;
     bex_aot::depth::probe(0)?;
-    _46 = ToBaml::to_baml(&_47);
+    _46 = bex_aot::render::to_string(&_47)?;
     _32 = string::concat(&_33, &_46);
     _31 = string::concat(&_32, &string::from_literal(" "));
     _51 = user_any_big(_2.clone(), int::lit(3))?;
     bex_aot::depth::probe(0)?;
-    _50 = ToBaml::to_baml(&_51);
+    _50 = bex_aot::render::to_string(&_51)?;
     _30 = string::concat(&_31, &_50);
     _29 = string::concat(&_30, &string::from_literal(" "));
     _55 = user_all_big(_2.clone(), int::lit(0))?;
     bex_aot::depth::probe(0)?;
-    _54 = ToBaml::to_baml(&_55);
+    _54 = bex_aot::render::to_string(&_55)?;
     _28 = string::concat(&_29, &_54);
     _27 = string::concat(&_28, &string::from_literal(" "));
     _59 = user_first_big(_2.clone(), int::lit(3))?;
     bex_aot::depth::probe(0)?;
-    _58 = ToBaml::to_baml(&_59);
+    _58 = bex_aot::render::to_string(&_59)?;
     _26 = string::concat(&_27, &_58);
     _25 = string::concat(&_26, &string::from_literal(" "));
     _62 = user_first_big_at(_2.clone(), int::lit(3))?;
     bex_aot::depth::probe(0)?;
-    _61 = ToBaml::to_baml(&_62);
+    _61 = bex_aot::render::to_string(&_62)?;
     _24 = string::concat(&_25, &_61);
     _23 = string::concat(&_24, &string::from_literal(" "));
     _65 = user_last_big(_2.clone(), int::lit(3))?;
     bex_aot::depth::probe(0)?;
-    _64 = ToBaml::to_baml(&_65);
+    _64 = bex_aot::render::to_string(&_65)?;
     _22 = string::concat(&_23, &_64);
     _21 = string::concat(&_22, &string::from_literal(" "));
     _68 = user_last_big_at(_2.clone(), int::lit(3))?;
     bex_aot::depth::probe(0)?;
-    _67 = ToBaml::to_baml(&_68);
+    _67 = bex_aot::render::to_string(&_68)?;
     _20 = string::concat(&_21, &_67);
     _19 = string::concat(&_20, &string::from_literal(" "));
     _72 = user_of(_1)?;
     _71 = user_comparisons(_72.clone())?;
     bex_aot::depth::probe(0)?;
-    _70 = ToBaml::to_baml(&_71);
+    _70 = bex_aot::render::to_string(&_71)?;
     _18 = string::concat(&_19, &_70);
     _17 = string::concat(&_18, &string::from_literal(" "));
     _75 = user_of(_1)?;
@@ -1704,7 +1711,7 @@ pub fn user_suite(mut _1: Int63) -> Result<Str, Thrown> {
     _88 = user_of(_1)?;
     _87 = user_throwing_map(_88.clone())?;
     bex_aot::depth::probe(0)?;
-    _86 = ToBaml::to_baml(&_87);
+    _86 = bex_aot::render::to_string(&_87)?;
     _4 = string::concat(&_5, &_86);
     _3 = string::concat(&_4, &string::from_literal(" "));
     _91 = user_of(_1)?;

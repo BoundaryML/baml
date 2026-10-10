@@ -83,7 +83,14 @@ impl ToBaml for user_Pixel {
             ],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.color as &dyn ToBaml, &self.weight as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Pixel {}
 impl bex_aot::ErrorClass for user_Pixel {
     const CLASS_FQN: &'static str = "user.Pixel";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -224,16 +231,16 @@ pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
     });
     _8 = user_pick(_1)?;
     bex_aot::depth::probe(0)?;
-    _7 = ToBaml::to_baml(&_8);
+    _7 = bex_aot::render::to_string(&_8)?;
     _6 = string::concat(&_7, &string::from_literal(" "));
     bex_aot::depth::probe(0)?;
-    _9 = ToBaml::to_baml(&_2);
+    _9 = bex_aot::render::to_string(&_2)?;
     _5 = string::concat(&_6, &_9);
     _4 = string::concat(&_5, &string::from_literal(" "));
     _12 = user_pick(_1)?;
     _11 = array::new::<user_Color>(Vec::from([_12, user_Color::Blue]));
     bex_aot::depth::probe(0)?;
-    _10 = ToBaml::to_baml(&_11);
+    _10 = bex_aot::render::to_string(&_11)?;
     _0 = string::concat(&_4, &_10);
     Ok(_0)
 }
@@ -276,7 +283,7 @@ pub fn user_json_in(mut _1: Str) -> Result<Str, Thrown> {
     _4 = user_name(_5)?;
     _7 = _2.borrow().weight;
     bex_aot::depth::probe(0)?;
-    _6 = ToBaml::to_baml(&_7);
+    _6 = bex_aot::render::to_string(&_7)?;
     _0 = string::concat(&_4, &_6);
     Ok(_0)
 }
@@ -362,7 +369,7 @@ pub fn user_tint(mut _1: Int63, mut _2: user_Color) -> Result<Str, Thrown> {
     }
     _4 = user_name(_2)?;
     bex_aot::depth::probe(0)?;
-    _5 = ToBaml::to_baml(&_1);
+    _5 = bex_aot::render::to_string(&_1)?;
     _0 = string::concat(&_4, &_5);
     Ok(_0)
 }

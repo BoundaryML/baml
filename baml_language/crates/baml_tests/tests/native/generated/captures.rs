@@ -39,7 +39,11 @@ impl ToBaml for user_Box {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Box", &[("n", &self.n as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.n as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Box {}
 impl bex_aot::ErrorClass for user_Box {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {

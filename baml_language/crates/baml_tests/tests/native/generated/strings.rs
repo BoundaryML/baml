@@ -40,7 +40,7 @@ pub fn user_greet(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _9: Str;
     _9 = string::from_literal("n=");
     bex_aot::depth::probe(0)?;
-    _3 = ToBaml::to_baml(&_1);
+    _3 = bex_aot::render::to_string(&_1)?;
     'bb4: {
         _2 = string::concat(&_9, &_3);
         _6 = int::rem(_1, int::lit(2))?;
@@ -101,12 +101,12 @@ pub fn user_same(mut _1: Int63) -> Result<bool, Thrown> {
     let mut _17: Str;
     _16 = string::from_literal("x");
     bex_aot::depth::probe(0)?;
-    _3 = ToBaml::to_baml(&_1);
+    _3 = bex_aot::render::to_string(&_1)?;
     _2 = string::concat(&_16, &_3);
     _7 = int::add(_1, int::lit(0))?;
     _17 = string::from_literal("x");
     bex_aot::depth::probe(0)?;
-    _6 = ToBaml::to_baml(&_7);
+    _6 = bex_aot::render::to_string(&_7)?;
     'bb4: {
         _5 = string::concat(&_17, &_6);
         _10 = string::eq(&_2, &_5);
@@ -130,10 +130,10 @@ pub fn user_ordered(mut _1: Int63) -> Result<bool, Thrown> {
     let mut _4: Str;
     let mut _5: Int63;
     bex_aot::depth::probe(0)?;
-    _2 = ToBaml::to_baml(&_1);
+    _2 = bex_aot::render::to_string(&_1)?;
     _5 = int::add(_1, int::lit(1))?;
     bex_aot::depth::probe(0)?;
-    _4 = ToBaml::to_baml(&_5);
+    _4 = bex_aot::render::to_string(&_5)?;
     _0 = string::cmp(&_2, &_4).is_lt();
     Ok(_0)
 }

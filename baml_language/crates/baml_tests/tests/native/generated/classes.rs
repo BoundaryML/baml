@@ -44,7 +44,14 @@ impl ToBaml for user_Point {
             &[("x", &self.x as &dyn ToBaml), ("y", &self.y as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.x as &dyn ToBaml, &self.y as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Point {}
 impl bex_aot::ErrorClass for user_Point {
     const CLASS_FQN: &'static str = "user.Point";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -84,7 +91,19 @@ impl ToBaml for user_Box {
             ],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[
+                &self.name as &dyn ToBaml,
+                &self.corner as &dyn ToBaml,
+                &self.tag as &dyn ToBaml,
+                &self.weights as &dyn ToBaml,
+            ],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Box {}
 impl bex_aot::ErrorClass for user_Box {
     const CLASS_FQN: &'static str = "user.Box";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -117,7 +136,11 @@ impl ToBaml for user_Counter {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Counter", &[("n", &self.n as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.n as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Counter {}
 impl bex_aot::ErrorClass for user_Counter {
     const CLASS_FQN: &'static str = "user.Counter";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -147,7 +170,14 @@ impl ToBaml for user_Holder {
             &[("c", &self.c as &dyn ToBaml), ("total", &self.total as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.c as &dyn ToBaml, &self.total as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Holder {}
 impl bex_aot::ErrorClass for user_Holder {
     const CLASS_FQN: &'static str = "user.Holder";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -193,7 +223,7 @@ pub fn user_make(mut _1: Int63) -> Result<Str, Thrown> {
     _2 = shared(user_Point { x: _1, y: _3 });
     _13 = string::from_literal("b");
     bex_aot::depth::probe(0)?;
-    _6 = ToBaml::to_baml(&_1);
+    _6 = bex_aot::render::to_string(&_1)?;
     _5 = string::concat(&_13, &_6);
     _10 = int::mul(_1, int::lit(2))?;
     _9 = array::new::<Int63>(Vec::from([_1, _10]));
@@ -235,7 +265,7 @@ pub fn user_render(mut _1: Int63) -> Result<Str, Thrown> {
     _3 = int::neg(_1)?;
     _2 = shared(user_Point { x: _1, y: _3 });
     bex_aot::depth::probe(0)?;
-    _0 = ToBaml::to_baml(&_2);
+    _0 = bex_aot::render::to_string(&_2)?;
     Ok(_0)
 }
 /// BAML function `user.nullable`.

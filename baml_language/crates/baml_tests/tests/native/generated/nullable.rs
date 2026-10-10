@@ -44,7 +44,14 @@ impl ToBaml for user_Node {
             &[("value", &self.value as &dyn ToBaml), ("next", &self.next as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.value as &dyn ToBaml, &self.next as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Node {}
 impl bex_aot::ErrorClass for user_Node {
     const CLASS_FQN: &'static str = "user.Node";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -108,7 +115,7 @@ pub fn user_describe(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _2: Option<Int63>;
     _2 = user_pick(_1)?;
     bex_aot::depth::probe(0)?;
-    _0 = ToBaml::to_baml(&_2);
+    _0 = bex_aot::render::to_string(&_2)?;
     Ok(_0)
 }
 /// BAML function `user.build`.
@@ -156,6 +163,6 @@ pub fn user_sparse(mut _1: Int63) -> Result<Str, Thrown> {
     _3 = int::add(_1, int::lit(1))?;
     _2 = array::new::<Option<Int63>>(Vec::from([Some(_1), None, Some(_3)]));
     bex_aot::depth::probe(0)?;
-    _0 = ToBaml::to_baml(&_2);
+    _0 = bex_aot::render::to_string(&_2)?;
     Ok(_0)
 }

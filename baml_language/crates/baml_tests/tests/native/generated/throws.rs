@@ -46,7 +46,11 @@ impl ToBaml for user_Invalid {
             &[("message", &self.message as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.message as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Invalid {}
 impl bex_aot::ErrorClass for user_Invalid {
     const CLASS_FQN: &'static str = "user.Invalid";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -91,7 +95,23 @@ impl ToBaml for user_Coded {
             ],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[
+                &self.code as &dyn ToBaml,
+                &self.message as &dyn ToBaml,
+                &self.retry as &dyn ToBaml,
+                &self.ratio as &dyn ToBaml,
+                &self.tags as &dyn ToBaml,
+                &self.detail as &dyn ToBaml,
+                &self.extra as &dyn ToBaml,
+                &self.counts as &dyn ToBaml,
+            ],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Coded {}
 impl bex_aot::ErrorClass for user_Coded {
     const CLASS_FQN: &'static str = "user.Coded";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -130,7 +150,14 @@ impl ToBaml for user_Detail {
             &[("n", &self.n as &dyn ToBaml), ("note", &self.note as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.n as &dyn ToBaml, &self.note as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Detail {}
 impl bex_aot::ErrorClass for user_Detail {
     const CLASS_FQN: &'static str = "user.Detail";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -165,7 +192,11 @@ impl ToBaml for baml_errors_InvalidArgument {
             &[("message", &self.message as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.message as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for baml_errors_InvalidArgument {}
 impl bex_aot::ErrorClass for baml_errors_InvalidArgument {
     const CLASS_FQN: &'static str = "baml.errors.InvalidArgument";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -201,7 +232,14 @@ impl ToBaml for baml_json_DecodeError {
             ],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.message as &dyn ToBaml, &self.path as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for baml_json_DecodeError {}
 impl bex_aot::ErrorClass for baml_json_DecodeError {
     const CLASS_FQN: &'static str = "baml.json.DecodeError";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -236,7 +274,11 @@ impl ToBaml for baml_panics_UserPanic {
             &[("message", &self.message as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.message as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for baml_panics_UserPanic {}
 impl bex_aot::ErrorClass for baml_panics_UserPanic {
     const CLASS_FQN: &'static str = "baml.panics.UserPanic";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {

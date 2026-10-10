@@ -75,7 +75,11 @@ impl ToBaml for user_Square {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Square", &[("side", &self.side as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.side as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Square {}
 impl bex_aot::ErrorClass for user_Square {
     const CLASS_FQN: &'static str = "user.Square";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -105,7 +109,14 @@ impl ToBaml for user_Rect {
             &[("w", &self.w as &dyn ToBaml), ("h", &self.h as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.w as &dyn ToBaml, &self.h as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Rect {}
 impl bex_aot::ErrorClass for user_Rect {
     const CLASS_FQN: &'static str = "user.Rect";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -131,7 +142,11 @@ impl ToBaml for user_Dot {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Dot", &[]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[]);
+    }
 }
+impl bex_aot::render::Overridable for user_Dot {}
 impl bex_aot::ErrorClass for user_Dot {
     const CLASS_FQN: &'static str = "user.Dot";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -161,7 +176,14 @@ impl ToBaml for user_Dog {
             &[("name", &self.name as &dyn ToBaml), ("barks", &self.barks as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.name as &dyn ToBaml, &self.barks as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Dog {}
 impl bex_aot::ErrorClass for user_Dog {
     const CLASS_FQN: &'static str = "user.Dog";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -189,7 +211,11 @@ impl ToBaml for user_Cat {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Cat", &[("name", &self.name as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.name as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Cat {}
 impl bex_aot::ErrorClass for user_Cat {
     const CLASS_FQN: &'static str = "user.Cat";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -219,7 +245,14 @@ impl ToBaml for user_Holder {
             &[("item", &self.item as &dyn ToBaml), ("tag", &self.tag as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(
+            out,
+            &[&self.item as &dyn ToBaml, &self.tag as &dyn ToBaml],
+        );
+    }
 }
+impl bex_aot::render::Overridable for user_Holder {}
 impl bex_aot::ErrorClass for user_Holder {
     const CLASS_FQN: &'static str = "user.Holder";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -247,7 +280,11 @@ impl ToBaml for user_Money {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Money", &[("cents", &self.cents as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.cents as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Money {}
 impl bex_aot::ErrorClass for user_Money {
     const CLASS_FQN: &'static str = "user.Money";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -276,7 +313,11 @@ impl ToBaml for user_Tag {
             &[("tag_text", &self.tag_text as &dyn ToBaml)],
         );
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.tag_text as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Tag {}
 impl bex_aot::ErrorClass for user_Tag {
     const CLASS_FQN: &'static str = "user.Tag";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -301,7 +342,11 @@ impl ToBaml for user_Note {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Note", &[("label", &self.label as &dyn ToBaml)]);
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        bex_aot::render::collect_fields(out, &[&self.label as &dyn ToBaml]);
+    }
 }
+impl bex_aot::render::Overridable for user_Note {}
 impl bex_aot::ErrorClass for user_Note {
     const CLASS_FQN: &'static str = "user.Note";
     fn readable_fields(&self) -> Vec<(&'static str, String)> {
@@ -327,6 +372,12 @@ impl ToBaml for Union_int_or_user_Shape {
         match self {
             Self::int(value) => value.render(out, nested),
             Self::user_Shape(value) => value.render(out, nested),
+        }
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::int(value) => value.collect(out),
+            Self::user_Shape(value) => value.collect(out),
         }
     }
 }
@@ -381,6 +432,12 @@ impl ToBaml for Union_user_Note_or_user_Tag {
         match self {
             Self::user_Note(value) => value.render(out, nested),
             Self::user_Tag(value) => value.render(out, nested),
+        }
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::user_Note(value) => value.collect(out),
+            Self::user_Tag(value) => value.collect(out),
         }
     }
 }
@@ -443,6 +500,13 @@ impl ToBaml for user_Shape {
             Self::user_Dot(value) => value.render(out, nested),
         }
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::user_Square(value) => value.collect(out),
+            Self::user_Rect(value) => value.collect(out),
+            Self::user_Dot(value) => value.collect(out),
+        }
+    }
 }
 impl bex_aot::Readable for user_Shape {
     fn readable(&self) -> String {
@@ -495,6 +559,12 @@ impl ToBaml for user_Named {
             Self::user_Cat(value) => value.render(out, nested),
         }
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::user_Dog(value) => value.collect(out),
+            Self::user_Cat(value) => value.collect(out),
+        }
+    }
 }
 impl bex_aot::Readable for user_Named {
     fn readable(&self) -> String {
@@ -545,6 +615,13 @@ impl ToBaml for user_Counted {
             Self::user_Dog(value) => value.render(out, nested),
         }
     }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::int(value) => value.collect(out),
+            Self::string(value) => value.collect(out),
+            Self::user_Dog(value) => value.collect(out),
+        }
+    }
 }
 impl bex_aot::Readable for user_Counted {
     fn readable(&self) -> String {
@@ -593,6 +670,12 @@ impl ToBaml for user_Labeled {
         match self {
             Self::user_Tag(value) => value.render(out, nested),
             Self::user_Note(value) => value.render(out, nested),
+        }
+    }
+    fn collect(&self, out: &mut Vec<bex_aot::render::Pending>) {
+        match self {
+            Self::user_Tag(value) => value.collect(out),
+            Self::user_Note(value) => value.collect(out),
         }
     }
 }
@@ -690,12 +773,12 @@ pub fn user___user_Rect_as_user_Shape___describe(
     _5 = _1.borrow().w;
     _10 = string::from_literal("rect ");
     bex_aot::depth::probe(0)?;
-    _4 = ToBaml::to_baml(&_5);
+    _4 = bex_aot::render::to_string(&_5)?;
     _3 = string::concat(&_10, &_4);
     _2 = string::concat(&_3, &string::from_literal("x"));
     _8 = _1.borrow().h;
     bex_aot::depth::probe(0)?;
-    _7 = ToBaml::to_baml(&_8);
+    _7 = bex_aot::render::to_string(&_8)?;
     _0 = string::concat(&_2, &_7);
     Ok(_0)
 }
@@ -804,7 +887,7 @@ pub fn user_Shape_describe__user_Square(mut _1: user_Shape) -> Result<Str, Throw
         }
     };
     bex_aot::depth::probe(0)?;
-    _4 = ToBaml::to_baml(&_5);
+    _4 = bex_aot::render::to_string(&_5)?;
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
@@ -844,7 +927,7 @@ pub fn user_Shape_describe__user_Dot(mut _1: user_Shape) -> Result<Str, Thrown> 
         }
     };
     bex_aot::depth::probe(0)?;
-    _4 = ToBaml::to_baml(&_5);
+    _4 = bex_aot::render::to_string(&_5)?;
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
@@ -882,7 +965,7 @@ pub fn user_static_calls(mut _1: Int63) -> Result<Str, Thrown> {
     _5 = string::concat(&_6, &_14);
     _16 = user___user_Square_as_user_Shape___area(_2.clone())?;
     bex_aot::depth::probe(0)?;
-    _15 = ToBaml::to_baml(&_16);
+    _15 = bex_aot::render::to_string(&_16)?;
     _0 = string::concat(&_5, &_15);
     Ok(_0)
 }
@@ -1005,7 +1088,7 @@ pub fn user_shapes(mut _1: Int63) -> Result<Str, Thrown> {
     _6 = user_Shape::user_Rect(shared(user_Rect { w: int::lit(2), h: _1 }));
     _13 = user_total(_2.clone())?;
     bex_aot::depth::probe(0)?;
-    _12 = ToBaml::to_baml(&_13);
+    _12 = bex_aot::render::to_string(&_13)?;
     _11 = string::concat(&_12, &string::from_literal("/"));
     _16 = user_describe_all(_2.clone())?;
     _10 = string::concat(&_11, &_16);
@@ -1037,7 +1120,7 @@ pub fn user_shapes(mut _1: Int63) -> Result<Str, Thrown> {
         }
     };
     bex_aot::depth::probe(0)?;
-    _19 = ToBaml::to_baml(&_20);
+    _19 = bex_aot::render::to_string(&_20)?;
     _0 = string::concat(&_7, &_19);
     Ok(_0)
 }
@@ -1231,7 +1314,7 @@ pub fn user_bounded__user_Square(mut _1: Shared<user_Square>) -> Result<Str, Thr
     _2 = string::concat(&_3, &string::from_literal(":"));
     _5 = user___user_Square_as_user_Shape___area(_1.clone())?;
     bex_aot::depth::probe(0)?;
-    _4 = ToBaml::to_baml(&_5);
+    _4 = bex_aot::render::to_string(&_5)?;
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
@@ -1247,7 +1330,7 @@ pub fn user_bounded__user_Rect(mut _1: Shared<user_Rect>) -> Result<Str, Thrown>
     _2 = string::concat(&_3, &string::from_literal(":"));
     _5 = user___user_Rect_as_user_Shape___area(_1.clone())?;
     bex_aot::depth::probe(0)?;
-    _4 = ToBaml::to_baml(&_5);
+    _4 = bex_aot::render::to_string(&_5)?;
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
@@ -1263,7 +1346,7 @@ pub fn user_bounded__user_Dot(mut _1: Shared<user_Dot>) -> Result<Str, Thrown> {
     _2 = string::concat(&_3, &string::from_literal(":"));
     _5 = user___user_Dot_as_user_Shape___area(_1.clone())?;
     bex_aot::depth::probe(0)?;
-    _4 = ToBaml::to_baml(&_5);
+    _4 = bex_aot::render::to_string(&_5)?;
     _0 = string::concat(&_2, &_4);
     Ok(_0)
 }
@@ -1605,7 +1688,7 @@ pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
         user_Named,
     >(Vec::from([user_Named::user_Dog(_4.clone()), user_Named::user_Cat(_5.clone())]));
     bex_aot::depth::probe(0)?;
-    _11 = ToBaml::to_baml(&_2);
+    _11 = bex_aot::render::to_string(&_2)?;
     _10 = string::concat(&_11, &string::from_literal("|"));
     bex_aot::depth::probe(1)?;
     _12 = json::to_string(&_2)?;
@@ -1616,7 +1699,7 @@ pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
     _7 = string::concat(&_8, &_14);
     _6 = string::concat(&_7, &string::from_literal("|"));
     bex_aot::depth::probe(0)?;
-    _16 = ToBaml::to_baml(&_3);
+    _16 = bex_aot::render::to_string(&_3)?;
     _0 = string::concat(&_6, &_16);
     Ok(_0)
 }
@@ -1688,7 +1771,7 @@ pub fn user_in_union(mut _1: Int63) -> Result<Str, Thrown> {
             };
             _16 = string::from_literal("int");
             bex_aot::depth::probe(0)?;
-            _9 = ToBaml::to_baml(&_8);
+            _9 = bex_aot::render::to_string(&_8)?;
             _5 = string::concat(&_16, &_9);
             break 'bb7;
         }
@@ -1766,7 +1849,7 @@ pub fn user_in_field(mut _1: Int63) -> Result<Str, Thrown> {
     };
     _6 = string::concat(&_7, &_8);
     bex_aot::depth::probe(0)?;
-    _10 = ToBaml::to_baml(&_2);
+    _10 = bex_aot::render::to_string(&_2)?;
     _0 = string::concat(&_6, &_10);
     Ok(_0)
 }
@@ -1847,9 +1930,9 @@ pub fn user_comparisons(mut _1: Int63, mut _2: Int63) -> Result<Str, Thrown> {
     _3 = shared(user_Money { cents: _1 });
     _4 = shared(user_Money { cents: _2 });
     bex_aot::depth::probe(0)?;
-    _5 = ToBaml::to_baml(&_1);
+    _5 = bex_aot::render::to_string(&_1)?;
     bex_aot::depth::probe(0)?;
-    _7 = ToBaml::to_baml(&_2);
+    _7 = bex_aot::render::to_string(&_2)?;
     'bb5: {
         _10 = _1 > _2;
         if _10 {
@@ -2033,7 +2116,7 @@ pub fn user_union_receivers(mut _1: Int63) -> Result<Str, Thrown> {
         if _3 {
             _42 = string::from_literal("t");
             bex_aot::depth::probe(0)?;
-            _5 = ToBaml::to_baml(&_1);
+            _5 = bex_aot::render::to_string(&_1)?;
             _4 = string::concat(&_42, &_5);
             _2 = Union_user_Note_or_user_Tag::user_Tag(
                 shared(user_Tag { tag_text: _4.clone() }),
