@@ -27,11 +27,15 @@ A function is admitted when all of the following hold:
   parameter; a generic function, a method of a generic class and an
   interface's default method are compiled at their call sites, one
   instance per type-argument tuple (per implementor for a default method),
-  never on their own, see [Generics](#generics); a defaulted parameter is
-  admitted when its default is a constant (a literal, possibly negated,
-  `null`, or an enum variant): the constant is passed from every call site
-  that omits the argument, and the callee's prologue test against the
-  omitted-argument sentinel is emitted as the constant `false`; the lambdas
+  never on their own, see [Generics](#generics); a defaulted parameter whose
+  default is a constant (a literal, possibly negated, `null`, or an enum
+  variant) takes the constant from every call site that omits the argument,
+  and the callee's prologue test against the omitted-argument sentinel is
+  emitted as the constant `false`; one whose default is computed is an
+  `Option<T>` input (`__arg_k`), its prologue's test is `is_none()`, the
+  `fill` block stores the default and the other path stores the provided
+  value, so the default is computed in the callee after the call, as on
+  the VM; the lambdas
   in its body are functions of their own, admitted with it, see
   [Function values](#function-values-and-closures);
 - every parameter, local and the return place has a native type (below), or
@@ -338,10 +342,7 @@ for both) in a plain copy, a binary or unary operand (read as the other
 operand's type, or the result's when both sides are narrowed), a call or
 builtin argument, an array element or a class field; the printer emits
 `match x { Union::int(value) => value, _ => <raise Unreachable> }`, so a
-narrowing the checker got wrong is a panic, never a miscompile. A field read
-through a narrowed union local (`v.n` after `v is A`) is rejected: the slot
-belongs to the narrowed class, which the MIR does not name; the binding
-form (`let a: A => a.n`) is admitted.
+narrowing the checker got wrong is a panic, never a miscompile. A field read or write through a narrowed union local (`v.n` after `v is A`) is a `match` over the class members that have the slot, which the VM reads from the instance without a class check; the slot must be typed alike in every member that has it, and the binding form (`let a: A => a.n`) is admitted too.
 
 Type tests are resolved once by the analyzer to the variants they select
 (`Candidate::member_tests`) and printed as `matches!`: `is_type(x, int)` is
@@ -577,7 +578,7 @@ binding or a wildcard (`let s: string => ..`), a binding of a generic class,
 of a class outside the model, or of a stdlib error or panic class (`let p:
 baml.panics.IndexOutOfBounds => ..`, see Limitations), a read of the bound
 context of `catch (e, ctx)`, `spawn`/`await`, sys-ops, a field read
-through a narrowed union (`v.n` after `v is A`; bind it instead), a type
+a type
 test against a float or bigint literal, `==` on function values, `to_string` or JSON of a function value, a method used
 as a value, a stdlib or generic function used as a value, a function with
 a defaulted parameter used as a value, a lambda in a generic function, a
@@ -591,8 +592,7 @@ or an interface, stdlib interface method calls other than those in the
 table, a user interface method with a `Self`-typed parameter called on an
 interface value, `sort` on a non-primitive array, calls with trace
 attachments, an omitted argument to a stdlib function, any stdlib function
-not in the table, a `panic` with a computed message, a defaulted parameter
-whose default is computed (`b: int = a + 1`), a generic function, a
+not in the table, a `panic` with a computed message, a generic function, a
 method of a generic class or an interface default method as a root (they
 are compiled at their call sites), a function instantiating itself without
 bound (sixteen instances on one call path), a read inside an instance that

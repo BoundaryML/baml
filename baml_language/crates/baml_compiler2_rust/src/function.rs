@@ -371,10 +371,38 @@ pub(crate) struct DirectCall<'db> {
     pub args: Vec<NativeTy<'db>>,
     /// The callee's return type; the destination is it or its `| null`.
     pub result: NativeTy<'db>,
-    /// Per argument, the callee's constant default when the call omits
-    /// that argument: the printer passes the constant instead of the
-    /// `<omitted>` sentinel. See [`default_constants`].
-    pub substituted: Vec<Option<Constant<'db>>>,
+    /// Per argument, how the printer passes it, see [`Passing`].
+    pub substituted: Vec<Passing<'db>>,
+}
+
+/// How a call site passes one argument to a callee with defaulted
+/// parameters, see [`defaults_of`].
+#[derive(Debug, Clone)]
+pub(crate) enum Passing<'db> {
+    /// The argument as it is.
+    AsIs,
+    /// The call omits the argument; the callee's constant default is passed.
+    Constant(Constant<'db>),
+    /// The parameter's default is computed in the callee: the argument is
+    /// passed as `Some(value)`.
+    Provided,
+    /// The parameter's default is computed in the callee and the call
+    /// omits the argument: `None` is passed.
+    Omitted,
+}
+
+/// Per parameter, its default, and the prologue's test temporaries by the
+/// parameter each tests; see [`defaults_of`].
+pub(crate) type Defaults<'db> = (Vec<Option<Default<'db>>>, FxHashMap<Local, Local>);
+
+/// A parameter's default, as the callee's prologue fills it.
+#[derive(Debug, Clone)]
+pub(crate) enum Default<'db> {
+    /// A constant, passed from every call site that omits the argument.
+    Constant(Constant<'db>),
+    /// Computed by the prologue: the parameter is an `Option<T>` input and
+    /// the prologue fills the local from it or from the default.
+    Computed,
 }
 
 /// What a `Call` or `VirtualCall` terminator does in the generated code.
@@ -505,6 +533,15 @@ pub(crate) struct Candidate<'db> {
     /// The `eq` overrides the body's `==` operators on unions and nullables
     /// can reach; the call graph admits them as callees.
     pub eq_overrides: Vec<Instance<'db>>,
+    /// Per parameter, its default, see [`defaults_of`].
+    pub defaults: Vec<Option<Default<'db>>>,
+    /// The slot type of every store through a narrowed union, by
+    /// statement: the printer matches the members whose slot has it.
+    pub narrowed_stores: FxHashMap<(BlockId, usize), NativeTy<'db>>,
+    /// The prologue's test temporaries (`_t = _k == <omitted>`) by the
+    /// parameter each tests, for the `if` the printer fills the parameter
+    /// in.
+    pub default_tests: FxHashMap<Local, Local>,
     /// The instance each `make_generic_function` (a generic function value
     /// whose type arguments mention the frame) builds, by the function and
     /// the templates it names.
@@ -797,7 +834,7 @@ fn analyze_body<'db>(
             "parameter list disagrees with MIR arity",
         ));
     }
-    default_constants(body, &param_names, &defaulted)?;
+    let (defaults, default_tests) = defaults_of(body, &param_names, &defaulted)?;
 
     let mut env = Env {
         db,
@@ -813,6 +850,7 @@ fn analyze_body<'db>(
         closures: FxHashMap::default(),
         function_values: FxHashMap::default(),
         eq_overrides: Vec::new(),
+        narrowed_stores: FxHashMap::default(),
         generic_values: FxHashMap::default(),
         field_links: FxHashMap::default(),
         frame,
@@ -879,6 +917,7 @@ fn analyze_body<'db>(
         eq_overrides,
         generic_values,
         field_links,
+        narrowed_stores,
         frame,
         ..
     } = env;
@@ -938,6 +977,9 @@ fn analyze_body<'db>(
         generic_values,
         field_links,
         type_args,
+        defaults,
+        default_tests,
+        narrowed_stores,
     })
 }
 
@@ -980,6 +1022,8 @@ struct Env<'a, 'db> {
     function_values: FxHashMap<Instance<'db>, NativeTy<'db>>,
     /// See [`Candidate::eq_overrides`].
     eq_overrides: Vec<Instance<'db>>,
+    /// See [`Candidate::narrowed_stores`].
+    narrowed_stores: FxHashMap<(BlockId, usize), NativeTy<'db>>,
     /// See [`Candidate::generic_values`].
     generic_values: FxHashMap<(FunctionLoc<'db>, Vec<TyTemplate>), Instance<'db>>,
     /// See [`Candidate::field_links`].
@@ -1539,7 +1583,68 @@ impl<'db> Env<'_, 'db> {
         }
     }
 
+    /// The type of field slot `field` accessed through a union or interface
+    /// value the checker narrowed. The MIR names the slot, not the class, so
+    /// the slot is taken from the class members that have it: when the
+    /// access's expected type is known (a read's destination, a store's
+    /// value) the members whose slot has that type, otherwise every member
+    /// with the slot, which must then agree.
+    fn narrowed_field_ty(
+        &self,
+        union: &NativeTy<'db>,
+        field: usize,
+        expected: Option<&NativeTy<'db>>,
+    ) -> Result<NativeTy<'db>, Rejection> {
+        let info = self.classes.variants_of(union)?;
+        let mut found: Option<NativeTy<'db>> = None;
+        for member in &info.members {
+            let NativeTy::Class(class) = member else {
+                continue;
+            };
+            let Some(slot) = self.classes.info(class)?.fields.get(field) else {
+                continue;
+            };
+            if let Some(expected) = expected
+                && slot.ty != *expected
+            {
+                continue;
+            }
+            match &found {
+                Some(ty) if *ty != slot.ty => {
+                    return Err(Rejection::unsupported(format!(
+                        "field slot {field} through a narrowed `{}` is typed `{}` in one member and `{}` in another",
+                        self.describe(union),
+                        self.describe(ty),
+                        self.describe(&slot.ty)
+                    )));
+                }
+                Some(_) => {}
+                None => found = Some(slot.ty.clone()),
+            }
+        }
+        found.ok_or_else(|| {
+            Rejection::invalid(format!(
+                "no class member of `{}` has field slot {field}{}",
+                self.describe(union),
+                expected.map_or(String::new(), |ty| format!(
+                    " typed `{}`",
+                    self.describe(ty)
+                ))
+            ))
+        })
+    }
+
     fn place_ty(&self, place: &Place) -> Result<NativeTy<'db>, Rejection> {
+        self.place_ty_with(place, None)
+    }
+
+    /// [`Self::place_ty`] with the type the read is expected to have, which
+    /// decides the slot of a field read through a narrowed union.
+    fn place_ty_with(
+        &self,
+        place: &Place,
+        expected: Option<&NativeTy<'db>>,
+    ) -> Result<NativeTy<'db>, Rejection> {
         match place {
             Place::Local(local) => self.local_ty(*local),
             Place::Field { base, field } => match self.place_ty(base)? {
@@ -1560,12 +1665,12 @@ impl<'db> Env<'_, 'db> {
                 }
                 // The checker narrowed the union to one class and lowering
                 // reads the field by its slot in that class, which the MIR
-                // does not name.
+                // does not name: the slot is read from whichever member the
+                // value holds (the VM reads the instance's slot without a
+                // class check), so every member with the slot must type it
+                // alike.
                 union @ (NativeTy::Union(_) | NativeTy::Interface(_)) => {
-                    Err(Rejection::unsupported(format!(
-                        "field read on a narrowed `{}` (bind it with `let x: C =>` to read its fields)",
-                        self.describe(&union)
-                    )))
+                    self.narrowed_field_ty(&union, *field, expected)
                 }
                 NativeTy::Thrown => Err(Rejection::unsupported(
                     "field read on a caught error typed by the checker, without a class test (bind it with `let e: C =>`)",
@@ -1648,7 +1753,7 @@ impl<'db> Env<'_, 'db> {
         expected: Option<&NativeTy<'db>>,
     ) -> Result<NativeTy<'db>, Rejection> {
         match operand {
-            Operand::Copy(place) | Operand::Move(place) => self.place_ty(place),
+            Operand::Copy(place) | Operand::Move(place) => self.place_ty_with(place, expected),
             Operand::Constant(constant) => match constant {
                 Constant::Int(value) => {
                     if Int63::new(*value).is_none() {
@@ -2477,7 +2582,28 @@ impl<'db> Env<'_, 'db> {
                         return Ok(None);
                     }
                 }
-                let expected = self.place_ty(destination)?;
+                // A store through a narrowed union: the stored value's type
+                // picks the slot, recorded for the printer.
+                let narrowed_store = match destination {
+                    Place::Field { base, .. }
+                        if matches!(
+                            self.place_ty(base)?,
+                            NativeTy::Union(_) | NativeTy::Interface(_)
+                        ) =>
+                    {
+                        Some(self.rvalue_ty(
+                            value,
+                            None,
+                            Some(TestSite::Statement(block, index)),
+                        )?)
+                    }
+                    _ => None,
+                };
+                let expected = self.place_ty_with(destination, narrowed_store.as_ref())?;
+                if narrowed_store.is_some() {
+                    self.narrowed_stores
+                        .insert((block, index), expected.clone());
+                }
                 if is_dead_null_write(value)
                     && !matches!(expected, NativeTy::Null | NativeTy::Option(_))
                 {
@@ -3096,24 +3222,31 @@ impl<'db> Env<'_, 'db> {
                 let mut substituted = Vec::with_capacity(value_args.len());
                 for ((arg, param), default) in value_args.iter().zip(&params).zip(&defaults) {
                     // An omitted argument is the callee's constant default,
-                    // passed from here: the callee's own prologue never sees
-                    // the sentinel (see `default_constants`).
-                    let substitute = if is_omitted(arg) {
-                        let Some(constant) = default else {
+                    // passed from here, or `None` for a computed one (see
+                    // `defaults_of`).
+                    let passing = match (is_omitted(arg), default) {
+                        (true, Some(Default::Constant(constant))) => {
+                            Passing::Constant(constant.clone())
+                        }
+                        (true, Some(Default::Computed)) => Passing::Omitted,
+                        (true, None) => {
                             return Err(Rejection::invalid(format!(
                                 "call of `{link_name}` omits an argument for a parameter without a default"
                             )));
-                        };
-                        Some(Operand::Constant(constant.clone()))
-                    } else {
-                        None
+                        }
+                        (false, Some(Default::Computed)) => Passing::Provided,
+                        (false, _) => Passing::AsIs,
                     };
+                    let substitute = match &passing {
+                        Passing::Constant(constant) => Some(Operand::Constant(constant.clone())),
+                        _ => None,
+                    };
+                    let omitted = matches!(passing, Passing::Omitted);
+                    substituted.push(passing);
+                    if omitted {
+                        continue;
+                    }
                     let arg = substitute.as_ref().unwrap_or(arg);
-                    substituted.push(
-                        substitute
-                            .as_ref()
-                            .map(|_| default.clone().expect("checked")),
-                    );
                     let actual = self.operand_ty(arg, Some(param))?;
                     if !fits(&actual, param) {
                         return Err(mismatch(
@@ -3794,21 +3927,26 @@ impl<'db> Env<'_, 'db> {
         let mut substituted = Vec::with_capacity(params.len());
         for (index, (param, default)) in params.iter().zip(&defaults).enumerate() {
             let arg = args.get(index).unwrap_or(&omitted);
-            let substitute = if is_omitted(arg) {
-                let Some(constant) = default else {
+            let passing = match (is_omitted(arg), default) {
+                (true, Some(Default::Constant(constant))) => Passing::Constant(constant.clone()),
+                (true, Some(Default::Computed)) => Passing::Omitted,
+                (true, None) => {
                     return Err(Rejection::invalid(format!(
                         "{described}: an argument is omitted for a parameter without a default"
                     )));
-                };
-                Some(Operand::Constant(constant.clone()))
-            } else {
-                None
+                }
+                (false, Some(Default::Computed)) => Passing::Provided,
+                (false, _) => Passing::AsIs,
             };
-            substituted.push(
-                substitute
-                    .as_ref()
-                    .map(|_| default.clone().expect("checked")),
-            );
+            let substitute = match &passing {
+                Passing::Constant(constant) => Some(Operand::Constant(constant.clone())),
+                _ => None,
+            };
+            let omitted = matches!(passing, Passing::Omitted);
+            substituted.push(passing);
+            if omitted {
+                continue;
+            }
             let arg = substitute.as_ref().unwrap_or(arg);
             // The receiver is the implementor's value (or the interface
             // value itself, for a default body); every other argument is
@@ -4045,14 +4183,7 @@ impl<'db> Env<'_, 'db> {
         &mut self,
         instance: &Instance<'db>,
         link_name: &str,
-    ) -> Result<
-        (
-            Vec<NativeTy<'db>>,
-            NativeTy<'db>,
-            Vec<Option<Constant<'db>>>,
-        ),
-        Rejection,
-    > {
+    ) -> Result<(Vec<NativeTy<'db>>, NativeTy<'db>, Vec<Option<Default<'db>>>), Rejection> {
         let callee = instance.loc;
         let frame = match Frame::new(self.db, callee, instance.type_args.clone()) {
             Ok(frame) => frame,
@@ -4113,8 +4244,8 @@ impl<'db> Env<'_, 'db> {
                 "`{link_name}` parameter list disagrees with its MIR arity"
             )));
         }
-        let defaults =
-            default_constants(body, &names, &defaulted).map_err(|rejection| match rejection {
+        let (defaults, _) =
+            defaults_of(body, &names, &defaulted).map_err(|rejection| match rejection {
                 Rejection::Unsupported(reason) => {
                     Rejection::Unsupported(format!("callee `{link_name}` {reason}"))
                 }
@@ -4774,25 +4905,28 @@ fn is_omitted_constant(constant: &Constant<'_>) -> bool {
     matches!(constant, Constant::OmittedArg)
 }
 
-/// The constant default of each parameter, parallel to `_1..=arity`; `None`
-/// for a parameter without one.
+/// Per parameter, its default, with the prologue test temporaries by the
+/// parameter they test; `None` for a parameter without a default.
 ///
 /// The VM fills an omitted argument in the callee: a call passes the
 /// `<omitted>` sentinel and the callee's prologue tests each defaulted
 /// parameter against it (`_t = _k == <omitted>; branch _t -> [fill, next]`,
 /// with `fill` storing the default and falling into `next`). Native code has
-/// no sentinel value, so the default is passed from the call site instead,
-/// which needs it to be a constant: the `fill` block must be a single store
-/// of a constant. The prologue stays in the callee, where its test is the
-/// constant `false`. A default that is computed (`b: int = a + 1`) is outside
-/// the subset, with the parameter named. A parameter a closure captures is
+/// no sentinel value. A constant default (the `fill` block a single store of
+/// a constant) is passed from every call site that omits the argument and the
+/// prologue's test is the constant `false`. A computed default (`b: int =
+/// a + 1`) keeps the prologue: the parameter is an `Option<T>` input, the
+/// test is `is_none()`, `fill` stores the default and the printer stores the
+/// provided value on the other path, so rustc's definite-initialization check
+/// still proves every read follows a write. A parameter a closure captures is
 /// tested and filled through its cell (`*_k`).
-pub(crate) fn default_constants<'db>(
+pub(crate) fn defaults_of<'db>(
     body: &'db MirFunctionBody<'db>,
     param_names: &[String],
     defaulted: &[bool],
-) -> Result<Vec<Option<Constant<'db>>>, Rejection> {
+) -> Result<Defaults<'db>, Rejection> {
     let mut defaults = vec![None; param_names.len()];
+    let mut tests = FxHashMap::default();
     for block in &body.blocks {
         let Some(Terminator::Branch {
             condition: Operand::Copy(Place::Local(test)) | Operand::Move(Place::Local(test)),
@@ -4820,20 +4954,16 @@ pub(crate) fn default_constants<'db>(
         let Some(param) = param else {
             continue;
         };
-        let Some(name) = param
+        if param
             .0
             .checked_sub(1)
             .and_then(|index| param_names.get(index))
-        else {
+            .is_none()
+        {
             return Err(Rejection::invalid(format!(
                 "{param} is tested against an omitted argument but is not a parameter"
             )));
-        };
-        let not_constant = || {
-            Rejection::unsupported(format!(
-                "default of parameter `{name}` is not a constant (the callee prologue computes it)"
-            ))
-        };
+        }
         let fill = body.block(*then_block);
         let constant = match (fill.statements.as_slice(), &fill.terminator) {
             (
@@ -4846,23 +4976,27 @@ pub(crate) fn default_constants<'db>(
                 Some(Terminator::Goto { target }),
             ) if param_place(destination) == Some(param) && target == else_block => match value {
                 Rvalue::Use(Operand::Constant(constant)) if !is_omitted_constant(constant) => {
-                    constant.clone()
+                    Some(constant.clone())
                 }
                 // A negative literal lowers as the negation of a constant.
                 Rvalue::UnaryOp {
                     op: UnaryOp::Neg,
                     operand: Operand::Constant(constant),
                 } => match constant {
-                    Constant::Int(value) => Constant::Int(value.wrapping_neg()),
-                    Constant::Float(value) => Constant::Float(-value),
-                    Constant::Bigint(value) => Constant::Bigint(-value),
-                    _ => return Err(not_constant()),
+                    Constant::Int(value) => Some(Constant::Int(value.wrapping_neg())),
+                    Constant::Float(value) => Some(Constant::Float(-value)),
+                    Constant::Bigint(value) => Some(Constant::Bigint(-value)),
+                    _ => None,
                 },
-                _ => return Err(not_constant()),
+                _ => None,
             },
-            _ => return Err(not_constant()),
+            _ => None,
         };
-        defaults[param.0 - 1] = Some(constant);
+        defaults[param.0 - 1] = Some(match constant {
+            Some(constant) => Default::Constant(constant),
+            None => Default::Computed,
+        });
+        tests.insert(*test, param);
     }
     for (index, (name, has_default)) in param_names.iter().zip(defaulted).enumerate() {
         if *has_default && defaults[index].is_none() {
@@ -4871,12 +5005,12 @@ pub(crate) fn default_constants<'db>(
             )));
         }
     }
-    Ok(defaults)
+    Ok((defaults, tests))
 }
 
 /// The parameter a prologue place names: the local, or the cell of a
 /// captured one.
-fn param_place(place: &Place) -> Option<Local> {
+pub(crate) fn param_place(place: &Place) -> Option<Local> {
     match place {
         Place::Local(local) | Place::Deref(CellId::Local(local)) => Some(*local),
         _ => None,
@@ -5125,8 +5259,17 @@ pub(crate) fn find_aliases(
             }
             let (base, is_field) = match source {
                 Place::Local(base) => (*base, false),
+                // A field through a narrowed union is a `match` that needs
+                // the read's destination type; it is copied, not aliased.
                 Place::Field { base, .. } => match &**base {
-                    Place::Local(base) => (*base, true),
+                    Place::Local(base)
+                        if matches!(
+                            kinds.get(base.0),
+                            Some(LocalKind::Value(NativeTy::Class(_)))
+                        ) =>
+                    {
+                        (*base, true)
+                    }
                     _ => continue,
                 },
                 Place::Index { .. } | Place::Capture(_) | Place::Deref(_) => continue,

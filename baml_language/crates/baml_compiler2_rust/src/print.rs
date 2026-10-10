@@ -18,9 +18,9 @@ use crate::{
     Rejection, TypeDecl,
     classes::{ClassInfo, ClassTable, EnumInfo, IfaceInfo, UnionInfo},
     function::{
-        ArrayCallback, BigintOp, Builtin, CallKind, Candidate, CmpKind, CompareOp, DirectCall,
-        FnId, LocalKind, MapOp, SortKind, TagSource, binop_operand_tys, binop_ty, equality_common,
-        is_dead_null_write, is_omitted, unary_operand_ty,
+        ArrayCallback, BigintOp, Builtin, CallKind, Candidate, CmpKind, CompareOp, Default,
+        DirectCall, FnId, LocalKind, MapOp, Passing, SortKind, TagSource, binop_operand_tys,
+        binop_ty, equality_common, is_dead_null_write, is_omitted, param_place, unary_operand_ty,
     },
     generics::Instance,
     structure::Stmt,
@@ -681,24 +681,48 @@ impl<'a, 'db> Printer<'a, 'db> {
             let ty = self.ty(ty);
             quote! { #ident: &cell::Cell<#ty> }
         });
+        // A parameter whose default the prologue computes is an `Option<T>`
+        // input (`__arg_k`); the prologue fills the parameter's local from it
+        // or from the default (see `defaults_of`).
+        let computed = |index: usize| {
+            matches!(
+                candidate.defaults.get(index - 1),
+                Some(Some(Default::Computed))
+            )
+        };
         let params = candidate
             .param_tys()
             .into_iter()
             .enumerate()
             .map(|(index, ty)| {
-                let ident = local_ident(Local(index + 1));
                 let ty = self.ty(ty);
-                quote! { mut #ident: #ty }
+                if computed(index + 1) {
+                    let ident = arg_ident(index + 1);
+                    quote! { #ident: Option<#ty> }
+                } else {
+                    let ident = local_ident(Local(index + 1));
+                    quote! { mut #ident: #ty }
+                }
             });
         // A captured parameter is celled on entry with the value the caller
         // passed, as the VM's frame preamble does: the parameter is shadowed
-        // by its cell.
+        // by its cell. A computed-default parameter's local is declared here
+        // and filled by the prologue (its cell starts empty).
         let celled_params = (1..=candidate.arity())
-            .filter(|index| candidate.body.local(Local(*index)).is_captured)
+            .filter(|index| candidate.body.local(Local(*index)).is_captured || computed(*index))
             .map(|index| {
                 let ident = local_ident(Local(index));
                 let ty = self.ty(&candidate.param_tys()[index - 1].clone());
-                quote! { let mut #ident: cell::Cell<#ty> = cell::with(#ident); }
+                match (
+                    candidate.body.local(Local(index)).is_captured,
+                    computed(index),
+                ) {
+                    (true, true) => quote! { let mut #ident: cell::Cell<#ty> = cell::fresh(); },
+                    (true, false) => {
+                        quote! { let mut #ident: cell::Cell<#ty> = cell::with(#ident); }
+                    }
+                    (false, _) => quote! { let mut #ident: #ty; },
+                }
             });
         let ret = self.ty(candidate.return_ty());
         // Declared without initializers: rustc proves every read follows a
@@ -790,9 +814,33 @@ impl<'a, 'db> Printer<'a, 'db> {
                 else_branch,
             } => {
                 let then_branch = self.body(then_branch, tail)?;
-                let else_branch = self.body(else_branch, tail)?;
+                let mut else_branch = self.body(else_branch, tail)?;
                 match self.terminator(BlockId(*block))? {
                     Terminator::Branch { condition, .. } => {
+                        // The prologue's test of a computed-default parameter:
+                        // the `then` branch fills the default, this path
+                        // stores the provided value, so the local is
+                        // assigned either way.
+                        if let Operand::Copy(Place::Local(test)) | Operand::Move(Place::Local(test)) =
+                            condition
+                            && let Some(param) = self.candidate.default_tests.get(test)
+                            && matches!(
+                                self.candidate.defaults.get(param.0 - 1),
+                                Some(Some(Default::Computed))
+                            )
+                        {
+                            let arg = arg_ident(param.0);
+                            let local = local_ident(*param);
+                            let provided = quote! { #arg.expect("an argument tested as provided") };
+                            else_branch.insert(
+                                0,
+                                if self.candidate.body.local(*param).is_captured {
+                                    quote! { cell::set(&#local, #provided); }
+                                } else {
+                                    quote! { #local = #provided; }
+                                },
+                            );
+                        }
                         let condition = self.operand(condition, Some(&NativeTy::Bool))?;
                         quote! {
                             if #condition { #(#then_branch)* } else { #(#else_branch)* }
@@ -1528,9 +1576,19 @@ impl<'a, 'db> Printer<'a, 'db> {
                         self.coerce(value, member, param, store)
                     };
                 }
-                // An omitted argument is the callee's constant default.
-                let substitute = default.clone().map(Operand::Constant);
-                self.operand(substitute.as_ref().unwrap_or(arg), Some(param))
+                // An omitted argument is the callee's constant default, or
+                // `None` for a computed one, which takes `Some(value)`.
+                match default {
+                    Passing::AsIs => self.operand(arg, Some(param)),
+                    Passing::Constant(constant) => {
+                        self.operand(&Operand::Constant(constant.clone()), Some(param))
+                    }
+                    Passing::Provided => {
+                        let value = self.operand(arg, Some(param))?;
+                        Ok(quote! { Some(#value) })
+                    }
+                    Passing::Omitted => Ok(quote! { None }),
+                }
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(self.fallible(&quote! { #callee(#(#args),*) }))
@@ -2130,7 +2188,12 @@ impl<'a, 'db> Printer<'a, 'db> {
                         return Ok(None);
                     }
                 }
-                let target_ty = self.place_ty(destination)?;
+                // A store through a narrowed union has the slot type the
+                // analyzer picked by the stored value.
+                let target_ty = match self.candidate.narrowed_stores.get(&(block, index)) {
+                    Some(slot) => slot.clone(),
+                    None => self.place_ty(destination)?,
+                };
                 if is_dead_null_write(value)
                     && !matches!(target_ty, NativeTy::Null | NativeTy::Option(_))
                 {
@@ -2159,13 +2222,38 @@ impl<'a, 'db> Printer<'a, 'db> {
                     // operands took on the same cell is released before the
                     // `borrow_mut()` of the store.
                     Place::Field { base, field } => {
-                        let class = base_ty(self, base)?;
-                        let field = self.field_ident(&class, *field)?;
-                        let base = self.place(base)?;
-                        quote! {{
-                            let value = #value;
-                            #base.borrow_mut().#field = value;
-                        }}
+                        if let Some(union) = self.narrowed_base(base)? {
+                            let slot = self
+                                .candidate
+                                .narrowed_stores
+                                .get(&(block, index))
+                                .ok_or_else(|| {
+                                    Rejection::invalid(
+                                        "store through a narrowed union was not analyzed",
+                                    )
+                                })?;
+                            let store = self.narrowed_field(
+                                &union,
+                                base,
+                                *field,
+                                slot,
+                                |object, ident| {
+                                    quote! { #object.borrow_mut().#ident = value; }
+                                },
+                            )?;
+                            quote! {{
+                                let value = #value;
+                                #store
+                            }}
+                        } else {
+                            let class = base_ty(self, base)?;
+                            let field = self.field_ident(&class, *field)?;
+                            let base = self.place(base)?;
+                            quote! {{
+                                let value = #value;
+                                #base.borrow_mut().#field = value;
+                            }}
+                        }
                     }
                     Place::Index { base, index, kind } => {
                         if *kind == IndexKind::Map {
@@ -2260,11 +2348,31 @@ impl<'a, 'db> Printer<'a, 'db> {
             }
             Rvalue::BinaryOp { op, left, right } => {
                 if is_omitted(left) || is_omitted(right) {
-                    // The callee prologue's `param == <omitted>` test: every
-                    // call passes the constant default, so it never holds.
-                    let value = match op {
-                        BinOp::Eq => quote! { false },
-                        BinOp::Ne => quote! { true },
+                    // The callee prologue's `param == <omitted>` test: for a
+                    // constant default every call passes the constant, so
+                    // it never holds; for a computed one it asks the
+                    // `Option` input.
+                    let param = [left, right].into_iter().find_map(|operand| match operand {
+                        Operand::Copy(place) | Operand::Move(place) => param_place(place),
+                        Operand::Constant(_) => None,
+                    });
+                    let computed = param.is_some_and(|param| {
+                        matches!(
+                            self.candidate.defaults.get(param.0 - 1),
+                            Some(Some(Default::Computed))
+                        )
+                    });
+                    let value = match (op, computed) {
+                        (BinOp::Eq, false) => quote! { false },
+                        (BinOp::Ne, false) => quote! { true },
+                        (BinOp::Eq, true) => {
+                            let arg = arg_ident(param.expect("computed").0);
+                            quote! { #arg.is_none() }
+                        }
+                        (BinOp::Ne, true) => {
+                            let arg = arg_ident(param.expect("computed").0);
+                            quote! { #arg.is_some() }
+                        }
                         _ => {
                             return Err(Rejection::invalid(format!(
                                 "`{op}` against an omitted argument"
@@ -2909,9 +3017,12 @@ impl<'a, 'db> Printer<'a, 'db> {
         let ty = self.operand_ty_with(operand, expected)?;
         Ok(match operand {
             Operand::Copy(place) | Operand::Move(place) => {
-                let expr = self.place(place)?;
-                // An element read and a cell read are owned already.
-                if ty.is_copy() || matches!(place, Place::Index { .. } | Place::Deref(_)) {
+                let expr = self.place_with(place, expected)?;
+                // An element read, a cell read and a field read through a
+                // narrowed union are owned already.
+                let owned = matches!(place, Place::Index { .. } | Place::Deref(_))
+                    || matches!(place, Place::Field { base, .. } if self.narrowed_base(base)?.is_some());
+                if ty.is_copy() || owned {
                     expr
                 } else {
                     quote! { #expr.clone() }
@@ -2979,7 +3090,7 @@ impl<'a, 'db> Printer<'a, 'db> {
         expected: Option<&NativeTy<'db>>,
     ) -> Result<NativeTy<'db>, Rejection> {
         match operand {
-            Operand::Copy(place) | Operand::Move(place) => self.place_ty(place),
+            Operand::Copy(place) | Operand::Move(place) => self.place_ty_with(place, expected),
             Operand::Constant(Constant::Int(_)) => Ok(NativeTy::Int),
             Operand::Constant(Constant::Bool(_)) => Ok(NativeTy::Bool),
             Operand::Constant(Constant::Float(_)) => Ok(NativeTy::Float),
@@ -3029,9 +3140,22 @@ impl<'a, 'db> Printer<'a, 'db> {
     }
 
     fn place_ty(&self, place: &Place) -> Result<NativeTy<'db>, Rejection> {
+        self.place_ty_with(place, None)
+    }
+
+    /// [`Self::place_ty`] with the type the access is expected to have,
+    /// which picks the slot of a field through a narrowed union.
+    fn place_ty_with(
+        &self,
+        place: &Place,
+        expected: Option<&NativeTy<'db>>,
+    ) -> Result<NativeTy<'db>, Rejection> {
         match place {
             Place::Local(local) => self.local_ty(*local),
             Place::Field { base, field } => {
+                if let Some(union) = self.narrowed_base(base)? {
+                    return self.narrowed_slot_ty(&union, *field, expected);
+                }
                 let class = base_ty(self, base)?;
                 let info = self.classes.info(&class)?;
                 info.fields
@@ -3064,6 +3188,16 @@ impl<'a, 'db> Printer<'a, 'db> {
     /// alias, its source place), a field through `borrow()`, or an indexed
     /// element (owned, via `array::get`).
     fn place(&self, place: &Place) -> Result<TokenStream, Rejection> {
+        self.place_with(place, None)
+    }
+
+    /// [`Self::place`] with the type the read is expected to have, which
+    /// picks the slot of a field read through a narrowed union.
+    fn place_with(
+        &self,
+        place: &Place,
+        expected: Option<&NativeTy<'db>>,
+    ) -> Result<TokenStream, Rejection> {
         match place {
             Place::Local(local) => {
                 self.local_ty(*local)?;
@@ -3074,6 +3208,12 @@ impl<'a, 'db> Printer<'a, 'db> {
                 Ok(quote! { #ident })
             }
             Place::Field { base, field } => {
+                if let Some(union) = self.narrowed_base(base)? {
+                    let slot = self.narrowed_slot_ty(&union, *field, expected)?;
+                    return self.narrowed_field(&union, base, *field, &slot, |object, ident| {
+                        quote! { #object.borrow().#ident.clone() }
+                    });
+                }
                 let class = base_ty(self, base)?;
                 let field = self.field_ident(&class, *field)?;
                 let base = self.place(base)?;
@@ -3114,6 +3254,94 @@ impl<'a, 'db> Printer<'a, 'db> {
         }
     }
 
+    /// The union or interface type of `base`, when a field is accessed
+    /// through a value the checker narrowed.
+    fn narrowed_base(&self, base: &Place) -> Result<Option<NativeTy<'db>>, Rejection> {
+        Ok(match self.place_ty(base)? {
+            ty @ (NativeTy::Union(_) | NativeTy::Interface(_)) => Some(ty),
+            _ => None,
+        })
+    }
+
+    /// Field slot `field` of whichever class member the narrowed `base`
+    /// holds: a `match` over the members that have the slot, `access`
+    /// applied to the member's handle and the field's identifier; any other
+    /// member is the checker's narrowing proven wrong, raised as
+    /// `Unreachable`.
+    /// The type of field slot `field` through the narrowed `union`, as the
+    /// analyzer decided it (`narrowed_field_ty`).
+    fn narrowed_slot_ty(
+        &self,
+        union: &NativeTy<'db>,
+        field: usize,
+        expected: Option<&NativeTy<'db>>,
+    ) -> Result<NativeTy<'db>, Rejection> {
+        let info = self.classes.variants_of(union)?;
+        let mut found: Option<NativeTy<'db>> = None;
+        for member in &info.members {
+            let NativeTy::Class(class) = member else {
+                continue;
+            };
+            let Some(slot) = self.classes.info(class)?.fields.get(field) else {
+                continue;
+            };
+            if expected.is_some_and(|expected| slot.ty != *expected) {
+                continue;
+            }
+            match &found {
+                Some(ty) if *ty != slot.ty => {
+                    return Err(Rejection::invalid(format!(
+                        "field slot {field} through a narrowed `{}` is not typed alike",
+                        self.describe(union)
+                    )));
+                }
+                Some(_) => {}
+                None => found = Some(slot.ty.clone()),
+            }
+        }
+        found.ok_or_else(|| {
+            Rejection::invalid(format!(
+                "no class member of `{}` has field slot {field}",
+                self.describe(union)
+            ))
+        })
+    }
+
+    fn narrowed_field(
+        &self,
+        union: &NativeTy<'db>,
+        base: &Place,
+        field: usize,
+        slot_ty: &NativeTy<'db>,
+        access: impl Fn(&TokenStream, &Ident) -> TokenStream,
+    ) -> Result<TokenStream, Rejection> {
+        let info = self.classes.variants_of(union)?;
+        let enum_name = info.ident.clone();
+        let mut arms = Vec::new();
+        for (variant, member) in info.variants.iter().zip(&info.members) {
+            let NativeTy::Class(class) = member else {
+                continue;
+            };
+            let Some(slot) = self.classes.info(class)?.fields.get(field) else {
+                continue;
+            };
+            if slot.ty != *slot_ty {
+                continue;
+            }
+            let ident = self.field_ident(class, field)?;
+            let body = access(&quote! { __object }, &ident);
+            arms.push(quote! { #enum_name::#variant(__object) => { #body } });
+        }
+        let raise = self.raise(&quote! { Thrown::from(Panic::Unreachable) }, false);
+        let base = self.place(base)?;
+        Ok(quote! {
+            match &#base {
+                #(#arms)*
+                _ => { #raise }
+            }
+        })
+    }
+
     fn field_ident(&self, class: &ClassInst<'db>, field: usize) -> Result<Ident, Rejection> {
         let info = self.classes.info(class)?;
         info.fields
@@ -3147,6 +3375,11 @@ impl<'a, 'db> Printer<'a, 'db> {
 }
 
 /// The class instance a field place's base holds.
+/// `__arg_k`: the `Option` input of a parameter whose default is computed.
+fn arg_ident(index: usize) -> Ident {
+    format_ident!("__arg_{index}")
+}
+
 fn base_ty<'db>(printer: &Printer<'_, 'db>, base: &Place) -> Result<ClassInst<'db>, Rejection> {
     match printer.place_ty(base)? {
         NativeTy::Class(class) => Ok(class),
