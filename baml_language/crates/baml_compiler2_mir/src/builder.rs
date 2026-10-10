@@ -30,8 +30,8 @@ use baml_base::{Name, Span};
 
 use crate::{
     BasicBlock, BlockId, FunctionOwner, Landing, Local, LocalDecl, MirFunction, MirFunctionBody,
-    MirFunctionKind, Operand, Place, RuntimeTy, Rvalue, Statement, StatementKind, SwitchKey,
-    Terminator, TypeTest,
+    MirFunctionKind, MirInternalError, Operand, Place, RuntimeTy, Rvalue, Statement, StatementKind,
+    SwitchKey, Terminator, TypeTest,
 };
 
 /// Builder for constructing MIR functions.
@@ -64,6 +64,121 @@ pub(crate) struct MirBuilder<'db> {
     /// (`BasicBlock::shielded`), with the same fresh-block discipline as the
     /// handler.
     shield_depth: u32,
+    /// What the reducibility check in [`Self::build`] needs to know.
+    structure: Structure,
+}
+
+/// The facts behind MIR's reducibility guarantee, recorded as lowering runs.
+///
+/// A block is *opened* when it first becomes the current block, so opening
+/// order is the order code is written in. A block *is inside* the loop that
+/// was innermost when it was created, and every loop enclosing that one. Every
+/// edge, counting each block's implicit edge to its `unwind` handler, obeys
+/// two rules:
+///
+/// 1. No hidden loops: an edge goes to a block opened later, or back to the
+///    header of a loop its source is inside.
+/// 2. One door per loop: an edge enters a loop only at the loop's header.
+///
+/// Such a graph is reducible: every cycle has a block that dominates it, its
+/// single way in. Let `m` be the cycle's earliest-opened block. The cycle's
+/// edge into `m` comes from a block `p` opened no earlier, so by rule 1 `m`
+/// heads a loop that `p` is inside. The entry is inside no loop, so by rule 2
+/// every path from the entry to `p` passes `m`. Every other block of the
+/// cycle reaches `p` along the cycle without passing `m`, so `m` dominates it
+/// too.
+///
+/// The check reads only what is recorded here, so it is sound whatever
+/// lowering does with the builder.
+#[derive(Default)]
+struct Structure {
+    /// Per block: its position in opening order.
+    opened: Vec<Option<u32>>,
+    next_open: u32,
+    /// Per block: the innermost loop open when it was created.
+    block_loop: Vec<Option<LoopId>>,
+    loops: Vec<LoopInfo>,
+    current_loop: Option<LoopId>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct LoopId(usize);
+
+struct LoopInfo {
+    parent: Option<LoopId>,
+    header: BlockId,
+}
+
+impl Structure {
+    fn add_block(&mut self) {
+        self.opened.push(None);
+        self.block_loop.push(self.current_loop);
+    }
+
+    fn open(&mut self, block: BlockId) {
+        if self.opened[block.0].is_none() {
+            self.opened[block.0] = Some(self.next_open);
+            self.next_open += 1;
+        }
+    }
+
+    /// Open a loop inside the current one, headed by the next block created.
+    fn begin_loop(&mut self, header: BlockId) -> LoopId {
+        let id = LoopId(self.loops.len());
+        self.loops.push(LoopInfo {
+            parent: self.current_loop,
+            header,
+        });
+        self.current_loop = Some(id);
+        id
+    }
+
+    fn end_loop(&mut self, id: LoopId) {
+        debug_assert_eq!(self.current_loop, Some(id), "loops close innermost first");
+        self.current_loop = self.loops[id.0].parent;
+    }
+
+    /// Check both rules on every edge of `blocks`, whose entry is block 0.
+    fn check(&self, blocks: &[BasicBlock<'_>]) -> Result<(), String> {
+        if self.block_loop.first().is_some_and(Option::is_some) {
+            return Err("the entry block is inside a loop".to_string());
+        }
+        for (u, block) in blocks.iter().enumerate() {
+            let u_open = self.opened[u].expect("a terminated block was opened");
+            let u_loop = self.block_loop[u];
+            let terminator = block.terminator.as_ref().expect("checked by build");
+            for v in terminator.successors().into_iter().chain(block.unwind) {
+                let v_open = self.opened[v.0].expect("a terminated block was opened");
+                let v_loop = self.block_loop[v.0];
+                let heads = v_loop.filter(|l| self.loops[l.0].header == v);
+                let forward = u_open < v_open || heads.is_some_and(|l| self.inside(u_loop, l));
+                let enters_by_door = v_loop.is_none_or(|l| self.inside(u_loop, l))
+                    || heads.is_some_and(|l| self.loops[l.0].parent == u_loop);
+                let broken = match (forward, enters_by_door) {
+                    (true, true) => continue,
+                    (false, true) => "rule 1 (no hidden loops)",
+                    (true, false) => "rule 2 (one door per loop)",
+                    (false, false) => "rules 1 and 2",
+                };
+                return Err(format!(
+                    "edge bb{u} -> {v} breaks reducibility {broken}: bb{u} opened #{u_open} in \
+                     loop {u_loop:?}, {v} opened #{v_open} in loop {v_loop:?}"
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether a block in loop `inner` is inside `outer`.
+    fn inside(&self, mut inner: Option<LoopId>, outer: LoopId) -> bool {
+        while let Some(l) = inner {
+            if l == outer {
+                return true;
+            }
+            inner = self.loops[l.0].parent;
+        }
+        false
+    }
 }
 
 /// Where lowering was before it moved out of line to fill a handler block;
@@ -73,6 +188,21 @@ pub(crate) struct OutOfLine {
     block: BlockId,
     unwind: Option<BlockId>,
     handling: Option<BlockId>,
+}
+
+/// A loop being lowered, opened by [`MirBuilder::enter_loop`] and closed by
+/// handing it back to [`MirBuilder::leave_loop`]. Code outside the loop may
+/// jump only to its header.
+#[must_use = "a loop is closed by handing this back to `leave_loop`"]
+pub(crate) struct LoopScope {
+    id: LoopId,
+    header: BlockId,
+}
+
+impl LoopScope {
+    pub(crate) fn header(&self) -> BlockId {
+        self.header
+    }
 }
 
 /// An open shield — a `defer` body being lowered. [`MirBuilder::enter_shield`]
@@ -99,6 +229,7 @@ impl<'db> MirBuilder<'db> {
             current_unwind: None,
             current_handling: None,
             shield_depth: 0,
+            structure: Structure::default(),
         }
     }
 
@@ -208,12 +339,41 @@ impl<'db> MirBuilder<'db> {
         block.handling = self.current_handling;
         block.shielded = self.shield_depth > 0;
         self.blocks.push(block);
+        self.structure.add_block();
         id
     }
 
     /// Set the current block for emitting statements and terminators.
     pub(crate) fn set_current_block(&mut self, block: BlockId) {
+        self.structure.open(block);
         self.current_block = Some(block);
+    }
+
+    /// Start lowering a loop, creating its header: blocks created until
+    /// [`Self::leave_loop`] are inside it. Create the block the loop exits to
+    /// with [`Self::create_loop_exit`].
+    pub(crate) fn enter_loop(&mut self) -> LoopScope {
+        let header = BlockId(self.blocks.len());
+        let id = self.structure.begin_loop(header);
+        let created = self.create_block();
+        debug_assert_eq!(created, header);
+        LoopScope { id, header }
+    }
+
+    /// Create a block outside `scope`, for the loop to exit to.
+    pub(crate) fn create_loop_exit(&mut self, scope: &LoopScope) -> BlockId {
+        let id = self.create_block();
+        self.structure.block_loop[id.0] = self.structure.loops[scope.id.0].parent;
+        id
+    }
+
+    /// Close `scope`, the innermost loop open.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "the token is consumed so a loop cannot be closed twice"
+    )]
+    pub(crate) fn leave_loop(&mut self, scope: LoopScope) {
+        self.structure.end_loop(scope.id);
     }
 
     /// Get the current block ID, panics if none is set.
@@ -284,7 +444,7 @@ impl<'db> MirBuilder<'db> {
         self.current_unwind = unwind;
         let created = self.create_block();
         debug_assert_eq!(created, fresh);
-        self.current_block = Some(fresh);
+        self.set_current_block(fresh);
     }
 
     /// Lower what follows inside a `defer` body: shielded from cancellation.
@@ -336,7 +496,7 @@ impl<'db> MirBuilder<'db> {
         self.shield_depth = depth;
         let created = self.create_block();
         debug_assert_eq!(created, fresh);
-        self.current_block = Some(fresh);
+        self.set_current_block(fresh);
     }
 
     /// Fill `block` (a handler created earlier) with `unwind` as its handler
@@ -353,7 +513,7 @@ impl<'db> MirBuilder<'db> {
             unwind: self.current_unwind,
             handling: self.current_handling,
         };
-        self.current_block = Some(block);
+        self.set_current_block(block);
         self.current_unwind = unwind;
         self.current_handling = handling;
         out_of_line
@@ -768,15 +928,18 @@ impl<'db> MirBuilder<'db> {
     /// Panics if:
     /// - No blocks were created
     /// - Any block is unterminated
-    pub(crate) fn build(self) -> MirFunction<'db> {
+    ///
+    /// Fails if the CFG breaks a reducibility rule (see [`Structure`]).
+    pub(crate) fn build(self) -> Result<MirFunction<'db>, MirInternalError> {
         assert!(!self.blocks.is_empty(), "function has no blocks");
         self.assert_regions_closed();
 
         for (i, block) in self.blocks.iter().enumerate() {
             assert!(block.terminator.is_some(), "block bb{i} is not terminated");
         }
+        self.check_reducible()?;
 
-        MirFunction {
+        Ok(MirFunction {
             arity: self.arity,
             span: self.span,
             identity: self.owner.into_identity(),
@@ -787,35 +950,212 @@ impl<'db> MirBuilder<'db> {
             }),
             lambdas: vec![],
             signature: None,
-        }
+        })
     }
 
     /// Consume the builder and produce just the `MirFunctionBody`.
     ///
     /// Used when building a let-binding initializer, which is a body and
     /// never a `MirFunction` of its own.
-    pub(crate) fn build_body(self) -> MirFunctionBody<'db> {
+    pub(crate) fn build_body(self) -> Result<MirFunctionBody<'db>, MirInternalError> {
         assert!(!self.blocks.is_empty(), "let body has no blocks");
         self.assert_regions_closed();
         for (i, block) in self.blocks.iter().enumerate() {
             assert!(block.terminator.is_some(), "block bb{i} is not terminated");
         }
-        MirFunctionBody {
+        self.check_reducible()?;
+        Ok(MirFunctionBody {
             blocks: self.blocks,
             entry: BlockId(0),
             locals: self.locals,
-        }
+        })
     }
 
     fn assert_regions_closed(&self) {
         assert!(
             self.current_unwind.is_none()
                 && self.current_handling.is_none()
-                && self.shield_depth == 0,
-            "a handler ({:?}, handling {:?}) or a shield (depth {}) is still in force at build",
+                && self.shield_depth == 0
+                && self.structure.current_loop.is_none(),
+            "a handler ({:?}, handling {:?}), a shield (depth {}) or a loop ({:?}) is still in \
+             force at build",
             self.current_unwind,
             self.current_handling,
             self.shield_depth,
+            self.structure.current_loop,
         );
+    }
+
+    fn check_reducible(&self) -> Result<(), MirInternalError> {
+        self.structure
+            .check(&self.blocks)
+            .map_err(|message| MirInternalError {
+                message,
+                span: self.span,
+            })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Structure;
+    use crate::{BasicBlock, BlockId, Local, Operand, Place, Terminator};
+
+    /// Drives [`Structure`] the way [`super::MirBuilder`] does, without a
+    /// function owner.
+    #[derive(Default)]
+    struct Graph {
+        st: Structure,
+        blocks: Vec<BasicBlock<'static>>,
+    }
+
+    impl Graph {
+        fn block(&mut self) -> BlockId {
+            let id = BlockId(self.blocks.len());
+            self.blocks.push(BasicBlock::new(id));
+            self.st.add_block();
+            id
+        }
+        fn enter_loop(&mut self) -> (super::LoopId, BlockId) {
+            let id = self.st.begin_loop(BlockId(self.blocks.len()));
+            (id, self.block())
+        }
+        fn loop_exit(&mut self, id: super::LoopId) -> BlockId {
+            let b = self.block();
+            self.st.block_loop[b.0] = self.st.loops[id.0].parent;
+            b
+        }
+        fn open(&mut self, b: BlockId) {
+            self.st.open(b);
+        }
+        fn goto(&mut self, from: BlockId, target: BlockId) {
+            self.blocks[from.0].terminator = Some(Terminator::Goto { target });
+        }
+        fn branch(&mut self, from: BlockId, then_block: BlockId, else_block: BlockId) {
+            self.blocks[from.0].terminator = Some(Terminator::Branch {
+                condition: Operand::Copy(Place::Local(Local(0))),
+                then_block,
+                else_block,
+            });
+        }
+        fn ret(&mut self, from: BlockId) {
+            self.blocks[from.0].terminator = Some(Terminator::Return);
+        }
+        fn check(&self) -> Result<(), String> {
+            self.st.check(&self.blocks)
+        }
+    }
+
+    /// `while c { if d { break } else { continue } }`, then return.
+    #[test]
+    fn structured_loop_passes() {
+        let mut g = Graph::default();
+        let entry = g.block();
+        let (lp, header) = g.enter_loop();
+        let body = g.block();
+        let then_b = g.block();
+        let exit = g.loop_exit(lp);
+        g.st.end_loop(lp);
+
+        g.open(entry);
+        g.goto(entry, header);
+        g.open(header);
+        g.branch(header, body, exit);
+        g.open(body);
+        g.branch(body, then_b, header); // continue: back edge
+        g.open(then_b);
+        g.goto(then_b, exit); // break
+        g.open(exit);
+        g.ret(exit);
+        assert_eq!(g.check(), Ok(()));
+    }
+
+    /// The classic irreducible shape, built without declaring a loop.
+    #[test]
+    fn two_entry_cycle_breaks_rule_1() {
+        let mut g = Graph::default();
+        let entry = g.block();
+        let a = g.block();
+        let b = g.block();
+        g.open(entry);
+        g.branch(entry, a, b);
+        g.open(a);
+        g.goto(a, b);
+        g.open(b);
+        g.goto(b, a);
+        let err = g.check().unwrap_err();
+        assert!(err.contains("rule 1"), "{err}");
+    }
+
+    /// A declared loop whose body is also entered from outside.
+    #[test]
+    fn jump_into_loop_body_breaks_rule_2() {
+        let mut g = Graph::default();
+        let entry = g.block();
+        let (lp, header) = g.enter_loop();
+        let body = g.block();
+        let exit = g.loop_exit(lp);
+        g.st.end_loop(lp);
+
+        g.open(entry);
+        g.branch(entry, header, body);
+        g.open(header);
+        g.branch(header, body, exit);
+        g.open(body);
+        g.goto(body, header);
+        g.open(exit);
+        g.ret(exit);
+        let err = g.check().unwrap_err();
+        assert!(err.contains("rule 2"), "{err}");
+    }
+
+    /// An inner loop's header may only be entered from its outer loop.
+    #[test]
+    fn nested_loops() {
+        let mut g = Graph::default();
+        let entry = g.block();
+        let (outer, outer_h) = g.enter_loop();
+        let (inner, inner_h) = g.enter_loop();
+        let inner_exit = g.loop_exit(inner);
+        g.st.end_loop(inner);
+        let outer_exit = g.loop_exit(outer);
+        g.st.end_loop(outer);
+
+        g.open(entry);
+        g.goto(entry, outer_h);
+        g.open(outer_h);
+        g.branch(outer_h, inner_h, outer_exit);
+        g.open(inner_h);
+        g.branch(inner_h, inner_h, inner_exit); // self loop
+        g.open(inner_exit);
+        g.branch(inner_exit, outer_h, outer_exit); // continue outer / break
+        g.open(outer_exit);
+        g.ret(outer_exit);
+        assert_eq!(g.check(), Ok(()));
+
+        // Entering the inner header straight from the entry skips the outer
+        // loop's header.
+        g.branch(entry, outer_h, inner_h);
+        let err = g.check().unwrap_err();
+        assert!(err.contains("rule 2"), "{err}");
+    }
+
+    /// A block's unwind edge counts: a handler opened before the block it
+    /// protects is a backward edge.
+    #[test]
+    fn unwind_edge_to_earlier_handler_breaks_rule_1() {
+        let mut g = Graph::default();
+        let entry = g.block();
+        let handler = g.block();
+        let protected = g.block();
+        g.open(entry);
+        g.goto(entry, protected);
+        g.open(handler);
+        g.ret(handler);
+        g.open(protected);
+        g.ret(protected);
+        g.blocks[protected.0].unwind = Some(handler);
+        let err = g.check().unwrap_err();
+        assert!(err.contains("rule 1"), "{err}");
     }
 }

@@ -2198,9 +2198,10 @@ impl<'db> LoweringContext<'db> {
             &Place::local(iter_local),
         )?;
 
-        let bb_header = self.builder.create_block();
+        let loop_scope = self.builder.enter_loop();
+        let bb_header = loop_scope.header();
         let bb_body = self.builder.create_block();
-        let bb_exit = self.builder.create_block();
+        let bb_exit = self.builder.create_loop_exit(&loop_scope);
 
         let prev_loop = self.loop_context.take();
         self.loop_context = Some(LoopContext {
@@ -2246,6 +2247,7 @@ impl<'db> LoweringContext<'db> {
         }
 
         self.loop_context = prev_loop;
+        self.builder.leave_loop(loop_scope);
         self.builder.set_current_block(bb_exit);
         Ok(())
     }
@@ -4592,8 +4594,8 @@ impl<'db> LoweringContext<'db> {
         // Take the builder out of self to call `build()` which consumes it
         let dummy = MirBuilder::new(self.builder.owner().clone(), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
-        let mut mir = builder.build();
-        optimize::optimize_function(self.db, &mut mir, self.opt);
+        let mut mir = builder.build()?;
+        optimize::optimize_function(self.db, &mut mir, self.opt)?;
 
         // Drain any lambda functions lowered during this function's body into the
         // MirFunction's lambdas list.  The lambda_idx values in MakeClosure rvalues
@@ -4847,8 +4849,8 @@ impl<'db> LoweringContext<'db> {
         // Take the builder out and build the MirFunctionBody
         let dummy = MirBuilder::new(self.builder.owner().clone(), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
-        let mut body = builder.build_body();
-        optimize::optimize_function_body(self.db, &mut body, self.opt);
+        let mut body = builder.build_body()?;
+        optimize::optimize_function_body(self.db, &mut body, self.opt)?;
         Ok(body)
     }
 
@@ -5071,8 +5073,8 @@ impl<'db> LoweringContext<'db> {
 
         let dummy = MirBuilder::new(self.builder.owner().clone(), 0);
         let lambda_builder = std::mem::replace(&mut self.builder, dummy);
-        let mut lambda_mir = lambda_builder.build();
-        optimize::optimize_function(self.db, &mut lambda_mir, self.opt);
+        let mut lambda_mir = lambda_builder.build()?;
+        optimize::optimize_function(self.db, &mut lambda_mir, self.opt)?;
         // Attach nested lambdas as direct children.
         lambda_mir.lambdas = nested_lambdas;
         lambda_mir.signature = Some(crate::ir::RuntimeSignature {
@@ -5639,8 +5641,8 @@ impl<'db> LoweringContext<'db> {
         let nested_lambdas = std::mem::take(&mut self.pending_lambdas);
         let dummy = MirBuilder::new(self.builder.owner().clone(), 0);
         let lambda_builder = std::mem::replace(&mut self.builder, dummy);
-        let mut lambda_mir = lambda_builder.build();
-        optimize::optimize_function(self.db, &mut lambda_mir, self.opt);
+        let mut lambda_mir = lambda_builder.build()?;
+        optimize::optimize_function(self.db, &mut lambda_mir, self.opt)?;
         lambda_mir.lambdas = nested_lambdas;
 
         let newly_needed_transitive = std::mem::take(&mut self.transitive_captures_needed);
@@ -11806,14 +11808,15 @@ impl LoweringContext<'_> {
                 after,
                 origin,
             } => {
-                let bb_cond = self.builder.create_block();
+                let loop_scope = self.builder.enter_loop();
+                let bb_cond = loop_scope.header();
                 let bb_body = self.builder.create_block();
                 let bb_after = if after.is_some() {
                     self.builder.create_block()
                 } else {
                     bb_cond
                 };
-                let bb_exit = self.builder.create_block();
+                let bb_exit = self.builder.create_loop_exit(&loop_scope);
 
                 // A C-style header binding is per-iteration: the closures one
                 // iteration makes keep that iteration's value while the step
@@ -11866,6 +11869,7 @@ impl LoweringContext<'_> {
                 }
 
                 self.loop_context = prev_loop;
+                self.builder.leave_loop(loop_scope);
                 self.builder.set_current_block(bb_exit);
             }
 
@@ -11880,9 +11884,10 @@ impl LoweringContext<'_> {
                 scrutinee,
                 body,
             } => {
-                let bb_header = self.builder.create_block();
+                let loop_scope = self.builder.enter_loop();
+                let bb_header = loop_scope.header();
                 let bb_body = self.builder.create_block();
-                let bb_exit = self.builder.create_block();
+                let bb_exit = self.builder.create_loop_exit(&loop_scope);
 
                 // `continue` re-enters the header (re-evaluates scrutinee +
                 // re-tests the pattern); `break` jumps to the exit. Save/swap/
@@ -11929,6 +11934,7 @@ impl LoweringContext<'_> {
 
                 // Exit.
                 self.loop_context = prev_loop;
+                self.builder.leave_loop(loop_scope);
                 self.builder.set_current_block(bb_exit);
             }
 
@@ -12427,7 +12433,6 @@ impl<'db> LoweringContext<'db> {
             dest.clone(),
             bb_join,
             SwitchOtherwise::Match { is_exhaustive },
-            None,
         )?;
         if !switched {
             // Whether any non-final arm's emitted test can reject a value the
@@ -12464,8 +12469,6 @@ impl<'db> LoweringContext<'db> {
     /// Unified entry point for both match and catch switch dispatch.
     /// - `arms`: `(pattern, body_expr, optional_guard)` tuples
     /// - `otherwise`: controls what happens for unmatched values
-    /// - `pre_created_blocks`: if `Some`, use these pre-created body blocks instead
-    ///   of creating new ones (used by catch, which pre-creates blocks)
     fn try_lower_as_switch(
         &mut self,
         scrutinee: Local,
@@ -12473,7 +12476,6 @@ impl<'db> LoweringContext<'db> {
         dest: Place,
         join: BlockId,
         otherwise: SwitchOtherwise,
-        pre_created_blocks: Option<&[Option<BlockId>]>,
     ) -> Lowered<bool> {
         use std::collections::HashSet;
 
@@ -12685,7 +12687,8 @@ impl<'db> LoweringContext<'db> {
         let is_switch_exhaustive = otherwise_idx.is_none()
             && (is_exhaustive || (is_match && matches!(switch_kind, Some(SwitchKind::TypeTag))));
 
-        // Save the entry block — this is where the switch terminator goes
+        // Save the entry block — the switch terminator goes here, or in the
+        // int guard's block below.
         let bb_entry = self.builder.current_block();
 
         // Emit discriminant/type-tag extraction before building arm blocks.
@@ -12710,9 +12713,35 @@ impl<'db> LoweringContext<'db> {
             _ => Operand::Copy(Place::Local(scrutinee)),
         };
 
+        let bb_otherwise = self.builder.create_block();
+
+        // An integer switch reads the scrutinee as a raw `int`. When the
+        // static type admits anything else — `int | float`, a union with a
+        // class — a non-int value reaching the switch is a *match failure*,
+        // not a broken invariant: it belongs to no arm, so it belongs to
+        // `otherwise`. Without the guard the VM raises a type error and the
+        // match aborts instead of falling through (B-1073). Provably int-only
+        // scrutinees, the overwhelmingly common case, keep the bare switch.
+        // The guarded switch block is opened before the arms, so the switch
+        // jumps forward (reducibility rule 1, see `Structure` in builder.rs).
+        let bb_switch = if matches!(switch_kind, Some(SwitchKind::Integer))
+            && !runtime_ty_is_int_only(&self.builder.local_ty(scrutinee))
+        {
+            let bb_switch = self.builder.create_block();
+            self.emit_is_type_tag_branch(
+                scrutinee,
+                baml_type::typetag::INT,
+                bb_switch,
+                bb_otherwise,
+            );
+            self.builder.set_current_block(bb_switch);
+            bb_switch
+        } else {
+            bb_entry
+        };
+
         // Build body blocks for each arm. Union sub-patterns sharing the same
         // arm_idx reuse a single block (e.g. Active | Pending → same bb).
-        let bb_otherwise = self.builder.create_block();
         let mut switch_arms: Vec<(SwitchKey<'db>, BlockId)> = Vec::new();
         let mut arm_blocks: std::collections::HashMap<usize, BlockId> =
             std::collections::HashMap::new();
@@ -12722,12 +12751,7 @@ impl<'db> LoweringContext<'db> {
                 // Union sub-pattern: reuse the same body block
                 switch_arms.push((val, existing_bb));
             } else {
-                // Use pre-created block if available, otherwise create a new one
-                let bb_body = if let Some(blocks) = pre_created_blocks {
-                    blocks[arm_idx].expect("pre-created block missing for arm")
-                } else {
-                    self.builder.create_block()
-                };
+                let bb_body = self.builder.create_block();
                 switch_arms.push((val, bb_body));
                 arm_blocks.insert(arm_idx, bb_body);
 
@@ -12847,45 +12871,8 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
-        // For catch with pre-created blocks: redirect wildcard arm's pre-created block
-        // to bb_otherwise, since the wildcard body was lowered there.
-        if let Some(blocks) = pre_created_blocks {
-            for (i, block_opt) in blocks.iter().enumerate() {
-                if let Some(block) = block_opt {
-                    if otherwise_idx == Some(i) {
-                        // Wildcard arm's pre-created block → redirect to otherwise
-                        self.builder.set_current_block(*block);
-                        self.builder.goto(bb_otherwise);
-                    } else if !arm_blocks.contains_key(&i) {
-                        // Unreachable pre-created block (e.g. duplicate tag) → terminate it
-                        self.builder.set_current_block(*block);
-                        self.builder.goto(bb_otherwise);
-                    }
-                }
-            }
-        }
-
-        // Emit the switch terminator in the entry block
-        self.builder.set_current_block(bb_entry);
-        // An integer switch reads the scrutinee as a raw `int`. When the
-        // static type admits anything else — `int | float`, a union with a
-        // class — a non-int value reaching the switch is a *match failure*,
-        // not a broken invariant: it belongs to no arm, so it belongs to
-        // `otherwise`. Without the guard the VM raises a type error and the
-        // match aborts instead of falling through (B-1073). Provably int-only
-        // scrutinees, the overwhelmingly common case, keep the bare switch.
-        if matches!(switch_kind, Some(SwitchKind::Integer))
-            && !runtime_ty_is_int_only(&self.builder.local_ty(scrutinee))
-        {
-            let bb_switch = self.builder.create_block();
-            self.emit_is_type_tag_branch(
-                scrutinee,
-                baml_type::typetag::INT,
-                bb_switch,
-                bb_otherwise,
-            );
-            self.builder.set_current_block(bb_switch);
-        }
+        // Emit the switch terminator in the entry block (or the guard's).
+        self.builder.set_current_block(bb_switch);
         self.builder.switch(
             switch_operand,
             switch_arms,
@@ -14662,7 +14649,6 @@ impl LoweringContext<'_> {
                     context_local,
                     needs_throw_if_panic,
                 },
-                None,
             )?;
         self.catch_rethrow_locals.truncate(switch_rethrow_mark);
         if lowered_as_switch {

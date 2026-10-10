@@ -5,6 +5,7 @@ mod lower;
 pub mod memory;
 mod optimize;
 pub mod pretty;
+mod reducible;
 
 pub use baml_type::ResolvedAliases;
 pub use ir::*;
