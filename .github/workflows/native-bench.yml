@@ -56,6 +56,8 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 90
+    outputs:
+      rendered: ${{ steps.rendered.outputs.rendered }}
     steps:
       # Bench the PR head, not the synthetic merge commit, so the candidate
       # sha on the page is one a reader can check out.
@@ -117,6 +119,12 @@ jobs:
           python3 -m bench run --out "$RUNNER_TEMP/bundle" ${PREVIOUS:+--previous "$PREVIOUS"}
           cat "$RUNNER_TEMP/bundle/summary.md" >> "$GITHUB_STEP_SUMMARY"
 
+      # A run with failed trials still renders its page; publish that too.
+      - name: "Check for a rendered page"
+        id: rendered
+        if: always()
+        run: test -f "$RUNNER_TEMP/bundle/kpis.html" && echo "rendered=true" >> "$GITHUB_OUTPUT" || true
+
       - name: "Upload the bundle"
         if: always()
         uses: actions/upload-artifact@v7
@@ -132,6 +140,7 @@ jobs:
   publish:
     name: "publish (bench-results, PR comment)"
     needs: bench
+    if: ${{ always() && needs.bench.outputs.rendered == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
