@@ -1,18 +1,6 @@
 """Read a bundle, judge it against a previous one, and write the PR summary."""
-import html
 import json
-import math
 from pathlib import Path
-
-from .rows import ORDER
-
-NAMES = {"native": "BAML native", "native-off": "BAML native, telemetry off", "control": "control (frozen native)", "vm-off": "BAML VM, telemetry off", "vm-low": "BAML VM, low",
-         "vm-medium": "BAML VM, medium", "vm-high": "BAML VM, high", "rust": "Rust", "go": "Go",
-         "node": "Node", "bun": "Bun", "python": "Python"}
-CASE_TITLES = {"00_startup": "Startup", "01_array_traversal": "Array traversal", "02_merge_sort": "Merge sort",
-               "10_quick_sort": "Quick sort", "03_json_aggregate": "JSON aggregate",
-               "04_allocation_retention": "Allocation and retention", "07_function_calls": "Function calls",
-               "09_json_hello": "JSON hello", "11_generate_sort": "Generate and sort"}
 
 
 class Bundle:
@@ -20,11 +8,6 @@ class Bundle:
         self.path = Path(path)
         self.manifest = json.loads((self.path / "manifest.json").read_text())
         self.summary = json.loads((self.path / "results" / "summary.json").read_text())
-        for scen in self.summary.values():  # "native" and "native-off" are one row; the first bundle used the short name
-            if "native" in scen and "native-off" not in scen:
-                scen["native-off"] = scen["native"]
-            if "native-off" in scen and "native" not in scen:
-                scen["native"] = scen["native-off"]
         self.protocol = json.loads((self.path / "results" / "protocol.json").read_text()) if (self.path / "results" / "protocol.json").exists() else {}
 
     def scenarios(self):
@@ -76,19 +59,20 @@ def verdicts(cur, prev, rule):
     thr = rule.get("threshold_percent", 5)
     out = []
     for scen in cur.scenarios():
-        a, b = prev.us(scen, "native"), cur.us(scen, "native")
+        a, b = prev.us(scen, "native-off"), cur.us(scen, "native-off")
         if a is None or b is None:
             continue
         d = (b - a) / a * 100
         ca, cb = prev.us(scen, "control"), cur.us(scen, "control")
         drift = (cb - ca) / ca * 100 if ca and cb else None
         net = d - (drift or 0.0) if rule.get("net_of_control", True) else d
-        disjoint = (cur.us(scen, "native", "min") > prev.us(scen, "native", "max")) or (cur.us(scen, "native", "max") < prev.us(scen, "native", "min"))
+        lo, hi = cur.us(scen, "native-off", "min"), cur.us(scen, "native-off", "max")
+        plo, phi = prev.us(scen, "native-off", "min"), prev.us(scen, "native-off", "max")
+        disjoint = None not in (lo, hi, plo, phi) and (lo > phi or hi < plo)
         significant = abs(net) > thr and (disjoint or not rule.get("require_disjoint_ranges", True))
         verdict = "unchanged" if not significant else ("faster" if net < 0 else "slower")
         out.append(dict(scenario=scen, before=a, after=b, delta=d, drift=drift, net=net, verdict=verdict))
     return out
-
 
 
 def markdown(bundle_dir, previous=None):

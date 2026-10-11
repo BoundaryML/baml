@@ -10,14 +10,16 @@
 # a workflow artifact and appended to the `bench-results` branch, where the
 # page is served read-only through raw.githack.com.
 #
+# The bench job runs candidate code with a read-only token; only the publish
+# job, which runs no candidate code, can write.
+#
 # Runs on: pull requests that touch the harness or this file (same-repo
 # branches only, since the Freestyle key is a secret); manual dispatch on
 # any branch that has this file; nightly on canary (schedules only fire on
 # the default branch).
 name: Native bench
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 on:
   pull_request:
     paths:
@@ -95,12 +97,15 @@ jobs:
 
       - name: "Fetch the previous bundle"
         if: ${{ github.event.inputs.previous != '' }}
+        env:
+          PREV: ${{ github.event.inputs.previous }}
         run: |
           set -euo pipefail
+          [[ "$PREV" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ && "$PREV" != *..* ]] || { echo "bad previous: $PREV"; exit 1; }
           git fetch --depth=1 origin bench-results
           mkdir -p previous
-          git --work-tree=previous checkout origin/bench-results -- "${{ github.event.inputs.previous }}"
-          echo "PREVIOUS=$PWD/previous/${{ github.event.inputs.previous }}" >> "$GITHUB_ENV"
+          git --work-tree=previous checkout origin/bench-results -- "$PREV"
+          echo "PREVIOUS=$PWD/previous/$PREV" >> "$GITHUB_ENV"
 
       - name: "Run"
         env:
@@ -124,52 +129,68 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  publish:
+    name: "publish (bench-results, PR comment)"
+    needs: bench
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: native-bench-${{ github.event.pull_request.head.sha || github.sha }}
+          path: bundle
+
       # bench-results holds every bundle that completed: nightly and dispatch
       # runs under <machine>/<date>-<sha12>, PR runs under <machine>/pr-<n>/.
       - name: "Append to bench-results"
-        if: ${{ success() }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
-          sha12=$(git rev-parse --short=12 HEAD)   # the candidate, read before the branch switch below
+          sha12=${SHA:0:12}
           dest="bench-x86-v1/${PR:+pr-$PR/}$(date -u +%Y-%m-%d)-$sha12"
+          git init -q results && cd results
           git config user.name "native-bench"
           git config user.email "native-bench@users.noreply.github.com"
-          if git fetch --depth=1 origin bench-results 2>/dev/null; then
-            git checkout -q -B bench-results origin/bench-results
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth=1 "$remote" bench-results 2>/dev/null; then
+            git checkout -q -B bench-results FETCH_HEAD
           else
             git checkout -q --orphan bench-results
-            git rm -rq --cached . 2>/dev/null || true
           fi
           mkdir -p "$dest"
           for f in kpis.json kpis.html summary.md manifest.json stage.json results/summary.json results/trials.csv results/protocol.json results/execute.log; do
-            [ -f "$RUNNER_TEMP/bundle/$f" ] && install -D "$RUNNER_TEMP/bundle/$f" "$dest/$f"
+            [ -f "../bundle/$f" ] && install -D "../bundle/$f" "$dest/$f"
           done
           git add "$dest"
           git -c core.hooksPath=/dev/null commit -q -m "bench: $dest" || echo "nothing to commit"
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" bench-results
+          git push -q "$remote" bench-results
           page="https://raw.githack.com/${GITHUB_REPOSITORY}/bench-results/$dest/kpis.html"
           { echo "PAGE=$page"; echo "DEST=$dest"; echo "SHA12=$sha12"; } >> "$GITHUB_ENV"
           { echo ""; echo "page: $page"; echo "bundle: https://github.com/${GITHUB_REPOSITORY}/tree/bench-results/$dest"; } >> "$GITHUB_STEP_SUMMARY"
 
       # One sticky comment per PR, replaced on every run.
       - name: "Comment on the PR"
-        if: ${{ success() && (github.event.pull_request.number || github.event.inputs.pr_number) }}
+        if: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
         run: |
           set -euo pipefail
+          [[ "$PR" =~ ^[0-9]+$ ]] || { echo "bad pr_number: $PR"; exit 1; }
           marker="<!-- native-bench -->"
           body=$(printf '%s\n%s\n\n**[Open the page](%s)** · [bundle](https://github.com/%s/tree/bench-results/%s) · [run %s](https://github.com/%s/actions/runs/%s)\n' \
-            "$marker" "$(cat "$RUNNER_TEMP/bundle/summary.md")" "$PAGE" "$GITHUB_REPOSITORY" "$DEST" "$GITHUB_RUN_ID" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")
+            "$marker" "$(cat bundle/summary.md)" "$PAGE" "$GITHUB_REPOSITORY" "$DEST" "$GITHUB_RUN_ID" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")
           body="$body
           <sub>native bench on bench-x86-v1 at \`$SHA12\`; the page is the bundle's kpis.html served from the bench-results branch.</sub>"
           existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
           if [ -n "$existing" ]; then
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -f body="$body" >/dev/null
           else
-            gh pr comment "$PR" --body "$body"
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -f body="$body" >/dev/null
           fi

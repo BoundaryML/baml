@@ -13,12 +13,10 @@ page (`kpis.html`), the PR summary (`summary.md`) and every trial
 touches this directory or the workflow, on dispatch against any branch, and
 nightly on `canary`. It is advisory: it never gates a merge.
 
-    cd baml_language/tools/native-bench
-    cargo build --release -p baml_cli --manifest-path ../../Cargo.toml
-    python3 -m bench run ../../.. --cli ../../target/release/baml-cli         # tier A on the Freestyle snapshot
-    python3 -m bench run ../../.. --cli ../../target/release/baml-cli \
-        --machine machines/local.json --protocol protocols/smoke.json         # plumbing check on this machine
-    python3 -m bench kpis <bundle> [--previous <bundle>]                      # re-render kpis.json and kpis.html
+    cd baml_language && cargo build --release -p baml_cli && cd tools/native-bench
+    python3 -m bench run                                                      # tier A on the Freestyle snapshot
+    python3 -m bench run --machine machines/local.json --protocol protocols/smoke.json   # plumbing check here
+    python3 -m bench render <bundle> [--previous <bundle>]                    # re-render the page and summary
     python3 -m bench compare <before> <after>                                 # verdicts between two bundles
 
 The package is Python standard library plus one C file (the observer);
@@ -116,9 +114,8 @@ candidate. The page reports it; a verdict subtracts it.
 
 The Freestyle provider boots a fresh VM from the snapshot in the machine
 file, copies the stage in, starts the execute step detached, polls for its
-done file, copies the results back and deletes the VM in a `finally`. A
-machine file with `"provider": "ssh"` does the same over SSH to a bare-metal
-host; `"provider": "local"` runs here.
+done file (for at most an hour), copies the results back and deletes the VM
+in a `finally`. `"provider": "local"` runs here.
 
 ## The bundle
 
@@ -151,7 +148,8 @@ file and beside it.
 - A row whose artifact is missing is skipped and listed under
   `verify.skipped_rows`; a run with no trials fails.
 - Every trial's output is checked against the oracle; a mismatch is a
-  failed trial, never dropped, and shows on the page.
+  failed trial, never dropped. Any failed trial fails the run (status
+  `trials_failed`); the page is still rendered and shows it.
 - Telemetry rows must produce a recording and report `telemetry_ok` with
   zero delivery loss; off rows must produce none. Recordings are measured in
   bytes and deleted after each trial.
@@ -163,13 +161,12 @@ file and beside it.
 
 ## Files
 
-    bench/                      the package; `bench/README.md` has the module map
+    bench/                      the package
     cases/<case>/               workload.baml and README.txt
     protocols/tier-a.json       the matrix above
     protocols/smoke.json        two scenarios, nine rows, three trials, for plumbing
     machines/bench-x86-v1.json  the Freestyle snapshot and its guest layout
     machines/local.json         this machine; native rows only unless a host and references are present
-    machines/ssh-example.json   a bare-metal host over SSH
 
 ## Changing things
 
@@ -182,7 +179,7 @@ file and beside it.
 - **A new row**: `bench/rows.py` defines what runs and under which
   environment; the page draws every row it finds in the protocol.
 - **The page**: edit `bench/templates/kpis.html` and re-render any bundle
-  with `python3 -m bench kpis <bundle>`; the data model is `bench/kpis.py`.
+  with `python3 -m bench render <bundle>`; the data model is `bench/kpis.py`.
 
 ## Secrets and cost
 

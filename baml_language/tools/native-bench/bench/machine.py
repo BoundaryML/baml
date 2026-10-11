@@ -1,7 +1,6 @@
 """Providers: run `python3 -m bench execute` on a machine and bring results back."""
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -11,6 +10,11 @@ from pathlib import Path
 def log(*a):
     print(time.strftime("%H:%M:%S"), *a, file=sys.stderr, flush=True)
 
+
+# Pinned: `@latest` would let a CLI release change the run under us.
+FREESTYLE = "freestyle@0.2.16"
+# The trials take about half an hour; give up well before the job's timeout.
+DEADLINE_S = 60 * 60
 
 # -I would ignore PYTHONPATH and the cwd; the package is shipped beside the stage, so cwd is the path.
 EXECUTE = "cd {home}/ship && mkdir -p results && setsid -f bash -c 'export PATH=$HOME/.cargo/bin:$PATH; {python} -m bench execute --stage . --machine machine.json --protocol protocol.json --out results > results/execute.log 2>&1; echo $? > results/execute.exit; touch results/execute.done' < /dev/null > /dev/null 2>&1; echo started"
@@ -39,7 +43,7 @@ class Freestyle:
         self.vm = None
 
     def fs(self, *args, capture=True):
-        return subprocess.run(["npx", "-y", "freestyle@latest", *args], env=self.env, capture_output=capture, text=True, stdin=subprocess.DEVNULL)
+        return subprocess.run(["npx", "-y", FREESTYLE, *args], env=self.env, capture_output=capture, text=True, stdin=subprocess.DEVNULL)
 
     def exec(self, *cmd, user=None):
         extra = ["--linux-user", user] if user else []
@@ -76,8 +80,10 @@ class Freestyle:
             # scp writes as root; the run executes as the default user.
             self.exec("chown", "-R", "1000:1000", f"{home}/ship", user="root")
             self.exec("bash", "-c", EXECUTE.format(home=home, python=self.machine.data.get("python", "python3")))
-            last = ""
+            last, deadline = "", time.monotonic() + DEADLINE_S
             while "execute.done" not in self.exec("ls", f"{home}/ship/results"):
+                if time.monotonic() > deadline:
+                    raise RuntimeError(f"execute did not finish within {DEADLINE_S}s")
                 time.sleep(30)
                 tail = self.exec("bash", "-c", f"tail -n 1 {home}/ship/results/execute.log 2>/dev/null").strip()
                 if tail != last:
@@ -93,25 +99,5 @@ class Freestyle:
             self.fs("vm", "delete", self.vm, "--output", "json")
 
 
-class Ssh:
-    def __init__(self, machine):
-        self.machine = machine
-        self.host = machine.data["host_ssh"]
-
-    def ssh(self, cmd):
-        return subprocess.run(["ssh", self.host, cmd], capture_output=True, text=True).stdout
-
-    def run(self, stage, out):
-        home = self.machine.data.get("guest_home", "~")
-        self.ssh(f"rm -rf {home}/ship && mkdir -p {home}/ship")
-        subprocess.run(["rsync", "-a", f"{stage}/.", f"{self.host}:{home}/ship/"], check=True)
-        (out / "machine.txt").write_text(self.ssh("grep -m1 'model name' /proc/cpuinfo; uname -r; cat /proc/loadavg"))
-        self.ssh(EXECUTE.format(home=home, python=self.machine.data.get("python", "python3")))
-        while "execute.done" not in self.ssh(f"ls {home}/ship/results"):
-            time.sleep(30)
-        subprocess.run(["rsync", "-a", f"{self.host}:{home}/ship/results", str(out) + "/"], check=True)
-        return int((out / "results" / "execute.exit").read_text().strip() or 1)
-
-
 def provider(machine):
-    return {"local": Local, "freestyle": Freestyle, "ssh": Ssh}[machine.provider](machine)
+    return {"local": Local, "freestyle": Freestyle}[machine.provider](machine)
