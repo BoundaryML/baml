@@ -72,6 +72,13 @@ jobs:
           direnv allow .envrc
           direnv export gha >> "$GITHUB_ENV"
 
+      # Install the documentation workspace while Rust builds/tests run. Join
+      # before using pnpm so the action's PATH/env exports are available.
+      - name: Setup Node.js and pnpm
+        id: node-setup
+        background: true
+        uses: ./.github/actions/setup-node2
+
       # Separate step so if fetch is slow, build is fast.
       - name: "Fetch cargo dependencies"
         if: inputs.run-compiler-tests
@@ -124,8 +131,9 @@ jobs:
             baml_language/**/*.snap
             baml_language/**/*.snap.new
 
-      - name: Setup Node.js and pnpm
-        uses: ./.github/actions/setup-node2
+      - name: Wait for Node.js and pnpm
+        wait: node-setup
+
       - name: Compile canonical documentation snippets
         env:
           # Require full diagnostics for both valid and intentionally invalid

@@ -67,15 +67,18 @@ jobs:
           rustup show
           rustup target add wasm32-unknown-unknown
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "linux-wasm"
-          save-if: false
+      # Cargo cache and npm dependencies occupy separate directories. Both
+      # must finish before pnpm build invokes the Rust/WASM toolchain.
+      - parallel:
+          - uses: Swatinem/rust-cache@v2
+            with:
+              workspaces: "baml_language -> target"
+              shared-key: "linux-wasm"
+              save-if: false
 
-      - name: Install package dependencies
-        working-directory: baml_language/sdks/typescript/bridge_typescript_web
-        run: pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
+          - name: Install package dependencies
+            working-directory: baml_language/sdks/typescript/bridge_typescript_web
+            run: pnpm install --frozen-lockfile --ignore-workspace --ignore-scripts
 
       - name: Build publishable package
         working-directory: baml_language/sdks/typescript/bridge_typescript_web
