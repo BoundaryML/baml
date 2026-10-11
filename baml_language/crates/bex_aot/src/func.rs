@@ -13,11 +13,12 @@
 //! value with [`item`], and calls either with [`Func::call`]; nothing else
 //! about the representation is public, so it can change here alone.
 
-use std::{fmt, rc::Rc};
+use std::fmt;
 
 use crate::{
     Thrown,
-    handle::Slot,
+    cc::{Object, Tracked},
+    handle::{Kind, Untracked},
     mem::{HeapRef, Trace, Visitor},
 };
 
@@ -27,69 +28,90 @@ pub trait Callable<A, R>: Trace {
 }
 
 /// A BAML function value of parameter tuple `A` and result `R`: a counted
-/// handle to a [`Callable`]. `Clone` copies the handle.
-pub struct Func<A, R>(Rc<Slot<dyn Callable<A, R>>>);
+/// handle to a [`Callable`]. `Clone` copies the handle. `H` is how it
+/// counts ([`Kind`]); a function type whose closures can reach a value of
+/// the type itself is [`CcFunc`].
+pub struct Func<A, R, H: Kind = Untracked>(H::Ptr<dyn Callable<A, R>>);
 
-impl<A: 'static, R: 'static> Func<A, R> {
+/// A function value the cycle collector examines.
+pub type CcFunc<A, R> = Func<A, R, Tracked>;
+
+impl<A: 'static, R: 'static, H: Kind> Func<A, R, H> {
     /// Call the function.
     #[inline]
     pub fn call(&self, args: A) -> Result<R, Thrown> {
-        self.0.0.call(args)
+        H::get(&self.0).call(args)
     }
 }
 
-/// Allocate a function value over `object`, a closure environment.
+/// Allocate a function value over `object`, a closure environment, of the
+/// kind the context asks for.
 #[inline]
-pub fn alloc<A: 'static, R: 'static, C: Callable<A, R>>(object: C) -> Func<A, R> {
-    let rc = Rc::new(Slot(object));
-    #[cfg(feature = "mem-stats")]
-    crate::mem::on_alloc(crate::handle::register(&rc));
-    let erased: Rc<Slot<dyn Callable<A, R>>> = rc;
-    Func(erased)
+pub fn alloc<A: 'static, R: 'static, C: Callable<A, R>, H: Kind>(object: C) -> Func<A, R, H> {
+    Func(H::alloc_callable(object, false))
 }
 
-/// Allocate a function value calling the declared function `function`.
+/// [`alloc`] for an environment that holds no tracked handle (every cell
+/// it captures is untracked): it can never be on a cycle, so even under a
+/// tracked function type the collector never buffers it.
 #[inline]
-pub fn item<A: 'static, R: 'static, F: 'static>(function: F) -> Func<A, R>
+pub fn alloc_acyclic<A: 'static, R: 'static, C: Callable<A, R>, H: Kind>(
+    object: C,
+) -> Func<A, R, H> {
+    Func(H::alloc_callable(object, true))
+}
+
+/// Allocate a function value calling the declared function `function`: it
+/// captures nothing, so it is acyclic.
+#[inline]
+pub fn item<A: 'static, R: 'static, F: 'static, H: Kind>(function: F) -> Func<A, R, H>
 where
     Item<F>: Callable<A, R>,
 {
-    alloc(Item(function))
+    alloc_acyclic(Item(function))
 }
 
-impl<A, R> Clone for Func<A, R> {
+impl<A, R, H: Kind> Clone for Func<A, R, H> {
     #[inline]
     fn clone(&self) -> Self {
-        Self(Rc::clone(&self.0))
+        Self(self.0.clone())
     }
 }
 
-impl<A, R> fmt::Debug for Func<A, R> {
+impl<A, R, H: Kind> fmt::Debug for Func<A, R, H> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("<function>")
     }
 }
 
 /// A function value is one edge, as any handle is.
-impl<A: 'static, R: 'static> Trace for Func<A, R> {
+impl<A: 'static, R: 'static, H: Kind> Trace for Func<A, R, H> {
     #[inline]
     fn trace(&self, visitor: &mut dyn Visitor) {
-        visitor.visit(self);
+        match H::object(&self.0) {
+            Some(object) => visitor.visit_tracked(object, self),
+            None => visitor.visit(self),
+        }
     }
 }
 
-impl<A: 'static, R: 'static> HeapRef for Func<A, R> {
+impl<A: 'static, R: 'static, H: Kind> HeapRef for Func<A, R, H> {
     #[inline]
     fn addr(&self) -> *const () {
-        Rc::as_ptr(&self.0).cast::<()>()
+        H::addr(&self.0)
     }
 
     fn trace_target(&self, visitor: &mut dyn Visitor) {
-        self.0.0.trace(visitor);
+        H::get(&self.0).trace(visitor);
     }
 
     fn strong_count(&self) -> usize {
-        Rc::strong_count(&self.0)
+        H::strong_count(&self.0)
+    }
+
+    #[inline]
+    fn object(&self) -> Option<Object> {
+        H::object(&self.0)
     }
 }
 

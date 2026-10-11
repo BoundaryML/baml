@@ -10,8 +10,10 @@
 use bex_lang::index::resolve_index;
 
 use crate::{
-    Int63, Panic, Str, Thrown, float,
-    handle::{Shared, shared},
+    Int63, Panic, Str, Thrown,
+    cc::Tracked,
+    float,
+    handle::{Kind, Shared, Untracked},
     int_from_usize,
     mem::{Trace, Visitor},
 };
@@ -19,19 +21,25 @@ use crate::{
 /// Allocate an array from its elements (`[a, b, c]`).
 #[inline]
 pub fn new<T: Trace>(items: Vec<T>) -> Shared<Vec<T>> {
-    shared(items)
+    Shared::new(items)
+}
+
+/// [`new`] for an array type that can be part of a cycle.
+#[inline]
+pub fn new_cc<T: Trace>(items: Vec<T>) -> Shared<Vec<T>, Tracked> {
+    Shared::new(items)
 }
 
 /// `arr.length()`.
 #[inline]
-pub fn len<T>(arr: &Shared<Vec<T>>) -> Int63 {
+pub fn len<T, H: Kind>(arr: &Shared<Vec<T>, H>) -> Int63 {
     int_from_usize(arr.borrow().len())
 }
 
 /// `arr[index]`, copying the element out. A negative index counts from the
 /// end; out of range raises `IndexOutOfBounds { index, length }`.
 #[inline]
-pub fn get<T: Clone>(arr: &Shared<Vec<T>>, index: Int63) -> Result<T, Thrown> {
+pub fn get<T: Clone, H: Kind>(arr: &Shared<Vec<T>, H>, index: Int63) -> Result<T, Thrown> {
     let items = arr.borrow();
     match resolve_index(index.get(), items.len()) {
         Some(offset) => Ok(items[offset].clone()),
@@ -42,7 +50,7 @@ pub fn get<T: Clone>(arr: &Shared<Vec<T>>, index: Int63) -> Result<T, Thrown> {
 /// `arr[index] = value`. Same index rules as [`get`]; assignment never grows
 /// the array.
 #[inline]
-pub fn set<T>(arr: &Shared<Vec<T>>, index: Int63, value: T) -> Result<(), Thrown> {
+pub fn set<T, H: Kind>(arr: &Shared<Vec<T>, H>, index: Int63, value: T) -> Result<(), Thrown> {
     let mut items = arr.borrow_mut();
     match resolve_index(index.get(), items.len()) {
         Some(offset) => {
@@ -55,23 +63,23 @@ pub fn set<T>(arr: &Shared<Vec<T>>, index: Int63, value: T) -> Result<(), Thrown
 
 /// `arr.push(value)`.
 #[inline]
-pub fn push<T>(arr: &Shared<Vec<T>>, value: T) {
+pub fn push<T, H: Kind>(arr: &Shared<Vec<T>, H>, value: T) {
     arr.borrow_mut().push(value);
 }
 
 /// `int[].sort()` in place, ascending. Stable, like the VM's `_rust_sort`.
-pub fn sort_int(arr: &Shared<Vec<Int63>>) {
+pub fn sort_int<H: Kind>(arr: &Shared<Vec<Int63>, H>) {
     arr.borrow_mut().sort_by(Int63::cmp);
 }
 
 /// `float[].sort()` in place in BAML's total float order ([`float::cmp`]):
 /// NaN last. Stable, so `-0.0` and `0.0` keep their relative order.
-pub fn sort_float(arr: &Shared<Vec<f64>>) {
+pub fn sort_float<H: Kind>(arr: &Shared<Vec<f64>, H>) {
     arr.borrow_mut().sort_by(|a, b| float::cmp(*a, *b));
 }
 
 /// `string[].sort()` in place in UTF-8 byte order. Stable.
-pub fn sort_str(arr: &Shared<Vec<Str>>) {
+pub fn sort_str<H: Kind>(arr: &Shared<Vec<Str>, H>) {
     arr.borrow_mut().sort_by(Str::cmp);
 }
 
@@ -84,10 +92,10 @@ pub fn sort_str(arr: &Shared<Vec<Str>>) {
 // is held while a callback runs. A callback's throw unwinds the method.
 
 /// `arr.map(f)`: every result, in order.
-pub fn map<T: Clone, U: Trace>(
-    arr: &Shared<Vec<T>>,
+pub fn map<T: Clone, U: Trace, H: Kind, B: Kind>(
+    arr: &Shared<Vec<T>, H>,
     f: &dyn Fn(T) -> Result<U, Thrown>,
-) -> Result<Shared<Vec<U>>, Thrown> {
+) -> Result<Shared<Vec<U>, B>, Thrown> {
     // The VM runs the callbacks under a native continuation frame.
     let _frame = crate::depth::Guard::enter()?;
     let items = snapshot(arr);
@@ -95,14 +103,14 @@ pub fn map<T: Clone, U: Trace>(
     for item in items {
         out.push(f(item)?);
     }
-    Ok(new(out))
+    Ok(Shared::new(out))
 }
 
 /// `arr.filter(predicate)`: the elements the predicate accepts, in order.
-pub fn filter<T: Clone + Trace>(
-    arr: &Shared<Vec<T>>,
+pub fn filter<T: Clone + Trace, H: Kind>(
+    arr: &Shared<Vec<T>, H>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
-) -> Result<Shared<Vec<T>>, Thrown> {
+) -> Result<Shared<Vec<T>, H>, Thrown> {
     // The VM runs the callbacks under a native continuation frame.
     let _frame = crate::depth::Guard::enter()?;
     let items = snapshot(arr);
@@ -112,14 +120,14 @@ pub fn filter<T: Clone + Trace>(
             out.push(item);
         }
     }
-    Ok(new(out))
+    Ok(Shared::new(out))
 }
 
 /// `arr.filter_map(f)`: the non-`null` results, in order.
-pub fn filter_map<T: Clone, U: Trace>(
-    arr: &Shared<Vec<T>>,
+pub fn filter_map<T: Clone, U: Trace, H: Kind, B: Kind>(
+    arr: &Shared<Vec<T>, H>,
     f: &dyn Fn(T) -> Result<Option<U>, Thrown>,
-) -> Result<Shared<Vec<U>>, Thrown> {
+) -> Result<Shared<Vec<U>, B>, Thrown> {
     // A BAML body on the VM: one frame around every callback, iterating
     // through `ArrayIterator`, whose `new` and `next` are a frame deeper.
     let _frame = crate::depth::Guard::enter()?;
@@ -131,12 +139,12 @@ pub fn filter_map<T: Clone, U: Trace>(
             out.push(value);
         }
     }
-    Ok(new(out))
+    Ok(Shared::new(out))
 }
 
 /// `arr.for_each(f)`: `f` on every element, left to right.
-pub fn for_each<T: Clone>(
-    arr: &Shared<Vec<T>>,
+pub fn for_each<T: Clone, H: Kind>(
+    arr: &Shared<Vec<T>, H>,
     f: &dyn Fn(T) -> Result<(), Thrown>,
 ) -> Result<(), Thrown> {
     // A BAML body on the VM: one frame around every callback, iterating
@@ -151,8 +159,8 @@ pub fn for_each<T: Clone>(
 
 /// `arr.some(predicate)`: whether any element is accepted; stops at the
 /// first. `false` on an empty array.
-pub fn some<T: Clone>(
-    arr: &Shared<Vec<T>>,
+pub fn some<T: Clone, H: Kind>(
+    arr: &Shared<Vec<T>, H>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<bool, Thrown> {
     // The VM runs the callbacks under a native continuation frame.
@@ -167,8 +175,8 @@ pub fn some<T: Clone>(
 
 /// `arr.every(predicate)`: whether every element is accepted; stops at the
 /// first rejected. `true` on an empty array.
-pub fn every<T: Clone>(
-    arr: &Shared<Vec<T>>,
+pub fn every<T: Clone, H: Kind>(
+    arr: &Shared<Vec<T>, H>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<bool, Thrown> {
     // The VM runs the callbacks under a native continuation frame.
@@ -182,8 +190,8 @@ pub fn every<T: Clone>(
 }
 
 /// `arr.find(predicate)`: the first element accepted, or `null`.
-pub fn find<T: Clone>(
-    arr: &Shared<Vec<T>>,
+pub fn find<T: Clone, H: Kind>(
+    arr: &Shared<Vec<T>, H>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<Option<T>, Thrown> {
     // The VM runs the callbacks under a native continuation frame.
@@ -198,8 +206,8 @@ pub fn find<T: Clone>(
 
 /// `arr.find_index(predicate)`: the index of the first element accepted,
 /// or `null`.
-pub fn find_index<T: Clone>(
-    arr: &Shared<Vec<T>>,
+pub fn find_index<T: Clone, H: Kind>(
+    arr: &Shared<Vec<T>, H>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<Option<Int63>, Thrown> {
     // The VM runs the callbacks under a native continuation frame.
@@ -213,8 +221,8 @@ pub fn find_index<T: Clone>(
 }
 
 /// `arr.find_last(predicate)`: the last element accepted, or `null`.
-pub fn find_last<T: Clone>(
-    arr: &Shared<Vec<T>>,
+pub fn find_last<T: Clone, H: Kind>(
+    arr: &Shared<Vec<T>, H>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<Option<T>, Thrown> {
     // The VM runs the callbacks under a native continuation frame.
@@ -229,8 +237,8 @@ pub fn find_last<T: Clone>(
 
 /// `arr.find_last_index(predicate)`: the index of the last element
 /// accepted, or `null`.
-pub fn find_last_index<T: Clone>(
-    arr: &Shared<Vec<T>>,
+pub fn find_last_index<T: Clone, H: Kind>(
+    arr: &Shared<Vec<T>, H>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<Option<Int63>, Thrown> {
     // The VM runs the callbacks under a native continuation frame.
@@ -245,8 +253,8 @@ pub fn find_last_index<T: Clone>(
 
 /// `arr.reduce(reducer, initial)`: the accumulator after every element,
 /// left to right; `initial` on an empty array.
-pub fn reduce<T: Clone, A>(
-    arr: &Shared<Vec<T>>,
+pub fn reduce<T: Clone, A, H: Kind>(
+    arr: &Shared<Vec<T>, H>,
     reducer: &dyn Fn(A, T) -> Result<A, Thrown>,
     initial: A,
 ) -> Result<A, Thrown> {
@@ -261,10 +269,10 @@ pub fn reduce<T: Clone, A>(
 
 /// `arr.flat_map(f)`: the results' elements, concatenated. Each result is
 /// read once `f` has returned it, so a later change to it is not seen.
-pub fn flat_map<T: Clone, U: Clone + Trace>(
-    arr: &Shared<Vec<T>>,
-    f: &dyn Fn(T) -> Result<Shared<Vec<U>>, Thrown>,
-) -> Result<Shared<Vec<U>>, Thrown> {
+pub fn flat_map<T: Clone, U: Clone + Trace, H: Kind, B: Kind>(
+    arr: &Shared<Vec<T>, H>,
+    f: &dyn Fn(T) -> Result<Shared<Vec<U>, B>, Thrown>,
+) -> Result<Shared<Vec<U>, B>, Thrown> {
     // The VM runs the callbacks under a native continuation frame.
     let _frame = crate::depth::Guard::enter()?;
     let mut out = Vec::new();
@@ -272,7 +280,7 @@ pub fn flat_map<T: Clone, U: Clone + Trace>(
         let inner = f(item)?;
         out.extend(inner.borrow().iter().cloned());
     }
-    Ok(new(out))
+    Ok(Shared::new(out))
 }
 
 /// `arr.sort_by(compare)` in place: the VM's bottom-up merge sort over a
@@ -283,8 +291,8 @@ pub fn flat_map<T: Clone, U: Clone + Trace>(
 /// is what makes the sort stable. The copy is written back only once every
 /// comparison has returned: a comparator that throws leaves the array as it
 /// was, and one that mutates the array has its changes overwritten.
-pub fn sort_by<T: Clone>(
-    arr: &Shared<Vec<T>>,
+pub fn sort_by<T: Clone, H: Kind>(
+    arr: &Shared<Vec<T>, H>,
     greater: &dyn Fn(T, T) -> Result<bool, Thrown>,
 ) -> Result<(), Thrown> {
     // The VM runs the callbacks under a native continuation frame.
@@ -299,8 +307,8 @@ pub fn sort_by<T: Clone>(
 /// then the elements ordered by their keys through `compare` with the same
 /// stable sort as [`sort_by`]. Written back only once every key has been
 /// computed.
-pub fn sort_by_key<T: Clone, K>(
-    arr: &Shared<Vec<T>>,
+pub fn sort_by_key<T: Clone, K, H: Kind>(
+    arr: &Shared<Vec<T>, H>,
     key: &dyn Fn(T) -> Result<K, Thrown>,
     compare: &dyn Fn(&K, &K) -> std::cmp::Ordering,
 ) -> Result<(), Thrown> {
@@ -334,7 +342,7 @@ pub fn sort_by_key<T: Clone, K>(
 /// The elements as they are now, with the borrow released before any
 /// callback runs.
 #[inline]
-fn snapshot<T: Clone>(arr: &Shared<Vec<T>>) -> Vec<T> {
+fn snapshot<T: Clone, H: Kind>(arr: &Shared<Vec<T>, H>) -> Vec<T> {
     arr.borrow().clone()
 }
 
@@ -383,20 +391,20 @@ fn merge_sort<T: Clone>(
 /// step, so elements pushed during iteration are visited and elements removed
 /// are not.
 #[derive(Debug)]
-pub struct Iter<T> {
-    arr: Shared<Vec<T>>,
+pub struct Iter<T, H: Kind = Untracked> {
+    arr: Shared<Vec<T>, H>,
     idx: usize,
 }
 
 /// A cursor holds its array: a root while the loop runs.
-impl<T: Trace> Trace for Iter<T> {
+impl<T: Trace, H: Kind> Trace for Iter<T, H> {
     #[inline]
     fn trace(&self, visitor: &mut dyn Visitor) {
         self.arr.trace(visitor);
     }
 }
 
-impl<T> Clone for Iter<T> {
+impl<T, H: Kind> Clone for Iter<T, H> {
     fn clone(&self) -> Self {
         Self {
             arr: self.arr.clone(),
@@ -407,7 +415,7 @@ impl<T> Clone for Iter<T> {
 
 /// `arr.iter()`: a cursor at the first element.
 #[inline]
-pub fn iter<T>(arr: &Shared<Vec<T>>) -> Iter<T> {
+pub fn iter<T, H: Kind>(arr: &Shared<Vec<T>, H>) -> Iter<T, H> {
     Iter {
         arr: arr.clone(),
         idx: 0,
@@ -416,14 +424,14 @@ pub fn iter<T>(arr: &Shared<Vec<T>>) -> Iter<T> {
 
 /// `iterator.next()`: `Some(element)` or `None` for the VM's `Done {}`.
 #[inline]
-pub fn next<T: Clone>(it: &mut Iter<T>) -> Option<T> {
+pub fn next<T: Clone, H: Kind>(it: &mut Iter<T, H>) -> Option<T> {
     let items = it.arr.borrow();
     let element = items.get(it.idx)?.clone();
     it.idx += 1;
     Some(element)
 }
 
-impl<T: Clone> Iterator for Iter<T> {
+impl<T: Clone, H: Kind> Iterator for Iter<T, H> {
     type Item = T;
 
     #[inline]
@@ -541,7 +549,7 @@ mod tests {
     #[test]
     fn callbacks_walk_a_snapshot_and_unwind_a_throw() {
         let arr = ints(&[1, 2, 3]);
-        let doubled = map(&arr, &|x| Ok(int(x.get() * 2))).unwrap();
+        let doubled: Shared<Vec<Int63>> = map(&arr, &|x| Ok(int(x.get() * 2))).unwrap();
         assert_eq!(*doubled.borrow(), vec![int(2), int(4), int(6)]);
         // A callback that pushes is not observed by the walk.
         let seen = std::cell::Cell::new(0);
@@ -558,7 +566,7 @@ mod tests {
         assert_eq!(len(&arr), int(6));
         let arr = ints(&[1, 2, 3, 4]);
         assert_eq!(
-            *filter_map(&arr, &|x| Ok((x.get() % 2 == 0).then_some(x)))
+            *filter_map::<_, _, _, Untracked>(&arr, &|x| Ok((x.get() % 2 == 0).then_some(x)))
                 .unwrap()
                 .borrow(),
             vec![int(2), int(4)]
@@ -595,7 +603,7 @@ mod tests {
         })
         .unwrap();
         assert_eq!(total.get(), 10);
-        let thrown = map(&arr, &|x| {
+        let thrown = map::<_, _, _, Untracked>(&arr, &|x| {
             if x.get() == 3 {
                 Err(Thrown::from(Panic::AssertionFailed))
             } else {

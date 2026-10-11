@@ -23,30 +23,35 @@
 
 use crate::{
     Panic, Thrown,
-    handle::{Shared, shared},
+    cc::Tracked,
+    handle::{Kind, Shared, Untracked},
     mem::{Trace, Visitor},
 };
 
 /// A captured local's cell: a heap object of its own, behind a [`Shared`]
-/// handle.
+/// handle of kind `H`.
 #[repr(transparent)]
-pub struct Cell<T>(Shared<Option<T>>);
+pub struct Cell<T, H: Kind = Untracked>(Shared<Option<T>, H>);
 
-impl<T> Clone for Cell<T> {
+/// A cell of a type that can be part of a cycle: a closure stored in a
+/// value the closure's own cell reaches.
+pub type CcCell<T> = Cell<T, Tracked>;
+
+impl<T, H: Kind> Clone for Cell<T, H> {
     #[inline]
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<T: std::fmt::Debug> std::fmt::Debug for Cell<T> {
+impl<T: std::fmt::Debug, H: Kind> std::fmt::Debug for Cell<T, H> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Debug::fmt(&self.0, f)
     }
 }
 
 /// The cell is one edge, as any handle is.
-impl<T: Trace> Trace for Cell<T> {
+impl<T: Trace, H: Kind> Trace for Cell<T, H> {
     #[inline]
     fn trace(&self, visitor: &mut dyn Visitor) {
         self.0.trace(visitor);
@@ -55,26 +60,26 @@ impl<T: Trace> Trace for Cell<T> {
 
 /// A new, empty cell: `fresh_cell(_n)`.
 #[inline]
-pub fn fresh<T: Trace>() -> Cell<T> {
-    Cell(shared(None))
+pub fn fresh<T: Trace, H: Kind>() -> Cell<T, H> {
+    Cell(Shared::new(None))
 }
 
 /// A new cell holding `value`: a captured parameter on entry.
 #[inline]
-pub fn with<T: Trace>(value: T) -> Cell<T> {
-    Cell(shared(Some(value)))
+pub fn with<T: Trace, H: Kind>(value: T) -> Cell<T, H> {
+    Cell(Shared::new(Some(value)))
 }
 
 /// A new cell holding the value of `cell`: `fresh_cell(_n, carry)`, the
 /// C-style `for` header binding copied into the next iteration.
 #[inline]
-pub fn carry<T: Clone + Trace>(cell: &Cell<T>) -> Cell<T> {
-    Cell(shared(cell.0.borrow().clone()))
+pub fn carry<T: Clone + Trace, H: Kind>(cell: &Cell<T, H>) -> Cell<T, H> {
+    Cell(Shared::new(cell.0.borrow().clone()))
 }
 
 /// The value in the cell, copied out: `copy *_n`.
 #[inline]
-pub fn get<T: Clone>(cell: &Cell<T>) -> Result<T, Thrown> {
+pub fn get<T: Clone, H: Kind>(cell: &Cell<T, H>) -> Result<T, Thrown> {
     match &*cell.0.borrow() {
         Some(value) => Ok(value.clone()),
         None => Err(unset()),
@@ -83,7 +88,7 @@ pub fn get<T: Clone>(cell: &Cell<T>) -> Result<T, Thrown> {
 
 /// `*_n = value`.
 #[inline]
-pub fn set<T>(cell: &Cell<T>, value: T) {
+pub fn set<T, H: Kind>(cell: &Cell<T, H>, value: T) {
     *cell.0.borrow_mut() = Some(value);
 }
 
@@ -108,7 +113,7 @@ mod tests {
         set(&c, 3);
         assert_eq!(get(&a).unwrap(), 2, "a carried cell is a new cell");
         assert_eq!(get(&c).unwrap(), 3);
-        assert_eq!(get(&with(7)).unwrap(), 7);
+        assert_eq!(get(&with::<_, Untracked>(7)).unwrap(), 7);
         assert_eq!(format!("{a:?}"), "Some(2)");
     }
 }

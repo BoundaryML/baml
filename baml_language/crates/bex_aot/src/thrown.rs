@@ -15,7 +15,7 @@ pub use bex_lang::render_object;
 use crate::{
     Error, Panic,
     errors::InvalidArgument,
-    handle::Shared,
+    handle::{Kind, Shared},
     mem::{Trace, Visitor},
     readable::Readable,
 };
@@ -62,7 +62,7 @@ pub trait ErrorClass {
     fn readable_fields(&self) -> Vec<(&'static str, String)>;
 }
 
-impl<T: ErrorClass + fmt::Debug + Trace> ErrorObject for Shared<T> {
+impl<T: ErrorClass + fmt::Debug + Trace, H: Kind> ErrorObject for Shared<T, H> {
     fn class_fqn(&self) -> &'static str {
         T::CLASS_FQN
     }

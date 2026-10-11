@@ -13,18 +13,21 @@
 //! the runtime's own types and by the backend for every generated class,
 //! union, interface and closure environment. `trace` visits each handle the
 //! value owns directly, without following it: a collector decides whether to
-//! descend, through [`HeapRef::trace_target`]. That serves both shapes of
-//! collector:
+//! descend, through [`HeapRef::trace_target`] (or, in [`crate::cc`], the
+//! object's type-erased ops table).
 //!
-//! - trial deletion (Bacon-Rajan / Nim ORC): `trace_target` on a candidate,
-//!   and for every child the visitor sees, decrement / restore / scan its
-//!   count by [`HeapRef::addr`] (the object's header address);
-//! - mark-sweep: `trace_target` on a root's object, mark every child the
-//!   visitor sees by its address and push it for a later `trace_target`.
+//! Its reader is the cycle collector in [`crate::cc`]: trial deletion
+//! subtracts one count from a child for every edge `trace` reports, so the
+//! impls must report each handle a value owns **exactly once**. A missed
+//! edge makes its target look referenced from outside, so a cycle through
+//! it is never freed (a leak, which the `cycle_leaks` test and
+//! `unreachable` catch); an edge reported twice would take a live object's
+//! count to zero and free it while it is still reachable. The backend
+//! generates one `trace` call per field, element or payload, and this
+//! module's container impls visit each element once.
 //!
-//! Today handles are `Rc` and nothing calls a collector: [`collect`] is a
-//! no-op, and `Trace` is only exercised by the tests and the `mem-stats`
-//! unreachable count (`unreachable`, under that feature).
+//! [`collect`] runs the collector; without `mem-stats` nothing else here
+//! has a runtime cost.
 
 use crate::{BigInt, Int63, Panic, Str, Thrown};
 
@@ -42,6 +45,16 @@ pub trait Trace: 'static {
 /// What a collector does with each edge a [`Trace`] impl reports.
 pub trait Visitor {
     fn visit(&mut self, object: &dyn HeapRef);
+
+    /// The edge of a tracked handle, with the cycle collector's view of its
+    /// object already at hand, so the collector skips a dynamic call per
+    /// edge. Every other visitor sees it as [`Visitor::visit`].
+    #[doc(hidden)]
+    #[inline]
+    fn visit_tracked(&mut self, object: crate::cc::Object, handle: &dyn HeapRef) {
+        let _ = object;
+        self.visit(handle);
+    }
 }
 
 impl<F: FnMut(&dyn HeapRef)> Visitor for F {
@@ -67,6 +80,15 @@ pub trait HeapRef {
     /// The number of handles to the object. Under `Rc` this is the strong
     /// count; a collector that keeps its own count reports that.
     fn strong_count(&self) -> usize;
+
+    /// The cycle collector's view of the object, for a tracked handle
+    /// ([`crate::cc::Tracked`]); `None` for an untracked one, which the
+    /// collector does not follow.
+    #[doc(hidden)]
+    #[inline]
+    fn object(&self) -> Option<crate::cc::Object> {
+        None
+    }
 }
 
 /// A no-op `Trace` for the values that hold no handle.
@@ -110,11 +132,15 @@ impl<T: Trace> Trace for Vec<T> {
     }
 }
 
-/// The contents of a handle's cell, read through a shared borrow.
+/// The contents of a handle's cell, read through a shared borrow. A cell
+/// that is mutably borrowed (a store in progress when a collection runs)
+/// reports no edges: the collector then keeps everything it might reach.
 impl<T: Trace> Trace for std::cell::RefCell<T> {
     #[inline]
     fn trace(&self, visitor: &mut dyn Visitor) {
-        self.borrow().trace(visitor);
+        if let Ok(value) = self.try_borrow() {
+            value.trace(visitor);
+        }
     }
 }
 
@@ -180,14 +206,17 @@ impl Trace for Thrown {
     }
 }
 
-/// Run the collector. A no-op under reference counting; a prototype
-/// collector fills it in. Generated code never calls it; hosts, tests and
-/// the torture hook do.
+/// Run the cycle collector over the possible roots buffered so far
+/// ([`crate::cc::collect`]). Untracked objects are freed by their counts
+/// alone. Generated code never calls it; hosts, tests and the torture hook
+/// do, and the collector runs itself when its buffer fills.
 #[inline]
-pub fn collect() {}
+pub fn collect() {
+    crate::cc::collect();
+}
 
 #[cfg(feature = "mem-stats")]
-pub(crate) use stats::{Erased, Registered, on_alloc, on_free};
+pub(crate) use stats::{Erased, Registered, on_alloc, on_cc_dealloc, on_free};
 #[cfg(feature = "mem-stats")]
 pub use stats::{Stats, stats, torture, unreachable};
 
@@ -198,6 +227,7 @@ mod stats {
     use std::{
         cell::{Cell, RefCell},
         collections::{HashMap, HashSet},
+        ptr::NonNull,
         rc::{Rc, Weak},
         sync::OnceLock,
     };
@@ -222,9 +252,13 @@ mod stats {
         }
     }
 
-    /// A live object as the registry keeps it: weakly, so the registry
-    /// never keeps anything alive.
-    pub(crate) type Registered = Weak<dyn Erased>;
+    /// A live object as the registry keeps it, never keeping it alive: a
+    /// weak `Rc` for an untracked object, the header of a tracked one
+    /// (taken out of the registry when its box is deallocated).
+    pub(crate) enum Registered {
+        Rc(Weak<dyn Erased>),
+        Cc(NonNull<crate::cc::Header>),
+    }
 
     /// A heap object behind an erased pointer: what the registry can ask of
     /// it.
@@ -237,7 +271,9 @@ mod stats {
         static STATS: Cell<Stats> = const {
             Cell::new(Stats { allocs: 0, frees: 0, torture_collections: 0 })
         };
-        static REGISTRY: RefCell<Vec<Registered>> = const { RefCell::new(Vec::new()) };
+        static REGISTRY: RefCell<Vec<Weak<dyn Erased>>> = const { RefCell::new(Vec::new()) };
+        static TRACKED: RefCell<HashSet<NonNull<crate::cc::Header>>> =
+            RefCell::new(HashSet::new());
     }
 
     /// The counters for this thread.
@@ -247,7 +283,8 @@ mod stats {
 
     /// Whether `BAML_MEM_TORTURE=1` was set when the first object was
     /// allocated: then every allocation runs the collector, right after the
-    /// new object is created and before its handle is returned.
+    /// new object is created and before its handle is returned, and so does
+    /// every decrement that buffers a possible root.
     pub fn torture() -> bool {
         static TORTURE: OnceLock<bool> = OnceLock::new();
         *TORTURE.get_or_init(|| std::env::var_os("BAML_MEM_TORTURE").is_some_and(|v| v == "1"))
@@ -271,25 +308,35 @@ mod stats {
             now.allocs += 1;
             stats.set(now);
         });
-        REGISTRY.with(|registry| {
-            let mut registry = registry.borrow_mut();
-            // Forget freed objects once they outnumber the live ones.
-            let live = usize::try_from(stats().live()).unwrap_or(usize::MAX);
-            if registry.len() >= 2 * live.max(1024) {
-                registry.retain(|entry| entry.strong_count() > 0);
+        match object {
+            Registered::Rc(weak) => REGISTRY.with(|registry| {
+                let mut registry = registry.borrow_mut();
+                // Forget freed objects once they outnumber the live ones.
+                let live = usize::try_from(stats().live()).unwrap_or(usize::MAX);
+                if registry.len() >= 2 * live.max(1024) {
+                    registry.retain(|entry| entry.strong_count() > 0);
+                }
+                registry.push(weak);
+            }),
+            Registered::Cc(header) => {
+                let _ = TRACKED.try_with(|tracked| tracked.borrow_mut().insert(header));
             }
-            registry.push(object);
-        });
+        }
     }
 
-    /// Count a free.
+    /// Count a free: an object's value dropped.
     #[inline(never)]
     pub(crate) fn on_free() {
-        STATS.with(|stats| {
+        let _ = STATS.try_with(|stats| {
             let mut now = stats.get();
             now.frees += 1;
             stats.set(now);
         });
+    }
+
+    /// Forget a tracked object whose box is deallocated.
+    pub(crate) fn on_cc_dealloc(header: NonNull<crate::cc::Header>) {
+        let _ = TRACKED.try_with(|tracked| tracked.borrow_mut().remove(&header));
     }
 
     /// How many live objects no handle outside the heap reaches: the
@@ -304,25 +351,35 @@ mod stats {
         // Every object starts with its strong count (less the one the
         // upgrade above added) as references from outside; each edge from
         // another object takes one away.
-        let mut external: HashMap<*const (), usize> = objects
-            .iter()
-            .map(|object| {
-                (
-                    Rc::as_ptr(object).cast::<()>(),
-                    Rc::strong_count(object) - 1,
-                )
-            })
-            .collect();
+        let mut external: HashMap<*const (), usize> = HashMap::new();
         let mut children: HashMap<*const (), Vec<*const ()>> = HashMap::new();
         for object in &objects {
             let mut edges = Vec::new();
             object.trace_contents(&mut |child: &dyn HeapRef| edges.push(child.addr()));
-            for child in &edges {
+            let addr = Rc::as_ptr(object).cast::<()>();
+            external.insert(addr, Rc::strong_count(object) - 1);
+            children.insert(addr, edges);
+        }
+        let tracked: Vec<_> = TRACKED.with(|tracked| tracked.borrow().iter().copied().collect());
+        for header in tracked {
+            let mut edges = Vec::new();
+            // SAFETY: the registry holds only allocated boxes.
+            #[allow(unsafe_code)]
+            let count = unsafe {
+                crate::cc::inspect(header, &mut |child: &dyn HeapRef| edges.push(child.addr()))
+            };
+            if let Some(count) = count {
+                let addr = header.as_ptr().cast_const().cast::<()>();
+                external.insert(addr, count);
+                children.insert(addr, edges);
+            }
+        }
+        for edges in children.values() {
+            for child in edges {
                 if let Some(count) = external.get_mut(child) {
                     *count = count.saturating_sub(1);
                 }
             }
-            children.insert(Rc::as_ptr(object).cast::<()>(), edges);
         }
         // Everything reachable from an object with an outside handle lives.
         let mut live: HashSet<*const ()> = HashSet::new();
@@ -338,7 +395,7 @@ mod stats {
                 stack.extend(edges.iter().copied());
             }
         }
-        let total = objects.len();
+        let total = external.len();
         drop(objects);
         (total - live.len()) as u64
     }
@@ -349,14 +406,19 @@ mod tests {
     use super::*;
     use crate::{
         cell,
-        func::{self, Callable, Func},
-        handle::{Shared, shared},
+        func::{self, Callable, CcFunc, Func},
+        handle::{Cc, Shared, cc, shared},
     };
 
     struct Node {
         next: Option<Shared<Node>>,
     }
     trace_fields!(Node, next);
+
+    struct CcNode {
+        next: Option<Cc<CcNode>>,
+    }
+    trace_fields!(CcNode, next);
 
     /// A closure over one cell holding an array of closures.
     struct Env {
@@ -370,9 +432,25 @@ mod tests {
         }
     }
 
+    /// [`Env`] at the tracked kind, as the backend emits it for a function
+    /// type whose closures can reach themselves.
+    struct CcEnv {
+        c0: cell::CcCell<Cc<Vec<CcFunc<(), i64>>>>,
+    }
+    trace_fields!(CcEnv, c0);
+
+    impl Callable<(), i64> for CcEnv {
+        fn call(&self, (): ()) -> Result<i64, Thrown> {
+            Ok(i64::try_from(cell::get(&self.c0)?.borrow().len()).unwrap_or(0))
+        }
+    }
+
+    /// An untracked cycle is found by `unreachable` and never freed: what
+    /// the backend's type analysis prevents by tracking every type that can
+    /// be on a cycle.
     #[test]
     #[cfg_attr(miri, ignore = "leaks a cycle on purpose")]
-    fn frees_are_counted_and_cycles_are_found() {
+    fn frees_are_counted_and_untracked_cycles_are_found() {
         let (start, start_garbage) = (stats(), unreachable());
         {
             let a = shared(Node { next: None });
@@ -384,9 +462,10 @@ mod tests {
             a.borrow_mut().next = Some(b);
             assert_eq!(unreachable(), start_garbage, "`a` still is");
         }
+        collect();
         let after = stats();
         assert_eq!(after.allocs - start.allocs, 2);
-        assert_eq!(after.live() - start.live(), 2, "known leak under Rc");
+        assert_eq!(after.live() - start.live(), 2, "an untracked cycle leaks");
         assert_eq!(unreachable() - start_garbage, 2);
         {
             let a = shared(Node { next: None });
@@ -396,28 +475,77 @@ mod tests {
     }
 
     #[test]
+    fn tracked_cycles_are_counted_found_and_collected() {
+        collect();
+        let (start, start_garbage) = (stats(), unreachable());
+        {
+            let a = cc(CcNode { next: None });
+            let b = cc(CcNode {
+                next: Some(a.clone()),
+            });
+            assert_eq!(stats().live() - start.live(), 2);
+            assert_eq!(unreachable(), start_garbage, "both are held from outside");
+            a.borrow_mut().next = Some(b);
+        }
+        if !torture() {
+            // (Torture collects at every buffered decrement.)
+            assert_eq!(stats().live() - start.live(), 2, "kept until a collection");
+            assert_eq!(unreachable() - start_garbage, 2, "found through `Trace`");
+        }
+        collect();
+        assert_eq!(stats().live(), start.live(), "collected");
+        assert_eq!(unreachable(), start_garbage);
+    }
+
+    #[test]
     #[cfg_attr(miri, ignore = "leaks a cycle on purpose")]
-    fn a_closure_cycle_through_its_cell_is_found() {
+    fn an_untracked_closure_cycle_through_its_cell_is_found() {
         let (start, start_garbage) = (stats(), unreachable());
         {
             let cell = cell::fresh();
             let closures: Shared<Vec<Func<(), i64>>> = shared(Vec::new());
             cell::set(&cell, closures.clone());
-            let closure = func::alloc(Env { c0: cell });
+            let closure: Func<(), i64> = func::alloc(Env { c0: cell });
             closures.borrow_mut().push(closure.clone());
             assert_eq!(closure.call(()).unwrap(), 1);
             assert_eq!(unreachable(), start_garbage);
         }
         // The cell, the array and the closure.
-        assert_eq!(stats().live() - start.live(), 3, "known leak under Rc");
+        assert_eq!(stats().live() - start.live(), 3, "an untracked cycle leaks");
         assert_eq!(unreachable() - start_garbage, 3);
     }
 
     #[test]
-    fn collect_is_a_no_op_under_rc() {
+    fn a_tracked_closure_cycle_through_its_cell_is_collected() {
+        collect();
+        let (start, start_garbage) = (stats(), unreachable());
+        {
+            let cell = cell::fresh();
+            let closures: Cc<Vec<CcFunc<(), i64>>> = cc(Vec::new());
+            cell::set(&cell, closures.clone());
+            let closure: CcFunc<(), i64> = func::alloc(CcEnv { c0: cell });
+            closures.borrow_mut().push(closure.clone());
+            assert_eq!(closure.call(()).unwrap(), 1);
+        }
+        if !torture() {
+            assert_eq!(
+                unreachable() - start_garbage,
+                3,
+                "the cell, array and closure"
+            );
+        }
+        collect();
+        assert_eq!(stats().live(), start.live());
+        assert_eq!(unreachable(), start_garbage);
+    }
+
+    #[test]
+    fn collect_leaves_untracked_objects_alone() {
+        let a = shared(vec![1_i64]);
         let start = stats();
         collect();
         assert_eq!(stats(), start);
+        assert_eq!(*a.borrow(), vec![1]);
         assert!(!torture() || std::env::var("BAML_MEM_TORTURE").as_deref() == Ok("1"));
     }
 }

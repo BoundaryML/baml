@@ -13,8 +13,9 @@
 //! the edges between them. The language rules both backends must agree on come from
 //! [`bex_lang`]; this crate adds only what native code
 //! needs and the VM never does: the handle, rendering, JSON through serde,
-//! the thrown-value type and the recursion guard. The binary links no VM
-//! and no garbage collector.
+//! the thrown-value type and the recursion guard. The binary links no VM;
+//! the only collector is [`cc`]'s cycle collector, for the handle types
+//! the backend marks as able to form cycles.
 
 /// Re-exported so generated code can derive `Serialize`
 /// (`#[serde(crate = "bex_aot::serde")]`) without its own dependency;
@@ -25,6 +26,7 @@ pub use serde_json;
 
 pub mod array;
 pub mod bigint;
+pub mod cc;
 pub mod cell;
 pub mod depth;
 pub mod eq;
@@ -42,9 +44,10 @@ pub mod thrown;
 pub use baml_type::Int63;
 pub use bex_lang::{Error, Panic, float, int};
 pub use bigint::BigInt;
+pub use cc::Tracked;
 pub use eq::BamlEq;
-pub use handle::{Shared, ptr_eq, shared};
-pub use map::Map;
+pub use handle::{Cc, Kind, Shared, Untracked, ptr_eq, shared};
+pub use map::{CcMap, Map};
 pub use readable::Readable;
 pub use render::ToBaml;
 pub use string::Str;

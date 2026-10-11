@@ -32,7 +32,10 @@ use std::fmt;
 
 use serde::Serialize;
 
-use crate::{ErrorObject, Int63, Str, Thrown, handle::Shared};
+use crate::{
+    ErrorObject, Int63, Str, Thrown,
+    handle::{Kind, Shared},
+};
 
 /// A parsed JSON document, as the VM holds it while decoding.
 pub type Json = serde_json::Value;
@@ -247,9 +250,9 @@ impl<T: FromJson> FromJson for Vec<T> {
     }
 }
 
-impl<T: FromJson + crate::mem::Trace> FromJson for Shared<T> {
+impl<T: FromJson + crate::mem::Trace, H: Kind> FromJson for Shared<T, H> {
     fn from_json(json: &Json) -> Result<Self, DecodeError> {
-        T::from_json(json).map(crate::handle::shared)
+        T::from_json(json).map(Shared::new)
     }
 }
 
