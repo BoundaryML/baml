@@ -3057,3 +3057,75 @@ function f(u: int | Named) -> string { match u { let n: Named => n.name(), let i
         "Union_int_or_user_Named::user_Named(_)",
     );
 }
+
+/// The cycle collector tracks exactly the heap types that can be on a
+/// cycle: every type the `cycles` fixture builds a cycle through, and none
+/// of the types that only hang off one. Prints the census of every fixture
+/// (types tracked / untracked, allocation sites tracked / untracked).
+#[test]
+fn tracking_follows_the_type_graph() {
+    let mut totals = [0usize; 4];
+    for name in fixtures() {
+        let module = emit_fixture(&name);
+        let (tracked, untracked) = module.memory.counts();
+        let sites = module.memory.sites;
+        println!(
+            "{name}: types {tracked} tracked / {untracked} untracked, sites {} / {}",
+            sites.tracked, sites.untracked
+        );
+        for (total, count) in
+            totals
+                .iter_mut()
+                .zip([tracked, untracked, sites.tracked, sites.untracked])
+        {
+            *total += count;
+        }
+        if name == "cycles" {
+            let tracked: Vec<&str> = module
+                .memory
+                .types
+                .iter()
+                .filter(|ty| ty.tracked)
+                .map(|ty| ty.described.as_str())
+                .collect();
+            for expected in [
+                "user.Node",
+                "user.DNode",
+                "user.TNode",
+                "user.TNode[]",
+                "user.GNode",
+                "user.GNode[]",
+                "user.MNode",
+                "map<string, user.MNode>",
+                "user.Link<int>",
+                "user.Branch",
+                "() -> int",
+                "() -> int[]",
+                "cell of () -> int[]",
+            ] {
+                assert!(
+                    tracked.contains(&expected),
+                    "{expected} is tracked: {tracked:?}"
+                );
+            }
+            for acyclic in [
+                "user.Owner",
+                "int[]",
+                "cell of int",
+                "cell of user.Owner",
+                "user.Leaf",
+                "user.Failure",
+                "string[]",
+            ] {
+                assert!(
+                    !tracked.contains(&acyclic),
+                    "{acyclic} is not tracked: {tracked:?}"
+                );
+            }
+        }
+    }
+    println!(
+        "all fixtures: types {} tracked / {} untracked, sites {} / {}",
+        totals[0], totals[1], totals[2], totals[3]
+    );
+}

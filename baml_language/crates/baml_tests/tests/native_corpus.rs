@@ -115,6 +115,16 @@ fn every_admitted_function_compiles() {
         sweep.roots.len(),
         sweep.module.functions.len()
     );
+    // Which heap types the cycle collector tracks, across the corpus.
+    let (tracked, untracked) = sweep.module.memory.counts();
+    let sites = sweep.module.memory.sites;
+    println!(
+        "memory: {tracked} heap types tracked, {untracked} untracked; allocation sites {} tracked, {} untracked",
+        sites.tracked, sites.untracked
+    );
+    if std::env::var_os("NATIVE_CORPUS_MEMORY").is_some() {
+        print!("{}", sweep.module.memory.render());
+    }
     assert!(
         sweep.roots.len() >= 1000,
         "only {} of {} corpus functions are admitted",
