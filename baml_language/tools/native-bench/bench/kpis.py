@@ -29,7 +29,9 @@ SCENARIO_LABELS = {
     "quick-reverse": "quick sort 1,024 reversed integers", "quick-duplicates": "quick sort 1,024 integers, many duplicates",
     "json-aggregate": "parse, validate and aggregate 1,024 JSON rows", "json-hello": "serialize a record to JSON",
     "allocation-low-retention": "allocate 128 batches of 2,048 objects, keep 4", "allocation-high-retention": "allocate 128 batches of 2,048 objects, keep 64",
-    "calls-empty": "call a function 0 times", "calls": "call a leaf function 128 times", "generate-sort": "generate and sort 8,192 numbers with the library sort"}
+    "calls-empty": "call a function 0 times", "calls": "call a leaf function 128 times", "generate-sort": "generate and sort 8,192 numbers with the library sort",
+    "cyclic-churn": "build and drop 64 cyclic graphs of 256 nodes", "live-heap-1m": "allocate and walk beside a live graph of 1M objects",
+    "live-heap-4m": "allocate and walk beside a live graph of 4M objects", "heap-calls": "4,096 iterations of small calls passing heap objects"}
 # One plain sentence per KPI on what the timed region contains.
 MEASURE = {
     "sort": "One job copies the input, sorts it in BAML code (no library sort) and serializes the whole result to JSON; the bar is jobs per second.",
@@ -37,6 +39,7 @@ MEASURE = {
     "json": "One job parses a JSON document, validates every row, groups and sorts, and serializes the answer; the bar is jobs per second.",
     "alloc": "One job allocates 128 batches of 2,048 small objects, keeping 4 or 64 batches alive, so the collector or the reference counts do real work; the bar is jobs per second.",
     "calls": "One job calls a one-line leaf function 128 times in a loop; the bar is jobs per second, so it is the cost of a call.",
+    "mem": "One job builds and drops cyclic graphs, allocates beside a large live graph, or passes heap objects through small calls; the bar is jobs per second, and peak memory shows what was not reclaimed.",
     "startup": "Time from the parent launching the process to the process reporting ready, after loading its image and preparing state; milliseconds, lower is better.",
     "memory": "Peak resident memory of the whole process over the run, from the kernel's wait4 accounting; MiB, lower is better.",
     "artifact": "Size of the executable a user would ship, stripped; BAML VM counts the bytecode plus the measurement host it needs; KB, lower is better.",
@@ -56,6 +59,7 @@ KPIS = [
     ("json", "JSON", "How fast does it parse, validate and serialize JSON?", ["json-aggregate", "json-hello"]),
     ("alloc", "Allocation", "How fast does it allocate and reclaim many small objects?", ["allocation-high-retention", "allocation-low-retention", "generate-sort"]),
     ("calls", "Function calls", "What does a function call cost?", ["calls", "calls-empty"]),
+    ("mem", "Memory management", "What do cycles, a large live heap and heap-passing calls cost?", ["cyclic-churn", "live-heap-1m", "live-heap-4m", "heap-calls"]),
 ]
 
 

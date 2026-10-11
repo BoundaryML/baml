@@ -16,6 +16,7 @@ nightly on `canary`. It is advisory: it never gates a merge.
     cd baml_language && cargo build --release -p baml_cli && cd tools/native-bench
     python3 -m bench run                                                      # tier A on the Freestyle snapshot
     python3 -m bench run --machine machines/local.json --protocol protocols/smoke.json   # plumbing check here
+    python3 -m bench run --machine machines/local.json --protocol protocols/mem.json     # memory-management cases here
     python3 -m bench render <bundle> [--previous <bundle>]                    # re-render the page and summary
     python3 -m bench compare <before> <after>                                 # verdicts between two bundles
 
@@ -54,6 +55,13 @@ Python in the snapshot's `ref/` directory with the same boundary.
 | `09_json_hello` | What does the smallest useful job cost: build a record, serialize it? |
 | `10_quick_sort` | Same question as merge sort with a recursive, in-place algorithm. |
 | `11_generate_sort` | What does generating 8,192 numbers and sorting them with the library sort cost? |
+| `12_cyclic_churn` | What does building and dropping request-scoped cyclic graphs cost, and are the cycles reclaimed? |
+| `13_live_heap` | What does ongoing allocation cost while a 1-4M-object graph stays live? |
+| `14_heap_calls` | What does a call-heavy loop cost when every call passes and returns heap objects? |
+
+Cases 12-14 exist for the memory-management comparison (protocol `mem`)
+and have no reference ports yet: their `rust`, `go`, `node`, `bun` and
+`python` rows are skipped as missing artifacts.
 
 ### Scenarios (protocol `tier-a`)
 
@@ -165,6 +173,7 @@ file and beside it.
     cases/<case>/               workload.baml and README.txt
     protocols/tier-a.json       the matrix above
     protocols/smoke.json        two scenarios, nine rows, three trials, for plumbing
+    protocols/mem.json          memory management: cases 01-04, 07, 10-14, native-off and vm-off, ten trials
     machines/bench-x86-v1.json  the Freestyle snapshot and its guest layout
     machines/local.json         this machine; native rows only unless a host and references are present
 
