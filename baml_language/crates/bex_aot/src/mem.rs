@@ -371,6 +371,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "leaks a cycle on purpose")]
     fn frees_are_counted_and_cycles_are_found() {
         let (start, start_garbage) = (stats(), unreachable());
         {
@@ -395,6 +396,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "leaks a cycle on purpose")]
     fn a_closure_cycle_through_its_cell_is_found() {
         let (start, start_garbage) = (stats(), unreachable());
         {

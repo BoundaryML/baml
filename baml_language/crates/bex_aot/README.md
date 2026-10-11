@@ -54,3 +54,17 @@ allocation. Without the feature a handle is exactly `Rc<RefCell<T>>`.
 
 `serde` and `serde_json` are re-exported so a generated crate depends on
 this crate alone.
+
+## Miri
+
+The unit tests run under Miri, with and without `mem-stats`:
+
+    cargo +nightly miri test -p bex_aot --features mem-stats --target x86_64-unknown-linux-gnu
+
+Any nightly with the `miri` and `rust-src` components works (checked with
+nightly-2026-05-27 and nightly-2026-10-10). On an aarch64 host pass the
+x86_64 target: `bex_str` counts code points with a NEON intrinsic
+(`llvm.aarch64.neon.uaddlv.i32.v16i8`) that Miri does not implement, while
+its x86_64 path interprets. Two bigint tests at the size cap take minutes
+under Miri and two `mem` tests leak a cycle on purpose (Miri's leak check
+would fail them); all four are `#[cfg_attr(miri, ignore)]`.

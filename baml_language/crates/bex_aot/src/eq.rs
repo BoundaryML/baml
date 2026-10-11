@@ -213,5 +213,8 @@ mod tests {
         );
         q.borrow_mut().n = int(2);
         assert!(!equals(&p, &q).unwrap());
+        // Break the cycles so the test frees what it built (Miri checks).
+        p.borrow_mut().next = None;
+        q.borrow_mut().next = None;
     }
 }
