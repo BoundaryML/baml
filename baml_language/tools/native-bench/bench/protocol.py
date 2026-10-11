@@ -79,6 +79,6 @@ class Machine:
     def bench_root(self):
         return Path(self.data["bench_root"]).expanduser()
 
-    def tool(self, name):
+    def tool(self, name, root=None):
         p = Path(self.data["tools"][name]).expanduser()
-        return p if p.is_absolute() else self.bench_root / p
+        return p if p.is_absolute() else (root or self.bench_root) / p

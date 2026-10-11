@@ -9,7 +9,6 @@ then Rust, Go, Node, Bun and Python. Execution KPIs are throughput, higher
 is better, as a user reads a benchmark; the per-job time is in the table.
 """
 import json
-import statistics
 from pathlib import Path
 
 from .report import Bundle
@@ -48,6 +47,7 @@ MEASURE = {
 REASONS = {
     "unsupported": "native telemetry does not exist yet; it arrives with the telemetry PR, and these rows fill in then",
     "not_run": "added to the protocol after this run; present from the next run",
+    "not_in_protocol": "this run's protocol has no startup scenario",
     "pending_http": "needs sys ops compiled natively (PR 8); the VM's HTTP harness has not been run on this machine yet",
 }
 KPIS = [
@@ -94,10 +94,11 @@ def scenario_entry(b, scen, value_fn):
             "source": src.read_text() if src.exists() else None}
 
 
-def headline(entry, vs=("node", "go")):
+def headline(entry):
+    """native-off over Node and Go, by median: a throughput ratio, or a cost ratio for lower-is-better KPIs."""
     nat = entry["values"].get("native-off")
     out = {}
-    for r in vs:
+    for r in ("node", "go"):
         v = entry["values"].get(r)
         out[r] = nat["median"] / v["median"] if nat and v and v["median"] else None
     return out
@@ -119,7 +120,6 @@ def cpu_text(m):
 def build(bundle_dir, previous=None):
     b = Bundle(bundle_dir)
     m = b.manifest
-    st = b.summary.get("startup", {})
     builds = m.get("builds", {})
     arts = m.get("artifacts", {})
     kpis = []
@@ -130,13 +130,18 @@ def build(bundle_dir, previous=None):
         kpis.append({"key": key, "title": title, "question": question, "measure": MEASURE[key], "unit": "ops/s", "better": "higher",
                      "default": entries[0]["name"] if entries else None, "scenarios": entries})
     # startup: launch to ready, lower is better
-    e = scenario_entry(b, "startup", lambda b_, s, r: val(b_, s, r, "launch_to_ready_ns", 1e-6, False))
-    e["label"] = "process start to ready, launch observed by the parent"; e["headline"] = {r: (e["values"]["native-off"]["median"] / e["values"][r]["median"]) if e["values"].get(r) and e["values"].get("native-off") else None for r in ("node", "go")}
-    kpis.append({"key": "startup", "title": "Startup", "question": "How fast does a fresh process get to work?", "measure": MEASURE["startup"], "unit": "ms", "better": "lower", "default": "startup", "scenarios": [e]})
+    startup = []
+    if "startup" in b.summary:
+        e = scenario_entry(b, "startup", lambda b_, s, r: val(b_, s, r, "launch_to_ready_ns", 1e-6, False))
+        e["label"] = "process start to ready, launch observed by the parent"
+        e["headline"] = headline(e)
+        startup.append(e)
+    kpis.append({"key": "startup", "title": "Startup", "question": "How fast does a fresh process get to work?", "measure": MEASURE["startup"], "unit": "ms", "better": "lower",
+                 "default": "startup" if startup else None, "scenarios": startup, **({} if startup else {"pending": REASONS["not_in_protocol"]})})
     # memory: peak RSS per scenario
     mem = [scenario_entry(b, s, lambda b_, s_, r: val(b_, s_, r, "peak_rss_bytes", 1 / 2**20, False)) for s in ["allocation-high-retention", "allocation-low-retention", "json-aggregate", "merge-random", "startup"] if s in b.summary]
     for e in mem:
-        e["headline"] = {r: (e["values"]["native-off"]["median"] / e["values"][r]["median"]) if e["values"].get(r) and e["values"].get("native-off") else None for r in ("node", "go")}
+        e["headline"] = headline(e)
     kpis.append({"key": "memory", "title": "Memory", "question": "How much memory does a process use at its peak?", "measure": MEASURE["memory"], "unit": "MiB", "better": "lower", "default": mem[0]["name"] if mem else None, "scenarios": mem})
     # artifact size per case: native stripped, VM bytecode + host, rust, go. Rows that do
     # not apply say why instead of standing empty (a note is drawn in italics, never a bar).
@@ -175,7 +180,7 @@ def build(bundle_dir, previous=None):
     kpis.append({"key": "http", "title": "Web server", "question": "How many requests per second does a small HTTP service handle?", "measure": MEASURE["http"], "unit": "req/s", "better": "higher", "default": None, "scenarios": [], "pending": REASONS["pending_http"]})
     data = {"schema": 2,
             "candidate": {"sha": m.get("candidate_sha"), "branch": m.get("candidate_branch"), "subject": m.get("candidate_subject"), "dirty_files": m.get("candidate_dirty_files")},
-            "machine": {"name": m.get("machine"), "cpu": cpu_text(m), "kernel": m.get("kernel"), "glibc": (m.get("glibc") or "").split()[-1],
+            "machine": {"name": m.get("machine"), "cpu": cpu_text(m), "kernel": m.get("kernel"), "glibc": (m.get("glibc") or "?").split()[-1],
                         "rustc": next((bd["rustc"] for bd in builds.values() if bd.get("rustc")), (m.get("rustc") or "").splitlines()[0] if m.get("rustc") else None)},
             "protocol": {"name": m.get("protocol"), "trials": m.get("trials"), "cpu": m.get("cpu"), "workers": m.get("workers"), "sha256": m.get("protocol_sha256")},
             "run": {"started": m.get("started"), "finished": m.get("finished"), "trials_total": m.get("trials_total"), "trials_failed": m.get("trials_failed"),

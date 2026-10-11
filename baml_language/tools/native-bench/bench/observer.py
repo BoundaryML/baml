@@ -30,8 +30,7 @@ def observer():
     return binary
 
 
-
-def run(command, directory, env, cpus, timeout=None, stdin=None):
+def run(command, directory, env, cpus, timeout=None):
     directory.mkdir(parents=True, exist_ok=False)
     usage, pidfile = directory / "usage.json", directory / "pid.txt"
     sampler = selectors.DefaultSelector()
@@ -53,15 +52,12 @@ def run(command, directory, env, cpus, timeout=None, stdin=None):
                 ",".join(map(str, cpus)),
                 *map(str, command),
             ],
-            stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=stderr,
             env=env,
             start_new_session=True,
         )
-        if stdin is not None:
-            child.stdin.write(stdin)
-            child.stdin.close()
         sampler.register(child.stdout, selectors.EVENT_READ)
         buffer = b""
         status = "ok"

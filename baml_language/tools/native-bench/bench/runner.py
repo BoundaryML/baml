@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import observer, oracle
+from .protocol import Scenario
 from .rows import ROWS
 
 FIELDS = ["schema", "protocol", "case", "scenario", "row", "level", "sink", "trial", "status", "coverage",
@@ -243,7 +244,6 @@ def verify(layout, protocol, out):
         for label, raw in oracle.checks(case):
             expected = oracle.oracle(case, raw, 1, 0)
             for row in rows:
-                from .protocol import Scenario
                 s = Scenario(name=f"check:{label}", case=case, jobs=1, warmup=0)
                 r = trial(layout, protocol, row, s, raw, 1, 0, out / "verify" / case / f"{n:04d}-{row.name}", expected)
                 n += 1
@@ -294,11 +294,10 @@ def summarize(rows, protocol):
     """summary.json: per scenario x row, each metric's n, median, min, max; per job for execution."""
     table = {}
     for r in rows:
-        if r["status"] != "ok":
-            table.setdefault(r["scenario"], {}).setdefault(r["row"], {}).setdefault("failed", 0)
-            table[r["scenario"]][r["row"]]["failed"] += 1
-            continue
         slot = table.setdefault(r["scenario"], {}).setdefault(r["row"], {"jobs": int(r["jobs"]), "n": 0, "failed": 0})
+        if r["status"] != "ok":
+            slot["failed"] += 1
+            continue
         slot["n"] += 1
         for m in METRICS:
             if r.get(m) not in (None, ""):
@@ -309,7 +308,7 @@ def summarize(rows, protocol):
     for scen, by_row in table.items():
         summary[scen] = {}
         for row, slot in by_row.items():
-            entry = {"n": slot.get("n", 0), "failed": slot.get("failed", 0), "jobs": slot.get("jobs")}
+            entry = {"n": slot["n"], "failed": slot["failed"], "jobs": slot["jobs"]}
             for m in METRICS + ["telemetry_bytes"]:
                 v = slot.get(m)
                 if v:

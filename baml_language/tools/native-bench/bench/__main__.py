@@ -49,17 +49,23 @@ def cmd_run(a):
     meta = stage.build_stage(worktree, cli, protocol, mach, st)
     (out / "stage.json").write_text(json.dumps(meta, indent=1))
     shutil.copytree(st / "native", out / "emitted", ignore=shutil.ignore_patterns("target"))
-    code = machines.provider(mach).run(st, out)
-    shutil.rmtree(tmp, ignore_errors=True)
+    try:
+        code = machines.provider(mach).run(st, out)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
     results = out / "results"
     manifest = {**meta}
     if (results / "manifest.json").exists():
         manifest.update(json.loads((results / "manifest.json").read_text()))
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1))
-    if code != 0 or not (results / "summary.json").exists():
-        print(f"execute failed with {code}; see {results / 'execute.log'}", file=sys.stderr)
-        sys.exit(code or 1)
-    render(out, a.previous)
+    # Failed trials still have a summary: render it so the page shows them, then fail.
+    if (results / "summary.json").exists():
+        render(out, a.previous)
+    if code != 0:
+        print(f"execute failed with {code} ({manifest.get('status')}); see {results / 'execute.log'}", file=sys.stderr)
+        sys.exit(code)
+    if not (results / "summary.json").exists():
+        sys.exit(f"no summary; see {results / 'execute.log'}")
 
 
 def render(bundle, previous=None):
@@ -75,7 +81,7 @@ def cmd_execute(a):
     root = Path(a.root).expanduser() if a.root else mach.bench_root
     out = Path(a.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    tools = {k: (Path(v).expanduser() if Path(v).expanduser().is_absolute() else root / v) for k, v in mach.data["tools"].items()}
+    tools = {k: mach.tool(k, root) for k in mach.data["tools"]}
     layout = runner.Layout(root=root, stage=Path(a.stage).resolve(), out=out, tools=tools)
     shutil.copy(protocol.path, out / "protocol.json")
     manifest = {"started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "machine": mach.name, "protocol": protocol.name,
@@ -121,10 +127,13 @@ def cmd_execute(a):
         manifest["status"] = "no_trials"
         (out / "manifest.json").write_text(json.dumps(manifest, indent=1))
         sys.exit(f"no trials ran; skipped rows: {skipped}")
-    manifest.update(status="ok", finished=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), loadavg_end=sh("cat /proc/loadavg"),
-                    trials_total=len(rows), trials_failed=sum(1 for r in rows if r["status"] != "ok"))
+    failed = sum(1 for r in rows if r["status"] != "ok")
+    manifest.update(status="trials_failed" if failed else "ok", finished=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    loadavg_end=sh("cat /proc/loadavg"), trials_total=len(rows), trials_failed=failed)
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1))
-    runner.log("done:", manifest["trials_total"], "trials,", manifest["trials_failed"], "failed")
+    runner.log("done:", len(rows), "trials,", failed, "failed")
+    if failed:
+        sys.exit(1)
 
 
 def main():

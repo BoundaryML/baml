@@ -58,8 +58,3 @@ ROWS = {r.name: r for r in [
     Row("bun", "bun"),
     Row("python", "python"),
 ]}
-
-ORDER = list(ROWS)
-
-# Backward name: the first bundle called the native row "native".
-ROWS["native"] = ROWS["native-off"]
