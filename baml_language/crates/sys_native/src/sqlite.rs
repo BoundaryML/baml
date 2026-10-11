@@ -136,6 +136,8 @@ mod tests {
         assert_eq!(result["rows"][0][0], "updated");
         assert!(query(path, "SELECT ?", "[{}]").is_err());
         assert!(query(path, "SELECT ?", "not JSON").is_err());
+        // Windows cannot unlink a database while either connection is open.
+        drop(CONNECTIONS.get().unwrap().lock().unwrap().remove(path));
         drop(observer);
         std::fs::remove_file(filename).unwrap();
     }
