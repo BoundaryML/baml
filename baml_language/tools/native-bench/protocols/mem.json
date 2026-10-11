@@ -1,0 +1,46 @@
+{
+ "schema": 1,
+ "name": "mem",
+ "purpose": "Memory management: reference counting with the cycle collector against the VM on allocation-, call- and cycle-heavy cases; one pinned core, one worker, fresh process per trial. Peak RSS is the leak signal for 12_cyclic_churn.",
+ "rows": [
+  "native-off",
+  "vm-off"
+ ],
+ "trials": 10,
+ "seed": 1729,
+ "cpu": 3,
+ "workers": 1,
+ "timeout_s": 600,
+ "cases": [
+  "01_array_traversal",
+  "02_merge_sort",
+  "03_json_aggregate",
+  "04_allocation_retention",
+  "07_function_calls",
+  "10_quick_sort",
+  "11_generate_sort",
+  "12_cyclic_churn",
+  "13_live_heap",
+  "14_heap_calls"
+ ],
+ "regression": {
+  "threshold_percent": 5,
+  "net_of_control": false,
+  "require_disjoint_ranges": true
+ },
+ "scenarios": [
+  {"name": "array-indexed", "case": "01_array_traversal", "size": 8192, "variant": "indexed", "jobs": 128, "warmup": 4},
+  {"name": "array-build", "case": "01_array_traversal", "size": 8192, "variant": "build", "jobs": 128, "warmup": 4},
+  {"name": "merge-random", "case": "02_merge_sort", "size": 1024, "variant": "random", "jobs": 32, "warmup": 4},
+  {"name": "json-aggregate", "case": "03_json_aggregate", "size": 1024, "jobs": 32, "warmup": 4},
+  {"name": "allocation-low-retention", "case": "04_allocation_retention", "size": 2048, "batches": 128, "retain": 4, "jobs": 8, "warmup": 1},
+  {"name": "allocation-high-retention", "case": "04_allocation_retention", "size": 2048, "batches": 128, "retain": 64, "jobs": 8, "warmup": 1},
+  {"name": "calls", "case": "07_function_calls", "size": 128, "jobs": 4096, "warmup": 16},
+  {"name": "quick-random", "case": "10_quick_sort", "size": 1024, "variant": "random", "jobs": 32, "warmup": 4},
+  {"name": "generate-sort", "case": "11_generate_sort", "size": 8192, "jobs": 32, "warmup": 4},
+  {"name": "cyclic-churn", "case": "12_cyclic_churn", "size": 256, "batches": 64, "jobs": 8, "warmup": 1},
+  {"name": "live-heap-1m", "case": "13_live_heap", "size": 500000, "batches": 65536, "jobs": 8, "warmup": 1},
+  {"name": "live-heap-4m", "case": "13_live_heap", "size": 2000000, "batches": 65536, "jobs": 4, "warmup": 1},
+  {"name": "heap-calls", "case": "14_heap_calls", "size": 4096, "jobs": 512, "warmup": 8}
+ ]
+}

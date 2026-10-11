@@ -74,8 +74,12 @@ def fixture(
                 "capture": variant == "trace",
             }
         )
-    if case in ("07_function_calls", "11_generate_sort"):
+    if case in ("07_function_calls", "11_generate_sort", "14_heap_calls"):
         return encode({"count": size, "seed": seed})
+    if case == "12_cyclic_churn":
+        return encode({"requests": batches, "nodes": size})
+    if case == "13_live_heap":
+        return encode({"live": size, "churn": batches, "seed": seed})
     if case == "00_startup":
         return encode({"value": 42})
     if case in ("01_array_traversal", "02_merge_sort", "10_quick_sort", "12_quick_sort_native", "13_sort_kernel_only"):
@@ -165,6 +169,12 @@ def oracle(case, raw, jobs=1, warmup=0):
         checksum = w * b * (b - 1) // 2 + b * w * (w + 1)
         live = w * kept * (2 * b - kept - 1) // 2 + kept * w * (w + 1)
         return [checksum, live]
+    if case == "12_cyclic_churn":
+        return cyclic_churn_oracle(data["requests"], data["nodes"])
+    if case == "13_live_heap":
+        return live_heap_oracle(data["live"], data["churn"], data["seed"])
+    if case == "14_heap_calls":
+        return heap_calls_oracle(data["count"], data["seed"])
     if case == "05_async_fanout":
         n = data["payload_size"]
         return [n * i + n * (n - 1) // 2 for i in range(data["fanout"])]
@@ -249,6 +259,11 @@ def checks(case):
         for n in (0, 1, 128, 8192):
             yield str(n), fixture(case, size=n)
         return
+    if case == "14_heap_calls":
+        for n in (0, 1, 4, 5, 128):
+            for seed in (0, 1729, 999):
+                yield f"{n}-{seed}", fixture(case, size=n, seed=seed)
+        return
     yield "default", fixture(case, size=16, batches=8, retain=2, delay_ms=2)
     if case in ("01_array_traversal", "02_merge_sort", "10_quick_sort", "12_quick_sort_native", "13_sort_kernel_only"):
         variants = (
@@ -301,12 +316,63 @@ def checks(case):
                 f"{width}-{batches}-{retain}",
                 fixture(case, size=width, batches=batches, retain=retain),
             )
+    if case == "12_cyclic_churn":
+        for requests, nodes in ((0, 0), (0, 5), (3, 0), (3, 1), (5, 2), (4, 17)):
+            yield f"{requests}-{nodes}", fixture(case, size=nodes, batches=requests)
+    if case == "13_live_heap":
+        for live, churn in ((0, 4), (1, 5), (2, 3), (17, 40), (1000, 64)):
+            for seed in (0, 1729):
+                yield f"{live}-{churn}-{seed}", fixture(case, size=live, batches=churn, seed=seed)
     if case == "05_async_fanout":
         for fanout, size in ((0, 4), (1, 0), (1, 7), (32, 8)):
             yield (
                 f"{fanout}-{size}",
                 fixture(case, fanout=fanout, size=size, delay_ms=2),
             )
+
+
+MODULUS = 1000000007
+
+
+def cyclic_churn_oracle(requests, nodes):
+    """Per request: every node's ring and chord neighbour values plus its parent's id."""
+    checksum = 0
+    for r in range(requests):
+        if nodes == 0:
+            continue
+        value = [(r * 31 + i * 17) % 1000 for i in range(nodes)]
+        total = sum(value[(i + 1) % nodes] + value[(i * 7 + r) % nodes] + i // 2 for i in range(nodes))
+        checksum = (checksum * 31 + total) % MODULUS
+    return [requests * nodes, checksum]
+
+
+def live_heap_oracle(live, churn, seed):
+    """The walk from each short-lived item: its own value (the index), then
+    the item, its parent and grandparent in heap order, weighted by hop."""
+    if live == 0:
+        return [0, 0]
+    checksum, x = 0, seed % live
+    for _ in range(churn):
+        x = (x * 1103515245 + 12345) % live
+        chain, i = [x], x
+        while len(chain) < 4 and i is not None:
+            chain.append((i * 7 + seed) % 1000)
+            i = (i - 1) // 2 if i > 0 else None
+        for hop, value in enumerate(chain):
+            checksum = (checksum + value * (hop + 1)) % MODULUS
+    return [live, checksum]
+
+
+def heap_calls_oracle(count, seed):
+    ring = [(0, 0), (1, 1), (2, 2), (3, 3)]
+    acc, step = (seed % 1000, 1), (3, 5)
+    for i in range(count):
+        moved = (acc[0] + step[0], acc[1] + step[1])
+        scaled = (moved[0] * 7 % 1000003, moved[1] * 7 % 1000003)
+        old, ring[i % 4] = ring[i % 4], scaled
+        back = (old[0] + step[0], old[1] + step[1])
+        acc = back if back[0] <= moved[0] else moved
+    return [acc[0], acc[1], ring[0][0], ring[3][1]]
 
 
 def workflow_oracle(config, calls=1):
