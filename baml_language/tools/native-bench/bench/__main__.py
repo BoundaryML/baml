@@ -78,7 +78,8 @@ def render(bundle, previous=None):
 def cmd_execute(a):
     protocol = Protocol.load(a.protocol)
     mach = Machine.load(a.machine)
-    root = Path(a.root).expanduser() if a.root else mach.bench_root
+    # absolute: the observer launches tools from inside each trial's directory
+    root = (Path(a.root).expanduser() if a.root else mach.bench_root).resolve()
     out = Path(a.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     tools = {k: mach.tool(k, root) for k in mach.data["tools"]}

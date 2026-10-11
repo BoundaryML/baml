@@ -56,6 +56,8 @@ def ratio(a, b):
 
 def verdicts(cur, prev, rule):
     """Per scenario: native change, control change (host drift), net, verdict."""
+    if cur.manifest.get("machine") != prev.manifest.get("machine"):
+        raise ValueError(f"cannot compare {cur.manifest.get('machine')} with {prev.manifest.get('machine')}: different machine files")
     thr = rule.get("threshold_percent", 5)
     out = []
     for scen in cur.scenarios():
