@@ -13,11 +13,12 @@ use crate::{
     Int63, Panic, Str, Thrown, float,
     handle::{Shared, shared},
     int_from_usize,
+    mem::{Trace, Visitor},
 };
 
 /// Allocate an array from its elements (`[a, b, c]`).
 #[inline]
-pub fn new<T>(items: Vec<T>) -> Shared<Vec<T>> {
+pub fn new<T: Trace>(items: Vec<T>) -> Shared<Vec<T>> {
     shared(items)
 }
 
@@ -83,7 +84,7 @@ pub fn sort_str(arr: &Shared<Vec<Str>>) {
 // is held while a callback runs. A callback's throw unwinds the method.
 
 /// `arr.map(f)`: every result, in order.
-pub fn map<T: Clone, U>(
+pub fn map<T: Clone, U: Trace>(
     arr: &Shared<Vec<T>>,
     f: &dyn Fn(T) -> Result<U, Thrown>,
 ) -> Result<Shared<Vec<U>>, Thrown> {
@@ -98,7 +99,7 @@ pub fn map<T: Clone, U>(
 }
 
 /// `arr.filter(predicate)`: the elements the predicate accepts, in order.
-pub fn filter<T: Clone>(
+pub fn filter<T: Clone + Trace>(
     arr: &Shared<Vec<T>>,
     predicate: &dyn Fn(T) -> Result<bool, Thrown>,
 ) -> Result<Shared<Vec<T>>, Thrown> {
@@ -115,7 +116,7 @@ pub fn filter<T: Clone>(
 }
 
 /// `arr.filter_map(f)`: the non-`null` results, in order.
-pub fn filter_map<T: Clone, U>(
+pub fn filter_map<T: Clone, U: Trace>(
     arr: &Shared<Vec<T>>,
     f: &dyn Fn(T) -> Result<Option<U>, Thrown>,
 ) -> Result<Shared<Vec<U>>, Thrown> {
@@ -260,7 +261,7 @@ pub fn reduce<T: Clone, A>(
 
 /// `arr.flat_map(f)`: the results' elements, concatenated. Each result is
 /// read once `f` has returned it, so a later change to it is not seen.
-pub fn flat_map<T: Clone, U: Clone>(
+pub fn flat_map<T: Clone, U: Clone + Trace>(
     arr: &Shared<Vec<T>>,
     f: &dyn Fn(T) -> Result<Shared<Vec<U>>, Thrown>,
 ) -> Result<Shared<Vec<U>>, Thrown> {
@@ -385,6 +386,14 @@ fn merge_sort<T: Clone>(
 pub struct Iter<T> {
     arr: Shared<Vec<T>>,
     idx: usize,
+}
+
+/// A cursor holds its array: a root while the loop runs.
+impl<T: Trace> Trace for Iter<T> {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn Visitor) {
+        self.arr.trace(visitor);
+    }
 }
 
 impl<T> Clone for Iter<T> {

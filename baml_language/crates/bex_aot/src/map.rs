@@ -27,6 +27,7 @@ use crate::{
     Int63, Panic, Str, Thrown,
     handle::{Shared, shared},
     int_from_usize,
+    mem::{HeapRef, Trace, Visitor},
     render::ToBaml,
 };
 
@@ -35,7 +36,7 @@ pub const STRING_MAP_REQUIRED: &str = "JSON requires maps with string keys";
 
 /// A key type the native map admits. Equality and hashing are the Rust
 /// ones, which agree with the VM's value equality for these types.
-pub trait MapKey: Hash + Eq + Clone + ToBaml {
+pub trait MapKey: Hash + Eq + Clone + ToBaml + Trace {
     /// Whether the type is JSON's object-key type, `string`. The VM decides
     /// by the map's declared key type, so an empty `map<int, V>` has no JSON
     /// form either.
@@ -102,6 +103,14 @@ impl<K: std::fmt::Debug, V: std::fmt::Debug> std::fmt::Debug for Map<K, V> {
     }
 }
 
+/// A map is one edge, its handle's.
+impl<K: Trace, V: Trace> Trace for Map<K, V> {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn Visitor) {
+        visitor.visit(&self.0 as &dyn HeapRef);
+    }
+}
+
 impl<K, V> Map<K, V> {
     /// The handle this map is, for identity comparison and borrowing.
     #[inline]
@@ -118,7 +127,7 @@ pub fn ptr_eq<K, V>(left: &Map<K, V>, right: &Map<K, V>) -> bool {
 
 /// Allocate a map from its entries (`{ k: v, .. }`), in order; a repeated
 /// key keeps its first position and takes the last value.
-pub fn new<K: MapKey, V>(entries: Vec<(K, V)>) -> Map<K, V> {
+pub fn new<K: MapKey, V: Trace>(entries: Vec<(K, V)>) -> Map<K, V> {
     let mut table = IndexMap::with_capacity(entries.len());
     for (key, value) in entries {
         table.insert(key, value);
@@ -170,7 +179,7 @@ pub fn keys<K: MapKey, V>(map: &Map<K, V>) -> Shared<Vec<K>> {
 }
 
 /// `m.values()`: a fresh array of the values in insertion order.
-pub fn values<K, V: Clone>(map: &Map<K, V>) -> Shared<Vec<V>> {
+pub fn values<K, V: Clone + Trace>(map: &Map<K, V>) -> Shared<Vec<V>> {
     shared(map.0.borrow().values().cloned().collect())
 }
 
@@ -256,7 +265,7 @@ impl<K: MapKey, V: crate::eq::BamlEq + Clone> crate::eq::BamlEq for Map<K, V> {
 
 /// A JSON object keyed by `string`: a map keyed by `int` or `bool` has no
 /// JSON form, which the VM reports at the map's path.
-impl<K: MapKey, V: crate::json::FromJson> crate::json::FromJson for Map<K, V> {
+impl<K: MapKey, V: crate::json::FromJson + Trace> crate::json::FromJson for Map<K, V> {
     fn from_json(json: &crate::json::Json) -> Result<Self, crate::json::DecodeError> {
         if !K::JSON_KEYS {
             return Err(crate::json::DecodeError {

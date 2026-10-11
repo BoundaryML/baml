@@ -177,6 +177,7 @@ mod tests {
         n: Int63,
         next: Option<Shared<Node>>,
     }
+    crate::mem::trace_fields!(Node, n, next);
 
     impl EqHandle for Node {
         fn fields_eq(a: &Shared<Self>, b: &Shared<Self>, cx: &mut EqCx) -> Result<bool, Thrown> {

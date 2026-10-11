@@ -94,13 +94,13 @@ callbacks.
 | `null`, `void` | `()` | |
 | `T \| null` | `Option<T>` | `null` is `None`, a `T` stored into it is `Some(v)`, `x == null` is `x.is_none()` |
 | `A \| B \| ..` | `Union_A_or_B` | a closed union (every member a known class, enum or primitive, or an array or map of those): a generated `pub enum Union_int_or_float { int(Int63), float(f64) }` with one variant per member in the order the type carries, `Copy` when every member is; `A \| B \| null` is `Option<Union_A_or_B>`; a member stored into it is its variant, `x is int` a `matches!`, see [Unions](#unions-and-narrowing) |
-| `T[]` | `Shared<Vec<T>>` | `Shared<T> = Rc<RefCell<T>>`: reference semantics; `[a, b]` is `array::new::<T>(Vec::from([..]))`, `xs[i]` `array::get(&xs, i)?`, `xs[i] = v` `array::set(&xs, i, v)?`, `.length()` `array::len(&xs)` |
+| `T[]` | `Shared<Vec<T>>` | `Shared<T>`, an `Rc<RefCell<T>>` behind `bex_aot::handle`'s seam: reference semantics; `[a, b]` is `array::new::<T>(Vec::from([..]))`, `xs[i]` `array::get(&xs, i)?`, `xs[i] = v` `array::set(&xs, i, v)?`, `.length()` `array::len(&xs)` |
 | class `C` | `Shared<user_C>` | generated `pub struct user_C { fields in declaration order }`; `C { .. }` is `shared(user_C { .., unspecified: None })`, `c.f` `c.borrow().f.clone()`, `c.f = v` `c.borrow_mut().f = v` |
 | class `Box<int>` | `Shared<user_Box__int>` | one struct per instantiation, its fields' types realized at the arguments; `Box<int> { .. }` names its instance; a union among the arguments is put in one canonical member order, see [Generics](#generics) |
 | interface `I` | `user_I` | a generated `pub enum user_I { user_A(Shared<user_A>), int(Int63), .. }` with one variant per implementor in the program (every `implements` block for `I`), in the order the blocks are found; an implementor stored into it is its variant, `x is A` a `matches!`, `x.m()` a `match`, see [Interfaces](#interfaces) |
 | `map<K, V>` | `Map<K, V>` | `bex_aot::map::Map`: a `Shared` handle over an insertion-ordered table; `K` is `int`, `bool` or `string`; `{ k: v }` is `map::new::<K, V>(Vec::from([..]))`, `m[k]` `map::index(&m, &k)?` (`MapKeyNotFound` when absent), `m[k] = v` `map::set(&m, k, v)`, `.length()` `map::len(&m)` |
 | enum `E` | `user_E` | generated fieldless `pub enum user_E { variants in declaration order }`, `Copy`; `E.V` is `user_E::V`, `==` compares variants, `match` switches on `int::lit(e as i64)` (the VM's discriminant), `to_string` and JSON use the variant's BAML name |
-| `(A, B) -> R throws E` | `Rc<dyn Fn(A, B) -> Result<R, Thrown>>` | a counted pointer to a closure, shared by reference; the `throws` clause has no native form; `f(a, b)` is `(f)(a, b)?`; a function type with an optional parameter, a class field of function type, a union member of function type, `==`, `to_string` and JSON of a function value have no native form, see [Function values](#function-values-and-closures) |
+| `(A, B) -> R throws E` | `func::Func<(A, B), R>` | a handle to the closure's environment, shared by reference; the `throws` clause has no native form; `f(a, b)` is `(f).call((a, b))?`; a function type with an optional parameter, a class field of function type, a union member of function type, `==`, `to_string` and JSON of a function value have no native form, see [Function values](#function-values-and-closures) |
 | a captured local | `cell::Cell<T>` | `bex_aot::cell::Cell<T>`, a counted pointer to the value, held by the local's slot and cloned into every closure capturing it; `fresh_cell` is `cell::fresh()` / `cell::carry(&c)`, reads `cell::get(&c)?`, writes `cell::set(&c, v)` |
 | for-in iterator | `bex_aot::array::Iter<T>` | refined from `virtual_call iter` on a `T[]` |
 | result of `next` | `Option<T>` | refined; `is_type(x, Done)` is `x.is_none()`, the element copy `x.clone().expect(..)` |
@@ -119,6 +119,10 @@ unqualified class name. Every class and enum also implements
 the fully qualified name, `user.Inner {n: 1}`), and every class
 `bex_aot::ErrorClass` (its link name and readable fields), so any class can
 be thrown and caught by name; a class that is never thrown pays nothing.
+Every class, enum, union, interface and closure environment implements
+`bex_aot::mem::Trace` (each field or the payload held, which visits the
+handles it owns without following them), the view a memory manager has of
+the object graph; under reference counting nothing calls it.
 
 ### Builtins
 
@@ -246,21 +250,27 @@ on anything but an array, `baml.ToJson.to_json`, `reflect.AnyClass`).
 
 ### Function values and closures
 
-A function type `(A, B) -> R throws E` is `Rc<dyn Fn(A, B) -> Result<R,
-Thrown>>` ([`NativeTy::Fn`]): a counted pointer to a closure, cloned where
-a handle would be, passed to a callee as a value. A call through one is
-`(f)(a, b)?` ([`CallKind::Indirect`]); every argument must be given, as a
-function type with an optional parameter has no native type. A declared
-function used as a value (`let g = f`, `xs.map(f)`) is its function item
-behind the pointer (`Rc::new(user_f)`) and is admitted like a callee; one
+A function type `(A, B) -> R throws E` is `func::Func<(A, B), R>`
+([`NativeTy::Fn`]): a counted handle to a heap object implementing
+`bex_aot::func::Callable<(A, B), R>` and `bex_aot::mem::Trace`, cloned
+where a handle would be, passed to a callee as a value. A call through one
+is `(f).call((a, b))?` ([`CallKind::Indirect`]); every argument must be
+given, as a function type with an optional parameter has no native type. A
+declared function used as a value (`let g = f`, `xs.map(f)`) is its function
+item behind the handle (`func::item(user_f)`), capturing nothing, and is
+admitted like a callee; one
 with a defaulted parameter is not, since the default is filled at direct
 call sites only.
 
 A lambda is a function of its own ([`FnId::Lambda`]), analyzed from the
 `make_closure` that creates it once the enclosing function's locals are
 typed, and emitted as `pub fn user_f__lambda0(..)` (nested:
-`user_f__lambda0__lambda1`) beside its creator. The closure value is a
-Rust closure calling it: `Rc::new(move |a| user_f__lambda0(&cell0, a))`.
+`user_f__lambda0__lambda1`) beside its creator, with its environment: a
+struct `user_f__lambda0__env` holding one captured cell per field (`_c0`,
+..), whose `Trace` visits the cells and whose `Callable::call` lends them to
+the lambda's function. The closure value is that environment behind the
+handle: `func::alloc(user_f__lambda0__env { _c0: cell::Cell::clone(&_2) })`,
+so a memory manager sees every edge a closure holds.
 Lambdas are never listed in `NativeModule::functions`; they have no
 declaration.
 
@@ -285,7 +295,8 @@ store has reached is the `Unreachable` panic (the checker should have
 rejected the program; the VM would read `null`).
 
 The `baml.Array` methods that call back into a function value map to
-`bex_aot::array` functions that take the callback as a `&dyn Fn`. Every one
+`bex_aot::array` functions that take the callback as a `&dyn Fn` (a
+function value is passed as `&|a| (f).call((a,))`). Every one
 walks a snapshot of the array taken before the first callback, as the VM's
 continuations do, so a callback that pushes to the array is not observed by
 the walk and no `RefCell` borrow is held while a callback runs. `sort_by`

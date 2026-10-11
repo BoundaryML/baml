@@ -1193,7 +1193,10 @@ async fn lambdas_match_vm() {
     check!(o, strings("hi") => user_strings(text("hi")));
     // A function value is called like any other: `returned` is observed
     // through `chosen`; its own result has no VM-side observation.
-    assert_eq!((user_returned(int(1)).unwrap())(int(9)).unwrap(), int(81));
+    assert_eq!(
+        user_returned(int(1)).unwrap().call((int(9),)).unwrap(),
+        int(81)
+    );
     // Runaway recursion through a function value throws `StackOverflow`
     // instead of overflowing the native stack.
     assert_eq!(
@@ -1232,12 +1235,12 @@ async fn captures_match_vm() {
     // A closure escaping its creator keeps the cell alive and sees its own
     // copy of the binding.
     let add = user_make_adder(int(5)).unwrap();
-    assert_eq!(add(int(1)).unwrap(), int(6));
+    assert_eq!(add.call((int(1),)).unwrap(), int(6));
     let first = user_make_counter().unwrap();
     let second = user_make_counter().unwrap();
-    assert_eq!(first().unwrap(), int(1));
-    assert_eq!(first().unwrap(), int(2));
-    assert_eq!(second().unwrap(), int(1));
+    assert_eq!(first.call(()).unwrap(), int(1));
+    assert_eq!(first.call(()).unwrap(), int(2));
+    assert_eq!(second.call(()).unwrap(), int(1));
     // The class handle a closure captures is the caller's object.
     let b = bex_aot::shared(user_Box { n: int(1) });
     assert_eq!(user_mutate_box(b.clone()).unwrap(), int(5));

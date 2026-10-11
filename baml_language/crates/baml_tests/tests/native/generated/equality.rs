@@ -22,10 +22,9 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int, json,
+    map, string,
 };
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
@@ -59,6 +58,10 @@ impl bex_aot::Readable for user_Loose {
     fn readable(&self) -> String {
         Self::NAMES[*self as usize].to_string()
     }
+}
+impl bex_aot::mem::Trace for user_Loose {
+    #[inline(always)]
+    fn trace(&self, _visitor: &mut dyn bex_aot::mem::Visitor) {}
 }
 impl bex_aot::BamlEq for user_Loose {
     fn baml_eq(
@@ -101,6 +104,10 @@ impl bex_aot::Readable for user_Suit {
         Self::NAMES[*self as usize].to_string()
     }
 }
+impl bex_aot::mem::Trace for user_Suit {
+    #[inline(always)]
+    fn trace(&self, _visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
 impl bex_aot::BamlEq for user_Suit {
     fn baml_eq(
         &self,
@@ -124,6 +131,12 @@ impl bex_aot::json::FromJson for user_Cents {
         Ok(Self {
             amount: bex_aot::json::field(object, "amount", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Cents {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.amount, visitor);
     }
 }
 impl ToBaml for user_Cents {
@@ -178,6 +191,13 @@ impl bex_aot::json::FromJson for user_Point {
             x: bex_aot::json::field(object, "x", false)?,
             y: bex_aot::json::field(object, "y", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Point {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.x, visitor);
+        bex_aot::mem::Trace::trace(&self.y, visitor);
     }
 }
 impl ToBaml for user_Point {
@@ -254,6 +274,15 @@ impl bex_aot::json::FromJson for user_Line {
             tags: bex_aot::json::field(object, "tags", false)?,
             meta: bex_aot::json::field(object, "meta", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Line {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.a, visitor);
+        bex_aot::mem::Trace::trace(&self.b, visitor);
+        bex_aot::mem::Trace::trace(&self.tags, visitor);
+        bex_aot::mem::Trace::trace(&self.meta, visitor);
     }
 }
 impl ToBaml for user_Line {
@@ -352,6 +381,13 @@ impl bex_aot::json::FromJson for user_Node {
         })
     }
 }
+impl bex_aot::mem::Trace for user_Node {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.n, visitor);
+        bex_aot::mem::Trace::trace(&self.next, visitor);
+    }
+}
 impl ToBaml for user_Node {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(
@@ -422,6 +458,13 @@ impl bex_aot::json::FromJson for user_Wallet {
             coins: bex_aot::json::field(object, "coins", false)?,
             label: bex_aot::json::field(object, "label", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Wallet {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.coins, visitor);
+        bex_aot::mem::Trace::trace(&self.label, visitor);
     }
 }
 impl ToBaml for user_Wallet {
@@ -506,6 +549,15 @@ impl bex_aot::Readable for Union_int_or_user_Point {
         match self {
             Self::int(value) => bex_aot::Readable::readable(value),
             Self::user_Point(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::mem::Trace for Union_int_or_user_Point {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::int(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Point(value) => bex_aot::mem::Trace::trace(value, visitor),
         }
     }
 }

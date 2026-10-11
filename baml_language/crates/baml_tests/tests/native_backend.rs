@@ -2346,22 +2346,27 @@ function f(n: int) -> int {
         "f",
     );
     let source = &module.rust_source;
-    // The lambda is a function named after its creator, called through a
-    // closure that owns nothing.
+    // The lambda is a function named after its creator, called through an
+    // environment that holds nothing.
     assert_contains(
         source,
         "pub fn user_f__lambda0(mut _1: Int63) -> Result<Int63, Thrown>",
     );
     assert_contains(
         source,
-        "let __closure: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>> = Rc::new(",
+        "let __closure: func::Func<(Int63,), Int63> = func::alloc(user_f__lambda0__env {});",
+    );
+    assert_contains(source, "pub struct user_f__lambda0__env {}");
+    assert_contains(
+        source,
+        "impl bex_aot::func::Callable<(Int63,), Int63> for user_f__lambda0__env {",
     );
     assert_contains(source, "user_f__lambda0(__arg0)");
     // A declared function as a value is its function item.
-    assert_contains(source, "= Rc::new(user_plain)");
+    assert_contains(source, "= func::item(user_plain)");
     // Calls through either are indirect.
-    assert_contains(source, "_4 = (_2)(_1)?;");
-    assert_contains(source, "_6 = (_3)(_1)?;");
+    assert_contains(source, "_4 = (_2).call((_1,))?;");
+    assert_contains(source, "_6 = (_3).call((_1,))?;");
     // Every function, the lambda included, guards its depth.
     assert_eq!(
         source.matches("bex_aot::depth::Guard::enter()?").count(),
@@ -2405,15 +2410,17 @@ function f(n: int) -> int {
     assert_contains(source, "_2 = cell::fresh();");
     assert_contains(source, "cell::set(&_2, value);");
     assert_contains(source, "_0 = cell::get(&_2)?;");
-    // The lambdas borrow their cells; the closure values own clones.
+    // The lambdas borrow their cells; the closure values' environments own
+    // clones, and trace them.
     assert_contains(source, "pub fn user_f__lambda0(");
     assert_contains(source, "_c0: &cell::Cell<Int63>,");
     assert_contains(source, "_c1: &cell::Cell<Int63>,");
     assert_contains(source, "_1 = cell::get(_c0)?;");
     assert_contains(source, "cell::set(_c0, value);");
-    assert_contains(source, "let __cell0 = cell::Cell::clone(&_2);");
-    assert_contains(source, "let __cell1 = cell::Cell::clone(&_1);");
-    assert_contains(source, "user_f__lambda0(&__cell0, &__cell1)");
+    assert_contains(source, "_c0: cell::Cell::clone(&_2),");
+    assert_contains(source, "_c1: cell::Cell::clone(&_1),");
+    assert_contains(source, "user_f__lambda0(&self._c0, &self._c1)");
+    assert_contains(source, "bex_aot::mem::Trace::trace(&self._c1, visitor);");
     // The loop body's binding gets a cell per iteration.
     assert_eq!(source.matches("cell::fresh()").count(), 2, "{source}");
 }
@@ -2454,8 +2461,11 @@ function f(xs: int[], k: int) -> string {
         "f",
     );
     let source = &module.rust_source;
-    // A callback of the type the runtime calls is borrowed as it is.
-    assert_contains(source, "let __callback = &*_4;");
+    // A callback of the type the runtime calls is called as it is.
+    assert_contains(
+        source,
+        "let __callback = &|__arg0: Int63| (_4).call((__arg0,));",
+    );
     assert_contains(source, "array::map(&_1, __callback)");
     assert_contains(source, "let __callback = &user_square;");
     // A callback that never returns `null` is adapted for `filter_map`; one
@@ -2671,10 +2681,7 @@ function mixed(n: int) -> int {
     let source = &module.rust_source;
     assert_eq!(source.matches("pub fn user_identity__int(").count(), 1);
     assert_contains(source, "_0 = user_identity__int(_1)?;");
-    assert_contains(
-        source,
-        "Rc::new(\n            user_identity__int,\n        )",
-    );
+    assert_contains(source, "= func::item(user_identity__int);");
     assert_contains(
         source,
         "pub fn user_pair__int__string(\n    mut _1: Int63,\n    mut _2: Str,\n)",

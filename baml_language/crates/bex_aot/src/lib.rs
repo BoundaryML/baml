@@ -7,8 +7,10 @@
 //! handles with reference semantics, `map<K, V>` is a [`Map`] handle over an
 //! insertion-ordered table, `T | null` is `Option<T>`, and every
 //! function returns `Result<T, Thrown>` so a `throw` or a panic unwinds as an
-//! error value. A function value is an `Rc<dyn Fn(..) -> Result<R, Thrown>>`
-//! and a local a closure captures lives in a [`cell::Cell`]. The language rules both backends must agree on come from
+//! error value. A function value is a [`func::Func`] handle to its closure's
+//! environment and a local a closure captures lives in a [`cell::Cell`].
+//! Every heap object implements [`mem::Trace`], so a memory manager can see
+//! the edges between them. The language rules both backends must agree on come from
 //! [`bex_lang`]; this crate adds only what native code
 //! needs and the VM never does: the handle, rendering, JSON through serde,
 //! the thrown-value type and the recursion guard. The binary links no VM
@@ -27,9 +29,11 @@ pub mod cell;
 pub mod depth;
 pub mod eq;
 pub mod errors;
+pub mod func;
 pub mod handle;
 pub mod json;
 pub mod map;
+pub mod mem;
 pub mod readable;
 pub mod render;
 pub mod string;

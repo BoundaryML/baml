@@ -294,6 +294,7 @@ mod tests {
     struct Counter {
         calls: Shared<Vec<Int63>>,
     }
+    crate::mem::trace_fields!(Counter, calls);
 
     impl ToBaml for Counter {
         fn render(&self, out: &mut String, _nested: bool) {
@@ -344,6 +345,7 @@ mod tests {
         y: f64,
         label: Str,
     }
+    crate::mem::trace_fields!(Point, x, y, label);
 
     impl Overridable for Point {}
 
@@ -358,6 +360,7 @@ mod tests {
     }
 
     struct Empty;
+    crate::mem::trace_fields!(Empty);
 
     impl Overridable for Empty {}
 
@@ -372,6 +375,7 @@ mod tests {
         tag: Option<Str>,
         next: Option<Shared<Node>>,
     }
+    crate::mem::trace_fields!(Node, children, tag, next);
 
     impl Overridable for Node {}
 

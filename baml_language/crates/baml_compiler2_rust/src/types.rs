@@ -7,7 +7,7 @@
 //! `Shared<..>` handles with reference semantics, `T | null` is
 //! `Option<T>`, a closed union of two or more other types is a generated
 //! Rust enum with one variant per member ([`NativeTy::Union`]), and a
-//! function value is a counted pointer to a Rust closure ([`NativeTy::Fn`]).
+//! function value is a handle to a closure environment ([`NativeTy::Fn`]).
 
 use std::fmt;
 
@@ -54,9 +54,10 @@ pub enum NativeTy<'db> {
     /// `unknown`, interfaces and generic classes make a union open, which
     /// has no native type.
     Union(Vec<NativeTy<'db>>),
-    /// A BAML function type `(A, B) -> R throws E`: `Rc<dyn Fn(A, B) ->
-    /// Result<R, Thrown>>`, a counted pointer to a closure, shared by
-    /// reference like a handle. The `throws` clause has no native form:
+    /// A BAML function type `(A, B) -> R throws E`: `func::Func<(A, B),
+    /// R>`, a handle to the closure's environment (or a declared function),
+    /// called with the arguments as a tuple and shared by reference like any
+    /// handle. The `throws` clause has no native form:
     /// every native function returns a `Result`. Parameter names and modes
     /// are not part of the type; a function type with an optional parameter
     /// has no native type.
@@ -522,7 +523,7 @@ impl<'db> NativeTy<'db> {
             Self::Fn(params, ret) => {
                 let params = params.iter().map(|param| param.to_tokens(class_name));
                 let ret = ret.to_tokens(class_name);
-                quote! { Rc<dyn Fn(#(#params),*) -> Result<#ret, Thrown>> }
+                quote! { func::Func<(#(#params,)*), #ret> }
             }
             Self::Interface(instance) => {
                 let name = class_name(TypeDecl::Interface(instance.clone()));

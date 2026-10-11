@@ -22,10 +22,9 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int, json,
+    map, string,
 };
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
@@ -65,6 +64,10 @@ impl bex_aot::Readable for baml_ops_Ordering {
         Self::NAMES[*self as usize].to_string()
     }
 }
+impl bex_aot::mem::Trace for baml_ops_Ordering {
+    #[inline(always)]
+    fn trace(&self, _visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
 impl bex_aot::BamlEq for baml_ops_Ordering {
     fn baml_eq(
         &self,
@@ -90,6 +93,13 @@ impl bex_aot::json::FromJson for user_Item {
             name: bex_aot::json::field(object, "name", false)?,
             weight: bex_aot::json::field(object, "weight", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Item {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.name, visitor);
+        bex_aot::mem::Trace::trace(&self.weight, visitor);
     }
 }
 impl ToBaml for user_Item {
@@ -149,6 +159,18 @@ impl bex_aot::Readable for user_Item {
         )
     }
 }
+/// The environment of BAML lambda `.<lambda(doubled, 0)>`.
+pub struct user_doubled__lambda0__env {}
+impl bex_aot::mem::Trace for user_doubled__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), Int63> for user_doubled__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Int63, Thrown> {
+        user_doubled__lambda0(__arg0)
+    }
+}
 /// BAML lambda `.<lambda(doubled, 0)>`.
 pub fn user_doubled__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
@@ -160,19 +182,29 @@ pub fn user_doubled__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_doubled(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
-    let mut _2: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
+    let mut _2: func::Func<(Int63,), Int63>;
     _2 = {
-        let __closure: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_doubled__lambda0(__arg0) });
+        let __closure: func::Func<(Int63,), Int63> = func::alloc(user_doubled__lambda0__env {});
         __closure
     };
     bex_aot::depth::probe(0)?;
     _0 = {
-        let __callback = &*_2;
+        let __callback = &|__arg0: Int63| (_2).call((__arg0,));
         array::map(&_1, __callback)?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(labels, 0)>`.
+pub struct user_labels__lambda0__env {}
+impl bex_aot::mem::Trace for user_labels__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), Str> for user_labels__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Str, Thrown> {
+        user_labels__lambda0(__arg0)
+    }
 }
 /// BAML lambda `.<lambda(labels, 0)>`.
 pub fn user_labels__lambda0(mut _1: Int63) -> Result<Str, Thrown> {
@@ -190,19 +222,29 @@ pub fn user_labels__lambda0(mut _1: Int63) -> Result<Str, Thrown> {
 pub fn user_labels(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Str>>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Str>>;
-    let mut _2: Rc<dyn Fn(Int63) -> Result<Str, Thrown>>;
+    let mut _2: func::Func<(Int63,), Str>;
     _2 = {
-        let __closure: Rc<dyn Fn(Int63) -> Result<Str, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_labels__lambda0(__arg0) });
+        let __closure: func::Func<(Int63,), Str> = func::alloc(user_labels__lambda0__env {});
         __closure
     };
     bex_aot::depth::probe(0)?;
     _0 = {
-        let __callback = &*_2;
+        let __callback = &|__arg0: Int63| (_2).call((__arg0,));
         array::map(&_1, __callback)?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(evens, 0)>`.
+pub struct user_evens__lambda0__env {}
+impl bex_aot::mem::Trace for user_evens__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), bool> for user_evens__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<bool, Thrown> {
+        user_evens__lambda0(__arg0)
+    }
 }
 /// BAML lambda `.<lambda(evens, 0)>`.
 pub fn user_evens__lambda0(mut _1: Int63) -> Result<bool, Thrown> {
@@ -217,19 +259,29 @@ pub fn user_evens__lambda0(mut _1: Int63) -> Result<bool, Thrown> {
 pub fn user_evens(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
-    let mut _2: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
+    let mut _2: func::Func<(Int63,), bool>;
     _2 = {
-        let __closure: Rc<dyn Fn(Int63) -> Result<bool, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_evens__lambda0(__arg0) });
+        let __closure: func::Func<(Int63,), bool> = func::alloc(user_evens__lambda0__env {});
         __closure
     };
     bex_aot::depth::probe(0)?;
     _0 = {
-        let __callback = &*_2;
+        let __callback = &|__arg0: Int63| (_2).call((__arg0,));
         array::filter(&_1, __callback)?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(halves, 0)>`.
+pub struct user_halves__lambda0__env {}
+impl bex_aot::mem::Trace for user_halves__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), Option<Int63>> for user_halves__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Option<Int63>, Thrown> {
+        user_halves__lambda0(__arg0)
+    }
 }
 /// BAML lambda `.<lambda(halves, 0)>`.
 pub fn user_halves__lambda0(mut _1: Int63) -> Result<Option<Int63>, Thrown> {
@@ -254,19 +306,29 @@ pub fn user_halves__lambda0(mut _1: Int63) -> Result<Option<Int63>, Thrown> {
 pub fn user_halves(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
-    let mut _2: Rc<dyn Fn(Int63) -> Result<Option<Int63>, Thrown>>;
+    let mut _2: func::Func<(Int63,), Option<Int63>>;
     _2 = {
-        let __closure: Rc<dyn Fn(Int63) -> Result<Option<Int63>, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_halves__lambda0(__arg0) });
+        let __closure: func::Func<(Int63,), Option<Int63>> = func::alloc(user_halves__lambda0__env {});
         __closure
     };
     bex_aot::depth::probe(1)?;
     _0 = {
-        let __callback = &*_2;
+        let __callback = &|__arg0: Int63| (_2).call((__arg0,));
         array::filter_map(&_1, __callback)?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(total, 0)>`.
+pub struct user_total__lambda0__env {}
+impl bex_aot::mem::Trace for user_total__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63, Int63), Int63> for user_total__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0, __arg1): (Int63, Int63)) -> Result<Int63, Thrown> {
+        user_total__lambda0(__arg0, __arg1)
+    }
 }
 /// BAML lambda `.<lambda(total, 0)>`.
 pub fn user_total__lambda0(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
@@ -279,20 +341,29 @@ pub fn user_total__lambda0(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown
 pub fn user_total(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
-    let mut _2: Rc<dyn Fn(Int63, Int63) -> Result<Int63, Thrown>>;
+    let mut _2: func::Func<(Int63, Int63), Int63>;
     _2 = {
-        let __closure: Rc<dyn Fn(Int63, Int63) -> Result<Int63, Thrown>> = Rc::new(move |
-            __arg0: Int63,
-            __arg1: Int63|
-        { user_total__lambda0(__arg0, __arg1) });
+        let __closure: func::Func<(Int63, Int63), Int63> = func::alloc(user_total__lambda0__env {});
         __closure
     };
     bex_aot::depth::probe(0)?;
     _0 = {
-        let __callback = &*_2;
+        let __callback = &|__arg0: Int63, __arg1: Int63| (_2).call((__arg0, __arg1));
         array::reduce(&_1, __callback, int::lit(0))?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(joined, 0)>`.
+pub struct user_joined__lambda0__env {}
+impl bex_aot::mem::Trace for user_joined__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Str, Int63), Str> for user_joined__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0, __arg1): (Str, Int63)) -> Result<Str, Thrown> {
+        user_joined__lambda0(__arg0, __arg1)
+    }
 }
 /// BAML lambda `.<lambda(joined, 0)>`.
 pub fn user_joined__lambda0(mut _1: Str, mut _2: Int63) -> Result<Str, Thrown> {
@@ -310,20 +381,33 @@ pub fn user_joined__lambda0(mut _1: Str, mut _2: Int63) -> Result<Str, Thrown> {
 pub fn user_joined(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
-    let mut _2: Rc<dyn Fn(Str, Int63) -> Result<Str, Thrown>>;
+    let mut _2: func::Func<(Str, Int63), Str>;
     _2 = {
-        let __closure: Rc<dyn Fn(Str, Int63) -> Result<Str, Thrown>> = Rc::new(move |
-            __arg0: Str,
-            __arg1: Int63|
-        { user_joined__lambda0(__arg0, __arg1) });
+        let __closure: func::Func<(Str, Int63), Str> = func::alloc(user_joined__lambda0__env {});
         __closure
     };
     bex_aot::depth::probe(0)?;
     _0 = {
-        let __callback = &*_2;
+        let __callback = &|__arg0: Str, __arg1: Int63| (_2).call((__arg0, __arg1));
         array::reduce(&_1, __callback, string::from_literal("["))?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(summed, 0)>`.
+pub struct user_summed__lambda0__env {
+    pub _c0: cell::Cell<Int63>,
+}
+impl bex_aot::mem::Trace for user_summed__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63,), ()> for user_summed__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<(), Thrown> {
+        user_summed__lambda0(&self._c0, __arg0)
+    }
 }
 /// BAML lambda `.<lambda(summed, 0)>`.
 pub fn user_summed__lambda0(
@@ -347,26 +431,41 @@ pub fn user_summed(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
     let mut _0: Int63;
     let mut _2: cell::Cell<Int63>;
     let mut _3: ();
-    let mut _4: Rc<dyn Fn(Int63) -> Result<(), Thrown>>;
+    let mut _4: func::Func<(Int63,), ()>;
     _2 = cell::fresh();
     {
         let value = int::lit(0);
         cell::set(&_2, value);
     }
     _4 = {
-        let __cell0 = cell::Cell::clone(&_2);
-        let __closure: Rc<dyn Fn(Int63) -> Result<(), Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_summed__lambda0(&__cell0, __arg0) });
+        let __closure: func::Func<(Int63,), ()> = func::alloc(user_summed__lambda0__env {
+            _c0: cell::Cell::clone(&_2),
+        });
         __closure
     };
     bex_aot::depth::probe(1)?;
     _3 = {
-        let __callback = &*_4;
+        let __callback = &|__arg0: Int63| (_4).call((__arg0,));
         array::for_each(&_1, __callback)?
     };
     _0 = cell::get(&_2)?;
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(any_big, 0)>`.
+pub struct user_any_big__lambda0__env {
+    pub _c0: cell::Cell<Int63>,
+}
+impl bex_aot::mem::Trace for user_any_big__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63,), bool> for user_any_big__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<bool, Thrown> {
+        user_any_big__lambda0(&self._c0, __arg0)
+    }
 }
 /// BAML lambda `.<lambda(any_big, 0)>`.
 pub fn user_any_big__lambda0(
@@ -385,20 +484,35 @@ pub fn user_any_big(mut _1: Shared<Vec<Int63>>, mut _2: Int63) -> Result<bool, T
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: bool;
-    let mut _3: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
+    let mut _3: func::Func<(Int63,), bool>;
     _3 = {
-        let __cell0 = cell::Cell::clone(&_2);
-        let __closure: Rc<dyn Fn(Int63) -> Result<bool, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_any_big__lambda0(&__cell0, __arg0) });
+        let __closure: func::Func<(Int63,), bool> = func::alloc(user_any_big__lambda0__env {
+            _c0: cell::Cell::clone(&_2),
+        });
         __closure
     };
     bex_aot::depth::probe(0)?;
     _0 = {
-        let __callback = &*_3;
+        let __callback = &|__arg0: Int63| (_3).call((__arg0,));
         array::some(&_1, __callback)?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(all_big, 0)>`.
+pub struct user_all_big__lambda0__env {
+    pub _c0: cell::Cell<Int63>,
+}
+impl bex_aot::mem::Trace for user_all_big__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63,), bool> for user_all_big__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<bool, Thrown> {
+        user_all_big__lambda0(&self._c0, __arg0)
+    }
 }
 /// BAML lambda `.<lambda(all_big, 0)>`.
 pub fn user_all_big__lambda0(
@@ -417,20 +531,35 @@ pub fn user_all_big(mut _1: Shared<Vec<Int63>>, mut _2: Int63) -> Result<bool, T
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: bool;
-    let mut _3: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
+    let mut _3: func::Func<(Int63,), bool>;
     _3 = {
-        let __cell0 = cell::Cell::clone(&_2);
-        let __closure: Rc<dyn Fn(Int63) -> Result<bool, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_all_big__lambda0(&__cell0, __arg0) });
+        let __closure: func::Func<(Int63,), bool> = func::alloc(user_all_big__lambda0__env {
+            _c0: cell::Cell::clone(&_2),
+        });
         __closure
     };
     bex_aot::depth::probe(0)?;
     _0 = {
-        let __callback = &*_3;
+        let __callback = &|__arg0: Int63| (_3).call((__arg0,));
         array::every(&_1, __callback)?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(first_big, 0)>`.
+pub struct user_first_big__lambda0__env {
+    pub _c0: cell::Cell<Int63>,
+}
+impl bex_aot::mem::Trace for user_first_big__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63,), bool> for user_first_big__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<bool, Thrown> {
+        user_first_big__lambda0(&self._c0, __arg0)
+    }
 }
 /// BAML lambda `.<lambda(first_big, 0)>`.
 pub fn user_first_big__lambda0(
@@ -452,20 +581,35 @@ pub fn user_first_big(
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: Option<Int63>;
-    let mut _3: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
+    let mut _3: func::Func<(Int63,), bool>;
     _3 = {
-        let __cell0 = cell::Cell::clone(&_2);
-        let __closure: Rc<dyn Fn(Int63) -> Result<bool, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_first_big__lambda0(&__cell0, __arg0) });
+        let __closure: func::Func<(Int63,), bool> = func::alloc(user_first_big__lambda0__env {
+            _c0: cell::Cell::clone(&_2),
+        });
         __closure
     };
     bex_aot::depth::probe(0)?;
     _0 = {
-        let __callback = &*_3;
+        let __callback = &|__arg0: Int63| (_3).call((__arg0,));
         array::find(&_1, __callback)?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(first_big_at, 0)>`.
+pub struct user_first_big_at__lambda0__env {
+    pub _c0: cell::Cell<Int63>,
+}
+impl bex_aot::mem::Trace for user_first_big_at__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63,), bool> for user_first_big_at__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<bool, Thrown> {
+        user_first_big_at__lambda0(&self._c0, __arg0)
+    }
 }
 /// BAML lambda `.<lambda(first_big_at, 0)>`.
 pub fn user_first_big_at__lambda0(
@@ -487,20 +631,35 @@ pub fn user_first_big_at(
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: Option<Int63>;
-    let mut _3: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
+    let mut _3: func::Func<(Int63,), bool>;
     _3 = {
-        let __cell0 = cell::Cell::clone(&_2);
-        let __closure: Rc<dyn Fn(Int63) -> Result<bool, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_first_big_at__lambda0(&__cell0, __arg0) });
+        let __closure: func::Func<(Int63,), bool> = func::alloc(user_first_big_at__lambda0__env {
+            _c0: cell::Cell::clone(&_2),
+        });
         __closure
     };
     bex_aot::depth::probe(0)?;
     _0 = {
-        let __callback = &*_3;
+        let __callback = &|__arg0: Int63| (_3).call((__arg0,));
         array::find_index(&_1, __callback)?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(last_big, 0)>`.
+pub struct user_last_big__lambda0__env {
+    pub _c0: cell::Cell<Int63>,
+}
+impl bex_aot::mem::Trace for user_last_big__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63,), bool> for user_last_big__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<bool, Thrown> {
+        user_last_big__lambda0(&self._c0, __arg0)
+    }
 }
 /// BAML lambda `.<lambda(last_big, 0)>`.
 pub fn user_last_big__lambda0(
@@ -522,20 +681,35 @@ pub fn user_last_big(
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: Option<Int63>;
-    let mut _3: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
+    let mut _3: func::Func<(Int63,), bool>;
     _3 = {
-        let __cell0 = cell::Cell::clone(&_2);
-        let __closure: Rc<dyn Fn(Int63) -> Result<bool, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_last_big__lambda0(&__cell0, __arg0) });
+        let __closure: func::Func<(Int63,), bool> = func::alloc(user_last_big__lambda0__env {
+            _c0: cell::Cell::clone(&_2),
+        });
         __closure
     };
     bex_aot::depth::probe(0)?;
     _0 = {
-        let __callback = &*_3;
+        let __callback = &|__arg0: Int63| (_3).call((__arg0,));
         array::find_last(&_1, __callback)?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(last_big_at, 0)>`.
+pub struct user_last_big_at__lambda0__env {
+    pub _c0: cell::Cell<Int63>,
+}
+impl bex_aot::mem::Trace for user_last_big_at__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63,), bool> for user_last_big_at__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<bool, Thrown> {
+        user_last_big_at__lambda0(&self._c0, __arg0)
+    }
 }
 /// BAML lambda `.<lambda(last_big_at, 0)>`.
 pub fn user_last_big_at__lambda0(
@@ -557,20 +731,31 @@ pub fn user_last_big_at(
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: Option<Int63>;
-    let mut _3: Rc<dyn Fn(Int63) -> Result<bool, Thrown>>;
+    let mut _3: func::Func<(Int63,), bool>;
     _3 = {
-        let __cell0 = cell::Cell::clone(&_2);
-        let __closure: Rc<dyn Fn(Int63) -> Result<bool, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_last_big_at__lambda0(&__cell0, __arg0) });
+        let __closure: func::Func<(Int63,), bool> = func::alloc(user_last_big_at__lambda0__env {
+            _c0: cell::Cell::clone(&_2),
+        });
         __closure
     };
     bex_aot::depth::probe(0)?;
     _0 = {
-        let __callback = &*_3;
+        let __callback = &|__arg0: Int63| (_3).call((__arg0,));
         array::find_last_index(&_1, __callback)?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(pairs, 0)>`.
+pub struct user_pairs__lambda0__env {}
+impl bex_aot::mem::Trace for user_pairs__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), Shared<Vec<Int63>>> for user_pairs__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Shared<Vec<Int63>>, Thrown> {
+        user_pairs__lambda0(__arg0)
+    }
 }
 /// BAML lambda `.<lambda(pairs, 0)>`.
 pub fn user_pairs__lambda0(mut _1: Int63) -> Result<Shared<Vec<Int63>>, Thrown> {
@@ -585,19 +770,33 @@ pub fn user_pairs__lambda0(mut _1: Int63) -> Result<Shared<Vec<Int63>>, Thrown> 
 pub fn user_pairs(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
-    let mut _2: Rc<dyn Fn(Int63) -> Result<Shared<Vec<Int63>>, Thrown>>;
+    let mut _2: func::Func<(Int63,), Shared<Vec<Int63>>>;
     _2 = {
-        let __closure: Rc<dyn Fn(Int63) -> Result<Shared<Vec<Int63>>, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_pairs__lambda0(__arg0) });
+        let __closure: func::Func<(Int63,), Shared<Vec<Int63>>> = func::alloc(user_pairs__lambda0__env {});
         __closure
     };
     bex_aot::depth::probe(0)?;
     _0 = {
-        let __callback = &*_2;
+        let __callback = &|__arg0: Int63| (_2).call((__arg0,));
         array::flat_map(&_1, __callback)?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(sorted_desc, 0)>`.
+pub struct user_sorted_desc__lambda0__env {}
+impl bex_aot::mem::Trace for user_sorted_desc__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63, Int63), baml_ops_Ordering>
+for user_sorted_desc__lambda0__env {
+    #[inline]
+    fn call(
+        &self,
+        (__arg0, __arg1): (Int63, Int63),
+    ) -> Result<baml_ops_Ordering, Thrown> {
+        user_sorted_desc__lambda0(__arg0, __arg1)
+    }
 }
 /// BAML lambda `.<lambda(sorted_desc, 0)>`.
 pub fn user_sorted_desc__lambda0(
@@ -620,17 +819,14 @@ pub fn user_sorted_desc(
 ) -> Result<Shared<Vec<Int63>>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
-    let mut _2: Rc<dyn Fn(Int63, Int63) -> Result<baml_ops_Ordering, Thrown>>;
+    let mut _2: func::Func<(Int63, Int63), baml_ops_Ordering>;
     _2 = {
-        let __closure: Rc<dyn Fn(Int63, Int63) -> Result<baml_ops_Ordering, Thrown>> = Rc::new(move |
-            __arg0: Int63,
-            __arg1: Int63|
-        { user_sorted_desc__lambda0(__arg0, __arg1) });
+        let __closure: func::Func<(Int63, Int63), baml_ops_Ordering> = func::alloc(user_sorted_desc__lambda0__env {});
         __closure
     };
     bex_aot::depth::probe(0)?;
     {
-        let __callback = &*_2;
+        let __callback = &|__arg0: Int63, __arg1: Int63| (_2).call((__arg0, __arg1));
         array::sort_by(
             &_1,
             &|left, right| {
@@ -641,6 +837,18 @@ pub fn user_sorted_desc(
     }
     _0 = _1.clone();
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(sorted_by_abs, 0)>`.
+pub struct user_sorted_by_abs__lambda0__env {}
+impl bex_aot::mem::Trace for user_sorted_by_abs__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), Int63> for user_sorted_by_abs__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Int63, Thrown> {
+        user_sorted_by_abs__lambda0(__arg0)
+    }
 }
 /// BAML lambda `.<lambda(sorted_by_abs, 0)>`.
 pub fn user_sorted_by_abs__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
@@ -665,20 +873,31 @@ pub fn user_sorted_by_abs(
 ) -> Result<Shared<Vec<Int63>>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
-    let mut _2: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
+    let mut _2: func::Func<(Int63,), Int63>;
     _2 = {
-        let __closure: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_sorted_by_abs__lambda0(__arg0) });
+        let __closure: func::Func<(Int63,), Int63> = func::alloc(user_sorted_by_abs__lambda0__env {});
         __closure
     };
     bex_aot::depth::probe(1)?;
     {
-        let __callback = &*_2;
+        let __callback = &|__arg0: Int63| (_2).call((__arg0,));
         array::sort_by_key(&_1, __callback, &|left, right| Ord::cmp(left, right))?;
     }
     _0 = _1.clone();
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(sorted_by_name, 0)>`.
+pub struct user_sorted_by_name__lambda0__env {}
+impl bex_aot::mem::Trace for user_sorted_by_name__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Shared<user_Item>,), Str>
+for user_sorted_by_name__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Shared<user_Item>,)) -> Result<Str, Thrown> {
+        user_sorted_by_name__lambda0(__arg0)
+    }
 }
 /// BAML lambda `.<lambda(sorted_by_name, 0)>`.
 pub fn user_sorted_by_name__lambda0(mut _1: Shared<user_Item>) -> Result<Str, Thrown> {
@@ -694,7 +913,7 @@ pub fn user_sorted_by_name(
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Shared<user_Item>>>;
-    let mut _3: Rc<dyn Fn(Shared<user_Item>) -> Result<Str, Thrown>>;
+    let mut _3: func::Func<(Shared<user_Item>,), Str>;
     let mut _7: Str;
     let mut _8: bex_aot::array::Iter<Shared<user_Item>>;
     let mut _9: Option<Shared<user_Item>>;
@@ -707,14 +926,12 @@ pub fn user_sorted_by_name(
     let mut _18: Str;
     let mut _19: Int63;
     _3 = {
-        let __closure: Rc<dyn Fn(Shared<user_Item>) -> Result<Str, Thrown>> = Rc::new(move |
-            __arg0: Shared<user_Item>|
-        { user_sorted_by_name__lambda0(__arg0) });
+        let __closure: func::Func<(Shared<user_Item>,), Str> = func::alloc(user_sorted_by_name__lambda0__env {});
         __closure
     };
     bex_aot::depth::probe(1)?;
     {
-        let __callback = &*_3;
+        let __callback = &|__arg0: Shared<user_Item>| (_3).call((__arg0,));
         array::sort_by_key(&_1, __callback, &|left, right| string::cmp(left, right))?;
     }
     _2 = _1.clone();
@@ -739,6 +956,26 @@ pub fn user_sorted_by_name(
             _7 = string::concat(&_13, &string::from_literal(" "));
             continue 'bb2;
         }
+    }
+}
+/// The environment of BAML lambda `.<lambda(comparisons, 0)>`.
+pub struct user_comparisons__lambda0__env {
+    pub _c0: cell::Cell<Int63>,
+}
+impl bex_aot::mem::Trace for user_comparisons__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63, Int63), baml_ops_Ordering>
+for user_comparisons__lambda0__env {
+    #[inline]
+    fn call(
+        &self,
+        (__arg0, __arg1): (Int63, Int63),
+    ) -> Result<baml_ops_Ordering, Thrown> {
+        user_comparisons__lambda0(&self._c0, __arg0, __arg1)
     }
 }
 /// BAML lambda `.<lambda(comparisons, 0)>`.
@@ -769,23 +1006,21 @@ pub fn user_comparisons(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
     let mut _0: Int63;
     let mut _2: cell::Cell<Int63>;
     let mut _3: Shared<Vec<Int63>>;
-    let mut _4: Rc<dyn Fn(Int63, Int63) -> Result<baml_ops_Ordering, Thrown>>;
+    let mut _4: func::Func<(Int63, Int63), baml_ops_Ordering>;
     _2 = cell::fresh();
     {
         let value = int::lit(0);
         cell::set(&_2, value);
     }
     _4 = {
-        let __cell0 = cell::Cell::clone(&_2);
-        let __closure: Rc<dyn Fn(Int63, Int63) -> Result<baml_ops_Ordering, Thrown>> = Rc::new(move |
-            __arg0: Int63,
-            __arg1: Int63|
-        { user_comparisons__lambda0(&__cell0, __arg0, __arg1) });
+        let __closure: func::Func<(Int63, Int63), baml_ops_Ordering> = func::alloc(user_comparisons__lambda0__env {
+            _c0: cell::Cell::clone(&_2),
+        });
         __closure
     };
     bex_aot::depth::probe(0)?;
     {
-        let __callback = &*_4;
+        let __callback = &|__arg0: Int63, __arg1: Int63| (_4).call((__arg0, __arg1));
         array::sort_by(
             &_1,
             &|left, right| {
@@ -797,6 +1032,26 @@ pub fn user_comparisons(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
     _3 = _1.clone();
     _0 = cell::get(&_2)?;
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(comparison_log, 0)>`.
+pub struct user_comparison_log__lambda0__env {
+    pub _c0: cell::Cell<Str>,
+}
+impl bex_aot::mem::Trace for user_comparison_log__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63, Int63), baml_ops_Ordering>
+for user_comparison_log__lambda0__env {
+    #[inline]
+    fn call(
+        &self,
+        (__arg0, __arg1): (Int63, Int63),
+    ) -> Result<baml_ops_Ordering, Thrown> {
+        user_comparison_log__lambda0(&self._c0, __arg0, __arg1)
+    }
 }
 /// BAML lambda `.<lambda(comparison_log, 0)>`.
 pub fn user_comparison_log__lambda0(
@@ -838,23 +1093,21 @@ pub fn user_comparison_log(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
     let mut _0: Str;
     let mut _2: cell::Cell<Str>;
     let mut _3: Shared<Vec<Int63>>;
-    let mut _4: Rc<dyn Fn(Int63, Int63) -> Result<baml_ops_Ordering, Thrown>>;
+    let mut _4: func::Func<(Int63, Int63), baml_ops_Ordering>;
     _2 = cell::fresh();
     {
         let value = string::from_literal("");
         cell::set(&_2, value);
     }
     _4 = {
-        let __cell0 = cell::Cell::clone(&_2);
-        let __closure: Rc<dyn Fn(Int63, Int63) -> Result<baml_ops_Ordering, Thrown>> = Rc::new(move |
-            __arg0: Int63,
-            __arg1: Int63|
-        { user_comparison_log__lambda0(&__cell0, __arg0, __arg1) });
+        let __closure: func::Func<(Int63, Int63), baml_ops_Ordering> = func::alloc(user_comparison_log__lambda0__env {
+            _c0: cell::Cell::clone(&_2),
+        });
         __closure
     };
     bex_aot::depth::probe(0)?;
     {
-        let __callback = &*_4;
+        let __callback = &|__arg0: Int63, __arg1: Int63| (_4).call((__arg0, __arg1));
         array::sort_by(
             &_1,
             &|left, right| {
@@ -866,6 +1119,26 @@ pub fn user_comparison_log(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
     _3 = _1.clone();
     _0 = cell::get(&_2)?;
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(throwing_comparator, 0)>`.
+pub struct user_throwing_comparator__lambda0__env {
+    pub _c0: cell::Cell<Int63>,
+}
+impl bex_aot::mem::Trace for user_throwing_comparator__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63, Int63), baml_ops_Ordering>
+for user_throwing_comparator__lambda0__env {
+    #[inline]
+    fn call(
+        &self,
+        (__arg0, __arg1): (Int63, Int63),
+    ) -> Result<baml_ops_Ordering, Thrown> {
+        user_throwing_comparator__lambda0(&self._c0, __arg0, __arg1)
+    }
 }
 /// BAML lambda `.<lambda(throwing_comparator, 0)>`.
 pub fn user_throwing_comparator__lambda0(
@@ -913,7 +1186,7 @@ pub fn user_throwing_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
     let mut _2: cell::Cell<Int63>;
     let mut _3: Shared<Vec<Int63>>;
     let mut _4: Thrown;
-    let mut _6: Rc<dyn Fn(Int63, Int63) -> Result<baml_ops_Ordering, Thrown>>;
+    let mut _6: func::Func<(Int63, Int63), baml_ops_Ordering>;
     let mut _9: bool;
     let mut _10: Str;
     let mut _11: Str;
@@ -927,11 +1200,8 @@ pub fn user_throwing_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
     'bb5: {
         'bb2: {
             _6 = {
-                let __cell0 = cell::Cell::clone(&_2);
-                let __closure: Rc<
-                    dyn Fn(Int63, Int63) -> Result<baml_ops_Ordering, Thrown>,
-                > = Rc::new(move |__arg0: Int63, __arg1: Int63| {
-                    user_throwing_comparator__lambda0(&__cell0, __arg0, __arg1)
+                let __closure: func::Func<(Int63, Int63), baml_ops_Ordering> = func::alloc(user_throwing_comparator__lambda0__env {
+                    _c0: cell::Cell::clone(&_2),
                 });
                 __closure
             };
@@ -943,7 +1213,9 @@ pub fn user_throwing_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
                 }
             };
             {
-                let __callback = &*_6;
+                let __callback = &|__arg0: Int63, __arg1: Int63| {
+                    (_6).call((__arg0, __arg1))
+                };
                 match array::sort_by(
                     &_1,
                     &|left, right| {
@@ -978,6 +1250,26 @@ pub fn user_throwing_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
     _0 = string::concat(&_10, &_13);
     Ok(_0)
 }
+/// The environment of BAML lambda `.<lambda(mutating_comparator, 0)>`.
+pub struct user_mutating_comparator__lambda0__env {
+    pub _c0: cell::Cell<Shared<Vec<Int63>>>,
+}
+impl bex_aot::mem::Trace for user_mutating_comparator__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63, Int63), baml_ops_Ordering>
+for user_mutating_comparator__lambda0__env {
+    #[inline]
+    fn call(
+        &self,
+        (__arg0, __arg1): (Int63, Int63),
+    ) -> Result<baml_ops_Ordering, Thrown> {
+        user_mutating_comparator__lambda0(&self._c0, __arg0, __arg1)
+    }
+}
 /// BAML lambda `.<lambda(mutating_comparator, 0)>`.
 pub fn user_mutating_comparator__lambda0(
     _c0: &cell::Cell<Shared<Vec<Int63>>>,
@@ -1004,19 +1296,17 @@ pub fn user_mutating_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
     let mut _1: cell::Cell<Shared<Vec<Int63>>> = cell::with(_1);
     let mut _0: Str;
     let mut _2: Shared<Vec<Int63>>;
-    let mut _3: Rc<dyn Fn(Int63, Int63) -> Result<baml_ops_Ordering, Thrown>>;
+    let mut _3: func::Func<(Int63, Int63), baml_ops_Ordering>;
     let mut _6: Shared<Vec<Int63>>;
     _3 = {
-        let __cell0 = cell::Cell::clone(&_1);
-        let __closure: Rc<dyn Fn(Int63, Int63) -> Result<baml_ops_Ordering, Thrown>> = Rc::new(move |
-            __arg0: Int63,
-            __arg1: Int63|
-        { user_mutating_comparator__lambda0(&__cell0, __arg0, __arg1) });
+        let __closure: func::Func<(Int63, Int63), baml_ops_Ordering> = func::alloc(user_mutating_comparator__lambda0__env {
+            _c0: cell::Cell::clone(&_1),
+        });
         __closure
     };
     bex_aot::depth::probe(0)?;
     {
-        let __callback = &*_3;
+        let __callback = &|__arg0: Int63, __arg1: Int63| (_3).call((__arg0, __arg1));
         array::sort_by(
             &cell::get(&_1)?,
             &|left, right| {
@@ -1030,6 +1320,28 @@ pub fn user_mutating_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
     bex_aot::depth::probe(0)?;
     _0 = bex_aot::render::to_string(&_6)?;
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(reading_comparator, 0)>`.
+pub struct user_reading_comparator__lambda0__env {
+    pub _c0: cell::Cell<Str>,
+    pub _c1: cell::Cell<Shared<Vec<Int63>>>,
+}
+impl bex_aot::mem::Trace for user_reading_comparator__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+        bex_aot::mem::Trace::trace(&self._c1, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63, Int63), baml_ops_Ordering>
+for user_reading_comparator__lambda0__env {
+    #[inline]
+    fn call(
+        &self,
+        (__arg0, __arg1): (Int63, Int63),
+    ) -> Result<baml_ops_Ordering, Thrown> {
+        user_reading_comparator__lambda0(&self._c0, &self._c1, __arg0, __arg1)
+    }
 }
 /// BAML lambda `.<lambda(reading_comparator, 0)>`.
 pub fn user_reading_comparator__lambda0(
@@ -1070,7 +1382,7 @@ pub fn user_reading_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown
     let mut _0: Str;
     let mut _2: cell::Cell<Str>;
     let mut _3: Shared<Vec<Int63>>;
-    let mut _4: Rc<dyn Fn(Int63, Int63) -> Result<baml_ops_Ordering, Thrown>>;
+    let mut _4: func::Func<(Int63, Int63), baml_ops_Ordering>;
     let mut _7: Str;
     let mut _8: Str;
     let mut _9: Shared<Vec<Int63>>;
@@ -1081,17 +1393,15 @@ pub fn user_reading_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown
         cell::set(&_2, value);
     }
     _4 = {
-        let __cell0 = cell::Cell::clone(&_2);
-        let __cell1 = cell::Cell::clone(&_1);
-        let __closure: Rc<dyn Fn(Int63, Int63) -> Result<baml_ops_Ordering, Thrown>> = Rc::new(move |
-            __arg0: Int63,
-            __arg1: Int63|
-        { user_reading_comparator__lambda0(&__cell0, &__cell1, __arg0, __arg1) });
+        let __closure: func::Func<(Int63, Int63), baml_ops_Ordering> = func::alloc(user_reading_comparator__lambda0__env {
+            _c0: cell::Cell::clone(&_2),
+            _c1: cell::Cell::clone(&_1),
+        });
         __closure
     };
     bex_aot::depth::probe(0)?;
     {
-        let __callback = &*_4;
+        let __callback = &|__arg0: Int63, __arg1: Int63| (_4).call((__arg0, __arg1));
         array::sort_by(
             &cell::get(&_1)?,
             &|left, right| {
@@ -1109,6 +1419,18 @@ pub fn user_reading_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown
     _0 = string::concat(&_7, &_11);
     Ok(_0)
 }
+/// The environment of BAML lambda `.<lambda(throwing_key, 0)>`.
+pub struct user_throwing_key__lambda0__env {}
+impl bex_aot::mem::Trace for user_throwing_key__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), Int63> for user_throwing_key__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Int63, Thrown> {
+        user_throwing_key__lambda0(__arg0)
+    }
+}
 /// BAML lambda `.<lambda(throwing_key, 0)>`.
 pub fn user_throwing_key__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
@@ -1122,14 +1444,12 @@ pub fn user_throwing_key(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
     let mut _0: Str;
     let mut _2: Shared<Vec<Int63>>;
     let mut _3: Thrown;
-    let mut _5: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
+    let mut _5: func::Func<(Int63,), Int63>;
     let mut _9: bool;
     'bb4: {
         'bb1: {
             _5 = {
-                let __closure: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>> = Rc::new(move |
-                    __arg0: Int63|
-                { user_throwing_key__lambda0(__arg0) });
+                let __closure: func::Func<(Int63,), Int63> = func::alloc(user_throwing_key__lambda0__env {});
                 __closure
             };
             match bex_aot::depth::probe(1) {
@@ -1140,7 +1460,7 @@ pub fn user_throwing_key(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
                 }
             };
             {
-                let __callback = &*_5;
+                let __callback = &|__arg0: Int63| (_5).call((__arg0,));
                 match array::sort_by_key(
                     &_1,
                     __callback,
@@ -1168,6 +1488,22 @@ pub fn user_throwing_key(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
     _0 = bex_aot::render::to_string(&_2)?;
     Ok(_0)
 }
+/// The environment of BAML lambda `.<lambda(pushing_map, 0)>`.
+pub struct user_pushing_map__lambda0__env {
+    pub _c0: cell::Cell<Shared<Vec<Int63>>>,
+}
+impl bex_aot::mem::Trace for user_pushing_map__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63,), Int63> for user_pushing_map__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Int63, Thrown> {
+        user_pushing_map__lambda0(&self._c0, __arg0)
+    }
+}
 /// BAML lambda `.<lambda(pushing_map, 0)>`.
 pub fn user_pushing_map__lambda0(
     _c0: &cell::Cell<Shared<Vec<Int63>>>,
@@ -1188,21 +1524,20 @@ pub fn user_pushing_map(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
     let mut _1: cell::Cell<Shared<Vec<Int63>>> = cell::with(_1);
     let mut _0: Str;
     let mut _2: Shared<Vec<Int63>>;
-    let mut _3: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
+    let mut _3: func::Func<(Int63,), Int63>;
     let mut _7: Str;
     let mut _8: Str;
     let mut _9: Shared<Vec<Int63>>;
     let mut _11: Str;
     _3 = {
-        let __cell0 = cell::Cell::clone(&_1);
-        let __closure: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_pushing_map__lambda0(&__cell0, __arg0) });
+        let __closure: func::Func<(Int63,), Int63> = func::alloc(user_pushing_map__lambda0__env {
+            _c0: cell::Cell::clone(&_1),
+        });
         __closure
     };
     bex_aot::depth::probe(0)?;
     _2 = {
-        let __callback = &*_3;
+        let __callback = &|__arg0: Int63| (_3).call((__arg0,));
         array::map(&cell::get(&_1)?, __callback)?
     };
     _9 = cell::get(&_1)?;
@@ -1213,6 +1548,18 @@ pub fn user_pushing_map(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
     _11 = bex_aot::render::to_string(&_2)?;
     _0 = string::concat(&_7, &_11);
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(throwing_map, 0)>`.
+pub struct user_throwing_map__lambda0__env {}
+impl bex_aot::mem::Trace for user_throwing_map__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), Int63> for user_throwing_map__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Int63, Thrown> {
+        user_throwing_map__lambda0(__arg0)
+    }
 }
 /// BAML lambda `.<lambda(throwing_map, 0)>`.
 pub fn user_throwing_map__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
@@ -1227,14 +1574,12 @@ pub fn user_throwing_map(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
     let mut _0: Int63;
     let mut _2: Thrown;
     let mut _4: Shared<Vec<Int63>>;
-    let mut _5: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
+    let mut _5: func::Func<(Int63,), Int63>;
     let mut _9: bool;
     'bb5: {
         'bb2: {
             _5 = {
-                let __closure: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>> = Rc::new(move |
-                    __arg0: Int63|
-                { user_throwing_map__lambda0(__arg0) });
+                let __closure: func::Func<(Int63,), Int63> = func::alloc(user_throwing_map__lambda0__env {});
                 __closure
             };
             match bex_aot::depth::probe(0) {
@@ -1245,7 +1590,7 @@ pub fn user_throwing_map(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
                 }
             };
             _4 = {
-                let __callback = &*_5;
+                let __callback = &|__arg0: Int63| (_5).call((__arg0,));
                 match array::map(&_1, __callback) {
                     Ok(value) => value,
                     Err(error) => {
@@ -1287,6 +1632,22 @@ pub fn user_named_callback(
     };
     Ok(_0)
 }
+/// The environment of BAML lambda `.<lambda(with_capture, 0)>`.
+pub struct user_with_capture__lambda0__env {
+    pub _c0: cell::Cell<Int63>,
+}
+impl bex_aot::mem::Trace for user_with_capture__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63,), Int63> for user_with_capture__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Int63, Thrown> {
+        user_with_capture__lambda0(&self._c0, __arg0)
+    }
+}
 /// BAML lambda `.<lambda(with_capture, 0)>`.
 pub fn user_with_capture__lambda0(
     _c0: &cell::Cell<Int63>,
@@ -1307,20 +1668,32 @@ pub fn user_with_capture(
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _2: cell::Cell<Int63> = cell::with(_2);
     let mut _0: Shared<Vec<Int63>>;
-    let mut _3: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
+    let mut _3: func::Func<(Int63,), Int63>;
     _3 = {
-        let __cell0 = cell::Cell::clone(&_2);
-        let __closure: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_with_capture__lambda0(&__cell0, __arg0) });
+        let __closure: func::Func<(Int63,), Int63> = func::alloc(user_with_capture__lambda0__env {
+            _c0: cell::Cell::clone(&_2),
+        });
         __closure
     };
     bex_aot::depth::probe(0)?;
     _0 = {
-        let __callback = &*_3;
+        let __callback = &|__arg0: Int63| (_3).call((__arg0,));
         array::map(&_1, __callback)?
     };
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(nullable_mapped, 0)>`.
+pub struct user_nullable_mapped__lambda0__env {}
+impl bex_aot::mem::Trace for user_nullable_mapped__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), Option<Int63>>
+for user_nullable_mapped__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Option<Int63>, Thrown> {
+        user_nullable_mapped__lambda0(__arg0)
+    }
 }
 /// BAML lambda `.<lambda(nullable_mapped, 0)>`.
 pub fn user_nullable_mapped__lambda0(mut _1: Int63) -> Result<Option<Int63>, Thrown> {
@@ -1344,16 +1717,14 @@ pub fn user_nullable_mapped(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Option<Int63>>>;
-    let mut _3: Rc<dyn Fn(Int63) -> Result<Option<Int63>, Thrown>>;
+    let mut _3: func::Func<(Int63,), Option<Int63>>;
     _3 = {
-        let __closure: Rc<dyn Fn(Int63) -> Result<Option<Int63>, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_nullable_mapped__lambda0(__arg0) });
+        let __closure: func::Func<(Int63,), Option<Int63>> = func::alloc(user_nullable_mapped__lambda0__env {});
         __closure
     };
     bex_aot::depth::probe(0)?;
     _2 = {
-        let __callback = &*_3;
+        let __callback = &|__arg0: Int63| (_3).call((__arg0,));
         array::map(&_1, __callback)?
     };
     bex_aot::depth::probe(0)?;

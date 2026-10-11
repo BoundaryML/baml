@@ -22,10 +22,9 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int, json,
+    map, string,
 };
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
@@ -61,6 +60,10 @@ impl bex_aot::Readable for user_Color {
         Self::NAMES[*self as usize].to_string()
     }
 }
+impl bex_aot::mem::Trace for user_Color {
+    #[inline(always)]
+    fn trace(&self, _visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
 impl bex_aot::BamlEq for user_Color {
     fn baml_eq(
         &self,
@@ -86,6 +89,13 @@ impl bex_aot::json::FromJson for user_Pixel {
             color: bex_aot::json::field(object, "color", false)?,
             weight: bex_aot::json::field(object, "weight", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Pixel {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.color, visitor);
+        bex_aot::mem::Trace::trace(&self.weight, visitor);
     }
 }
 impl ToBaml for user_Pixel {

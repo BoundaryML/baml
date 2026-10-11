@@ -69,10 +69,9 @@ pub(crate) fn render_module<'db>(
     table: &ClassTable<'db>,
 ) -> Result<String, Rejection> {
     let mut items = quote! {
-        use std::rc::Rc;
         use bex_aot::{
-            BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-            string,
+            BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int, json,
+            map, string,
         };
         use bex_aot::handle::{Shared, shared};
         use bex_aot::render::ToBaml;
@@ -218,6 +217,12 @@ fn render_class<'db>(
         let baml_name = &field.name;
         quote! { (#baml_name, bex_aot::Readable::readable(&self.#ident)) }
     });
+    // A memory manager's view of the object: every field, each of which
+    // reports the handles it holds.
+    let traced = class.fields.iter().map(|field| {
+        let ident = &field.ident;
+        quote! { bex_aot::mem::Trace::trace(&self.#ident, visitor); }
+    });
     // Every class can be thrown (`throw C { .. }`) and caught by name, and
     // prints inside an uncaught throw as the engine does, so each one is an
     // `ErrorClass`; the trait costs nothing when the class is never thrown.
@@ -233,6 +238,13 @@ fn render_class<'db>(
             fn from_json(json: &bex_aot::json::Json) -> Result<Self, bex_aot::json::DecodeError> {
                 let object = bex_aot::json::object(json, #json_name)?;
                 Ok(Self { #(#decoded),* })
+            }
+        }
+
+        impl bex_aot::mem::Trace for #name {
+            #[inline]
+            fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+                #(#traced)*
             }
         }
 
@@ -358,6 +370,11 @@ fn render_enum<'db>(
             }
         }
 
+        impl bex_aot::mem::Trace for #name {
+            #[inline(always)]
+            fn trace(&self, _visitor: &mut dyn bex_aot::mem::Visitor) {}
+        }
+
         #eq_impl
     })
 }
@@ -439,6 +456,15 @@ fn render_union<'db>(info: &UnionInfo<'db>, table: &ClassTable<'db>) -> TokenStr
             }
         }
 
+        impl bex_aot::mem::Trace for #name {
+            #[inline]
+            fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+                match self {
+                    #(Self::#variant_names(value) => bex_aot::mem::Trace::trace(value, visitor),)*
+                }
+            }
+        }
+
         impl bex_aot::serde::Serialize for #name {
             fn serialize<S: bex_aot::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
                 match self {
@@ -511,6 +537,15 @@ fn render_iface<'db>(info: &IfaceInfo<'db>, table: &ClassTable<'db>) -> TokenStr
             fn readable(&self) -> String {
                 match self {
                     #(Self::#variant_names(value) => bex_aot::Readable::readable(value),)*
+                }
+            }
+        }
+
+        impl bex_aot::mem::Trace for #name {
+            #[inline]
+            fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+                match self {
+                    #(Self::#variant_names(value) => bex_aot::mem::Trace::trace(value, visitor),)*
                 }
             }
         }
@@ -756,7 +791,13 @@ impl<'a, 'db> Printer<'a, 'db> {
         // overflowing the native stack.
         let guard = quote! { let _frame = bex_aot::depth::Guard::enter()?; };
         let body = self.tail_stmts(&candidate.structured)?;
+        let env = if candidate.is_lambda() {
+            self.lambda_env(name)
+        } else {
+            TokenStream::new()
+        };
         Ok(quote! {
+            #env
             #[doc = #doc]
             pub fn #name(#(#captures,)* #(#params),*) -> Result<#ret, Thrown> {
                 #guard
@@ -765,6 +806,50 @@ impl<'a, 'db> Printer<'a, 'db> {
                 #(#body)*
             }
         })
+    }
+
+    /// A lambda's environment: a struct holding the cells it captures, the
+    /// object a closure value of it is ([`bex_aot::func::Func`]). It traces
+    /// its cells, and a call lends them to the lambda's function with the
+    /// arguments unpacked from the tuple.
+    fn lambda_env(&self, name: &Ident) -> TokenStream {
+        let candidate = self.candidate;
+        let env = env_ident(name);
+        let doc = format!(" The environment of BAML lambda `{}`.", candidate.link_name);
+        let fields: Vec<Ident> = (0..candidate.captures.len()).map(capture_ident).collect();
+        let field_tys = candidate.captures.iter().map(|ty| {
+            let ty = self.ty(ty);
+            quote! { cell::Cell<#ty> }
+        });
+        let param_tys: Vec<TokenStream> = candidate
+            .param_tys()
+            .into_iter()
+            .map(|ty| self.ty(ty))
+            .collect();
+        let args: Vec<Ident> = (0..param_tys.len())
+            .map(|index| format_ident!("__arg{index}"))
+            .collect();
+        let ret = self.ty(candidate.return_ty());
+        quote! {
+            #[doc = #doc]
+            pub struct #env {
+                #(pub #fields: #field_tys,)*
+            }
+
+            impl bex_aot::mem::Trace for #env {
+                #[inline]
+                fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+                    #(bex_aot::mem::Trace::trace(&self.#fields, visitor);)*
+                }
+            }
+
+            impl bex_aot::func::Callable<(#(#param_tys,)*), #ret> for #env {
+                #[inline]
+                fn call(&self, (#(#args,)*): (#(#param_tys,)*)) -> Result<#ret, Thrown> {
+                    #name(#(&self.#fields,)* #(#args),*)
+                }
+            }
+        }
     }
 
     fn stmts(&self, stmts: &[Stmt]) -> Result<Vec<TokenStream>, Rejection> {
@@ -1223,7 +1308,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                     .collect::<Result<Vec<_>, _>>()?;
                 (
                     TokenStream::new(),
-                    self.fallible(&quote! { (#callee)(#(#args),*) }),
+                    self.fallible(&quote! { (#callee).call((#(#args,)*)) }),
                     result,
                 )
             }
@@ -1769,7 +1854,14 @@ impl<'a, 'db> Printer<'a, 'db> {
             }
             _ => {
                 let value = self.operand_borrowed(callback)?;
-                quote! { &*#value }
+                let names: Vec<Ident> = (0..actual_params.len())
+                    .map(|index| format_ident!("__arg{index}"))
+                    .collect();
+                let params = names.iter().zip(actual_params).map(|(name, ty)| {
+                    let ty = self.ty(ty);
+                    quote! { #name: #ty }
+                });
+                quote! { &|#(#params),*| (#value).call((#(#names,)*)) }
             }
         };
         let ret_as_is = match op {
@@ -2503,8 +2595,9 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let test = self.member_test(site)?;
                 (self.member_test_tokens(operand, &ty, test)?, NativeTy::Bool)
             }
-            // A closure value: the cells it captures, cloned into a Rust
-            // closure that lends them to the lambda's function on every
+            // A closure value: the cells it captures, cloned into the
+            // lambda's environment (`<lambda>__env`, emitted with the
+            // lambda), which lends them to the lambda's function on every
             // call.
             Rvalue::MakeClosure {
                 lambda_idx,
@@ -2518,13 +2611,12 @@ impl<'a, 'db> Printer<'a, 'db> {
                     .names
                     .get(&site.id)
                     .ok_or_else(|| Rejection::invalid("lambda has no Rust name"))?;
-                let cells: Vec<Ident> = (0..captures.len())
-                    .map(|index| format_ident!("__cell{index}"))
-                    .collect();
-                let clones = cells
+                let env = env_ident(name);
+                let fields = captures
                     .iter()
-                    .zip(captures)
-                    .map(|(cell, capture)| {
+                    .enumerate()
+                    .map(|(index, capture)| {
+                        let field = capture_ident(index);
                         let source = match capture {
                             Operand::Copy(Place::Local(local))
                             | Operand::Move(Place::Local(local)) => {
@@ -2540,24 +2632,14 @@ impl<'a, 'db> Printer<'a, 'db> {
                                 )));
                             }
                         };
-                        Ok(quote! { let #cell = cell::Cell::clone(#source); })
+                        Ok(quote! { #field: cell::Cell::clone(#source) })
                     })
                     .collect::<Result<Vec<_>, Rejection>>()?;
-                let args: Vec<Ident> = (0..site.params.len())
-                    .map(|index| format_ident!("__arg{index}"))
-                    .collect();
-                let params = args.iter().zip(&site.params).map(|(arg, ty)| {
-                    let ty = self.ty(ty);
-                    quote! { #arg: #ty }
-                });
                 let ty = NativeTy::Fn(site.params.clone(), Box::new(site.ret.clone()));
                 let fn_ty = self.ty(&ty);
                 (
                     quote! {{
-                        #(#clones)*
-                        let __closure: #fn_ty = Rc::new(move |#(#params),*| {
-                            #name(#(&#cells,)* #(#args),*)
-                        });
+                        let __closure: #fn_ty = func::alloc(#env { #(#fields),* });
                         __closure
                     }},
                     ty,
@@ -2708,8 +2790,8 @@ impl<'a, 'db> Printer<'a, 'db> {
         }})
     }
 
-    /// The function item of `instance` behind a counted pointer, as a
-    /// value of the function type `ty`.
+    /// The function item of `instance` as a value of the function type
+    /// `ty`: a function value that captures nothing.
     fn function_value(
         &self,
         instance: &Instance<'db>,
@@ -2721,7 +2803,7 @@ impl<'a, 'db> Printer<'a, 'db> {
             .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
         let fn_ty = self.ty(ty);
         Ok(quote! {{
-            let __function: #fn_ty = Rc::new(#name);
+            let __function: #fn_ty = func::item(#name);
             __function
         }})
     }
@@ -3054,7 +3136,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                     quote! { #name::#variant }
                 }
                 // A declared function as a value (at its type arguments, for
-                // a generic one): its function item behind a counted pointer.
+                // a generic one): its function item behind a function handle.
                 Constant::Function(DeclRef::Source(_)) | Constant::GenericFunction { .. } => {
                     let instance = function_constant(operand)
                         .ok_or_else(|| Rejection::unsupported("stdlib function used as a value"))?;
@@ -3480,9 +3562,15 @@ fn local_ident(local: Local) -> Ident {
     format_ident!("_{}", local.0)
 }
 
-/// The parameter holding a lambda's `index`th capture.
+/// The parameter holding a lambda's `index`th capture, and the field of
+/// its environment holding the cell.
 fn capture_ident(index: usize) -> Ident {
     format_ident!("_c{index}")
+}
+
+/// The environment struct of the lambda whose function is `name`.
+fn env_ident(name: &Ident) -> Ident {
+    format_ident!("{name}__env")
 }
 
 /// An `int` literal, range-checked here; `int::lit` is a `const fn` the

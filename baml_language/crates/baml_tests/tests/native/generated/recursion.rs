@@ -22,10 +22,9 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int, json,
+    map, string,
 };
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
@@ -233,6 +232,18 @@ pub fn user_deep_for_in(mut _1: Int63) -> Result<Int63, Thrown> {
     }
     Ok(_0)
 }
+/// The environment of BAML lambda `.<lambda(deep_map, 0)>`.
+pub struct user_deep_map__lambda0__env {}
+impl bex_aot::mem::Trace for user_deep_map__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), Int63> for user_deep_map__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Int63, Thrown> {
+        user_deep_map__lambda0(__arg0)
+    }
+}
 /// BAML lambda `.<lambda(deep_map, 0)>`.
 pub fn user_deep_map__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
@@ -247,7 +258,7 @@ pub fn user_deep_map(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _2: bool;
     let mut _3: Shared<Vec<Int63>>;
     let mut _4: Shared<Vec<Int63>>;
-    let mut _5: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
+    let mut _5: func::Func<(Int63,), Int63>;
     let mut _9: Int63;
     let mut _10: Int63;
     'bb5: {
@@ -255,14 +266,12 @@ pub fn user_deep_map(mut _1: Int63) -> Result<Int63, Thrown> {
         if _2 {
             _4 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2)]));
             _5 = {
-                let __closure: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>> = Rc::new(move |
-                    __arg0: Int63|
-                { user_deep_map__lambda0(__arg0) });
+                let __closure: func::Func<(Int63,), Int63> = func::alloc(user_deep_map__lambda0__env {});
                 __closure
             };
             bex_aot::depth::probe(0)?;
             _3 = {
-                let __callback = &*_5;
+                let __callback = &|__arg0: Int63| (_5).call((__arg0,));
                 array::map(&_4, __callback)?
             };
             _0 = array::len(&_3);
@@ -275,6 +284,22 @@ pub fn user_deep_map(mut _1: Int63) -> Result<Int63, Thrown> {
         }
     }
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(deep_for_each, 0)>`.
+pub struct user_deep_for_each__lambda0__env {
+    pub _c0: cell::Cell<Int63>,
+}
+impl bex_aot::mem::Trace for user_deep_for_each__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(Int63,), ()> for user_deep_for_each__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<(), Thrown> {
+        user_deep_for_each__lambda0(&self._c0, __arg0)
+    }
 }
 /// BAML lambda `.<lambda(deep_for_each, 0)>`.
 pub fn user_deep_for_each__lambda0(
@@ -300,7 +325,7 @@ pub fn user_deep_for_each(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _3: cell::Cell<Int63>;
     let mut _4: ();
     let mut _5: Shared<Vec<Int63>>;
-    let mut _6: Rc<dyn Fn(Int63) -> Result<(), Thrown>>;
+    let mut _6: func::Func<(Int63,), ()>;
     let mut _9: Int63;
     let mut _10: Int63;
     'bb5: {
@@ -313,15 +338,14 @@ pub fn user_deep_for_each(mut _1: Int63) -> Result<Int63, Thrown> {
             }
             _5 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2)]));
             _6 = {
-                let __cell0 = cell::Cell::clone(&_3);
-                let __closure: Rc<dyn Fn(Int63) -> Result<(), Thrown>> = Rc::new(move |
-                    __arg0: Int63|
-                { user_deep_for_each__lambda0(&__cell0, __arg0) });
+                let __closure: func::Func<(Int63,), ()> = func::alloc(user_deep_for_each__lambda0__env {
+                    _c0: cell::Cell::clone(&_3),
+                });
                 __closure
             };
             bex_aot::depth::probe(1)?;
             _4 = {
-                let __callback = &*_6;
+                let __callback = &|__arg0: Int63| (_6).call((__arg0,));
                 array::for_each(&_5, __callback)?
             };
             _0 = cell::get(&_3)?;
@@ -334,6 +358,18 @@ pub fn user_deep_for_each(mut _1: Int63) -> Result<Int63, Thrown> {
         }
     }
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(deep_for_each_empty, 0)>`.
+pub struct user_deep_for_each_empty__lambda0__env {}
+impl bex_aot::mem::Trace for user_deep_for_each_empty__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), ()> for user_deep_for_each_empty__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<(), Thrown> {
+        user_deep_for_each_empty__lambda0(__arg0)
+    }
 }
 /// BAML lambda `.<lambda(deep_for_each_empty, 0)>`.
 pub fn user_deep_for_each_empty__lambda0(mut _1: Int63) -> Result<(), Thrown> {
@@ -349,7 +385,7 @@ pub fn user_deep_for_each_empty(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _2: bool;
     let mut _3: Shared<Vec<Int63>>;
     let mut _4: ();
-    let mut _5: Rc<dyn Fn(Int63) -> Result<(), Thrown>>;
+    let mut _5: func::Func<(Int63,), ()>;
     let mut _8: Int63;
     let mut _9: Int63;
     'bb5: {
@@ -357,14 +393,12 @@ pub fn user_deep_for_each_empty(mut _1: Int63) -> Result<Int63, Thrown> {
         if _2 {
             _3 = array::new::<Int63>(Vec::new());
             _5 = {
-                let __closure: Rc<dyn Fn(Int63) -> Result<(), Thrown>> = Rc::new(move |
-                    __arg0: Int63|
-                { user_deep_for_each_empty__lambda0(__arg0) });
+                let __closure: func::Func<(Int63,), ()> = func::alloc(user_deep_for_each_empty__lambda0__env {});
                 __closure
             };
             bex_aot::depth::probe(1)?;
             _4 = {
-                let __callback = &*_5;
+                let __callback = &|__arg0: Int63| (_5).call((__arg0,));
                 array::for_each(&_3, __callback)?
             };
             _0 = int::lit(0);
@@ -377,6 +411,18 @@ pub fn user_deep_for_each_empty(mut _1: Int63) -> Result<Int63, Thrown> {
         }
     }
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(deep_sort_by_key, 0)>`.
+pub struct user_deep_sort_by_key__lambda0__env {}
+impl bex_aot::mem::Trace for user_deep_sort_by_key__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), Int63> for user_deep_sort_by_key__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Int63, Thrown> {
+        user_deep_sort_by_key__lambda0(__arg0)
+    }
 }
 /// BAML lambda `.<lambda(deep_sort_by_key, 0)>`.
 pub fn user_deep_sort_by_key__lambda0(mut _1: Int63) -> Result<Int63, Thrown> {
@@ -392,7 +438,7 @@ pub fn user_deep_sort_by_key(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _2: bool;
     let mut _3: Shared<Vec<Int63>>;
     let mut _4: Shared<Vec<Int63>>;
-    let mut _5: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>>;
+    let mut _5: func::Func<(Int63,), Int63>;
     let mut _9: Int63;
     let mut _10: Int63;
     let mut _11: Int63;
@@ -401,14 +447,12 @@ pub fn user_deep_sort_by_key(mut _1: Int63) -> Result<Int63, Thrown> {
         if _2 {
             _4 = array::new::<Int63>(Vec::from([int::lit(2), int::lit(1)]));
             _5 = {
-                let __closure: Rc<dyn Fn(Int63) -> Result<Int63, Thrown>> = Rc::new(move |
-                    __arg0: Int63|
-                { user_deep_sort_by_key__lambda0(__arg0) });
+                let __closure: func::Func<(Int63,), Int63> = func::alloc(user_deep_sort_by_key__lambda0__env {});
                 __closure
             };
             bex_aot::depth::probe(1)?;
             {
-                let __callback = &*_5;
+                let __callback = &|__arg0: Int63| (_5).call((__arg0,));
                 array::sort_by_key(
                     &_4,
                     __callback,

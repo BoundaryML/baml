@@ -22,10 +22,9 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int, json,
+    map, string,
 };
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
@@ -65,6 +64,10 @@ impl bex_aot::Readable for baml_ops_Ordering {
         Self::NAMES[*self as usize].to_string()
     }
 }
+impl bex_aot::mem::Trace for baml_ops_Ordering {
+    #[inline(always)]
+    fn trace(&self, _visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
 impl bex_aot::BamlEq for baml_ops_Ordering {
     fn baml_eq(
         &self,
@@ -88,6 +91,12 @@ impl bex_aot::json::FromJson for user_Square {
         Ok(Self {
             side: bex_aot::json::field(object, "side", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Square {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.side, visitor);
     }
 }
 impl ToBaml for user_Square {
@@ -144,6 +153,13 @@ impl bex_aot::json::FromJson for user_Rect {
             w: bex_aot::json::field(object, "w", false)?,
             h: bex_aot::json::field(object, "h", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Rect {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.w, visitor);
+        bex_aot::mem::Trace::trace(&self.h, visitor);
     }
 }
 impl ToBaml for user_Rect {
@@ -212,6 +228,10 @@ impl bex_aot::json::FromJson for user_Dot {
         Ok(Self {})
     }
 }
+impl bex_aot::mem::Trace for user_Dot {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
 impl ToBaml for user_Dot {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Dot", &[]);
@@ -260,6 +280,13 @@ impl bex_aot::json::FromJson for user_Dog {
             name: bex_aot::json::field(object, "name", false)?,
             barks: bex_aot::json::field(object, "barks", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Dog {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.name, visitor);
+        bex_aot::mem::Trace::trace(&self.barks, visitor);
     }
 }
 impl ToBaml for user_Dog {
@@ -332,6 +359,12 @@ impl bex_aot::json::FromJson for user_Cat {
         })
     }
 }
+impl bex_aot::mem::Trace for user_Cat {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.name, visitor);
+    }
+}
 impl ToBaml for user_Cat {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Cat", &[("name", &self.name as &dyn ToBaml)]);
@@ -386,6 +419,13 @@ impl bex_aot::json::FromJson for user_Holder {
             item: bex_aot::json::field(object, "item", false)?,
             tag: bex_aot::json::field(object, "tag", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Holder {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.item, visitor);
+        bex_aot::mem::Trace::trace(&self.tag, visitor);
     }
 }
 impl ToBaml for user_Holder {
@@ -458,6 +498,12 @@ impl bex_aot::json::FromJson for user_Money {
         })
     }
 }
+impl bex_aot::mem::Trace for user_Money {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.cents, visitor);
+    }
+}
 impl ToBaml for user_Money {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Money", &[("cents", &self.cents as &dyn ToBaml)]);
@@ -510,6 +556,12 @@ impl bex_aot::json::FromJson for user_Tag {
         Ok(Self {
             tag_text: bex_aot::json::field(object, "tag_text", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Tag {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.tag_text, visitor);
     }
 }
 impl ToBaml for user_Tag {
@@ -568,6 +620,12 @@ impl bex_aot::json::FromJson for user_Note {
         Ok(Self {
             label: bex_aot::json::field(object, "label", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Note {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.label, visitor);
     }
 }
 impl ToBaml for user_Note {
@@ -633,6 +691,15 @@ impl bex_aot::Readable for Union_int_or_user_Shape {
         match self {
             Self::int(value) => bex_aot::Readable::readable(value),
             Self::user_Shape(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::mem::Trace for Union_int_or_user_Shape {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::int(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Shape(value) => bex_aot::mem::Trace::trace(value, visitor),
         }
     }
 }
@@ -703,6 +770,15 @@ impl bex_aot::Readable for Union_user_Note_or_user_Tag {
         match self {
             Self::user_Note(value) => bex_aot::Readable::readable(value),
             Self::user_Tag(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::mem::Trace for Union_user_Note_or_user_Tag {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::user_Note(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Tag(value) => bex_aot::mem::Trace::trace(value, visitor),
         }
     }
 }
@@ -783,6 +859,16 @@ impl bex_aot::Readable for user_Shape {
         }
     }
 }
+impl bex_aot::mem::Trace for user_Shape {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::user_Square(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Rect(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Dot(value) => bex_aot::mem::Trace::trace(value, visitor),
+        }
+    }
+}
 impl bex_aot::BamlEq for user_Shape {
     fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
         match (self, other) {
@@ -855,6 +941,15 @@ impl bex_aot::Readable for user_Named {
         }
     }
 }
+impl bex_aot::mem::Trace for user_Named {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::user_Dog(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Cat(value) => bex_aot::mem::Trace::trace(value, visitor),
+        }
+    }
+}
 impl bex_aot::BamlEq for user_Named {
     fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
         match (self, other) {
@@ -923,6 +1018,16 @@ impl bex_aot::Readable for user_Counted {
         }
     }
 }
+impl bex_aot::mem::Trace for user_Counted {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::int(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::string(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Dog(value) => bex_aot::mem::Trace::trace(value, visitor),
+        }
+    }
+}
 impl bex_aot::BamlEq for user_Counted {
     fn baml_eq(&self, other: &Self, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
         match (self, other) {
@@ -986,6 +1091,15 @@ impl bex_aot::Readable for user_Labeled {
         match self {
             Self::user_Tag(value) => bex_aot::Readable::readable(value),
             Self::user_Note(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::mem::Trace for user_Labeled {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::user_Tag(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Note(value) => bex_aot::mem::Trace::trace(value, visitor),
         }
     }
 }

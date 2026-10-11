@@ -22,10 +22,9 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int, json,
+    map, string,
 };
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
@@ -43,6 +42,12 @@ impl bex_aot::json::FromJson for user_Invalid {
         Ok(Self {
             message: bex_aot::json::field(object, "message", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Invalid {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.message, visitor);
     }
 }
 impl ToBaml for user_Invalid {
@@ -103,6 +108,13 @@ impl bex_aot::json::FromJson for user_Coded {
             code: bex_aot::json::field(object, "code", false)?,
             message: bex_aot::json::field(object, "message", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Coded {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.code, visitor);
+        bex_aot::mem::Trace::trace(&self.message, visitor);
     }
 }
 impl ToBaml for user_Coded {
@@ -178,6 +190,12 @@ impl bex_aot::json::FromJson for baml_errors_InvalidArgument {
         })
     }
 }
+impl bex_aot::mem::Trace for baml_errors_InvalidArgument {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.message, visitor);
+    }
+}
 impl ToBaml for baml_errors_InvalidArgument {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(
@@ -234,6 +252,12 @@ impl bex_aot::json::FromJson for baml_panics_Exit {
         Ok(Self {
             code: bex_aot::json::field(object, "code", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for baml_panics_Exit {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.code, visitor);
     }
 }
 impl ToBaml for baml_panics_Exit {

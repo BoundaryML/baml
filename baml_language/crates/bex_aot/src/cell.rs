@@ -18,49 +18,58 @@
 //! panic rather than a Rust panic.
 //!
 //! A cycle through a cell (a closure stored in a cell it captures) is never
-//! freed, like a cycle through class fields; see the crate README.
+//! freed, like a cycle through class fields; see the crate README. The cell
+//! is a [`Shared`] object, so a memory manager sees it as one.
 
-use std::{cell::RefCell, rc::Rc};
+use crate::{
+    Panic, Thrown,
+    handle::{Shared, shared},
+    mem::{Trace, Visitor},
+};
 
-use crate::{Panic, Thrown};
-
-/// A captured local's cell: shared, mutable, counted.
+/// A captured local's cell: a heap object of its own, behind a [`Shared`]
+/// handle.
 #[repr(transparent)]
-pub struct Cell<T>(Rc<RefCell<Option<T>>>);
+pub struct Cell<T>(Shared<Option<T>>);
 
 impl<T> Clone for Cell<T> {
     #[inline]
     fn clone(&self) -> Self {
-        Self(Rc::clone(&self.0))
+        Self(self.0.clone())
     }
 }
 
 impl<T: std::fmt::Debug> std::fmt::Debug for Cell<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.0.try_borrow() {
-            Ok(value) => std::fmt::Debug::fmt(&*value, f),
-            Err(_) => f.write_str("<mutably borrowed>"),
-        }
+        std::fmt::Debug::fmt(&self.0, f)
+    }
+}
+
+/// The cell is one edge, as any handle is.
+impl<T: Trace> Trace for Cell<T> {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn Visitor) {
+        self.0.trace(visitor);
     }
 }
 
 /// A new, empty cell: `fresh_cell(_n)`.
 #[inline]
-pub fn fresh<T>() -> Cell<T> {
-    Cell(Rc::new(RefCell::new(None)))
+pub fn fresh<T: Trace>() -> Cell<T> {
+    Cell(shared(None))
 }
 
 /// A new cell holding `value`: a captured parameter on entry.
 #[inline]
-pub fn with<T>(value: T) -> Cell<T> {
-    Cell(Rc::new(RefCell::new(Some(value))))
+pub fn with<T: Trace>(value: T) -> Cell<T> {
+    Cell(shared(Some(value)))
 }
 
 /// A new cell holding the value of `cell`: `fresh_cell(_n, carry)`, the
 /// C-style `for` header binding copied into the next iteration.
 #[inline]
-pub fn carry<T: Clone>(cell: &Cell<T>) -> Cell<T> {
-    Cell(Rc::new(RefCell::new(cell.0.borrow().clone())))
+pub fn carry<T: Clone + Trace>(cell: &Cell<T>) -> Cell<T> {
+    Cell(shared(cell.0.borrow().clone()))
 }
 
 /// The value in the cell, copied out: `copy *_n`.

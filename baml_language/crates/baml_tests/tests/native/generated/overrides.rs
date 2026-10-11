@@ -22,10 +22,9 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int, json,
+    map, string,
 };
 use bex_aot::handle::{Shared, shared};
 use bex_aot::render::ToBaml;
@@ -45,6 +44,13 @@ impl bex_aot::json::FromJson for user_Tag {
             name: bex_aot::json::field(object, "name", false)?,
             seen: bex_aot::json::field(object, "seen", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Tag {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.name, visitor);
+        bex_aot::mem::Trace::trace(&self.seen, visitor);
     }
 }
 impl ToBaml for user_Tag {
@@ -122,6 +128,12 @@ impl bex_aot::json::FromJson for user_Plain {
         })
     }
 }
+impl bex_aot::mem::Trace for user_Plain {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.n, visitor);
+    }
+}
 impl ToBaml for user_Plain {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Plain", &[("n", &self.n as &dyn ToBaml)]);
@@ -182,6 +194,16 @@ impl bex_aot::json::FromJson for user_Holder {
             by_name: bex_aot::json::field(object, "by_name", false)?,
             maybe: bex_aot::json::field(object, "maybe", true)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Holder {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.tags, visitor);
+        bex_aot::mem::Trace::trace(&self.plain, visitor);
+        bex_aot::mem::Trace::trace(&self.label, visitor);
+        bex_aot::mem::Trace::trace(&self.by_name, visitor);
+        bex_aot::mem::Trace::trace(&self.maybe, visitor);
     }
 }
 impl ToBaml for user_Holder {
