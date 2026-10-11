@@ -1404,62 +1404,53 @@ async fn cycles_match_vm() {
 
 /// What each `cycles` shape leaves on the native heap once it has returned
 /// and its result is dropped, after a collection: the objects a memory
-/// manager has to free. Under reference counting every cycle leaks, so the
-/// expected counts are today's leaks; a collector that frees cycles turns
-/// each of them into 0. The second check is that `Trace` reports every
-/// edge: every leaked object is unreachable from outside the heap.
+/// manager has to free. Under plain reference counting every cycle leaked
+/// (the counts in the comments); the cycle collector (`bex_aot::cc`) frees
+/// them all, so every count is 0. The second check is that `Trace` reports
+/// every edge: every leaked object would be unreachable from outside the
+/// heap, so the unreachable count must not grow either.
 #[test]
 fn cycle_leaks() {
     use bex_aot::mem;
     use cycles::*;
-    let cases: &[(&str, &dyn Fn(), u64)] = &[
-        // known leak under Rc: the node.
-        ("self_loop", &|| drop(user_self_loop(int(3))), 1),
-        // known leak under Rc: every node.
-        ("doubly_linked", &|| drop(user_doubly_linked(int(10))), 10),
-        // known leak under Rc: 15 nodes and their 15 child arrays.
-        (
-            "tree_with_parents",
-            &|| drop(user_tree_with_parents(int(3))),
-            30,
-        ),
-        // known leak under Rc: 8 nodes and their 8 edge arrays.
-        ("graph", &|| drop(user_graph(int(8))), 16),
-        // known leak under Rc: the array, its cell, two closures, `n`'s cell.
-        (
-            "closure_in_owner",
-            &|| drop(user_closure_in_owner(int(3))),
-            5,
-        ),
-        // known leak under Rc: the closure, the array and its cell, the
-        // owner, its cell and its items array.
-        (
-            "closure_captures_owner",
-            &|| drop(user_closure_captures_owner(int(3))),
-            6,
-        ),
-        // known leak under Rc: two nodes and their two maps.
-        ("map_cycle", &|| drop(user_map_cycle(int(3))), 4),
-        // known leak under Rc: the three links.
-        ("generic_cycle", &|| drop(user_generic_cycle(int(3))), 3),
-        // known leak under Rc: the branch.
-        ("union_cycle", &|| drop(user_union_cycle(int(3))), 1),
-        (
-            "built_then_broken",
-            &|| drop(user_built_then_broken(int(100))),
-            0,
-        ),
-        // known leak under Rc: the two nodes the caught error held.
-        ("cycle_in_error", &|| drop(user_cycle_in_error(int(3))), 2),
-        // known leak under Rc: the two nodes.
-        (
-            "cycle_across_defer",
-            &|| drop(user_cycle_across_defer(int(3))),
-            2,
-        ),
-        ("long_list", &|| drop(user_long_list(int(10000))), 0),
+    let cases: &[(&str, &dyn Fn())] = &[
+        // Leaked under Rc: the node.
+        ("self_loop", &|| drop(user_self_loop(int(3)))),
+        // Leaked under Rc: every node (10).
+        ("doubly_linked", &|| drop(user_doubly_linked(int(10)))),
+        // Leaked under Rc: 15 nodes and their 15 child arrays.
+        ("tree_with_parents", &|| {
+            drop(user_tree_with_parents(int(3)));
+        }),
+        // Leaked under Rc: 8 nodes and their 8 edge arrays.
+        ("graph", &|| drop(user_graph(int(8)))),
+        // Leaked under Rc: the array, its cell, two closures, `n`'s cell.
+        ("closure_in_owner", &|| drop(user_closure_in_owner(int(3)))),
+        // Leaked under Rc: the closure, the array and its cell, the owner,
+        // its cell and its items array.
+        ("closure_captures_owner", &|| {
+            drop(user_closure_captures_owner(int(3)));
+        }),
+        // Leaked under Rc: two nodes and their two maps.
+        ("map_cycle", &|| drop(user_map_cycle(int(3)))),
+        // Leaked under Rc: the three links.
+        ("generic_cycle", &|| drop(user_generic_cycle(int(3)))),
+        // Leaked under Rc: the branch.
+        ("union_cycle", &|| drop(user_union_cycle(int(3)))),
+        ("built_then_broken", &|| {
+            drop(user_built_then_broken(int(100)))
+        }),
+        // Leaked under Rc: the two nodes the caught error held.
+        ("cycle_in_error", &|| drop(user_cycle_in_error(int(3)))),
+        // Leaked under Rc: the two nodes.
+        ("cycle_across_defer", &|| {
+            drop(user_cycle_across_defer(int(3)))
+        }),
+        ("long_list", &|| drop(user_long_list(int(10000)))),
     ];
-    for (name, run, expected) in cases {
+    for (name, run) in cases {
+        // Whatever an earlier case left buffered is settled first.
+        mem::collect();
         let before = mem::stats();
         let garbage_before = mem::unreachable();
         run();
@@ -1475,11 +1466,11 @@ fn cycle_leaks() {
             );
         }
         let leaked = after.live() - before.live();
-        assert_eq!(leaked, *expected, "{name}: live objects after the call");
+        assert_eq!(leaked, 0, "{name}: live objects after the call");
         assert_eq!(
-            mem::unreachable() - garbage_before,
-            leaked,
-            "{name}: every leaked object is unreachable through `Trace`"
+            mem::unreachable(),
+            garbage_before,
+            "{name}: nothing unreachable is left through `Trace`"
         );
     }
 }
@@ -1499,16 +1490,20 @@ fn long_list_of_a_million_child() {
     assert_eq!(head, Some(999_999));
 }
 
-/// Dropping the head of a long list frees it node by node, recursively,
-/// under reference counting: each node's `Rc` drop drops the next. The
-/// child process builds and drops 1,000,000 nodes on an 8 MiB stack. Known
-/// failure under Rc: the recursive drop overflows the stack (a debug build
-/// overflows past about 22,000 nodes on 8 MiB, a release build with fat LTO
-/// past about 260,000, 32 bytes a node). A manager that frees without
-/// recursing flips this to success.
+/// Dropping the head of a long list frees it node by node. Under plain
+/// reference counting each node's `Rc` drop dropped the next, recursively,
+/// and the child overflowed its 8 MiB stack (a debug build past about
+/// 22,000 nodes, a release build with fat LTO past about 260,000). A
+/// tracked handle frees iteratively (`bex_aot::cc`), so the child builds
+/// and drops all 1,000,000 nodes. The child runs without
+/// `BAML_MEM_TORTURE`: building the list buffers every old head, and a
+/// collection at each of a million allocations would trace the list each
+/// time (quadratic), which tests nothing the torture run of `long_list`
+/// at 10,000 does not.
 #[test]
 fn long_list_of_a_million() {
     let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        .env_remove("BAML_MEM_TORTURE")
         .args([
             "--exact",
             "long_list_of_a_million_child",
@@ -1519,10 +1514,10 @@ fn long_list_of_a_million() {
         .output()
         .expect("child test");
     let stderr = String::from_utf8_lossy(&output.stderr);
-    // known failure under Rc: the drop overflows the stack.
-    assert!(!output.status.success(), "the child succeeded:\n{stderr}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stderr.contains("has overflowed its stack"),
-        "the child failed otherwise:\n{stderr}"
+        output.status.success(),
+        "the child failed:\n{stderr}\n{stdout}"
     );
+    assert!(stdout.contains("1 passed"), "the child ran:\n{stdout}");
 }

@@ -23,10 +23,10 @@
     clippy::let_unit_value
 )]
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int, json,
-    map, string,
+    BigInt, CcMap, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int,
+    json, map, string,
 };
-use bex_aot::handle::{Shared, shared};
+use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Box`.
 #[derive(Debug, bex_aot::serde::Serialize)]
@@ -280,12 +280,12 @@ pub fn user_make_adder__lambda0(
     Ok(_0)
 }
 /// BAML function `user.make_adder`.
-pub fn user_make_adder(mut _1: Int63) -> Result<func::Func<(Int63,), Int63>, Thrown> {
+pub fn user_make_adder(mut _1: Int63) -> Result<func::CcFunc<(Int63,), Int63>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _1: cell::Cell<Int63> = cell::with(_1);
-    let mut _0: func::Func<(Int63,), Int63>;
+    let mut _0: func::CcFunc<(Int63,), Int63>;
     _0 = {
-        let __closure: func::Func<(Int63,), Int63> = func::alloc(user_make_adder__lambda0__env {
+        let __closure: func::CcFunc<(Int63,), Int63> = func::alloc_acyclic(user_make_adder__lambda0__env {
             _c0: cell::Cell::clone(&_1),
         });
         __closure
@@ -296,7 +296,7 @@ pub fn user_make_adder(mut _1: Int63) -> Result<func::Func<(Int63,), Int63>, Thr
 pub fn user_escaped(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
-    let mut _2: func::Func<(Int63,), Int63>;
+    let mut _2: func::CcFunc<(Int63,), Int63>;
     let mut _3: Int63;
     let mut _5: Int63;
     _2 = user_make_adder(_1)?;
@@ -865,9 +865,9 @@ pub fn user_nested__lambda0(
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _1: cell::Cell<Int63> = cell::with(_1);
     let mut _0: Int63;
-    let mut _2: func::Func<(Int63,), Int63>;
+    let mut _2: func::CcFunc<(Int63,), Int63>;
     _2 = {
-        let __closure: func::Func<(Int63,), Int63> = func::alloc(user_nested__lambda0__lambda0__env {
+        let __closure: func::CcFunc<(Int63,), Int63> = func::alloc_acyclic(user_nested__lambda0__lambda0__env {
             _c0: cell::Cell::clone(&_1),
             _c1: cell::Cell::clone(_c0),
         });
@@ -881,14 +881,14 @@ pub fn user_nested(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: cell::Cell<Int63>;
-    let mut _3: func::Func<(Int63,), Int63>;
+    let mut _3: func::CcFunc<(Int63,), Int63>;
     _2 = cell::fresh();
     {
         let value = _1;
         cell::set(&_2, value);
     }
     _3 = {
-        let __closure: func::Func<(Int63,), Int63> = func::alloc(user_nested__lambda0__env {
+        let __closure: func::CcFunc<(Int63,), Int63> = func::alloc_acyclic(user_nested__lambda0__env {
             _c0: cell::Cell::clone(&_2),
         });
         __closure
@@ -927,7 +927,7 @@ pub fn user_closure_captures_closure__lambda0(
 }
 /// The environment of BAML lambda `.<lambda(closure_captures_closure, 1)>`.
 pub struct user_closure_captures_closure__lambda1__env {
-    pub _c0: cell::Cell<func::Func<(Int63,), Int63>>,
+    pub _c0: cell::CcCell<func::CcFunc<(Int63,), Int63>>,
 }
 impl bex_aot::mem::Trace for user_closure_captures_closure__lambda1__env {
     #[inline]
@@ -944,14 +944,14 @@ for user_closure_captures_closure__lambda1__env {
 }
 /// BAML lambda `.<lambda(closure_captures_closure, 1)>`.
 pub fn user_closure_captures_closure__lambda1(
-    _c0: &cell::Cell<func::Func<(Int63,), Int63>>,
+    _c0: &cell::CcCell<func::CcFunc<(Int63,), Int63>>,
     mut _1: Int63,
 ) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
-    let mut _2: func::Func<(Int63,), Int63>;
+    let mut _2: func::CcFunc<(Int63,), Int63>;
     let mut _3: Int63;
-    let mut _4: func::Func<(Int63,), Int63>;
+    let mut _4: func::CcFunc<(Int63,), Int63>;
     _2 = cell::get(_c0)?;
     _4 = cell::get(_c0)?;
     _3 = (_4).call((_1,))?;
@@ -963,12 +963,12 @@ pub fn user_closure_captures_closure(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _1: cell::Cell<Int63> = cell::with(_1);
     let mut _0: Int63;
-    let mut _2: cell::Cell<func::Func<(Int63,), Int63>>;
-    let mut _3: func::Func<(Int63,), Int63>;
+    let mut _2: cell::CcCell<func::CcFunc<(Int63,), Int63>>;
+    let mut _3: func::CcFunc<(Int63,), Int63>;
     _2 = cell::fresh();
     {
         let value = {
-            let __closure: func::Func<(Int63,), Int63> = func::alloc(user_closure_captures_closure__lambda0__env {
+            let __closure: func::CcFunc<(Int63,), Int63> = func::alloc_acyclic(user_closure_captures_closure__lambda0__env {
                 _c0: cell::Cell::clone(&_1),
             });
             __closure
@@ -976,7 +976,7 @@ pub fn user_closure_captures_closure(mut _1: Int63) -> Result<Int63, Thrown> {
         cell::set(&_2, value);
     }
     _3 = {
-        let __closure: func::Func<(Int63,), Int63> = func::alloc(user_closure_captures_closure__lambda1__env {
+        let __closure: func::CcFunc<(Int63,), Int63> = func::alloc(user_closure_captures_closure__lambda1__env {
             _c0: cell::Cell::clone(&_2),
         });
         __closure
@@ -1269,7 +1269,7 @@ pub fn user_throwing_capture(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: cell::Cell<Int63>;
-    let mut _3: func::Func<(Int63,), Int63>;
+    let mut _3: func::CcFunc<(Int63,), Int63>;
     let mut _4: Thrown;
     let mut _7: bool;
     _2 = cell::fresh();
@@ -1278,7 +1278,7 @@ pub fn user_throwing_capture(mut _1: Int63) -> Result<Int63, Thrown> {
         cell::set(&_2, value);
     }
     _3 = {
-        let __closure: func::Func<(Int63,), Int63> = func::alloc(user_throwing_capture__lambda0__env {
+        let __closure: func::CcFunc<(Int63,), Int63> = func::alloc_acyclic(user_throwing_capture__lambda0__env {
             _c0: cell::Cell::clone(&_2),
         });
         __closure

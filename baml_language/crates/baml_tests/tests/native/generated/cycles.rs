@@ -23,17 +23,17 @@
     clippy::let_unit_value
 )]
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int, json,
-    map, string,
+    BigInt, CcMap, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int,
+    json, map, string,
 };
-use bex_aot::handle::{Shared, shared};
+use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Node`.
 #[derive(Debug, bex_aot::serde::Serialize)]
 #[serde(crate = "bex_aot::serde")]
 pub struct user_Node {
     pub value: Int63,
-    pub next: Option<Shared<user_Node>>,
+    pub next: Option<Cc<user_Node>>,
 }
 impl bex_aot::json::FromJson for user_Node {
     fn from_json(
@@ -68,11 +68,11 @@ impl ToBaml for user_Node {
         );
     }
 }
-impl bex_aot::render::Overridable for user_Node {}
-impl bex_aot::eq::EqHandle for user_Node {
+impl bex_aot::render::Overridable<bex_aot::Tracked> for user_Node {}
+impl bex_aot::eq::EqHandle<bex_aot::Tracked> for user_Node {
     fn fields_eq(
-        a: &Shared<Self>,
-        b: &Shared<Self>,
+        a: &Cc<Self>,
+        b: &Cc<Self>,
         cx: &mut bex_aot::eq::EqCx,
     ) -> Result<bool, Thrown> {
         {
@@ -112,8 +112,8 @@ impl bex_aot::Readable for user_Node {
 #[serde(crate = "bex_aot::serde")]
 pub struct user_DNode {
     pub value: Int63,
-    pub prev: Option<Shared<user_DNode>>,
-    pub next: Option<Shared<user_DNode>>,
+    pub prev: Option<Cc<user_DNode>>,
+    pub next: Option<Cc<user_DNode>>,
 }
 impl bex_aot::json::FromJson for user_DNode {
     fn from_json(
@@ -158,11 +158,11 @@ impl ToBaml for user_DNode {
         );
     }
 }
-impl bex_aot::render::Overridable for user_DNode {}
-impl bex_aot::eq::EqHandle for user_DNode {
+impl bex_aot::render::Overridable<bex_aot::Tracked> for user_DNode {}
+impl bex_aot::eq::EqHandle<bex_aot::Tracked> for user_DNode {
     fn fields_eq(
-        a: &Shared<Self>,
-        b: &Shared<Self>,
+        a: &Cc<Self>,
+        b: &Cc<Self>,
         cx: &mut bex_aot::eq::EqCx,
     ) -> Result<bool, Thrown> {
         {
@@ -209,8 +209,8 @@ impl bex_aot::Readable for user_DNode {
 #[serde(crate = "bex_aot::serde")]
 pub struct user_TNode {
     pub value: Int63,
-    pub parent: Option<Shared<user_TNode>>,
-    pub children: Shared<Vec<Shared<user_TNode>>>,
+    pub parent: Option<Cc<user_TNode>>,
+    pub children: Cc<Vec<Cc<user_TNode>>>,
 }
 impl bex_aot::json::FromJson for user_TNode {
     fn from_json(
@@ -255,11 +255,11 @@ impl ToBaml for user_TNode {
         );
     }
 }
-impl bex_aot::render::Overridable for user_TNode {}
-impl bex_aot::eq::EqHandle for user_TNode {
+impl bex_aot::render::Overridable<bex_aot::Tracked> for user_TNode {}
+impl bex_aot::eq::EqHandle<bex_aot::Tracked> for user_TNode {
     fn fields_eq(
-        a: &Shared<Self>,
-        b: &Shared<Self>,
+        a: &Cc<Self>,
+        b: &Cc<Self>,
         cx: &mut bex_aot::eq::EqCx,
     ) -> Result<bool, Thrown> {
         {
@@ -306,7 +306,7 @@ impl bex_aot::Readable for user_TNode {
 #[serde(crate = "bex_aot::serde")]
 pub struct user_GNode {
     pub id: Int63,
-    pub edges: Shared<Vec<Shared<user_GNode>>>,
+    pub edges: Cc<Vec<Cc<user_GNode>>>,
 }
 impl bex_aot::json::FromJson for user_GNode {
     fn from_json(
@@ -341,11 +341,11 @@ impl ToBaml for user_GNode {
         );
     }
 }
-impl bex_aot::render::Overridable for user_GNode {}
-impl bex_aot::eq::EqHandle for user_GNode {
+impl bex_aot::render::Overridable<bex_aot::Tracked> for user_GNode {}
+impl bex_aot::eq::EqHandle<bex_aot::Tracked> for user_GNode {
     fn fields_eq(
-        a: &Shared<Self>,
-        b: &Shared<Self>,
+        a: &Cc<Self>,
+        b: &Cc<Self>,
         cx: &mut bex_aot::eq::EqCx,
     ) -> Result<bool, Thrown> {
         {
@@ -467,7 +467,7 @@ impl bex_aot::Readable for user_Owner {
 #[serde(crate = "bex_aot::serde")]
 pub struct user_MNode {
     pub name: Str,
-    pub links: Map<Str, Shared<user_MNode>>,
+    pub links: CcMap<Str, Cc<user_MNode>>,
 }
 impl bex_aot::json::FromJson for user_MNode {
     fn from_json(
@@ -502,11 +502,11 @@ impl ToBaml for user_MNode {
         );
     }
 }
-impl bex_aot::render::Overridable for user_MNode {}
-impl bex_aot::eq::EqHandle for user_MNode {
+impl bex_aot::render::Overridable<bex_aot::Tracked> for user_MNode {}
+impl bex_aot::eq::EqHandle<bex_aot::Tracked> for user_MNode {
     fn fields_eq(
-        a: &Shared<Self>,
-        b: &Shared<Self>,
+        a: &Cc<Self>,
+        b: &Cc<Self>,
         cx: &mut bex_aot::eq::EqCx,
     ) -> Result<bool, Thrown> {
         {
@@ -546,7 +546,7 @@ impl bex_aot::Readable for user_MNode {
 #[serde(crate = "bex_aot::serde")]
 pub struct user_Link__int {
     pub value: Int63,
-    pub next: Option<Shared<user_Link__int>>,
+    pub next: Option<Cc<user_Link__int>>,
 }
 impl bex_aot::json::FromJson for user_Link__int {
     fn from_json(
@@ -581,11 +581,11 @@ impl ToBaml for user_Link__int {
         );
     }
 }
-impl bex_aot::render::Overridable for user_Link__int {}
-impl bex_aot::eq::EqHandle for user_Link__int {
+impl bex_aot::render::Overridable<bex_aot::Tracked> for user_Link__int {}
+impl bex_aot::eq::EqHandle<bex_aot::Tracked> for user_Link__int {
     fn fields_eq(
-        a: &Shared<Self>,
-        b: &Shared<Self>,
+        a: &Cc<Self>,
+        b: &Cc<Self>,
         cx: &mut bex_aot::eq::EqCx,
     ) -> Result<bool, Thrown> {
         {
@@ -663,11 +663,11 @@ impl ToBaml for user_Branch {
         );
     }
 }
-impl bex_aot::render::Overridable for user_Branch {}
-impl bex_aot::eq::EqHandle for user_Branch {
+impl bex_aot::render::Overridable<bex_aot::Tracked> for user_Branch {}
+impl bex_aot::eq::EqHandle<bex_aot::Tracked> for user_Branch {
     fn fields_eq(
-        a: &Shared<Self>,
-        b: &Shared<Self>,
+        a: &Cc<Self>,
+        b: &Cc<Self>,
         cx: &mut bex_aot::eq::EqCx,
     ) -> Result<bool, Thrown> {
         {
@@ -767,7 +767,7 @@ impl bex_aot::Readable for user_Leaf {
 #[serde(crate = "bex_aot::serde")]
 pub struct user_Failure {
     pub message: Str,
-    pub culprit: Shared<user_Node>,
+    pub culprit: Cc<user_Node>,
 }
 impl bex_aot::json::FromJson for user_Failure {
     fn from_json(
@@ -847,7 +847,7 @@ impl bex_aot::Readable for user_Failure {
 /// BAML union `user.Branch | user.Leaf`.
 #[derive(Clone, Debug)]
 pub enum Union_user_Branch_or_user_Leaf {
-    user_Branch(Shared<user_Branch>),
+    user_Branch(Cc<user_Branch>),
     user_Leaf(Shared<user_Leaf>),
 }
 impl ToBaml for Union_user_Branch_or_user_Leaf {
@@ -904,7 +904,7 @@ impl bex_aot::json::FromJson for Union_user_Branch_or_user_Leaf {
             json,
             &[
                 |json| {
-                    <Shared<user_Branch> as bex_aot::json::FromJson>::from_json(json)
+                    <Cc<user_Branch> as bex_aot::json::FromJson>::from_json(json)
                         .map(Self::user_Branch)
                 },
                 |json| {
@@ -932,13 +932,13 @@ impl bex_aot::BamlEq for Union_user_Branch_or_user_Leaf {
 pub fn user_self_loop(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
-    let mut _2: Shared<user_Node>;
-    let mut _3: Option<Shared<user_Node>>;
+    let mut _2: Cc<user_Node>;
+    let mut _3: Option<Cc<user_Node>>;
     let mut _4: bool;
-    let mut _6: Shared<user_Node>;
+    let mut _6: Cc<user_Node>;
     let mut _7: Int63;
     let mut _8: Int63;
-    _2 = shared(user_Node { value: _1, next: None });
+    _2 = cc(user_Node { value: _1, next: None });
     {
         let value = Some(_2.clone());
         _2.borrow_mut().next = value;
@@ -964,26 +964,26 @@ pub fn user_self_loop(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_doubly_linked(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
-    let mut _2: Shared<user_DNode>;
-    let mut _3: Shared<user_DNode>;
+    let mut _2: Cc<user_DNode>;
+    let mut _3: Cc<user_DNode>;
     let mut _4: Int63;
     let mut _5: bool;
     let mut _6: Int63;
-    let mut _7: Shared<user_DNode>;
+    let mut _7: Cc<user_DNode>;
     let mut _8: Int63;
     let mut _10: Int63;
-    let mut _11: Option<Shared<user_DNode>>;
+    let mut _11: Option<Cc<user_DNode>>;
     let mut _12: bool;
     let mut _14: bool;
-    let mut _15: Shared<user_DNode>;
+    let mut _15: Cc<user_DNode>;
     let mut _16: Int63;
-    let mut _17: Option<Shared<user_DNode>>;
+    let mut _17: Option<Cc<user_DNode>>;
     let mut _18: bool;
     let mut _20: bool;
-    let mut _21: Shared<user_DNode>;
+    let mut _21: Cc<user_DNode>;
     let mut _22: Int63;
     let mut _23: Int63;
-    _2 = shared(user_DNode {
+    _2 = cc(user_DNode {
         value: int::lit(0),
         prev: None,
         next: None,
@@ -995,7 +995,7 @@ pub fn user_doubly_linked(mut _1: Int63) -> Result<Int63, Thrown> {
         _5 = _6 < _1;
         if _5 {
             _8 = _4;
-            _7 = shared(user_DNode {
+            _7 = cc(user_DNode {
                 value: _8,
                 prev: Some(_3.clone()),
                 next: None,
@@ -1045,21 +1045,21 @@ pub fn user_doubly_linked(mut _1: Int63) -> Result<Int63, Thrown> {
     }
 }
 /// BAML function `user.grow`.
-pub fn user_grow(mut _1: Shared<user_TNode>, mut _2: Int63) -> Result<(), Thrown> {
+pub fn user_grow(mut _1: Cc<user_TNode>, mut _2: Int63) -> Result<(), Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: ();
     let mut _3: bool;
     let mut _4: Int63;
     let mut _5: bool;
     let mut _6: Int63;
-    let mut _7: Shared<user_TNode>;
+    let mut _7: Cc<user_TNode>;
     let mut _8: Int63;
     let mut _9: Int63;
     let mut _10: Int63;
     let mut _11: Int63;
-    let mut _12: Shared<Vec<Shared<user_TNode>>>;
+    let mut _12: Cc<Vec<Cc<user_TNode>>>;
     let mut _13: Int63;
-    let mut _14: Shared<Vec<Shared<user_TNode>>>;
+    let mut _14: Cc<Vec<Cc<user_TNode>>>;
     let mut _17: ();
     let mut _19: Int63;
     'bb8: {
@@ -1077,8 +1077,8 @@ pub fn user_grow(mut _1: Shared<user_TNode>, mut _2: Int63) -> Result<(), Thrown
                     _9 = int::mul(_10, int::lit(2))?;
                     _11 = _4;
                     _8 = int::add(_9, _11)?;
-                    _12 = array::new::<Shared<user_TNode>>(Vec::new());
-                    _7 = shared(user_TNode {
+                    _12 = array::new_cc::<Cc<user_TNode>>(Vec::new());
+                    _7 = cc(user_TNode {
                         value: _8,
                         parent: Some(_1.clone()),
                         children: _12.clone(),
@@ -1102,24 +1102,24 @@ pub fn user_grow(mut _1: Shared<user_TNode>, mut _2: Int63) -> Result<(), Thrown
     Ok(_0)
 }
 /// BAML function `user.sum_to_root`.
-pub fn user_sum_to_root(mut _1: Shared<user_TNode>) -> Result<Int63, Thrown> {
+pub fn user_sum_to_root(mut _1: Cc<user_TNode>) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
-    let mut _3: Option<Shared<user_TNode>>;
+    let mut _3: Option<Cc<user_TNode>>;
     let mut _4: bool;
     let mut _6: bool;
-    let mut _7: Shared<user_TNode>;
+    let mut _7: Cc<user_TNode>;
     let mut _8: Int63;
     let mut _9: Int63;
     let mut _10: Int63;
-    let mut _11: Shared<Vec<Shared<user_TNode>>>;
-    let mut _12: bex_aot::array::Iter<Shared<user_TNode>>;
-    let mut _13: Option<Shared<user_TNode>>;
+    let mut _11: Cc<Vec<Cc<user_TNode>>>;
+    let mut _12: bex_aot::array::Iter<Cc<user_TNode>, bex_aot::Tracked>;
+    let mut _13: Option<Cc<user_TNode>>;
     let mut _14: bool;
-    let mut _15: Shared<user_TNode>;
+    let mut _15: Cc<user_TNode>;
     let mut _17: Int63;
-    let mut _18: Shared<user_TNode>;
+    let mut _18: Cc<user_TNode>;
     _2 = int::lit(0);
     _3 = _1.borrow().parent.clone();
     'bb1: loop {
@@ -1159,11 +1159,11 @@ pub fn user_sum_to_root(mut _1: Shared<user_TNode>) -> Result<Int63, Thrown> {
 pub fn user_tree_with_parents(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
-    let mut _2: Shared<user_TNode>;
-    let mut _3: Shared<Vec<Shared<user_TNode>>>;
+    let mut _2: Cc<user_TNode>;
+    let mut _3: Cc<Vec<Cc<user_TNode>>>;
     let mut _4: ();
-    _3 = array::new::<Shared<user_TNode>>(Vec::new());
-    _2 = shared(user_TNode {
+    _3 = array::new_cc::<Cc<user_TNode>>(Vec::new());
+    _2 = cc(user_TNode {
         value: int::lit(1),
         parent: None,
         children: _3.clone(),
@@ -1176,55 +1176,55 @@ pub fn user_tree_with_parents(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_graph(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
-    let mut _2: Shared<Vec<Shared<user_GNode>>>;
+    let mut _2: Cc<Vec<Cc<user_GNode>>>;
     let mut _3: Int63;
     let mut _4: bool;
     let mut _5: Int63;
     let mut _6: Int63;
-    let mut _7: Shared<user_GNode>;
+    let mut _7: Cc<user_GNode>;
     let mut _8: Int63;
-    let mut _9: Shared<Vec<Shared<user_GNode>>>;
-    let mut _12: bex_aot::array::Iter<Shared<user_GNode>>;
-    let mut _13: Option<Shared<user_GNode>>;
+    let mut _9: Cc<Vec<Cc<user_GNode>>>;
+    let mut _12: bex_aot::array::Iter<Cc<user_GNode>, bex_aot::Tracked>;
+    let mut _13: Option<Cc<user_GNode>>;
     let mut _14: bool;
-    let mut _15: Shared<user_GNode>;
-    let mut _16: Shared<user_GNode>;
+    let mut _15: Cc<user_GNode>;
+    let mut _16: Cc<user_GNode>;
     let mut _17: Int63;
-    let mut _18: Shared<Vec<Shared<user_GNode>>>;
-    let mut _19: Shared<user_GNode>;
+    let mut _18: Cc<Vec<Cc<user_GNode>>>;
+    let mut _19: Cc<user_GNode>;
     let mut _21: Int63;
     let mut _22: Int63;
     let mut _23: Int63;
     let mut _25: Int63;
-    let mut _26: Shared<Vec<Shared<user_GNode>>>;
-    let mut _27: Shared<user_GNode>;
+    let mut _26: Cc<Vec<Cc<user_GNode>>>;
+    let mut _27: Cc<user_GNode>;
     let mut _29: Int63;
     let mut _30: Int63;
     let mut _31: Int63;
     let mut _32: Int63;
     let mut _34: Int63;
-    let mut _36: bex_aot::array::Iter<Shared<user_GNode>>;
-    let mut _37: Option<Shared<user_GNode>>;
+    let mut _36: bex_aot::array::Iter<Cc<user_GNode>, bex_aot::Tracked>;
+    let mut _37: Option<Cc<user_GNode>>;
     let mut _38: bool;
-    let mut _39: Shared<user_GNode>;
-    let mut _40: Shared<user_GNode>;
-    let mut _41: Shared<Vec<Shared<user_GNode>>>;
-    let mut _42: bex_aot::array::Iter<Shared<user_GNode>>;
-    let mut _43: Option<Shared<user_GNode>>;
+    let mut _39: Cc<user_GNode>;
+    let mut _40: Cc<user_GNode>;
+    let mut _41: Cc<Vec<Cc<user_GNode>>>;
+    let mut _42: bex_aot::array::Iter<Cc<user_GNode>, bex_aot::Tracked>;
+    let mut _43: Option<Cc<user_GNode>>;
     let mut _44: bool;
-    let mut _45: Shared<user_GNode>;
+    let mut _45: Cc<user_GNode>;
     let mut _47: Int63;
     let mut _48: Int63;
     let mut _49: Int63;
-    _2 = array::new::<Shared<user_GNode>>(Vec::new());
+    _2 = array::new_cc::<Cc<user_GNode>>(Vec::new());
     _3 = int::lit(0);
     'bb1: loop {
         _5 = _3;
         _4 = _5 < _1;
         if _4 {
             _8 = _3;
-            _9 = array::new::<Shared<user_GNode>>(Vec::new());
-            _7 = shared(user_GNode {
+            _9 = array::new_cc::<Cc<user_GNode>>(Vec::new());
+            _7 = cc(user_GNode {
                 id: _8,
                 edges: _9.clone(),
             });
@@ -1302,7 +1302,7 @@ pub fn user_graph(mut _1: Int63) -> Result<Int63, Thrown> {
 }
 /// The environment of BAML lambda `.<lambda(closure_in_owner, 0)>`.
 pub struct user_closure_in_owner__lambda0__env {
-    pub _c0: cell::Cell<Shared<Vec<func::Func<(), Int63>>>>,
+    pub _c0: cell::CcCell<Cc<Vec<func::CcFunc<(), Int63>>>>,
 }
 impl bex_aot::mem::Trace for user_closure_in_owner__lambda0__env {
     #[inline]
@@ -1318,7 +1318,7 @@ impl bex_aot::func::Callable<(), Int63> for user_closure_in_owner__lambda0__env 
 }
 /// BAML lambda `.<lambda(closure_in_owner, 0)>`.
 pub fn user_closure_in_owner__lambda0(
-    _c0: &cell::Cell<Shared<Vec<func::Func<(), Int63>>>>,
+    _c0: &cell::CcCell<Cc<Vec<func::CcFunc<(), Int63>>>>,
 ) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
@@ -1330,7 +1330,7 @@ pub fn user_closure_in_owner__lambda0(
 /// The environment of BAML lambda `.<lambda(closure_in_owner, 1)>`.
 pub struct user_closure_in_owner__lambda1__env {
     pub _c0: cell::Cell<Int63>,
-    pub _c1: cell::Cell<Shared<Vec<func::Func<(), Int63>>>>,
+    pub _c1: cell::CcCell<Cc<Vec<func::CcFunc<(), Int63>>>>,
 }
 impl bex_aot::mem::Trace for user_closure_in_owner__lambda1__env {
     #[inline]
@@ -1348,7 +1348,7 @@ impl bex_aot::func::Callable<(), Int63> for user_closure_in_owner__lambda1__env 
 /// BAML lambda `.<lambda(closure_in_owner, 1)>`.
 pub fn user_closure_in_owner__lambda1(
     _c0: &cell::Cell<Int63>,
-    _c1: &cell::Cell<Shared<Vec<func::Func<(), Int63>>>>,
+    _c1: &cell::CcCell<Cc<Vec<func::CcFunc<(), Int63>>>>,
 ) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
@@ -1364,26 +1364,26 @@ pub fn user_closure_in_owner(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _1: cell::Cell<Int63> = cell::with(_1);
     let mut _0: Int63;
-    let mut _2: cell::Cell<Shared<Vec<func::Func<(), Int63>>>>;
+    let mut _2: cell::CcCell<Cc<Vec<func::CcFunc<(), Int63>>>>;
     let mut _3: Int63;
-    let mut _4: func::Func<(), Int63>;
+    let mut _4: func::CcFunc<(), Int63>;
     let mut _6: Int63;
-    let mut _7: func::Func<(), Int63>;
+    let mut _7: func::CcFunc<(), Int63>;
     let mut _9: Int63;
-    let mut _10: Shared<Vec<func::Func<(), Int63>>>;
-    let mut _11: bex_aot::array::Iter<func::Func<(), Int63>>;
-    let mut _12: Option<func::Func<(), Int63>>;
+    let mut _10: Cc<Vec<func::CcFunc<(), Int63>>>;
+    let mut _11: bex_aot::array::Iter<func::CcFunc<(), Int63>, bex_aot::Tracked>;
+    let mut _12: Option<func::CcFunc<(), Int63>>;
     let mut _13: bool;
-    let mut _14: func::Func<(), Int63>;
+    let mut _14: func::CcFunc<(), Int63>;
     let mut _16: Int63;
-    let mut _17: func::Func<(), Int63>;
+    let mut _17: func::CcFunc<(), Int63>;
     _2 = cell::fresh();
     {
-        let value = array::new::<func::Func<(), Int63>>(Vec::new());
+        let value = array::new_cc::<func::CcFunc<(), Int63>>(Vec::new());
         cell::set(&_2, value);
     }
     _4 = {
-        let __closure: func::Func<(), Int63> = func::alloc(user_closure_in_owner__lambda0__env {
+        let __closure: func::CcFunc<(), Int63> = func::alloc(user_closure_in_owner__lambda0__env {
             _c0: cell::Cell::clone(&_2),
         });
         __closure
@@ -1392,7 +1392,7 @@ pub fn user_closure_in_owner(mut _1: Int63) -> Result<Int63, Thrown> {
     array::push(&cell::get(&_2)?, _4.clone());
     _3 = array::len(&cell::get(&_2)?);
     _7 = {
-        let __closure: func::Func<(), Int63> = func::alloc(user_closure_in_owner__lambda1__env {
+        let __closure: func::CcFunc<(), Int63> = func::alloc(user_closure_in_owner__lambda1__env {
             _c0: cell::Cell::clone(&_1),
             _c1: cell::Cell::clone(&_2),
         });
@@ -1423,7 +1423,7 @@ pub fn user_closure_in_owner(mut _1: Int63) -> Result<Int63, Thrown> {
 /// The environment of BAML lambda `.<lambda(closure_captures_owner, 0)>`.
 pub struct user_closure_captures_owner__lambda0__env {
     pub _c0: cell::Cell<Shared<user_Owner>>,
-    pub _c1: cell::Cell<Shared<Vec<func::Func<(), Int63>>>>,
+    pub _c1: cell::CcCell<Cc<Vec<func::CcFunc<(), Int63>>>>,
 }
 impl bex_aot::mem::Trace for user_closure_captures_owner__lambda0__env {
     #[inline]
@@ -1441,7 +1441,7 @@ impl bex_aot::func::Callable<(), Int63> for user_closure_captures_owner__lambda0
 /// BAML lambda `.<lambda(closure_captures_owner, 0)>`.
 pub fn user_closure_captures_owner__lambda0(
     _c0: &cell::Cell<Shared<user_Owner>>,
-    _c1: &cell::Cell<Shared<Vec<func::Func<(), Int63>>>>,
+    _c1: &cell::CcCell<Cc<Vec<func::CcFunc<(), Int63>>>>,
 ) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
@@ -1466,17 +1466,17 @@ pub fn user_closure_captures_owner(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _0: Int63;
     let mut _2: cell::Cell<Shared<user_Owner>>;
     let mut _3: Shared<Vec<Int63>>;
-    let mut _4: cell::Cell<Shared<Vec<func::Func<(), Int63>>>>;
+    let mut _4: cell::CcCell<Cc<Vec<func::CcFunc<(), Int63>>>>;
     let mut _5: Int63;
-    let mut _6: func::Func<(), Int63>;
+    let mut _6: func::CcFunc<(), Int63>;
     let mut _8: Int63;
     let mut _9: Int63;
-    let mut _10: func::Func<(), Int63>;
-    let mut _11: Shared<Vec<func::Func<(), Int63>>>;
+    let mut _10: func::CcFunc<(), Int63>;
+    let mut _11: Cc<Vec<func::CcFunc<(), Int63>>>;
     let mut _12: Int63;
     let mut _13: Int63;
-    let mut _14: func::Func<(), Int63>;
-    let mut _15: Shared<Vec<func::Func<(), Int63>>>;
+    let mut _14: func::CcFunc<(), Int63>;
+    let mut _15: Cc<Vec<func::CcFunc<(), Int63>>>;
     let mut _16: Int63;
     let mut _17: Int63;
     let mut _18: Shared<Vec<Int63>>;
@@ -1491,11 +1491,11 @@ pub fn user_closure_captures_owner(mut _1: Int63) -> Result<Int63, Thrown> {
     }
     _4 = cell::fresh();
     {
-        let value = array::new::<func::Func<(), Int63>>(Vec::new());
+        let value = array::new_cc::<func::CcFunc<(), Int63>>(Vec::new());
         cell::set(&_4, value);
     }
     _6 = {
-        let __closure: func::Func<(), Int63> = func::alloc(user_closure_captures_owner__lambda0__env {
+        let __closure: func::CcFunc<(), Int63> = func::alloc(user_closure_captures_owner__lambda0__env {
             _c0: cell::Cell::clone(&_2),
             _c1: cell::Cell::clone(&_4),
         });
@@ -1522,42 +1522,42 @@ pub fn user_closure_captures_owner(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_map_cycle(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
-    let mut _2: Shared<user_MNode>;
-    let mut _4: Map<Str, Shared<user_MNode>>;
-    let mut _5: Shared<user_MNode>;
-    let mut _7: Map<Str, Shared<user_MNode>>;
-    let mut _8: Map<Str, Shared<user_MNode>>;
-    let mut _10: Option<Shared<user_MNode>>;
-    let mut _11: Map<Str, Shared<user_MNode>>;
-    let mut _13: Option<Shared<user_MNode>>;
-    let mut _14: Map<Str, Shared<user_MNode>>;
-    let mut _16: Option<Shared<user_MNode>>;
+    let mut _2: Cc<user_MNode>;
+    let mut _4: CcMap<Str, Cc<user_MNode>>;
+    let mut _5: Cc<user_MNode>;
+    let mut _7: CcMap<Str, Cc<user_MNode>>;
+    let mut _8: CcMap<Str, Cc<user_MNode>>;
+    let mut _10: Option<Cc<user_MNode>>;
+    let mut _11: CcMap<Str, Cc<user_MNode>>;
+    let mut _13: Option<Cc<user_MNode>>;
+    let mut _14: CcMap<Str, Cc<user_MNode>>;
+    let mut _16: Option<Cc<user_MNode>>;
     let mut _17: Int63;
     let mut _18: Shared<Vec<Str>>;
-    let mut _19: Map<Str, Shared<user_MNode>>;
+    let mut _19: CcMap<Str, Cc<user_MNode>>;
     let mut _22: bex_aot::array::Iter<Str>;
     let mut _23: Option<Str>;
     let mut _24: bool;
     let mut _25: Str;
     let mut _27: Int63;
     let mut _28: Str;
-    let mut _29: Shared<user_MNode>;
-    let mut _30: Map<Str, Shared<user_MNode>>;
+    let mut _29: Cc<user_MNode>;
+    let mut _30: CcMap<Str, Cc<user_MNode>>;
     let mut _31: Str;
     let mut _32: Int63;
     let mut _33: Int63;
     let mut _34: Str;
-    let mut _35: Shared<user_MNode>;
-    let mut _36: Map<Str, Shared<user_MNode>>;
-    let mut _37: Shared<user_MNode>;
-    let mut _38: Map<Str, Shared<user_MNode>>;
-    _4 = map::new::<Str, Shared<user_MNode>>(Vec::new());
-    _2 = shared(user_MNode {
+    let mut _35: Cc<user_MNode>;
+    let mut _36: CcMap<Str, Cc<user_MNode>>;
+    let mut _37: Cc<user_MNode>;
+    let mut _38: CcMap<Str, Cc<user_MNode>>;
+    _4 = map::new_cc::<Str, Cc<user_MNode>>(Vec::new());
+    _2 = cc(user_MNode {
         name: string::from_literal("a"),
         links: _4.clone(),
     });
-    _7 = map::new::<Str, Shared<user_MNode>>(Vec::new());
-    _5 = shared(user_MNode {
+    _7 = map::new_cc::<Str, Cc<user_MNode>>(Vec::new());
+    _5 = cc(user_MNode {
         name: string::from_literal("b"),
         links: _7.clone(),
     });
@@ -1610,30 +1610,30 @@ pub fn user_map_cycle(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_generic_cycle(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
-    let mut _2: Shared<user_Link__int>;
-    let mut _3: Shared<user_Link__int>;
+    let mut _2: Cc<user_Link__int>;
+    let mut _3: Cc<user_Link__int>;
     let mut _4: Int63;
-    let mut _6: Shared<user_Link__int>;
+    let mut _6: Cc<user_Link__int>;
     let mut _7: Int63;
     let mut _9: Int63;
-    let mut _10: Option<Shared<user_Link__int>>;
+    let mut _10: Option<Cc<user_Link__int>>;
     let mut _11: Int63;
     let mut _12: bool;
     let mut _13: Int63;
     let mut _14: bool;
-    let mut _16: Shared<user_Link__int>;
+    let mut _16: Cc<user_Link__int>;
     let mut _17: Int63;
-    _2 = shared(user_Link__int {
+    _2 = cc(user_Link__int {
         value: _1,
         next: None,
     });
     _4 = int::add(_1, int::lit(1))?;
-    _3 = shared(user_Link__int {
+    _3 = cc(user_Link__int {
         value: _4,
         next: Some(_2.clone()),
     });
     _7 = int::add(_1, int::lit(2))?;
-    _6 = shared(user_Link__int {
+    _6 = cc(user_Link__int {
         value: _7,
         next: Some(_3.clone()),
     });
@@ -1675,7 +1675,7 @@ pub fn user_generic_cycle(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_union_cycle(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
-    let mut _2: Shared<user_Branch>;
+    let mut _2: Cc<user_Branch>;
     let mut _3: Shared<user_Leaf>;
     let mut _4: Int63;
     let mut _6: Union_user_Branch_or_user_Leaf;
@@ -1684,14 +1684,14 @@ pub fn user_union_cycle(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _9: Union_user_Branch_or_user_Leaf;
     let mut _10: Union_user_Branch_or_user_Leaf;
     let mut _11: Shared<user_Leaf>;
-    let mut _12: Shared<user_Branch>;
+    let mut _12: Cc<user_Branch>;
     let mut _13: Str;
     let mut _14: Int63;
     let mut _15: Int63;
     let mut _16: Int63;
     'bb3: {
         _3 = shared(user_Leaf { value: _1 });
-        _2 = shared(user_Branch {
+        _2 = cc(user_Branch {
             label: string::from_literal("b"),
             child: Union_user_Branch_or_user_Leaf::user_Leaf(_3.clone()),
         });
@@ -1753,9 +1753,9 @@ pub fn user_built_then_broken(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _3: Int63;
     let mut _4: bool;
     let mut _5: Int63;
-    let mut _6: Shared<user_Node>;
+    let mut _6: Cc<user_Node>;
     let mut _7: Int63;
-    let mut _8: Shared<user_Node>;
+    let mut _8: Cc<user_Node>;
     let mut _9: Int63;
     let mut _10: Int63;
     let mut _12: Int63;
@@ -1768,10 +1768,10 @@ pub fn user_built_then_broken(mut _1: Int63) -> Result<Int63, Thrown> {
         _4 = _5 < _1;
         if _4 {
             _7 = _3;
-            _6 = shared(user_Node { value: _7, next: None });
+            _6 = cc(user_Node { value: _7, next: None });
             _10 = _3;
             _9 = int::add(_10, int::lit(1))?;
-            _8 = shared(user_Node {
+            _8 = cc(user_Node {
                 value: _9,
                 next: Some(_6.clone()),
             });
@@ -1800,13 +1800,13 @@ pub fn user_built_then_broken(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_throw_cycle(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
-    let mut _2: Shared<user_Node>;
-    let mut _3: Shared<user_Node>;
+    let mut _2: Cc<user_Node>;
+    let mut _3: Cc<user_Node>;
     let mut _4: Int63;
     let mut _6: Shared<user_Failure>;
-    _2 = shared(user_Node { value: _1, next: None });
+    _2 = cc(user_Node { value: _1, next: None });
     _4 = int::mul(_1, int::lit(2))?;
-    _3 = shared(user_Node {
+    _3 = cc(user_Node {
         value: _4,
         next: Some(_2.clone()),
     });
@@ -1827,9 +1827,9 @@ pub fn user_cycle_in_error(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _2: Thrown;
     let mut _4: Shared<user_Failure>;
     let mut _5: Shared<user_Failure>;
-    let mut _6: Option<Shared<user_Node>>;
+    let mut _6: Option<Cc<user_Node>>;
     let mut _7: bool;
-    let mut _9: Shared<user_Node>;
+    let mut _9: Cc<user_Node>;
     let mut _10: Int63;
     let mut _11: Int63;
     let mut _12: Str;
@@ -1873,26 +1873,26 @@ pub fn user_cycle_across_defer(mut _1: Int63) -> Result<Str, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Shared<Vec<Str>>;
-    let mut _3: Shared<user_Node>;
-    let mut _4: Shared<user_Node>;
+    let mut _3: Cc<user_Node>;
+    let mut _4: Cc<user_Node>;
     let mut _5: Int63;
     let mut _7: Thrown;
     let mut _9: Int63;
     let mut _10: Str;
     let mut _11: Str;
     let mut _12: Int63;
-    let mut _15: Option<Shared<user_Node>>;
+    let mut _15: Option<Cc<user_Node>>;
     let mut _16: bool;
     let mut _18: bool;
-    let mut _19: Shared<user_Node>;
+    let mut _19: Cc<user_Node>;
     let mut _20: Int63;
     let mut _21: Str;
     let mut _22: Str;
     let mut _23: Int63;
-    let mut _26: Option<Shared<user_Node>>;
+    let mut _26: Option<Cc<user_Node>>;
     let mut _27: bool;
     let mut _29: bool;
-    let mut _30: Shared<user_Node>;
+    let mut _30: Cc<user_Node>;
     let mut _31: Int63;
     let mut _32: Str;
     let mut _33: Str;
@@ -1901,9 +1901,9 @@ pub fn user_cycle_across_defer(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _39: Str;
     let mut _40: Str;
     _2 = array::new::<Str>(Vec::new());
-    _3 = shared(user_Node { value: _1, next: None });
+    _3 = cc(user_Node { value: _1, next: None });
     _5 = int::add(_1, int::lit(1))?;
-    _4 = shared(user_Node {
+    _4 = cc(user_Node {
         value: _5,
         next: Some(_3.clone()),
     });
@@ -1988,13 +1988,13 @@ pub fn user_cycle_across_defer(mut _1: Int63) -> Result<Str, Thrown> {
 pub fn user_long_list(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
-    let mut _2: Option<Shared<user_Node>>;
+    let mut _2: Option<Cc<user_Node>>;
     let mut _3: Int63;
     let mut _4: bool;
     let mut _5: Int63;
     let mut _6: Int63;
     let mut _8: bool;
-    let mut _10: Shared<user_Node>;
+    let mut _10: Cc<user_Node>;
     _2 = None;
     _3 = int::lit(0);
     'bb1: loop {
@@ -2003,7 +2003,7 @@ pub fn user_long_list(mut _1: Int63) -> Result<Int63, Thrown> {
         if _4 {
             _6 = _3;
             _2 = Some(
-                shared(user_Node {
+                cc(user_Node {
                     value: _6,
                     next: _2.clone(),
                 }),

@@ -23,10 +23,10 @@
     clippy::let_unit_value
 )]
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int, json,
-    map, string,
+    BigInt, CcMap, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int,
+    json, map, string,
 };
-use bex_aot::handle::{Shared, shared};
+use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.sum`.
 pub fn user_sum(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {

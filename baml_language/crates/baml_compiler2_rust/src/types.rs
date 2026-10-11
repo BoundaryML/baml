@@ -485,8 +485,16 @@ impl<'db> NativeTy<'db> {
     }
 
     /// The Rust spelling of this type. `name` gives each class's generated
-    /// struct identifier and each enum's generated enum identifier.
-    pub fn to_tokens(&self, name: &dyn Fn(TypeDecl<'db>) -> Ident) -> TokenStream {
+    /// struct identifier and each enum's generated enum identifier;
+    /// `tracked` says which heap types (arrays, maps, classes, function
+    /// types) the cycle collector tracks, whose handles are spelled `Cc<..>`,
+    /// `CcMap<..>` and `func::CcFunc<..>` rather than `Shared<..>`, `Map<..>`
+    /// and `func::Func<..>` (see [`crate::memory`]).
+    pub fn to_tokens(
+        &self,
+        name: &dyn Fn(TypeDecl<'db>) -> Ident,
+        tracked: &dyn Fn(&NativeTy<'db>) -> bool,
+    ) -> TokenStream {
         let class_name = name;
         match self {
             Self::Int => quote! { Int63 },
@@ -496,24 +504,36 @@ impl<'db> NativeTy<'db> {
             Self::Str => quote! { Str },
             Self::Null => quote! { () },
             Self::Array(inner) => {
-                let inner = inner.to_tokens(class_name);
-                quote! { Shared<Vec<#inner>> }
+                let inner = inner.to_tokens(class_name, tracked);
+                if tracked(self) {
+                    quote! { Cc<Vec<#inner>> }
+                } else {
+                    quote! { Shared<Vec<#inner>> }
+                }
             }
             Self::Map(key, value) => {
-                let key = key.to_tokens(class_name);
-                let value = value.to_tokens(class_name);
-                quote! { Map<#key, #value> }
+                let key = key.to_tokens(class_name, tracked);
+                let value = value.to_tokens(class_name, tracked);
+                if tracked(self) {
+                    quote! { CcMap<#key, #value> }
+                } else {
+                    quote! { Map<#key, #value> }
+                }
             }
             Self::Class(class) => {
                 let name = class_name(TypeDecl::Class(class.clone()));
-                quote! { Shared<#name> }
+                if tracked(self) {
+                    quote! { Cc<#name> }
+                } else {
+                    quote! { Shared<#name> }
+                }
             }
             Self::Enum(enum_ref) => {
                 let name = class_name(TypeDecl::Enum(*enum_ref));
                 quote! { #name }
             }
             Self::Option(inner) => {
-                let inner = inner.to_tokens(class_name);
+                let inner = inner.to_tokens(class_name, tracked);
                 quote! { Option<#inner> }
             }
             Self::Union(members) => {
@@ -521,17 +541,28 @@ impl<'db> NativeTy<'db> {
                 quote! { #name }
             }
             Self::Fn(params, ret) => {
-                let params = params.iter().map(|param| param.to_tokens(class_name));
-                let ret = ret.to_tokens(class_name);
-                quote! { func::Func<(#(#params,)*), #ret> }
+                let params = params
+                    .iter()
+                    .map(|param| param.to_tokens(class_name, tracked));
+                let ret = ret.to_tokens(class_name, tracked);
+                if tracked(self) {
+                    quote! { func::CcFunc<(#(#params,)*), #ret> }
+                } else {
+                    quote! { func::Func<(#(#params,)*), #ret> }
+                }
             }
             Self::Interface(instance) => {
                 let name = class_name(TypeDecl::Interface(instance.clone()));
                 quote! { #name }
             }
             Self::ArrayIter(inner) => {
-                let inner = inner.to_tokens(class_name);
-                quote! { bex_aot::array::Iter<#inner> }
+                let array_tracked = tracked(&Self::Array(inner.clone()));
+                let inner = inner.to_tokens(class_name, tracked);
+                if array_tracked {
+                    quote! { bex_aot::array::Iter<#inner, bex_aot::Tracked> }
+                } else {
+                    quote! { bex_aot::array::Iter<#inner> }
+                }
             }
             Self::Thrown => quote! { Thrown },
         }
@@ -904,9 +935,12 @@ mod tests {
     }
 
     fn tokens(ty: &NativeTy<'_>) -> String {
-        ty.to_tokens(&|_| Ident::new("C", proc_macro2::Span::call_site()))
-            .to_string()
-            .replace(' ', "")
+        ty.to_tokens(
+            &|_| Ident::new("C", proc_macro2::Span::call_site()),
+            &|_| false,
+        )
+        .to_string()
+        .replace(' ', "")
     }
 
     #[test]

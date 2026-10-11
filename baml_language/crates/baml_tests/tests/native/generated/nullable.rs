@@ -23,17 +23,17 @@
     clippy::let_unit_value
 )]
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int, json,
-    map, string,
+    BigInt, CcMap, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int,
+    json, map, string,
 };
-use bex_aot::handle::{Shared, shared};
+use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Node`.
 #[derive(Debug, bex_aot::serde::Serialize)]
 #[serde(crate = "bex_aot::serde")]
 pub struct user_Node {
     pub value: Int63,
-    pub next: Option<Shared<user_Node>>,
+    pub next: Option<Cc<user_Node>>,
 }
 impl bex_aot::json::FromJson for user_Node {
     fn from_json(
@@ -68,11 +68,11 @@ impl ToBaml for user_Node {
         );
     }
 }
-impl bex_aot::render::Overridable for user_Node {}
-impl bex_aot::eq::EqHandle for user_Node {
+impl bex_aot::render::Overridable<bex_aot::Tracked> for user_Node {}
+impl bex_aot::eq::EqHandle<bex_aot::Tracked> for user_Node {
     fn fields_eq(
-        a: &Shared<Self>,
-        b: &Shared<Self>,
+        a: &Cc<Self>,
+        b: &Cc<Self>,
         cx: &mut bex_aot::eq::EqCx,
     ) -> Result<bool, Thrown> {
         {
@@ -157,11 +157,11 @@ pub fn user_describe(mut _1: Int63) -> Result<Str, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.build`.
-pub fn user_build(mut _1: Int63) -> Result<Option<Shared<user_Node>>, Thrown> {
+pub fn user_build(mut _1: Int63) -> Result<Option<Cc<user_Node>>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Option<Shared<user_Node>>;
+    let mut _0: Option<Cc<user_Node>>;
     let mut _2: bool;
-    let mut _3: Option<Shared<user_Node>>;
+    let mut _3: Option<Cc<user_Node>>;
     let mut _4: Int63;
     'bb4: {
         _2 = _1 == int::lit(0);
@@ -172,7 +172,7 @@ pub fn user_build(mut _1: Int63) -> Result<Option<Shared<user_Node>>, Thrown> {
             _4 = int::sub(_1, int::lit(1))?;
             _3 = user_build(_4)?;
             _0 = Some(
-                shared(user_Node {
+                cc(user_Node {
                     value: _1,
                     next: _3.clone(),
                 }),
@@ -186,7 +186,7 @@ pub fn user_build(mut _1: Int63) -> Result<Option<Shared<user_Node>>, Thrown> {
 pub fn user_chain(mut _1: Int63) -> Result<Str, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
-    let mut _2: Option<Shared<user_Node>>;
+    let mut _2: Option<Cc<user_Node>>;
     _2 = user_build(_1)?;
     bex_aot::depth::probe(1)?;
     _0 = json::to_string(&_2)?;
