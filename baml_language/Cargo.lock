@@ -7506,6 +7506,7 @@ dependencies = [
  "once_cell",
  "prost",
  "reqwest",
+ "rusqlite",
  "rustls",
  "rustls-pemfile",
  "serde_json",

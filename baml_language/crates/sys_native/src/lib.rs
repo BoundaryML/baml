@@ -23,6 +23,7 @@ mod http_server;
 mod io_impls;
 pub mod registry;
 pub mod shell;
+mod sqlite;
 
 pub use sys_ops::{SysOps, io};
 pub use sys_types::{CallId, CompletionHandle, OpError, SysOp, SysOpContext, VmInternalError};

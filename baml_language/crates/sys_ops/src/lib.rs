@@ -1925,6 +1925,23 @@ impl io::IoClassNetUdpSocket for DefaultIoOps {
 
 impl io::IoNamespaceNet for DefaultIoOps {}
 
+impl io::IoNamespaceSqlite for DefaultIoOps {
+    fn query(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _sql: String,
+        _params_json: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "sqlite".to_string(),
+            message: "SQLite is unavailable on this host".to_string(),
+        })
+    }
+}
+
 impl io::IoNamespaceEnv for DefaultIoOps {
     fn get(
         &self,

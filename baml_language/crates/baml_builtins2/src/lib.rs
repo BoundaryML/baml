@@ -146,6 +146,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_errors/error_context.baml"),
     builtin!("baml", "ns_panics/panics.baml"),
     builtin!("baml", "ns_env/env.baml"),
+    builtin!("baml", "ns_sqlite/sqlite.baml"),
     builtin!("baml", "ns_io/io.baml"),
     builtin!("baml", "ns_io/read.baml"),
     builtin!("baml", "ns_io/write.baml"),
