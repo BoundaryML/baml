@@ -1,0 +1,3173 @@
+{
+ "schema": 2,
+ "candidate": {
+  "sha": "5269955feb7c8b76ed8dcdb61365820afca04339",
+  "branch": "HEAD",
+  "subject": "fix(ci): native-bench publishes failed runs; absolute bench root; same-machine verdicts",
+  "dirty_files": 0
+ },
+ "machine": {
+  "name": "bench-x86-v1",
+  "cpu": "4 vCPU, AMD family 19h, KVM guest",
+  "kernel": "6.1.102",
+  "glibc": "2.39",
+  "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)"
+ },
+ "protocol": {
+  "name": "tier-a",
+  "trials": 20,
+  "cpu": 3,
+  "workers": 1,
+  "sha256": "fe0814e3c831ceded20457b7ee0dc3cb00b47bff7e7022c725e85dab18c2032b"
+ },
+ "run": {
+  "started": "2026-10-11T16:21:44Z",
+  "finished": "2026-10-11T16:52:32Z",
+  "trials_total": 4600,
+  "trials_failed": 0,
+  "verify_failures": 0,
+  "loadavg_start": "0.35 0.09 0.03 1/147 94415",
+  "loadavg_end": "1.03 1.03 1.00 1/143 130831"
+ },
+ "rows": [
+  {
+   "key": "native-off",
+   "label": "native \u00b7 telemetry off",
+   "family": "BAML native",
+   "status": "measured"
+  },
+  {
+   "key": "native-low",
+   "label": "native \u00b7 low",
+   "family": "BAML native",
+   "status": "unsupported"
+  },
+  {
+   "key": "native-medium",
+   "label": "native \u00b7 medium",
+   "family": "BAML native",
+   "status": "unsupported"
+  },
+  {
+   "key": "native-high",
+   "label": "native \u00b7 high",
+   "family": "BAML native",
+   "status": "unsupported"
+  },
+  {
+   "key": "vm-off",
+   "label": "VM \u00b7 telemetry off",
+   "family": "BAML VM",
+   "status": "measured"
+  },
+  {
+   "key": "vm-low",
+   "label": "VM \u00b7 low",
+   "family": "BAML VM",
+   "status": "measured"
+  },
+  {
+   "key": "vm-medium",
+   "label": "VM \u00b7 medium",
+   "family": "BAML VM",
+   "status": "measured"
+  },
+  {
+   "key": "vm-high",
+   "label": "VM \u00b7 high",
+   "family": "BAML VM",
+   "status": "measured"
+  },
+  {
+   "key": "rust",
+   "label": "Rust",
+   "family": "references",
+   "status": "measured"
+  },
+  {
+   "key": "go",
+   "label": "Go",
+   "family": "references",
+   "status": "measured"
+  },
+  {
+   "key": "node",
+   "label": "Node",
+   "family": "references",
+   "status": "measured"
+  },
+  {
+   "key": "bun",
+   "label": "Bun",
+   "family": "references",
+   "status": "measured"
+  },
+  {
+   "key": "python",
+   "label": "Python",
+   "family": "references",
+   "status": "measured"
+  }
+ ],
+ "reasons": {
+  "unsupported": "native telemetry does not exist yet; it arrives with the telemetry PR, and these rows fill in then",
+  "not_run": "added to the protocol after this run; present from the next run",
+  "not_in_protocol": "this run's protocol has no startup scenario",
+  "pending_http": "needs sys ops compiled natively (PR 8); the VM's HTTP harness has not been run on this machine yet"
+ },
+ "kpis": [
+  {
+   "key": "sort",
+   "title": "Sorting",
+   "question": "How fast does it sort?",
+   "measure": "One job copies the input, sorts it in BAML code (no library sort) and serializes the whole result to JSON; the bar is jobs per second.",
+   "unit": "ops/s",
+   "better": "higher",
+   "default": "merge-random",
+   "scenarios": [
+    {
+     "name": "merge-random",
+     "label": "merge sort 1,024 random integers",
+     "case": "02_merge_sort",
+     "values": {
+      "native-off": {
+       "median": 17206.623044292537,
+       "min": 14590.925174087975,
+       "max": 17929.40074339778,
+       "n": 20,
+       "us_per_job": 58.11715625
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 375.8075200787646,
+       "min": 358.49374238529884,
+       "max": 379.4994492395649,
+       "n": 20,
+       "us_per_job": 2660.936640625
+      },
+      "vm-low": {
+       "median": 358.40892065467153,
+       "min": 351.7128001202418,
+       "max": 365.46120278718075,
+       "n": 20,
+       "us_per_job": 2790.109125
+      },
+      "vm-medium": {
+       "median": 358.50951461844954,
+       "min": 346.1162875445857,
+       "max": 364.09018136048735,
+       "n": 20,
+       "us_per_job": 2789.32625
+      },
+      "vm-high": {
+       "median": 359.9269685685339,
+       "min": 309.38638856130456,
+       "max": 363.384166765897,
+       "n": 20,
+       "us_per_job": 2778.34140625
+      },
+      "rust": {
+       "median": 29536.30311631073,
+       "min": 18819.654776957686,
+       "max": 30648.757575989763,
+       "n": 20,
+       "us_per_job": 33.856640625
+      },
+      "go": {
+       "median": 11230.138885233244,
+       "min": 10691.488739690649,
+       "max": 11782.357760247429,
+       "n": 20,
+       "us_per_job": 89.04609375
+      },
+      "node": {
+       "median": 3061.816545138065,
+       "min": 2588.6740172604696,
+       "max": 3091.3247862711173,
+       "n": 20,
+       "us_per_job": 326.6035
+      },
+      "bun": {
+       "median": 1666.3667206569485,
+       "min": 1519.406861546424,
+       "max": 3563.567246629812,
+       "n": 20,
+       "us_per_job": 600.108
+      },
+      "python": {
+       "median": 947.0306519788131,
+       "min": 881.3614985987867,
+       "max": 957.1381282822921,
+       "n": 20,
+       "us_per_job": 1055.93203125
+      }
+     },
+     "source": "class State { values: int[] }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let a: int[] = [];\n    let b: int[] = [];\n    for (let value in state.values) { a.push(value); b.push(0); }\n    let width = 1;\n    let n = a.length();\n    while (width < n) {\n        let lo = 0;\n        while (lo < n) {\n            let mid = lo + width;\n            if (mid > n) { mid = n; }\n            let hi = lo + 2 * width;\n            if (hi > n) { hi = n; }\n            let i = lo;\n            let j = mid;\n            let k = lo;\n            while (k < hi) {\n                if (i < mid && (j >= hi || a[i] <= a[j])) {\n                    b[k] = a[i]; i += 1;\n                } else { b[k] = a[j]; j += 1; }\n                k += 1;\n            }\n            lo += 2 * width;\n        }\n        let tmp = a; a = b; b = tmp;\n        width *= 2;\n    }\n    baml.json.to_string(a)\n}\n",
+     "headline": {
+      "node": 5.619743309446598,
+      "go": 1.5321825687229838
+     }
+    },
+    {
+     "name": "quick-random",
+     "label": "quick sort 1,024 random integers",
+     "case": "10_quick_sort",
+     "values": {
+      "native-off": {
+       "median": 17274.187235995087,
+       "min": 10531.51225933849,
+       "max": 17991.709195506344,
+       "n": 20,
+       "us_per_job": 57.88984375
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 343.69445927745596,
+       "min": 329.6109238663555,
+       "max": 348.4646977547341,
+       "n": 20,
+       "us_per_job": 2909.561015625
+      },
+      "vm-low": {
+       "median": 329.2767263834706,
+       "min": 316.2807065200981,
+       "max": 332.39689165279214,
+       "n": 20,
+       "us_per_job": 3036.95925
+      },
+      "vm-medium": {
+       "median": 329.4854223833996,
+       "min": 311.75543425281506,
+       "max": 332.67202639419855,
+       "n": 20,
+       "us_per_job": 3035.035640625
+      },
+      "vm-high": {
+       "median": 330.0909428398947,
+       "min": 324.35566847817955,
+       "max": 335.20418470580205,
+       "n": 20,
+       "us_per_job": 3029.46815625
+      },
+      "rust": {
+       "median": 36344.98890626003,
+       "min": 33841.16227471833,
+       "max": 38108.1222699103,
+       "n": 20,
+       "us_per_job": 27.514109375
+      },
+      "go": {
+       "median": 14672.491645850068,
+       "min": 13215.320521080088,
+       "max": 15015.240469076112,
+       "n": 20,
+       "us_per_job": 68.15475
+      },
+      "node": {
+       "median": 1652.8024091247914,
+       "min": 1260.6957724812885,
+       "max": 1769.6204175264534,
+       "n": 20,
+       "us_per_job": 605.033
+      },
+      "bun": {
+       "median": 1141.1210697895917,
+       "min": 878.2642578037141,
+       "max": 1277.8435112903464,
+       "n": 20,
+       "us_per_job": 876.331203125
+      },
+      "python": {
+       "median": 817.3243230648579,
+       "min": 729.6274672637817,
+       "max": 823.6858484825249,
+       "n": 20,
+       "us_per_job": 1223.504515625
+      }
+     },
+     "source": "class State { values: int[] }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let a: int[] = [];\n    for (let v in state.values) { a.push(v); }\n    let lows: int[] = [0]; let highs: int[] = [a.length() - 1]; let top = 1;\n    while (top > 0) {\n        top -= 1; let lo = lows[top]; let hi = highs[top];\n        if (lo < hi) {\n            let pivot = a[lo + (hi - lo) / 2];\n            let lt = lo; let i = lo; let gt = hi;\n            while (i <= gt) {\n                if (a[i] < pivot) { let v = a[lt]; a[lt] = a[i]; a[i] = v; lt += 1; i += 1; }\n                else if (a[i] > pivot) { let v = a[gt]; a[gt] = a[i]; a[i] = v; gt -= 1; }\n                else { i += 1; }\n            }\n            if (top == lows.length()) { lows.push(lo); highs.push(lt - 1); }\n            else { lows[top] = lo; highs[top] = lt - 1; }\n            top += 1;\n            if (top == lows.length()) { lows.push(gt + 1); highs.push(hi); }\n            else { lows[top] = gt + 1; highs[top] = hi; }\n            top += 1;\n        }\n    }\n    baml.json.to_string(a)\n}\n",
+     "headline": {
+      "node": 10.451453325955816,
+      "go": 1.1773179125224362
+     }
+    },
+    {
+     "name": "merge-sorted",
+     "label": "merge sort 1,024 sorted integers",
+     "case": "02_merge_sort",
+     "values": {
+      "native-off": {
+       "median": 22239.140957582662,
+       "min": 17661.905863145617,
+       "max": 22838.725056722116,
+       "n": 20,
+       "us_per_job": 44.965765625
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 416.78240518691956,
+       "min": 393.62479863785154,
+       "max": 420.62707320676395,
+       "n": 20,
+       "us_per_job": 2399.33353125
+      },
+      "vm-low": {
+       "median": 395.2625583731003,
+       "min": 335.86555318699203,
+       "max": 401.1459637031599,
+       "n": 20,
+       "us_per_job": 2529.963890625
+      },
+      "vm-medium": {
+       "median": 394.2725480820147,
+       "min": 331.38091979910695,
+       "max": 399.773148726755,
+       "n": 20,
+       "us_per_job": 2536.316578125
+      },
+      "vm-high": {
+       "median": 393.1855923725534,
+       "min": 377.1271310761795,
+       "max": 396.25126000161396,
+       "n": 20,
+       "us_per_job": 2543.3281875
+      },
+      "rust": {
+       "median": 41782.19334318262,
+       "min": 38218.949193878754,
+       "max": 42566.72000808768,
+       "n": 20,
+       "us_per_job": 23.933640625
+      },
+      "go": {
+       "median": 12874.893254058861,
+       "min": 11369.93504924603,
+       "max": 13431.726325218193,
+       "n": 20,
+       "us_per_job": 77.670546875
+      },
+      "node": {
+       "median": 3275.3869613805264,
+       "min": 2933.0816504853747,
+       "max": 3519.082610354307,
+       "n": 20,
+       "us_per_job": 305.3074375
+      },
+      "bun": {
+       "median": 2696.723674562421,
+       "min": 1464.4717773863774,
+       "max": 3249.2105941323725,
+       "n": 20,
+       "us_per_job": 370.82034375
+      },
+      "python": {
+       "median": 1143.7157874845968,
+       "min": 1113.451059441724,
+       "max": 1156.7594497396515,
+       "n": 20,
+       "us_per_job": 874.34309375
+      }
+     },
+     "source": "class State { values: int[] }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let a: int[] = [];\n    let b: int[] = [];\n    for (let value in state.values) { a.push(value); b.push(0); }\n    let width = 1;\n    let n = a.length();\n    while (width < n) {\n        let lo = 0;\n        while (lo < n) {\n            let mid = lo + width;\n            if (mid > n) { mid = n; }\n            let hi = lo + 2 * width;\n            if (hi > n) { hi = n; }\n            let i = lo;\n            let j = mid;\n            let k = lo;\n            while (k < hi) {\n                if (i < mid && (j >= hi || a[i] <= a[j])) {\n                    b[k] = a[i]; i += 1;\n                } else { b[k] = a[j]; j += 1; }\n                k += 1;\n            }\n            lo += 2 * width;\n        }\n        let tmp = a; a = b; b = tmp;\n        width *= 2;\n    }\n    baml.json.to_string(a)\n}\n",
+     "headline": {
+      "node": 6.789775137960859,
+      "go": 1.7273262402056564
+     }
+    },
+    {
+     "name": "merge-reverse",
+     "label": "merge sort 1,024 reversed integers",
+     "case": "02_merge_sort",
+     "values": {
+      "native-off": {
+       "median": 21876.84158568817,
+       "min": 12066.524256541847,
+       "max": 22432.275558072954,
+       "n": 20,
+       "us_per_job": 45.7104375
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 406.0803502179068,
+       "min": 393.21812279904606,
+       "max": 410.7675209099281,
+       "n": 20,
+       "us_per_job": 2462.566828125
+      },
+      "vm-low": {
+       "median": 385.4344931374412,
+       "min": 352.20045876531134,
+       "max": 391.1352041704987,
+       "n": 20,
+       "us_per_job": 2594.47459375
+      },
+      "vm-medium": {
+       "median": 383.98434879794297,
+       "min": 343.3379913927097,
+       "max": 390.6542275361398,
+       "n": 20,
+       "us_per_job": 2604.2728125
+      },
+      "vm-high": {
+       "median": 386.7346206125516,
+       "min": 352.90399180733385,
+       "max": 392.42869656427206,
+       "n": 20,
+       "us_per_job": 2585.75246875
+      },
+      "rust": {
+       "median": 40793.094239059006,
+       "min": 24158.327639769137,
+       "max": 42581.50365934797,
+       "n": 20,
+       "us_per_job": 24.513953125
+      },
+      "go": {
+       "median": 12967.753452208459,
+       "min": 12011.660319254917,
+       "max": 13449.706922480093,
+       "n": 20,
+       "us_per_job": 77.114359375
+      },
+      "node": {
+       "median": 3265.1510277751604,
+       "min": 3160.6895557878006,
+       "max": 3325.825974077265,
+       "n": 20,
+       "us_per_job": 306.264546875
+      },
+      "bun": {
+       "median": 2682.6197592717626,
+       "min": 1543.6624936323922,
+       "max": 3255.055024162172,
+       "n": 20,
+       "us_per_job": 372.7699375
+      },
+      "python": {
+       "median": 1104.9242260230235,
+       "min": 1026.7623356751108,
+       "max": 1114.075169993945,
+       "n": 20,
+       "us_per_job": 905.0394375
+      }
+     },
+     "source": "class State { values: int[] }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let a: int[] = [];\n    let b: int[] = [];\n    for (let value in state.values) { a.push(value); b.push(0); }\n    let width = 1;\n    let n = a.length();\n    while (width < n) {\n        let lo = 0;\n        while (lo < n) {\n            let mid = lo + width;\n            if (mid > n) { mid = n; }\n            let hi = lo + 2 * width;\n            if (hi > n) { hi = n; }\n            let i = lo;\n            let j = mid;\n            let k = lo;\n            while (k < hi) {\n                if (i < mid && (j >= hi || a[i] <= a[j])) {\n                    b[k] = a[i]; i += 1;\n                } else { b[k] = a[j]; j += 1; }\n                k += 1;\n            }\n            lo += 2 * width;\n        }\n        let tmp = a; a = b; b = tmp;\n        width *= 2;\n    }\n    baml.json.to_string(a)\n}\n",
+     "headline": {
+      "node": 6.700100975296944,
+      "go": 1.6870186240287024
+     }
+    },
+    {
+     "name": "merge-duplicates",
+     "label": "merge sort 1,024 integers, many duplicates",
+     "case": "02_merge_sort",
+     "values": {
+      "native-off": {
+       "median": 19895.146361441963,
+       "min": 16558.46743104692,
+       "max": 20381.321792409868,
+       "n": 20,
+       "us_per_job": 50.263515625
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 384.07734165428894,
+       "min": 349.1657410228315,
+       "max": 388.0922339032864,
+       "n": 20,
+       "us_per_job": 2603.642265625
+      },
+      "vm-low": {
+       "median": 364.88251829097624,
+       "min": 305.949492882501,
+       "max": 371.1879720249545,
+       "n": 20,
+       "us_per_job": 2740.608140625
+      },
+      "vm-medium": {
+       "median": 363.3382425439345,
+       "min": 298.15319161298424,
+       "max": 370.9431125467949,
+       "n": 20,
+       "us_per_job": 2752.256390625
+      },
+      "vm-high": {
+       "median": 366.41499052276214,
+       "min": 352.1408573993823,
+       "max": 371.52116146803104,
+       "n": 20,
+       "us_per_job": 2729.145984375
+      },
+      "rust": {
+       "median": 39573.25194434517,
+       "min": 37246.071994329286,
+       "max": 40745.43778426309,
+       "n": 20,
+       "us_per_job": 25.26959375
+      },
+      "go": {
+       "median": 14937.816670043236,
+       "min": 14136.604661457033,
+       "max": 15348.148773443098,
+       "n": 20,
+       "us_per_job": 66.9441875
+      },
+      "node": {
+       "median": 3239.694355085687,
+       "min": 2707.4721069031825,
+       "max": 3304.492684989115,
+       "n": 20,
+       "us_per_job": 308.67109375
+      },
+      "bun": {
+       "median": 1919.1082096060782,
+       "min": 1266.004121872045,
+       "max": 3136.612203969971,
+       "n": 20,
+       "us_per_job": 521.075359375
+      },
+      "python": {
+       "median": 1049.3418749106113,
+       "min": 939.802479363406,
+       "max": 1060.1440596633174,
+       "n": 20,
+       "us_per_job": 952.978265625
+      }
+     },
+     "source": "class State { values: int[] }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let a: int[] = [];\n    let b: int[] = [];\n    for (let value in state.values) { a.push(value); b.push(0); }\n    let width = 1;\n    let n = a.length();\n    while (width < n) {\n        let lo = 0;\n        while (lo < n) {\n            let mid = lo + width;\n            if (mid > n) { mid = n; }\n            let hi = lo + 2 * width;\n            if (hi > n) { hi = n; }\n            let i = lo;\n            let j = mid;\n            let k = lo;\n            while (k < hi) {\n                if (i < mid && (j >= hi || a[i] <= a[j])) {\n                    b[k] = a[i]; i += 1;\n                } else { b[k] = a[j]; j += 1; }\n                k += 1;\n            }\n            lo += 2 * width;\n        }\n        let tmp = a; a = b; b = tmp;\n        width *= 2;\n    }\n    baml.json.to_string(a)\n}\n",
+     "headline": {
+      "node": 6.141056587702624,
+      "go": 1.3318644083603135
+     }
+    },
+    {
+     "name": "quick-sorted",
+     "label": "quick sort 1,024 sorted integers",
+     "case": "10_quick_sort",
+     "values": {
+      "native-off": {
+       "median": 20361.240215867325,
+       "min": 11971.952707793816,
+       "max": 20872.523670746374,
+       "n": 20,
+       "us_per_job": 49.112921875
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 394.82262430122023,
+       "min": 366.03569852371055,
+       "max": 400.5468165002157,
+       "n": 20,
+       "us_per_job": 2532.782921875
+      },
+      "vm-low": {
+       "median": 378.2822822183833,
+       "min": 347.374963928638,
+       "max": 383.249454998316,
+       "n": 20,
+       "us_per_job": 2643.528515625
+      },
+      "vm-medium": {
+       "median": 377.25958226812764,
+       "min": 359.62409886489036,
+       "max": 383.13163368477996,
+       "n": 20,
+       "us_per_job": 2650.694765625
+      },
+      "vm-high": {
+       "median": 379.089252050864,
+       "min": 349.9805979506011,
+       "max": 382.5287866360221,
+       "n": 20,
+       "us_per_job": 2637.90121875
+      },
+      "rust": {
+       "median": 42212.59980146887,
+       "min": 38539.91530853611,
+       "max": 44383.909723127625,
+       "n": 20,
+       "us_per_job": 23.689609375
+      },
+      "go": {
+       "median": 15593.667996189297,
+       "min": 12325.84448404978,
+       "max": 15904.93619635439,
+       "n": 20,
+       "us_per_job": 64.12859375
+      },
+      "node": {
+       "median": 2099.098574915418,
+       "min": 2019.1080817198663,
+       "max": 2131.5779078736023,
+       "n": 20,
+       "us_per_job": 476.39496875
+      },
+      "bun": {
+       "median": 1541.7694864305615,
+       "min": 982.7398030227049,
+       "max": 2005.6935371728032,
+       "n": 20,
+       "us_per_job": 648.605390625
+      },
+      "python": {
+       "median": 1060.638545172488,
+       "min": 949.9024702480899,
+       "max": 1075.0628718604678,
+       "n": 20,
+       "us_per_job": 942.828265625
+      }
+     },
+     "source": "class State { values: int[] }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let a: int[] = [];\n    for (let v in state.values) { a.push(v); }\n    let lows: int[] = [0]; let highs: int[] = [a.length() - 1]; let top = 1;\n    while (top > 0) {\n        top -= 1; let lo = lows[top]; let hi = highs[top];\n        if (lo < hi) {\n            let pivot = a[lo + (hi - lo) / 2];\n            let lt = lo; let i = lo; let gt = hi;\n            while (i <= gt) {\n                if (a[i] < pivot) { let v = a[lt]; a[lt] = a[i]; a[i] = v; lt += 1; i += 1; }\n                else if (a[i] > pivot) { let v = a[gt]; a[gt] = a[i]; a[i] = v; gt -= 1; }\n                else { i += 1; }\n            }\n            if (top == lows.length()) { lows.push(lo); highs.push(lt - 1); }\n            else { lows[top] = lo; highs[top] = lt - 1; }\n            top += 1;\n            if (top == lows.length()) { lows.push(gt + 1); highs.push(hi); }\n            else { lows[top] = gt + 1; highs[top] = hi; }\n            top += 1;\n        }\n    }\n    baml.json.to_string(a)\n}\n",
+     "headline": {
+      "node": 9.699992396349357,
+      "go": 1.305737702049518
+     }
+    },
+    {
+     "name": "quick-reverse",
+     "label": "quick sort 1,024 reversed integers",
+     "case": "10_quick_sort",
+     "values": {
+      "native-off": {
+       "median": 20454.995813118043,
+       "min": 17658.689537612732,
+       "max": 20952.212586386955,
+       "n": 20,
+       "us_per_job": 48.8878125
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 396.3608696521637,
+       "min": 358.09057422128785,
+       "max": 401.1516562611688,
+       "n": 20,
+       "us_per_job": 2522.953390625
+      },
+      "vm-low": {
+       "median": 379.01941128371703,
+       "min": 357.3416802989726,
+       "max": 383.46654741496155,
+       "n": 20,
+       "us_per_job": 2638.387296875
+      },
+      "vm-medium": {
+       "median": 378.1363746117182,
+       "min": 359.3991093977757,
+       "max": 383.5840690535713,
+       "n": 20,
+       "us_per_job": 2644.548546875
+      },
+      "vm-high": {
+       "median": 375.4270357878579,
+       "min": 361.4992703250197,
+       "max": 381.2356844511287,
+       "n": 20,
+       "us_per_job": 2663.633421875
+      },
+      "rust": {
+       "median": 41281.05431812729,
+       "min": 19180.28266941584,
+       "max": 43630.25540060755,
+       "n": 20,
+       "us_per_job": 24.2241875
+      },
+      "go": {
+       "median": 15733.432388401412,
+       "min": 14699.707935177963,
+       "max": 16173.4521879901,
+       "n": 20,
+       "us_per_job": 63.558921875
+      },
+      "node": {
+       "median": 2180.2881645986745,
+       "min": 2101.432605710105,
+       "max": 2213.558446693466,
+       "n": 20,
+       "us_per_job": 458.65496875
+      },
+      "bun": {
+       "median": 1365.3141097106686,
+       "min": 1035.788834766045,
+       "max": 1975.842485343108,
+       "n": 20,
+       "us_per_job": 732.4321875
+      },
+      "python": {
+       "median": 1062.6283601097416,
+       "min": 976.7066453044645,
+       "max": 1072.0779443548663,
+       "n": 20,
+       "us_per_job": 941.06278125
+      }
+     },
+     "source": "class State { values: int[] }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let a: int[] = [];\n    for (let v in state.values) { a.push(v); }\n    let lows: int[] = [0]; let highs: int[] = [a.length() - 1]; let top = 1;\n    while (top > 0) {\n        top -= 1; let lo = lows[top]; let hi = highs[top];\n        if (lo < hi) {\n            let pivot = a[lo + (hi - lo) / 2];\n            let lt = lo; let i = lo; let gt = hi;\n            while (i <= gt) {\n                if (a[i] < pivot) { let v = a[lt]; a[lt] = a[i]; a[i] = v; lt += 1; i += 1; }\n                else if (a[i] > pivot) { let v = a[gt]; a[gt] = a[i]; a[i] = v; gt -= 1; }\n                else { i += 1; }\n            }\n            if (top == lows.length()) { lows.push(lo); highs.push(lt - 1); }\n            else { lows[top] = lo; highs[top] = lt - 1; }\n            top += 1;\n            if (top == lows.length()) { lows.push(gt + 1); highs.push(hi); }\n            else { lows[top] = gt + 1; highs[top] = hi; }\n            top += 1;\n        }\n    }\n    baml.json.to_string(a)\n}\n",
+     "headline": {
+      "node": 9.381785465447038,
+      "go": 1.300097480839422
+     }
+    },
+    {
+     "name": "quick-duplicates",
+     "label": "quick sort 1,024 integers, many duplicates",
+     "case": "10_quick_sort",
+     "values": {
+      "native-off": {
+       "median": 51778.34338426489,
+       "min": 47365.44513157233,
+       "max": 53723.00419039433,
+       "n": 20,
+       "us_per_job": 19.31309375
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 745.5574300500253,
+       "min": 687.2160589679484,
+       "max": 756.3790885007971,
+       "n": 20,
+       "us_per_job": 1341.278296875
+      },
+      "vm-low": {
+       "median": 688.5533979400118,
+       "min": 663.3875557989267,
+       "max": 697.9782775636693,
+       "n": 20,
+       "us_per_job": 1452.3201875
+      },
+      "vm-medium": {
+       "median": 680.7754253346575,
+       "min": 554.7804136647339,
+       "max": 690.3746201375459,
+       "n": 20,
+       "us_per_job": 1468.9131875
+      },
+      "vm-high": {
+       "median": 683.6264490330473,
+       "min": 662.9756876456345,
+       "max": 693.9725340851659,
+       "n": 20,
+       "us_per_job": 1462.787171875
+      },
+      "rust": {
+       "median": 75819.14291197635,
+       "min": 69774.54101434739,
+       "max": 77946.11974472646,
+       "n": 20,
+       "us_per_job": 13.18928125
+      },
+      "go": {
+       "median": 26314.664175545124,
+       "min": 12702.364545160082,
+       "max": 27959.63676936882,
+       "n": 20,
+       "us_per_job": 38.001625
+      },
+      "node": {
+       "median": 3626.8978451353155,
+       "min": 2406.0817927956045,
+       "max": 5951.720019186858,
+       "n": 20,
+       "us_per_job": 275.71771875
+      },
+      "bun": {
+       "median": 1534.2767249309852,
+       "min": 1378.9141447547872,
+       "max": 1716.9007687691458,
+       "n": 20,
+       "us_per_job": 651.77290625
+      },
+      "python": {
+       "median": 3898.0534765429456,
+       "min": 3570.97781518873,
+       "max": 3973.0182398784254,
+       "n": 20,
+       "us_per_job": 256.538296875
+      }
+     },
+     "source": "class State { values: int[] }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let a: int[] = [];\n    for (let v in state.values) { a.push(v); }\n    let lows: int[] = [0]; let highs: int[] = [a.length() - 1]; let top = 1;\n    while (top > 0) {\n        top -= 1; let lo = lows[top]; let hi = highs[top];\n        if (lo < hi) {\n            let pivot = a[lo + (hi - lo) / 2];\n            let lt = lo; let i = lo; let gt = hi;\n            while (i <= gt) {\n                if (a[i] < pivot) { let v = a[lt]; a[lt] = a[i]; a[i] = v; lt += 1; i += 1; }\n                else if (a[i] > pivot) { let v = a[gt]; a[gt] = a[i]; a[i] = v; gt -= 1; }\n                else { i += 1; }\n            }\n            if (top == lows.length()) { lows.push(lo); highs.push(lt - 1); }\n            else { lows[top] = lo; highs[top] = lt - 1; }\n            top += 1;\n            if (top == lows.length()) { lows.push(gt + 1); highs.push(hi); }\n            else { lows[top] = gt + 1; highs[top] = hi; }\n            top += 1;\n        }\n    }\n    baml.json.to_string(a)\n}\n",
+     "headline": {
+      "node": 14.27620671856367,
+      "go": 1.9676611884100652
+     }
+    }
+   ]
+  },
+  {
+   "key": "arrays",
+   "title": "Arrays and loops",
+   "question": "How fast does it iterate, index and build arrays?",
+   "measure": "One job walks or builds an array of 8,192 integers in BAML code and returns the sum; the bar is jobs per second.",
+   "unit": "ops/s",
+   "better": "higher",
+   "default": "array-iterator",
+   "scenarios": [
+    {
+     "name": "array-iterator",
+     "label": "iterate 8,192 integers",
+     "case": "01_array_traversal",
+     "values": {
+      "native-off": {
+       "median": 189416.78129094935,
+       "min": 163572.42168970313,
+       "max": 193151.27819367338,
+       "n": 20,
+       "us_per_job": 5.27936328125
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 263.44985339581666,
+       "min": 251.46410357583252,
+       "max": 267.35933789729927,
+       "n": 20,
+       "us_per_job": 3795.7887890625
+      },
+      "vm-low": {
+       "median": 226.97239306588912,
+       "min": 214.90353244021372,
+       "max": 230.44298194846144,
+       "n": 20,
+       "us_per_job": 4405.8221640625
+      },
+      "vm-medium": {
+       "median": 225.72911049377177,
+       "min": 209.54624593971405,
+       "max": 228.85155922646172,
+       "n": 20,
+       "us_per_job": 4430.08878125
+      },
+      "vm-high": {
+       "median": 225.75736662469515,
+       "min": 188.28717692614197,
+       "max": 229.17232208305694,
+       "n": 20,
+       "us_per_job": 4429.5343046875
+      },
+      "rust": {
+       "median": 1058358.552033206,
+       "min": 725825.2008777949,
+       "max": 1218270.2466045476,
+       "n": 20,
+       "us_per_job": 0.944859375
+      },
+      "go": {
+       "median": 364050.57458841667,
+       "min": 173893.90569787836,
+       "max": 381852.4617550894,
+       "n": 20,
+       "us_per_job": 2.74687109375
+      },
+      "node": {
+       "median": 9431.797219012484,
+       "min": 9011.751605711084,
+       "max": 9721.930754181058,
+       "n": 20,
+       "us_per_job": 106.02433203125
+      },
+      "bun": {
+       "median": 8004.04154072547,
+       "min": 6336.26101593629,
+       "max": 10342.73479846252,
+       "n": 20,
+       "us_per_job": 124.9368828125
+      },
+      "python": {
+       "median": 4956.40522151869,
+       "min": 4671.312067550092,
+       "max": 5213.914062883469,
+       "n": 20,
+       "us_per_job": 201.75912890625
+      }
+     },
+     "source": "class State { values: int[], variant: string }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let values = state.values;\n    if (state.variant == \"build\") {\n        values = [];\n        let j = 0;\n        while (j < state.values.length()) {\n            values.push(state.values[j]);\n            j += 1;\n        }\n    }\n    let total = 0;\n    if (state.variant == \"indexed\") {\n        let i = 0;\n        while (i < values.length()) { total += values[i]; i += 1; }\n    } else {\n        for (let value in values) { total += value; }\n    }\n    total.to_string()\n}\n",
+     "headline": {
+      "node": 20.08278771188228,
+      "go": 0.5203034811992746
+     }
+    },
+    {
+     "name": "array-indexed",
+     "label": "index 8,192 integers",
+     "case": "01_array_traversal",
+     "values": {
+      "native-off": {
+       "median": 187897.35519793077,
+       "min": 163079.55351875987,
+       "max": 190914.27054341958,
+       "n": 20,
+       "us_per_job": 5.3220546875
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 2235.2509606624035,
+       "min": 1869.3924706683924,
+       "max": 2264.3129298866647,
+       "n": 20,
+       "us_per_job": 447.37705859375
+      },
+      "vm-low": {
+       "median": 2163.57095018923,
+       "min": 1972.8758850679574,
+       "max": 2184.610175685497,
+       "n": 20,
+       "us_per_job": 462.19884765625
+      },
+      "vm-medium": {
+       "median": 2108.79155115301,
+       "min": 2021.690623937477,
+       "max": 2149.9437630139832,
+       "n": 20,
+       "us_per_job": 474.20523828125
+      },
+      "vm-high": {
+       "median": 2146.2331244456054,
+       "min": 2037.1303288822778,
+       "max": 2174.2996759104412,
+       "n": 20,
+       "us_per_job": 465.932609375
+      },
+      "rust": {
+       "median": 1086393.766815763,
+       "min": 630725.1861378431,
+       "max": 1317387.4560013174,
+       "n": 20,
+       "us_per_job": 0.9204765625
+      },
+      "go": {
+       "median": 191350.22248200673,
+       "min": 100684.73485697655,
+       "max": 194975.71942993975,
+       "n": 20,
+       "us_per_job": 5.22601953125
+      },
+      "node": {
+       "median": 86174.33741696463,
+       "min": 67983.05947136797,
+       "max": 118494.70985922273,
+       "n": 20,
+       "us_per_job": 11.6043828125
+      },
+      "bun": {
+       "median": 8387.34873285508,
+       "min": 7249.803065896405,
+       "max": 12952.767530811901,
+       "n": 20,
+       "us_per_job": 119.2271875
+      },
+      "python": {
+       "median": 2046.3993064624851,
+       "min": 1745.3453106382628,
+       "max": 2091.962816145429,
+       "n": 20,
+       "us_per_job": 488.66318359375
+      }
+     },
+     "source": "class State { values: int[], variant: string }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let values = state.values;\n    if (state.variant == \"build\") {\n        values = [];\n        let j = 0;\n        while (j < state.values.length()) {\n            values.push(state.values[j]);\n            j += 1;\n        }\n    }\n    let total = 0;\n    if (state.variant == \"indexed\") {\n        let i = 0;\n        while (i < values.length()) { total += values[i]; i += 1; }\n    } else {\n        for (let value in values) { total += value; }\n    }\n    total.to_string()\n}\n",
+     "headline": {
+      "node": 2.1804328391730756,
+      "go": 0.9819552481346049
+     }
+    },
+    {
+     "name": "array-build",
+     "label": "build and sum 8,192 integers",
+     "case": "01_array_traversal",
+     "values": {
+      "native-off": {
+       "median": 33539.42172534384,
+       "min": 27808.954222550714,
+       "max": 33728.865769391,
+       "n": 20,
+       "us_per_job": 29.81566015625
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 161.91315378280683,
+       "min": 155.99256979603885,
+       "max": 164.2522433815213,
+       "n": 20,
+       "us_per_job": 6176.15046484375
+      },
+      "vm-low": {
+       "median": 146.73523137838922,
+       "min": 142.70450430367964,
+       "max": 148.8080612637766,
+       "n": 20,
+       "us_per_job": 6814.9958984375
+      },
+      "vm-medium": {
+       "median": 145.22305330652696,
+       "min": 129.77166509257017,
+       "max": 148.42783170782573,
+       "n": 20,
+       "us_per_job": 6885.9590625
+      },
+      "vm-high": {
+       "median": 147.83789484049032,
+       "min": 133.46067970662935,
+       "max": 149.640339444146,
+       "n": 20,
+       "us_per_job": 6764.16558203125
+      },
+      "rust": {
+       "median": 143365.08085846563,
+       "min": 128709.70531510751,
+       "max": 148575.30214180585,
+       "n": 20,
+       "us_per_job": 6.97519921875
+      },
+      "go": {
+       "median": 24749.950572608475,
+       "min": 22820.292160356054,
+       "max": 26387.67200948307,
+       "n": 20,
+       "us_per_job": 40.40412109375
+      },
+      "node": {
+       "median": 6606.7446966228,
+       "min": 4431.083190055874,
+       "max": 6788.162399360852,
+       "n": 20,
+       "us_per_job": 151.36047265625
+      },
+      "bun": {
+       "median": 5641.23748124564,
+       "min": 4061.3394246655803,
+       "max": 6257.379919657197,
+       "n": 20,
+       "us_per_job": 177.2660703125
+      },
+      "python": {
+       "median": 1165.0620447648057,
+       "min": 1125.1206702906393,
+       "max": 1179.021642130474,
+       "n": 20,
+       "us_per_job": 858.32338671875
+      }
+     },
+     "source": "class State { values: int[], variant: string }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let values = state.values;\n    if (state.variant == \"build\") {\n        values = [];\n        let j = 0;\n        while (j < state.values.length()) {\n            values.push(state.values[j]);\n            j += 1;\n        }\n    }\n    let total = 0;\n    if (state.variant == \"indexed\") {\n        let i = 0;\n        while (i < values.length()) { total += values[i]; i += 1; }\n    } else {\n        for (let value in values) { total += value; }\n    }\n    total.to_string()\n}\n",
+     "headline": {
+      "node": 5.076542724965344,
+      "go": 1.3551308568051421
+     }
+    },
+    {
+     "name": "array-small",
+     "label": "sum 128 integers",
+     "case": "01_array_traversal",
+     "values": {
+      "native-off": {
+       "median": 5721849.123946623,
+       "min": 5149856.291852012,
+       "max": 5964776.364573656,
+       "n": 20,
+       "us_per_job": 0.1747686767578125
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 11124.852147394617,
+       "min": 10910.65685569179,
+       "max": 11365.10010332169,
+       "n": 20,
+       "us_per_job": 89.88883508300782
+      },
+      "vm-low": {
+       "median": 8470.637390099257,
+       "min": 7136.627055610379,
+       "max": 8616.30089736607,
+       "n": 20,
+       "us_per_job": 118.05487048339843
+      },
+      "vm-medium": {
+       "median": 7944.790733678672,
+       "min": 7585.283625310456,
+       "max": 8055.670045214552,
+       "n": 20,
+       "us_per_job": 125.86863940429687
+      },
+      "vm-high": {
+       "median": 8368.866605846228,
+       "min": 7992.9706818459845,
+       "max": 8524.08040853287,
+       "n": 20,
+       "us_per_job": 119.49049340820312
+      },
+      "rust": {
+       "median": 28624540.511831384,
+       "min": 16808446.901147783,
+       "max": 29514339.2419657,
+       "n": 20,
+       "us_per_job": 0.03493505859375
+      },
+      "go": {
+       "median": 10665694.533050373,
+       "min": 9694169.771041509,
+       "max": 11569150.814162042,
+       "n": 20,
+       "us_per_job": 0.093758544921875
+      },
+      "node": {
+       "median": 552823.1942261829,
+       "min": 486643.4433825521,
+       "max": 574293.6300517089,
+       "n": 20,
+       "us_per_job": 1.8088966064453125
+      },
+      "bun": {
+       "median": 258964.38145984468,
+       "min": 197303.39819457757,
+       "max": 302195.0902446319,
+       "n": 20,
+       "us_per_job": 3.861534912109375
+      },
+      "python": {
+       "median": 371763.1037644736,
+       "min": 356555.8618836996,
+       "max": 379405.9628982466,
+       "n": 20,
+       "us_per_job": 2.689885009765625
+      }
+     },
+     "source": "class State { values: int[], variant: string }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let values = state.values;\n    if (state.variant == \"build\") {\n        values = [];\n        let j = 0;\n        while (j < state.values.length()) {\n            values.push(state.values[j]);\n            j += 1;\n        }\n    }\n    let total = 0;\n    if (state.variant == \"indexed\") {\n        let i = 0;\n        while (i < values.length()) { total += values[i]; i += 1; }\n    } else {\n        for (let value in values) { total += value; }\n    }\n    total.to_string()\n}\n",
+     "headline": {
+      "node": 10.35023346289913,
+      "go": 0.5364722481237405
+     }
+    },
+    {
+     "name": "array-empty",
+     "label": "call with an empty array",
+     "case": "01_array_traversal",
+     "values": {
+      "native-off": {
+       "median": 11508931.644644877,
+       "min": 8529956.892063558,
+       "max": 12492946.792124808,
+       "n": 20,
+       "us_per_job": 0.0868890380859375
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 34485.76186997966,
+       "min": 31585.20921407178,
+       "max": 38567.33644144384,
+       "n": 20,
+       "us_per_job": 28.997474487304686
+      },
+      "vm-low": {
+       "median": 21132.024386025954,
+       "min": 19566.121634896972,
+       "max": 21671.012632348593,
+       "n": 20,
+       "us_per_job": 47.32154296875
+      },
+      "vm-medium": {
+       "median": 17827.345341952412,
+       "min": 16013.377550584855,
+       "max": 18504.70900796178,
+       "n": 20,
+       "us_per_job": 56.093601196289065
+      },
+      "vm-high": {
+       "median": 20294.389643233895,
+       "min": 16852.21090762478,
+       "max": 20769.243176638098,
+       "n": 20,
+       "us_per_job": 49.274701904296876
+      },
+      "rust": {
+       "median": 46086164.02443827,
+       "min": 28689902.499159474,
+       "max": 46766532.70003653,
+       "n": 20,
+       "us_per_job": 0.021698486328125
+      },
+      "go": {
+       "median": 169256198.34710744,
+       "min": 111976817.29954346,
+       "max": 173677069.19945726,
+       "n": 20,
+       "us_per_job": 0.005908203125
+      },
+      "node": {
+       "median": 1246021.7652258931,
+       "min": 1127503.4030177782,
+       "max": 1288287.310715965,
+       "n": 20,
+       "us_per_job": 0.80255419921875
+      },
+      "bun": {
+       "median": 1412252.6015134135,
+       "min": 1247692.9408177445,
+       "max": 1430716.6052895298,
+       "n": 20,
+       "us_per_job": 0.708088623046875
+      },
+      "python": {
+       "median": 2472949.1004768396,
+       "min": 2308726.8295927374,
+       "max": 2595608.5041665346,
+       "n": 20,
+       "us_per_job": 0.40437548828125
+      }
+     },
+     "source": "class State { values: int[], variant: string }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let values = state.values;\n    if (state.variant == \"build\") {\n        values = [];\n        let j = 0;\n        while (j < state.values.length()) {\n            values.push(state.values[j]);\n            j += 1;\n        }\n    }\n    let total = 0;\n    if (state.variant == \"indexed\") {\n        let i = 0;\n        while (i < values.length()) { total += values[i]; i += 1; }\n    } else {\n        for (let value in values) { total += value; }\n    }\n    total.to_string()\n}\n",
+     "headline": {
+      "node": 9.236541419931301,
+      "go": 0.06799710590830225
+     }
+    }
+   ]
+  },
+  {
+   "key": "json",
+   "title": "JSON",
+   "question": "How fast does it parse, validate and serialize JSON?",
+   "measure": "One job parses a JSON document, validates every row, groups and sorts, and serializes the answer; the bar is jobs per second.",
+   "unit": "ops/s",
+   "better": "higher",
+   "default": "json-aggregate",
+   "scenarios": [
+    {
+     "name": "json-aggregate",
+     "label": "parse, validate and aggregate 1,024 JSON rows",
+     "case": "03_json_aggregate",
+     "values": {
+      "native-off": {
+       "median": 1177.7194037883846,
+       "min": 1038.0975642370718,
+       "max": 1195.4922768210188,
+       "n": 20,
+       "us_per_job": 849.0986875
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 45.528202228255644,
+       "min": 44.58994024277765,
+       "max": 46.489287034119684,
+       "n": 20,
+       "us_per_job": 21964.407796875
+      },
+      "vm-low": {
+       "median": 44.882875803784366,
+       "min": 42.881253262945116,
+       "max": 45.70678575310689,
+       "n": 20,
+       "us_per_job": 22280.212265625
+      },
+      "vm-medium": {
+       "median": 43.8228714866699,
+       "min": 42.88399026438004,
+       "max": 44.48351635568748,
+       "n": 20,
+       "us_per_job": 22819.13453125
+      },
+      "vm-high": {
+       "median": 41.81159247869111,
+       "min": 39.29104765953985,
+       "max": 42.675211609637685,
+       "n": 20,
+       "us_per_job": 23916.812078125
+      },
+      "rust": {
+       "median": 2232.082057195638,
+       "min": 1738.4565938898031,
+       "max": 2270.4970898613083,
+       "n": 20,
+       "us_per_job": 448.012203125
+      },
+      "go": {
+       "median": 567.0654584037551,
+       "min": 508.31572760630945,
+       "max": 585.085458587697,
+       "n": 20,
+       "us_per_job": 1763.46484375
+      },
+      "node": {
+       "median": 2522.6471634507843,
+       "min": 2357.821346550297,
+       "max": 2575.608600214677,
+       "n": 20,
+       "us_per_job": 396.408984375
+      },
+      "bun": {
+       "median": 1775.3377240209213,
+       "min": 1595.4819143150426,
+       "max": 1959.1177431600313,
+       "n": 20,
+       "us_per_job": 563.273109375
+      },
+      "python": {
+       "median": 1258.951613158633,
+       "min": 1154.9962774830913,
+       "max": 1285.1658010472574,
+       "n": 20,
+       "us_per_job": 794.311703125
+      }
+     },
+     "source": "class State { raw: string }\nclass Row { account: string, amount_cents: int | float, active: bool }\nclass Total { account: string, total_cents: int }\nclass Invalid { message: string }\nfunction prepare(raw: string) -> State { State { raw: raw } }\nfunction aggregate(raw: string) -> string {\n    let rows = baml.json.deserialize<Row[]>(raw);\n    let totals: map<string, int> = {};\n    if (rows.length() > 1000000) { throw Invalid { message: \"too many rows\" }; }\n    for (let row in rows) {\n        if (!row.account.is_ascii()) { throw Invalid { message: \"non-ASCII account\" }; }\n        let amount = match (row.amount_cents) {\n            let n: int => n,\n            let f: float => {\n                if (f != f.floor() || f < 0.0 || f > 1000000.0) {\n                    throw Invalid { message: \"invalid amount\" };\n                }\n                f.itrunc()\n            }\n        };\n        if (amount < 0 || amount > 1000000) { throw Invalid { message: \"invalid amount\" }; }\n        if (row.active) { totals[row.account] = (totals.get(row.account) ?? 0) + amount; }\n    }\n    let accounts = totals.keys();\n    accounts.sort();\n    let output: Total[] = [];\n    for (let account in accounts) {\n        output.push(Total { account: account, total_cents: totals.get(account) ?? 0 });\n    }\n    baml.json.to_string(output)\n}\nfunction run(state: State) -> string {\n    aggregate(state.raw) catch (_) { let _ => \"{\\\"error\\\":\\\"invalid\\\"}\" }\n}\n",
+     "headline": {
+      "node": 0.46685855273448407,
+      "go": 2.0768667643830265
+     }
+    },
+    {
+     "name": "json-hello",
+     "label": "serialize a record to JSON",
+     "case": "09_json_hello",
+     "values": {
+      "native-off": {
+       "median": 15731549.707433887,
+       "min": 10692311.507548051,
+       "max": 16125539.847327042,
+       "n": 20,
+       "us_per_job": 0.0635665283203125
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 34129.56173234889,
+       "min": 32780.232796153934,
+       "max": 37328.15594726607,
+       "n": 20,
+       "us_per_job": 29.300112548828125
+      },
+      "vm-low": {
+       "median": 20961.721961242984,
+       "min": 18739.098491708904,
+       "max": 21747.3765382028,
+       "n": 20,
+       "us_per_job": 47.70600439453125
+      },
+      "vm-medium": {
+       "median": 17770.174395259404,
+       "min": 15614.74353233587,
+       "max": 18124.27874574327,
+       "n": 20,
+       "us_per_job": 56.27406787109375
+      },
+      "vm-high": {
+       "median": 20184.92545612412,
+       "min": 18047.856826915788,
+       "max": 20616.430361823033,
+       "n": 20,
+       "us_per_job": 49.541921875
+      },
+      "rust": {
+       "median": 30561234.38735768,
+       "min": 17943820.42160969,
+       "max": 31084937.162285227,
+       "n": 20,
+       "us_per_job": 0.03272119140625
+      },
+      "go": {
+       "median": 4021756.3665944827,
+       "min": 2427595.8858887693,
+       "max": 4195642.30920122,
+       "n": 20,
+       "us_per_job": 0.2486475830078125
+      },
+      "node": {
+       "median": 1236975.6669732933,
+       "min": 1021333.2987569456,
+       "max": 1294196.9359508383,
+       "n": 20,
+       "us_per_job": 0.80842333984375
+      },
+      "bun": {
+       "median": 1524026.958459289,
+       "min": 1353025.7600116804,
+       "max": 1559568.1945561322,
+       "n": 20,
+       "us_per_job": 0.6561563720703125
+      },
+      "python": {
+       "median": 448305.3134303724,
+       "min": 431367.9936533299,
+       "max": 452881.074380741,
+       "n": 20,
+       "us_per_job": 2.2306226806640623
+      }
+     },
+     "source": "class State { message: string }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string { baml.json.to_string(state) }\n",
+     "headline": {
+      "node": 12.71775195540167,
+      "go": 3.9116118117206957
+     }
+    }
+   ]
+  },
+  {
+   "key": "alloc",
+   "title": "Allocation",
+   "question": "How fast does it allocate and reclaim many small objects?",
+   "measure": "One job allocates 128 batches of 2,048 small objects, keeping 4 or 64 batches alive, so the collector or the reference counts do real work; the bar is jobs per second.",
+   "unit": "ops/s",
+   "better": "higher",
+   "default": "allocation-high-retention",
+   "scenarios": [
+    {
+     "name": "allocation-high-retention",
+     "label": "allocate 128 batches of 2,048 objects, keep 64",
+     "case": "04_allocation_retention",
+     "values": {
+      "native-off": {
+       "median": 46.45910642738276,
+       "min": 41.832963153442385,
+       "max": 48.7197069996821,
+       "n": 20,
+       "us_per_job": 21524.3055
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 2.2371791234380036,
+       "min": 2.153822355351717,
+       "max": 2.279187853436652,
+       "n": 20,
+       "us_per_job": 446991.4766875
+      },
+      "vm-low": {
+       "median": 2.0663123199413103,
+       "min": 1.9910109890618637,
+       "max": 2.1099711526300116,
+       "n": 20,
+       "us_per_job": 483953.9455625
+      },
+      "vm-medium": {
+       "median": 2.0886393761708306,
+       "min": 2.0296179231016502,
+       "max": 2.124651364795632,
+       "n": 20,
+       "us_per_job": 478780.5934375
+      },
+      "vm-high": {
+       "median": 2.085896987915457,
+       "min": 2.008704645249412,
+       "max": 2.11749966913803,
+       "n": 20,
+       "us_per_job": 479410.0599375
+      },
+      "rust": {
+       "median": 73.4938442566591,
+       "min": 61.916018752938015,
+       "max": 74.7338696540983,
+       "n": 20,
+       "us_per_job": 13606.58175
+      },
+      "go": {
+       "median": 43.15875554673966,
+       "min": 39.76882323400836,
+       "max": 45.39645862226288,
+       "n": 20,
+       "us_per_job": 23170.2695625
+      },
+      "node": {
+       "median": 44.48896220089031,
+       "min": 24.215211554576353,
+       "max": 49.89130991043599,
+       "n": 20,
+       "us_per_job": 22477.4854375
+      },
+      "bun": {
+       "median": 48.58593726931169,
+       "min": 45.374245157602424,
+       "max": 49.51554976421686,
+       "n": 20,
+       "us_per_job": 20582.08725
+      },
+      "python": {
+       "median": 5.637927079671323,
+       "min": 5.4104175613989725,
+       "max": 5.776053898126396,
+       "n": 20,
+       "us_per_job": 177370.155
+      }
+     },
+     "source": "class Cell { value: int, payload: int[] }\nclass State { batches: int, width: int, retain: int }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(s: State) -> string {\n    let retained: Cell[][] = [];\n    let checksum = 0;\n    let batch = 0;\n    while (batch < s.batches) {\n        let cells: Cell[] = [];\n        let i = 0;\n        while (i < s.width) {\n            let cell = Cell { value: batch + i, payload: [i, i + 1, i + 2, i + 3] };\n            let alias = cell;\n            alias.value += 1;\n            alias.payload[0] += 1;\n            cells.push(cell);\n            i += 1;\n        }\n        for (let cell in cells) { checksum += cell.value + cell.payload[0]; }\n        if (s.retain > 0) {\n            if (retained.length() < s.retain) { retained.push(cells); }\n            else { retained[batch % s.retain] = cells; }\n        }\n        batch += 1;\n    }\n    let live_sum = 0;\n    for (let cells in retained) {\n        for (let cell in cells) { live_sum += cell.value + cell.payload[0]; }\n    }\n    baml.json.to_string([checksum, live_sum])\n}\n",
+     "headline": {
+      "node": 1.0442838881607586,
+      "go": 1.0764700195553347
+     }
+    },
+    {
+     "name": "allocation-low-retention",
+     "label": "allocate 128 batches of 2,048 objects, keep 4",
+     "case": "04_allocation_retention",
+     "values": {
+      "native-off": {
+       "median": 57.33288658592557,
+       "min": 38.12316712747568,
+       "max": 58.38892816882388,
+       "n": 20,
+       "us_per_job": 17441.996375
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 3.039862029022123,
+       "min": 2.931784570932007,
+       "max": 3.090486366949272,
+       "n": 20,
+       "us_per_job": 328962.2984375
+      },
+      "vm-low": {
+       "median": 2.8132513035413984,
+       "min": 1.9638821370764217,
+       "max": 2.8649190455169813,
+       "n": 20,
+       "us_per_job": 355460.6013125
+      },
+      "vm-medium": {
+       "median": 2.8378102972963584,
+       "min": 2.7411644778646487,
+       "max": 2.8649664317577312,
+       "n": 20,
+       "us_per_job": 352384.3721875
+      },
+      "vm-high": {
+       "median": 2.826853213800938,
+       "min": 2.679213078574356,
+       "max": 2.867673045766285,
+       "n": 20,
+       "us_per_job": 353750.239
+      },
+      "rust": {
+       "median": 119.88963409871,
+       "min": 110.76419457691304,
+       "max": 121.29048957026113,
+       "n": 20,
+       "us_per_job": 8341.0046875
+      },
+      "go": {
+       "median": 55.805591734243166,
+       "min": 51.77314913887889,
+       "max": 57.31897624811963,
+       "n": 20,
+       "us_per_job": 17919.35125
+      },
+      "node": {
+       "median": 75.4924749242544,
+       "min": 64.15380026784051,
+       "max": 79.21633027220969,
+       "n": 20,
+       "us_per_job": 13246.353375
+      },
+      "bun": {
+       "median": 105.45676750053903,
+       "min": 99.42044590915064,
+       "max": 109.87959586174763,
+       "n": 20,
+       "us_per_job": 9482.5588125
+      },
+      "python": {
+       "median": 7.838974329158116,
+       "min": 7.09371469327961,
+       "max": 8.006779893003218,
+       "n": 20,
+       "us_per_job": 127567.7095
+      }
+     },
+     "source": "class Cell { value: int, payload: int[] }\nclass State { batches: int, width: int, retain: int }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(s: State) -> string {\n    let retained: Cell[][] = [];\n    let checksum = 0;\n    let batch = 0;\n    while (batch < s.batches) {\n        let cells: Cell[] = [];\n        let i = 0;\n        while (i < s.width) {\n            let cell = Cell { value: batch + i, payload: [i, i + 1, i + 2, i + 3] };\n            let alias = cell;\n            alias.value += 1;\n            alias.payload[0] += 1;\n            cells.push(cell);\n            i += 1;\n        }\n        for (let cell in cells) { checksum += cell.value + cell.payload[0]; }\n        if (s.retain > 0) {\n            if (retained.length() < s.retain) { retained.push(cells); }\n            else { retained[batch % s.retain] = cells; }\n        }\n        batch += 1;\n    }\n    let live_sum = 0;\n    for (let cells in retained) {\n        for (let cell in cells) { live_sum += cell.value + cell.payload[0]; }\n    }\n    baml.json.to_string([checksum, live_sum])\n}\n",
+     "headline": {
+      "node": 0.7594516757259674,
+      "go": 1.0273681329096136
+     }
+    },
+    {
+     "name": "generate-sort",
+     "label": "generate and sort 8,192 numbers with the library sort",
+     "case": "11_generate_sort",
+     "values": {
+      "native-off": {
+       "median": 3638.752394611781,
+       "min": 3361.284867947197,
+       "max": 3735.703637291195,
+       "n": 20,
+       "us_per_job": 274.81946875
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 228.73559864587955,
+       "min": 215.1280404449321,
+       "max": 232.86862991319515,
+       "n": 20,
+       "us_per_job": 4371.8599375
+      },
+      "vm-low": {
+       "median": 227.68870467180827,
+       "min": 200.541925699204,
+       "max": 230.7721925306152,
+       "n": 20,
+       "us_per_job": 4391.961390625
+      },
+      "vm-medium": {
+       "median": 226.93112984151804,
+       "min": 217.82580467677175,
+       "max": 230.5222577560276,
+       "n": 20,
+       "us_per_job": 4406.62328125
+      },
+      "vm-high": {
+       "median": 226.51829586152064,
+       "min": 210.0217551035024,
+       "max": 230.54134176127158,
+       "n": 20,
+       "us_per_job": 4414.6544375
+      },
+      "rust": {
+       "median": 4795.402288171159,
+       "min": 3678.177407921714,
+       "max": 4951.172925129756,
+       "n": 20,
+       "us_per_job": 208.533078125
+      },
+      "go": {
+       "median": 1245.1828690153422,
+       "min": 1015.3816678487931,
+       "max": 1260.5027452174163,
+       "n": 20,
+       "us_per_job": 803.094890625
+      },
+      "node": {
+       "median": 435.7667725575385,
+       "min": 414.144992809084,
+       "max": 448.58704612943956,
+       "n": 20,
+       "us_per_job": 2294.80553125
+      },
+      "bun": {
+       "median": 455.30504110967,
+       "min": 404.59552237928466,
+       "max": 459.9139107271743,
+       "n": 20,
+       "us_per_job": 2196.329734375
+      },
+      "python": {
+       "median": 518.5739495121912,
+       "min": 494.803366301927,
+       "max": 524.3178109154645,
+       "n": 20,
+       "us_per_job": 1928.36528125
+      }
+     },
+     "source": "class State { count: int seed: int }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(s: State) -> string {\n let a: int[] = []; let value = s.seed;\n for (let i = 0; i < s.count; i += 1) { value = (value * 48271) % 1000000007; a.push(value); }\n a.sort(); baml.json.to_string(a)\n}\n",
+     "headline": {
+      "node": 8.350229122004297,
+      "go": 2.922263456362205
+     }
+    }
+   ]
+  },
+  {
+   "key": "calls",
+   "title": "Function calls",
+   "question": "What does a function call cost?",
+   "measure": "One job calls a one-line leaf function 128 times in a loop; the bar is jobs per second, so it is the cost of a call.",
+   "unit": "ops/s",
+   "better": "higher",
+   "default": "calls",
+   "scenarios": [
+    {
+     "name": "calls",
+     "label": "call a leaf function 128 times",
+     "case": "07_function_calls",
+     "values": {
+      "native-off": {
+       "median": 6589966.068753811,
+       "min": 5286634.72658186,
+       "max": 6805693.786979791,
+       "n": 20,
+       "us_per_job": 0.151745849609375
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 30159.297825278638,
+       "min": 29037.16538113998,
+       "max": 32596.15878779469,
+       "n": 20,
+       "us_per_job": 33.15727062988281
+      },
+      "vm-low": {
+       "median": 19632.721062450008,
+       "min": 17866.904785048486,
+       "max": 20040.44569011819,
+       "n": 20,
+       "us_per_job": 50.93537451171875
+      },
+      "vm-medium": {
+       "median": 15712.616700871626,
+       "min": 13495.595463990665,
+       "max": 15947.858104150555,
+       "n": 20,
+       "us_per_job": 63.643123168945316
+      },
+      "vm-high": {
+       "median": 10853.224681778769,
+       "min": 10256.617309817588,
+       "max": 11020.963699918757,
+       "n": 20,
+       "us_per_job": 92.13851452636719
+      },
+      "rust": {
+       "median": 52421083.61649165,
+       "min": 17172780.137264848,
+       "max": 53843019.205237076,
+       "n": 20,
+       "us_per_job": 0.0190762939453125
+      },
+      "go": {
+       "median": 8618948.218975153,
+       "min": 8148114.256613878,
+       "max": 9036337.283054,
+       "n": 20,
+       "us_per_job": 0.1160234375
+      },
+      "node": {
+       "median": 962360.7913161976,
+       "min": 545838.7987175453,
+       "max": 1008922.6597723619,
+       "n": 20,
+       "us_per_job": 1.039111328125
+      },
+      "bun": {
+       "median": 249633.9976151299,
+       "min": 197119.03029757034,
+       "max": 292529.0745404219,
+       "n": 20,
+       "us_per_job": 4.005864624023437
+      },
+      "python": {
+       "median": 214393.7841714629,
+       "min": 72926.43622304515,
+       "max": 216684.93006038928,
+       "n": 20,
+       "us_per_job": 4.664314331054688
+      }
+     },
+     "source": "class State { count: int, seed: int }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction leaf(value: int) -> int { value + 1 }\nfunction run(state: State) -> string {\n    let value = state.seed;\n    let i = 0;\n    while (i < state.count) { value = leaf(value); i += 1; }\n    value.to_string()\n}\n",
+     "headline": {
+      "node": 6.847708394001457,
+      "go": 0.7645905163051785
+     }
+    },
+    {
+     "name": "calls-empty",
+     "label": "call a function 0 times",
+     "case": "07_function_calls",
+     "values": {
+      "native-off": {
+       "median": 15163546.774321925,
+       "min": 9361857.743646005,
+       "max": 15595313.790963398,
+       "n": 20,
+       "us_per_job": 0.0659476318359375
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 44234.56401356441,
+       "min": 40765.798259618896,
+       "max": 58500.335891332885,
+       "n": 20,
+       "us_per_job": 22.606756103515625
+      },
+      "vm-low": {
+       "median": 25534.57228665667,
+       "min": 22863.030215007097,
+       "max": 25944.183812160714,
+       "n": 20,
+       "us_per_job": 39.16259057617187
+      },
+      "vm-medium": {
+       "median": 21403.19945173113,
+       "min": 18656.430383734987,
+       "max": 22884.43816860579,
+       "n": 20,
+       "us_per_job": 46.72198669433594
+      },
+      "vm-high": {
+       "median": 24767.82626956561,
+       "min": 18512.84867403597,
+       "max": 25521.43465604586,
+       "n": 20,
+       "us_per_job": 40.374960205078125
+      },
+      "rust": {
+       "median": 52525278.43142284,
+       "min": 36055385.861288875,
+       "max": 53879140.24887533,
+       "n": 20,
+       "us_per_job": 0.0190384521484375
+      },
+      "go": {
+       "median": 39827698.530770205,
+       "min": 32547717.05099884,
+       "max": 44150300.7308082,
+       "n": 20,
+       "us_per_job": 0.025108154296875
+      },
+      "node": {
+       "median": 1385822.9567189154,
+       "min": 895466.7215839617,
+       "max": 1448098.9458857868,
+       "n": 20,
+       "us_per_job": 0.7215928955078125
+      },
+      "bun": {
+       "median": 1816032.2930976807,
+       "min": 1563445.3051791035,
+       "max": 1858544.6089274574,
+       "n": 20,
+       "us_per_job": 0.5506510009765625
+      },
+      "python": {
+       "median": 2369687.4396152035,
+       "min": 2172290.8812044333,
+       "max": 2478097.3342908532,
+       "n": 20,
+       "us_per_job": 0.42199658203125
+      }
+     },
+     "source": "class State { count: int, seed: int }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction leaf(value: int) -> int { value + 1 }\nfunction run(state: State) -> string {\n    let value = state.seed;\n    let i = 0;\n    while (i < state.count) { value = leaf(value); i += 1; }\n    value.to_string()\n}\n",
+     "headline": {
+      "node": 10.941907623051108,
+      "go": 0.38072867209755606
+     }
+    }
+   ]
+  },
+  {
+   "key": "startup",
+   "title": "Startup",
+   "question": "How fast does a fresh process get to work?",
+   "measure": "Time from the parent launching the process to the process reporting ready, after loading its image and preparing state; milliseconds, lower is better.",
+   "unit": "ms",
+   "better": "lower",
+   "default": "startup",
+   "scenarios": [
+    {
+     "name": "startup",
+     "label": "process start to ready, launch observed by the parent",
+     "case": "00_startup",
+     "values": {
+      "native-off": {
+       "median": 2.4746075,
+       "min": 1.989302,
+       "max": 3.429143,
+       "n": 20
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 31.916611,
+       "min": 31.050421,
+       "max": 40.925816999999995,
+       "n": 20
+      },
+      "vm-low": {
+       "median": 106.84908449999999,
+       "min": 104.152,
+       "max": 233.448301,
+       "n": 20
+      },
+      "vm-medium": {
+       "median": 106.7894335,
+       "min": 104.06786199999999,
+       "max": 235.215657,
+       "n": 20
+      },
+      "vm-high": {
+       "median": 108.0327805,
+       "min": 103.989215,
+       "max": 170.605017,
+       "n": 20
+      },
+      "rust": {
+       "median": 2.489706,
+       "min": 1.846044,
+       "max": 3.007482,
+       "n": 20
+      },
+      "go": {
+       "median": 3.1550035,
+       "min": 2.592904,
+       "max": 5.042611,
+       "n": 20
+      },
+      "node": {
+       "median": 84.78246299999999,
+       "min": 79.100323,
+       "max": 92.106903,
+       "n": 20
+      },
+      "bun": {
+       "median": 11.267071999999999,
+       "min": 9.812839,
+       "max": 12.216187,
+       "n": 20
+      },
+      "python": {
+       "median": 291.85954649999996,
+       "min": 287.568902,
+       "max": 307.47443499999997,
+       "n": 20
+      }
+     },
+     "source": "class State { value: int }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string { state.value.to_string() }\n",
+     "headline": {
+      "node": 0.029187728363116793,
+      "go": 0.7843438208547153
+     }
+    }
+   ]
+  },
+  {
+   "key": "memory",
+   "title": "Memory",
+   "question": "How much memory does a process use at its peak?",
+   "measure": "Peak resident memory of the whole process over the run, from the kernel's wait4 accounting; MiB, lower is better.",
+   "unit": "MiB",
+   "better": "lower",
+   "default": "allocation-high-retention",
+   "scenarios": [
+    {
+     "name": "allocation-high-retention",
+     "label": "allocate 128 batches of 2,048 objects, keep 64",
+     "case": "04_allocation_retention",
+     "values": {
+      "native-off": {
+       "median": 23.4140625,
+       "min": 23.37890625,
+       "max": 23.48046875,
+       "n": 20
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 232.5234375,
+       "min": 232.1484375,
+       "max": 232.80078125,
+       "n": 20
+      },
+      "vm-low": {
+       "median": 234.51953125,
+       "min": 234.2265625,
+       "max": 235.421875,
+       "n": 20
+      },
+      "vm-medium": {
+       "median": 234.5234375,
+       "min": 234.234375,
+       "max": 234.78515625,
+       "n": 20
+      },
+      "vm-high": {
+       "median": 234.5859375,
+       "min": 234.22265625,
+       "max": 235.96484375,
+       "n": 20
+      },
+      "rust": {
+       "median": 17.474609375,
+       "min": 17.42578125,
+       "max": 17.515625,
+       "n": 20
+      },
+      "go": {
+       "median": 31.91796875,
+       "min": 30.26171875,
+       "max": 51.34375,
+       "n": 20
+      },
+      "node": {
+       "median": 215.419921875,
+       "min": 213.8828125,
+       "max": 264.58203125,
+       "n": 20
+      },
+      "bun": {
+       "median": 87.451171875,
+       "min": 85.4140625,
+       "max": 88.83203125,
+       "n": 20
+      },
+      "python": {
+       "median": 59.74609375,
+       "min": 59.6484375,
+       "max": 60.1796875,
+       "n": 20
+      }
+     },
+     "source": "class Cell { value: int, payload: int[] }\nclass State { batches: int, width: int, retain: int }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(s: State) -> string {\n    let retained: Cell[][] = [];\n    let checksum = 0;\n    let batch = 0;\n    while (batch < s.batches) {\n        let cells: Cell[] = [];\n        let i = 0;\n        while (i < s.width) {\n            let cell = Cell { value: batch + i, payload: [i, i + 1, i + 2, i + 3] };\n            let alias = cell;\n            alias.value += 1;\n            alias.payload[0] += 1;\n            cells.push(cell);\n            i += 1;\n        }\n        for (let cell in cells) { checksum += cell.value + cell.payload[0]; }\n        if (s.retain > 0) {\n            if (retained.length() < s.retain) { retained.push(cells); }\n            else { retained[batch % s.retain] = cells; }\n        }\n        batch += 1;\n    }\n    let live_sum = 0;\n    for (let cells in retained) {\n        for (let cell in cells) { live_sum += cell.value + cell.payload[0]; }\n    }\n    baml.json.to_string([checksum, live_sum])\n}\n",
+     "headline": {
+      "node": 0.10869033047735618,
+      "go": 0.7335699424795007
+     }
+    },
+    {
+     "name": "allocation-low-retention",
+     "label": "allocate 128 batches of 2,048 objects, keep 4",
+     "case": "04_allocation_retention",
+     "values": {
+      "native-off": {
+       "median": 3.7109375,
+       "min": 3.6796875,
+       "max": 3.7890625,
+       "n": 20
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 70.8203125,
+       "min": 70.3828125,
+       "max": 71.03125,
+       "n": 20
+      },
+      "vm-low": {
+       "median": 72.21875,
+       "min": 71.87890625,
+       "max": 73.2890625,
+       "n": 20
+      },
+      "vm-medium": {
+       "median": 72.24609375,
+       "min": 71.87890625,
+       "max": 73.578125,
+       "n": 20
+      },
+      "vm-high": {
+       "median": 72.2265625,
+       "min": 71.87109375,
+       "max": 73.40625,
+       "n": 20
+      },
+      "rust": {
+       "median": 3.359375,
+       "min": 3.30859375,
+       "max": 3.4140625,
+       "n": 20
+      },
+      "go": {
+       "median": 9.466796875,
+       "min": 8.8984375,
+       "max": 12.046875,
+       "n": 20
+      },
+      "node": {
+       "median": 140.15234375,
+       "min": 138.9921875,
+       "max": 140.85546875,
+       "n": 20
+      },
+      "bun": {
+       "median": 55.72265625,
+       "min": 55.48828125,
+       "max": 56.30078125,
+       "n": 20
+      },
+      "python": {
+       "median": 25.97265625,
+       "min": 25.9375,
+       "max": 26.28515625,
+       "n": 20
+      }
+     },
+     "source": "class Cell { value: int, payload: int[] }\nclass State { batches: int, width: int, retain: int }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(s: State) -> string {\n    let retained: Cell[][] = [];\n    let checksum = 0;\n    let batch = 0;\n    while (batch < s.batches) {\n        let cells: Cell[] = [];\n        let i = 0;\n        while (i < s.width) {\n            let cell = Cell { value: batch + i, payload: [i, i + 1, i + 2, i + 3] };\n            let alias = cell;\n            alias.value += 1;\n            alias.payload[0] += 1;\n            cells.push(cell);\n            i += 1;\n        }\n        for (let cell in cells) { checksum += cell.value + cell.payload[0]; }\n        if (s.retain > 0) {\n            if (retained.length() < s.retain) { retained.push(cells); }\n            else { retained[batch % s.retain] = cells; }\n        }\n        batch += 1;\n    }\n    let live_sum = 0;\n    for (let cells in retained) {\n        for (let cell in cells) { live_sum += cell.value + cell.payload[0]; }\n    }\n    baml.json.to_string([checksum, live_sum])\n}\n",
+     "headline": {
+      "node": 0.02647788399899663,
+      "go": 0.3919950484835981
+     }
+    },
+    {
+     "name": "json-aggregate",
+     "label": "parse, validate and aggregate 1,024 JSON rows",
+     "case": "03_json_aggregate",
+     "values": {
+      "native-off": {
+       "median": 2.9765625,
+       "min": 2.93359375,
+       "max": 3.01171875,
+       "n": 20
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 71.291015625,
+       "min": 70.9140625,
+       "max": 71.75,
+       "n": 20
+      },
+      "vm-low": {
+       "median": 73.78125,
+       "min": 73.0703125,
+       "max": 74.1953125,
+       "n": 20
+      },
+      "vm-medium": {
+       "median": 73.8828125,
+       "min": 73.48046875,
+       "max": 74.19921875,
+       "n": 20
+      },
+      "vm-high": {
+       "median": 74.353515625,
+       "min": 73.890625,
+       "max": 75.16015625,
+       "n": 20
+      },
+      "rust": {
+       "median": 3.177734375,
+       "min": 3.1328125,
+       "max": 3.22265625,
+       "n": 20
+      },
+      "go": {
+       "median": 8.552734375,
+       "min": 8.35546875,
+       "max": 8.75,
+       "n": 20
+      },
+      "node": {
+       "median": 68.333984375,
+       "min": 68.1953125,
+       "max": 68.9296875,
+       "n": 20
+      },
+      "bun": {
+       "median": 33.55859375,
+       "min": 33.36328125,
+       "max": 33.96875,
+       "n": 20
+      },
+      "python": {
+       "median": 24.55078125,
+       "min": 24.515625,
+       "max": 24.56640625,
+       "n": 20
+      }
+     },
+     "source": "class State { raw: string }\nclass Row { account: string, amount_cents: int | float, active: bool }\nclass Total { account: string, total_cents: int }\nclass Invalid { message: string }\nfunction prepare(raw: string) -> State { State { raw: raw } }\nfunction aggregate(raw: string) -> string {\n    let rows = baml.json.deserialize<Row[]>(raw);\n    let totals: map<string, int> = {};\n    if (rows.length() > 1000000) { throw Invalid { message: \"too many rows\" }; }\n    for (let row in rows) {\n        if (!row.account.is_ascii()) { throw Invalid { message: \"non-ASCII account\" }; }\n        let amount = match (row.amount_cents) {\n            let n: int => n,\n            let f: float => {\n                if (f != f.floor() || f < 0.0 || f > 1000000.0) {\n                    throw Invalid { message: \"invalid amount\" };\n                }\n                f.itrunc()\n            }\n        };\n        if (amount < 0 || amount > 1000000) { throw Invalid { message: \"invalid amount\" }; }\n        if (row.active) { totals[row.account] = (totals.get(row.account) ?? 0) + amount; }\n    }\n    let accounts = totals.keys();\n    accounts.sort();\n    let output: Total[] = [];\n    for (let account in accounts) {\n        output.push(Total { account: account, total_cents: totals.get(account) ?? 0 });\n    }\n    baml.json.to_string(output)\n}\nfunction run(state: State) -> string {\n    aggregate(state.raw) catch (_) { let _ => \"{\\\"error\\\":\\\"invalid\\\"}\" }\n}\n",
+     "headline": {
+      "node": 0.04355903621345071,
+      "go": 0.34802466316510616
+     }
+    },
+    {
+     "name": "merge-random",
+     "label": "merge sort 1,024 random integers",
+     "case": "02_merge_sort",
+     "values": {
+      "native-off": {
+       "median": 2.1484375,
+       "min": 2.12890625,
+       "max": 2.23046875,
+       "n": 20
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 31.576171875,
+       "min": 31.26171875,
+       "max": 31.81640625,
+       "n": 20
+      },
+      "vm-low": {
+       "median": 34.068359375,
+       "min": 33.65625,
+       "max": 34.3671875,
+       "n": 20
+      },
+      "vm-medium": {
+       "median": 33.974609375,
+       "min": 33.7265625,
+       "max": 34.203125,
+       "n": 20
+      },
+      "vm-high": {
+       "median": 34.111328125,
+       "min": 33.7109375,
+       "max": 34.3515625,
+       "n": 20
+      },
+      "rust": {
+       "median": 2.26953125,
+       "min": 2.20703125,
+       "max": 2.30859375,
+       "n": 20
+      },
+      "go": {
+       "median": 5.52734375,
+       "min": 5.51953125,
+       "max": 5.546875,
+       "n": 20
+      },
+      "node": {
+       "median": 73.501953125,
+       "min": 73.109375,
+       "max": 73.62890625,
+       "n": 20
+      },
+      "bun": {
+       "median": 33.716796875,
+       "min": 29.125,
+       "max": 33.91796875,
+       "n": 20
+      },
+      "python": {
+       "median": 23.71484375,
+       "min": 23.68359375,
+       "max": 23.73828125,
+       "n": 20
+      }
+     },
+     "source": "class State { values: int[] }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string {\n    let a: int[] = [];\n    let b: int[] = [];\n    for (let value in state.values) { a.push(value); b.push(0); }\n    let width = 1;\n    let n = a.length();\n    while (width < n) {\n        let lo = 0;\n        while (lo < n) {\n            let mid = lo + width;\n            if (mid > n) { mid = n; }\n            let hi = lo + 2 * width;\n            if (hi > n) { hi = n; }\n            let i = lo;\n            let j = mid;\n            let k = lo;\n            while (k < hi) {\n                if (i < mid && (j >= hi || a[i] <= a[j])) {\n                    b[k] = a[i]; i += 1;\n                } else { b[k] = a[j]; j += 1; }\n                k += 1;\n            }\n            lo += 2 * width;\n        }\n        let tmp = a; a = b; b = tmp;\n        width *= 2;\n    }\n    baml.json.to_string(a)\n}\n",
+     "headline": {
+      "node": 0.029229665453192676,
+      "go": 0.38869257950530034
+     }
+    },
+    {
+     "name": "startup",
+     "label": "process start to ready",
+     "case": "00_startup",
+     "values": {
+      "native-off": {
+       "median": 2.03125,
+       "min": 2.0,
+       "max": 2.1171875,
+       "n": 20
+      },
+      "native-low": null,
+      "native-medium": null,
+      "native-high": null,
+      "vm-off": {
+       "median": 30.09375,
+       "min": 29.8125,
+       "max": 30.34375,
+       "n": 20
+      },
+      "vm-low": {
+       "median": 32.619140625,
+       "min": 32.1328125,
+       "max": 32.76171875,
+       "n": 20
+      },
+      "vm-medium": {
+       "median": 32.431640625,
+       "min": 32.07421875,
+       "max": 32.80078125,
+       "n": 20
+      },
+      "vm-high": {
+       "median": 32.482421875,
+       "min": 32.26171875,
+       "max": 32.7734375,
+       "n": 20
+      },
+      "rust": {
+       "median": 2.2109375,
+       "min": 2.1328125,
+       "max": 2.2421875,
+       "n": 20
+      },
+      "go": {
+       "median": 2.98828125,
+       "min": 2.96875,
+       "max": 2.99609375,
+       "n": 20
+      },
+      "node": {
+       "median": 63.984375,
+       "min": 62.35546875,
+       "max": 64.0546875,
+       "n": 20
+      },
+      "bun": {
+       "median": 20.138671875,
+       "min": 20.08984375,
+       "max": 20.1953125,
+       "n": 20
+      },
+      "python": {
+       "median": 24.447265625,
+       "min": 24.1015625,
+       "max": 24.484375,
+       "n": 20
+      }
+     },
+     "source": "class State { value: int }\nfunction prepare(raw: string) -> State { baml.json.deserialize<State>(raw) }\nfunction run(state: State) -> string { state.value.to_string() }\n",
+     "headline": {
+      "node": 0.031746031746031744,
+      "go": 0.6797385620915033
+     }
+    }
+   ]
+  },
+  {
+   "key": "artifact",
+   "title": "Binary size",
+   "question": "How big is the thing you ship?",
+   "measure": "Size of the executable a user would ship, stripped; BAML VM counts the bytecode plus the measurement host it needs; KB, lower is better. The published packed CLI is 32.7 MiB.",
+   "unit": "KB",
+   "better": "lower",
+   "default": "00_startup",
+   "scenarios": [
+    {
+     "name": "00_startup",
+     "label": "startup: executable to ship",
+     "case": "00_startup",
+     "values": {
+      "native-off": {
+       "median": 422.2890625
+      },
+      "vm-off": {
+       "median": 36285.2197265625
+      },
+      "vm-low": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-high": {
+       "note": "same artifact as telemetry off"
+      },
+      "rust": {
+       "median": 504.328125
+      },
+      "go": {
+       "median": 2520.15625
+      },
+      "node": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "bun": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "python": {
+       "note": "no binary: ships source and a runtime"
+      }
+     },
+     "headline": {
+      "go": 0.16756463512927025,
+      "node": null
+     }
+    },
+    {
+     "name": "01_array_traversal",
+     "label": "array traversal: executable to ship",
+     "case": "01_array_traversal",
+     "values": {
+      "native-off": {
+       "median": 427.5546875
+      },
+      "vm-off": {
+       "median": 36287.8056640625
+      },
+      "vm-low": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-high": {
+       "note": "same artifact as telemetry off"
+      },
+      "rust": {
+       "median": 509.2265625
+      },
+      "go": {
+       "median": 2520.15625
+      },
+      "node": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "bun": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "python": {
+       "note": "no binary: ships source and a runtime"
+      }
+     },
+     "headline": {
+      "go": 0.16965403930807862,
+      "node": null
+     }
+    },
+    {
+     "name": "02_merge_sort",
+     "label": "merge sort: executable to ship",
+     "case": "02_merge_sort",
+     "values": {
+      "native-off": {
+       "median": 431.3515625
+      },
+      "vm-off": {
+       "median": 36289.7216796875
+      },
+      "vm-low": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-high": {
+       "note": "same artifact as telemetry off"
+      },
+      "rust": {
+       "median": 507.4375
+      },
+      "go": {
+       "median": 2520.15625
+      },
+      "node": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "bun": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "python": {
+       "note": "no binary: ships source and a runtime"
+      }
+     },
+     "headline": {
+      "go": 0.17116064232128464,
+      "node": null
+     }
+    },
+    {
+     "name": "03_json_aggregate",
+     "label": "json aggregate: executable to ship",
+     "case": "03_json_aggregate",
+     "values": {
+      "native-off": {
+       "median": 498.703125
+      },
+      "vm-off": {
+       "median": 36292.71484375
+      },
+      "vm-low": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-high": {
+       "note": "same artifact as telemetry off"
+      },
+      "rust": {
+       "median": 488.2890625
+      },
+      "go": {
+       "median": 2524.15625
+      },
+      "node": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "bun": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "python": {
+       "note": "no binary: ships source and a runtime"
+      }
+     },
+     "headline": {
+      "go": 0.19757220853503027,
+      "node": null
+     }
+    },
+    {
+     "name": "04_allocation_retention",
+     "label": "allocation retention: executable to ship",
+     "case": "04_allocation_retention",
+     "values": {
+      "native-off": {
+       "median": 435.3203125
+      },
+      "vm-off": {
+       "median": 36291.4541015625
+      },
+      "vm-low": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-high": {
+       "note": "same artifact as telemetry off"
+      },
+      "rust": {
+       "median": 507.9296875
+      },
+      "go": {
+       "median": 2524.15625
+      },
+      "node": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "bun": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "python": {
+       "note": "no binary: ships source and a runtime"
+      }
+     },
+     "headline": {
+      "go": 0.1724617136914563,
+      "node": null
+     }
+    },
+    {
+     "name": "07_function_calls",
+     "label": "function calls: executable to ship",
+     "case": "07_function_calls",
+     "values": {
+      "native-off": {
+       "median": 422.7578125
+      },
+      "vm-off": {
+       "median": 36286.244140625
+      },
+      "vm-low": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-high": {
+       "note": "same artifact as telemetry off"
+      },
+      "rust": {
+       "median": 505.390625
+      },
+      "go": {
+       "median": 2520.15625
+      },
+      "node": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "bun": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "python": {
+       "note": "no binary: ships source and a runtime"
+      }
+     },
+     "headline": {
+      "go": 0.167750635501271,
+      "node": null
+     }
+    },
+    {
+     "name": "09_json_hello",
+     "label": "json hello: executable to ship",
+     "case": "09_json_hello",
+     "values": {
+      "native-off": {
+       "median": 427.2734375
+      },
+      "vm-off": {
+       "median": 36285.330078125
+      },
+      "vm-low": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-high": {
+       "note": "same artifact as telemetry off"
+      },
+      "rust": {
+       "median": 505.03125
+      },
+      "go": {
+       "median": 2520.15625
+      },
+      "node": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "bun": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "python": {
+       "note": "no binary: ships source and a runtime"
+      }
+     },
+     "headline": {
+      "go": 0.16954243908487818,
+      "node": null
+     }
+    },
+    {
+     "name": "10_quick_sort",
+     "label": "quick sort: executable to ship",
+     "case": "10_quick_sort",
+     "values": {
+      "native-off": {
+       "median": 432.9140625
+      },
+      "vm-off": {
+       "median": 36291.3115234375
+      },
+      "vm-low": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-high": {
+       "note": "same artifact as telemetry off"
+      },
+      "rust": {
+       "median": 507.71875
+      },
+      "go": {
+       "median": 2520.15625
+      },
+      "node": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "bun": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "python": {
+       "note": "no binary: ships source and a runtime"
+      }
+     },
+     "headline": {
+      "go": 0.1717806435612871,
+      "node": null
+     }
+    },
+    {
+     "name": "11_generate_sort",
+     "label": "generate sort: executable to ship",
+     "case": "11_generate_sort",
+     "values": {
+      "native-off": {
+       "median": 434.390625
+      },
+      "vm-off": {
+       "median": 36286.443359375
+      },
+      "vm-low": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same artifact as telemetry off"
+      },
+      "vm-high": {
+       "note": "same artifact as telemetry off"
+      },
+      "rust": {
+       "median": 511.828125
+      },
+      "go": {
+       "median": 2528.15625
+      },
+      "node": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "bun": {
+       "note": "no binary: ships source and a runtime"
+      },
+      "python": {
+       "note": "no binary: ships source and a runtime"
+      }
+     },
+     "headline": {
+      "go": 0.17182111469573924,
+      "node": null
+     }
+    }
+   ]
+  },
+  {
+   "key": "build",
+   "title": "Build time",
+   "question": "How long from source to a runnable artifact?",
+   "measure": "Wall time of a clean release build on the measuring machine; seconds, lower is better. Native is a cargo build with fat LTO on 4 vCPU; VM is the bytecode compile by the pinned host.",
+   "unit": "s",
+   "better": "lower",
+   "default": "00_startup",
+   "scenarios": [
+    {
+     "name": "00_startup",
+     "label": "startup: clean release build",
+     "case": "00_startup",
+     "values": {
+      "native-off": {
+       "median": 25.618
+      },
+      "vm-low": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-high": {
+       "note": "same compile as telemetry off"
+      },
+      "rust": {
+       "note": "prebuilt into the snapshot"
+      },
+      "go": {
+       "note": "prebuilt into the snapshot"
+      },
+      "node": {
+       "note": "no build step"
+      },
+      "bun": {
+       "note": "no build step"
+      },
+      "python": {
+       "note": "no build step"
+      },
+      "vm-off": {
+       "median": 2.714
+      }
+     },
+     "headline": {}
+    },
+    {
+     "name": "01_array_traversal",
+     "label": "array traversal: clean release build",
+     "case": "01_array_traversal",
+     "values": {
+      "native-off": {
+       "median": 26.284
+      },
+      "vm-low": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-high": {
+       "note": "same compile as telemetry off"
+      },
+      "rust": {
+       "note": "prebuilt into the snapshot"
+      },
+      "go": {
+       "note": "prebuilt into the snapshot"
+      },
+      "node": {
+       "note": "no build step"
+      },
+      "bun": {
+       "note": "no build step"
+      },
+      "python": {
+       "note": "no build step"
+      },
+      "vm-off": {
+       "median": 1.112
+      }
+     },
+     "headline": {}
+    },
+    {
+     "name": "02_merge_sort",
+     "label": "merge sort: clean release build",
+     "case": "02_merge_sort",
+     "values": {
+      "native-off": {
+       "median": 24.696
+      },
+      "vm-low": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-high": {
+       "note": "same compile as telemetry off"
+      },
+      "rust": {
+       "note": "prebuilt into the snapshot"
+      },
+      "go": {
+       "note": "prebuilt into the snapshot"
+      },
+      "node": {
+       "note": "no build step"
+      },
+      "bun": {
+       "note": "no build step"
+      },
+      "python": {
+       "note": "no build step"
+      },
+      "vm-off": {
+       "median": 1.027
+      }
+     },
+     "headline": {}
+    },
+    {
+     "name": "03_json_aggregate",
+     "label": "json aggregate: clean release build",
+     "case": "03_json_aggregate",
+     "values": {
+      "native-off": {
+       "median": 24.128
+      },
+      "vm-low": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-high": {
+       "note": "same compile as telemetry off"
+      },
+      "rust": {
+       "note": "prebuilt into the snapshot"
+      },
+      "go": {
+       "note": "prebuilt into the snapshot"
+      },
+      "node": {
+       "note": "no build step"
+      },
+      "bun": {
+       "note": "no build step"
+      },
+      "python": {
+       "note": "no build step"
+      },
+      "vm-off": {
+       "median": 1.093
+      }
+     },
+     "headline": {}
+    },
+    {
+     "name": "04_allocation_retention",
+     "label": "allocation retention: clean release build",
+     "case": "04_allocation_retention",
+     "values": {
+      "native-off": {
+       "median": 23.653
+      },
+      "vm-low": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-high": {
+       "note": "same compile as telemetry off"
+      },
+      "rust": {
+       "note": "prebuilt into the snapshot"
+      },
+      "go": {
+       "note": "prebuilt into the snapshot"
+      },
+      "node": {
+       "note": "no build step"
+      },
+      "bun": {
+       "note": "no build step"
+      },
+      "python": {
+       "note": "no build step"
+      },
+      "vm-off": {
+       "median": 1.123
+      }
+     },
+     "headline": {}
+    },
+    {
+     "name": "07_function_calls",
+     "label": "function calls: clean release build",
+     "case": "07_function_calls",
+     "values": {
+      "native-off": {
+       "median": 23.273
+      },
+      "vm-low": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-high": {
+       "note": "same compile as telemetry off"
+      },
+      "rust": {
+       "note": "prebuilt into the snapshot"
+      },
+      "go": {
+       "note": "prebuilt into the snapshot"
+      },
+      "node": {
+       "note": "no build step"
+      },
+      "bun": {
+       "note": "no build step"
+      },
+      "python": {
+       "note": "no build step"
+      },
+      "vm-off": {
+       "median": 1.06
+      }
+     },
+     "headline": {}
+    },
+    {
+     "name": "09_json_hello",
+     "label": "json hello: clean release build",
+     "case": "09_json_hello",
+     "values": {
+      "native-off": {
+       "median": 23.598
+      },
+      "vm-low": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-high": {
+       "note": "same compile as telemetry off"
+      },
+      "rust": {
+       "note": "prebuilt into the snapshot"
+      },
+      "go": {
+       "note": "prebuilt into the snapshot"
+      },
+      "node": {
+       "note": "no build step"
+      },
+      "bun": {
+       "note": "no build step"
+      },
+      "python": {
+       "note": "no build step"
+      },
+      "vm-off": {
+       "median": 1.015
+      }
+     },
+     "headline": {}
+    },
+    {
+     "name": "10_quick_sort",
+     "label": "quick sort: clean release build",
+     "case": "10_quick_sort",
+     "values": {
+      "native-off": {
+       "median": 23.188
+      },
+      "vm-low": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-high": {
+       "note": "same compile as telemetry off"
+      },
+      "rust": {
+       "note": "prebuilt into the snapshot"
+      },
+      "go": {
+       "note": "prebuilt into the snapshot"
+      },
+      "node": {
+       "note": "no build step"
+      },
+      "bun": {
+       "note": "no build step"
+      },
+      "python": {
+       "note": "no build step"
+      },
+      "vm-off": {
+       "median": 1.058
+      }
+     },
+     "headline": {}
+    },
+    {
+     "name": "11_generate_sort",
+     "label": "generate sort: clean release build",
+     "case": "11_generate_sort",
+     "values": {
+      "native-off": {
+       "median": 23.434
+      },
+      "vm-low": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-medium": {
+       "note": "same compile as telemetry off"
+      },
+      "vm-high": {
+       "note": "same compile as telemetry off"
+      },
+      "rust": {
+       "note": "prebuilt into the snapshot"
+      },
+      "go": {
+       "note": "prebuilt into the snapshot"
+      },
+      "node": {
+       "note": "no build step"
+      },
+      "bun": {
+       "note": "no build step"
+      },
+      "python": {
+       "note": "no build step"
+      },
+      "vm-off": {
+       "median": 0.997
+      }
+     },
+     "headline": {}
+    }
+   ]
+  },
+  {
+   "key": "http",
+   "title": "Web server",
+   "question": "How many requests per second does a small HTTP service handle?",
+   "measure": "Requests per second and p99 latency of a small HTTP service under a fixed arrival rate.",
+   "unit": "req/s",
+   "better": "higher",
+   "default": null,
+   "scenarios": [],
+   "pending": "needs sys ops compiled natively (PR 8); the VM's HTTP harness has not been run on this machine yet"
+  }
+ ],
+ "drift": [
+  {
+   "scenario": "startup",
+   "ratio": 0.9545733578882751
+  },
+  {
+   "scenario": "array-empty",
+   "ratio": 1.1839984430593884
+  },
+  {
+   "scenario": "array-small",
+   "ratio": 1.0846858081437898
+  },
+  {
+   "scenario": "array-iterator",
+   "ratio": 1.0027890763772132
+  },
+  {
+   "scenario": "array-indexed",
+   "ratio": 1.0096814689984006
+  },
+  {
+   "scenario": "array-build",
+   "ratio": 1.1693447522330402
+  },
+  {
+   "scenario": "merge-random",
+   "ratio": 0.9552178627248854
+  },
+  {
+   "scenario": "merge-sorted",
+   "ratio": 0.9628492191135913
+  },
+  {
+   "scenario": "merge-reverse",
+   "ratio": 0.9213010405729607
+  },
+  {
+   "scenario": "merge-duplicates",
+   "ratio": 0.9551239189455607
+  },
+  {
+   "scenario": "quick-random",
+   "ratio": 0.9835052920200674
+  },
+  {
+   "scenario": "quick-sorted",
+   "ratio": 0.9786569798142835
+  },
+  {
+   "scenario": "quick-reverse",
+   "ratio": 0.980749374497294
+  },
+  {
+   "scenario": "quick-duplicates",
+   "ratio": 0.9711408747384639
+  },
+  {
+   "scenario": "allocation-low-retention",
+   "ratio": 1.0546308348782336
+  },
+  {
+   "scenario": "allocation-high-retention",
+   "ratio": 1.0145800983833888
+  },
+  {
+   "scenario": "calls-empty",
+   "ratio": 1.2446475430419788
+  },
+  {
+   "scenario": "calls",
+   "ratio": 1.2534188908909232
+  },
+  {
+   "scenario": "json-hello",
+   "ratio": 0.9820668142711119
+  },
+  {
+   "scenario": "generate-sort",
+   "ratio": 0.980781562934044
+  }
+ ]
+}
