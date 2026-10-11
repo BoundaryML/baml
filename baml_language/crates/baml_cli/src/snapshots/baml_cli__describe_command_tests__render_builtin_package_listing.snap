@@ -227,6 +227,7 @@ interface        baml.spawn.Modifier              <builtin>/baml/ns_spawn/spawn.
 class            baml.spawn.Plan                  <builtin>/baml/ns_spawn/spawn.baml:78
 class            baml.spawn.Limit                 <builtin>/baml/ns_spawn/spawn.baml:146
 class            baml.spawn.Root                  <builtin>/baml/ns_spawn/spawn.baml:183
+function         baml.sqlite.query                <builtin>/baml/ns_sqlite/sqlite.baml:6
 class            baml.sys.ProcessOptions          <builtin>/baml/ns_sys/sys.baml:2
 enum             baml.sys.StderrMode              <builtin>/baml/ns_sys/sys.baml:18
 class            baml.sys.ShellOutput             <builtin>/baml/ns_sys/sys.baml:29
