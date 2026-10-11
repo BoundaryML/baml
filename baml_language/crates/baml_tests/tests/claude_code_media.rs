@@ -21,6 +21,13 @@ cat > "$dir/stdin"
 printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"structured_output":"seen","usage":{"input_tokens":1,"output_tokens":1}}'
 "#;
 
+/// Answers, closes stdout, and lingers without ever reading stdin.
+const ANSWERS_WITHOUT_READING: &str = r#"#!/bin/sh
+printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"structured_output":"seen","usage":{"input_tokens":1,"output_tokens":1}}'
+exec 1>&-
+sleep 1
+"#;
+
 const CLIENT: &str = r#"
     function invoke_with(executable: string, input: ai.ModelTurnInput) -> string {
         let cl = claude_code.ClaudeCodeClient.new(
@@ -37,6 +44,14 @@ const CLIENT: &str = r#"
         }
     }
 
+    function Look(picture: image) -> string {
+        client: "claude-code/haiku"
+        prompt: `
+          ${role("user")}
+          Look at ${picture}
+        `
+    }
+
     function input_of(spec: ai.FunctionSpec<string>) -> ai.ModelTurnInput {
         ai.ModelTurnInput {
             prompt: spec.prompt_template,
@@ -47,9 +62,9 @@ const CLIENT: &str = r#"
     }
 "#;
 
-fn install_fake_claude(dir: &Path) -> String {
+fn install_fake_claude(dir: &Path, body: &str) -> String {
     let script = dir.join("claude");
-    std::fs::write(&script, FAKE_CLAUDE).expect("write fake claude");
+    std::fs::write(&script, body).expect("write fake claude");
     let mut permissions = std::fs::metadata(&script)
         .expect("stat fake claude")
         .permissions();
@@ -73,21 +88,13 @@ fn recorded_stdin(dir: &Path) -> String {
 #[tokio::test]
 async fn image_prompt_goes_to_stdin_as_stream_json() {
     let temp = tempfile::tempdir().expect("tempdir for fake claude");
-    let executable = install_fake_claude(temp.path());
+    let executable = install_fake_claude(temp.path(), FAKE_CLAUDE);
     // 1.5 MB of base64: past macOS's 1 MiB argv limit and every pipe buffer.
     let data = "QUJD".repeat(384 * 1024);
 
     let output = baml_test! {
         baml: &format!(r#"
             {CLIENT}
-
-            function Look(picture: image) -> string {{
-                client: "claude-code/haiku"
-                prompt: `
-                  ${{role("user")}}
-                  Look at ${{picture}}
-                `
-            }}
 
             function main(executable: string, data: string) -> string {{
                 invoke_with(
@@ -129,7 +136,7 @@ async fn image_prompt_goes_to_stdin_as_stream_json() {
 #[tokio::test]
 async fn text_prompt_keeps_riding_argv() {
     let temp = tempfile::tempdir().expect("tempdir for fake claude");
-    let executable = install_fake_claude(temp.path());
+    let executable = install_fake_claude(temp.path(), FAKE_CLAUDE);
 
     let output = baml_test! {
         baml: &format!(r#"
@@ -163,4 +170,34 @@ async fn text_prompt_keeps_riding_argv() {
     );
     assert_eq!(argv.last().map(String::as_str), Some("[user]\nGreet Ada"));
     assert_eq!(recorded_stdin(temp.path()), "", "stdin closes unused");
+}
+
+/// A CLI that answers without reading its stdin never saw the image, so its
+/// answer must not be accepted.
+#[tokio::test]
+async fn image_prompt_fails_when_the_cli_never_reads_it() {
+    let temp = tempfile::tempdir().expect("tempdir for fake claude");
+    let executable = install_fake_claude(temp.path(), ANSWERS_WITHOUT_READING);
+    let data = "QUJD".repeat(384 * 1024);
+
+    let output = baml_test! {
+        baml: &format!(r#"
+            {CLIENT}
+
+            function main(executable: string, data: string) -> string {{
+                invoke_with(
+                    executable,
+                    input_of(Look@spec(baml.media.Image.from_base64(data, "image/png"))),
+                )
+            }}
+        "#),
+        args: {
+            "executable" => BexExternalValue::String(executable.into()),
+            "data" => BexExternalValue::String(data.into()),
+        },
+    };
+    let Ok(BexExternalValue::String(result)) = output.result else {
+        panic!("expected a string result, got {:?}", output.result);
+    };
+    assert!(result.contains("could not receive the prompt"), "{result}");
 }

@@ -342,14 +342,13 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
                 }
             };
             let result = _read_result(p);
-            // Preserve CLI errors: do not await an errored writer future here, because
-            // that would abort this closure before exit status and result.is_error are
-            // interpreted. A normal writer failure is returned as a string by the task.
-            if (input.is_result()) {
-                input_error = await input;
-            } else if (input.is_error()) {
-                input_error = "the stdin writer task did not complete cleanly";
-            }
+            // A result counts only once the whole prompt was written, so wait
+            // for the writer (within this timeout). Its failures are reported
+            // after the CLI's own exit status and result errors.
+            input_error
+                = (await input) catch_all (e) {
+                    _ => "the stdin writer task did not complete cleanly"
+                };
             return result;
         }
         _read_result(p)
