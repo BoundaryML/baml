@@ -26,7 +26,7 @@ jobs:
         run: |
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
           git -c http.extraheader="AUTHORIZATION: basic $auth" fetch --no-tags origin "refs/pull/$PR_NUMBER/head"
-      - uses: BoundaryML/codeturtle/cli@96795abd8936f187c5279785520947a7f084ff74
+      - uses: BoundaryML/codeturtle/cli@2e85410d0b2fd2b4894da533f5777441f79ca7ca
         with:
           api-url: 'https://boundary-codeturtle-staging.fly.dev'
           runtime-url: 'https://github.com/BoundaryML/baml/releases/download/baml-language-0.20.2-nightly.20261004.a/baml-language-0.20.2-nightly.20261004.a-x86_64-unknown-linux-musl.tar.gz'
