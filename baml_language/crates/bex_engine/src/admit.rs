@@ -1038,12 +1038,10 @@ impl Program for Heap<'_> {
     fn class(&self, name: &str, type_args: &[RuntimeTy]) -> Result<ClassFacts, Mismatch> {
         let Some(class) = self.engine.resolve_inbound_declaration(
             self.vm,
-            self.permit,
             name,
             self.overlay,
             InboundDeclarationKind::Class,
-        )?
-        else {
+        ) else {
             return Ok(ClassFacts::Missing);
         };
         // SAFETY: the permit is held, and the resolver returns a live object.
@@ -1057,7 +1055,7 @@ impl Program for Heap<'_> {
             .iter()
             .map(|ty| {
                 self.engine
-                    .anchor_wire_ty_with_runtime(self.vm, self.permit, ty, self.overlay)
+                    .anchor_wire_ty_with_runtime(self.vm, ty, self.overlay)
             })
             .collect::<Result<Vec<_>, _>>()?;
         let fields = class
@@ -1072,9 +1070,8 @@ impl Program for Heap<'_> {
     }
 
     fn variant(&self, enum_name: &str, variant: &str) -> VariantFacts {
-        let Ok(Some(declared)) = self.engine.resolve_inbound_declaration(
+        let Some(declared) = self.engine.resolve_inbound_declaration(
             self.vm,
-            self.permit,
             enum_name,
             self.overlay,
             InboundDeclarationKind::Enum,
@@ -1110,9 +1107,9 @@ impl Program for Heap<'_> {
         if has_erased_position(ty) {
             return Ok(true);
         }
-        let Ok(ty) =
-            self.engine
-                .realize_host_ty_with_runtime(self.vm, self.permit, ty, self.overlay)
+        let Ok(ty) = self
+            .engine
+            .realize_host_ty_with_runtime(self.vm, ty, self.overlay)
         else {
             return Ok(true);
         };
@@ -1122,7 +1119,7 @@ impl Program for Heap<'_> {
     fn is_subtype(&self, value_ty: &RuntimeTy, ty: &RuntimeTy) -> Result<bool, Mismatch> {
         let anchor = |ty: &RuntimeTy| {
             self.engine
-                .anchor_wire_ty_with_runtime(self.vm, self.permit, ty, self.overlay)
+                .anchor_wire_ty_with_runtime(self.vm, ty, self.overlay)
         };
         let (value_ty, ty) = (anchor(value_ty)?, anchor(ty)?);
         Ok(baml_type::normalize::is_subtype(
@@ -1172,8 +1169,7 @@ impl BexEngine {
         value: &BexExternalValue,
         ty: &RuntimeTy,
     ) -> Result<Value, EngineError> {
-        let none = indexmap::IndexMap::new();
-        let overlay = InboundRuntimeOverlay::new(&none, &none, None);
+        let overlay = InboundRuntimeOverlay::none();
         let admitted = self.admit(holder, value, ty, overlay)?;
         self.land(holder, admitted, overlay)
     }
@@ -1187,8 +1183,7 @@ impl BexEngine {
         value: &BexExternalValue,
         ty: &RuntimeTy,
     ) -> Result<Result<Value, Mismatch>, EngineError> {
-        let none = indexmap::IndexMap::new();
-        let overlay = InboundRuntimeOverlay::new(&none, &none, None);
+        let overlay = InboundRuntimeOverlay::none();
         match self.admit(holder, value, ty, overlay) {
             Ok(admitted) => self.land(holder, admitted, overlay).map(Ok),
             Err(mismatch) => Ok(Err(Mismatch::new(format!(
@@ -1234,12 +1229,8 @@ impl BexEngine {
                     .into_iter()
                     .map(|item| self.land(holder, item, overlay))
                     .collect::<Result<Vec<_>, _>>()?;
-                let element = self.realize_host_ty_with_runtime(
-                    &holder.holder().vm,
-                    holder.proof(),
-                    &element,
-                    overlay,
-                )?;
+                let element =
+                    self.realize_host_ty_with_runtime(&holder.holder().vm, &element, overlay)?;
                 Value::object(holder.holder_mut().tlab_mut().alloc_array(element, values))
             }
             Admitted::Map {
@@ -1248,18 +1239,9 @@ impl BexEngine {
                 value,
                 entries,
             } => {
-                let sent_key = self.realize_host_ty_with_runtime(
-                    &holder.holder().vm,
-                    holder.proof(),
-                    sent_key,
-                    overlay,
-                )?;
-                let key = self.realize_host_ty_with_runtime(
-                    &holder.holder().vm,
-                    holder.proof(),
-                    &key,
-                    overlay,
-                )?;
+                let sent_key =
+                    self.realize_host_ty_with_runtime(&holder.holder().vm, sent_key, overlay)?;
+                let key = self.realize_host_ty_with_runtime(&holder.holder().vm, &key, overlay)?;
                 for key_ty in [&sent_key, &key] {
                     if !baml_type::normalize::is_string_key(key_ty.as_ty(), &holder.holder().vm) {
                         return Err(EngineError::CannotConvert {
@@ -1293,12 +1275,8 @@ impl BexEngine {
                             .map(|entry| (bex_vm_types::BexStr::from(name), entry))
                     })
                     .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
-                let value = self.realize_host_ty_with_runtime(
-                    &holder.holder().vm,
-                    holder.proof(),
-                    &value,
-                    overlay,
-                )?;
+                let value =
+                    self.realize_host_ty_with_runtime(&holder.holder().vm, &value, overlay)?;
                 Value::object(holder.holder_mut().tlab_mut().alloc_map(key, value, values))
             }
             Admitted::Instance {
@@ -1313,24 +1291,16 @@ impl BexEngine {
                 let class_ptr = self
                     .resolve_inbound_declaration(
                         &holder.holder().vm,
-                        holder.proof(),
                         &class,
                         overlay,
                         InboundDeclarationKind::Class,
-                    )?
+                    )
                     .ok_or_else(|| EngineError::TypeMismatch {
                         message: format!("Unknown class `{class}` in external Instance value"),
                     })?;
                 let type_args = type_args
                     .iter()
-                    .map(|ty| {
-                        self.realize_host_ty_with_runtime(
-                            &holder.holder().vm,
-                            holder.proof(),
-                            ty,
-                            overlay,
-                        )
-                    })
+                    .map(|ty| self.realize_host_ty_with_runtime(&holder.holder().vm, ty, overlay))
                     .collect::<Result<Box<[_]>, _>>()?;
                 Value::object(
                     holder
@@ -1343,11 +1313,10 @@ impl BexEngine {
                 let enum_ptr = self
                     .resolve_inbound_declaration(
                         &holder.holder().vm,
-                        holder.proof(),
                         &enum_name,
                         overlay,
                         InboundDeclarationKind::Enum,
-                    )?
+                    )
                     .ok_or_else(|| EngineError::TypeMismatch {
                         message: format!("Unknown enum `{enum_name}` in external Variant value"),
                     })?;

@@ -134,23 +134,26 @@ fn trusted_stdlib_capability_kind(
     })
 }
 
+/// The runtime declarations one call may name by their wire spelling: the
+/// heads of the type values a host passed as type arguments. A `BamlTy` head
+/// is a bare name on the wire, so a type argument that names a runtime
+/// declaration resolves through these before the program's own declarations.
 #[derive(Clone, Copy)]
 pub(crate) struct InboundRuntimeOverlay<'a> {
-    dynamic_classes: &'a indexmap::IndexMap<String, bex_external_types::Handle>,
-    dynamic_enums: &'a indexmap::IndexMap<String, bex_external_types::Handle>,
     runtime_named_objects: Option<&'a indexmap::IndexMap<String, HeapPtr>>,
 }
 
 impl<'a> InboundRuntimeOverlay<'a> {
-    pub(crate) fn new(
-        dynamic_classes: &'a indexmap::IndexMap<String, bex_external_types::Handle>,
-        dynamic_enums: &'a indexmap::IndexMap<String, bex_external_types::Handle>,
-        runtime_named_objects: Option<&'a indexmap::IndexMap<String, HeapPtr>>,
-    ) -> Self {
+    pub(crate) fn new(runtime_named_objects: &'a indexmap::IndexMap<String, HeapPtr>) -> Self {
         Self {
-            dynamic_classes,
-            dynamic_enums,
-            runtime_named_objects,
+            runtime_named_objects: Some(runtime_named_objects),
+        }
+    }
+
+    /// A call that passed no type values names no runtime declaration.
+    pub(crate) const fn none() -> Self {
+        Self {
+            runtime_named_objects: None,
         }
     }
 }
@@ -163,48 +166,16 @@ impl BexEngine {
     pub(crate) fn resolve_inbound_declaration(
         &self,
         vm: &BexVm,
-        permit: PermitProof<'_>,
         name: &str,
         overlay: InboundRuntimeOverlay<'_>,
         kind: InboundDeclarationKind,
-    ) -> Result<Option<HeapPtr>, EngineError> {
-        let dynamic = match kind {
-            InboundDeclarationKind::Class => overlay
-                .dynamic_classes
-                .get(name)
-                .map(|handle| ("class", handle)),
-            InboundDeclarationKind::Enum => overlay
-                .dynamic_enums
-                .get(name)
-                .map(|handle| ("enum", handle)),
-            InboundDeclarationKind::Any => overlay
-                .dynamic_classes
-                .get(name)
-                .map(|handle| ("class", handle))
-                .or_else(|| {
-                    overlay
-                        .dynamic_enums
-                        .get(name)
-                        .map(|handle| ("enum", handle))
-                }),
-        };
-        if let Some((kind_name, handle)) = dynamic {
-            return self
-                .resolve_handle(permit, handle)
-                .map(Some)
-                .ok_or_else(|| EngineError::TypeMismatch {
-                    message: format!(
-                        "Runtime {kind_name} `{name}` expired before its value landed"
-                    ),
-                });
-        }
-
+    ) -> Option<HeapPtr> {
         if let Some(ptr) = overlay.runtime_named_objects.and_then(|objects| {
             objects
                 .get(name)
                 .or_else(|| resolve_named_object(objects, name))
         }) {
-            return Ok(Some(*ptr));
+            return Some(*ptr);
         }
 
         let statically_resolved = match kind {
@@ -224,31 +195,23 @@ impl BexEngine {
                 .or_else(|| resolve_named_object(&self.resolved_enum_names, name)),
         };
         if let Some(ptr) = statically_resolved {
-            return Ok(Some(*ptr));
+            return Some(*ptr);
         }
 
-        Ok(vm
-            .declaration_head(&baml_type::TypeName::from_dotted_path(name))
-            .map(bex_vm_types::TypeHead::ptr))
+        vm.declaration_head(&baml_type::TypeName::from_dotted_path(name))
+            .map(bex_vm_types::TypeHead::ptr)
     }
 
     pub(crate) fn anchor_wire_ty_with_runtime(
         &self,
         vm: &BexVm,
-        permit: PermitProof<'_>,
         ty: &RuntimeTy,
         overlay: InboundRuntimeOverlay<'_>,
     ) -> Result<bex_vm_types::RuntimeTy, EngineError> {
         ty.try_map_heads(&mut |name: &baml_type::TypeName| {
             let spelling = name.to_string();
             let ptr = self
-                .resolve_inbound_declaration(
-                    vm,
-                    permit,
-                    &spelling,
-                    overlay,
-                    InboundDeclarationKind::Any,
-                )?
+                .resolve_inbound_declaration(vm, &spelling, overlay, InboundDeclarationKind::Any)
                 .ok_or_else(|| EngineError::TypeMismatch {
                     message: format!("host-supplied type names unknown declaration `{name}`"),
                 })?;
@@ -272,11 +235,10 @@ impl BexEngine {
     pub(crate) fn realize_host_ty_with_runtime(
         &self,
         vm: &BexVm,
-        permit: PermitProof<'_>,
         ty: &RuntimeTy,
         overlay: InboundRuntimeOverlay<'_>,
     ) -> Result<bex_vm_types::RealizedTy, EngineError> {
-        let anchored = self.anchor_wire_ty_with_runtime(vm, permit, ty, overlay)?;
+        let anchored = self.anchor_wire_ty_with_runtime(vm, ty, overlay)?;
         bex_vm_types::RealizedTy::try_from(anchored).map_err(|e| EngineError::TypeMismatch {
             message: format!("host-supplied type is not realized: {e}"),
         })
@@ -1236,49 +1198,7 @@ impl BexEngine {
             holder,
             external,
             None,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-            None,
-        )
-    }
-
-    pub(crate) fn convert_external_to_vm_value_with_runtime_schema(
-        &self,
-        holder: &mut impl HeapPermit<BexThread>,
-        external: BexExternalValue,
-        overlay: &crate::RuntimeSchemaOverlay,
-        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
-        dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
-    ) -> Result<Value, EngineError> {
-        let mut named = indexmap::IndexMap::new();
-        for (name, handle) in &overlay.named_owners {
-            let Some(owner) = self.resolve_handle(holder.proof(), handle) else {
-                continue;
-            };
-            let Object::Package(package) = (unsafe { owner.get() }) else {
-                continue;
-            };
-            let ptr = package
-                .classes
-                .values()
-                .chain(package.enums.values())
-                .copied()
-                .find(|ptr| match unsafe { ptr.get() } {
-                    Object::Class(class) => class.name.to_string() == *name,
-                    Object::Enum(enm) => enm.name.to_string() == *name,
-                    _ => false,
-                });
-            if let Some(ptr) = ptr {
-                named.insert(name.clone(), ptr);
-            }
-        }
-        self.convert_external_to_vm_value_with_ty_and_runtime(
-            holder,
-            external,
-            None,
-            dynamic_classes,
-            dynamic_enums,
-            Some(&named),
+            InboundRuntimeOverlay::none(),
         )
     }
 
@@ -1293,35 +1213,7 @@ impl BexEngine {
         slot: &RuntimeTy,
         overlay: InboundRuntimeOverlay<'_>,
     ) -> Result<Value, EngineError> {
-        self.convert_external_to_vm_value_with_ty_and_runtime(
-            holder,
-            value,
-            Some(slot),
-            overlay.dynamic_classes,
-            overlay.dynamic_enums,
-            overlay.runtime_named_objects,
-        )
-    }
-
-    /// Materialize an external value using call-local runtime class and enum
-    /// side tables in addition to the engine's frozen static definition table.
-    /// Recursive calls retain both tables for nested containers and classes.
-    pub(crate) fn convert_external_to_vm_value_with_dynamic_types(
-        &self,
-        holder: &mut impl HeapPermit<BexThread>,
-        external: BexExternalValue,
-        expected_ty: Option<&RuntimeTy>,
-        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
-        dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
-    ) -> Result<Value, EngineError> {
-        self.convert_external_to_vm_value_with_ty_and_runtime(
-            holder,
-            external,
-            expected_ty,
-            dynamic_classes,
-            dynamic_enums,
-            None,
-        )
+        self.convert_external_to_vm_value_with_ty_and_runtime(holder, value, Some(slot), overlay)
     }
 
     fn convert_external_to_vm_value_with_ty_and_runtime(
@@ -1329,9 +1221,7 @@ impl BexEngine {
         holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
-        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
-        dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
-        runtime_named_objects: Option<&indexmap::IndexMap<String, HeapPtr>>,
+        overlay: InboundRuntimeOverlay<'_>,
     ) -> Result<Value, EngineError> {
         // Structural host-only stash (03b §F/§G): when the declared slot resolves
         // to `RustType` (the generic var bound to `rust_type`) but the value is a
@@ -1348,8 +1238,6 @@ impl BexEngine {
                 holder.holder_mut().tlab_mut().alloc_rust_data(arc),
             ));
         }
-        let overlay =
-            InboundRuntimeOverlay::new(dynamic_classes, dynamic_enums, runtime_named_objects);
         Ok(match external {
             BexExternalValue::Handle(handle) => Value::object(
                 self.resolve_handle(holder.proof(), &handle)
@@ -1411,18 +1299,12 @@ impl BexEngine {
                             self.land(holder, admitted, overlay)
                         }
                         None => self.convert_external_to_vm_value_with_ty_and_runtime(
-                            holder,
-                            v,
-                            None,
-                            dynamic_classes,
-                            dynamic_enums,
-                            runtime_named_objects,
+                            holder, v, None, overlay,
                         ),
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 let element_ty = self.realize_host_ty_with_runtime(
                     &holder.holder().vm,
-                    holder.proof(),
                     &runtime_element_ty,
                     overlay,
                 )?;
@@ -1438,12 +1320,8 @@ impl BexEngine {
                 value_type,
                 entries,
             } => {
-                let incoming_key_ty = self.realize_host_ty_with_runtime(
-                    &holder.holder().vm,
-                    holder.proof(),
-                    &key_type,
-                    overlay,
-                )?;
+                let incoming_key_ty =
+                    self.realize_host_ty_with_runtime(&holder.holder().vm, &key_type, overlay)?;
                 if !baml_type::normalize::is_string_key(
                     incoming_key_ty.as_ty(),
                     &holder.holder().vm,
@@ -1460,12 +1338,8 @@ impl BexEngine {
                     }
                     _ => (key_type, value_type),
                 };
-                let key_ty = self.realize_host_ty_with_runtime(
-                    &holder.holder().vm,
-                    holder.proof(),
-                    &key_type,
-                    overlay,
-                )?;
+                let key_ty =
+                    self.realize_host_ty_with_runtime(&holder.holder().vm, &key_type, overlay)?;
                 if !baml_type::normalize::is_string_key(key_ty.as_ty(), &holder.holder().vm) {
                     return Err(EngineError::CannotConvert {
                         type_name:
@@ -1503,12 +1377,7 @@ impl BexEngine {
                                 self.land(holder, admitted, overlay)
                             }
                             None => self.convert_external_to_vm_value_with_ty_and_runtime(
-                                holder,
-                                v,
-                                None,
-                                dynamic_classes,
-                                dynamic_enums,
-                                runtime_named_objects,
+                                holder, v, None, overlay,
                             ),
                         }
                         .map(|v| (bex_vm_types::BexStr::from(k.as_str()), v))
@@ -1516,7 +1385,6 @@ impl BexEngine {
                     .collect::<Result<indexmap::IndexMap<bex_vm_types::BexStr, Value>, _>>()?;
                 let value_ty = self.realize_host_ty_with_runtime(
                     &holder.holder().vm,
-                    holder.proof(),
                     &runtime_value_ty,
                     overlay,
                 )?;
@@ -1550,11 +1418,10 @@ impl BexEngine {
                 let class_ptr = self
                     .resolve_inbound_declaration(
                         &holder.holder().vm,
-                        holder.proof(),
                         &class_name,
                         overlay,
                         InboundDeclarationKind::Class,
-                    )?
+                    )
                     .ok_or_else(|| EngineError::TypeMismatch {
                         message: format!("Unknown class `{class_name}` in external Instance value"),
                     })?;
@@ -1575,14 +1442,7 @@ impl BexEngine {
                 // works against the class's own head-typed templates.
                 let type_args = type_args
                     .iter()
-                    .map(|ty| {
-                        self.anchor_wire_ty_with_runtime(
-                            &holder.holder().vm,
-                            holder.proof(),
-                            ty,
-                            overlay,
-                        )
-                    })
+                    .map(|ty| self.anchor_wire_ty_with_runtime(&holder.holder().vm, ty, overlay))
                     .collect::<Result<Vec<_>, _>>()?;
 
                 // Build field values in the order defined by the class.
@@ -1630,11 +1490,10 @@ impl BexEngine {
                 let enum_ptr = self
                     .resolve_inbound_declaration(
                         &holder.holder().vm,
-                        holder.proof(),
                         &enum_name,
                         overlay,
                         InboundDeclarationKind::Enum,
-                    )?
+                    )
                     .ok_or_else(|| EngineError::TypeMismatch {
                         message: format!("Unknown enum `{enum_name}` in external Variant value"),
                     })?;
@@ -1684,12 +1543,7 @@ impl BexEngine {
                             ),
                         })
                 })?;
-                let ty = self.realize_host_ty_with_runtime(
-                    &holder.holder().vm,
-                    holder.proof(),
-                    &named,
-                    overlay,
-                )?;
+                let ty = self.realize_host_ty_with_runtime(&holder.holder().vm, &named, overlay)?;
                 // The wire carries the definition only (H-4); derive a fresh
                 // static identity with the receiving VM's complete fact context.
                 Value::object(
@@ -1738,9 +1592,7 @@ impl BexEngine {
                             fields,
                         },
                         None,
-                        dynamic_classes,
-                        dynamic_enums,
-                        runtime_named_objects,
+                        overlay,
                     );
                 }
             }
@@ -1786,9 +1638,7 @@ impl BexEngine {
                             fields,
                         },
                         None,
-                        dynamic_classes,
-                        dynamic_enums,
-                        runtime_named_objects,
+                        overlay,
                     );
                 }
             }
@@ -1946,7 +1796,6 @@ impl BexEngine {
                             name: param.name.clone(),
                             ty: self.realize_host_ty_with_runtime(
                                 &holder.holder().vm,
-                                holder.proof(),
                                 &param.ty,
                                 overlay,
                             )?,
@@ -1958,13 +1807,11 @@ impl BexEngine {
                     handle: arc,
                     ret_ty: Box::new(self.realize_host_ty_with_runtime(
                         &holder.holder().vm,
-                        holder.proof(),
                         &ret,
                         overlay,
                     )?),
                     throws_ty: Box::new(self.realize_host_ty_with_runtime(
                         &holder.holder().vm,
-                        holder.proof(),
                         &normalized_throws,
                         overlay,
                     )?),
