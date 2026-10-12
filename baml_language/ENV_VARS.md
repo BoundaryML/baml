@@ -79,3 +79,5 @@ Go, Rust, C++, Java, C# and TypeScript load a native library. Python and Swift l
 `NAPI_RS_NATIVE_LIBRARY_PATH`, `NAPI_RS_FORCE_WASI` and `NAPI_RS_ENFORCE_VERSION_CHECK` belong to the generated napi-rs loader, not to us.
 
 Not listed: test, benchmark and CI-only variables, Ruby, and the old `engine/`.
+
+<!-- CodeTurtle test: verify environment-variable documentation routes to its configured owners. -->
