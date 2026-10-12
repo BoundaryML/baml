@@ -50,3 +50,5 @@ See our [guide on getting started](/CONTRIBUTING.md).
 Made with ❤️ by Boundary. HQ in Seattle, WA.
 
 We're hiring software engineers who love Rust. [Email us](mailto:founders@boundaryml.com) or reach out on [Discord](https://www.boundaryml.com/discord).
+
+<!-- CodeTurtle test: this documentation-only change is outside the configured ownership rules. -->
