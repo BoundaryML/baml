@@ -69,6 +69,7 @@
 #![warn(clippy::disallowed_methods)]
 #![allow(unsafe_code)]
 
+mod admit;
 mod bex_work;
 mod conversion;
 mod function_call_context;
@@ -76,7 +77,6 @@ mod future;
 pub use future::LeakedFuture;
 #[cfg(not(target_arch = "wasm32"))]
 mod host_instrumentation;
-mod inbound_config;
 mod invocation;
 mod json_arguments;
 #[cfg(not(target_arch = "wasm32"))]
@@ -135,7 +135,6 @@ pub use function_call_context::{
     BoundaryContext, BoundaryStorageContext, FunctionCallContext, FunctionCallContextBuilder,
     InheritedInvocationState, InvocationCapture,
 };
-pub use inbound_config::{InboundUnionAmbiguityPolicy, register_inbound_union_ambiguity_policy};
 use indexmap::IndexMap;
 use invocation::PreparedInvocation;
 pub use sys_types::{CallId, ClassDefinition, ClassFieldDefinition};
@@ -1041,15 +1040,12 @@ pub struct BexEngine {
     runtime_compiler: Option<Arc<dyn RuntimeCompiler>>,
     /// Context passed to `sys_ops` that need engine-level information.
     sys_op_ctx: sys_types::EngineSysOpContext,
-    /// The inbound matcher's name-headed views of the definition tables.
+    /// The bodies of the program's aliases in the wire's spelling, for judging
+    /// a host value against an alias (`admit`).
     ///
-    /// Built once: they project `sys_op_ctx`'s tables, which are fixed at
-    /// engine construction. Rebuilding them per coercion would walk every
-    /// compiled class on every inbound argument, and `coerce_inbound_arg`
-    /// recurses over argument trees.
+    /// Built once: it projects `sys_op_ctx`'s table, which is fixed at engine
+    /// construction.
     inbound_alias_view: indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-    inbound_class_view:
-        indexmap::IndexMap<baml_type::TypeName, crate::conversion::WireClassDefinition>,
     /// Process argv passed in at engine creation. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) with each spawned VM.
     argv: Arc<[String]>,
@@ -1168,8 +1164,8 @@ fn truncate_preview(mut value: String, max_chars: usize) -> String {
 /// `type_arg_0` (`T`, the declared return type) and `throws_ty` is `type_arg_1`
 /// (`E`, the declared error contract). Returns `Err` if the slot is absent or
 /// not a `Type` object — for `BamlHostCallHostValue` that's an engine/compiler
-/// ABI bug and a missing slot would silently skip both
-/// `validate_host_return_schema` and `enforce_host_throw_contract`, so the
+/// ABI bug and a missing slot would silently skip both the admission of the
+/// return value and `enforce_host_throw_contract`, so the
 /// caller surfaces it as a fatal internal error rather than soft-failing the
 /// contract checks. `slot_name` is used only for the diagnostic message.
 fn host_call_type_arg(
@@ -1618,9 +1614,8 @@ fn friendly_inference_conflict(function_name: &str, detail: &str) -> String {
 
 /// A generic call whose argument value doesn't inhabit its (now concrete)
 /// declared parameter type — e.g. a caller-specified `T=int` contradicted by a
-/// `string` actual (03b C4). `detail` is the structural clash from
-/// [`crate::conversion::check_generic_arg`]; we add the call frame and the
-/// 1-based argument position.
+/// `string` actual (03b C4). `detail` is the mismatch from admission; we add
+/// the call frame and the 1-based argument position.
 fn friendly_arg_type_mismatch(function_name: &str, arg_index: usize, detail: &str) -> String {
     let name = host_display_name(function_name);
     format!(
@@ -2159,12 +2154,10 @@ impl BexEngine {
             runtime_io,
         };
 
-        // Project the inbound matcher's views once; the tables they mirror do
-        // not change after this point.
-        let (inbound_alias_view, inbound_class_view) = crate::conversion::wire_definition_views(
-            sys_op_ctx.type_alias_definitions.as_ref(),
-            sys_op_ctx.class_definitions.as_ref(),
-        );
+        // Project the alias bodies once; the table they mirror does not
+        // change after this point.
+        let inbound_alias_view =
+            crate::conversion::inbound_alias_view(sys_op_ctx.type_alias_definitions.as_ref());
 
         Ok(Self {
             #[cfg(test)]
@@ -2196,7 +2189,6 @@ impl BexEngine {
             sys_ops,
             runtime_compiler,
             inbound_alias_view,
-            inbound_class_view,
             sys_op_ctx,
             argv,
             heap_permit_manager,
@@ -3299,14 +3291,6 @@ impl BexEngine {
         // bridge-generics/streaming/04. `collect_type_var_bindings` only fills
         // keys not already bound, so the explicit `_types=` bindings win on
         // conflict.
-        // Whether the *caller* specified any explicit type binding (subscript /
-        // `_types=`). In explicit/partial mode the wire must be fully bound — an
-        // under-specified (argless) generic instance is a host bug and Gate B
-        // rejects it. In pure-inference mode (no caller bindings) BAML instead
-        // recovers an unbound instance's args from its field values (03b G1), so
-        // Gate B is lenient about its missing wire args. Captured before the
-        // self-receiver / inference sources mutate `type_args`.
-        let caller_specified_types = !type_args.is_empty();
         let mut type_args = type_args;
         let mut live_type_args = IndexMap::new();
         if let (Some(self_declared), Some(BexCallArg::Provided(self_value))) =
@@ -3338,8 +3322,7 @@ impl BexEngine {
         // TypeVar appears in a parameter / the return type. The declared-params
         // list also catches type params used only in the body (e.g.
         // `one_type_arg<T>()` reflecting `T`), which a signature scan misses.
-        // Non-generic calls bypass all type-var work and keep the existing
-        // permissive coercion path untouched (no regression, zero extra cost).
+        // Non-generic calls bypass all type-var work (zero extra cost).
         // Computed here (before the `type_args` freeze) because the inference
         // step below mutates `type_args` and is gated on this flag. The
         // (unsubstituted) `return_type` is used; self-receiver substitution does
@@ -3484,21 +3467,20 @@ impl BexEngine {
         return_type = crate::conversion::substitute_type_vars(&return_type, &type_args);
 
         // Strict generic handling — substitution + full-binding enforcement
-        // (Gate A) + per-arg structural check (Gate B) — applies to *every*
-        // generic call: free functions, instance methods, and static methods
-        // alike. The host is required to fully bind every call: a free
-        // function's/static's TypeVars arrive by name through `type_args`, and
-        // a generic instance method's class TypeVars arrive on the receiver
-        // (sent by the host as the instance's wire class args, or recovered
-        // from a generic `self` handle above). If a receiver can't supply its
-        // class type args, that's a host/SDK bug to fix at the source — the
-        // engine does not paper over it with a runtime-`unknown` fallback.
-        // Non-generic calls bypass all of this and keep the existing permissive
-        // coercion path untouched.
+        // (Gate A) — applies to *every* generic call: free functions, instance
+        // methods, and static methods alike. The host is required to fully
+        // bind every call: a free function's/static's TypeVars arrive by name
+        // through `type_args`, and a generic instance method's class TypeVars
+        // arrive on the receiver (sent by the host as the instance's wire
+        // class args, or recovered from a generic `self` handle above). If a
+        // receiver can't supply its class type args, that's a host/SDK bug to
+        // fix at the source — the engine does not paper over it with a
+        // runtime-`unknown` fallback. Each argument is then admitted to its
+        // now-concrete parameter type, as every argument is.
         let param_types: Vec<RuntimeTy> = if callee_is_generic {
             // Substitute the explicit/recovered bindings into every declared
-            // parameter so coercion and validation see concrete types instead
-            // of bare TypeVars.
+            // parameter so admission sees concrete types instead of bare
+            // TypeVars.
             let substituted: Vec<RuntimeTy> = declared_param_types
                 .iter()
                 .map(|t| crate::conversion::substitute_type_vars(t, &type_args))
@@ -3558,54 +3540,31 @@ impl BexEngine {
             declared_param_types
         };
 
-        // Type-directed coercion for each provided arg: lets host SDKs send
-        // `int(42)` to a `bigint` slot (and vice versa) without re-encoding,
-        // and rewrites the engine-registered class FQN onto incoming
-        // `Map`/`Instance`/`Variant` values. Idempotent for already-matching
-        // values, so callers that already coerced (e.g. `BexProject::Bex`
-        // kwargs entry) aren't double-charged. For a generic call, the now-
-        // concrete `param_types` also drive Gate B — a structural check that
-        // hard-fails a wire value that doesn't inhabit its expected type
-        // (01pt3 item 5).
-        let args: Vec<BexCallArg> = args
-            .into_iter()
-            .enumerate()
-            .map(|(idx, arg)| match arg {
-                BexCallArg::Provided(value) => {
-                    let coerced = self.coerce_inbound_arg(*value, &param_types[idx])?;
-                    if callee_is_generic {
-                        crate::conversion::check_generic_arg(
-                            &coerced,
-                            &param_types[idx],
-                            caller_specified_types,
-                        )
-                        .map_err(|detail| EngineError::TypeMismatch {
-                            message: friendly_arg_type_mismatch(function_name, idx, &detail),
-                        })?;
-                    }
-                    Ok(BexCallArg::Provided(Box::new(coerced)))
-                }
-                BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
-            })
-            .collect::<Result<_, EngineError>>()?;
-
-        // Reuse the (substituted) `param_types` to thread the expected
-        // `RuntimeTy` into per-arg VM conversion. Binding a `HostValue` to an
-        // `Object::HostClosure` needs it: the closure carries the declared
-        // `RuntimeTy::Function`'s arity and return type, extracted from the
-        // parameter type.
+        // Each provided argument is admitted to its parameter's type and
+        // landed on the heap (`admit`). For a generic call the now-concrete
+        // `param_types` also hold a generic instance to the type arguments
+        // the wire gave it.
         let vm_args: Vec<Value> = args
             .into_iter()
             .enumerate()
             .map(|(idx, arg)| match arg {
-                BexCallArg::Provided(arg) => self.convert_external_to_vm_value_with_ty(
-                    &mut thread,
-                    *arg,
-                    param_types.get(idx),
-                ),
+                BexCallArg::Provided(value) => self
+                    .admit_to_heap(&mut thread, &value, &param_types[idx])
+                    .map_err(|error| match error {
+                        EngineError::TypeMismatch { message } if callee_is_generic => {
+                            EngineError::TypeMismatch {
+                                message: friendly_arg_type_mismatch(
+                                    function_name,
+                                    idx,
+                                    &format!("does not fit: {message}"),
+                                ),
+                            }
+                        }
+                        other => other,
+                    }),
                 BexCallArg::OmittedDefault => Ok(Value::OMITTED_ARG),
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, EngineError>>()?;
         self.prepare_entry_point(
             thread,
             function_index,
@@ -4158,35 +4117,20 @@ impl BexEngine {
             }
         };
 
-        // Coerce each provided arg to its declared param type (offset by `self`
-        // for bound methods).
-        let coerced: Vec<BexCallArg> = args
-            .into_iter()
-            .enumerate()
-            .map(|(idx, arg)| match param_types.get(idx + self_offset) {
-                Some(ty) => match arg {
-                    BexCallArg::Provided(value) => self
-                        .coerce_inbound_arg(*value, ty)
-                        .map(|value| BexCallArg::Provided(Box::new(value))),
-                    BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
-                },
-                None => Ok(arg),
-            })
-            .collect::<Result<_, _>>()?;
-
         // Build VM args: the receiver as `self` in slot 0 (bound methods), then
-        // the converted user args.
-        let mut vm_args: Vec<Value> = Vec::with_capacity(coerced.len() + self_offset);
+        // each provided arg, admitted to its declared param type (offset by
+        // `self` for bound methods). A callable that declares no parameter
+        // types takes each value as what it is.
+        let mut vm_args: Vec<Value> = Vec::with_capacity(args.len() + self_offset);
         if let Some(receiver) = receiver {
             vm_args.push(receiver);
         }
-        for (idx, arg) in coerced.into_iter().enumerate() {
+        for (idx, arg) in args.into_iter().enumerate() {
             vm_args.push(match arg {
-                BexCallArg::Provided(arg) => self.convert_external_to_vm_value_with_ty(
-                    &mut thread,
-                    *arg,
-                    param_types.get(idx + self_offset),
-                )?,
+                BexCallArg::Provided(value) => match param_types.get(idx + self_offset) {
+                    Some(ty) => self.admit_to_heap(&mut thread, &value, ty)?,
+                    None => self.convert_external_to_vm_value(&mut thread, *value)?,
+                },
                 BexCallArg::OmittedDefault => Value::OMITTED_ARG,
             });
         }
@@ -5744,53 +5688,27 @@ impl BexEngine {
                         // cancellation it received): per BEP-034 it runs to
                         // completion and its value stands, for a root call as
                         // for a spawned child.
-                        let return_value = if !copy_objects {
-                            if let Some(ptr) = value.as_object_ptr() {
-                                // SAFETY: the active thread holds the heap permit
-                                // through `thread.proof()`.
-                                //
-                                // Heap-boxed floats can't be handle-wrapped — a
-                                // function declared `-> float` (or
-                                // `-> Union<float, ...>` / `-> float?`) should
-                                // surface as an inline `BexExternalValue::Float`,
-                                // not an opaque `Handle`. Route them through the
-                                // typed converter so declared-type metadata
-                                // (e.g. Union wrapping) is preserved; the bare
-                                // unboxing fast-path stripped that.
-                                if matches!(unsafe { ptr.get() }, Object::Float(_)) {
-                                    self.convert_vm_value_to_external_with_type(
-                                        value,
-                                        &return_type,
-                                        &thread.vm,
-                                        thread.proof(),
-                                    )?
-                                } else {
-                                    let handle = self.heap.create_handle(ptr);
-                                    BexExternalValue::Handle(handle)
-                                }
-                            } else {
-                                let external = self.convert_vm_value_to_external_with_type(
-                                    value,
-                                    &return_type,
-                                    &thread.vm,
-                                    thread.proof(),
-                                )?;
-                                crate::conversion::coerce_return_to_declared_type(
-                                    external,
-                                    &return_type,
-                                )?
+                        // A heap-boxed float is no handle: a function declared
+                        // `-> float` (or `-> float | ...`, `-> float?`) hands the
+                        // host an inline `BexExternalValue::Float`, through the
+                        // typed converter so the declared type's shape (a union
+                        // wrapper) is kept.
+                        //
+                        // SAFETY: the active thread holds the heap permit
+                        // through `thread.proof()`.
+                        let return_value = match value.as_object_ptr() {
+                            Some(ptr)
+                                if !copy_objects
+                                    && !matches!(unsafe { ptr.get() }, Object::Float(_)) =>
+                            {
+                                BexExternalValue::Handle(self.heap.create_handle(ptr))
                             }
-                        } else {
-                            let external = self.convert_vm_value_to_external_with_type(
+                            _ => self.convert_vm_value_to_external_with_type(
                                 value,
                                 &return_type,
                                 &thread.vm,
                                 thread.proof(),
-                            )?;
-                            crate::conversion::coerce_return_to_declared_type(
-                                external,
-                                &return_type,
-                            )?
+                            )?,
                         };
                         return Ok(ThreadOutcome::RootValue(return_value));
                     }
@@ -6119,88 +6037,70 @@ impl BexEngine {
 
                         match outcome {
                             Ok(external) => {
-                                // Schema-aware return-type validation for host
-                                // callables. The bridge's shared
-                                // `validate_host_return` guard already rejected
-                                // scalar / enum-identity / class-name mismatches at
-                                // the FFI boundary; here — where the compiled class
-                                // schema is reachable — we additionally validate
-                                // class *field types* against the declared return
-                                // type (`host_ret_ty`, captured from `args[2]` before
-                                // the await). A mismatch is injected into the VM's
-                                // exception unwinder so an in-BAML `catch` can
-                                // catch it exactly like a host-raised error.
-                                if operation == SysOp::BamlHostCallHostValue
+                                // The return value of a host callback is
+                                // admitted to the declared return type
+                                // (`host_ret_ty`, captured from `args[2]` before
+                                // the await), as an argument is to its
+                                // parameter. One that does not inhabit it is a
+                                // breach of the callback's contract.
+                                let landed = if operation == SysOp::BamlHostCallHostValue
                                     && let Some(ret_ty) = host_ret_ty.as_ref()
-                                    && let Err(message) =
-                                        self.validate_host_return_schema(&external, ret_ty)
                                 {
-                                    // A wrong-return-type at the engine-level
-                                    // schema check is the same kind of contract
-                                    // breach as the FFI-boundary guard catches:
-                                    // the host returned a value that doesn't
-                                    // inhabit `T`. Surface as
-                                    // `baml.panics.HostContractViolation`
-                                    // (panic, not catchable).
-                                    let op_err = OpError::new(
-                                        SysOp::BamlHostCallHostValue,
-                                        sys_types::VmPanic::HostContractViolation {
-                                            message,
-                                            class_name: None,
-                                            language: None,
-                                        },
-                                    );
-                                    if let Some(outcome) = self
-                                        .inject_sysop_throw(
-                                            thread,
-                                            call_id,
-                                            op_err,
-                                            throws_type.as_ref(),
-                                            host_throws_ty.as_ref(),
-                                        )
-                                        .await?
-                                    {
-                                        return Ok(outcome);
-                                    }
-                                    // VM caught the throw; the unwinder truncated
-                                    // the eval stack back to the catching frame's
-                                    // locals region, so we must NOT push the
-                                    // would-be return value (there's no slot
-                                    // expecting it any more). Fall through to the
-                                    // top of the outer loop.
+                                    self.admit_host_return(thread, &external, ret_ty)?
+                                } else if let Some(overlay) = runtime_schema_overlay.as_ref() {
+                                    Ok(self.convert_external_to_vm_value_with_runtime_schema(
+                                        thread,
+                                        external,
+                                        overlay,
+                                        &runtime_type_overlay.class_handles_by_name(),
+                                        &runtime_type_overlay.enum_handles_by_name(),
+                                    )?)
                                 } else {
-                                    // Convert the external value back into a VM
-                                    // Value (allocating string / list / instance
-                                    // heap objects as needed) and push it onto
-                                    // the eval stack. The bytecode that follows
-                                    // this sys-op call is a normal `store_var`
-                                    // / projection / whatever the surrounding
-                                    // expression expected — no implicit await.
-                                    let value = if operation == SysOp::BamlHostCallHostValue {
-                                        self.convert_host_return_to_vm_value_with_ty(
-                                            thread,
-                                            external,
-                                            host_ret_ty.as_ref(),
-                                        )?
-                                    } else if let Some(overlay) = runtime_schema_overlay.as_ref() {
-                                        self.convert_external_to_vm_value_with_runtime_schema(
-                                            thread,
-                                            external,
-                                            overlay,
-                                            &runtime_type_overlay.class_handles_by_name(),
-                                            &runtime_type_overlay.enum_handles_by_name(),
-                                        )?
-                                    } else {
-                                        self.convert_external_to_vm_value_with_dynamic_types(
-                                            thread,
-                                            external,
-                                            None,
-                                            &runtime_type_overlay.class_handles_by_name(),
-                                            &runtime_type_overlay.enum_handles_by_name(),
-                                        )?
-                                    };
-
-                                    thread.vm.stack.push(value);
+                                    Ok(self.convert_external_to_vm_value_with_dynamic_types(
+                                        thread,
+                                        external,
+                                        None,
+                                        &runtime_type_overlay.class_handles_by_name(),
+                                        &runtime_type_overlay.enum_handles_by_name(),
+                                    )?)
+                                };
+                                match landed {
+                                    // Push the value onto the eval stack. The
+                                    // bytecode that follows this sys-op call is
+                                    // a normal `store_var` / projection /
+                                    // whatever the surrounding expression
+                                    // expected — no implicit await.
+                                    Ok(value) => thread.vm.stack.push(value),
+                                    // `baml.panics.HostContractViolation`: a
+                                    // panic, not catchable.
+                                    Err(mismatch) => {
+                                        let op_err = OpError::new(
+                                            SysOp::BamlHostCallHostValue,
+                                            sys_types::VmPanic::HostContractViolation {
+                                                message: mismatch.message,
+                                                class_name: None,
+                                                language: None,
+                                            },
+                                        );
+                                        if let Some(outcome) = self
+                                            .inject_sysop_throw(
+                                                thread,
+                                                call_id,
+                                                op_err,
+                                                throws_type.as_ref(),
+                                                host_throws_ty.as_ref(),
+                                            )
+                                            .await?
+                                        {
+                                            return Ok(outcome);
+                                        }
+                                        // VM caught the throw; the unwinder
+                                        // truncated the eval stack back to the
+                                        // catching frame's locals region, so
+                                        // there is no slot for a return value
+                                        // any more. Fall through to the top of
+                                        // the outer loop.
+                                    }
                                 }
                             }
                             Err(op_err) => {

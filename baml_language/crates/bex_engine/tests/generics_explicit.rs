@@ -192,27 +192,47 @@ async fn inbound_instance_arg_wrong_arity_rejected() {
     );
 }
 
-/// A bare host map can be promoted into a generic class when the contextual
-/// class slot already supplies the concrete arguments.
+/// A host instance that names its class but not its type arguments takes
+/// them from the contextual class slot. A bare map names no class, and the
+/// engine makes it none.
 #[tokio::test]
-async fn inbound_bare_map_against_generic_class_uses_context() {
+async fn inbound_instance_against_generic_class_takes_the_arguments_from_context() {
     let source = r#"
         class Box<T> { v T }
         function takes_box<T>(b: Box<T>) -> int { 1 }
         function main() -> int { 0 }
     "#;
-    let arg = BexExternalValue::Map {
-        key_type: baml_type::RuntimeTy::string(),
-        value_type: baml_type::RuntimeTy::int(),
-        entries: indexmap::IndexMap::from_iter([("v".to_string(), BexExternalValue::Int(5))]),
+    let fields = indexmap::IndexMap::from_iter([("v".to_string(), BexExternalValue::Int(5))]);
+    let instance = BexExternalValue::Instance {
+        class_name: "Box".to_string(),
+        type_args: vec![],
+        fields: fields.clone(),
     };
     let out = call_named(
         source,
         "takes_box",
-        vec![arg],
+        vec![instance],
         vec![("T".to_string(), baml_type::RuntimeTy::int())],
     )
     .await
-    .expect("the contextual Box<int> type supplies the map's nominal identity");
+    .expect("the contextual Box<int> type supplies the instance's type arguments");
     assert_eq!(out, BexExternalValue::Int(1));
+
+    let map = BexExternalValue::Map {
+        key_type: baml_type::RuntimeTy::string(),
+        value_type: baml_type::RuntimeTy::int(),
+        entries: fields,
+    };
+    let err = call_named(
+        source,
+        "takes_box",
+        vec![map],
+        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+    )
+    .await
+    .expect_err("a map is not an instance of a class");
+    assert!(
+        matches!(err, EngineError::TypeMismatch { .. }),
+        "expected TypeMismatch, got {err:?}"
+    );
 }

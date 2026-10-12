@@ -36,6 +36,13 @@ pub enum CtypesError {
     #[error("Union selected type `{selected}` is not a member of declared union `{union}`")]
     UnionSelectedTypeNotMember { selected: String, union: String },
 
+    /// The `js_number_value` arm asked the engine to read a JavaScript number
+    /// by the type of its slot. A host states `int_value` or `float_value`
+    /// itself; the field stays on the wire only until the generated protobuf
+    /// code is next regenerated.
+    #[error("InboundValue.js_number_value is no longer accepted: send int_value or float_value")]
+    JsNumberValueRetired,
+
     #[error("Internal error: {0}")]
     InternalError(String),
 }

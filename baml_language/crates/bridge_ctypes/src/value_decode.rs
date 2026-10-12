@@ -138,7 +138,7 @@ fn decode_inbound(
                 Ok(BexExternalValue::Bigint(bi))
             }
             InboundValueVariant::FloatValue(f) => Ok(BexExternalValue::Float(f)),
-            InboundValueVariant::JsNumberValue(f) => Ok(BexExternalValue::JsNumber(f)),
+            InboundValueVariant::JsNumberValue(_) => Err(CtypesError::JsNumberValueRetired),
             InboundValueVariant::BoolValue(b) => Ok(BexExternalValue::Bool(b)),
             InboundValueVariant::ListValue(list) => convert_list(list, handle_table, owners),
             InboundValueVariant::MapValue(map) => convert_map(map, handle_table, owners),
@@ -512,19 +512,19 @@ mod tests {
     }
 
     #[test]
-    fn javascript_number_has_a_distinct_inbound_wire_variant() {
-        let decoded = inbound_to_external(
+    fn javascript_number_wire_variant_is_refused() {
+        let error = inbound_to_external(
             InboundValue {
                 value_type: None,
-                value: Some(InboundValueVariant::JsNumberValue(-0.0)),
+                value: Some(InboundValueVariant::JsNumberValue(7.0)),
             },
             &CffiHandleTable::new(),
         )
-        .unwrap();
-        let BexExternalValue::JsNumber(value) = decoded else {
-            panic!("expected a JavaScript number")
-        };
-        assert_eq!(value.to_bits(), (-0.0_f64).to_bits());
+        .unwrap_err();
+        assert!(
+            matches!(error, CtypesError::JsNumberValueRetired),
+            "{error}"
+        );
     }
 
     #[test]

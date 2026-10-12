@@ -9,7 +9,7 @@ use ::bex_vm_types::{HeapPtr, Object, Value, ValueKind, float_order};
 use baml_type::{Literal, Ty};
 use bex_external_types::{
     BexExternalAdt, BexExternalValue, HostValueKind, RuntimeTy, UnionMetadata,
-    is_canonical_json_alias, js_number_to_i64, runtime_ty_structurally_equal, selected_arm_equal,
+    is_canonical_json_alias, runtime_ty_structurally_equal, selected_arm_equal,
     value_satisfies_json,
 };
 use bex_vm::BexVm;
@@ -109,7 +109,7 @@ pub(crate) fn anchor_wire_ty(
 }
 
 #[derive(Clone, Copy)]
-enum InboundDeclarationKind {
+pub(crate) enum InboundDeclarationKind {
     Any,
     Class,
     Enum,
@@ -160,7 +160,7 @@ impl BexEngine {
     /// used for external instances and variants, then through the VM's declared
     /// package surface. Keeping this lookup shared prevents container/type
     /// metadata from drifting from value allocation again.
-    fn resolve_inbound_declaration(
+    pub(crate) fn resolve_inbound_declaration(
         &self,
         vm: &BexVm,
         permit: PermitProof<'_>,
@@ -269,7 +269,7 @@ impl BexEngine {
         })
     }
 
-    fn realize_host_ty_with_runtime(
+    pub(crate) fn realize_host_ty_with_runtime(
         &self,
         vm: &BexVm,
         permit: PermitProof<'_>,
@@ -927,7 +927,7 @@ impl BexEngine {
     /// disambiguation is needed. A generic instance's type is read from its
     /// wire-supplied `type_args` (the value-level source of truth); class/enum
     /// `TypeName`s are resolved against the engine registry so the binding
-    /// survives Gate B's name match. Opaque host values — and anything else with
+    /// names the class admission resolves. Opaque host values — and anything else with
     /// no readable BAML type, including empty containers — are `HostOnly`
     /// (Case 2, → `rust_type`).
     pub(crate) fn synth_ty_from_value(&self, value: &BexExternalValue) -> SynthTy {
@@ -935,16 +935,6 @@ impl BexEngine {
             BexExternalValue::Int(_) => SynthTy::Known(RuntimeTy::int()),
             BexExternalValue::Bigint(_) => SynthTy::Known(RuntimeTy::Bigint),
             BexExternalValue::Float(_) => SynthTy::Known(RuntimeTy::float()),
-            // An unconstrained integral JavaScript number keeps the Node
-            // bridge's historical `int` inference. Contextual coercion can
-            // still select `float`; a non-integral number is float-only.
-            BexExternalValue::JsNumber(value) => {
-                SynthTy::Known(if js_number_to_vm_int(*value).is_some() {
-                    RuntimeTy::int()
-                } else {
-                    RuntimeTy::float()
-                })
-            }
             BexExternalValue::Bool(_) => SynthTy::Known(RuntimeTy::bool()),
             // A `String` value widens to `string`, never a `Literal` (00b3
             // T2/T45 — `identity("hi")` binds `T = string`).
@@ -1061,7 +1051,7 @@ impl BexEngine {
 
     /// Resolve a class FQN (as it arrives on an inbound `Instance`) to the
     /// engine-registered `TypeName`, so a synthesized `Class` type matches the
-    /// declared slot's name in Gate B. `None` if no such class is registered.
+    /// declared slot's name. `None` if no such class is registered.
     fn resolve_class_type_name(&self, class_name: &str) -> Option<baml_type::TypeName> {
         let ptr = self
             .resolved_class_names
@@ -1238,10 +1228,10 @@ impl BexEngine {
         holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
     ) -> Result<Value, EngineError> {
-        // Default: no declared-type context. Inbound `HostValue` arguments
-        // need the declared `RuntimeTy::Function` to materialize an
-        // `Object::HostClosure` — callers that thread the type in should
-        // use `convert_external_to_vm_value_with_ty`.
+        // Default: no declared-type context. A value bound for a slot with
+        // a declared type is admitted to it instead (`BexEngine::admit`),
+        // which is also what gives an inbound `HostValue` the declared
+        // `RuntimeTy::Function` its `Object::HostClosure` needs.
         self.convert_external_to_vm_value_with_ty_and_runtime(
             holder,
             external,
@@ -1292,50 +1282,24 @@ impl BexEngine {
         )
     }
 
-    /// Like [`Self::convert_external_to_vm_value`], but threads the effective
-    /// contextual `RuntimeTy` alongside the value tree. Sparse inbound
-    /// `value_type` annotations are validated during coercion and become the
-    /// context for their payload subtree; unannotated children inherit their
-    /// list, map, or class-field type from the parent. This also lets nested
-    /// `BexExternalValue::HostValue` values bind to an [`Object::HostClosure`].
-    pub(crate) fn convert_external_to_vm_value_with_ty(
+    /// Land a value of the engine's own making in the slot it was admitted to
+    /// ([`crate::admit::Admitted::Engine`]): a host callable is bound to the
+    /// declared function type, a media value becomes its wrapper instance, a
+    /// live reference resolves to its object.
+    pub(crate) fn land_engine_value(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
-        external: BexExternalValue,
-        expected_ty: Option<&RuntimeTy>,
+        value: BexExternalValue,
+        slot: &RuntimeTy,
+        overlay: InboundRuntimeOverlay<'_>,
     ) -> Result<Value, EngineError> {
         self.convert_external_to_vm_value_with_ty_and_runtime(
             holder,
-            external,
-            expected_ty,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-            None,
-        )
-    }
-
-    /// Materialize a host-callable return using its declared return type.
-    ///
-    /// Host returns have not gone through the entry-point argument coercion
-    /// pass. Resolve their inbound carriers recursively against the declared
-    /// return type before ordinary VM materialization.
-    pub(crate) fn convert_host_return_to_vm_value_with_ty(
-        &self,
-        holder: &mut impl HeapPermit<BexThread>,
-        external: BexExternalValue,
-        expected_ty: Option<&RuntimeTy>,
-    ) -> Result<Value, EngineError> {
-        let external = match expected_ty {
-            Some(expected_ty) => self.coerce_inbound_arg(external, expected_ty)?,
-            None => external,
-        };
-        self.convert_external_to_vm_value_with_ty_and_runtime(
-            holder,
-            external,
-            expected_ty,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-            None,
+            value,
+            Some(slot),
+            overlay.dynamic_classes,
+            overlay.dynamic_enums,
+            overlay.runtime_named_objects,
         )
     }
 
@@ -1363,29 +1327,12 @@ impl BexEngine {
     fn convert_external_to_vm_value_with_ty_and_runtime(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
-        mut external: BexExternalValue,
+        external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
         dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
         dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
         runtime_named_objects: Option<&indexmap::IndexMap<String, HeapPtr>>,
     ) -> Result<Value, EngineError> {
-        // A `baml.json.json` slot materializes containers with the alias as
-        // their element/value type, exactly like BAML-born `baml.json.parse`
-        // values (`serde_to_value`), so runtime type tests (`match (j) { let
-        // m: map<string, json> => ... }`) treat host and BAML json alike.
-        // `coerce_inbound_arg` already re-annotates argument trees; this hook
-        // covers the paths that convert without a coercion pass, notably
-        // host-callable return values.
-        if let Some(declared @ RuntimeTy::TypeAlias(name)) = expected_ty
-            && is_canonical_json_alias(name)
-            && matches!(
-                external,
-                BexExternalValue::Array { .. } | BexExternalValue::Map { .. }
-            )
-            && value_satisfies_json(&external)
-        {
-            external = annotate_json_container_types(external, declared);
-        }
         // Structural host-only stash (03b §F/§G): when the declared slot resolves
         // to `RustType` (the generic var bound to `rust_type`) but the value is a
         // structural `BexExternalValue` (e.g. an unbound generic instance), ride
@@ -1446,16 +1393,6 @@ impl BexEngine {
             BexExternalValue::Float(f) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc(Object::Float(f)))
             }
-            BexExternalValue::JsNumber(f) => match js_number_to_i64(f) {
-                Some(i) => Value::try_int(i).ok_or_else(|| EngineError::TypeMismatch {
-                    message: format!(
-                        "integer {i} is outside the BAML integer range [{}, {}]",
-                        Value::INT_MIN,
-                        Value::INT_MAX
-                    ),
-                })?,
-                None => Value::object(holder.holder_mut().tlab_mut().alloc(Object::Float(f))),
-            },
             BexExternalValue::Bool(b) => Value::bool(b),
             BexExternalValue::String(s) => {
                 Value::object(holder.holder_mut().tlab_mut().alloc_string(s))
@@ -1468,19 +1405,19 @@ impl BexEngine {
                 let runtime_element_ty = declared_element_ty.unwrap_or(&element_type).clone();
                 let values = items
                     .into_iter()
-                    .map(|v| {
-                        let v = match declared_element_ty {
-                            Some(ty) => self.coerce_inbound_arg(v, ty)?,
-                            None => v,
-                        };
-                        self.convert_external_to_vm_value_with_ty_and_runtime(
+                    .map(|v| match declared_element_ty {
+                        Some(ty) => {
+                            let admitted = self.admit(holder, &v, ty, overlay)?;
+                            self.land(holder, admitted, overlay)
+                        }
+                        None => self.convert_external_to_vm_value_with_ty_and_runtime(
                             holder,
                             v,
-                            declared_element_ty,
+                            None,
                             dynamic_classes,
                             dynamic_enums,
                             runtime_named_objects,
-                        )
+                        ),
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 let element_ty = self.realize_host_ty_with_runtime(
@@ -1560,18 +1497,20 @@ impl BexEngine {
                 let values = entries
                     .into_iter()
                     .map(|(k, v)| {
-                        let v = match declared_value_ty {
-                            Some(ty) => self.coerce_inbound_arg(v, ty)?,
-                            None => v,
-                        };
-                        self.convert_external_to_vm_value_with_ty_and_runtime(
-                            holder,
-                            v,
-                            declared_value_ty,
-                            dynamic_classes,
-                            dynamic_enums,
-                            runtime_named_objects,
-                        )
+                        match declared_value_ty {
+                            Some(ty) => {
+                                let admitted = self.admit(holder, &v, ty, overlay)?;
+                                self.land(holder, admitted, overlay)
+                            }
+                            None => self.convert_external_to_vm_value_with_ty_and_runtime(
+                                holder,
+                                v,
+                                None,
+                                dynamic_classes,
+                                dynamic_enums,
+                                runtime_named_objects,
+                            ),
+                        }
                         .map(|v| (bex_vm_types::BexStr::from(k.as_str()), v))
                     })
                     .collect::<Result<indexmap::IndexMap<bex_vm_types::BexStr, Value>, _>>()?;
@@ -1664,15 +1603,8 @@ impl BexEngine {
                     })?;
                     let field_ty = class_field.field_template.substitute_symbolic(&type_args);
                     let wire_field_ty = overlay_wire_ty(&field_ty)?;
-                    let field_value = self.coerce_inbound_arg(ext.clone(), &wire_field_ty)?;
-                    values.push(self.convert_external_to_vm_value_with_ty_and_runtime(
-                        holder,
-                        field_value,
-                        Some(&wire_field_ty),
-                        dynamic_classes,
-                        dynamic_enums,
-                        runtime_named_objects,
-                    )?);
+                    let admitted = self.admit(holder, ext, &wire_field_ty, overlay)?;
+                    values.push(self.land(holder, admitted, overlay)?);
                 }
                 let realized_type_args = type_args
                     .into_iter()
@@ -1726,21 +1658,15 @@ impl BexEngine {
                         .alloc_variant(enum_ptr, index),
                 )
             }
-            BexExternalValue::Union { value, metadata } => {
-                // A typed host value carries an authoritative exact type.
-                // First apply that type to shape-only class/container payloads,
-                // then materialize against it. This path also handles host
-                // throws, which have no declared parameter context.
-                let selected_type = metadata.selected_option;
-                let value = self.coerce_inbound_arg(*value, &selected_type)?;
-                return self.convert_external_to_vm_value_with_ty_and_runtime(
-                    holder,
-                    value,
-                    Some(&selected_type),
-                    dynamic_classes,
-                    dynamic_enums,
-                    runtime_named_objects,
-                );
+            BexExternalValue::Union { ref metadata, .. } => {
+                // A typed host value names its own exact type, so it is
+                // admitted to that type with the name it carries: an anonymous
+                // class payload is an instance of the class the host named.
+                // This path also handles host throws, which have no declared
+                // parameter context.
+                let selected_type = metadata.selected_option.clone();
+                let admitted = self.admit(holder, &external, &selected_type, overlay)?;
+                return self.land(holder, admitted, overlay);
             }
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => {
                 // A lane type lands here. An anonymous declaration has no
@@ -2708,7 +2634,7 @@ fn template_max_type_arg_ref<N: Clone>(t: &baml_type::TyTemplate<N>) -> Option<u
 /// materialized into an introspectable VM object, so it round-trips unchanged
 /// (03b G2/G3/G4). Handles / host-values / rust-data already have their own
 /// opaque round-trip and are left to their existing arms.
-fn is_structural_host_only(value: &BexExternalValue) -> bool {
+pub(crate) fn is_structural_host_only(value: &BexExternalValue) -> bool {
     matches!(
         value,
         BexExternalValue::Instance { .. }
@@ -2808,7 +2734,7 @@ impl SynthTy {
     /// The `RuntimeTy` to feed [`infer_bindings_runtime`]. `HostOnly` lowers to
     /// `RustType` (the recommended host-only default — round-trips as
     /// `Object::RustData` with no materializer change; see
-    /// `convert_external_to_vm_value_with_ty`).
+    /// `BexEngine::land_engine_value`).
     pub(crate) fn into_runtime_ty(self) -> RuntimeTy {
         match self {
             SynthTy::Known(ty) => ty,
@@ -2840,8 +2766,8 @@ fn synth_collection_element<'a>(
 /// underlying `RuntimeTy::Function` if there is one. Returns `None` if the type is
 /// not a function (after peeling).
 ///
-/// Used by `convert_external_to_vm_value_with_ty` to find the function
-/// signature behind, e.g., `(int) -> int` and `((int) -> int)?` so that an
+/// Used where a host callable lands (`BexEngine::land_engine_value`) to
+/// find the function signature behind, e.g., `(int) -> int` and `((int) -> int)?` so that an
 /// inbound `BexExternalValue::HostValue` can be bound to it as an
 /// `Object::HostClosure`.
 /// Returns `Some(())` if `ty` is the runtime representation of
@@ -2994,6 +2920,9 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
     }
 }
 
+/// The standard library's class for a rendered prompt.
+pub(crate) const PROMPT_CLASS: &str = "ai.Prompt";
+
 /// Find which union member matches a value.
 ///
 /// `Unknown` arms match any value (see `value_matches_type`) and are
@@ -3095,7 +3024,7 @@ fn find_matching_member(
 /// `type_name`, refined for the mismatch diagnostics: an instance or variant
 /// names its class/enum, since "instance" alone cannot identify which
 /// declaration failed to match.
-fn described_value_type(value: &BexExternalValue) -> String {
+pub(crate) fn described_value_type(value: &BexExternalValue) -> String {
     match value {
         BexExternalValue::Instance { class_name, .. } => format!("instance of `{class_name}`"),
         BexExternalValue::Variant { enum_name, .. } => format!("variant of `{enum_name}`"),
@@ -3103,85 +3032,7 @@ fn described_value_type(value: &BexExternalValue) -> String {
     }
 }
 
-/// Select a union member for an inbound node that did not carry `value_type`.
-/// Unlike the general VM/output selector above, this must not invent intent for
-/// overlapping arms: a literal and its primitive, an enum variant and its enum,
-/// or two container/class shapes that both accept the payload require an
-/// explicit sparse annotation.
-fn find_unannotated_inbound_member_with_aliases(
-    value: &BexExternalValue,
-    members: &[RuntimeTy],
-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
-    ambiguity_policy: crate::InboundUnionAmbiguityPolicy,
-) -> Result<RuntimeTy, EngineError> {
-    let mut matching: Vec<&RuntimeTy> = Vec::new();
-    for member in members.iter().filter(|member| {
-        !matches!(member, RuntimeTy::Unknown)
-            && value_matches_type_with_definitions(value, member, aliases, classes)
-    }) {
-        if matching
-            .iter()
-            .all(|matched| !runtime_ty_structurally_equal(matched, member))
-        {
-            matching.push(member);
-        }
-    }
-
-    // A nested optional alias can make one null payload match both the alias
-    // member and an explicit null member. That is not distinct host intent:
-    // unlike an empty container, a bare null already identifies its exact leaf
-    // type. Prefer the exact null arm so statically typed SDKs can encode `nil`
-    // without attaching the forbidden root-union/optional annotation.
-    if matches!(value, BexExternalValue::Null)
-        && matching.len() > 1
-        && let Some(exact_null) = matching
-            .iter()
-            .find(|member| runtime_ty_resolves_to_exact_null(member, aliases))
-    {
-        return Ok((**exact_null).clone());
-    }
-
-    match matching.as_slice() {
-        [member] => Ok((*member).clone()),
-        [] => members
-            .iter()
-            .find(|member| matches!(member, RuntimeTy::Unknown))
-            .cloned()
-            .ok_or_else(|| EngineError::TypeMismatch {
-                message: format!(
-                    "Value of type '{}' does not match any member of union {:?}",
-                    described_value_type(value),
-                    members
-                ),
-            }),
-        _ if ambiguity_policy == crate::InboundUnionAmbiguityPolicy::SelectDefault => {
-            // Dynamic host values do not carry a generated union wrapper. Use
-            // the same specificity preference as normal BAML selection, then
-            // fall back to the first declared structural match. This makes an
-            // empty Python/TypeScript list deterministic while still letting
-            // an exact literal/enum-variant beat its broad parent type.
-            matching
-                .iter()
-                .find(|member| {
-                    matches!(member, RuntimeTy::Literal(..) | RuntimeTy::EnumVariant(..))
-                })
-                .or_else(|| matching.first())
-                .map(|member| (**member).clone())
-                .ok_or_else(|| EngineError::TypeMismatch {
-                    message: "dynamic default selection had no matching union member".to_string(),
-                })
-        }
-        _ => Err(EngineError::TypeMismatch {
-            message: format!(
-                "value of type `{}` matches multiple union members; add an inbound `value_type` annotation to select one",
-                value.type_name()
-            ),
-        }),
-    }
-}
-
-fn runtime_ty_resolves_to_exact_null<'a>(
+pub(crate) fn runtime_ty_resolves_to_exact_null<'a>(
     mut ty: &'a RuntimeTy,
     aliases: &'a indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
 ) -> bool {
@@ -3202,7 +3053,10 @@ fn runtime_ty_resolves_to_exact_null<'a>(
     false
 }
 
-fn type_name_matches_external_name(external_name: &str, type_name: &baml_type::TypeName) -> bool {
+pub(crate) fn type_name_matches_external_name(
+    external_name: &str,
+    type_name: &baml_type::TypeName,
+) -> bool {
     external_name == type_name.display_name().as_str()
         || external_name == type_name.render_dotted(false)
 }
@@ -3217,9 +3071,9 @@ fn resolve_named_object<'a>(
         return Some(found);
     }
     // MIR uses `display_name`, which strips the `user.` prefix for
-    // user-package types, so an `Instance` arriving
-    // from `coerce_arg_to_declared_type` may carry `lorem.MyLorem` while
-    // the engine registered `user.lorem.MyLorem`. Try the `user.`
+    // user-package types, so an `Instance` admitted to a declared class
+    // may carry `lorem.MyLorem` while the engine registered
+    // `user.lorem.MyLorem`. Try the `user.`
     // prefix as a fallback before giving up. Builtin/vendor types keep
     // their full FQN so this only fires for user-package classes.
     let user_qualified = format!("user.{name}");
@@ -3229,91 +3083,10 @@ fn resolve_named_object<'a>(
     None
 }
 
-/// Check if a value matches a declared type.
+/// Whether a value the engine produced is of a declared type, as it is: the
+/// outbound side asks this to say which member of a union a value came out
+/// of. Nothing is converted on the way out.
 fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
-    value_matches_type_with_definitions(
-        value,
-        ty,
-        &indexmap::IndexMap::new(),
-        &indexmap::IndexMap::new(),
-    )
-}
-
-/// Look up a class definition in the inbound wire view by its declared name.
-///
-/// Exact. The view holds only *declared* names — anonymous declarations are
-/// filtered out when it is projected, having no name a wire value could carry
-/// — and declared names are program-unique, so the old "scan for a unique
-/// matching `display_name`" fallback had nothing left to find that this misses.
-fn find_inbound_class_definition<'a>(
-    classes: &'a indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
-    type_name: &baml_type::TypeName,
-) -> Option<&'a WireClassDefinition> {
-    classes.get(type_name)
-}
-
-fn map_matches_class_shape(
-    entries: &indexmap::IndexMap<String, BexExternalValue>,
-    type_name: &baml_type::TypeName,
-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
-) -> bool {
-    let Some(definition) = find_inbound_class_definition(classes, type_name) else {
-        // Shape-only fallback. Reached by unit-level callers with no loaded
-        // program, and — deliberately — by a real engine for any class the
-        // inbound view cannot represent: one that is anonymous, or whose field
-        // types name an anonymous declaration. Matching on shape alone is
-        // weaker than matching on a definition, but it never asserts a shape
-        // the class does not actually have.
-        return true;
-    };
-
-    // A plain host object has no nominal identity. Its field set and values are
-    // therefore the only evidence available for selecting a class union arm.
-    // Reject unknown keys, require non-optional fields, and recursively check
-    // every supplied value. If two class definitions still accept the same
-    // object, the caller reports an ambiguity and asks for a sparse annotation.
-    if entries.keys().any(|key| {
-        !definition
-            .fields
-            .iter()
-            .any(|field| field.name == *key || field.alias.as_deref() == Some(key.as_str()))
-    }) {
-        return false;
-    }
-
-    definition.fields.iter().all(|field| {
-        let value = entries
-            .get(&field.name)
-            .or_else(|| field.alias.as_ref().and_then(|alias| entries.get(alias)));
-        match value {
-            Some(value) => {
-                value_matches_type_with_definitions(value, &field.field_type, aliases, classes)
-            }
-            None => {
-                field.skip
-                    || matches!(
-                        &field.field_type,
-                        RuntimeTy::Union(members) if members.iter().any(RuntimeTy::is_null)
-                    )
-            }
-        }
-    })
-}
-
-fn value_matches_type_with_definitions(
-    value: &BexExternalValue,
-    ty: &RuntimeTy,
-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
-) -> bool {
-    if let RuntimeTy::TypeAlias(name) = ty
-        && !is_canonical_json_alias(name)
-        && let Some(expanded) = aliases.get(name)
-    {
-        return value_matches_type_with_definitions(value, expanded, aliases, classes);
-    }
-
     match (value, ty) {
         // `Unknown` is the engine's "any value matches" sentinel
         // (TypeScript `unknown` semantics — see `baml_type::RuntimeTy::Unknown`).
@@ -3326,8 +3099,6 @@ fn value_matches_type_with_definitions(
         (BexExternalValue::Int(_), RuntimeTy::Int) => true,
         (BexExternalValue::Bigint(_), RuntimeTy::Bigint) => true,
         (BexExternalValue::Float(_), RuntimeTy::Float) => true,
-        (BexExternalValue::JsNumber(value), RuntimeTy::Int) => js_number_to_i64(*value).is_some(),
-        (BexExternalValue::JsNumber(_), RuntimeTy::Float) => true,
         (BexExternalValue::Bool(_), RuntimeTy::Bool) => true,
         (BexExternalValue::String(_), RuntimeTy::String) => true,
         // Literal types match their corresponding runtime values
@@ -3340,12 +3111,6 @@ fn value_matches_type_with_definitions(
         (BexExternalValue::Float(value), RuntimeTy::Literal(Literal::Float(expected), _)) => {
             float_literal_matches(*value, expected)
         }
-        (BexExternalValue::JsNumber(value), RuntimeTy::Literal(Literal::Int(expected), _)) => {
-            js_number_to_i64(*value).is_some_and(|value| value == *expected)
-        }
-        (BexExternalValue::JsNumber(value), RuntimeTy::Literal(Literal::Float(expected), _)) => {
-            float_literal_matches(*value, expected)
-        }
         (BexExternalValue::Uint8Array(_), RuntimeTy::Uint8Array) => true,
         (BexExternalValue::String(value), RuntimeTy::Literal(Literal::String(expected), _)) => {
             value.as_str() == expected
@@ -3353,26 +3118,18 @@ fn value_matches_type_with_definitions(
         (BexExternalValue::Bool(value), RuntimeTy::Literal(Literal::Bool(expected), _)) => {
             value == expected
         }
-        (BexExternalValue::Array { items, .. }, RuntimeTy::List(expected_element)) => {
-            items.iter().all(|item| {
-                value_matches_type_with_definitions(item, expected_element, aliases, classes)
-            })
-        }
+        (BexExternalValue::Array { items, .. }, RuntimeTy::List(expected_element)) => items
+            .iter()
+            .all(|item| value_matches_type(item, expected_element)),
         (
             BexExternalValue::Map { entries, .. },
             RuntimeTy::Map {
                 value: expected_value,
                 ..
             },
-        ) => entries.values().all(|value| {
-            value_matches_type_with_definitions(value, expected_value, aliases, classes)
-        }),
-        // A plain host object arrives as a bare `Map`, so use the loaded class
-        // definition to test whether its field shape inhabits a `Class` slot.
-        // It is promoted to an `Instance` during contextual materialization.
-        (BexExternalValue::Map { entries, .. }, RuntimeTy::Class(type_name, _)) => {
-            map_matches_class_shape(entries, type_name, aliases, classes)
-        }
+        ) => entries
+            .values()
+            .all(|value| value_matches_type(value, expected_value)),
         // `BexExternalValue::Instance` now carries its wire-supplied class
         // type args, so we can disambiguate `Foo<int>` from `Foo<string>` at
         // the FFI boundary instead of name-only. The comparison is name-only
@@ -3434,7 +3191,7 @@ fn value_matches_type_with_definitions(
                 // matches `Media` structurally), and the per-member arms
                 // below unwrap for every non-annotation-dependent case.
                 selected_arm_equal(member, &metadata.selected_option)
-                    && value_matches_type_with_definitions(union_value, member, aliases, classes)
+                    && value_matches_type(union_value, member)
             })
         }
         // `value_satisfies_json` peels sparse inbound leaf annotations (the
@@ -3462,16 +3219,12 @@ fn value_matches_type_with_definitions(
         {
             true
         }
-        (BexExternalValue::Union { value, .. }, ty) => {
-            value_matches_type_with_definitions(value, ty, aliases, classes)
-        }
+        (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
         (value, RuntimeTy::TypeAlias(name)) if is_canonical_json_alias(name) => {
             value_satisfies_json(value)
         }
         // Handle nested unions (including nullable `T | null`) in the type.
-        (value, RuntimeTy::Union(members)) => members
-            .iter()
-            .any(|m| value_matches_type_with_definitions(value, m, aliases, classes)),
+        (value, RuntimeTy::Union(members)) => members.iter().any(|m| value_matches_type(value, m)),
         _ => false,
     }
 }
@@ -3493,7 +3246,10 @@ fn value_matches_type_with_definitions(
 /// - differing (non-zero) arity → reject.
 /// - per-arg: an expected `TypeVar`/`Unknown` is a wildcard; otherwise the
 ///   wire arg must be compatible with the expected arg.
-fn class_type_args_compatible(wire_args: &[RuntimeTy], expected_args: &[RuntimeTy]) -> bool {
+pub(crate) fn class_type_args_compatible(
+    wire_args: &[RuntimeTy],
+    expected_args: &[RuntimeTy],
+) -> bool {
     if expected_args.is_empty() {
         return true;
     }
@@ -3562,382 +3318,10 @@ fn runtime_ty_compatible(wire: &RuntimeTy, expected: &RuntimeTy) -> bool {
     }
 }
 
-fn float_literal_matches(value: f64, source: &str) -> bool {
+pub(crate) fn float_literal_matches(value: f64, source: &str) -> bool {
     source
         .parse::<f64>()
         .is_ok_and(|expected| float_order::eq(value, expected))
-}
-
-/// Structurally check a generic call's argument against its now-concrete
-/// expected parameter type (Gate B), returning a human-readable mismatch
-/// `detail` on a positive failure (the caller frames it with the function name
-/// and argument position).
-///
-/// By the time this runs, Gate A has guaranteed every `TypeVar` is bound, so
-/// `expected` is a concrete type and the question is simply "does this value
-/// inhabit it?".
-///
-/// Three kinds of value:
-/// - **`Instance`** keeps the stronger comparison: its wire-supplied `type_args`
-///   carry generic information the signature can check (a `GenericBox<string>`
-///   arriving at a `GenericBox<int>` param is rejected), and an instance
-///   smuggling an unbound `TypeVar` in its wire args is rejected (the wire must
-///   be fully bound). `caller_specified_types` selects the mode: in explicit /
-///   partial mode (`true`) the wire must be fully bound, so an *unbound* instance
-///   (empty wire args) is rejected; in pure-inference mode (`false`) BAML has
-///   already recovered such an instance's args from its field values (03b G1),
-///   so the missing wire args are admitted.
-/// - **plain host data** (scalars, lists, maps, enum variants) is checked with
-///   the shared `value_satisfies_ty` shape match (via `validate_host_return`) —
-///   the same strict, recursive check the *return* path uses. This is the seam
-///   the pre-inference version skipped entirely, admitting e.g. a `string`
-///   argument into an `int` slot when the binding was caller-specified (03b C4).
-///   The shared check is lenient exactly where inference is (it accepts any value
-///   against `rust_type`/`unknown`, matches a value against any union arm, and
-///   treats an empty container's element position vacuously), so every value
-///   whose synthesized type produced a binding still passes.
-/// - **opaque / engine-minted typed carriers** (a typed heap handle such as a
-///   `Stream` receiver, a host callable, a reflected type / media /
-///   prompt, a host-only value, a raw handle) stay lenient — they are either
-///   already typed by the engine or ride opaquely through the VM, so a value-shape
-///   check isn't meaningful. This matches the pre-inference behavior for every
-///   non-`Instance` value; only plain host data is newly checked.
-pub(crate) fn check_generic_arg(
-    value: &BexExternalValue,
-    expected: &RuntimeTy,
-    caller_specified_types: bool,
-) -> Result<(), String> {
-    match value {
-        BexExternalValue::Instance { type_args, .. } => {
-            if let Some(name) = type_args.iter().find_map(first_unbound_type_var) {
-                return Err(format!(
-                    "is a generic instance carrying an unbound type variable `{name}`; the host \
-                     must send fully-bound generic instances"
-                ));
-            }
-            // Pure-inference mode: an *unbound* generic instance (no wire args)
-            // was already reconstructed from its fields and consumed by inference
-            // (G1). Admit it rather than demanding wire args inference didn't need.
-            if !caller_specified_types && type_args.is_empty() {
-                return Ok(());
-            }
-            // Compare against the expected type, peeling optional/union wrappers
-            // so an instance bound for a `T?`/`T | ...` slot still validates
-            // against the class member. Lenient where the expected type isn't a
-            // concrete class.
-            if expected_admits_instance(value, expected) {
-                Ok(())
-            } else {
-                Err(format!(
-                    "has runtime type `{}`, which doesn't match the expected type `{expected}`",
-                    value.type_name(),
-                ))
-            }
-        }
-
-        // Plain host data — strict structural shape check (the 03b C4 fix).
-        BexExternalValue::Null
-        | BexExternalValue::Int(_)
-        | BexExternalValue::Bigint(_)
-        | BexExternalValue::Float(_)
-        | BexExternalValue::JsNumber(_)
-        | BexExternalValue::Bool(_)
-        | BexExternalValue::String(_)
-        | BexExternalValue::Uint8Array(_)
-        | BexExternalValue::Array { .. }
-        | BexExternalValue::Map { .. }
-        | BexExternalValue::Variant { .. } => {
-            bex_external_types::validate_host_return(value, expected).map_err(|_| {
-                format!(
-                    "has type `{}`, which doesn't match the expected type `{expected}`",
-                    value.type_name(),
-                )
-            })
-        }
-
-        // The FFI union wrapper: peel and re-check the carried value, so an opaque
-        // inner stays lenient rather than being shape-checked.
-        BexExternalValue::Union { value: inner, .. } => {
-            check_generic_arg(inner, expected, caller_specified_types)
-        }
-
-        // Opaque / engine-minted typed carriers: lenient (see the doc above).
-        BexExternalValue::Adt(_)
-        | BexExternalValue::RustData(_)
-        | BexExternalValue::FunctionRef { .. }
-        | BexExternalValue::Handle(_)
-        | BexExternalValue::HostValue(_) => Ok(()),
-    }
-}
-
-/// Whether an `Instance` value is admitted by `expected`, peeling `Union`
-/// (covers `Optional`, which lowers to `T | null`) so a class instance matches
-/// its union/optional member. Defers the actual class+args comparison to
-/// [`value_matches_type`].
-fn expected_admits_instance(value: &BexExternalValue, expected: &RuntimeTy) -> bool {
-    match expected {
-        RuntimeTy::Union(members) => members.iter().any(|m| expected_admits_instance(value, m)),
-        // Only a `Class` slot can definitively reject an instance; against any
-        // other expected shape (TypeVar/unknown/opaque) stay lenient.
-        RuntimeTy::Class(..) => value_matches_type(value, expected),
-        _ => true,
-    }
-}
-
-impl BexEngine {
-    /// Schema-aware strict validation of a host-callable's returned value
-    /// against its declared return type.
-    ///
-    /// This is the engine-side complement to the bridges' shared
-    /// `bex_external_types::validate_host_return` guard. The shared guard runs
-    /// at the FFI boundary and enforces everything checkable without a schema
-    /// (scalar discrimination including contextual JavaScript `number`
-    /// resolution, container recursion,
-    /// enum identity, class-*name* identity). This method adds the one check
-    /// the shared guard cannot perform — class *field types* — by resolving
-    /// the declared class against the engine's compiled schema
-    /// (`resolved_class_names`) and recursively validating each declared
-    /// field's value against its instantiated field type.
-    ///
-    /// Returns `Err(message)` describing the first mismatch; the caller maps
-    /// it to a `VmBamlError::HostCallable` so it surfaces as a catchable
-    /// `root.errors.HostCallable`.
-    pub(crate) fn validate_host_return_schema(
-        &self,
-        value: &BexExternalValue,
-        expected: &RuntimeTy,
-    ) -> Result<(), String> {
-        // `InboundValue.value_type` is carried transiently as an annotated
-        // external union. Coerce its structural payload first so an anonymous
-        // class gains its nominal identity/type args and a class-shaped media
-        // shell becomes the underlying media ADT. The shared boundary guard
-        // has already checked that the annotation is assignable to `expected`;
-        // this pass verifies that the payload actually inhabits it and then
-        // applies the resolved class schema recursively.
-        if matches!(
-            value,
-            BexExternalValue::Union { metadata, .. }
-                if metadata.is_inbound_type_annotation
-        ) {
-            let coerced = self
-                .coerce_inbound_arg(value.clone(), expected)
-                .map_err(|error| error.to_string())?;
-            return match &coerced {
-                BexExternalValue::Union {
-                    value: inner,
-                    metadata,
-                } if metadata.is_inbound_type_annotation => {
-                    self.validate_host_return_schema(inner, expected)
-                }
-                other => self.validate_host_return_schema(other, expected),
-            };
-        }
-
-        match expected {
-            // `unknown` / opaque-any: accept (defensive — concrete at the FFI
-            // boundary).
-            RuntimeTy::Unknown => Ok(()),
-
-            // Union (including nullable `T | null`): must satisfy at least one
-            // member (schema-aware).
-            RuntimeTy::Union(members) => {
-                let inner = match value {
-                    BexExternalValue::Union { value: inner, .. } => inner.as_ref(),
-                    other => other,
-                };
-                if members
-                    .iter()
-                    .any(|m| self.validate_host_return_schema(inner, m).is_ok())
-                {
-                    Ok(())
-                } else {
-                    Err(format!(
-                        "host callable returned a value of type `{}` that does not match the \
-                         declared return type `{expected}`",
-                        inner.type_name(),
-                    ))
-                }
-            }
-
-            // A `Union`-wrapped value against a non-union declared type:
-            // validate the inner value.
-            _ if matches!(value, BexExternalValue::Union { .. }) => {
-                let BexExternalValue::Union { value: inner, .. } = value else {
-                    unreachable!("guarded by the matches! above")
-                };
-                self.validate_host_return_schema(inner, expected)
-            }
-
-            RuntimeTy::List(inner) => match value {
-                BexExternalValue::Array { items, .. } => {
-                    for item in items {
-                        self.validate_host_return_schema(item, inner)?;
-                    }
-                    Ok(())
-                }
-                other => Err(format!(
-                    "host callable returned `{}` where a list was declared",
-                    other.type_name(),
-                )),
-            },
-
-            RuntimeTy::Map { value: v_ty, .. } => match value {
-                BexExternalValue::Map { entries, .. } => {
-                    for v in entries.values() {
-                        self.validate_host_return_schema(v, v_ty)?;
-                    }
-                    Ok(())
-                }
-                other => Err(format!(
-                    "host callable returned `{}` where a map was declared",
-                    other.type_name(),
-                )),
-            },
-
-            // The schema-aware part: validate each declared field's value
-            // against its declared field type. A bare `Map` does NOT satisfy a
-            // class type here: result materialization is value-driven, so a
-            // `Map` becomes an `Object::Map`, never an instance of the declared
-            // class — accepting it would hand back a value that cannot inhabit
-            // the declared return type. A host returning a class must encode it
-            // as a class value (→ `Instance`), not a plain map.
-            RuntimeTy::Class(tn, expected_args) => match value {
-                BexExternalValue::Instance {
-                    class_name, fields, ..
-                } => {
-                    if !type_name_matches_external_name(class_name, tn) {
-                        return Err(format!(
-                            "host callable returned an instance of `{class_name}` where class \
-                             `{tn}` was declared",
-                        ));
-                    }
-                    let Some(class_ptr) = self
-                        .resolved_class_names
-                        .get(class_name)
-                        .or_else(|| resolve_named_object(&self.resolved_class_names, class_name))
-                    else {
-                        // Unknown class: leave it to the engine's
-                        // `convert_external_to_vm_value`, which errors with a
-                        // clear "Unknown class" message.
-                        return Ok(());
-                    };
-                    // SAFETY: class_ptr points to a compile-time Class object
-                    // (a GC root for the program's lifetime).
-                    #[expect(
-                        unsafe_code,
-                        reason = "reading a compile-time Class object via its GC-rooted pointer"
-                    )]
-                    let Object::Class(class) = (unsafe { class_ptr.get() }) else {
-                        return Ok(());
-                    };
-                    for class_field in &class.fields {
-                        if let Some(field_value) = fields.get(&class_field.name) {
-                            // Compare in the wire's spelling: the host supplied
-                            // `expected_args` there. A field whose template names
-                            // a declaration the host cannot name is not
-                            // host-validatable — materialization reports it.
-                            let Ok(template) = class_field
-                                .field_template
-                                .try_map_heads(&mut bex_vm_types::TypeHead::to_name)
-                            else {
-                                continue;
-                            };
-                            let field_ty = template.substitute_symbolic(expected_args);
-                            self.validate_host_return_schema(field_value, &field_ty)?;
-                        }
-                        // Missing fields are reported by
-                        // `convert_external_to_vm_value` at materialization.
-                    }
-                    Ok(())
-                }
-                other => Err(format!(
-                    "host callable returned `{}` where class `{tn}` was declared",
-                    other.type_name(),
-                )),
-            },
-
-            // Enum identity: a `Variant` must name the declared enum, and the
-            // variant must exist on that enum (the latter is also enforced by
-            // `convert_external_to_vm_value`).
-            RuntimeTy::Enum(tn) => match value {
-                BexExternalValue::Variant {
-                    enum_name,
-                    variant_name,
-                } => {
-                    if !type_name_matches_external_name(enum_name, tn) {
-                        return Err(format!(
-                            "host callable returned a variant of enum `{enum_name}` where enum \
-                             `{tn}` was declared",
-                        ));
-                    }
-                    if let Some(enum_ptr) = self
-                        .resolved_enum_names
-                        .get(enum_name)
-                        .or_else(|| resolve_named_object(&self.resolved_enum_names, enum_name))
-                    {
-                        #[expect(
-                            unsafe_code,
-                            reason = "reading a compile-time Enum object via its GC-rooted pointer"
-                        )]
-                        if let Object::Enum(enum_obj) = unsafe { enum_ptr.get() } {
-                            if !enum_obj.variants.iter().any(|v| &v.name == variant_name) {
-                                return Err(format!(
-                                    "host callable returned unknown variant `{variant_name}` of \
-                                     enum `{enum_name}`",
-                                ));
-                            }
-                        }
-                    }
-                    Ok(())
-                }
-                other => Err(format!(
-                    "host callable returned `{}` where enum `{tn}` was declared",
-                    other.type_name(),
-                )),
-            },
-
-            RuntimeTy::EnumVariant(tn, expected_variant) => match value {
-                BexExternalValue::Variant {
-                    enum_name,
-                    variant_name,
-                } => {
-                    if !type_name_matches_external_name(enum_name, tn) {
-                        return Err(format!(
-                            "host callable returned a variant of enum `{enum_name}` where enum \
-                             `{tn}` was declared",
-                        ));
-                    }
-                    if variant_name != expected_variant.as_str() {
-                        return Err(format!(
-                            "host callable returned enum variant `{enum_name}.{variant_name}` \
-                             where `{tn}.{expected_variant}` was declared",
-                        ));
-                    }
-                    Ok(())
-                }
-                other => Err(format!(
-                    "host callable returned `{}` where enum variant \
-                     `{tn}.{expected_variant}` was declared",
-                    other.type_name(),
-                )),
-            },
-
-            // Function-typed positions are materialized with their declared
-            // type context into `Object::HostClosure`, including inside
-            // containers and class fields. Keep this validation strict so an
-            // opaque host-value carrier cannot masquerade as a callable.
-            RuntimeTy::Function { .. } => {
-                bex_external_types::validate_host_return(value, expected).map_err(|e| e.to_string())
-            }
-
-            // Scalars and everything else: defer to the schema-free shape
-            // check (including contextual JavaScript-number resolution,
-            // otherwise exact tags, literal equality, and media).
-            _ => {
-                bex_external_types::validate_host_return(value, expected).map_err(|e| e.to_string())
-            }
-        }
-    }
 }
 
 /// For union types, find which member matches the actual runtime value.
@@ -4167,110 +3551,27 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
     })
 }
 
-/// Coerce a host-encoded **incoming** value to match the declared param type.
+/// The bodies of the program's aliases in the wire's spelling: name-headed,
+/// because a host value names the types it means.
 ///
-/// Handles two layers of bridge mismatch:
-///
-/// 1. **Sparse type annotations:** an inbound node may carry an exact
-///    `value_type`. Validate it against this contextual type, then use it as
-///    the recursive context for the node's payload.
-/// 2. **Containers / classes:** thread the contextual element, map, and class
-///    field types recursively instead of requiring type metadata on each
-///    payload message.
-/// 3. **Class / enum naming:** bind shape-only class/enum payloads to the
-///    engine-registered FQN supplied by the contextual type.
-/// 4. **Numeric / optional / union coercion:** see `coerce_numeric_to_declared_type`.
-impl BexEngine {
-    /// Apply the declared type to an inbound value while retaining access to
-    /// this program's recursive-alias definitions. Alias references are
-    /// nominal in `RuntimeTy`, but their payload shape must still participate
-    /// in sparse inbound matching (for example `RecList | null` receiving an
-    /// unannotated integer leaf).
-    pub(crate) fn coerce_inbound_arg(
-        &self,
-        value: BexExternalValue,
-        ty: &RuntimeTy,
-    ) -> Result<BexExternalValue, EngineError> {
-        coerce_arg_to_declared_type_with_aliases(
-            value,
-            ty,
-            &self.inbound_alias_view,
-            &self.inbound_class_view,
-            crate::inbound_config::inbound_union_ambiguity_policy(),
-        )
-    }
-}
-
-/// A class definition as the inbound matcher reads it: name-headed, because it
-/// is matched against wire values that carry only names.
-#[derive(Clone, Debug)]
-pub(crate) struct WireClassDefinition {
-    pub fields: Vec<WireClassFieldDefinition>,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct WireClassFieldDefinition {
-    pub name: String,
-    pub field_type: RuntimeTy,
-    /// The serialized key a payload may use instead of `name`.
-    pub alias: Option<String>,
-    pub skip: bool,
-}
-
-/// Project the lane's definition tables into the name-headed views the inbound
-/// matcher needs.
-///
-/// The one place the two spellings meet, and it is a genuine boundary: an
-/// inbound value carries a name and nothing else, so matching it can only ever
-/// be name-based. Identity still governs everywhere it can — the tables
-/// themselves, rendering, and rooting — and an anonymous declaration simply
-/// does not appear here, because it has no name a wire value could carry.
-///
-/// A class projects **all of its fields or none of it**. Admitting a class
-/// whose unprojectable fields were dropped would be worse than omitting it:
-/// the matcher decides "does this payload fit" by walking `fields`, so a
-/// missing field silently stops being required and a payload lacking it
-/// matches anyway. Omitting the class instead lands on the shape-only path,
-/// which is degraded but does not claim a shape the class does not have.
-pub(crate) fn wire_definition_views(
+/// An alias whose body names an anonymous declaration is left out, since it
+/// has no spelling a host could have sent.
+pub(crate) fn inbound_alias_view(
     aliases: &indexmap::IndexMap<::sys_types::DefKey, ::sys_types::SapTy>,
-    classes: &indexmap::IndexMap<::sys_types::DefKey, sys_types::ClassDefinition>,
-) -> (
-    indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-    indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
-) {
-    let to_wire = |ty: &::sys_types::SapTy| -> Option<RuntimeTy> {
-        ty.clone()
-            .try_map_heads(&mut |head: &::sys_types::DefKey| head.declared().cloned().ok_or(()))
-            .ok()
-    };
-    let alias_view = aliases
+) -> indexmap::IndexMap<baml_type::TypeName, RuntimeTy> {
+    aliases
         .iter()
-        .filter_map(|(head, ty)| Some((head.declared()?.clone(), to_wire(ty)?)))
-        .collect();
-    let class_view = classes
-        .iter()
-        .filter_map(|(head, def)| {
-            // All fields or no class — see the doc comment.
-            let fields = def
-                .fields
-                .iter()
-                .map(|f| {
-                    Some(WireClassFieldDefinition {
-                        name: f.name.clone(),
-                        field_type: to_wire(&f.field_type)?,
-                        alias: f.alias.clone(),
-                        skip: f.skip,
-                    })
-                })
-                .collect::<Option<Vec<_>>>()?;
-            Some((head.declared()?.clone(), WireClassDefinition { fields }))
+        .filter_map(|(head, ty)| {
+            let body = ty
+                .clone()
+                .try_map_heads(&mut |head: &::sys_types::DefKey| head.declared().cloned().ok_or(()))
+                .ok()?;
+            Some((head.declared()?.clone(), body))
         })
-        .collect();
-    (alias_view, class_view)
+        .collect()
 }
 
-fn runtime_ty_assignable_with_aliases(
+pub(crate) fn runtime_ty_assignable_with_aliases(
     actual: &RuntimeTy,
     expected: &RuntimeTy,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
@@ -4306,7 +3607,7 @@ fn runtime_ty_assignable_with_aliases(
 /// with omitted/wildcard args carries that nominal discriminator. It may refine
 /// to one contextual class, but must not silently select between multiple
 /// concrete instantiations in a union.
-fn class_annotation_can_refine(annotation: &RuntimeTy, contextual: &RuntimeTy) -> bool {
+pub(crate) fn class_annotation_can_refine(annotation: &RuntimeTy, contextual: &RuntimeTy) -> bool {
     let (
         RuntimeTy::Class(annotation_name, annotation_args),
         RuntimeTy::Class(contextual_name, contextual_args),
@@ -4330,7 +3631,7 @@ fn class_annotation_can_refine(annotation: &RuntimeTy, contextual: &RuntimeTy) -
 ///
 /// Keep this conversion contextual: the same wrapper remains an ordinary
 /// nominal class when passed as the receiver of a `baml.media.Image` method.
-fn stdlib_media_wrapper_kind(annotation: &RuntimeTy) -> Option<baml_type::MediaKind> {
+pub(crate) fn stdlib_media_wrapper_kind(annotation: &RuntimeTy) -> Option<baml_type::MediaKind> {
     let RuntimeTy::Class(name, args) = annotation else {
         return None;
     };
@@ -4354,7 +3655,7 @@ fn resolve_runtime_alias<'a>(
     Some(ty)
 }
 
-fn stdlib_media_wrapper_matches(
+pub(crate) fn stdlib_media_wrapper_matches(
     annotation: &RuntimeTy,
     contextual: &RuntimeTy,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
@@ -4377,7 +3678,7 @@ fn stdlib_media_wrapper_matches(
 /// payload must be checked. In a generic `media` context the wrapper still
 /// promises one exact kind, so validate that promise before widening the
 /// resulting carrier back to the contextual type.
-fn stdlib_media_wrapper_payload_type(
+pub(crate) fn stdlib_media_wrapper_payload_type(
     annotation: &RuntimeTy,
     contextual: &RuntimeTy,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
@@ -4390,7 +3691,7 @@ fn stdlib_media_wrapper_payload_type(
         .then_some(RuntimeTy::Media(wrapper_kind))
 }
 
-fn refine_class_annotation_args(
+pub(crate) fn refine_class_annotation_args(
     annotation: &[RuntimeTy],
     contextual: &[RuntimeTy],
 ) -> Vec<RuntimeTy> {
@@ -4413,7 +3714,7 @@ fn refine_class_annotation_args(
 /// Whether a sparse inbound annotation names an enclosing union rather than
 /// one exact selected type. Follow aliases here because the protobuf decoder
 /// cannot see program-local alias definitions.
-fn inbound_annotation_resolves_to_root_union(
+pub(crate) fn inbound_annotation_resolves_to_root_union(
     annotation: &RuntimeTy,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
 ) -> bool {
@@ -4434,686 +3735,10 @@ fn inbound_annotation_resolves_to_root_union(
 }
 
 #[cfg(test)]
-pub(crate) fn coerce_arg_to_declared_type(
-    value: BexExternalValue,
-    ty: &RuntimeTy,
-) -> Result<BexExternalValue, EngineError> {
-    coerce_arg_to_declared_type_with_aliases(
-        value,
-        ty,
-        &indexmap::IndexMap::new(),
-        &indexmap::IndexMap::new(),
-        crate::InboundUnionAmbiguityPolicy::Reject,
-    )
-}
-
-#[cfg(test)]
-fn coerce_arg_to_declared_type_with_policy(
-    value: BexExternalValue,
-    ty: &RuntimeTy,
-    policy: crate::InboundUnionAmbiguityPolicy,
-) -> Result<BexExternalValue, EngineError> {
-    coerce_arg_to_declared_type_with_aliases(
-        value,
-        ty,
-        &indexmap::IndexMap::new(),
-        &indexmap::IndexMap::new(),
-        policy,
-    )
-}
-
-fn coerce_arg_to_declared_type_with_aliases(
-    value: BexExternalValue,
-    ty: &RuntimeTy,
-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
-    ambiguity_policy: crate::InboundUnionAmbiguityPolicy,
-) -> Result<BexExternalValue, EngineError> {
-    // Defense in depth for internally constructed values and aliases. Wire
-    // inputs reject a root union in `inbound_to_external`, but an alias can be
-    // recognized as union-shaped only after the engine has loaded its body.
-    if let BexExternalValue::Union { metadata, .. } = &value
-        && metadata.is_inbound_type_annotation
-        && inbound_annotation_resolves_to_root_union(&metadata.selected_option, aliases)
-    {
-        return Err(EngineError::TypeMismatch {
-            message: "inbound value_type must identify one exact selected type, not a root union or optional"
-                .to_string(),
-        });
-    }
-
-    // Recursive aliases are nominal in the public type but transparent to the
-    // payload matcher. Expanding one layer here makes its body the effective
-    // recursive context; recursive references consume payload structure before
-    // returning here again, so productive aliases terminate with the value.
-    if let RuntimeTy::TypeAlias(name) = ty
-        && !is_canonical_json_alias(name)
-        && let Some(expanded) = aliases.get(name)
-    {
-        return coerce_arg_to_declared_type_with_aliases(
-            value,
-            expanded,
-            aliases,
-            classes,
-            ambiguity_policy,
-        );
-    }
-
-    match (value, ty) {
-        (BexExternalValue::Union { value, metadata }, declared @ RuntimeTy::Union(members)) => {
-            let value_type = &metadata.selected_option;
-            let selected_type = members
-                .iter()
-                .find(|member| selected_arm_equal(member, value_type))
-                .or_else(|| {
-                    members.iter().find(|member| {
-                        runtime_ty_assignable_with_aliases(value_type, member, aliases)
-                    })
-                })
-                // Prefer the exact primitive kind before the generic `media`
-                // supertype, independent of union declaration order.
-                .or_else(|| {
-                    members.iter().find(|member| {
-                        stdlib_media_wrapper_matches(value_type, member, aliases, false)
-                    })
-                })
-                .or_else(|| {
-                    members.iter().find(|member| {
-                        stdlib_media_wrapper_matches(value_type, member, aliases, true)
-                    })
-                })
-                .cloned();
-            let selected_type = match selected_type {
-                Some(selected) => selected,
-                None => {
-                    let refinements = members
-                        .iter()
-                        .filter(|member| class_annotation_can_refine(value_type, member))
-                        .collect::<Vec<_>>();
-                    match refinements.as_slice() {
-                        [selected] => (*selected).clone(),
-                        [] => {
-                            return Err(EngineError::TypeMismatch {
-                                message: format!(
-                                    "host value type `{value_type}` is not a member of declared union `{declared}`"
-                                ),
-                            });
-                        }
-                        _ => {
-                            return Err(EngineError::TypeMismatch {
-                                message: format!(
-                                    "host class annotation `{value_type}` does not identify one member of declared union `{declared}`; provide concrete generic arguments"
-                                ),
-                            });
-                        }
-                    }
-                }
-            };
-            let annotation_coerced = coerce_arg_to_declared_type_with_aliases(
-                *value,
-                value_type,
-                aliases,
-                classes,
-                ambiguity_policy,
-            )?;
-            if !value_matches_type_with_definitions(
-                &annotation_coerced,
-                value_type,
-                aliases,
-                classes,
-            ) {
-                return Err(EngineError::TypeMismatch {
-                    message: format!(
-                        "host-typed payload `{}` does not inhabit `{value_type}`",
-                        annotation_coerced.type_name()
-                    ),
-                });
-            }
-            let media_payload_type =
-                stdlib_media_wrapper_payload_type(value_type, &selected_type, aliases);
-            let payload_type = media_payload_type.as_ref().unwrap_or(&selected_type);
-            let coerced = coerce_arg_to_declared_type_with_aliases(
-                annotation_coerced,
-                payload_type,
-                aliases,
-                classes,
-                ambiguity_policy,
-            )?;
-            if !value_matches_type_with_definitions(&coerced, &selected_type, aliases, classes) {
-                return Err(EngineError::TypeMismatch {
-                    message: format!(
-                        "host-typed payload `{}` does not inhabit contextual type `{selected_type}`",
-                        coerced.type_name()
-                    ),
-                });
-            }
-            Ok(BexExternalValue::Union {
-                value: Box::new(coerced),
-                metadata: UnionMetadata::new(declared.clone(), selected_type),
-            })
-        }
-        (BexExternalValue::Union { value, metadata }, declared)
-            if metadata.is_inbound_type_annotation =>
-        {
-            let value_type = &metadata.selected_option;
-            let media_payload_type =
-                stdlib_media_wrapper_payload_type(value_type, declared, aliases);
-            let effective_type = if media_payload_type.is_some() {
-                // Validate the payload against its nominal annotation below,
-                // then unwrap its sole `_data` field using the primitive
-                // contextual type.
-                declared
-            } else if runtime_ty_assignable_with_aliases(value_type, declared, aliases) {
-                value_type
-            } else if class_annotation_can_refine(value_type, declared) {
-                declared
-            } else {
-                return Err(EngineError::TypeMismatch {
-                    message: format!(
-                        "host value type `{value_type}` is not assignable to declared type `{declared}`"
-                    ),
-                });
-            };
-            let annotation_coerced = coerce_arg_to_declared_type_with_aliases(
-                *value,
-                value_type,
-                aliases,
-                classes,
-                ambiguity_policy,
-            )?;
-            if !value_matches_type_with_definitions(
-                &annotation_coerced,
-                value_type,
-                aliases,
-                classes,
-            ) {
-                return Err(EngineError::TypeMismatch {
-                    message: format!(
-                        "host-typed payload `{}` does not inhabit `{value_type}`",
-                        annotation_coerced.type_name()
-                    ),
-                });
-            }
-            let payload_type = media_payload_type.as_ref().unwrap_or(effective_type);
-            let coerced = coerce_arg_to_declared_type_with_aliases(
-                annotation_coerced,
-                payload_type,
-                aliases,
-                classes,
-                ambiguity_policy,
-            )?;
-            Ok(BexExternalValue::typed(coerced, effective_type.clone()))
-        }
-        // A declared `baml.json.json` slot receiving a container. Untyped
-        // bridge encoders (Go `baml.JSON`, Python dicts/lists, `--json-args`)
-        // send containers without a `value_type` annotation, which the wire
-        // decoder defaults to a scalar-union element type. Left as-is, the
-        // materialized VM map/list would carry that synthesized type and fail
-        // runtime type tests such as `match (j) { let m: map<string, json> =>
-        // ... }` — diverging from BAML-born `baml.json.parse` values, whose
-        // containers carry the `json` alias itself (`serde_to_value`).
-        // Re-annotate the container tree with the declared alias so both
-        // materialize identically. Values outside the JSON algebra are left
-        // unchanged for the standard validation paths to reject.
-        (value, declared @ RuntimeTy::TypeAlias(name))
-            if is_canonical_json_alias(name)
-                && matches!(
-                    value,
-                    BexExternalValue::Array { .. } | BexExternalValue::Map { .. }
-                )
-                && value_satisfies_json(&value) =>
-        {
-            Ok(annotate_json_container_types(value, declared))
-        }
-        (BexExternalValue::Array { items, .. }, RuntimeTy::List(expected_element)) => {
-            Ok(BexExternalValue::Array {
-                element_type: expected_element.as_ref().clone(),
-                items: items
-                    .into_iter()
-                    .map(|item| {
-                        coerce_arg_to_declared_type_with_aliases(
-                            item,
-                            expected_element,
-                            aliases,
-                            classes,
-                            ambiguity_policy,
-                        )
-                    })
-                    .collect::<Result<_, _>>()?,
-            })
-        }
-        (
-            BexExternalValue::Map { entries, .. },
-            RuntimeTy::Map {
-                key,
-                value: expected_value,
-                ..
-            },
-        ) => Ok(BexExternalValue::Map {
-            key_type: key.as_ref().clone(),
-            value_type: expected_value.as_ref().clone(),
-            entries: entries
-                .into_iter()
-                .map(|(name, value)| {
-                    coerce_arg_to_declared_type_with_aliases(
-                        value,
-                        expected_value,
-                        aliases,
-                        classes,
-                        ambiguity_policy,
-                    )
-                    .map(|value| (name, value))
-                })
-                .collect::<Result<_, _>>()?,
-        }),
-        // Python media wrappers use a class-shaped payload solely to carry the
-        // `_data` handle, but their sparse annotation is the exact primitive
-        // media type (`image`/`audio`/`video`/`pdf`). Unwrap that implementation
-        // shell before validating/materializing the annotated node.
-        (BexExternalValue::Instance { mut fields, .. }, media_ty @ RuntimeTy::Media(..)) => {
-            let data = fields
-                .shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
-                .ok_or_else(|| EngineError::TypeMismatch {
-                    message: format!(
-                        "host media payload for `{media_ty}` is missing its `_data` handle"
-                    ),
-                })?;
-            if !fields.is_empty() {
-                return Err(EngineError::TypeMismatch {
-                    message: format!(
-                        "host media payload for `{media_ty}` contains unexpected fields"
-                    ),
-                });
-            }
-            let coerced = coerce_arg_to_declared_type_with_aliases(
-                data,
-                media_ty,
-                aliases,
-                classes,
-                ambiguity_policy,
-            )?;
-            if !value_matches_type_with_definitions(&coerced, media_ty, aliases, classes) {
-                return Err(EngineError::TypeMismatch {
-                    message: format!(
-                        "host media payload `{}` does not inhabit contextual type `{media_ty}`",
-                        coerced.type_name()
-                    ),
-                });
-            }
-            Ok(coerced)
-        }
-        // ── Class / enum naming (incoming only) ──────────────────────────
-        (BexExternalValue::Map { entries, .. }, RuntimeTy::Class(type_name, class_args)) => {
-            Ok(BexExternalValue::Instance {
-                class_name: type_name.to_string(),
-                type_args: class_args.to_vec(),
-                fields: entries,
-            })
-        }
-        (
-            BexExternalValue::Instance {
-                fields, type_args, ..
-            },
-            RuntimeTy::Class(type_name, class_args),
-        ) => {
-            // The contextual type is authoritative for nominal identity and
-            // generic arguments. A sparse node annotation, when present, has
-            // already been checked against that context above.
-            if !type_args.is_empty() && !class_type_args_compatible(&type_args, class_args) {
-                return Err(EngineError::TypeMismatch {
-                    message: format!(
-                        "host class type arguments `{type_args:?}` are incompatible with declared class `{type_name}` arguments `{class_args:?}`"
-                    ),
-                });
-            }
-            Ok(BexExternalValue::Instance {
-                class_name: type_name.to_string(),
-                type_args: refine_class_annotation_args(&type_args, class_args),
-                fields,
-            })
-        }
-        (BexExternalValue::Variant { variant_name, .. }, RuntimeTy::Enum(type_name)) => {
-            Ok(BexExternalValue::Variant {
-                enum_name: type_name.to_string(),
-                variant_name,
-            })
-        }
-
-        // An unannotated node in a union context is selected from payload
-        // shape. Typed bridges reject ambiguous payloads unless they carry
-        // `value_type`; dynamic bridges use their registered default policy.
-        // An annotation was handled by the union-carrier arm above.
-        (value, declared @ RuntimeTy::Union(members)) => {
-            let (value, preferred_member) = match value {
-                BexExternalValue::JsNumber(number) => {
-                    resolve_js_number_for_union(number, members, aliases, classes)
-                }
-                value => (coerce_numeric_to_declared_type(value, declared)?, None),
-            };
-            let selected = match preferred_member {
-                Some(member) => member,
-                None => find_unannotated_inbound_member_with_aliases(
-                    &value,
-                    members,
-                    aliases,
-                    classes,
-                    ambiguity_policy,
-                )?,
-            };
-            let coerced = coerce_arg_to_declared_type_with_aliases(
-                value,
-                &selected,
-                aliases,
-                classes,
-                ambiguity_policy,
-            )?;
-            Ok(BexExternalValue::Union {
-                value: Box::new(coerced),
-                metadata: UnionMetadata::new(declared.clone(), selected),
-            })
-        }
-
-        // ── Numeric / optional / union ───────────────────────────────────
-        (v, ty) => coerce_numeric_to_declared_type(v, ty),
-    }
-}
-
-/// Rewrite every container annotation in a JSON value tree to the `json`
-/// alias itself: lists become `json[]`, maps become `map<string, json>`.
-/// Scalars carry no annotation and pass through; sparse inbound leaf
-/// annotations (transient `Union` carriers) are recursed through with their
-/// metadata intact. The caller has already proven the tree inhabits the JSON
-/// algebra (`value_satisfies_json`).
-fn annotate_json_container_types(value: BexExternalValue, json_ty: &RuntimeTy) -> BexExternalValue {
-    match value {
-        BexExternalValue::Array { items, .. } => BexExternalValue::Array {
-            element_type: json_ty.clone(),
-            items: items
-                .into_iter()
-                .map(|item| annotate_json_container_types(item, json_ty))
-                .collect(),
-        },
-        BexExternalValue::Map { entries, .. } => BexExternalValue::Map {
-            key_type: RuntimeTy::string(),
-            value_type: json_ty.clone(),
-            entries: entries
-                .into_iter()
-                .map(|(key, entry)| (key, annotate_json_container_types(entry, json_ty)))
-                .collect(),
-        },
-        BexExternalValue::Union { value, metadata } => BexExternalValue::Union {
-            value: Box::new(annotate_json_container_types(*value, json_ty)),
-            metadata,
-        },
-        scalar => scalar,
-    }
-}
-
-/// Coerce an **outgoing** return value to match the declared return type.
-///
-/// Handles int↔bigint conversion at the FFI boundary. These conversions exist
-/// **only** at the host boundary — the type system does not relate `int` and
-/// `bigint` (concrete types are atomic; see `baml_type::normalize`). `int → bigint` and
-/// `int → float` widen unconditionally; `bigint → int` succeeds when the value
-/// fits in i64, erroring on overflow rather than silently truncating. Unions
-/// delegate to member coercion.
-///
-/// Class / enum naming is intentionally *not* rewritten here — the
-/// engine-side FQN (e.g. `user.lorem.MyLorem`) is the authoritative
-/// output and stripping it back to the bare display name would break
-/// host-side type lookups.
-pub(crate) fn coerce_return_to_declared_type(
-    value: BexExternalValue,
-    ty: &RuntimeTy,
-) -> Result<BexExternalValue, EngineError> {
-    coerce_numeric_to_declared_type(value, ty)
-}
-
-/// Shared numeric / optional / union coercion used by both arg and return
-/// paths.
-///
-/// These conversions exist only at the FFI boundary. The subtype relation
-/// (`baml_type::normalize::is_subtype`) is coercion-free and does **not** widen
-/// `int` to `bigint` or `float`; the arms below add those widenings (plus a
-/// checked `bigint → int` narrowing) only when crossing the host boundary.
-fn coerce_numeric_to_declared_type(
-    value: BexExternalValue,
-    ty: &RuntimeTy,
-) -> Result<BexExternalValue, EngineError> {
-    match (value, ty) {
-        (
-            BexExternalValue::JsNumber(value),
-            RuntimeTy::Int | RuntimeTy::Literal(Literal::Int(_), _),
-        ) => js_number_to_i64(value)
-            .map(BexExternalValue::Int)
-            .ok_or_else(|| EngineError::TypeMismatch {
-                message: format!("JavaScript number {value} is not representable as an int"),
-            }),
-
-        (
-            BexExternalValue::JsNumber(value),
-            RuntimeTy::Float | RuntimeTy::Literal(Literal::Float(_), _),
-        ) => Ok(BexExternalValue::Float(value)),
-
-        // An integral JavaScript number can inhabit either `int` or `float`.
-        // Preserve the historical integer default when an exact int arm is
-        // available; otherwise select a float arm. `bigint` is deliberately
-        // excluded — a JavaScript `bigint` has its own wire variant.
-        (BexExternalValue::JsNumber(value), RuntimeTy::Union(members)) => {
-            let (value, _) = resolve_js_number_for_union(
-                value,
-                members,
-                &indexmap::IndexMap::new(),
-                &indexmap::IndexMap::new(),
-            );
-            Ok(value)
-        }
-
-        // Int → Bigint widening (FFI boundary only — `int` is not a subtype of
-        // `bigint` in the type system).
-        (
-            BexExternalValue::Int(i),
-            RuntimeTy::Bigint | RuntimeTy::Literal(Literal::Bigint(_), _),
-        ) => Ok(BexExternalValue::Bigint(num_bigint::BigInt::from(i))),
-
-        // Bigint → Int narrowing: host-supplied bigint must fit in i64, otherwise
-        // there is no safe representation in the `int` slot and we reject the
-        // call rather than silently truncate.
-        (BexExternalValue::Bigint(bi), RuntimeTy::Int | RuntimeTy::Literal(Literal::Int(_), _)) => {
-            i64::try_from(&bi)
-                .map(BexExternalValue::Int)
-                .map_err(|_| EngineError::TypeMismatch {
-                    message: format!("bigint value {bi} does not fit in i64"),
-                })
-        }
-
-        // Int → Float widening (FFI boundary only — `int` is not a subtype of
-        // `float` in the type system). Hosts whose encoders are value-shaped
-        // rather than schema-shaped emit integral numbers as ints (Python `7`,
-        // JS `Number.isInteger`), so a `float` slot must accept them; without
-        // this arm the int rides through unconverted and a declared `-> float`
-        // hands the host back an int.
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "deliberate host-language `float(int)` semantics — may round above 2^53"
-        )]
-        (BexExternalValue::Int(i), RuntimeTy::Float | RuntimeTy::Literal(Literal::Float(_), _)) => {
-            Ok(BexExternalValue::Float(i as f64))
-        }
-
-        // Union: delegate to member coercion. A value that already inhabits
-        // some member is left alone (an `Int` against `int | float` stays
-        // `Int`; `Null` against `int | null` is preserved). Otherwise the
-        // first member the value coerces into wins — a host int lands on the
-        // `bigint` member of `bigint | null` or the `float` member of
-        // `float?`. A member coercion error (bigint → int overflow)
-        // propagates rather than silently falling through.
-        (v, RuntimeTy::Union(members)) => {
-            if members.iter().any(|m| value_matches_type(&v, m)) {
-                return Ok(v);
-            }
-            // A host int prefers the lossless target: `bigint` (exact for
-            // every i64) beats `float` (rounds above 2^53) regardless of
-            // member declaration order. An exact `int` member was already
-            // taken by the match check above. The partition is stable, so
-            // declaration order still breaks ties within each group.
-            let prefer_bigint = matches!(&v, BexExternalValue::Int(_));
-            let (bigint_members, other_members): (Vec<&RuntimeTy>, Vec<&RuntimeTy>) =
-                members.iter().partition(|m| {
-                    prefer_bigint
-                        && matches!(
-                            m,
-                            RuntimeTy::Bigint | RuntimeTy::Literal(Literal::Bigint(_), _)
-                        )
-                });
-            for member in bigint_members.into_iter().chain(other_members) {
-                let coerced = coerce_numeric_to_declared_type(v.clone(), member)?;
-                if value_matches_type(&coerced, member) {
-                    return Ok(coerced);
-                }
-            }
-            Ok(v)
-        }
-
-        // No numeric context selected a representation (for example an
-        // `unknown` slot). Keep Node's historical value-shaped default so a
-        // JavaScript integer infers/materializes as `int`, otherwise `float`.
-        (BexExternalValue::JsNumber(value), _) => Ok(match js_number_to_vm_int(value) {
-            Some(integer) => BexExternalValue::Int(integer),
-            None => BexExternalValue::Float(value),
-        }),
-
-        (v, _) => Ok(v),
-    }
-}
-
-/// Convert an integral JavaScript number only when the VM can represent it as
-/// an immediate integer. Larger integral doubles must remain floats.
-fn js_number_to_vm_int(value: f64) -> Option<i64> {
-    js_number_to_i64(value).filter(|integer| Value::try_int(*integer).is_some())
-}
-
-/// Resolve a JavaScript number against the explicit numeric arms of a union.
-///
-/// An in-range integral number prefers an integer arm, including one hidden
-/// behind a nested union or alias. A float arm comes next. Catch-all arms such
-/// as `unknown` and `baml.json.json` are deliberately left to the normal union
-/// selector so they cannot outrank a numeric arm.
-fn resolve_js_number_for_union(
-    value: f64,
-    members: &[RuntimeTy],
-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
-) -> (BexExternalValue, Option<RuntimeTy>) {
-    if let Some(integer) = js_number_to_vm_int(value) {
-        let integer_value = BexExternalValue::Int(integer);
-        let matching_literal = members.iter().find(|member| {
-            member_admits_numeric_arm(
-                member,
-                &integer_value,
-                |ty| matches!(ty, RuntimeTy::Literal(Literal::Int(_), _)),
-                aliases,
-                classes,
-                &mut std::collections::HashSet::new(),
-            )
-        });
-        let matching_int = members.iter().find(|member| {
-            member_admits_numeric_arm(
-                member,
-                &integer_value,
-                |ty| matches!(ty, RuntimeTy::Int),
-                aliases,
-                classes,
-                &mut std::collections::HashSet::new(),
-            )
-        });
-        if let Some(member) = matching_literal.or(matching_int) {
-            return (integer_value, Some(member.clone()));
-        }
-    }
-
-    let float_value = BexExternalValue::Float(value);
-    let matching_literal = members.iter().find(|member| {
-        member_admits_numeric_arm(
-            member,
-            &float_value,
-            |ty| matches!(ty, RuntimeTy::Literal(Literal::Float(_), _)),
-            aliases,
-            classes,
-            &mut std::collections::HashSet::new(),
-        )
-    });
-    let matching_float = members.iter().find(|member| {
-        member_admits_numeric_arm(
-            member,
-            &float_value,
-            |ty| matches!(ty, RuntimeTy::Float),
-            aliases,
-            classes,
-            &mut std::collections::HashSet::new(),
-        )
-    });
-    if let Some(member) = matching_literal.or(matching_float) {
-        return (float_value, Some(member.clone()));
-    }
-
-    (BexExternalValue::JsNumber(value), None)
-}
-
-/// Find a matching numeric leaf without letting a catch-all sibling make an
-/// unrelated numeric literal appear to match the value.
-fn member_admits_numeric_arm(
-    member: &RuntimeTy,
-    value: &BexExternalValue,
-    is_numeric_arm: fn(&RuntimeTy) -> bool,
-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-    classes: &indexmap::IndexMap<baml_type::TypeName, WireClassDefinition>,
-    visited_aliases: &mut std::collections::HashSet<baml_type::TypeName>,
-) -> bool {
-    match member {
-        RuntimeTy::TypeAlias(name) if is_canonical_json_alias(name) => false,
-        RuntimeTy::TypeAlias(name) => {
-            if !visited_aliases.insert(name.clone()) {
-                return false;
-            }
-            let matches = aliases.get(name).is_some_and(|expanded| {
-                member_admits_numeric_arm(
-                    expanded,
-                    value,
-                    is_numeric_arm,
-                    aliases,
-                    classes,
-                    visited_aliases,
-                )
-            });
-            visited_aliases.remove(name);
-            matches
-        }
-        RuntimeTy::Union(members) => members.iter().any(|nested| {
-            member_admits_numeric_arm(
-                nested,
-                value,
-                is_numeric_arm,
-                aliases,
-                classes,
-                visited_aliases,
-            )
-        }),
-        _ => {
-            is_numeric_arm(member)
-                && value_matches_type_with_definitions(value, member, aliases, classes)
-        }
-    }
-}
-
-#[cfg(test)]
-mod union_container_selection_tests {
+mod outbound_selection_tests {
     use std::sync::Arc;
 
-    use baml_type::{
-        Freshness, FunctionParamMode, MediaKind, Name, RuntimeFunctionParamTy, TypeName,
-    };
-    use bex_external_types::{HostValueArc, HostValueKind};
+    use baml_type::{Freshness, MediaKind, Name, TypeName};
     use bex_heap::{BexHeap, Tlab};
     use bex_vm_types::{
         DeclarationName, EnumVariant, MediaContent, MediaValue, Object, Value,
@@ -5141,254 +3766,6 @@ mod union_container_selection_tests {
         RuntimeTy::Literal(Literal::Float(value.to_string()), Freshness::Regular)
     }
 
-    #[test]
-    fn js_number_uses_the_declared_numeric_context() {
-        assert_eq!(
-            coerce_numeric_to_declared_type(BexExternalValue::JsNumber(7.0), &RuntimeTy::int())
-                .unwrap(),
-            BexExternalValue::Int(7)
-        );
-        assert_eq!(
-            coerce_numeric_to_declared_type(BexExternalValue::JsNumber(7.0), &RuntimeTy::float())
-                .unwrap(),
-            BexExternalValue::Float(7.0)
-        );
-        assert!(
-            coerce_numeric_to_declared_type(BexExternalValue::JsNumber(7.5), &RuntimeTy::int())
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn js_number_union_prefers_int_but_never_bigint() {
-        let float_then_int = RuntimeTy::Union(Box::new([RuntimeTy::float(), RuntimeTy::int()]));
-        assert_eq!(
-            coerce_numeric_to_declared_type(BexExternalValue::JsNumber(7.0), &float_then_int)
-                .unwrap(),
-            BexExternalValue::Int(7)
-        );
-
-        let bigint_then_float =
-            RuntimeTy::Union(Box::new([RuntimeTy::bigint(), RuntimeTy::float()]));
-        assert_eq!(
-            coerce_numeric_to_declared_type(BexExternalValue::JsNumber(7.0), &bigint_then_float)
-                .unwrap(),
-            BexExternalValue::Float(7.0)
-        );
-    }
-
-    #[test]
-    fn js_number_union_prefers_aliased_int_over_float() {
-        let alias_name = TypeName::from_dotted_path("user.aliases.IntAlias");
-        let alias = RuntimeTy::TypeAlias(alias_name.clone());
-        let mut aliases = indexmap::IndexMap::new();
-        aliases.insert(alias_name, RuntimeTy::int());
-        let declared = RuntimeTy::union([RuntimeTy::float(), alias.clone()]);
-
-        let coerced = coerce_arg_to_declared_type_with_aliases(
-            BexExternalValue::JsNumber(7.0),
-            &declared,
-            &aliases,
-            &indexmap::IndexMap::new(),
-            crate::InboundUnionAmbiguityPolicy::Reject,
-        )
-        .unwrap();
-
-        let BexExternalValue::Union { value, metadata } = coerced else {
-            panic!("expected a selected union carrier")
-        };
-        assert_eq!(metadata.selected_option, alias);
-        assert_eq!(*value, BexExternalValue::Int(7));
-    }
-
-    #[test]
-    fn js_number_union_prefers_int_inside_nested_aliases() {
-        let int_or_string = TypeName::from_dotted_path("user.aliases.IntOrString");
-        let float_or_bool = TypeName::from_dotted_path("user.aliases.FloatOrBool");
-        let int_alias = RuntimeTy::TypeAlias(int_or_string.clone());
-        let float_alias = RuntimeTy::TypeAlias(float_or_bool.clone());
-        let aliases = indexmap::IndexMap::from([
-            (
-                int_or_string,
-                RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]),
-            ),
-            (
-                float_or_bool,
-                RuntimeTy::union([RuntimeTy::float(), RuntimeTy::Bool]),
-            ),
-        ]);
-
-        for declared in [
-            RuntimeTy::union([int_alias.clone(), float_alias]),
-            RuntimeTy::union([RuntimeTy::float(), int_alias.clone()]),
-        ] {
-            let coerced = coerce_arg_to_declared_type_with_aliases(
-                BexExternalValue::JsNumber(7.0),
-                &declared,
-                &aliases,
-                &indexmap::IndexMap::new(),
-                crate::InboundUnionAmbiguityPolicy::Reject,
-            )
-            .unwrap();
-
-            let BexExternalValue::Union { value, metadata } = coerced else {
-                panic!("expected an outer union carrier")
-            };
-            assert_eq!(metadata.selected_option, int_alias);
-            let BexExternalValue::Union { value, metadata } = *value else {
-                panic!("expected an inner union carrier")
-            };
-            assert_eq!(metadata.selected_option, RuntimeTy::int());
-            assert_eq!(*value, BexExternalValue::Int(7));
-        }
-    }
-
-    #[test]
-    fn js_number_union_uses_float_when_integral_value_exceeds_vm_int_range() {
-        let declared = RuntimeTy::union([RuntimeTy::int(), RuntimeTy::float()]);
-        let number = 2_f64.powi(62);
-
-        let coerced =
-            coerce_arg_to_declared_type(BexExternalValue::JsNumber(number), &declared).unwrap();
-
-        let BexExternalValue::Union { value, metadata } = coerced else {
-            panic!("expected a selected union carrier")
-        };
-        assert_eq!(metadata.selected_option, RuntimeTy::float());
-        assert_eq!(*value, BexExternalValue::Float(number));
-    }
-
-    #[test]
-    fn js_number_without_numeric_context_uses_float_beyond_vm_int_range() {
-        let number = 2_f64.powi(62);
-
-        let coerced =
-            coerce_arg_to_declared_type(BexExternalValue::JsNumber(number), &RuntimeTy::unknown())
-                .unwrap();
-
-        assert_eq!(coerced, BexExternalValue::Float(number));
-    }
-
-    #[test]
-    fn js_number_union_prefers_float_over_catch_all_arms() {
-        for catch_all in [json_ty(), RuntimeTy::unknown()] {
-            let declared = RuntimeTy::union([catch_all, RuntimeTy::float()]);
-            let coerced = coerce_arg_to_declared_type_with_aliases(
-                BexExternalValue::JsNumber(7.0),
-                &declared,
-                &indexmap::IndexMap::new(),
-                &indexmap::IndexMap::new(),
-                crate::InboundUnionAmbiguityPolicy::SelectDefault,
-            )
-            .unwrap();
-
-            let BexExternalValue::Union { value, metadata } = coerced else {
-                panic!("expected a selected union carrier")
-            };
-            assert_eq!(metadata.selected_option, RuntimeTy::float());
-            assert_eq!(*value, BexExternalValue::Float(7.0));
-        }
-    }
-
-    #[test]
-    fn js_number_union_prefers_numeric_arms_over_registered_json_alias() {
-        let json = json_ty();
-        let RuntimeTy::TypeAlias(json_name) = &json else {
-            unreachable!()
-        };
-        let aliases = indexmap::IndexMap::from([(
-            json_name.clone(),
-            RuntimeTy::union([RuntimeTy::int(), RuntimeTy::float(), RuntimeTy::string()]),
-        )]);
-
-        for (declared, expected) in [
-            (
-                RuntimeTy::union([json.clone(), RuntimeTy::float()]),
-                RuntimeTy::float(),
-            ),
-            (
-                RuntimeTy::union([json.clone(), RuntimeTy::int()]),
-                RuntimeTy::int(),
-            ),
-        ] {
-            let coerced = coerce_arg_to_declared_type_with_aliases(
-                BexExternalValue::JsNumber(7.0),
-                &declared,
-                &aliases,
-                &indexmap::IndexMap::new(),
-                crate::InboundUnionAmbiguityPolicy::Reject,
-            )
-            .unwrap();
-
-            let BexExternalValue::Union { value, metadata } = coerced else {
-                panic!("expected a selected union carrier")
-            };
-            assert_eq!(metadata.selected_option, expected);
-            assert_eq!(
-                *value,
-                if expected == RuntimeTy::int() {
-                    BexExternalValue::Int(7)
-                } else {
-                    BexExternalValue::Float(7.0)
-                }
-            );
-        }
-    }
-
-    #[test]
-    fn js_number_union_prefers_matching_numeric_literals() {
-        let int_literal = RuntimeTy::Literal(Literal::Int(7), Freshness::Regular);
-        let declared = RuntimeTy::union([RuntimeTy::int(), int_literal.clone()]);
-        let coerced = coerce_arg_to_declared_type_with_policy(
-            BexExternalValue::JsNumber(7.0),
-            &declared,
-            crate::InboundUnionAmbiguityPolicy::SelectDefault,
-        )
-        .unwrap();
-        let BexExternalValue::Union { value, metadata } = coerced else {
-            panic!("expected a selected integer union carrier")
-        };
-        assert_eq!(metadata.selected_option, int_literal);
-        assert_eq!(*value, BexExternalValue::Int(7));
-
-        let float_literal_ty = float_literal("7.5");
-        let declared = RuntimeTy::union([RuntimeTy::float(), float_literal_ty.clone()]);
-        let coerced = coerce_arg_to_declared_type_with_policy(
-            BexExternalValue::JsNumber(7.5),
-            &declared,
-            crate::InboundUnionAmbiguityPolicy::SelectDefault,
-        )
-        .unwrap();
-        let BexExternalValue::Union { value, metadata } = coerced else {
-            panic!("expected a selected float union carrier")
-        };
-        assert_eq!(metadata.selected_option, float_literal_ty);
-        assert_eq!(*value, BexExternalValue::Float(7.5));
-    }
-
-    #[test]
-    fn js_number_resolution_is_recursive_for_containers() {
-        let values = BexExternalValue::Array {
-            element_type: RuntimeTy::unknown(),
-            items: vec![
-                BexExternalValue::JsNumber(1.0),
-                BexExternalValue::JsNumber(2.5),
-            ],
-        };
-        let coerced = coerce_arg_to_declared_type(values, &list(RuntimeTy::float())).unwrap();
-        let BexExternalValue::Array { items, .. } = coerced else {
-            panic!("expected a list")
-        };
-        assert_eq!(
-            items,
-            vec![BexExternalValue::Float(1.0), BexExternalValue::Float(2.5)]
-        );
-    }
-
-    fn media_ty(kind: MediaKind) -> RuntimeTy {
-        RuntimeTy::Media(kind)
-    }
-
     fn media_value(kind: MediaKind) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::Media(Arc::new(MediaValue::new(
             kind,
@@ -5409,218 +3786,6 @@ mod union_container_selection_tests {
             MediaKind::Generic => panic!("generic media has no stdlib wrapper class"),
         };
         RuntimeTy::Class(TypeName::from_dotted_path(name), Box::new([]))
-    }
-
-    fn media_wrapper_value(kind: MediaKind) -> BexExternalValue {
-        let RuntimeTy::Class(name, ..) = media_wrapper_ty(kind) else {
-            unreachable!()
-        };
-        BexExternalValue::Instance {
-            class_name: name.to_string(),
-            type_args: vec![],
-            fields: indexmap::IndexMap::from([("_data".to_string(), media_value(kind))]),
-        }
-    }
-
-    fn callback_ty(param_freshness: Freshness) -> RuntimeTy {
-        RuntimeTy::Function {
-            params: Box::new([RuntimeFunctionParamTy {
-                name: Some(Name::new("status")),
-                ty: RuntimeTy::Literal(Literal::String("draft".to_string()), param_freshness),
-                mode: FunctionParamMode::Required,
-            }]),
-            ret: Box::new(RuntimeTy::int()),
-            throws: Box::new(RuntimeTy::Never),
-        }
-    }
-
-    fn json_ty() -> RuntimeTy {
-        RuntimeTy::TypeAlias(TypeName::from_dotted_path("baml.json.json"))
-    }
-
-    #[test]
-    fn canonical_json_alias_matches_values_and_selected_union_arms() {
-        let json = json_ty();
-        let image = media_ty(MediaKind::Image);
-        let mut entries = indexmap::IndexMap::new();
-        entries.insert("value".to_string(), BexExternalValue::Int(7));
-        let object = BexExternalValue::Map {
-            key_type: RuntimeTy::string(),
-            value_type: RuntimeTy::unknown(),
-            entries,
-        };
-        assert!(value_matches_type(&object, &json));
-        assert!(!value_matches_type(
-            &BexExternalValue::Float(f64::INFINITY),
-            &json
-        ));
-        let forged = BexExternalValue::union(
-            BexExternalValue::String("json-shaped payload".into()),
-            [RuntimeTy::bigint(), RuntimeTy::string()],
-            RuntimeTy::bigint(),
-        );
-        assert!(!value_matches_type(&forged, &json));
-
-        let declared = RuntimeTy::union([json.clone(), image]);
-        let selected = BexExternalValue::union(
-            object,
-            [json.clone(), media_ty(MediaKind::Image)],
-            json.clone(),
-        );
-        let coerced = coerce_arg_to_declared_type(selected, &declared).unwrap();
-        let BexExternalValue::Union { metadata, .. } = coerced else {
-            panic!("selected JSON union metadata was lost")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &metadata.selected_option,
-            &json
-        ));
-    }
-
-    #[test]
-    fn canonical_json_alias_accepts_leaf_annotated_inbound_trees() {
-        // The Swift bridge annotates every json scalar leaf with a sparse
-        // inbound `value_type` (a transient `Union` carrier). Such trees must
-        // satisfy `json` and re-annotate their containers exactly like
-        // untyped trees; annotations outside the JSON algebra must not.
-        let json = json_ty();
-        let mut entries = indexmap::IndexMap::new();
-        entries.insert(
-            "type".to_string(),
-            BexExternalValue::typed(BexExternalValue::String("ok".into()), RuntimeTy::string()),
-        );
-        let object = BexExternalValue::Map {
-            key_type: RuntimeTy::string(),
-            value_type: RuntimeTy::unknown(),
-            entries,
-        };
-        assert!(value_matches_type(&object, &json));
-
-        let coerced = coerce_arg_to_declared_type(object, &json).unwrap();
-        let BexExternalValue::Map {
-            value_type,
-            entries,
-            ..
-        } = coerced
-        else {
-            panic!("annotated JSON object must stay a map")
-        };
-        assert!(runtime_ty_structurally_equal(&value_type, &json));
-        let BexExternalValue::Union { metadata, .. } = &entries["type"] else {
-            panic!("leaf annotation must be preserved")
-        };
-        assert!(metadata.is_inbound_type_annotation);
-
-        // Bigint is a JSON leaf, including when a bridge supplies a sparse
-        // inbound annotation for it.
-        let mut bigint_entries = indexmap::IndexMap::new();
-        bigint_entries.insert(
-            "huge".to_string(),
-            BexExternalValue::typed(
-                BexExternalValue::Bigint(num_bigint::BigInt::from(1)),
-                RuntimeTy::bigint(),
-            ),
-        );
-        let bigint_object = BexExternalValue::Map {
-            key_type: RuntimeTy::string(),
-            value_type: RuntimeTy::unknown(),
-            entries: bigint_entries,
-        };
-        assert!(value_matches_type(&bigint_object, &json));
-    }
-
-    #[test]
-    fn canonical_json_alias_reannotates_untyped_inbound_containers() {
-        // Untyped bridges (Go `baml.JSON`, Python dicts, `--json-args`) send
-        // containers without element annotations; the wire decoder synthesizes
-        // a scalar-union element type. A declared `json` slot must rewrite
-        // those to the alias itself so the materialized VM containers pass
-        // `match (j) { let m: map<string, json> => ... }` exactly like
-        // BAML-born `baml.json.parse` values.
-        let json = json_ty();
-        let nested_list = BexExternalValue::Array {
-            element_type: RuntimeTy::unknown(),
-            items: vec![BexExternalValue::Int(1)],
-        };
-        let mut nested_entries = indexmap::IndexMap::new();
-        nested_entries.insert("inner".to_string(), nested_list);
-        let object = BexExternalValue::Map {
-            key_type: RuntimeTy::string(),
-            value_type: RuntimeTy::unknown(),
-            entries: nested_entries,
-        };
-
-        let coerced = coerce_arg_to_declared_type(object, &json).unwrap();
-        let BexExternalValue::Map {
-            key_type,
-            value_type,
-            entries,
-        } = coerced
-        else {
-            panic!("JSON object must stay a map")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &key_type,
-            &RuntimeTy::string()
-        ));
-        assert!(runtime_ty_structurally_equal(&value_type, &json));
-        let BexExternalValue::Array { element_type, .. } = &entries["inner"] else {
-            panic!("nested JSON list must stay a list")
-        };
-        assert!(runtime_ty_structurally_equal(element_type, &json));
-
-        // A tree outside the JSON algebra is left untouched for the standard
-        // validation paths to reject.
-        let mut binary_entries = indexmap::IndexMap::new();
-        binary_entries.insert(
-            "bytes".to_string(),
-            BexExternalValue::Uint8Array(vec![1, 2]),
-        );
-        let binary = BexExternalValue::Map {
-            key_type: RuntimeTy::string(),
-            value_type: RuntimeTy::unknown(),
-            entries: binary_entries,
-        };
-        let untouched = coerce_arg_to_declared_type(binary, &json).unwrap();
-        let BexExternalValue::Map { value_type, .. } = untouched else {
-            panic!("non-JSON map must stay a map")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &value_type,
-            &RuntimeTy::unknown()
-        ));
-    }
-
-    #[test]
-    fn literal_matching_checks_value_and_prefers_exact_literal() {
-        let draft = string_literal("draft");
-        let published = string_literal("published");
-        let value = BexExternalValue::String("draft".into());
-        assert!(value_matches_type(&value, &draft));
-        assert!(!value_matches_type(&value, &published));
-        assert_eq!(
-            find_matching_member(&value, &[RuntimeTy::string(), draft.clone()]).unwrap(),
-            draft
-        );
-    }
-
-    #[test]
-    fn enum_variant_matching_checks_value_and_prefers_exact_variant() {
-        let mood = TypeName::from_dotted_path("user.callbacks.Mood");
-        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"));
-        let sad = RuntimeTy::EnumVariant(mood.clone(), Name::new("SAD"));
-        let broad = RuntimeTy::Enum(mood.clone());
-        let value = BexExternalValue::Variant {
-            enum_name: mood.to_string(),
-            variant_name: "HAPPY".to_string(),
-        };
-
-        assert!(value_matches_type(&value, &happy));
-        assert!(!value_matches_type(&value, &sad));
-        assert_eq!(
-            find_matching_member(&value, &[broad, sad, happy.clone()]).unwrap(),
-            happy
-        );
     }
 
     #[test]
@@ -5729,486 +3894,6 @@ mod union_container_selection_tests {
     }
 
     #[test]
-    fn enum_variant_selected_arm_has_exact_structural_identity() {
-        let mood = TypeName::from_dotted_path("user.callbacks.Mood");
-        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"));
-        let another_happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"));
-        let sad = RuntimeTy::EnumVariant(mood, Name::new("SAD"));
-        assert!(runtime_ty_structurally_equal(&happy, &another_happy));
-        assert!(!runtime_ty_structurally_equal(&happy, &sad));
-    }
-
-    #[test]
-    fn float_literal_matching_uses_baml_equality_and_preserves_decimal_precision() {
-        let negative_zero = float_literal("-0.0");
-        let precise = float_literal("1.2345678901234567e-300");
-        assert!(value_matches_type(
-            &BexExternalValue::Float(-0.0),
-            &negative_zero
-        ));
-        assert!(value_matches_type(
-            &BexExternalValue::Float(0.0),
-            &negative_zero
-        ));
-        assert!(value_matches_type(
-            &BexExternalValue::Float(1.234_567_890_123_456_7e-300),
-            &precise
-        ));
-        assert_eq!(
-            find_matching_member(
-                &BexExternalValue::Float(-0.0),
-                &[RuntimeTy::float(), negative_zero.clone()]
-            )
-            .unwrap(),
-            negative_zero
-        );
-    }
-
-    #[test]
-    fn host_typed_overlapping_arm_uses_contextual_union() {
-        let draft = string_literal("draft");
-        let declared = RuntimeTy::union([RuntimeTy::string(), draft]);
-        // The inbound wire carries only the exact value type. Its transient
-        // carrier therefore has no copy of `declared`; coercion must validate
-        // the type against the contextual union and reconstruct that union.
-        let selected = BexExternalValue::typed(
-            BexExternalValue::String("draft".into()),
-            RuntimeTy::string(),
-        );
-        let coerced = coerce_arg_to_declared_type(selected, &declared).unwrap();
-        let BexExternalValue::Union { metadata, .. } = coerced else {
-            panic!("selected union metadata was lost")
-        };
-        assert_eq!(metadata.union_type, declared);
-        assert_eq!(metadata.selected_option, RuntimeTy::string());
-    }
-
-    #[test]
-    fn host_root_union_annotation_is_rejected_before_arm_matching() {
-        let declared = RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]);
-        let typed = BexExternalValue::typed(BexExternalValue::Int(7), declared.clone());
-
-        let error = coerce_arg_to_declared_type(typed, &declared).unwrap_err();
-        assert!(matches!(
-            error,
-            EngineError::TypeMismatch { message }
-                if message.contains("must identify one exact selected type")
-        ));
-    }
-
-    #[test]
-    fn host_alias_to_root_union_annotation_is_rejected() {
-        let alias_name = TypeName::from_dotted_path("user.aliases.Choice");
-        let alias = RuntimeTy::TypeAlias(alias_name.clone());
-        let mut aliases = indexmap::IndexMap::new();
-        aliases.insert(
-            alias_name,
-            RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]),
-        );
-        let typed = BexExternalValue::typed(BexExternalValue::Int(7), alias);
-
-        let error = coerce_arg_to_declared_type_with_aliases(
-            typed,
-            &RuntimeTy::int(),
-            &aliases,
-            &indexmap::IndexMap::new(),
-            crate::InboundUnionAmbiguityPolicy::Reject,
-        )
-        .unwrap_err();
-        assert!(matches!(
-            error,
-            EngineError::TypeMismatch { message }
-                if message.contains("must identify one exact selected type")
-        ));
-    }
-
-    #[test]
-    fn host_type_annotation_rejects_type_outside_contextual_union() {
-        let declared = RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]);
-        let typed = BexExternalValue::typed(BexExternalValue::Bool(true), RuntimeTy::bool());
-        let error = coerce_arg_to_declared_type(typed, &declared).unwrap_err();
-        assert!(matches!(
-            error,
-            EngineError::TypeMismatch { message }
-                if message.contains("bool") && message.contains("declared union")
-        ));
-    }
-
-    #[test]
-    fn host_typed_literal_is_assignable_to_non_union_primitive() {
-        let draft = string_literal("draft");
-        let typed =
-            BexExternalValue::typed(BexExternalValue::String("draft".into()), draft.clone());
-        let coerced = coerce_arg_to_declared_type(typed, &RuntimeTy::string()).unwrap();
-        let BexExternalValue::Union { metadata, .. } = coerced else {
-            panic!("typed-value metadata was lost")
-        };
-        assert_eq!(metadata.selected_option, draft);
-    }
-
-    #[test]
-    fn host_type_annotation_rejects_wrong_non_union_type() {
-        let typed = BexExternalValue::typed(BexExternalValue::Int(7), RuntimeTy::int());
-        let error = coerce_arg_to_declared_type(typed, &RuntimeTy::string()).unwrap_err();
-        assert!(matches!(
-            error,
-            EngineError::TypeMismatch { message }
-                if message.contains("int") && message.contains("string")
-        ));
-    }
-
-    #[test]
-    fn nominal_generic_class_annotation_refines_from_context() {
-        let name = TypeName::from_dotted_path("user.generics.Box");
-        let nominal = RuntimeTy::Class(name.clone(), Box::new([]));
-        let declared = RuntimeTy::Class(name, Box::new([RuntimeTy::int()]));
-        let typed = BexExternalValue::typed(
-            BexExternalValue::Instance {
-                class_name: String::new(),
-                type_args: vec![],
-                fields: indexmap::IndexMap::new(),
-            },
-            nominal,
-        );
-
-        let coerced = coerce_arg_to_declared_type(typed, &declared).unwrap();
-        let BexExternalValue::Union { metadata, value } = coerced else {
-            panic!("expected sparse type carrier")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &metadata.selected_option,
-            &declared
-        ));
-        let BexExternalValue::Instance { type_args, .. } = *value else {
-            panic!("expected class payload")
-        };
-        assert_eq!(type_args, vec![RuntimeTy::int()]);
-    }
-
-    #[test]
-    fn nominal_generic_class_annotation_cannot_choose_concrete_union_arm() {
-        let name = TypeName::from_dotted_path("user.generics.Box");
-        let nominal = RuntimeTy::Class(name.clone(), Box::new([]));
-        let declared = RuntimeTy::union([
-            RuntimeTy::Class(name.clone(), Box::new([RuntimeTy::int()])),
-            RuntimeTy::Class(name, Box::new([RuntimeTy::string()])),
-        ]);
-        let typed = BexExternalValue::typed(
-            BexExternalValue::Instance {
-                class_name: String::new(),
-                type_args: vec![],
-                fields: indexmap::IndexMap::new(),
-            },
-            nominal,
-        );
-
-        let error = coerce_arg_to_declared_type(typed, &declared).unwrap_err();
-        assert!(matches!(
-            error,
-            EngineError::TypeMismatch { message }
-                if message.contains("does not identify one member")
-                    && message.contains("concrete generic arguments")
-        ));
-    }
-
-    #[test]
-    fn host_typed_literal_selects_broader_contextual_union_arm() {
-        let draft = string_literal("draft");
-        let declared = RuntimeTy::union([RuntimeTy::string(), RuntimeTy::int()]);
-        let typed = BexExternalValue::typed(BexExternalValue::String("draft".into()), draft);
-        let coerced = coerce_arg_to_declared_type(typed, &declared).unwrap();
-        let BexExternalValue::Union { metadata, .. } = coerced else {
-            panic!("selected union metadata was lost")
-        };
-        assert_eq!(metadata.union_type, declared);
-        assert_eq!(metadata.selected_option, RuntimeTy::string());
-    }
-
-    #[test]
-    fn sparse_nested_hint_selects_only_the_ambiguous_empty_child() {
-        let int_list = list(RuntimeTy::int());
-        let string_list = list(RuntimeTy::string());
-        let child_type = RuntimeTy::union([int_list.clone(), string_list]);
-        let value = BexExternalValue::Array {
-            element_type: RuntimeTy::unknown(),
-            items: vec![BexExternalValue::typed(
-                BexExternalValue::Array {
-                    element_type: RuntimeTy::unknown(),
-                    items: vec![],
-                },
-                int_list.clone(),
-            )],
-        };
-
-        let coerced = coerce_arg_to_declared_type(value, &list(child_type)).unwrap();
-        let BexExternalValue::Array { items, .. } = coerced else {
-            panic!("expected outer list")
-        };
-        let BexExternalValue::Union { metadata, value } = &items[0] else {
-            panic!("expected selected child union")
-        };
-        assert_eq!(metadata.selected_option, int_list);
-        assert!(
-            matches!(value.as_ref(), BexExternalValue::Array { items, .. } if items.is_empty())
-        );
-    }
-
-    #[test]
-    fn unannotated_recursive_alias_uses_contextual_payload_shape() {
-        let alias_name = TypeName::from_dotted_path("user.aliases.RecList");
-        let alias = RuntimeTy::TypeAlias(alias_name.clone());
-        let alias_body = RuntimeTy::union([RuntimeTy::int(), list(alias.clone())]);
-        let mut aliases = indexmap::IndexMap::new();
-        aliases.insert(alias_name, alias_body);
-
-        let declared = RuntimeTy::union([alias.clone(), RuntimeTy::Null]);
-        let value = BexExternalValue::Array {
-            element_type: RuntimeTy::unknown(),
-            items: vec![BexExternalValue::Int(6)],
-        };
-
-        let coerced = coerce_arg_to_declared_type_with_aliases(
-            value,
-            &declared,
-            &aliases,
-            &indexmap::IndexMap::new(),
-            crate::InboundUnionAmbiguityPolicy::Reject,
-        )
-        .unwrap();
-        let BexExternalValue::Union { metadata, value } = coerced else {
-            panic!("expected the nullable union carrier")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &metadata.selected_option,
-            &alias
-        ));
-        let BexExternalValue::Union { metadata, value } = *value else {
-            panic!("expected the recursive alias body union carrier")
-        };
-        assert!(matches!(metadata.selected_option, RuntimeTy::List(..)));
-        let BexExternalValue::Array { items, .. } = *value else {
-            panic!("expected the recursive list payload")
-        };
-        assert!(matches!(items.as_slice(), [BexExternalValue::Union { .. }]));
-    }
-
-    #[test]
-    fn unannotated_null_prefers_exact_null_over_nested_optional_alias() {
-        let alias_name = TypeName::from_dotted_path("user.aliases.OptionalState");
-        let alias = RuntimeTy::TypeAlias(alias_name.clone());
-        let alias_body =
-            RuntimeTy::optional(RuntimeTy::Enum(TypeName::from_dotted_path("user.State")));
-        let mut aliases = indexmap::IndexMap::new();
-        aliases.insert(alias_name, alias_body);
-
-        // This is the runtime shape of `OptionalState?`: the alias already
-        // contains null, but applying `?` outside the opaque alias introduces
-        // another explicit null member.
-        let declared = RuntimeTy::union([alias, RuntimeTy::null()]);
-        let coerced = coerce_arg_to_declared_type_with_aliases(
-            BexExternalValue::Null,
-            &declared,
-            &aliases,
-            &indexmap::IndexMap::new(),
-            crate::InboundUnionAmbiguityPolicy::Reject,
-        )
-        .unwrap();
-
-        let BexExternalValue::Union { value, metadata } = coerced else {
-            panic!("expected the outer optional union carrier")
-        };
-        assert!(metadata.selected_option.is_null());
-        assert!(matches!(*value, BexExternalValue::Null));
-    }
-
-    #[test]
-    fn unannotated_nested_container_uses_payload_shape() {
-        let int_list = list(RuntimeTy::int());
-        let string_list = list(RuntimeTy::string());
-        let child_type = RuntimeTy::union([int_list, string_list.clone()]);
-        let value = BexExternalValue::Array {
-            element_type: RuntimeTy::unknown(),
-            items: vec![BexExternalValue::Array {
-                element_type: RuntimeTy::unknown(),
-                items: vec![BexExternalValue::String("hello".into())],
-            }],
-        };
-
-        let coerced = coerce_arg_to_declared_type(value, &list(child_type)).unwrap();
-        let BexExternalValue::Array { items, .. } = coerced else {
-            panic!("expected outer list")
-        };
-        let BexExternalValue::Union { metadata, .. } = &items[0] else {
-            panic!("expected selected child union")
-        };
-        assert_eq!(metadata.selected_option, string_list);
-    }
-
-    #[test]
-    fn unannotated_ambiguous_empty_child_requires_value_type() {
-        let child_type = RuntimeTy::union([list(RuntimeTy::int()), list(RuntimeTy::string())]);
-        let value = BexExternalValue::Array {
-            element_type: RuntimeTy::unknown(),
-            items: vec![BexExternalValue::Array {
-                element_type: RuntimeTy::unknown(),
-                items: vec![],
-            }],
-        };
-
-        let error = coerce_arg_to_declared_type(value, &list(child_type)).unwrap_err();
-        assert!(matches!(
-            error,
-            EngineError::TypeMismatch { message }
-                if message.contains("multiple union members")
-                    && message.contains("value_type")
-        ));
-    }
-
-    #[test]
-    fn unannotated_literal_vs_primitive_requires_value_type() {
-        let declared = RuntimeTy::union([RuntimeTy::string(), string_literal("draft")]);
-        let error =
-            coerce_arg_to_declared_type(BexExternalValue::String("draft".into()), &declared)
-                .unwrap_err();
-        assert!(matches!(
-            error,
-            EngineError::TypeMismatch { message }
-                if message.contains("multiple union members")
-                    && message.contains("value_type")
-        ));
-    }
-
-    #[test]
-    fn dynamic_default_selects_first_matching_empty_container_arm() {
-        let int_list = list(RuntimeTy::int());
-        let string_list = list(RuntimeTy::string());
-        let declared = RuntimeTy::union([int_list.clone(), string_list]);
-        let value = BexExternalValue::Array {
-            element_type: RuntimeTy::unknown(),
-            items: vec![],
-        };
-
-        let coerced = coerce_arg_to_declared_type_with_policy(
-            value,
-            &declared,
-            crate::InboundUnionAmbiguityPolicy::SelectDefault,
-        )
-        .unwrap();
-        let BexExternalValue::Union { metadata, value } = coerced else {
-            panic!("expected selected union")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &metadata.selected_option,
-            &int_list
-        ));
-        assert!(matches!(
-            *value,
-            BexExternalValue::Array {
-                ref element_type,
-                ref items,
-            } if items.is_empty()
-                && runtime_ty_structurally_equal(element_type, &RuntimeTy::int())
-        ));
-    }
-
-    #[test]
-    fn dynamic_default_prefers_exact_literal_over_broad_primitive() {
-        let literal = string_literal("draft");
-        let declared = RuntimeTy::union([RuntimeTy::string(), literal.clone()]);
-
-        let coerced = coerce_arg_to_declared_type_with_policy(
-            BexExternalValue::String("draft".into()),
-            &declared,
-            crate::InboundUnionAmbiguityPolicy::SelectDefault,
-        )
-        .unwrap();
-        let BexExternalValue::Union { metadata, value } = coerced else {
-            panic!("expected selected union")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &metadata.selected_option,
-            &literal
-        ));
-        assert!(matches!(*value, BexExternalValue::String(ref value) if value == "draft"));
-    }
-
-    #[test]
-    fn unannotated_structurally_duplicate_members_select_first_canonical_arm() {
-        let declared = RuntimeTy::Union(Box::new([
-            RuntimeTy::int(),
-            RuntimeTy::int(),
-            RuntimeTy::string(),
-        ]));
-
-        let coerced = coerce_arg_to_declared_type(BexExternalValue::Int(7), &declared).unwrap();
-        let BexExternalValue::Union { metadata, value } = coerced else {
-            panic!("expected selected union")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &metadata.selected_option,
-            &RuntimeTy::int()
-        ));
-        assert!(matches!(*value, BexExternalValue::Int(7)));
-
-        let RuntimeTy::Union(members) = &declared else {
-            unreachable!()
-        };
-        let outbound_selected = find_matching_member(&BexExternalValue::Int(7), members).unwrap();
-        assert!(runtime_ty_structurally_equal(
-            &outbound_selected,
-            &RuntimeTy::int()
-        ));
-    }
-
-    #[test]
-    fn host_typed_callable_selects_structurally_equal_function_arm() {
-        let declared_arm = callback_ty(Freshness::Regular);
-        let wire_arm = callback_ty(Freshness::Fresh);
-        assert_ne!(declared_arm, wire_arm);
-        assert!(runtime_ty_structurally_equal(&declared_arm, &wire_arm));
-
-        let declared = RuntimeTy::union([declared_arm.clone(), RuntimeTy::string()]);
-        let typed = BexExternalValue::typed(
-            BexExternalValue::HostValue(HostValueArc::new(41, HostValueKind::Callable)),
-            wire_arm,
-        );
-        let coerced = coerce_arg_to_declared_type(typed, &declared).unwrap();
-        let BexExternalValue::Union { metadata, .. } = coerced else {
-            panic!("selected callable union metadata was lost")
-        };
-        assert_eq!(metadata.union_type, declared);
-        assert_eq!(metadata.selected_option, declared_arm);
-
-        let opaque = BexExternalValue::HostValue(HostValueArc::new(42, HostValueKind::Opaque));
-        assert!(!value_matches_type(&opaque, &metadata.selected_option));
-    }
-
-    #[test]
-    fn media_matching_is_kind_specific_and_generic_accepts_every_kind() {
-        let image = media_value(MediaKind::Image);
-        assert!(value_matches_type(&image, &media_ty(MediaKind::Image)));
-        assert!(value_matches_type(&image, &media_ty(MediaKind::Generic)));
-        assert!(!value_matches_type(&image, &media_ty(MediaKind::Audio)));
-
-        assert!(runtime_ty_compatible(
-            &media_ty(MediaKind::Image),
-            &media_ty(MediaKind::Generic)
-        ));
-        assert!(!runtime_ty_compatible(
-            &media_ty(MediaKind::Image),
-            &media_ty(MediaKind::Audio)
-        ));
-        assert!(runtime_ty_structurally_equal(
-            &media_ty(MediaKind::Image),
-            &media_ty(MediaKind::Image)
-        ));
-        assert!(!runtime_ty_structurally_equal(
-            &media_ty(MediaKind::Image),
-            &media_ty(MediaKind::Generic)
-        ));
-    }
-
-    #[test]
     fn portable_media_selects_the_nested_prompt_part_wrapper_union() {
         let media_part = RuntimeTy::union([
             media_wrapper_ty(MediaKind::Image),
@@ -6254,219 +3939,6 @@ mod union_container_selection_tests {
     }
 
     #[test]
-    fn stdlib_media_wrapper_annotation_coerces_only_in_primitive_context() {
-        let wrapper_ty = media_wrapper_ty(MediaKind::Image);
-        let typed_wrapper =
-            BexExternalValue::typed(media_wrapper_value(MediaKind::Image), wrapper_ty.clone());
-
-        let coerced =
-            coerce_arg_to_declared_type(typed_wrapper, &media_ty(MediaKind::Image)).unwrap();
-        let BexExternalValue::Union { value, metadata } = coerced else {
-            panic!("expected sparse type carrier")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &metadata.selected_option,
-            &media_ty(MediaKind::Image)
-        ));
-        assert!(matches!(
-            *value,
-            BexExternalValue::Adt(BexExternalAdt::Media(ref media))
-                if media.kind == MediaKind::Image
-        ));
-
-        let nominal = coerce_arg_to_declared_type(
-            BexExternalValue::typed(media_wrapper_value(MediaKind::Image), wrapper_ty.clone()),
-            &wrapper_ty,
-        )
-        .unwrap();
-        let BexExternalValue::Union { value, metadata } = nominal else {
-            panic!("expected sparse type carrier")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &metadata.selected_option,
-            &wrapper_ty
-        ));
-        assert!(matches!(*value, BexExternalValue::Instance { .. }));
-    }
-
-    #[test]
-    fn generic_media_still_validates_the_wrappers_concrete_kind() {
-        let typed_wrapper = BexExternalValue::typed(
-            media_wrapper_value(MediaKind::Audio),
-            media_wrapper_ty(MediaKind::Image),
-        );
-
-        let error =
-            coerce_arg_to_declared_type(typed_wrapper, &media_ty(MediaKind::Generic)).unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("does not inhabit contextual type `image`"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn local_class_cannot_spoof_a_stdlib_media_wrapper_fqn() {
-        let local_spoof = RuntimeTy::Class(
-            TypeName::new(
-                Name::new("user"),
-                vec![Name::new("baml"), Name::new("media")],
-                Name::new("Image"),
-            ),
-            Box::new([]),
-        );
-        let RuntimeTy::Class(name, ..) = &local_spoof else {
-            unreachable!()
-        };
-        assert_eq!(name.display_name().as_str(), "baml.media.Image");
-        assert_eq!(name.render_dotted(false), "user.baml.media.Image");
-        assert_eq!(stdlib_media_wrapper_kind(&local_spoof), None);
-
-        let typed_spoof =
-            BexExternalValue::typed(media_wrapper_value(MediaKind::Image), local_spoof);
-        let error =
-            coerce_arg_to_declared_type(typed_spoof, &media_ty(MediaKind::Image)).unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("is not assignable to declared type `image`"),
-            "unexpected error: {error}"
-        );
-    }
-
-    #[test]
-    fn stdlib_media_wrapper_selects_alias_union_arm_and_retains_alias_metadata() {
-        let alias_name = TypeName::from_dotted_path("user.aliases.ImageAlias");
-        let alias = RuntimeTy::TypeAlias(alias_name.clone());
-        let mut aliases = indexmap::IndexMap::new();
-        aliases.insert(alias_name, media_ty(MediaKind::Image));
-        let declared = RuntimeTy::union([alias.clone(), RuntimeTy::string()]);
-        let typed_wrapper = BexExternalValue::typed(
-            media_wrapper_value(MediaKind::Image),
-            media_wrapper_ty(MediaKind::Image),
-        );
-
-        let coerced = coerce_arg_to_declared_type_with_aliases(
-            typed_wrapper,
-            &declared,
-            &aliases,
-            &indexmap::IndexMap::new(),
-            crate::InboundUnionAmbiguityPolicy::Reject,
-        )
-        .unwrap();
-        let BexExternalValue::Union { value, metadata } = coerced else {
-            panic!("expected selected union carrier")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &metadata.selected_option,
-            &alias
-        ));
-        assert!(matches!(
-            *value,
-            BexExternalValue::Adt(BexExternalAdt::Media(ref media))
-                if media.kind == MediaKind::Image
-        ));
-    }
-
-    #[test]
-    fn stdlib_media_wrapper_alias_resolution_rejects_cycles() {
-        let first_name = TypeName::from_dotted_path("user.aliases.First");
-        let second_name = TypeName::from_dotted_path("user.aliases.Second");
-        let first = RuntimeTy::TypeAlias(first_name.clone());
-        let second = RuntimeTy::TypeAlias(second_name.clone());
-        let mut aliases = indexmap::IndexMap::new();
-        aliases.insert(first_name, second);
-        aliases.insert(second_name, first.clone());
-
-        assert!(!stdlib_media_wrapper_matches(
-            &media_wrapper_ty(MediaKind::Image),
-            &first,
-            &aliases,
-            true,
-        ));
-    }
-
-    #[test]
-    fn stdlib_image_wrapper_selects_primitive_arm_over_user_image_class() {
-        let primitive_image = media_ty(MediaKind::Image);
-        let user_image =
-            RuntimeTy::Class(TypeName::from_dotted_path("user.media.Image"), Box::new([]));
-        let declared = RuntimeTy::union([primitive_image.clone(), user_image]);
-        let typed_wrapper = BexExternalValue::typed(
-            media_wrapper_value(MediaKind::Image),
-            media_wrapper_ty(MediaKind::Image),
-        );
-
-        let coerced = coerce_arg_to_declared_type(typed_wrapper, &declared).unwrap();
-        let BexExternalValue::Union { value, metadata } = coerced else {
-            panic!("expected selected union carrier")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &metadata.selected_option,
-            &primitive_image
-        ));
-        assert!(matches!(
-            *value,
-            BexExternalValue::Adt(BexExternalAdt::Media(ref media))
-                if media.kind == MediaKind::Image
-        ));
-    }
-
-    #[test]
-    fn host_selected_media_arm_survives_argument_coercion() {
-        let image = media_ty(MediaKind::Image);
-        let audio = media_ty(MediaKind::Audio);
-        let declared = RuntimeTy::union([image.clone(), audio.clone()]);
-        let selected = BexExternalValue::union(
-            media_value(MediaKind::Image),
-            [image.clone(), audio],
-            image.clone(),
-        );
-        let coerced = coerce_arg_to_declared_type(selected, &declared).unwrap();
-        let BexExternalValue::Union { metadata, .. } = coerced else {
-            panic!("selected media union metadata was lost")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &metadata.selected_option,
-            &image
-        ));
-    }
-
-    #[test]
-    fn host_selected_metatype_arm_survives_argument_coercion() {
-        let metatype = RuntimeTy::type_type();
-        let declared = RuntimeTy::union([metatype.clone(), RuntimeTy::string()]);
-        let selected = BexExternalValue::union(
-            BexExternalValue::Adt(BexExternalAdt::Type(RuntimeTy::int())),
-            [metatype.clone(), RuntimeTy::string()],
-            metatype.clone(),
-        );
-        let coerced = coerce_arg_to_declared_type(selected, &declared).unwrap();
-        let BexExternalValue::Union { metadata, .. } = coerced else {
-            panic!("selected metatype union metadata was lost")
-        };
-        assert!(runtime_ty_structurally_equal(
-            &metadata.selected_option,
-            &metatype
-        ));
-    }
-
-    #[test]
-    fn structural_type_identity_preserves_nested_optional_arms() {
-        let int_list = list(RuntimeTy::int());
-        let optional_int_list = list(RuntimeTy::optional(RuntimeTy::int()));
-        assert!(!runtime_ty_structurally_equal(
-            &int_list,
-            &optional_int_list
-        ));
-        assert!(!runtime_ty_structurally_equal(
-            &map(RuntimeTy::int()),
-            &map(RuntimeTy::optional(RuntimeTy::int()))
-        ));
-    }
-
-    #[test]
     fn empty_array_uses_its_declared_element_type_to_select_union_arm() {
         let int_list = list(RuntimeTy::int());
         let string_list = list(RuntimeTy::string());
@@ -6503,6 +3975,106 @@ mod union_container_selection_tests {
             panic!("expected union wrapper")
         };
         assert_eq!(metadata.selected_option, string_map);
+    }
+
+    #[test]
+    fn literal_matching_checks_value_and_prefers_exact_literal() {
+        let draft = string_literal("draft");
+        let published = string_literal("published");
+        let value = BexExternalValue::String("draft".into());
+        assert!(value_matches_type(&value, &draft));
+        assert!(!value_matches_type(&value, &published));
+        assert_eq!(
+            find_matching_member(&value, &[RuntimeTy::string(), draft.clone()]).unwrap(),
+            draft
+        );
+    }
+
+    #[test]
+    fn enum_variant_matching_checks_value_and_prefers_exact_variant() {
+        let mood = TypeName::from_dotted_path("user.callbacks.Mood");
+        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"));
+        let sad = RuntimeTy::EnumVariant(mood.clone(), Name::new("SAD"));
+        let broad = RuntimeTy::Enum(mood.clone());
+        let value = BexExternalValue::Variant {
+            enum_name: mood.to_string(),
+            variant_name: "HAPPY".to_string(),
+        };
+
+        assert!(value_matches_type(&value, &happy));
+        assert!(!value_matches_type(&value, &sad));
+        assert_eq!(
+            find_matching_member(&value, &[broad, sad, happy.clone()]).unwrap(),
+            happy
+        );
+    }
+
+    #[test]
+    fn float_literal_matching_uses_baml_equality_and_preserves_decimal_precision() {
+        let negative_zero = float_literal("-0.0");
+        let precise = float_literal("1.2345678901234567e-300");
+        assert!(value_matches_type(
+            &BexExternalValue::Float(-0.0),
+            &negative_zero
+        ));
+        assert!(value_matches_type(
+            &BexExternalValue::Float(0.0),
+            &negative_zero
+        ));
+        assert!(value_matches_type(
+            &BexExternalValue::Float(1.234_567_890_123_456_7e-300),
+            &precise
+        ));
+        assert_eq!(
+            find_matching_member(
+                &BexExternalValue::Float(-0.0),
+                &[RuntimeTy::float(), negative_zero.clone()]
+            )
+            .unwrap(),
+            negative_zero
+        );
+    }
+
+    #[test]
+    fn structurally_duplicate_members_select_the_first() {
+        let declared = RuntimeTy::Union(Box::new([
+            RuntimeTy::int(),
+            RuntimeTy::int(),
+            RuntimeTy::string(),
+        ]));
+
+        let RuntimeTy::Union(members) = &declared else {
+            unreachable!()
+        };
+        let outbound_selected = find_matching_member(&BexExternalValue::Int(7), members).unwrap();
+        assert!(runtime_ty_structurally_equal(
+            &outbound_selected,
+            &RuntimeTy::int()
+        ));
+    }
+
+    #[test]
+    fn enum_variant_selected_arm_has_exact_structural_identity() {
+        let mood = TypeName::from_dotted_path("user.callbacks.Mood");
+        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"));
+        let another_happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"));
+        let sad = RuntimeTy::EnumVariant(mood, Name::new("SAD"));
+        assert!(runtime_ty_structurally_equal(&happy, &another_happy));
+        assert!(!runtime_ty_structurally_equal(&happy, &sad));
+    }
+
+    #[test]
+    fn structural_type_identity_preserves_nested_optional_arms() {
+        let int_list = list(RuntimeTy::int());
+        let optional_int_list = list(RuntimeTy::optional(RuntimeTy::int()));
+        assert!(!runtime_ty_structurally_equal(
+            &int_list,
+            &optional_int_list
+        ));
+        assert!(!runtime_ty_structurally_equal(
+            &map(RuntimeTy::int()),
+            &map(RuntimeTy::optional(RuntimeTy::int()))
+        ));
     }
 }
 
@@ -6868,44 +4440,5 @@ mod inference_unifier_tests {
         let actual = union(vec![int(), string()]);
         let out = infer(&formal, &actual);
         assert_eq!(out.get("T"), Some(&string()));
-    }
-}
-
-#[cfg(test)]
-mod union_media_annotation_tests {
-    use super::*;
-
-    /// An inbound media value annotated `image` must satisfy a DECLARED
-    /// union containing that media kind (`image | string`). The wrapper
-    /// payload's shape never matches `Media` structurally — the sparse
-    /// annotation is the value's identity — so the union-member check must
-    /// recurse with the annotated carrier, not the unwrapped payload.
-    #[test]
-    fn annotated_media_matches_declared_media_or_string_union() {
-        let media_ty = RuntimeTy::Media(baml_type::MediaKind::Image);
-        let declared = RuntimeTy::Union(Box::new([media_ty.clone(), RuntimeTy::String]));
-        let wrapper = BexExternalValue::Instance {
-            class_name: "baml.media.Image".to_string(),
-            type_args: vec![],
-            fields: indexmap::IndexMap::new(),
-        };
-        let annotated = BexExternalValue::typed(wrapper, media_ty);
-        assert!(value_matches_type_with_definitions(
-            &annotated,
-            &declared,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-        ));
-
-        // control: a string-annotated payload still matches through the
-        // generic unwrap path
-        let annotated_string =
-            BexExternalValue::typed(BexExternalValue::String("hi".into()), RuntimeTy::String);
-        assert!(value_matches_type_with_definitions(
-            &annotated_string,
-            &declared,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-        ));
     }
 }

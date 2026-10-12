@@ -23,14 +23,14 @@
 
 mod bex_external_value;
 mod handle;
-mod host_return;
+mod json_alias;
 mod runtime_ty_identity;
 
 pub use baml_type::MediaKind;
 pub use bex_external_value::{
     AsBexExternalValue, BexExternalAdt, BexExternalValue, MEDIA_WRAPPER_DATA_FIELD,
     OpaqueExternalValue, RuntimeTy, TaggedHeapHandleKind, ToBexExternalValue, TypeDefRef, TypeName,
-    UnionMetadata, js_number_to_i64, try_convert_rust_data,
+    UnionMetadata, try_convert_rust_data,
 };
 pub use bex_resource_types::{
     HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch, host_value,
@@ -44,7 +44,5 @@ pub use bex_vm_types::{
     },
 };
 pub use handle::{Handle, HandleInner, WeakHeapRef};
-pub use host_return::{
-    HostReturnTypeError, is_canonical_json_alias, validate_host_return, value_satisfies_json,
-};
+pub use json_alias::{is_canonical_json_alias, value_satisfies_json};
 pub use runtime_ty_identity::{runtime_ty_structurally_equal, selected_arm_equal};

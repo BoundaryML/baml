@@ -18,6 +18,23 @@ must accept legacy messages that omit it. Present but malformed collection or
 union metadata fails closed. The C# runtime consumes these schemas directly
 with build-time `Grpc.Tools`; it does not maintain a private schema copy.
 
+Inbound values are admitted, never converted. A value inhabits the declared
+type of its slot as it is, or the call (or the host callback's return) is a
+type error: an `int_value` is no `float` or `bigint`, a `map_value` is no
+class, a `string_value` is no enum variant, and `js_number_value` is refused.
+What a host means by a value that is not a BAML value is the host's bridge to
+say before the value is sent. `InboundValue.value_type` names the one exact
+type of its node: it must be assignable to the slot and must determine a value
+(a concrete type or a literal, never a union, an optional, `unknown`, an
+interface or a type variable), and the node is judged against it. Scalars,
+`null`, enum variants, media, handles and callables are self-evident and carry
+no `value_type`. A list, map or class under an abstract slot (`unknown`, an
+interface, a union including an optional, or a type that mentions an unbound
+type variable) must carry one. Where several members of a union take a value
+and every one of them lands the same value (`"draft"` under
+`string | "draft"`), none has to be named; where they land differently (an
+empty list under `int[] | string[]`), the host names the member.
+
 Generated C# types carry canonical serialized `BamlTy` metadata through names,
 union cases, descriptors, registry factories, and codecs. The C# generator
 normalizes unions once at its boundary so all those layers observe the same

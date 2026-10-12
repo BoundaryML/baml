@@ -65,10 +65,6 @@ static LOGGER_INIT: Once = Once::new();
 
 #[wasm_bindgen(start)]
 pub fn start() {
-    bex_project::register_inbound_union_ambiguity_policy(
-        bex_project::InboundUnionAmbiguityPolicy::SelectDefault,
-    )
-    .expect("the browser TypeScript bridge must own the process-wide inbound policy");
     #[cfg(feature = "console_error_panic")]
     console_error_panic_hook::set_once();
     LOGGER_INIT.call_once(|| {

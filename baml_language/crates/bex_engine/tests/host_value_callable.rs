@@ -395,119 +395,6 @@ async fn host_callable_returns_int_result() {
     drop(arc);
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn host_callable_resolves_integral_js_number_to_float() {
-    let source = r#"
-        function measure(f: () -> float) -> float {
-            return f();
-        }
-    "#;
-
-    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::JsNumber(1.0)));
-    let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("Failed to create engine"),
-    );
-
-    let result = engine
-        .call_function(
-            "measure",
-            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("integral JavaScript number should satisfy a float return contract");
-
-    let value = match result {
-        BexExternalValue::Float(value) => value,
-        other => panic!("expected Float(1.0), got {other:?}"),
-    };
-    assert!((value - 1.0).abs() < f64::EPSILON);
-    drop(arc);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn host_callable_resolves_integral_js_number_class_field_to_float() {
-    let source = r#"
-        class Size {
-            width float
-        }
-        function measure(f: () -> Size) -> float {
-            return f().width;
-        }
-    "#;
-
-    let arc = register_host_callable(|_items| {
-        let mut fields = IndexMap::new();
-        fields.insert("width".to_string(), BexExternalValue::JsNumber(612.0));
-        FakeReturn::Ok(BexExternalValue::Instance {
-            class_name: "Size".to_string(),
-            type_args: vec![],
-            fields,
-        })
-    });
-    let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("Failed to create engine"),
-    );
-
-    let result = engine
-        .call_function(
-            "measure",
-            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("integral class field should satisfy its float contract");
-
-    let value = match result {
-        BexExternalValue::Float(value) => value,
-        other => panic!("expected Float(612.0), got {other:?}"),
-    };
-    assert!((value - 612.0).abs() < f64::EPSILON);
-    drop(arc);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn host_callable_integral_number_uses_float_in_float_bigint_union() {
-    let source = r#"
-        function measure(f: () -> float | bigint) -> float | bigint {
-            return f();
-        }
-    "#;
-
-    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::JsNumber(1.0)));
-    let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("Failed to create engine"),
-    );
-
-    let result = engine
-        .call_function(
-            "measure",
-            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("an integral JavaScript number should select the float arm");
-
-    let BexExternalValue::Union { value, metadata } = result else {
-        panic!("expected selected union result")
-    };
-    assert_eq!(metadata.selected_option, RuntimeTy::float());
-    let BexExternalValue::Float(value) = *value else {
-        panic!("expected a float payload")
-    };
-    assert!((value - 1.0).abs() < f64::EPSILON);
-    drop(arc);
-}
-
 /// A callable that crosses a host boundary may itself be host-owned. APIs such
 /// as the HTTP server retain a callable handle and later ask the engine to
 /// invoke it as a fresh VM root, so that entry path must accept the same
@@ -1020,6 +907,67 @@ async fn host_callable_sysop_operand_layout_is_pinned() {
         other => panic!("expected Int(15), got {other:?}"),
     }
     drop(arc);
+}
+
+/// A host callable's return value inhabits its declared type as it is: an
+/// integer where a `float` is declared is no float, at the root or in a class
+/// field, and the engine converts nothing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_int_returned_for_float_is_a_contract_violation() {
+    let source = r#"
+        class Size {
+            width float
+        }
+        function measure(f: () -> float, g: () -> Size) -> float {
+            return f() + g().width;
+        }
+    "#;
+
+    let float = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Float(1.0)));
+    let size = register_host_callable(|_items| {
+        FakeReturn::Ok(BexExternalValue::Instance {
+            class_name: "Size".to_string(),
+            type_args: vec![],
+            fields: IndexMap::from([("width".to_string(), BexExternalValue::Int(612))]),
+        })
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&float)),
+                BexExternalValue::HostValue(Arc::clone(&size)),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
+            BexExternalValue::Instance {
+                class_name, fields, ..
+            } => {
+                assert_eq!(class_name, "baml.panics.HostContractViolation");
+                match fields.get("message") {
+                    Some(BexExternalValue::String(m)) => assert!(
+                        m.contains("float") && m.contains("int"),
+                        "message should describe the float/int mismatch, got {m:?}"
+                    ),
+                    other => panic!("expected a message field, got {other:?}"),
+                }
+            }
+            other => panic!("expected Instance, got {other:?}"),
+        },
+        other => panic!("expected UnhandledThrow(HostContractViolation), got {other:?}"),
+    }
+    drop((float, size));
 }
 
 // ============================================================================
@@ -1669,9 +1617,9 @@ async fn host_callable_undeclared_callback_accepts_native_throw_as_opaque() {
 
     // Behaviour: throw a generic native exception. With no declared throws
     // on `f`, the synthesized effect param normalizes to `unknown` at the
-    // FFI boundary — `validate_host_return` accepts any value against
-    // `Unknown`, so the throw propagates as the catchable
-    // `HostCallable` instance the fake dispatch builds.
+    // FFI boundary, and `unknown` admits every value, so the throw
+    // propagates as the catchable `HostCallable` instance the fake dispatch
+    // builds.
     let arc = register_host_callable(|_items| FakeReturn::Err {
         class_name: "ValueError".to_string(),
         message: "native exception from host".to_string(),

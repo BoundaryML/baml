@@ -50,7 +50,7 @@ pub(crate) fn value_matches_template(
 /// Whether `value` is a member of `ty`: `TYPE_SYSTEM.md` "Values and
 /// membership", asked of the canonical algebra. `None` for a value with no
 /// reconstructible BAML type (an opaque native handle, or a compile-time
-/// definition object — see [`BexVm::value_concrete_ty`]); the caller decides
+/// definition object — see `BexVm::value_concrete_ty`); the caller decides
 /// what that means for it.
 ///
 /// Every *data* value reconstructs faithfully, including the callables: a
@@ -63,7 +63,7 @@ pub(crate) fn value_matches_template(
 /// The reconstruction is the singleton-precise one: a literal type holds a
 /// single value, so nothing decides membership in it short of the value
 /// reporting the type of exactly itself.
-pub(crate) fn value_is_member(vm: &BexVm, value: Value, ty: &Ty) -> Option<bool> {
+pub fn value_is_member(vm: &BexVm, value: Value, ty: &Ty) -> Option<bool> {
     // The canonical algebra operates over `Ty`; a value's realized type widens
     // into it.
     let value_ty: Ty = vm.value_singleton_ty(value)?.into();
