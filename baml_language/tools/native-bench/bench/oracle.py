@@ -80,6 +80,10 @@ def fixture(
         return encode({"requests": batches, "nodes": size})
     if case == "13_live_heap":
         return encode({"live": size, "churn": batches, "seed": seed})
+    if case == "15_cycles_into_live":
+        return encode({"live": size, "requests": batches})
+    if case == "16_live_walk":
+        return encode({"nodes": size, "walks": batches})
     if case == "00_startup":
         return encode({"value": 42})
     if case in ("01_array_traversal", "02_merge_sort", "10_quick_sort", "12_quick_sort_native", "13_sort_kernel_only"):
@@ -175,6 +179,10 @@ def oracle(case, raw, jobs=1, warmup=0):
         return live_heap_oracle(data["live"], data["churn"], data["seed"])
     if case == "14_heap_calls":
         return heap_calls_oracle(data["count"], data["seed"])
+    if case == "15_cycles_into_live":
+        return cycles_into_live_oracle(data["live"], data["requests"])
+    if case == "16_live_walk":
+        return live_walk_oracle(data["nodes"], data["walks"])
     if case == "05_async_fanout":
         n = data["payload_size"]
         return [n * i + n * (n - 1) // 2 for i in range(data["fanout"])]
@@ -264,6 +272,14 @@ def checks(case):
             for seed in (0, 1729, 999):
                 yield f"{n}-{seed}", fixture(case, size=n, seed=seed)
         return
+    if case == "15_cycles_into_live":
+        for live, requests in ((0, 0), (0, 5), (1, 3), (2, 4), (17, 40), (1000, 64)):
+            yield f"{live}-{requests}", fixture(case, size=live, batches=requests)
+        return
+    if case == "16_live_walk":
+        for nodes, walks in ((0, 3), (1, 0), (1, 2), (2, 3), (17, 4), (1000, 5)):
+            yield f"{nodes}-{walks}", fixture(case, size=nodes, batches=walks)
+        return
     yield "default", fixture(case, size=16, batches=8, retain=2, delay_ms=2)
     if case in ("01_array_traversal", "02_merge_sort", "10_quick_sort", "12_quick_sort_native", "13_sort_kernel_only"):
         variants = (
@@ -332,6 +348,25 @@ def checks(case):
 
 
 MODULUS = 1000000007
+
+
+def cycles_into_live_oracle(live, requests):
+    """Per request: the first node's value plus the value of the live node the cycle points at."""
+    checksum = 0
+    for r in range(requests):
+        total = r % 1000 + ((r * 7919 % live) * 7 % 1000 if live > 0 else 0)
+        checksum = (checksum * 31 + total) % MODULUS
+    return [live, checksum]
+
+
+def live_walk_oracle(nodes, walks):
+    """Per walk: the tree's value sum plus the walk's index, when the tree is not empty."""
+    total = sum(i * 13 % 1000 for i in range(nodes))
+    checksum = 0
+    for w in range(walks):
+        if nodes > 0:
+            checksum = (checksum * 31 + total + w) % MODULUS
+    return [nodes, checksum]
 
 
 def cyclic_churn_oracle(requests, nodes):
