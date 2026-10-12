@@ -31,7 +31,8 @@ SCENARIO_LABELS = {
     "allocation-low-retention": "allocate 128 batches of 2,048 objects, keep 4", "allocation-high-retention": "allocate 128 batches of 2,048 objects, keep 64",
     "calls-empty": "call a function 0 times", "calls": "call a leaf function 128 times", "generate-sort": "generate and sort 8,192 numbers with the library sort",
     "cyclic-churn": "build and drop 64 cyclic graphs of 256 nodes", "live-heap-1m": "allocate and walk beside a live graph of 1M objects",
-    "live-heap-4m": "allocate and walk beside a live graph of 4M objects", "heap-calls": "4,096 iterations of small calls passing heap objects"}
+    "live-heap-4m": "allocate and walk beside a live graph of 4M objects", "heap-calls": "4,096 iterations of small calls passing heap objects",
+    "cycles-into-live": "build and drop 65,536 cycles that point into a live ring of 1M nodes", "live-walk": "walk a live tree of 1M nodes 4 times, read only"}
 # One plain sentence per KPI on what the timed region contains.
 MEASURE = {
     "sort": "One job copies the input, sorts it in BAML code (no library sort) and serializes the whole result to JSON; the bar is jobs per second.",
@@ -59,7 +60,7 @@ KPIS = [
     ("json", "JSON", "How fast does it parse, validate and serialize JSON?", ["json-aggregate", "json-hello"]),
     ("alloc", "Allocation", "How fast does it allocate and reclaim many small objects?", ["allocation-high-retention", "allocation-low-retention", "generate-sort"]),
     ("calls", "Function calls", "What does a function call cost?", ["calls", "calls-empty"]),
-    ("mem", "Memory management", "What do cycles, a large live heap and heap-passing calls cost?", ["cyclic-churn", "live-heap-1m", "live-heap-4m", "heap-calls"]),
+    ("mem", "Memory management", "What do cycles, a large live heap and heap-passing calls cost?", ["cyclic-churn", "live-heap-1m", "live-heap-4m", "heap-calls", "cycles-into-live", "live-walk"]),
 ]
 
 

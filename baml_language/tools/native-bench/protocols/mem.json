@@ -21,7 +21,9 @@
   "11_generate_sort",
   "12_cyclic_churn",
   "13_live_heap",
-  "14_heap_calls"
+  "14_heap_calls",
+  "15_cycles_into_live",
+  "16_live_walk"
  ],
  "regression": {
   "threshold_percent": 5,
@@ -41,6 +43,8 @@
   {"name": "cyclic-churn", "case": "12_cyclic_churn", "size": 256, "batches": 64, "jobs": 8, "warmup": 1},
   {"name": "live-heap-1m", "case": "13_live_heap", "size": 500000, "batches": 65536, "jobs": 8, "warmup": 1},
   {"name": "live-heap-4m", "case": "13_live_heap", "size": 2000000, "batches": 65536, "jobs": 4, "warmup": 1},
-  {"name": "heap-calls", "case": "14_heap_calls", "size": 4096, "jobs": 512, "warmup": 8}
+  {"name": "heap-calls", "case": "14_heap_calls", "size": 4096, "jobs": 512, "warmup": 8},
+  {"name": "cycles-into-live", "case": "15_cycles_into_live", "size": 1000000, "batches": 65536, "jobs": 8, "warmup": 1},
+  {"name": "live-walk", "case": "16_live_walk", "size": 1048576, "batches": 4, "jobs": 8, "warmup": 1}
  ]
 }

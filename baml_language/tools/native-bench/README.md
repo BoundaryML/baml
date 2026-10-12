@@ -58,8 +58,10 @@ Python in the snapshot's `ref/` directory with the same boundary.
 | `12_cyclic_churn` | What does building and dropping request-scoped cyclic graphs cost, and are the cycles reclaimed? |
 | `13_live_heap` | What does ongoing allocation cost while a 1-4M-object graph stays live? |
 | `14_heap_calls` | What does a call-heavy loop cost when every call passes and returns heap objects? |
+| `15_cycles_into_live` | What does dropping request-scoped cycles cost when each points into a large live graph? |
+| `16_live_walk` | What does reading a large live recursive structure cost when nothing becomes garbage? |
 
-Cases 12-14 exist for the memory-management comparison (protocol `mem`)
+Cases 12-16 exist for the memory-management comparison (protocol `mem`)
 and have no reference ports yet: their `rust`, `go`, `node`, `bun` and
 `python` rows are skipped as missing artifacts.
 
