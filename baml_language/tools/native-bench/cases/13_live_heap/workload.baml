@@ -25,10 +25,14 @@ function run(s: State) -> string {
     let n = items.length();
     if (n == 0) { return baml.json.to_string([0, 0]); }
     let checksum = 0;
-    let x = s.config.seed % n;
+    // A full-period LCG mod 2^31 (the index taken from its high bits): an
+    // LCG mod `n` itself can cycle through a few dozen items.
+    let state = s.config.seed % 2147483648;
+    let x = 0;
     let k = 0;
     while (k < s.config.churn) {
-        x = (x * 1103515245 + 12345) % n;
+        state = (state * 1103515245 + 12345) % 2147483648;
+        x = (state / 256) % n;
         let old = items[x];
         let fresh = Item { id: old.id, value: old.value, next: old.next, tags: [old.id % 3] };
         items[x] = fresh;
