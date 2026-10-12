@@ -385,6 +385,37 @@ function fetch_all(urls: string[]) -> string[] {
 
 Also just start writing some code. This is plenty of information already. Pretend you're writing some typescript but with this new syntax etc.
 
+## Traces — `baml query`
+
+Every run records its spans: function calls (an LLM function with its arguments, output and error), futures, and HTTP requests with the model usage. `baml query` runs one read-only SQL `SELECT` (SQLite syntax) over them. The schema is in the CLI — don't guess a column:
+
+```bash
+baml query --schema                    # relations: spans, span_announcements, processes, profiler
+baml query --schema --table spans      # the columns of one relation and what they mean
+baml query "SELECT span_name, status, start_time FROM spans WHERE span_type = 'function' ORDER BY start_time DESC LIMIT 20"
+baml query --format json "SELECT temporary_projections['model_name'], temporary_projections['output_tokens'] FROM spans WHERE span_type = 'network_span'"
+baml help query                        # --from <project>, --max-rows, --explain, --format table|json|jsonl
+```
+
+BAML values navigate with brackets: `input_args['customer']['age']`, `output_value['items'][0]`, `error_value['error']`, `context_metadata['user_id']` (the tags of `$trace = trace.context(metadata = {…})`; `baml describe trace`).
+
+**A run and a query use the same rule to pick local files or Boundary** (the hosted trace store), so a query reads where your runs wrote:
+
+| Credential | Runs record to, and `baml query` reads |
+|------------|------------------------------------------|
+| none | local files: `<project>/.baml/btel/` (a host SDK outside a project: `~/.baml/btel/`) |
+| `baml auth login` + a project | Boundary, your personal environment of that project |
+| `BOUNDARY_API_KEY=<key>` | Boundary, the environment the key belongs to; wins over a saved login |
+| `BOUNDARY_API_KEY=local`, or `baml query --local` | local files, also when you are logged in |
+
+- **Local — no account.** Nothing to set up: `baml run …` or `baml test`, then `baml query "…"`. The first query builds an index in `.baml/btel/`. `--from <dir>` reads the recordings of another project.
+- **Account.** Sign up at **https://cloud.boundaryml.com**, then `baml auth login` (opens the browser; `--no-open` prints the URL). `baml auth status` verifies the login and shows the selected project; `baml auth logout` removes it. Name the project as `org_handle/project_name`: `[boundary]` `project = "acme/app"` in `baml.toml`, or `BOUNDARY_PROJECT`, or `baml query --project acme/app`. `--environment <name>` reads another environment than your personal one.
+- **API key — CI, servers, production.** Create a key for the environment at https://cloud.boundaryml.com and set `BOUNDARY_API_KEY`. The process then needs no login and no browser.
+- The Boundary API endpoint is built in. Set `BOUNDARY_API_URL` (or `[boundary]` `api_url`) only for another gateway.
+- `BAML_TELEMETRY=off|low|medium|high` sets how much a run records (default `medium`).
+- **Custom dashboard, hosted by Boundary.** A dashboard is one self-contained HTML file: `boundary.query(sql)` runs the same SQL as `baml query`, `boundary.openProcess(id)` / `boundary.openSpan(id)` open a trace in Boundary, and the page's `#` stays in the URL for deep links. Start from https://github.com/BoundaryML/boundary-dashboard-template and upload the file on the Dashboards page of an environment at https://cloud.boundaryml.com.
+- Empty result but you just ran the code? You are logged in or have a key, so the query asked Boundary — add `--local` for the local files, or check `baml auth status` for the project.
+
 ## BAML workflow visualizer annotations
 Use '//#' to add comments that will show up in the BAML visualizer. Useful for annotating branches, general flow of the program. When you write baml code you should add some of these in general flow of the program. No need to annotate _everything_.
 e.g.
