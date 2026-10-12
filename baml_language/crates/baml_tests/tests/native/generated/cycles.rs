@@ -1300,6 +1300,77 @@ pub fn user_graph(mut _1: Int63) -> Result<Int63, Thrown> {
         }
     }
 }
+/// BAML function `user.cycles_into_live`.
+pub fn user_cycles_into_live(mut _1: Int63) -> Result<Int63, Thrown> {
+    let _frame = bex_aot::depth::Guard::enter()?;
+    let mut _0: Int63;
+    let mut _2: Cc<user_GNode>;
+    let mut _3: Cc<Vec<Cc<user_GNode>>>;
+    let mut _4: Int63;
+    let mut _5: Int63;
+    let mut _6: bool;
+    let mut _7: Int63;
+    let mut _8: Cc<user_GNode>;
+    let mut _9: Int63;
+    let mut _10: Cc<Vec<Cc<user_GNode>>>;
+    let mut _11: Cc<user_GNode>;
+    let mut _12: Int63;
+    let mut _13: Int63;
+    let mut _14: Cc<Vec<Cc<user_GNode>>>;
+    let mut _17: Int63;
+    let mut _18: Cc<Vec<Cc<user_GNode>>>;
+    let mut _21: Int63;
+    let mut _22: Int63;
+    let mut _23: Int63;
+    let mut _25: Int63;
+    let mut _26: Int63;
+    let mut _27: Int63;
+    let mut _28: Int63;
+    _3 = array::new_cc::<Cc<user_GNode>>(Vec::new());
+    _2 = cc(user_GNode {
+        id: int::lit(7),
+        edges: _3.clone(),
+    });
+    _4 = int::lit(0);
+    _5 = int::lit(0);
+    'bb1: loop {
+        _7 = _5;
+        _6 = _7 < _1;
+        if _6 {
+            _9 = _5;
+            _10 = array::new_cc::<Cc<user_GNode>>(Vec::new());
+            _8 = cc(user_GNode {
+                id: _9,
+                edges: _10.clone(),
+            });
+            _13 = _5;
+            _12 = int::add(_13, int::lit(1))?;
+            _14 = array::new_cc::<Cc<user_GNode>>(Vec::from([_8.clone(), _2.clone()]));
+            _11 = cc(user_GNode {
+                id: _12,
+                edges: _14.clone(),
+            });
+            _18 = _8.borrow().edges.clone();
+            bex_aot::depth::probe(0)?;
+            array::push(&_18, _11.clone());
+            _17 = array::len(&_18);
+            _22 = _8.borrow().id;
+            _23 = array::len(&_11.borrow().edges);
+            _21 = int::add(_22, _23)?;
+            _4 = int::add(_4, _21)?;
+            _5 = int::add(_5, int::lit(1))?;
+            continue 'bb1;
+        } else {
+            break 'bb1;
+        }
+    }
+    _26 = _4;
+    _27 = _2.borrow().id;
+    _25 = int::add(_26, _27)?;
+    _28 = array::len(&_2.borrow().edges);
+    _0 = int::add(_25, _28)?;
+    Ok(_0)
+}
 /// The environment of BAML lambda `.<lambda(closure_in_owner, 0)>`.
 pub struct user_closure_in_owner__lambda0__env {
     pub _c0: cell::CcCell<Cc<Vec<func::CcFunc<(), Int63>>>>,

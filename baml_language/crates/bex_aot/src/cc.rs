@@ -742,6 +742,17 @@ fn collect_in(gc: &Gc) {
         state.set(state.get() & !BUFFERED);
         collect_white(header, &mut whites, &mut stack);
     }
+    // An edge from a white object to one that lives was taken away by
+    // `mark_gray` and never given back; the white value's drop below takes
+    // it away again. Give it back first.
+    for &header in &whites {
+        children(header, |child| {
+            let state = state_of(child);
+            if color(state.get()) != FREEING {
+                state.set(state.get() + 1);
+            }
+        });
+    }
     stats.traced += traced;
     stats.freed += whites.len() as u64;
     // Free: drop every white value, then deallocate the boxes. Drops of
@@ -1157,6 +1168,35 @@ mod tests {
             edges.borrow_mut().push(nodes[(id + 1) % n].clone());
             edges.borrow_mut().push(nodes[(id * 7 + 3) % n].clone());
         }
+    }
+
+    /// A garbage cycle with an edge to a live object: `mark_gray` takes the
+    /// edge out of the live object's count, and freeing the cycle must not
+    /// take it out a second time.
+    #[test]
+    fn a_garbage_cycle_does_not_take_a_live_objects_count_twice() {
+        let keep = cc(GNode {
+            id: 7,
+            edges: cc(Vec::new()),
+            _probe: Probe,
+        });
+        let freed = freed_by(|| {
+            let a = cc(GNode {
+                id: 1,
+                edges: cc(Vec::new()),
+                _probe: Probe,
+            });
+            let b = cc(GNode {
+                id: 2,
+                edges: cc(vec![a.clone(), keep.clone()]),
+                _probe: Probe,
+            });
+            let edges = a.borrow().edges.clone();
+            edges.borrow_mut().push(b);
+        });
+        assert_eq!(freed, 2, "the cycle, not `keep`");
+        assert_eq!(keep.strong_count(), 1, "only `keep`'s own handle is left");
+        assert_eq!(keep.borrow().id, 7);
     }
 
     #[test]

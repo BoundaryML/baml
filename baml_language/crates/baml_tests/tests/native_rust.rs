@@ -1399,6 +1399,9 @@ async fn cycles_match_vm() {
     for n in [1, 2, 8, 33] {
         check!(o, graph(n) => user_graph(int(n)));
     }
+    for n in [0, 1, 2, 50] {
+        check!(o, cycles_into_live(n) => user_cycles_into_live(int(n)));
+    }
     check!(o, long_list(10000) => user_long_list(int(10000)));
 }
 
@@ -1424,6 +1427,9 @@ fn cycle_leaks() {
         }),
         // Leaked under Rc: 8 nodes and their 8 edge arrays.
         ("graph", &|| drop(user_graph(int(8)))),
+        // Leaked under Rc: 20 nodes and their 20 edge arrays. The node the
+        // cycles point at outlives each of them and is freed by its count.
+        ("cycles_into_live", &|| drop(user_cycles_into_live(int(10)))),
         // Leaked under Rc: the array, its cell, two closures, `n`'s cell.
         ("closure_in_owner", &|| drop(user_closure_in_owner(int(3)))),
         // Leaked under Rc: the closure, the array and its cell, the owner,

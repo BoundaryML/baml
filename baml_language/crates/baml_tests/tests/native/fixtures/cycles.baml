@@ -102,6 +102,22 @@ function graph(n: int) -> int {
     sum
 }
 
+// Request-scoped cycles that each also point at a node that outlives
+// them: freeing a cycle must leave the outside node's count as it was.
+function cycles_into_live(n: int) -> int {
+    let keep = GNode { id: 7, edges: [] };
+    let total = 0;
+    let i = 0;
+    while (i < n) {
+        let a = GNode { id: i, edges: [] };
+        let b = GNode { id: i + 1, edges: [a, keep] };
+        a.edges.push(b);
+        total += a.id + b.edges.length();
+        i += 1;
+    }
+    total + keep.id + keep.edges.length()
+}
+
 // A closure that captures the array holding it: the array, the closure's
 // environment and the captured cell form a cycle.
 function closure_in_owner(n: int) -> int {
