@@ -72,9 +72,9 @@ pub trait HeapRef {
     fn addr(&self) -> *const ();
 
     /// Visit the object's own children: its contents' [`Trace`]. Reads the
-    /// object through a shared borrow, which is free whenever no Rust code
-    /// is mid-way through a store into it (generated code never holds a
-    /// borrow across a call or an allocation).
+    /// object through a shared borrow; an object mutably borrowed at that
+    /// moment (a store whose old value's drop triggered a collection)
+    /// reports no edges, which only keeps more objects alive.
     fn trace_target(&self, visitor: &mut dyn Visitor);
 
     /// The number of handles to the object. Under `Rc` this is the strong

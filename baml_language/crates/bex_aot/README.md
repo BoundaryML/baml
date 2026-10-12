@@ -12,7 +12,7 @@ only collector is the cycle collector for tracked handles (`cc`).
 | `float` | `f64` | `bex_lang::float` re-exported |
 | `bigint` | `BigInt` over `num_bigint::BigInt` | `bigint`: a counted pointer; the VM's checks and messages (`AllocFailure` past `MAX_BIGINT_BITS`, `DivisionByZero`, `NegativeBitShift`), `to_int`, `parse`, `pow`, `isqrt`, `ilog`, JSON as a number with every digit |
 | `string` | `Str` over `bex_str::BexStr` | `string`: literals, `concat`, byte-order `cmp`, code-point `length` |
-| `T[]`, class `C` | `Shared<Vec<T>>`, `Shared<C>` (or `Cc<..>`) | `handle`: `Rc<RefCell<T>>` with reference semantics, reached only through `shared` / `cc` / `borrow` / `borrow_mut` / `ptr_eq` / `id`; `array`: checked `get`/`set`, `push`, primitive sorts, the for-in cursor `Iter<T>` |
+| `T[]`, class `C` | `Shared<Vec<T>>`, `Shared<C>` (or `Cc<..>`) | `handle`: `Rc<RefCell<T>>` (or, for a type that can be on a cycle, the cycle collector's `Cc` box) with reference semantics, reached only through `shared` / `cc` / `borrow` / `borrow_mut` / `ptr_eq` / `id`; `array`: checked `get`/`set`, `push`, primitive sorts, the for-in cursor `Iter<T>` |
 | `map<K, V>` | `Map<K, V>` | `map`: a handle over an insertion-ordered `IndexMap`, keyed by `string`, `int` or `bool`; `index` raises `MapKeyNotFound`; JSON needs string keys, as on the VM |
 | `T \| null` | `Option<T>` | |
 | `(A) -> R throws E` | `func::Func<(A,), R>` | `func`: a counted handle to a `Callable` object, the closure's generated environment (`<lambda>__env`, its captured cells as fields) or a declared function (`func::item`); called with `call((a,))`; the `throws` clause has no form of its own |

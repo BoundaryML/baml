@@ -260,7 +260,9 @@ impl<T: Trace, H: Kind> HeapRef for Shared<T, H> {
     }
 
     fn trace_target(&self, visitor: &mut dyn Visitor) {
-        self.borrow().trace(visitor);
+        // Through the cell's own `Trace`: no edges while a store is in
+        // progress, rather than a panic.
+        H::get(&self.0).trace(visitor);
     }
 
     fn strong_count(&self) -> usize {

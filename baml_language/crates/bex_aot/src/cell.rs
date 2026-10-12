@@ -17,9 +17,10 @@
 //! program the checker should have rejected, reported as the `Unreachable`
 //! panic rather than a Rust panic.
 //!
-//! A cycle through a cell (a closure stored in a cell it captures) is never
-//! freed, like a cycle through class fields; see the crate README. The cell
-//! is a [`Shared`] object, so a memory manager sees it as one.
+//! A cell is a [`Shared`] object, so the cycle collector sees it as one: a
+//! cell whose type can be on a cycle (a closure stored in a value its own
+//! cell reaches) is a [`CcCell`], tracked like any other such handle, and
+//! a cycle through it is freed by [`crate::cc`].
 
 use crate::{
     Panic, Thrown,
