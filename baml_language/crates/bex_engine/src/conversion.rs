@@ -2879,27 +2879,6 @@ pub(crate) fn described_value_type(value: &BexExternalValue) -> String {
     }
 }
 
-pub(crate) fn runtime_ty_resolves_to_exact_null<'a>(
-    mut ty: &'a RuntimeTy,
-    aliases: &'a indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-) -> bool {
-    // A productive alias chain cannot contain more distinct aliases than the
-    // registry. The bound also makes this defensive against an invalid cycle.
-    for _ in 0..=aliases.len() {
-        match ty {
-            RuntimeTy::Null => return true,
-            RuntimeTy::TypeAlias(name) if !is_canonical_json_alias(name) => {
-                let Some(expanded) = aliases.get(name) else {
-                    return false;
-                };
-                ty = expanded;
-            }
-            _ => return false,
-        }
-    }
-    false
-}
-
 pub(crate) fn type_name_matches_external_name(
     external_name: &str,
     type_name: &baml_type::TypeName,
@@ -3398,79 +3377,6 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
     })
 }
 
-/// The bodies of the program's aliases in the wire's spelling: name-headed,
-/// because a host value names the types it means.
-///
-/// An alias whose body names an anonymous declaration is left out, since it
-/// has no spelling a host could have sent.
-pub(crate) fn inbound_alias_view(
-    aliases: &indexmap::IndexMap<::sys_types::DefKey, ::sys_types::SapTy>,
-) -> indexmap::IndexMap<baml_type::TypeName, RuntimeTy> {
-    aliases
-        .iter()
-        .filter_map(|(head, ty)| {
-            let body = ty
-                .clone()
-                .try_map_heads(&mut |head: &::sys_types::DefKey| head.declared().cloned().ok_or(()))
-                .ok()?;
-            Some((head.declared()?.clone(), body))
-        })
-        .collect()
-}
-
-pub(crate) fn runtime_ty_assignable_with_aliases(
-    actual: &RuntimeTy,
-    expected: &RuntimeTy,
-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-) -> bool {
-    if runtime_ty_structurally_equal(actual, expected) {
-        return true;
-    }
-    if let RuntimeTy::TypeAlias(name) = actual
-        && let Some(expanded) = aliases.get(name)
-    {
-        return runtime_ty_assignable_with_aliases(expanded, expected, aliases);
-    }
-    if let RuntimeTy::TypeAlias(name) = expected
-        && let Some(expanded) = aliases.get(name)
-    {
-        return runtime_ty_assignable_with_aliases(actual, expanded, aliases);
-    }
-    #[expect(
-        deprecated,
-        reason = "inbound annotation matching has aliases but no VM-backed type facts"
-    )]
-    baml_type::normalize::is_subtype(
-        actual.as_ty(),
-        expected.as_ty(),
-        &baml_type::normalize::NoFacts,
-    )
-}
-
-/// An erased generic host object can know its nominal class without knowing
-/// every concrete argument (Python's unparameterized Pydantic generic and
-/// TypeScript's erased generic are the common cases). With the redundant
-/// `InboundClassValue.class_ty` channel removed, a class-shaped `value_type`
-/// with omitted/wildcard args carries that nominal discriminator. It may refine
-/// to one contextual class, but must not silently select between multiple
-/// concrete instantiations in a union.
-pub(crate) fn class_annotation_can_refine(annotation: &RuntimeTy, contextual: &RuntimeTy) -> bool {
-    let (
-        RuntimeTy::Class(annotation_name, annotation_args),
-        RuntimeTy::Class(contextual_name, contextual_args),
-    ) = (annotation, contextual)
-    else {
-        return false;
-    };
-    annotation_name == contextual_name
-        && (annotation_args.is_empty()
-            || (annotation_args.len() == contextual_args.len()
-                && annotation_args
-                    .iter()
-                    .zip(contextual_args)
-                    .all(|(annotation, contextual)| runtime_ty_compatible(annotation, contextual))))
-}
-
 /// The generated host SDKs expose primitive media through the corresponding
 /// handle-backed stdlib wrapper class. Some bridges therefore annotate the
 /// class-shaped `_data` payload with that wrapper's exact FQN even when the
@@ -3486,99 +3392,6 @@ pub(crate) fn stdlib_media_wrapper_kind(annotation: &RuntimeTy) -> Option<baml_t
         return None;
     }
     baml_type::MediaKind::from_wrapper_class_name(&name.render_dotted(false))
-}
-
-fn resolve_runtime_alias<'a>(
-    mut ty: &'a RuntimeTy,
-    aliases: &'a indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-) -> Option<&'a RuntimeTy> {
-    let mut visited = std::collections::HashSet::new();
-    while let RuntimeTy::TypeAlias(name) = ty {
-        if !visited.insert(name) {
-            return None;
-        }
-        ty = aliases.get(name)?;
-    }
-    Some(ty)
-}
-
-pub(crate) fn stdlib_media_wrapper_matches(
-    annotation: &RuntimeTy,
-    contextual: &RuntimeTy,
-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-    allow_generic: bool,
-) -> bool {
-    let Some(wrapper_kind) = stdlib_media_wrapper_kind(annotation) else {
-        return false;
-    };
-    let Some(contextual) = resolve_runtime_alias(contextual, aliases) else {
-        return false;
-    };
-    let RuntimeTy::Media(contextual_kind) = contextual else {
-        return false;
-    };
-    wrapper_kind == *contextual_kind
-        || (allow_generic && *contextual_kind == baml_type::MediaKind::Generic)
-}
-
-/// Return the concrete primitive media type against which a wrapper's `_data`
-/// payload must be checked. In a generic `media` context the wrapper still
-/// promises one exact kind, so validate that promise before widening the
-/// resulting carrier back to the contextual type.
-pub(crate) fn stdlib_media_wrapper_payload_type(
-    annotation: &RuntimeTy,
-    contextual: &RuntimeTy,
-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-) -> Option<RuntimeTy> {
-    let wrapper_kind = stdlib_media_wrapper_kind(annotation)?;
-    let RuntimeTy::Media(contextual_kind) = resolve_runtime_alias(contextual, aliases)? else {
-        return None;
-    };
-    (*contextual_kind == wrapper_kind || *contextual_kind == baml_type::MediaKind::Generic)
-        .then_some(RuntimeTy::Media(wrapper_kind))
-}
-
-pub(crate) fn refine_class_annotation_args(
-    annotation: &[RuntimeTy],
-    contextual: &[RuntimeTy],
-) -> Vec<RuntimeTy> {
-    if annotation.is_empty() {
-        return contextual.to_vec();
-    }
-    annotation
-        .iter()
-        .zip(contextual)
-        .map(|(annotation, contextual)| {
-            if is_wildcard_ty(annotation) {
-                contextual.clone()
-            } else {
-                annotation.clone()
-            }
-        })
-        .collect()
-}
-
-/// Whether a sparse inbound annotation names an enclosing union rather than
-/// one exact selected type. Follow aliases here because the protobuf decoder
-/// cannot see program-local alias definitions.
-pub(crate) fn inbound_annotation_resolves_to_root_union(
-    annotation: &RuntimeTy,
-    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
-) -> bool {
-    let mut current = annotation;
-    let mut visited = std::collections::HashSet::new();
-    loop {
-        match current {
-            RuntimeTy::Union(..) => return true,
-            RuntimeTy::TypeAlias(name) if visited.insert(name.clone()) => {
-                let Some(expanded) = aliases.get(name) else {
-                    return false;
-                };
-                current = expanded;
-            }
-            _ => return false,
-        }
-    }
 }
 
 #[cfg(test)]

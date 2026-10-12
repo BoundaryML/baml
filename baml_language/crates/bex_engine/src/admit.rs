@@ -1,11 +1,11 @@
 //! Admission: the one judgment of a value that a host hands the engine.
 //!
 //! A host value arrives as a [`BexExternalValue`] and is bound for a slot with
-//! a declared type: a function argument, the return value of a host callback,
-//! a class field or a list item inside either. [`admit`] decides whether the
-//! value inhabits that type. Its result is an [`Admitted`] tree in which every
-//! decision is made, so landing it on the heap ([`BexEngine::land`]) decides
-//! nothing.
+//! a declared type: a function argument, the return value of a host callback
+//! or a sys-op, a class field or a list item inside either. [`admit`] decides
+//! whether the value inhabits that type. Its result is an [`Admitted`] tree in
+//! which every decision is made, so landing it on the heap
+//! ([`BexEngine::land`]) decides nothing.
 //!
 //! The judgment is directed by the declared type, and a value that no arm
 //! takes is a [`Mismatch`]: nothing enters a slot as it arrived because no
@@ -28,82 +28,118 @@
 //! value. What still ties is the same value in more than one type. Where
 //! every member left would land the same value, which was meant makes no
 //! difference; otherwise only the host knows, and it has to name the type.
+//!
+//! # Heads
+//!
+//! The judgment is made over the heads of the [`Program`] that answers it:
+//! the engine's are live declaration pointers ([`TypeHead`]), so a class is
+//! read where it lives and nothing is resolved by name on the way; a test's
+//! are names. A host spells types by name (a `value_type`, an instance's
+//! class, a variant's enum), and each spelling is resolved once, where it is
+//! met.
 
-use baml_type::{Literal, MediaKind, TypeName};
+use baml_type::{HeadDisplay, Literal, MediaKind, Name};
 use bex_external_types::{
-    BexExternalAdt, BexExternalValue, HostValueKind, RuntimeTy, UnionMetadata,
-    is_canonical_json_alias, runtime_ty_structurally_equal, selected_arm_equal,
-    value_satisfies_json,
+    BexExternalAdt, BexExternalValue, Handle, HostValueKind, UnionMetadata, value_satisfies_json,
 };
 use bex_heap::{HeapPermit, TlabHolder};
-use bex_vm_types::{Object, Value};
+use bex_vm_types::{HeapPtr, Object, TypeHead, Value};
 
 use crate::{
     BexEngine, EngineError,
     conversion::{
-        self, InboundDeclarationKind, InboundRuntimeOverlay, class_annotation_can_refine,
-        class_type_args_compatible, first_unbound_type_var, float_literal_matches,
-        inbound_annotation_resolves_to_root_union, is_structural_host_only, peel_to_rust_type,
-        refine_class_annotation_args, runtime_ty_assignable_with_aliases,
-        runtime_ty_resolves_to_exact_null, stdlib_media_wrapper_kind, stdlib_media_wrapper_matches,
-        stdlib_media_wrapper_payload_type, type_name_matches_external_name,
+        self, InboundDeclarationKind, InboundRuntimeOverlay, first_unbound_type_var,
+        float_literal_matches, is_structural_host_only, type_name_matches_external_name,
     },
     thread::BexThread,
 };
+
+/// A declared type over the heads `N` of the program that judges against it.
+pub(crate) type Ty<N> = baml_type::RuntimeTy<N>;
+
+/// A type as a host spells it: by name.
+pub(crate) type WireTy = baml_type::RuntimeTy;
+
+/// What a program's declaration heads must afford the judgment: identity, a
+/// rendering for messages, and the clone a type tree takes.
+pub(crate) trait Head: Clone + PartialEq + std::fmt::Debug + HeadDisplay {}
+
+impl<N: Clone + PartialEq + std::fmt::Debug + HeadDisplay> Head for N {}
 
 /// How deep a judgment may nest before it is given up. A value is a finite
 /// tree, so only a type can exceed this: an alias cycle that consumes no value
 /// on the way round.
 const MAX_DEPTH: usize = 512;
 
-/// Why a host value does not inhabit the type it was bound for.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Mismatch {
-    pub(crate) message: String,
+/// Why a host value does not inhabit the type it was bound for. A union
+/// judges its value against every member and drops the refusals, so a
+/// refusal is rendered only where it is reported.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Mismatch<'a, N: Head> {
+    /// `value` is of another kind than `ty` holds.
+    Kind {
+        value: &'a BexExternalValue,
+        ty: Ty<N>,
+    },
+    Message(String),
 }
 
-impl Mismatch {
+impl<'a, N: Head> Mismatch<'a, N> {
     fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
+        Self::Message(message.into())
     }
 
     /// `value` is of another kind than `ty` holds.
-    fn kind(value: &BexExternalValue, ty: &RuntimeTy) -> Self {
-        Self::new(format!(
-            "Value of type '{}' does not match the declared type `{ty}`",
-            conversion::described_value_type(value),
-        ))
+    fn kind(value: &'a BexExternalValue, ty: &Ty<N>) -> Self {
+        Self::Kind {
+            value,
+            ty: ty.clone(),
+        }
     }
 }
 
-impl std::fmt::Display for Mismatch {
+impl<N: Head> std::fmt::Display for Mismatch<'_, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
+        match self {
+            Self::Kind { value, ty } => write!(
+                f,
+                "Value of type '{}' does not match the declared type `{ty}`",
+                conversion::described_value_type(value),
+            ),
+            Self::Message(message) => f.write_str(message),
+        }
     }
 }
 
-impl From<Mismatch> for EngineError {
-    fn from(mismatch: Mismatch) -> Self {
+impl<N: Head> From<Mismatch<'_, N>> for EngineError {
+    fn from(mismatch: Mismatch<'_, N>) -> Self {
         EngineError::TypeMismatch {
-            message: mismatch.message,
+            message: mismatch.to_string(),
+        }
+    }
+}
+
+impl<N: Head> From<EngineError> for Mismatch<'_, N> {
+    fn from(error: EngineError) -> Self {
+        match error {
+            EngineError::TypeMismatch { message } => Self::new(message),
+            other => Self::new(other.to_string()),
         }
     }
 }
 
 /// The fields of a class, as a value is judged against them.
-pub(crate) enum ClassFacts {
-    /// The program has no class of that name.
+pub(crate) enum ClassFacts<'p, N: Head> {
+    /// The head is no class the program declares.
     Missing,
     /// The fields in declaration order, each with its type for the type
     /// arguments that were asked.
-    Fields(Vec<(String, RuntimeTy)>),
+    Fields(Vec<(&'p str, Ty<N>)>),
 }
 
 /// Whether an enum declares a variant.
 pub(crate) enum VariantFacts {
-    /// The program has no enum of that name.
+    /// The head is no enum the program declares.
     NoEnum,
     NoVariant,
     /// The variant, at this index among the enum's variants.
@@ -111,32 +147,50 @@ pub(crate) enum VariantFacts {
 }
 
 /// What the judgment reads of the program and of its live values. The engine
-/// answers from the heap ([`Heap`]).
-pub(crate) trait Program {
-    /// The fields of the class a host calls `name`, for `type_args`.
-    fn class(&self, name: &str, type_args: &[RuntimeTy]) -> Result<ClassFacts, Mismatch>;
+/// answers from the heap ([`Heap`]); a test answers from a table.
+pub(crate) trait Program<N: Head> {
+    /// The declaration the program knows by the spelling a host used.
+    fn resolve(&self, name: &str, kind: InboundDeclarationKind) -> Option<N>;
 
-    fn variant(&self, enum_name: &str, variant: &str) -> VariantFacts;
+    /// Whether `head` is the declaration a host spells `name`.
+    fn head_is_named(&self, head: &N, name: &str) -> bool;
+
+    /// A type the host spelled, over the program's heads.
+    fn anchor(&self, ty: &WireTy) -> Result<Ty<N>, Mismatch<'static, N>>;
+
+    /// The fields of the class `head`, for `type_args`.
+    fn class<'p>(
+        &'p self,
+        head: &N,
+        type_args: &[Ty<N>],
+    ) -> Result<ClassFacts<'p, N>, Mismatch<'static, N>>;
+
+    fn variant(&self, head: &N, variant: &str) -> VariantFacts;
+
+    /// What the alias `head` stands for; `None` for a head that is no alias.
+    fn alias(&self, head: &N) -> Option<Ty<N>>;
+
+    /// Whether `head` is the standard library's recursive `json` alias.
+    fn is_json(&self, head: &N) -> bool;
+
+    /// The media kind whose standard-library wrapper class `head` is.
+    fn media_wrapper(&self, head: &N) -> Option<MediaKind>;
+
+    /// Whether `head` is the standard library's prompt class.
+    fn is_prompt_class(&self, head: &N) -> bool;
 
     /// Whether the object behind `handle` is a member of `ty`. A live value
     /// is judged as `is` judges it, since its type is on the heap and not in
     /// what the host sent.
-    fn live_value_fits(
-        &self,
-        handle: &bex_external_types::Handle,
-        ty: &RuntimeTy,
-    ) -> Result<bool, Mismatch>;
+    fn live_value_fits(&self, handle: &Handle, ty: &Ty<N>) -> Result<bool, Mismatch<'static, N>>;
 
     /// Whether every value of `value_ty` is a member of `ty`.
-    fn is_subtype(&self, value_ty: &RuntimeTy, ty: &RuntimeTy) -> Result<bool, Mismatch>;
+    fn is_subtype(&self, value_ty: &Ty<N>, ty: &Ty<N>) -> Result<bool, Mismatch<'static, N>>;
 }
 
 /// What one judgment is made against.
-pub(crate) struct Cx<'c> {
-    pub(crate) program: &'c dyn Program,
-    /// The bodies of the program's aliases. An alias is transparent: a value
-    /// is judged against what it stands for.
-    pub(crate) aliases: &'c indexmap::IndexMap<TypeName, RuntimeTy>,
+pub(crate) struct Cx<'c, N: Head> {
+    pub(crate) program: &'c dyn Program<N>,
 }
 
 /// The kind of type that took a value, where a union reads it to choose
@@ -153,7 +207,7 @@ enum Leaf {
 /// A value that inhabits the type it was judged against, with every decision
 /// made. It borrows from the value it was made of.
 #[derive(Debug, PartialEq)]
-pub(crate) enum Admitted<'a> {
+pub(crate) enum Admitted<'a, N: Head> {
     Null,
     Int(VmInt),
     Bigint(std::borrow::Cow<'a, num_bigint::BigInt>),
@@ -162,26 +216,25 @@ pub(crate) enum Admitted<'a> {
     String(&'a bex_str::BexStr),
     Bytes(&'a [u8]),
     List {
-        element: RuntimeTy,
-        items: Vec<Admitted<'a>>,
+        element: Ty<N>,
+        items: Vec<Admitted<'a, N>>,
     },
     Map {
         /// The key type the host sent, and the one that is declared: a key is
         /// checked against both where the map lands.
-        sent_key: &'a RuntimeTy,
-        key: RuntimeTy,
-        value: RuntimeTy,
-        entries: Vec<(&'a str, Admitted<'a>)>,
+        sent_key: &'a WireTy,
+        key: Ty<N>,
+        value: Ty<N>,
+        entries: Vec<(&'a str, Admitted<'a, N>)>,
     },
     Instance {
-        /// The class, by the name the program resolves.
-        class: String,
-        type_args: Vec<RuntimeTy>,
+        class: N,
+        type_args: Vec<Ty<N>>,
         /// One value for each field, in declaration order.
-        fields: Vec<Admitted<'a>>,
+        fields: Vec<Admitted<'a, N>>,
     },
     Variant {
-        enum_name: String,
+        enum_head: N,
         index: usize,
     },
     /// A value of the engine's own making that the host hands back: a live
@@ -189,7 +242,7 @@ pub(crate) enum Admitted<'a> {
     /// through the constructor of its kind, for the slot it was admitted to.
     Engine {
         value: &'a BexExternalValue,
-        slot: RuntimeTy,
+        slot: Ty<N>,
     },
 }
 
@@ -208,7 +261,7 @@ impl PartialEq for VmInt {
 }
 
 impl VmInt {
-    fn new(int: i64) -> Result<Self, Mismatch> {
+    fn new<N: Head>(int: i64) -> Result<Self, Mismatch<'static, N>> {
         match Value::try_int(int) {
             Some(value) => Ok(Self { int, value }),
             None => Err(Mismatch::new(format!(
@@ -222,20 +275,20 @@ impl VmInt {
 
 /// A value with the kind of type that took it.
 #[derive(Debug)]
-pub(crate) struct Admission<'a> {
-    pub(crate) value: Admitted<'a>,
+pub(crate) struct Admission<'a, N: Head> {
+    pub(crate) value: Admitted<'a, N>,
     leaf: Leaf,
 }
 
-impl<'a> Admission<'a> {
-    fn of(value: Admitted<'a>) -> Self {
+impl<'a, N: Head> Admission<'a, N> {
+    fn of(value: Admitted<'a, N>) -> Self {
         Self {
             value,
             leaf: Leaf::Other,
         }
     }
 
-    fn engine(value: &'a BexExternalValue, slot: &RuntimeTy) -> Self {
+    fn engine(value: &'a BexExternalValue, slot: &Ty<N>) -> Self {
         Self::of(Admitted::Engine {
             value,
             slot: slot.clone(),
@@ -249,20 +302,20 @@ impl<'a> Admission<'a> {
 }
 
 /// Judge `value` against `ty`.
-pub(crate) fn admit<'a>(
-    cx: &Cx<'_>,
+pub(crate) fn admit<'a, N: Head>(
+    cx: &Cx<'_, N>,
     value: &'a BexExternalValue,
-    ty: &RuntimeTy,
-) -> Result<Admission<'a>, Mismatch> {
+    ty: &Ty<N>,
+) -> Result<Admission<'a, N>, Mismatch<'a, N>> {
     admit_at(cx, value, ty, 0)
 }
 
-fn admit_at<'a>(
-    cx: &Cx<'_>,
+fn admit_at<'a, N: Head>(
+    cx: &Cx<'_, N>,
     value: &'a BexExternalValue,
-    ty: &RuntimeTy,
+    ty: &Ty<N>,
     depth: usize,
-) -> Result<Admission<'a>, Mismatch> {
+) -> Result<Admission<'a, N>, Mismatch<'a, N>> {
     if depth > MAX_DEPTH {
         return Err(Mismatch::new(format!(
             "the declared type `{ty}` is too deeply nested to check a value against"
@@ -289,21 +342,21 @@ fn admit_at<'a>(
 
     // A `$rust_type` slot carries a structural host value through the VM as
     // opaque data, and hands the same value back.
-    if peel_to_rust_type(ty).is_some() && is_structural_host_only(value) {
+    if peels_to_rust_type(ty) && is_structural_host_only(value) {
         return Ok(Admission::engine(value, ty));
     }
 
     match ty {
-        RuntimeTy::TypeAlias(name) if is_canonical_json_alias(name) => admit_json(value, ty),
+        Ty::TypeAlias(head) if cx.program.is_json(head) => admit_json(value, ty),
         // An alias is transparent: the value is judged against what it
         // stands for.
-        RuntimeTy::TypeAlias(name) => {
-            let body = cx.aliases.get(name).ok_or_else(|| {
+        Ty::TypeAlias(head) => {
+            let body = cx.program.alias(head).ok_or_else(|| {
                 Mismatch::new(format!(
                     "the declared type `{ty}` is an alias this program cannot expand"
                 ))
             })?;
-            admit_at(cx, value, body, depth)
+            admit_at(cx, value, &body, depth)
         }
         _ if let BexExternalValue::Union {
             value: payload,
@@ -312,48 +365,48 @@ fn admit_at<'a>(
         {
             admit_typed_by_host(cx, value, payload, metadata, ty, depth)
         }
-        RuntimeTy::Union(members) => admit_union(cx, value, ty, members, depth),
-        RuntimeTy::Unknown | RuntimeTy::TypeVar(_) => {
+        Ty::Union(members) => admit_union(cx, value, ty, members, depth),
+        Ty::Unknown | Ty::TypeVar(_) => {
             Ok(admit_as_itself(cx, value, ty, depth)?.leaf(Leaf::CatchAll))
         }
-        RuntimeTy::Null | RuntimeTy::Void => match value {
+        Ty::Null | Ty::Void => match value {
             BexExternalValue::Null => Ok(Admission::of(Admitted::Null)),
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::Never => Err(Mismatch::kind(value, ty)),
-        RuntimeTy::Bool => match value {
+        Ty::Never => Err(Mismatch::kind(value, ty)),
+        Ty::Bool => match value {
             BexExternalValue::Bool(b) => Ok(Admission::of(Admitted::Bool(*b))),
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::String => match value {
+        Ty::String => match value {
             BexExternalValue::String(s) => Ok(Admission::of(Admitted::String(s))),
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::Uint8Array => match value {
+        Ty::Uint8Array => match value {
             BexExternalValue::Uint8Array(bytes) => Ok(Admission::of(Admitted::Bytes(bytes))),
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::Int => match value {
+        Ty::Int => match value {
             BexExternalValue::Int(i) => VmInt::new(*i).map(Admitted::Int).map(Admission::of),
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::Float => match value {
+        Ty::Float => match value {
             BexExternalValue::Float(f) => Ok(Admission::of(Admitted::Float(*f))),
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::Bigint => match value {
+        Ty::Bigint => match value {
             BexExternalValue::Bigint(big) => {
                 bigint(std::borrow::Cow::Borrowed(big)).map(Admission::of)
             }
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::Literal(literal, _) => admit_literal(cx, value, ty, literal, depth),
-        RuntimeTy::List(element) => match value {
+        Ty::Literal(literal, _) => admit_literal(cx, value, ty, literal, depth),
+        Ty::List(element) => match value {
             BexExternalValue::Array { items, .. } => {
                 let items = items
                     .iter()
                     .map(|item| Ok(admit_at(cx, item, element, depth)?.value))
-                    .collect::<Result<_, Mismatch>>()?;
+                    .collect::<Result<_, Mismatch<'a, N>>>()?;
                 Ok(Admission::of(Admitted::List {
                     element: element.as_ref().clone(),
                     items,
@@ -361,7 +414,7 @@ fn admit_at<'a>(
             }
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::Map {
+        Ty::Map {
             key,
             value: value_ty,
             ..
@@ -374,7 +427,7 @@ fn admit_at<'a>(
                     .map(|(name, entry)| {
                         Ok((name.as_str(), admit_at(cx, entry, value_ty, depth)?.value))
                     })
-                    .collect::<Result<_, Mismatch>>()?;
+                    .collect::<Result<_, Mismatch<'a, N>>>()?;
                 Ok(Admission::of(Admitted::Map {
                     sent_key: key_type,
                     key: key.as_ref().clone(),
@@ -384,30 +437,24 @@ fn admit_at<'a>(
             }
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::Class(name, args) => {
-            admit_class(cx, value, ty, name, args, ClassOrigin::Slot, depth)
-        }
-        RuntimeTy::Enum(name) => match value {
+        Ty::Class(head, args) => admit_class(cx, value, ty, head, args, ClassOrigin::Slot, depth),
+        Ty::Enum(head) => match value {
             BexExternalValue::Variant {
                 enum_name,
                 variant_name,
-            } if type_name_matches_external_name(enum_name, name) => {
-                admit_variant(cx, &name.to_string(), variant_name)
-            }
+            } if cx.program.head_is_named(head, enum_name) => admit_variant(cx, head, variant_name),
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::EnumVariant(name, declared) => match value {
+        Ty::EnumVariant(head, declared) => match value {
             BexExternalValue::Variant {
                 enum_name,
                 variant_name,
-            } if type_name_matches_external_name(enum_name, name)
-                && variant_name == declared.as_str() =>
-            {
-                admit_variant(cx, &name.to_string(), variant_name)
+            } if variant_name == declared.as_str() && cx.program.head_is_named(head, enum_name) => {
+                admit_variant(cx, head, variant_name)
             }
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::Media(kind) => match value {
+        Ty::Media(kind) => match value {
             BexExternalValue::Adt(BexExternalAdt::Media(media))
                 if *kind == MediaKind::Generic || media.kind == *kind =>
             {
@@ -432,14 +479,14 @@ fn admit_at<'a>(
             }
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::Function { .. } => match value {
+        Ty::Function { .. } => match value {
             BexExternalValue::HostValue(host) if host.kind == HostValueKind::Callable => {
                 Ok(Admission::engine(value, ty))
             }
             BexExternalValue::FunctionRef { .. } => Ok(Admission::engine(value, ty)),
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::RustType => match value {
+        Ty::RustType => match value {
             BexExternalValue::RustData(_)
             | BexExternalValue::Adt(BexExternalAdt::Media(_) | BexExternalAdt::PromptAst(_)) => {
                 Ok(Admission::engine(value, ty))
@@ -453,31 +500,33 @@ fn admit_at<'a>(
             // the value, which rides through as what it is.
             _ => Ok(admit_as_itself(cx, value, ty, depth)?.leaf(Leaf::CatchAll)),
         },
-        RuntimeTy::Type => match value {
+        Ty::Type => match value {
             BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)) => {
                 Ok(Admission::engine(value, ty))
             }
             _ => Err(Mismatch::kind(value, ty)),
         },
-        RuntimeTy::PromptAst => match value {
+        Ty::PromptAst => match value {
             BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => Ok(Admission::engine(value, ty)),
             _ => Err(Mismatch::kind(value, ty)),
         },
         // No host value says which implementor it is except by being one: the
         // value is admitted as what it is, and that type is asked of the slot.
-        RuntimeTy::Interface(..) | RuntimeTy::AssociatedTypeProjection { .. } => {
-            let own = own_type(value).ok_or_else(|| Mismatch::kind(value, ty))?;
+        Ty::Interface(..) | Ty::AssociatedTypeProjection { .. } => {
+            let own = own_type(cx, value).ok_or_else(|| Mismatch::kind(value, ty))?;
             if !cx.program.is_subtype(&own, ty)? {
                 return Err(Mismatch::kind(value, ty));
             }
             admit_at(cx, value, &own, depth)
         }
         // Only a live value inhabits these, and that was judged above.
-        RuntimeTy::Future(..) | RuntimeTy::Resource => Err(Mismatch::kind(value, ty)),
+        Ty::Future(..) | Ty::Resource => Err(Mismatch::kind(value, ty)),
     }
 }
 
-fn bigint(big: std::borrow::Cow<'_, num_bigint::BigInt>) -> Result<Admitted<'_>, Mismatch> {
+fn bigint<N: Head>(
+    big: std::borrow::Cow<'_, num_bigint::BigInt>,
+) -> Result<Admitted<'_, N>, Mismatch<'_, N>> {
     let bits = big.bits();
     if bits > baml_type::MAX_BIGINT_BITS {
         return Err(Mismatch::new(format!(
@@ -489,19 +538,19 @@ fn bigint(big: std::borrow::Cow<'_, num_bigint::BigInt>) -> Result<Admitted<'_>,
 }
 
 /// A literal type holds the one value of its base type that it names.
-fn admit_literal<'a>(
-    cx: &Cx<'_>,
+fn admit_literal<'a, N: Head>(
+    cx: &Cx<'_, N>,
     value: &'a BexExternalValue,
-    ty: &RuntimeTy,
+    ty: &Ty<N>,
     literal: &Literal,
     depth: usize,
-) -> Result<Admission<'a>, Mismatch> {
+) -> Result<Admission<'a, N>, Mismatch<'a, N>> {
     let base = match literal {
-        Literal::Int(_) => RuntimeTy::Int,
-        Literal::Bigint(_) => RuntimeTy::Bigint,
-        Literal::Float(_) => RuntimeTy::Float,
-        Literal::String(_) => RuntimeTy::String,
-        Literal::Bool(_) => RuntimeTy::Bool,
+        Literal::Int(_) => Ty::Int,
+        Literal::Bigint(_) => Ty::Bigint,
+        Literal::Float(_) => Ty::Float,
+        Literal::String(_) => Ty::String,
+        Literal::Bool(_) => Ty::Bool,
     };
     let admission = admit_at(cx, value, &base, depth).map_err(|_| Mismatch::kind(value, ty))?;
     let is_the_value = match (literal, &admission.value) {
@@ -526,21 +575,23 @@ fn admit_literal<'a>(
     }
 }
 
-fn admit_variant<'a>(
-    cx: &Cx<'_>,
-    enum_name: &str,
+fn admit_variant<'a, N: Head>(
+    cx: &Cx<'_, N>,
+    head: &N,
     variant: &str,
-) -> Result<Admission<'a>, Mismatch> {
-    match cx.program.variant(enum_name, variant) {
+) -> Result<Admission<'a, N>, Mismatch<'a, N>> {
+    match cx.program.variant(head, variant) {
         VariantFacts::Declared(index) => Ok(Admission::of(Admitted::Variant {
-            enum_name: enum_name.to_string(),
+            enum_head: head.clone(),
             index,
         })),
         VariantFacts::NoVariant => Err(Mismatch::new(format!(
-            "Unknown variant `{variant}` in enum `{enum_name}`"
+            "Unknown variant `{variant}` in enum `{}`",
+            head.head_display_name()
         ))),
         VariantFacts::NoEnum => Err(Mismatch::new(format!(
-            "Unknown enum `{enum_name}` in external Variant value"
+            "Unknown enum `{}` in external Variant value",
+            head.head_display_name()
         ))),
     }
 }
@@ -556,17 +607,17 @@ enum ClassOrigin {
     NamedByHost,
 }
 
-/// The class named `name`, of an instance that names it, or of a value with
-/// no class of its own.
-fn admit_class<'a>(
-    cx: &Cx<'_>,
+/// The class `head`, of an instance that names it, or of a value with no
+/// class of its own.
+fn admit_class<'a, N: Head>(
+    cx: &Cx<'_, N>,
     value: &'a BexExternalValue,
-    ty: &RuntimeTy,
-    name: &TypeName,
-    args: &[RuntimeTy],
+    ty: &Ty<N>,
+    head: &N,
+    args: &[Ty<N>],
     origin: ClassOrigin,
     depth: usize,
-) -> Result<Admission<'a>, Mismatch> {
+) -> Result<Admission<'a, N>, Mismatch<'a, N>> {
     let (fields, type_args) = match value {
         BexExternalValue::Instance {
             class_name,
@@ -578,7 +629,7 @@ fn admit_class<'a>(
                 // host named the class for it.
                 matches!(origin, ClassOrigin::NamedByHost)
             } else {
-                type_name_matches_external_name(class_name, name)
+                cx.program.head_is_named(head, class_name)
             };
             if !named {
                 return Err(Mismatch::kind(value, ty));
@@ -591,64 +642,67 @@ fn admit_class<'a>(
                      `{unbound}`; the host must send fully-bound generic instances"
                 )));
             }
-            if !type_args.is_empty() && !class_type_args_compatible(type_args, args) {
+            let sent: Vec<Ty<N>> = type_args
+                .iter()
+                .map(|arg| cx.program.anchor(arg))
+                .collect::<Result<_, _>>()?;
+            if !sent.is_empty() && !type_args_compatible(&sent, args) {
                 return Err(Mismatch::new(format!(
                     "host class type arguments `{}` are incompatible with declared class `{ty}`",
-                    type_args
-                        .iter()
+                    sent.iter()
                         .map(ToString::to_string)
                         .collect::<Vec<_>>()
                         .join(", "),
                 )));
             }
-            (fields, refine_class_annotation_args(type_args, args))
+            (fields, refine_type_args(&sent, args))
         }
         // The engine's own media and prompt values are instances of the
         // standard library's wrapper classes.
         BexExternalValue::Adt(BexExternalAdt::Media(media))
-            if stdlib_media_wrapper_kind(ty) == Some(media.kind) =>
+            if args.is_empty() && cx.program.media_wrapper(head) == Some(media.kind) =>
         {
             return Ok(Admission::engine(value, ty));
         }
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(_))
-            if name.render_dotted(false) == conversion::PROMPT_CLASS =>
-        {
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) if cx.program.is_prompt_class(head) => {
             return Ok(Admission::engine(value, ty));
         }
         _ => return Err(Mismatch::kind(value, ty)),
     };
 
-    let class = name.to_string();
-    let declared = match cx.program.class(&class, &type_args)? {
+    let declared = match cx.program.class(head, &type_args)? {
         ClassFacts::Fields(declared) => declared,
         ClassFacts::Missing => {
             return Err(Mismatch::new(format!(
-                "Unknown class `{class}` in external Instance value"
+                "Unknown class `{}` in external Instance value",
+                head.head_display_name()
             )));
         }
     };
     if let Some(unknown) = fields
         .keys()
-        .find(|key| !declared.iter().any(|(field, _)| field == *key))
+        .find(|key| !declared.iter().any(|(field, _)| *field == key.as_str()))
     {
         return Err(Mismatch::new(format!(
-            "class `{class}` has no field `{}`",
+            "class `{}` has no field `{}`",
+            head.head_display_name(),
             bounded(unknown)
         )));
     }
     let fields = declared
         .iter()
         .map(|(field, field_ty)| {
-            let sent = fields.get(field).ok_or_else(|| {
+            let sent = fields.get(*field).ok_or_else(|| {
                 Mismatch::new(format!(
-                    "Missing field `{field}` in external Instance for class `{class}`"
+                    "Missing field `{field}` in external Instance for class `{}`",
+                    head.head_display_name()
                 ))
             })?;
             Ok(admit_at(cx, sent, field_ty, depth)?.value)
         })
-        .collect::<Result<_, Mismatch>>()?;
+        .collect::<Result<_, Mismatch<'a, N>>>()?;
     Ok(Admission::of(Admitted::Instance {
-        class,
+        class: head.clone(),
         type_args,
         fields,
     }))
@@ -666,45 +720,55 @@ fn bounded(text: &str) -> String {
 }
 
 /// The type a value has by what it is: the class it names, the element type
-/// it carries. `None` for a value that has no type until a slot gives it one.
-fn own_type(value: &BexExternalValue) -> Option<RuntimeTy> {
+/// it carries. `None` for a value that has no type until a slot gives it one,
+/// or that names a declaration the program does not have.
+fn own_type<N: Head>(cx: &Cx<'_, N>, value: &BexExternalValue) -> Option<Ty<N>> {
     match value {
-        BexExternalValue::Null => Some(RuntimeTy::Null),
-        BexExternalValue::Int(_) => Some(RuntimeTy::Int),
-        BexExternalValue::Bigint(_) => Some(RuntimeTy::Bigint),
-        BexExternalValue::Float(_) => Some(RuntimeTy::Float),
-        BexExternalValue::Bool(_) => Some(RuntimeTy::Bool),
-        BexExternalValue::String(_) => Some(RuntimeTy::String),
-        BexExternalValue::Uint8Array(_) => Some(RuntimeTy::Uint8Array),
+        BexExternalValue::Null => Some(Ty::Null),
+        BexExternalValue::Int(_) => Some(Ty::Int),
+        BexExternalValue::Bigint(_) => Some(Ty::Bigint),
+        BexExternalValue::Float(_) => Some(Ty::Float),
+        BexExternalValue::Bool(_) => Some(Ty::Bool),
+        BexExternalValue::String(_) => Some(Ty::String),
+        BexExternalValue::Uint8Array(_) => Some(Ty::Uint8Array),
         BexExternalValue::Array { element_type, .. } => {
-            Some(RuntimeTy::List(Box::new(element_type.clone())))
+            Some(Ty::List(Box::new(cx.program.anchor(element_type).ok()?)))
         }
         BexExternalValue::Map {
             key_type,
             value_type,
             ..
-        } => Some(RuntimeTy::Map {
-            key: Box::new(key_type.clone()),
-            value: Box::new(value_type.clone()),
+        } => Some(Ty::Map {
+            key: Box::new(cx.program.anchor(key_type).ok()?),
+            value: Box::new(cx.program.anchor(value_type).ok()?),
         }),
         BexExternalValue::Instance {
             class_name,
             type_args,
             ..
-        } if !class_name.is_empty() => Some(RuntimeTy::Class(
-            TypeName::from_dotted_path(class_name),
-            type_args.clone().into(),
+        } if !class_name.is_empty() => {
+            let head = cx
+                .program
+                .resolve(class_name, InboundDeclarationKind::Class)?;
+            let type_args = type_args
+                .iter()
+                .map(|arg| cx.program.anchor(arg).ok())
+                .collect::<Option<Box<[_]>>>()?;
+            Some(Ty::Class(head, type_args))
+        }
+        BexExternalValue::Variant { enum_name, .. } => Some(Ty::Enum(
+            cx.program
+                .resolve(enum_name, InboundDeclarationKind::Enum)?,
         )),
-        BexExternalValue::Variant { enum_name, .. } => {
-            Some(RuntimeTy::Enum(TypeName::from_dotted_path(enum_name)))
-        }
-        BexExternalValue::Adt(BexExternalAdt::Media(media)) => Some(RuntimeTy::Media(media.kind)),
+        BexExternalValue::Adt(BexExternalAdt::Media(media)) => Some(Ty::Media(media.kind)),
         BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)) => {
-            Some(RuntimeTy::Type)
+            Some(Ty::Type)
         }
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => Some(RuntimeTy::PromptAst),
-        BexExternalValue::RustData(_) => Some(RuntimeTy::RustType),
-        BexExternalValue::Union { metadata, .. } => Some(metadata.selected_option.clone()),
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => Some(Ty::PromptAst),
+        BexExternalValue::RustData(_) => Some(Ty::RustType),
+        BexExternalValue::Union { metadata, .. } => {
+            cx.program.anchor(&metadata.selected_option).ok()
+        }
         // An object that names no class, a callable with no signature, and a
         // reference whose type is on the heap.
         BexExternalValue::Instance { .. }
@@ -716,17 +780,17 @@ fn own_type(value: &BexExternalValue) -> Option<RuntimeTy> {
 }
 
 /// A slot that takes every value takes this one as what it is.
-fn admit_as_itself<'a>(
-    cx: &Cx<'_>,
+fn admit_as_itself<'a, N: Head>(
+    cx: &Cx<'_, N>,
     value: &'a BexExternalValue,
-    ty: &RuntimeTy,
+    ty: &Ty<N>,
     depth: usize,
-) -> Result<Admission<'a>, Mismatch> {
+) -> Result<Admission<'a, N>, Mismatch<'a, N>> {
     match value {
         // A function reference lands as the function it indexes.
         BexExternalValue::FunctionRef { .. } => Ok(Admission::engine(value, ty)),
         _ => {
-            let own = own_type(value).ok_or_else(|| {
+            let own = own_type(cx, value).ok_or_else(|| {
                 Mismatch::new(format!(
                     "Value of type '{}' has no type of its own, and the declared type `{ty}` \
                      gives it none",
@@ -741,11 +805,14 @@ fn admit_as_itself<'a>(
 /// A value of the recursive `baml.json.json` alias. Its containers take the
 /// alias as their element type, as the containers of a value that BAML parsed
 /// do, so a type test reads both alike.
-fn admit_json<'a>(
+fn admit_json<'a, N: Head>(
     value: &'a BexExternalValue,
-    json: &RuntimeTy,
-) -> Result<Admission<'a>, Mismatch> {
-    fn tree<'a>(value: &'a BexExternalValue, json: &RuntimeTy) -> Result<Admitted<'a>, Mismatch> {
+    json: &Ty<N>,
+) -> Result<Admission<'a, N>, Mismatch<'a, N>> {
+    fn tree<'a, N: Head>(
+        value: &'a BexExternalValue,
+        json: &Ty<N>,
+    ) -> Result<Admitted<'a, N>, Mismatch<'a, N>> {
         Ok(match value {
             BexExternalValue::Null => Admitted::Null,
             BexExternalValue::Int(i) => Admitted::Int(VmInt::new(*i)?),
@@ -764,12 +831,12 @@ fn admit_json<'a>(
                 key_type, entries, ..
             } => Admitted::Map {
                 sent_key: key_type,
-                key: RuntimeTy::string(),
+                key: Ty::String,
                 value: json.clone(),
                 entries: entries
                     .iter()
                     .map(|(name, entry)| Ok((name.as_str(), tree(entry, json)?)))
-                    .collect::<Result<_, Mismatch>>()?,
+                    .collect::<Result<_, Mismatch<'a, N>>>()?,
             },
             // A bridge may name the type of each leaf.
             BexExternalValue::Union { value, .. } => tree(value, json)?,
@@ -792,19 +859,19 @@ fn admit_json<'a>(
 
 /// A value whose type the host named (`value_type`), or one the engine wrapped
 /// with the member of a union it came out of.
-fn admit_typed_by_host<'a>(
-    cx: &Cx<'_>,
+fn admit_typed_by_host<'a, N: Head>(
+    cx: &Cx<'_, N>,
     carrier: &'a BexExternalValue,
     payload: &'a BexExternalValue,
     metadata: &UnionMetadata,
-    ty: &RuntimeTy,
+    ty: &Ty<N>,
     depth: usize,
-) -> Result<Admission<'a>, Mismatch> {
-    let named = &metadata.selected_option;
+) -> Result<Admission<'a, N>, Mismatch<'a, N>> {
+    let named = cx.program.anchor(&metadata.selected_option)?;
     // A wire value names one exact type. The decoder rejects a union there,
     // but only the program knows that an alias stands for one.
     if metadata.is_inbound_type_annotation
-        && inbound_annotation_resolves_to_root_union(named, cx.aliases)
+        && matches!(expand_alias(cx, &named).as_ref(), Some(Ty::Union(_)))
     {
         return Err(Mismatch::new(
             "inbound value_type must identify one exact selected type, not a root union or optional",
@@ -812,41 +879,48 @@ fn admit_typed_by_host<'a>(
     }
 
     let slot = match ty {
-        RuntimeTy::Union(members) => {
-            let found = members
-                .iter()
-                .find(|member| selected_arm_equal(member, named))
-                .or_else(|| {
-                    members.iter().find(|member| {
-                        runtime_ty_assignable_with_aliases(named, member, cx.aliases)
-                    })
-                })
-                // The exact media kind before the generic `media` supertype,
-                // whatever the order of the members.
-                .or_else(|| {
-                    members.iter().find(|member| {
-                        stdlib_media_wrapper_matches(named, member, cx.aliases, false)
-                    })
-                })
-                .or_else(|| {
-                    members.iter().find(|member| {
-                        stdlib_media_wrapper_matches(named, member, cx.aliases, true)
-                    })
-                });
+        Ty::Union(members) => {
+            let mut found = None;
+            for member in members {
+                if selected_arm_equal(member, &named) {
+                    found = Some(member);
+                    break;
+                }
+            }
+            if found.is_none() {
+                for member in members {
+                    if cx.program.is_subtype(&named, member)? {
+                        found = Some(member);
+                        break;
+                    }
+                }
+            }
+            // The exact media kind before the generic `media` supertype,
+            // whatever the order of the members.
+            if found.is_none() {
+                found = members
+                    .iter()
+                    .find(|member| media_wrapper_matches(cx, &named, member, false))
+                    .or_else(|| {
+                        members
+                            .iter()
+                            .find(|member| media_wrapper_matches(cx, &named, member, true))
+                    });
+            }
             match found {
                 Some(member) => member,
                 None => {
                     let mut refinements = members
                         .iter()
-                        .filter(|member| class_annotation_can_refine(named, member));
+                        .filter(|member| class_annotation_can_refine(&named, member));
                     match (refinements.next(), refinements.next()) {
                         (Some(member), None) => member,
                         (None, _) => {
                             // The `json` alias is opaque to the subtype test
                             // above, which cannot expand it.
-                            if let Some(json) = members.iter().find(|member| {
-                                matches!(member, RuntimeTy::TypeAlias(name) if is_canonical_json_alias(name))
-                            }) && value_satisfies_json(carrier)
+                            if let Some(json) = members.iter().find(
+                                |member| matches!(member, Ty::TypeAlias(head) if cx.program.is_json(head)),
+                            ) && value_satisfies_json(carrier)
                             {
                                 return admit_json(carrier, json);
                             }
@@ -869,24 +943,24 @@ fn admit_typed_by_host<'a>(
     };
     // A member that is itself a union (`T | null` inside `T? | string`): the
     // type the host named is a member of that member.
-    if let RuntimeTy::Union(_) = slot {
+    if let Ty::Union(_) = slot {
         return admit_typed_by_host(cx, carrier, payload, metadata, slot, depth);
     }
 
     // A media value in a class-shaped shell, named as the standard library's
     // wrapper class, in a slot of the primitive media type.
-    if let Some(media) = stdlib_media_wrapper_payload_type(named, slot, cx.aliases) {
+    if let Some(media) = media_wrapper_payload_type(cx, &named, slot) {
         return admit_at(cx, payload, &media, depth);
     }
     // The type the host named is the value's exact type wherever the slot
     // takes it; a class named without its type arguments takes the slot's.
-    let judged_against = if selected_arm_equal(slot, named) {
+    let judged_against = if selected_arm_equal(slot, &named) {
         // One type in two spellings: the declaration's is the one a value
         // lands by.
         slot
-    } else if runtime_ty_assignable_with_aliases(named, slot, cx.aliases) {
-        named
-    } else if class_annotation_can_refine(named, slot) {
+    } else if cx.program.is_subtype(&named, slot)? {
+        &named
+    } else if class_annotation_can_refine(&named, slot) {
         slot
     } else {
         return Err(Mismatch::new(format!(
@@ -894,11 +968,11 @@ fn admit_typed_by_host<'a>(
         )));
     };
     let admission = match judged_against {
-        RuntimeTy::Class(name, args) => admit_class(
+        Ty::Class(head, args) => admit_class(
             cx,
             payload,
             judged_against,
-            name,
+            head,
             args,
             ClassOrigin::NamedByHost,
             depth,
@@ -914,19 +988,20 @@ fn admit_typed_by_host<'a>(
     Ok(admission)
 }
 
-fn admit_union<'a>(
-    cx: &Cx<'_>,
+fn admit_union<'a, N: Head>(
+    cx: &Cx<'_, N>,
     value: &'a BexExternalValue,
-    ty: &RuntimeTy,
-    members: &[RuntimeTy],
+    ty: &Ty<N>,
+    members: &[Ty<N>],
     depth: usize,
-) -> Result<Admission<'a>, Mismatch> {
-    let mut taken: Vec<(&RuntimeTy, Admission<'a>)> = Vec::new();
+) -> Result<Admission<'a, N>, Mismatch<'a, N>> {
+    // A union rarely has more than a few members that take one value.
+    let mut taken: smallvec::SmallVec<[(&Ty<N>, Admission<'a, N>); 4]> = smallvec::SmallVec::new();
     for member in members {
         // Two spellings of one type are one member.
         if taken
             .iter()
-            .any(|(seen, _)| runtime_ty_structurally_equal(seen, member))
+            .any(|(seen, _)| structurally_equal(seen, member))
         {
             continue;
         }
@@ -954,9 +1029,9 @@ fn admit_union<'a>(
     if matches!(value, BexExternalValue::Null)
         && taken
             .iter()
-            .any(|(member, _)| runtime_ty_resolves_to_exact_null(member, cx.aliases))
+            .any(|(member, _)| resolves_to_exact_null(cx, member))
     {
-        taken.retain(|(member, _)| runtime_ty_resolves_to_exact_null(member, cx.aliases));
+        taken.retain(|(member, _)| resolves_to_exact_null(cx, member));
     }
 
     // What is left is the same value in more than one type. Where every
@@ -978,25 +1053,362 @@ fn admit_union<'a>(
     Ok(taken.swap_remove(0).1)
 }
 
+// ── Type questions the judgment asks of a declared type ──────────────────
+
+/// What `ty` stands for once every alias around it is expanded; `None` for
+/// an alias the program cannot expand, or a cycle of aliases.
+fn expand_alias<N: Head>(cx: &Cx<'_, N>, ty: &Ty<N>) -> Option<Ty<N>> {
+    let mut current = ty.clone();
+    for _ in 0..MAX_DEPTH {
+        let Ty::TypeAlias(head) = &current else {
+            return Some(current);
+        };
+        current = cx.program.alias(head)?;
+    }
+    None
+}
+
+/// Whether `ty` is `null` itself, also under aliases of it.
+fn resolves_to_exact_null<N: Head>(cx: &Cx<'_, N>, ty: &Ty<N>) -> bool {
+    match ty {
+        Ty::Null => true,
+        Ty::TypeAlias(head) if !cx.program.is_json(head) => {
+            matches!(expand_alias(cx, ty), Some(Ty::Null))
+        }
+        _ => false,
+    }
+}
+
+/// Whether a value named as the standard library's media wrapper class
+/// `annotation` is a value of the media type `contextual` (an alias of one
+/// too), of its kind or, with `allow_generic`, of the generic `media`.
+fn media_wrapper_matches<N: Head>(
+    cx: &Cx<'_, N>,
+    annotation: &Ty<N>,
+    contextual: &Ty<N>,
+    allow_generic: bool,
+) -> bool {
+    let Some(kind) = media_wrapper_kind(cx, annotation) else {
+        return false;
+    };
+    let Some(Ty::Media(contextual_kind)) = expand_alias(cx, contextual) else {
+        return false;
+    };
+    kind == contextual_kind || (allow_generic && contextual_kind == MediaKind::Generic)
+}
+
+/// The media type a value named as the wrapper class `annotation` inhabits in
+/// the media slot `contextual`.
+fn media_wrapper_payload_type<N: Head>(
+    cx: &Cx<'_, N>,
+    annotation: &Ty<N>,
+    contextual: &Ty<N>,
+) -> Option<Ty<N>> {
+    let kind = media_wrapper_kind(cx, annotation)?;
+    let Ty::Media(contextual_kind) = expand_alias(cx, contextual)? else {
+        return None;
+    };
+    (contextual_kind == kind || contextual_kind == MediaKind::Generic).then_some(Ty::Media(kind))
+}
+
+/// The media kind whose wrapper class `ty` names, with no type arguments.
+fn media_wrapper_kind<N: Head>(cx: &Cx<'_, N>, ty: &Ty<N>) -> Option<MediaKind> {
+    match ty {
+        Ty::Class(head, args) if args.is_empty() => cx.program.media_wrapper(head),
+        _ => None,
+    }
+}
+
+/// Whether `ty` is `$rust_type`, or a union with exactly one such member.
+fn peels_to_rust_type<N: Head>(ty: &Ty<N>) -> bool {
+    match ty {
+        Ty::RustType => true,
+        Ty::Union(members) => members.iter().filter(|m| peels_to_rust_type(m)).count() == 1,
+        _ => false,
+    }
+}
+
+/// A type-argument position that fixes nothing: a type variable or `unknown`.
+fn is_wildcard<N: Head>(ty: &Ty<N>) -> bool {
+    matches!(ty, Ty::TypeVar(..) | Ty::Unknown)
+}
+
+/// Whether the type arguments a host sent for an instance can be those the
+/// slot declares. Empty arguments say nothing; a declared wildcard takes any
+/// argument.
+fn type_args_compatible<N: Head>(sent: &[Ty<N>], declared: &[Ty<N>]) -> bool {
+    if declared.is_empty() {
+        return true;
+    }
+    if sent.is_empty() {
+        return declared.iter().all(is_wildcard);
+    }
+    sent.len() == declared.len()
+        && sent
+            .iter()
+            .zip(declared)
+            .all(|(sent, declared)| compatible(sent, declared))
+}
+
+/// Structural compatibility of a type the host sent against a declared one:
+/// only a positive leaf or shape mismatch says no.
+fn compatible<N: Head>(sent: &Ty<N>, declared: &Ty<N>) -> bool {
+    match (sent, declared) {
+        (_, Ty::TypeVar(..) | Ty::Unknown) | (Ty::TypeVar(..) | Ty::Unknown, _) => true,
+        (Ty::Int, Ty::Int)
+        | (Ty::String, Ty::String)
+        | (Ty::Bool, Ty::Bool)
+        | (Ty::Float, Ty::Float)
+        | (Ty::Null, Ty::Null)
+        | (Ty::Bigint, Ty::Bigint)
+        | (Ty::Uint8Array, Ty::Uint8Array) => true,
+        (Ty::Media(sent), Ty::Media(declared)) => {
+            *declared == MediaKind::Generic || sent == declared
+        }
+        (
+            Ty::Int | Ty::String | Ty::Bool | Ty::Float | Ty::Null | Ty::Bigint | Ty::Uint8Array,
+            Ty::Int | Ty::String | Ty::Bool | Ty::Float | Ty::Null | Ty::Bigint | Ty::Uint8Array,
+        ) => false,
+        (Ty::List(sent), Ty::List(declared)) => compatible(sent, declared),
+        (
+            Ty::Map {
+                key: sent_key,
+                value: sent_value,
+            },
+            Ty::Map {
+                key: declared_key,
+                value: declared_value,
+            },
+        ) => compatible(sent_key, declared_key) && compatible(sent_value, declared_value),
+        (Ty::Class(sent, sent_args), Ty::Class(declared, declared_args)) => {
+            sent == declared && type_args_compatible(sent_args, declared_args)
+        }
+        _ => true,
+    }
+}
+
+/// The type arguments an instance lands with: the host's where it sent them,
+/// the slot's where it sent none or a wildcard.
+fn refine_type_args<N: Head>(sent: &[Ty<N>], declared: &[Ty<N>]) -> Vec<Ty<N>> {
+    if sent.is_empty() {
+        return declared.to_vec();
+    }
+    sent.iter()
+        .zip(declared)
+        .map(|(sent, declared)| {
+            if is_wildcard(sent) {
+                declared.clone()
+            } else {
+                sent.clone()
+            }
+        })
+        .collect()
+}
+
+/// Whether a class named by the host without every argument can stand for
+/// the declared class `contextual`.
+fn class_annotation_can_refine<N: Head>(annotation: &Ty<N>, contextual: &Ty<N>) -> bool {
+    let (Ty::Class(annotation_head, annotation_args), Ty::Class(contextual_head, contextual_args)) =
+        (annotation, contextual)
+    else {
+        return false;
+    };
+    annotation_head == contextual_head
+        && (annotation_args.is_empty()
+            || (annotation_args.len() == contextual_args.len()
+                && annotation_args
+                    .iter()
+                    .zip(contextual_args)
+                    .all(|(annotation, contextual)| compatible(annotation, contextual))))
+}
+
+/// Whether two types are one type in two spellings: structurally equal, with
+/// the freshness of a literal and the order of union members immaterial.
+fn structurally_equal<N: Head>(left: &Ty<N>, right: &Ty<N>) -> bool {
+    match (left, right) {
+        (Ty::String, Ty::String)
+        | (Ty::Int, Ty::Int)
+        | (Ty::Bigint, Ty::Bigint)
+        | (Ty::Float, Ty::Float)
+        | (Ty::Bool, Ty::Bool)
+        | (Ty::Null, Ty::Null)
+        | (Ty::Uint8Array, Ty::Uint8Array)
+        | (Ty::Unknown, Ty::Unknown)
+        | (Ty::RustType, Ty::RustType)
+        | (Ty::Type, Ty::Type)
+        | (Ty::Resource, Ty::Resource)
+        | (Ty::PromptAst, Ty::PromptAst)
+        | (Ty::Void, Ty::Void)
+        | (Ty::Never, Ty::Never) => true,
+        (Ty::Media(left), Ty::Media(right)) => left == right,
+        (Ty::Literal(left, ..), Ty::Literal(right, ..)) => left == right,
+        (Ty::TypeVar(left), Ty::TypeVar(right)) => left == right,
+        (Ty::List(left), Ty::List(right)) => structurally_equal(left, right),
+        (
+            Ty::Map {
+                key: left_key,
+                value: left_value,
+            },
+            Ty::Map {
+                key: right_key,
+                value: right_value,
+            },
+        ) => structurally_equal(left_key, right_key) && structurally_equal(left_value, right_value),
+        (Ty::Class(left_head, left_args), Ty::Class(right_head, right_args)) => {
+            left_head == right_head && structurally_equal_slices(left_args, right_args)
+        }
+        (
+            Ty::Interface(left_head, left_args, left_bindings),
+            Ty::Interface(right_head, right_args, right_bindings),
+        ) => {
+            left_head == right_head
+                && structurally_equal_slices(left_args, right_args)
+                && structurally_equal_unordered(
+                    left_bindings.iter().map(|(name, ty)| (Some(name), ty)),
+                    right_bindings.iter().map(|(name, ty)| (Some(name), ty)),
+                )
+        }
+        (Ty::Enum(left), Ty::Enum(right)) => left == right,
+        (Ty::EnumVariant(left_head, left_variant), Ty::EnumVariant(right_head, right_variant)) => {
+            left_head == right_head && left_variant == right_variant
+        }
+        (Ty::TypeAlias(left), Ty::TypeAlias(right)) => left == right,
+        (
+            Ty::Function {
+                params: left_params,
+                ret: left_ret,
+                throws: left_throws,
+            },
+            Ty::Function {
+                params: right_params,
+                ret: right_ret,
+                throws: right_throws,
+            },
+        ) => {
+            left_params.len() == right_params.len()
+                && left_params
+                    .iter()
+                    .zip(right_params.iter())
+                    .all(|(left, right)| {
+                        left.name == right.name
+                            && left.mode == right.mode
+                            && structurally_equal(&left.ty, &right.ty)
+                    })
+                && structurally_equal(left_ret, right_ret)
+                && structurally_equal(left_throws, right_throws)
+        }
+        (Ty::Future(left_value, left_error), Ty::Future(right_value, right_error)) => {
+            structurally_equal(left_value, right_value)
+                && structurally_equal(left_error, right_error)
+        }
+        (
+            Ty::AssociatedTypeProjection {
+                base: left_base,
+                interface: left_interface,
+                member: left_member,
+            },
+            Ty::AssociatedTypeProjection {
+                base: right_base,
+                interface: right_interface,
+                member: right_member,
+            },
+        ) => {
+            left_member == right_member
+                && structurally_equal(left_base, right_base)
+                && left_interface.name == right_interface.name
+                && structurally_equal_slices(&left_interface.generics, &right_interface.generics)
+                && structurally_equal_unordered(
+                    left_interface
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (Some(name), ty)),
+                    right_interface
+                        .associated_types
+                        .iter()
+                        .map(|(name, ty)| (Some(name), ty)),
+                )
+        }
+        (Ty::Union(left), Ty::Union(right)) => structurally_equal_unordered(
+            left.iter().map(|ty| (None, ty)),
+            right.iter().map(|ty| (None, ty)),
+        ),
+        _ => false,
+    }
+}
+
+fn structurally_equal_slices<N: Head>(left: &[Ty<N>], right: &[Ty<N>]) -> bool {
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(right)
+            .all(|(left, right)| structurally_equal(left, right))
+}
+
+/// Whether two collections of (optionally named) types pair off one to one,
+/// in any order.
+fn structurally_equal_unordered<'t, N: Head + 't>(
+    left: impl ExactSizeIterator<Item = (Option<&'t Name>, &'t Ty<N>)>,
+    right: impl ExactSizeIterator<Item = (Option<&'t Name>, &'t Ty<N>)>,
+) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    let right: Vec<_> = right.collect();
+    let mut matched = vec![false; right.len()];
+    left.into_iter().all(|(left_name, left_ty)| {
+        let Some(index) = right
+            .iter()
+            .enumerate()
+            .position(|(index, (right_name, right_ty))| {
+                !matched[index] && left_name == *right_name && structurally_equal(left_ty, right_ty)
+            })
+        else {
+            return false;
+        };
+        matched[index] = true;
+        true
+    })
+}
+
+/// Whether `left` and `right` name one type, also where one spells an
+/// optional of the other's one non-null member (`T?` beside `T`).
+fn selected_arm_equal<N: Head>(left: &Ty<N>, right: &Ty<N>) -> bool {
+    if structurally_equal(left, right) {
+        return true;
+    }
+    sole_non_null(left).is_some_and(|inner| structurally_equal(inner, right))
+        || sole_non_null(right).is_some_and(|inner| structurally_equal(left, inner))
+}
+
+/// The one member of an optional (`T | null`) that is not `null`.
+fn sole_non_null<N: Head>(ty: &Ty<N>) -> Option<&Ty<N>> {
+    let Ty::Union(members) = ty else {
+        return None;
+    };
+    if !members.iter().any(|member| matches!(member, Ty::Null)) {
+        return None;
+    }
+    let mut non_null = members.iter().filter(|member| !matches!(member, Ty::Null));
+    let only = non_null.next()?;
+    non_null.next().is_none().then_some(only)
+}
+
 /// Whether `ty` has a position that stands for a type the boundary was not
 /// told: a type variable, `unknown`, or the `$rust_type` a generic call falls
 /// back to. Generics are invariant, so no live value's type equals such a
 /// type, and membership in it says nothing.
-fn has_erased_position(ty: &RuntimeTy) -> bool {
+fn has_erased_position<N: Head>(ty: &Ty<N>) -> bool {
     match ty {
-        RuntimeTy::Unknown
-        | RuntimeTy::TypeVar(_)
-        | RuntimeTy::AssociatedTypeProjection { .. }
-        | RuntimeTy::RustType => true,
-        RuntimeTy::List(element) => has_erased_position(element),
-        RuntimeTy::Map { key, value } => has_erased_position(key) || has_erased_position(value),
-        RuntimeTy::Union(members) => members.iter().any(has_erased_position),
-        RuntimeTy::Class(_, args) => args.iter().any(has_erased_position),
-        RuntimeTy::Interface(_, args, associated) => {
+        Ty::Unknown | Ty::TypeVar(_) | Ty::AssociatedTypeProjection { .. } | Ty::RustType => true,
+        Ty::List(element) => has_erased_position(element),
+        Ty::Map { key, value } => has_erased_position(key) || has_erased_position(value),
+        Ty::Union(members) => members.iter().any(has_erased_position),
+        Ty::Class(_, args) => args.iter().any(has_erased_position),
+        Ty::Interface(_, args, associated) => {
             args.iter().any(has_erased_position)
                 || associated.iter().any(|(_, ty)| has_erased_position(ty))
         }
-        RuntimeTy::Function {
+        Ty::Function {
             params,
             ret,
             throws,
@@ -1005,28 +1417,31 @@ fn has_erased_position(ty: &RuntimeTy) -> bool {
                 || has_erased_position(ret)
                 || has_erased_position(throws)
         }
-        RuntimeTy::Future(value, error) => has_erased_position(value) || has_erased_position(error),
-        RuntimeTy::Int
-        | RuntimeTy::Bigint
-        | RuntimeTy::Float
-        | RuntimeTy::String
-        | RuntimeTy::Bool
-        | RuntimeTy::Null
-        | RuntimeTy::Void
-        | RuntimeTy::Never
-        | RuntimeTy::Uint8Array
-        | RuntimeTy::Media(_)
-        | RuntimeTy::Literal(..)
-        | RuntimeTy::Enum(_)
-        | RuntimeTy::EnumVariant(..)
-        | RuntimeTy::TypeAlias(_)
-        | RuntimeTy::Type
-        | RuntimeTy::Resource
-        | RuntimeTy::PromptAst => false,
+        Ty::Future(value, error) => has_erased_position(value) || has_erased_position(error),
+        Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Void
+        | Ty::Never
+        | Ty::Uint8Array
+        | Ty::Media(_)
+        | Ty::Literal(..)
+        | Ty::Enum(_)
+        | Ty::EnumVariant(..)
+        | Ty::TypeAlias(_)
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst => false,
     }
 }
 
-/// The program as the engine holds it, on the heap of one call.
+// ── The engine's program ─────────────────────────────────────────────────
+
+/// The program as the engine holds it, on the heap of one call. Its heads are
+/// the live declaration pointers, so a class or enum is read where it lives.
 pub(crate) struct Heap<'h> {
     pub(crate) engine: &'h BexEngine,
     pub(crate) vm: &'h bex_vm::BexVm,
@@ -1034,53 +1449,70 @@ pub(crate) struct Heap<'h> {
     pub(crate) overlay: InboundRuntimeOverlay<'h>,
 }
 
-impl Program for Heap<'_> {
-    fn class(&self, name: &str, type_args: &[RuntimeTy]) -> Result<ClassFacts, Mismatch> {
-        let Some(class) = self.engine.resolve_inbound_declaration(
-            self.vm,
-            name,
-            self.overlay,
-            InboundDeclarationKind::Class,
-        ) else {
-            return Ok(ClassFacts::Missing);
+impl Heap<'_> {
+    /// The head of the declaration at `ptr`, or `None` for an object that is
+    /// no declaration.
+    fn head_at(&self, ptr: HeapPtr) -> Option<TypeHead> {
+        let tag = match self.vm.get_object(ptr) {
+            Object::Class(class) => class.type_tag,
+            Object::Enum(enm) => enm.type_tag,
+            Object::Interface(interface) => interface.type_tag,
+            Object::TypeAlias(alias) => alias.type_tag,
+            _ => return None,
         };
-        // SAFETY: the permit is held, and the resolver returns a live object.
-        #[expect(unsafe_code, reason = "reading a class under a held heap permit")]
-        let Object::Class(class) = (unsafe { class.get() }) else {
-            return Err(Mismatch::new(format!(
-                "Resolved name `{name}` does not point to a class"
-            )));
-        };
-        let type_args = type_args
-            .iter()
-            .map(|ty| {
-                self.engine
-                    .anchor_wire_ty_with_runtime(self.vm, ty, self.overlay)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let fields = class
-            .fields
-            .iter()
-            .map(|field| {
-                let ty = field.field_template.substitute_symbolic(&type_args);
-                Ok((field.name.clone(), conversion::overlay_wire_ty(&ty)?))
-            })
-            .collect::<Result<_, EngineError>>()?;
-        Ok(ClassFacts::Fields(fields))
+        Some(TypeHead::new(ptr, tag))
+    }
+}
+
+impl Program<TypeHead> for Heap<'_> {
+    fn resolve(&self, name: &str, kind: InboundDeclarationKind) -> Option<TypeHead> {
+        let ptr = self
+            .engine
+            .resolve_inbound_declaration(self.vm, name, self.overlay, kind)?;
+        self.head_at(ptr)
     }
 
-    fn variant(&self, enum_name: &str, variant: &str) -> VariantFacts {
-        let Some(declared) = self.engine.resolve_inbound_declaration(
-            self.vm,
-            enum_name,
-            self.overlay,
-            InboundDeclarationKind::Enum,
-        ) else {
-            return VariantFacts::NoEnum;
+    fn head_is_named(&self, head: &TypeHead, name: &str) -> bool {
+        // The spelling resolves to the declaration itself, or renders it: a
+        // host may spell a declared name by its display form.
+        self.resolve(name, InboundDeclarationKind::Any)
+            .is_some_and(|resolved| resolved == *head)
+            || head
+                .overlay_name()
+                .is_some_and(|declared| type_name_matches_external_name(name, &declared))
+    }
+
+    fn anchor(&self, ty: &WireTy) -> Result<Ty<TypeHead>, Mismatch<'static, TypeHead>> {
+        self.engine
+            .anchor_wire_ty_with_runtime(self.vm, ty, self.overlay)
+            .map_err(Into::into)
+    }
+
+    fn class<'p>(
+        &'p self,
+        head: &TypeHead,
+        type_args: &[Ty<TypeHead>],
+    ) -> Result<ClassFacts<'p, TypeHead>, Mismatch<'static, TypeHead>> {
+        let vm: &'p bex_vm::BexVm = self.vm;
+        let Object::Class(class) = vm.get_object(head.ptr()) else {
+            return Ok(ClassFacts::Missing);
         };
-        // SAFETY: the permit is held, and the resolver returns a live object.
-        #[expect(unsafe_code, reason = "reading an enum under a held heap permit")]
-        let Object::Enum(declared) = (unsafe { declared.get() }) else {
+        Ok(ClassFacts::Fields(
+            class
+                .fields
+                .iter()
+                .map(|field| {
+                    (
+                        field.name.as_str(),
+                        field.field_template.substitute_symbolic(type_args),
+                    )
+                })
+                .collect(),
+        ))
+    }
+
+    fn variant(&self, head: &TypeHead, variant: &str) -> VariantFacts {
+        let Object::Enum(declared) = self.vm.get_object(head.ptr()) else {
             return VariantFacts::NoEnum;
         };
         match declared.variants.iter().position(|v| v.name == variant) {
@@ -1089,11 +1521,30 @@ impl Program for Heap<'_> {
         }
     }
 
+    fn alias(&self, head: &TypeHead) -> Option<Ty<TypeHead>> {
+        self.vm
+            .type_alias_definition(head.ptr())
+            .map(|definition| definition.clone().into())
+    }
+
+    fn is_json(&self, head: &TypeHead) -> bool {
+        self.vm.stdlib_heads().is_json_alias(*head)
+    }
+
+    fn media_wrapper(&self, head: &TypeHead) -> Option<MediaKind> {
+        self.vm.stdlib_heads().media_kind(*head)
+    }
+
+    fn is_prompt_class(&self, head: &TypeHead) -> bool {
+        head.overlay_name()
+            .is_some_and(|name| name.render_dotted(false) == conversion::PROMPT_CLASS)
+    }
+
     fn live_value_fits(
         &self,
-        handle: &bex_external_types::Handle,
-        ty: &RuntimeTy,
-    ) -> Result<bool, Mismatch> {
+        handle: &Handle,
+        ty: &Ty<TypeHead>,
+    ) -> Result<bool, Mismatch<'static, TypeHead>> {
         let object = self
             .engine
             .resolve_handle(self.permit, handle)
@@ -1107,21 +1558,14 @@ impl Program for Heap<'_> {
         if has_erased_position(ty) {
             return Ok(true);
         }
-        let Ok(ty) = self
-            .engine
-            .realize_host_ty_with_runtime(self.vm, ty, self.overlay)
-        else {
-            return Ok(true);
-        };
         Ok(bex_vm::value_is_member(self.vm, Value::object(object), ty.as_ty()).unwrap_or(true))
     }
 
-    fn is_subtype(&self, value_ty: &RuntimeTy, ty: &RuntimeTy) -> Result<bool, Mismatch> {
-        let anchor = |ty: &RuntimeTy| {
-            self.engine
-                .anchor_wire_ty_with_runtime(self.vm, ty, self.overlay)
-        };
-        let (value_ty, ty) = (anchor(value_ty)?, anchor(ty)?);
+    fn is_subtype(
+        &self,
+        value_ty: &Ty<TypeHead>,
+        ty: &Ty<TypeHead>,
+    ) -> Result<bool, Mismatch<'static, TypeHead>> {
         Ok(baml_type::normalize::is_subtype(
             value_ty.as_ty(),
             ty.as_ty(),
@@ -1130,47 +1574,131 @@ impl Program for Heap<'_> {
     }
 }
 
-impl From<EngineError> for Mismatch {
-    fn from(error: EngineError) -> Self {
-        match error {
-            EngineError::TypeMismatch { message } => Self::new(message),
-            other => Self::new(other.to_string()),
-        }
-    }
+/// A declaration head of a type held across a sys-op's await. The collector
+/// may move a runtime declaration while the heap permit is released, so such
+/// a head is rooted by a handle and found again through it; a compile-time
+/// declaration never moves and is kept as it is.
+#[derive(Clone, Debug)]
+pub(crate) enum RootedHead {
+    Static(TypeHead),
+    Runtime {
+        handle: Handle,
+        tag: baml_type::typetag::TypeTag,
+    },
+}
+
+/// A declared type held across a sys-op's await.
+pub(crate) enum HeldTy {
+    /// Every declaration it names was compiled with the program, and none
+    /// moves: the type is held as it is.
+    Pinned(bex_vm_types::RuntimeTy),
+    /// It names a runtime declaration, rooted for the span of the await.
+    Rooted(baml_type::RuntimeTy<RootedHead>),
 }
 
 impl BexEngine {
-    /// Judge a value from a host against the type of the slot it is bound for.
+    /// Hold `ty` across an await, rooting every runtime declaration it names.
+    pub(crate) fn hold_ty(&self, ty: bex_vm_types::RuntimeTy) -> HeldTy {
+        let mut names_runtime_declaration = false;
+        ty.visit_heads(&mut |head: &TypeHead| {
+            names_runtime_declaration |= !self.heap.is_compile_time_ptr(head.ptr());
+        });
+        if !names_runtime_declaration {
+            return HeldTy::Pinned(ty);
+        }
+        HeldTy::Rooted(ty.map_heads(&mut |head: &TypeHead| {
+            if self.heap.is_compile_time_ptr(head.ptr()) {
+                RootedHead::Static(*head)
+            } else {
+                RootedHead::Runtime {
+                    handle: self.heap.create_handle(head.ptr()),
+                    tag: head.tag(),
+                }
+            }
+        }))
+    }
+
+    /// The type [`Self::hold_ty`] held, at the declarations' places after the
+    /// await.
+    pub(crate) fn release_ty(
+        &self,
+        permit: bex_heap::PermitProof<'_>,
+        held: HeldTy,
+    ) -> Result<bex_vm_types::RuntimeTy, EngineError> {
+        match held {
+            HeldTy::Pinned(ty) => Ok(ty),
+            HeldTy::Rooted(ty) => ty.try_map_heads(&mut |head: &RootedHead| match head {
+                RootedHead::Static(head) => Ok(*head),
+                RootedHead::Runtime { handle, tag } => self
+                    .resolve_handle(permit, handle)
+                    .map(|ptr| TypeHead::new(ptr, *tag))
+                    .ok_or_else(|| EngineError::TypeMismatch {
+                        message: "a declaration of the declared type expired during the call"
+                            .to_string(),
+                    }),
+            }),
+        }
+    }
+
+    /// Judge a value from a host against the type of the slot it is bound
+    /// for, as the host spelled it.
     pub(crate) fn admit<'a>(
         &self,
         holder: &impl HeapPermit<BexThread>,
         value: &'a BexExternalValue,
-        ty: &RuntimeTy,
+        ty: &WireTy,
         overlay: InboundRuntimeOverlay<'_>,
-    ) -> Result<Admitted<'a>, Mismatch> {
+    ) -> Result<Admitted<'a, TypeHead>, Mismatch<'a, TypeHead>> {
         let heap = Heap {
             engine: self,
             vm: &holder.holder().vm,
             permit: holder.proof(),
             overlay,
         };
-        let cx = Cx {
-            program: &heap,
-            aliases: &self.inbound_alias_view,
-        };
-        admit(&cx, value, ty).map(|admission| admission.value)
+        let ty = heap.anchor(ty)?;
+        admit(&Cx { program: &heap }, value, &ty).map(|admission| admission.value)
     }
 
-    /// Admit a value from a host to the type of its slot and put it on the
-    /// heap.
+    /// Judge a value against a type the engine already holds.
+    pub(crate) fn admit_realized<'a>(
+        &self,
+        holder: &impl HeapPermit<BexThread>,
+        value: &'a BexExternalValue,
+        ty: &bex_vm_types::RuntimeTy,
+        overlay: InboundRuntimeOverlay<'_>,
+    ) -> Result<Admitted<'a, TypeHead>, Mismatch<'a, TypeHead>> {
+        let heap = Heap {
+            engine: self,
+            vm: &holder.holder().vm,
+            permit: holder.proof(),
+            overlay,
+        };
+        admit(&Cx { program: &heap }, value, ty).map(|admission| admission.value)
+    }
+
+    /// Admit a value from a host to the type of its slot, as the host spelled
+    /// it, and put it on the heap. `overlay` names the runtime declarations
+    /// the call may spell.
     pub(crate) fn admit_to_heap(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         value: &BexExternalValue,
-        ty: &RuntimeTy,
+        ty: &WireTy,
+        overlay: InboundRuntimeOverlay<'_>,
+    ) -> Result<Value, EngineError> {
+        let admitted = self.admit(holder, value, ty, overlay)?;
+        self.land(holder, admitted, overlay)
+    }
+
+    /// Admit a value to a type the engine holds and put it on the heap.
+    pub(crate) fn admit_realized_to_heap(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        value: &BexExternalValue,
+        ty: &bex_vm_types::RuntimeTy,
     ) -> Result<Value, EngineError> {
         let overlay = InboundRuntimeOverlay::none();
-        let admitted = self.admit(holder, value, ty, overlay)?;
+        let admitted = self.admit_realized(holder, value, ty, overlay)?;
         self.land(holder, admitted, overlay)
     }
 
@@ -1181,10 +1709,10 @@ impl BexEngine {
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         value: &BexExternalValue,
-        ty: &RuntimeTy,
-    ) -> Result<Result<Value, Mismatch>, EngineError> {
+        ty: &bex_vm_types::RuntimeTy,
+    ) -> Result<Result<Value, Mismatch<'static, TypeHead>>, EngineError> {
         let overlay = InboundRuntimeOverlay::none();
-        match self.admit(holder, value, ty, overlay) {
+        match self.admit_realized(holder, value, ty, overlay) {
             Ok(admitted) => self.land(holder, admitted, overlay).map(Ok),
             Err(mismatch) => Ok(Err(Mismatch::new(format!(
                 "host callable returned a value that does not match the declared return type \
@@ -1193,13 +1721,20 @@ impl BexEngine {
         }
     }
 
+    /// A type the judgment settled on, realized for the heap.
+    fn realized(ty: &Ty<TypeHead>) -> Result<bex_vm_types::RealizedTy, EngineError> {
+        bex_vm_types::RealizedTy::try_from(ty).map_err(|e| EngineError::TypeMismatch {
+            message: format!("declared type is not realized: {e}"),
+        })
+    }
+
     /// Put an admitted value on the heap. Every question of type was settled
-    /// when the value was admitted; what can still fail here is a name or a
-    /// handle that no longer resolves.
+    /// when the value was admitted; what can still fail here is a handle
+    /// that no longer resolves.
     pub(crate) fn land(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
-        admitted: Admitted<'_>,
+        admitted: Admitted<'_, TypeHead>,
         overlay: InboundRuntimeOverlay<'_>,
     ) -> Result<Value, EngineError> {
         Ok(match admitted {
@@ -1229,8 +1764,7 @@ impl BexEngine {
                     .into_iter()
                     .map(|item| self.land(holder, item, overlay))
                     .collect::<Result<Vec<_>, _>>()?;
-                let element =
-                    self.realize_host_ty_with_runtime(&holder.holder().vm, &element, overlay)?;
+                let element = Self::realized(&element)?;
                 Value::object(holder.holder_mut().tlab_mut().alloc_array(element, values))
             }
             Admitted::Map {
@@ -1240,8 +1774,9 @@ impl BexEngine {
                 entries,
             } => {
                 let sent_key =
-                    self.realize_host_ty_with_runtime(&holder.holder().vm, sent_key, overlay)?;
-                let key = self.realize_host_ty_with_runtime(&holder.holder().vm, &key, overlay)?;
+                    self.anchor_wire_ty_with_runtime(&holder.holder().vm, sent_key, overlay)?;
+                let sent_key = Self::realized(&sent_key)?;
+                let key = Self::realized(&key)?;
                 for key_ty in [&sent_key, &key] {
                     if !baml_type::normalize::is_string_key(key_ty.as_ty(), &holder.holder().vm) {
                         return Err(EngineError::CannotConvert {
@@ -1275,8 +1810,7 @@ impl BexEngine {
                             .map(|entry| (bex_vm_types::BexStr::from(name), entry))
                     })
                     .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
-                let value =
-                    self.realize_host_ty_with_runtime(&holder.holder().vm, &value, overlay)?;
+                let value = Self::realized(&value)?;
                 Value::object(holder.holder_mut().tlab_mut().alloc_map(key, value, values))
             }
             Admitted::Instance {
@@ -1288,46 +1822,25 @@ impl BexEngine {
                     .into_iter()
                     .map(|field| self.land(holder, field, overlay))
                     .collect::<Result<Vec<_>, _>>()?;
-                let class_ptr = self
-                    .resolve_inbound_declaration(
-                        &holder.holder().vm,
-                        &class,
-                        overlay,
-                        InboundDeclarationKind::Class,
-                    )
-                    .ok_or_else(|| EngineError::TypeMismatch {
-                        message: format!("Unknown class `{class}` in external Instance value"),
-                    })?;
                 let type_args = type_args
                     .iter()
-                    .map(|ty| self.realize_host_ty_with_runtime(&holder.holder().vm, ty, overlay))
+                    .map(Self::realized)
                     .collect::<Result<Box<[_]>, _>>()?;
                 Value::object(
                     holder
                         .holder_mut()
                         .tlab_mut()
-                        .alloc_instance_with_type_args(class_ptr, type_args, values),
+                        .alloc_instance_with_type_args(class.ptr(), type_args, values),
                 )
             }
-            Admitted::Variant { enum_name, index } => {
-                let enum_ptr = self
-                    .resolve_inbound_declaration(
-                        &holder.holder().vm,
-                        &enum_name,
-                        overlay,
-                        InboundDeclarationKind::Enum,
-                    )
-                    .ok_or_else(|| EngineError::TypeMismatch {
-                        message: format!("Unknown enum `{enum_name}` in external Variant value"),
-                    })?;
-                Value::object(
-                    holder
-                        .holder_mut()
-                        .tlab_mut()
-                        .alloc_variant(enum_ptr, index),
-                )
-            }
+            Admitted::Variant { enum_head, index } => Value::object(
+                holder
+                    .holder_mut()
+                    .tlab_mut()
+                    .alloc_variant(enum_head.ptr(), index),
+            ),
             Admitted::Engine { value, slot } => {
+                let slot = conversion::overlay_wire_ty(&slot)?;
                 self.land_engine_value(holder, value.clone(), &slot, overlay)?
             }
         })
@@ -1338,20 +1851,21 @@ impl BexEngine {
 mod tests {
     use std::{borrow::Cow, sync::Arc};
 
-    use baml_type::{Freshness, FunctionParamMode, Name, RuntimeFunctionParamTy};
-    use bex_external_types::HostValueArc;
+    use baml_type::{Freshness, FunctionParamMode, Name, RuntimeFunctionParamTy, TypeName};
+    use bex_external_types::{HostValueArc, RuntimeTy, is_canonical_json_alias};
     use bex_str::BexStr;
     use bex_vm_types::{MediaContent, MediaValue};
     use indexmap::IndexMap;
 
     use super::*;
 
-    /// The program of a test: the classes and enums it declares, by the name
-    /// a slot's type prints.
-    #[derive(Default)]
+    /// The program of a test: the classes, enums and aliases it declares, by
+    /// name. Its heads are names, so every spelling resolves to itself.
+    #[derive(Default, Clone)]
     struct Facts {
-        classes: IndexMap<String, Vec<(String, RuntimeTy)>>,
-        enums: IndexMap<String, Vec<String>>,
+        classes: IndexMap<TypeName, Vec<(String, RuntimeTy)>>,
+        enums: IndexMap<TypeName, Vec<String>>,
+        aliases: IndexMap<TypeName, RuntimeTy>,
     }
 
     impl Facts {
@@ -1378,16 +1892,37 @@ mod tests {
         }
     }
 
-    impl Program for Facts {
-        fn class(&self, name: &str, _type_args: &[RuntimeTy]) -> Result<ClassFacts, Mismatch> {
-            Ok(match self.classes.get(name) {
-                Some(fields) => ClassFacts::Fields(fields.clone()),
+    impl Program<TypeName> for Facts {
+        fn resolve(&self, name: &str, _kind: InboundDeclarationKind) -> Option<TypeName> {
+            Some(TypeName::from_dotted_path(name))
+        }
+
+        fn head_is_named(&self, head: &TypeName, name: &str) -> bool {
+            type_name_matches_external_name(name, head)
+        }
+
+        fn anchor(&self, ty: &WireTy) -> Result<RuntimeTy, Mismatch<'static, TypeName>> {
+            Ok(ty.clone())
+        }
+
+        fn class<'p>(
+            &'p self,
+            head: &TypeName,
+            _type_args: &[RuntimeTy],
+        ) -> Result<ClassFacts<'p, TypeName>, Mismatch<'static, TypeName>> {
+            Ok(match self.classes.get(head) {
+                Some(fields) => ClassFacts::Fields(
+                    fields
+                        .iter()
+                        .map(|(name, ty)| (name.as_str(), ty.clone()))
+                        .collect(),
+                ),
                 None => ClassFacts::Missing,
             })
         }
 
-        fn variant(&self, enum_name: &str, variant: &str) -> VariantFacts {
-            match self.enums.get(enum_name) {
+        fn variant(&self, head: &TypeName, variant: &str) -> VariantFacts {
+            match self.enums.get(head) {
                 None => VariantFacts::NoEnum,
                 Some(variants) => match variants.iter().position(|declared| declared == variant) {
                     Some(index) => VariantFacts::Declared(index),
@@ -1396,26 +1931,73 @@ mod tests {
             }
         }
 
+        fn alias(&self, head: &TypeName) -> Option<RuntimeTy> {
+            self.aliases.get(head).cloned()
+        }
+
+        fn is_json(&self, head: &TypeName) -> bool {
+            is_canonical_json_alias(head)
+        }
+
+        fn media_wrapper(&self, head: &TypeName) -> Option<MediaKind> {
+            MediaKind::from_wrapper_class_name(&head.render_dotted(false))
+        }
+
+        fn is_prompt_class(&self, head: &TypeName) -> bool {
+            head.render_dotted(false) == conversion::PROMPT_CLASS
+        }
+
         fn live_value_fits(
             &self,
-            _handle: &bex_external_types::Handle,
+            _handle: &Handle,
             _ty: &RuntimeTy,
-        ) -> Result<bool, Mismatch> {
+        ) -> Result<bool, Mismatch<'static, TypeName>> {
             Err(Mismatch::new("the program of a test has no heap"))
         }
 
-        fn is_subtype(&self, value_ty: &RuntimeTy, ty: &RuntimeTy) -> Result<bool, Mismatch> {
-            Ok(runtime_ty_assignable_with_aliases(
-                value_ty,
-                ty,
-                &IndexMap::new(),
-            ))
+        fn is_subtype(
+            &self,
+            value_ty: &RuntimeTy,
+            ty: &RuntimeTy,
+        ) -> Result<bool, Mismatch<'static, TypeName>> {
+            Ok(assignable_with_aliases(value_ty, ty, &self.aliases))
         }
     }
 
-    /// The name a judgment resolves a declaration by.
-    fn declared(name: &str) -> String {
-        TypeName::from_dotted_path(name).to_string()
+    /// Whether every value of `actual` is one of `expected`, with the aliases
+    /// of a test program expanded, and no VM to ask about declarations.
+    fn assignable_with_aliases(
+        actual: &RuntimeTy,
+        expected: &RuntimeTy,
+        aliases: &IndexMap<TypeName, RuntimeTy>,
+    ) -> bool {
+        if structurally_equal(actual, expected) {
+            return true;
+        }
+        if let RuntimeTy::TypeAlias(name) = actual
+            && let Some(expanded) = aliases.get(name)
+        {
+            return assignable_with_aliases(expanded, expected, aliases);
+        }
+        if let RuntimeTy::TypeAlias(name) = expected
+            && let Some(expanded) = aliases.get(name)
+        {
+            return assignable_with_aliases(actual, expanded, aliases);
+        }
+        #[expect(
+            deprecated,
+            reason = "a test program has aliases but no VM-backed type facts"
+        )]
+        baml_type::normalize::is_subtype(
+            actual.as_ty(),
+            expected.as_ty(),
+            &baml_type::normalize::NoFacts,
+        )
+    }
+
+    /// The head a judgment resolves a declaration by.
+    fn declared(name: &str) -> TypeName {
+        TypeName::from_dotted_path(name)
     }
 
     fn class_ty(name: &str) -> RuntimeTy {
@@ -1522,20 +2104,20 @@ mod tests {
         }
     }
 
-    fn int(int: i64) -> Admitted<'static> {
-        Admitted::Int(VmInt::new(int).expect("a test integer the VM holds"))
+    fn int(int: i64) -> Admitted<'static, TypeName> {
+        Admitted::Int(VmInt::new::<TypeName>(int).expect("a test integer the VM holds"))
     }
 
     /// A value of the engine's own making, admitted to `slot`.
-    fn engine(value: &BexExternalValue, slot: RuntimeTy) -> Admitted<'_> {
+    fn engine(value: &BexExternalValue, slot: RuntimeTy) -> Admitted<'_, TypeName> {
         Admitted::Engine { value, slot }
     }
 
     /// A map as a `json` slot holds one: its values are `json` themselves.
     fn json_map<'a>(
         sent_key: &'a RuntimeTy,
-        entries: Vec<(&'a str, Admitted<'a>)>,
-    ) -> Admitted<'a> {
+        entries: Vec<(&'a str, Admitted<'a, TypeName>)>,
+    ) -> Admitted<'a, TypeName> {
         Admitted::Map {
             sent_key,
             key: RuntimeTy::string(),
@@ -1547,11 +2129,13 @@ mod tests {
     /// The refusal of a value that more than one member took, which tells the
     /// host how to say which one it meant.
     #[track_caller]
-    fn assert_host_has_to_name_the_member(result: Result<Admitted<'_>, Mismatch>) {
+    fn assert_host_has_to_name_the_member(
+        result: Result<Admitted<'_, TypeName>, Mismatch<'_, TypeName>>,
+    ) {
         let error = result.unwrap_err();
         assert!(
-            error.message.contains("matches multiple union members")
-                && error.message.contains("value_type"),
+            error.to_string().contains("matches multiple union members")
+                && error.to_string().contains("value_type"),
             "{error}"
         );
     }
@@ -1592,21 +2176,23 @@ mod tests {
         facts: &Facts,
         value: &'a BexExternalValue,
         ty: &RuntimeTy,
-    ) -> Result<Admitted<'a>, Mismatch> {
-        admit_with_aliases(facts, &IndexMap::new(), value, ty)
+    ) -> Result<Admitted<'a, TypeName>, Mismatch<'a, TypeName>> {
+        admit(&Cx { program: facts }, value, ty).map(|admission| admission.value)
     }
 
+    /// Judge `value` against `ty` in a program of `facts` that also declares
+    /// `aliases`.
     fn admit_with_aliases<'a>(
         facts: &Facts,
         aliases: &IndexMap<TypeName, RuntimeTy>,
         value: &'a BexExternalValue,
         ty: &RuntimeTy,
-    ) -> Result<Admitted<'a>, Mismatch> {
-        let cx = Cx {
-            program: facts,
-            aliases,
+    ) -> Result<Admitted<'a, TypeName>, Mismatch<'a, TypeName>> {
+        let program = Facts {
+            aliases: aliases.clone(),
+            ..facts.clone()
         };
-        admit(&cx, value, ty).map(|admission| admission.value)
+        admit(&Cx { program: &program }, value, ty).map(|admission| admission.value)
     }
 
     // ── The engine's own contract ────────────────────────────────────────
@@ -1676,13 +2262,16 @@ mod tests {
             reading.clone(),
         );
         let error = admit_in(&facts, &extra, &reading).unwrap_err();
-        assert!(error.message.contains("has no field `zzz`"), "{error}");
+        assert!(error.to_string().contains("has no field `zzz`"), "{error}");
         let missing = BexExternalValue::typed(
             instance(&[("label", BexExternalValue::String("a".into()))]),
             reading.clone(),
         );
         let error = admit_in(&facts, &missing, &reading).unwrap_err();
-        assert!(error.message.contains("Missing field `count`"), "{error}");
+        assert!(
+            error.to_string().contains("Missing field `count`"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -1846,7 +2435,7 @@ mod tests {
             variant_name: "HAPPY".to_string(),
         };
         let admitted = || Admitted::Variant {
-            enum_name: declared("user.callbacks.Mood"),
+            enum_head: declared("user.callbacks.Mood"),
             index: 0,
         };
         assert_eq!(admit_in(&facts, &value, &happy), Ok(admitted()));
@@ -1908,7 +2497,7 @@ mod tests {
         let error = admit_in(&facts, &named, &int_or_string).unwrap_err();
         assert!(
             error
-                .message
+                .to_string()
                 .contains("must identify one exact selected type"),
             "{error}"
         );
@@ -1926,7 +2515,7 @@ mod tests {
         let error = admit_with_aliases(&facts, &aliases, &named, &RuntimeTy::int()).unwrap_err();
         assert!(
             error
-                .message
+                .to_string()
                 .contains("must identify one exact selected type"),
             "{error}"
         );
@@ -1939,7 +2528,7 @@ mod tests {
         let named = BexExternalValue::typed(BexExternalValue::Bool(true), RuntimeTy::bool());
         let error = admit_in(&facts, &named, &int_or_string).unwrap_err();
         assert!(
-            error.message.contains("bool") && error.message.contains("declared union"),
+            error.to_string().contains("bool") && error.to_string().contains("declared union"),
             "{error}"
         );
     }
@@ -1950,7 +2539,7 @@ mod tests {
         let named = BexExternalValue::typed(BexExternalValue::Int(7), RuntimeTy::int());
         let error = admit_in(&facts, &named, &RuntimeTy::string()).unwrap_err();
         assert!(
-            error.message.contains("int") && error.message.contains("string"),
+            error.to_string().contains("int") && error.to_string().contains("string"),
             "{error}"
         );
     }
@@ -2015,7 +2604,7 @@ mod tests {
         let box_of_int = RuntimeTy::Class(name, Box::new([RuntimeTy::int()]));
         let error = admit_in(&facts, &unbound, &box_of_int).unwrap_err();
         assert!(
-            error.message.contains("unbound type variable `T`"),
+            error.to_string().contains("unbound type variable `T`"),
             "{error}"
         );
     }
@@ -2035,7 +2624,7 @@ mod tests {
         assert_eq!(
             admit_in(&facts, &named, &declared),
             Ok(Admitted::Instance {
-                class: TypeName::from_dotted_path("user.unions.T").to_string(),
+                class: TypeName::from_dotted_path("user.unions.T"),
                 type_args: vec![],
                 fields: vec![int(1)],
             })
@@ -2060,8 +2649,8 @@ mod tests {
         );
         let error = admit_in(&facts, &named, &either_box).unwrap_err();
         assert!(
-            error.message.contains("does not identify one member")
-                && error.message.contains("concrete generic arguments"),
+            error.to_string().contains("does not identify one member")
+                && error.to_string().contains("concrete generic arguments"),
             "{error}"
         );
     }
@@ -2096,10 +2685,7 @@ mod tests {
         let declared_member = callback_ty(Freshness::Regular);
         let wire_spelling = callback_ty(Freshness::Fresh);
         assert_ne!(declared_member, wire_spelling);
-        assert!(runtime_ty_structurally_equal(
-            &declared_member,
-            &wire_spelling
-        ));
+        assert!(structurally_equal(&declared_member, &wire_spelling));
 
         let callable = BexExternalValue::HostValue(HostValueArc::new(41, HostValueKind::Callable));
         let named = BexExternalValue::typed(callable.clone(), wire_spelling);
@@ -2340,7 +2926,7 @@ mod tests {
         };
         assert_eq!(name.display_name().as_str(), IMAGE_CLASS);
         assert_eq!(name.render_dotted(false), "user.baml.media.Image");
-        assert_eq!(stdlib_media_wrapper_kind(&spoof), None);
+        assert_eq!(Facts::default().media_wrapper(name), None);
 
         let facts = with_media_class(Facts::default(), "user.baml.media.Image");
         let image = media_value(MediaKind::Image);
@@ -2348,7 +2934,7 @@ mod tests {
         let error = admit_in(&facts, &named, &RuntimeTy::Media(MediaKind::Image)).unwrap_err();
         assert!(
             error
-                .message
+                .to_string()
                 .contains("is not assignable to declared type `image`"),
             "{error}"
         );
@@ -2378,10 +2964,14 @@ mod tests {
             ("user.aliases.First", alias_ty("user.aliases.Second")),
             ("user.aliases.Second", alias_ty("user.aliases.First")),
         ]);
-        assert!(!stdlib_media_wrapper_matches(
+        let facts = Facts {
+            aliases,
+            ..Facts::default()
+        };
+        assert!(!media_wrapper_matches(
+            &Cx { program: &facts },
             &class_ty(IMAGE_CLASS),
             &alias_ty("user.aliases.First"),
-            &aliases,
             true,
         ));
     }

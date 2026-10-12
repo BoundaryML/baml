@@ -1794,13 +1794,19 @@ pub enum VmExecState {
     /// fulfillment path.
     ///
     /// - Input: the `SysOp` to run plus its `args`, popped from the
-    ///   eval stack by the `OpCode::SysOp` handler.
+    ///   eval stack by the `OpCode::SysOp` handler, and the op's declared
+    ///   `return_type`, which the engine admits the result to.
     /// - Output: a single `Value` on the VM stack.
     /// - No `Object::Future` is allocated; no `FutureManager` entry
     ///   is created.
     SysOp {
         operation: bex_vm_types::SysOp,
         args: Vec<Value>,
+        /// The declared return type of the op, realized. A sys-op threads no
+        /// type arguments, so the declaration realizes on its own; the one
+        /// exception, `call_host_value<T, E>`, is dispatched by the VM's own
+        /// host-call path with the callable's bound return type.
+        return_type: bex_vm_types::RealizedTy,
     },
 
     /// VM has completed the execution of all available bytecode.
@@ -6642,7 +6648,7 @@ impl BexVm {
             bex_vm_types::RealizedTy::unknown(),
             vec![Value::object(positional_ptr), Value::object(optional_ptr)],
         );
-        let ret_ty_ptr = self.alloc_type(bex_vm_types::types::TypeValue::new(ret_ty));
+        let ret_ty_ptr = self.alloc_type(bex_vm_types::types::TypeValue::new(ret_ty.clone()));
         let throws_ty_ptr = self.alloc_type(bex_vm_types::types::TypeValue::new(throws_ty));
         VmExecState::SysOp {
             operation: bex_vm_types::SysOp::BamlHostCallHostValue,
@@ -6652,6 +6658,7 @@ impl BexVm {
                 Value::object(ret_ty_ptr),
                 Value::object(throws_ty_ptr),
             ],
+            return_type: ret_ty,
         }
     }
 
@@ -6689,7 +6696,7 @@ impl BexVm {
     /// kind — see there); the funnel caller has already matched on the kind, so
     /// for it the check is redundant. Do not delete it.
     fn dispatch_sysop_yield(&mut self, callee_fn_ptr: HeapPtr) -> Result<VmExecState, VmError> {
-        let (sys_op, arity) = {
+        let (sys_op, arity, return_type) = {
             let obj = self.get_object(callee_fn_ptr);
             let Object::Function(f) = obj else {
                 return Err(VmInternalError::TypeError {
@@ -6705,7 +6712,16 @@ impl BexVm {
                 }
                 .into());
             };
-            (sys_op, f.arity)
+            // A sys-op threads no type arguments (see the dispatch sites), so
+            // its declared return type realizes on its own.
+            let return_type = f.return_type.substitute(&[], self).map_err(|e| {
+                VmInternalError::TypeSubstitution {
+                    message: format!(
+                        "sys-op `{sys_op}` has a return type that does not realize: {e}"
+                    ),
+                }
+            })?;
+            (sys_op, f.arity, return_type)
         };
         let args_offset = self
             .stack
@@ -6718,6 +6734,7 @@ impl BexVm {
         Ok(VmExecState::SysOp {
             operation: sys_op,
             args: call_args,
+            return_type,
         })
     }
 

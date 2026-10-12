@@ -1013,7 +1013,6 @@ pub struct BexEngine {
     ///
     /// Built once: it projects `sys_op_ctx`'s table, which is fixed at engine
     /// construction.
-    inbound_alias_view: indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
     /// Process argv passed in at engine creation. Exposed to BAML via
     /// `baml.sys.argv()`. Shared (cheap to clone) with each spawned VM.
     argv: Arc<[String]>,
@@ -2124,8 +2123,6 @@ impl BexEngine {
 
         // Project the alias bodies once; the table they mirror does not
         // change after this point.
-        let inbound_alias_view =
-            crate::conversion::inbound_alias_view(sys_op_ctx.type_alias_definitions.as_ref());
 
         Ok(Self {
             #[cfg(test)]
@@ -2156,7 +2153,6 @@ impl BexEngine {
             resolved_enum_names,
             sys_ops,
             runtime_compiler,
-            inbound_alias_view,
             sys_op_ctx,
             argv,
             heap_permit_manager,
@@ -3499,13 +3495,16 @@ impl BexEngine {
         // Each provided argument is admitted to its parameter's type and
         // landed on the heap (`admit`). For a generic call the now-concrete
         // `param_types` also hold a generic instance to the type arguments
-        // the wire gave it.
+        // the wire gave it; a runtime declaration a receiver bound is spelled
+        // by name in them and resolves through the call's overlay.
+        let runtime_named_objects = Self::runtime_named_objects(&type_values, &live_type_args);
+        let overlay = crate::conversion::InboundRuntimeOverlay::new(&runtime_named_objects);
         let vm_args: Vec<Value> = args
             .into_iter()
             .enumerate()
             .map(|(idx, arg)| match arg {
                 BexCallArg::Provided(value) => self
-                    .admit_to_heap(&mut thread, &value, &param_types[idx])
+                    .admit_to_heap(&mut thread, &value, &param_types[idx], overlay)
                     .map_err(|error| match error {
                         EngineError::TypeMismatch { message } if callee_is_generic => {
                             EngineError::TypeMismatch {
@@ -3589,6 +3588,29 @@ impl BexEngine {
 
     /// Finish preparation for every executable entry without setting a VM
     /// frame, registering active execution or running application code.
+    /// The runtime declarations one call spells by name: the heads of the
+    /// type values the host passed and of the live types a receiver bound. A
+    /// `BamlTy` head is a bare name on the wire, so a spelling that names a
+    /// runtime declaration resolves through these.
+    fn runtime_named_objects(
+        type_values: &indexmap::IndexMap<String, bex_vm_types::types::TypeValue>,
+        live_type_args: &indexmap::IndexMap<String, bex_vm_types::RuntimeTy>,
+    ) -> indexmap::IndexMap<String, HeapPtr> {
+        let mut named = indexmap::IndexMap::new();
+        let mut note = |head: &bex_vm_types::TypeHead| {
+            if let Ok(name) = head.to_overlay_name() {
+                named.entry(name.to_string()).or_insert_with(|| head.ptr());
+            }
+        };
+        for type_value in type_values.values() {
+            type_value.ty.visit_heads(&mut note);
+        }
+        for ty in live_type_args.values() {
+            ty.visit_heads(&mut note);
+        }
+        named
+    }
+
     /// Named functions and callable targets differ only in target resolution
     /// and argument binding; both admit and execute this same prepared state.
     #[expect(clippy::too_many_arguments)]
@@ -3610,16 +3632,7 @@ impl BexEngine {
         copy_objects: bool,
     ) -> Result<PreparedInvocation, EngineError> {
         // Finish fallible host type narrowing before setting the entry frame.
-        let mut runtime_named_objects = indexmap::IndexMap::new();
-        for type_value in type_values.values() {
-            type_value.ty.visit_heads(&mut |head| {
-                if let Ok(name) = head.to_overlay_name() {
-                    runtime_named_objects
-                        .entry(name.to_string())
-                        .or_insert_with(|| head.ptr());
-                }
-            });
-        }
+        let runtime_named_objects = Self::runtime_named_objects(&type_values, &live_type_args);
         // Live capability receivers supply exact heap-owned types. Their wire
         // spellings are useful for structural checks above, but may name a
         // runtime-only declaration and must not be re-anchored by name here.
@@ -4066,24 +4079,6 @@ impl BexEngine {
             }
         };
 
-        // Build VM args: the receiver as `self` in slot 0 (bound methods), then
-        // each provided arg, admitted to its declared param type (offset by
-        // `self` for bound methods). A callable that declares no parameter
-        // types takes each value as what it is.
-        let mut vm_args: Vec<Value> = Vec::with_capacity(args.len() + self_offset);
-        if let Some(receiver) = receiver {
-            vm_args.push(receiver);
-        }
-        for (idx, arg) in args.into_iter().enumerate() {
-            vm_args.push(match arg {
-                BexCallArg::Provided(value) => match param_types.get(idx + self_offset) {
-                    Some(ty) => self.admit_to_heap(&mut thread, &value, ty)?,
-                    None => self.convert_external_to_vm_value(&mut thread, *value)?,
-                },
-                BexCallArg::OmittedDefault => Value::OMITTED_ARG,
-            });
-        }
-
         let mut seed_wire_type_args = indexmap::IndexMap::new();
         let mut seed_live_type_args = indexmap::IndexMap::new();
         for (i, ty) in seed_type_args.into_iter().enumerate() {
@@ -4095,6 +4090,28 @@ impl BexEngine {
             let wire_ty = crate::conversion::overlay_wire_ty_under_permit(&live_ty, thread.proof());
             seed_wire_type_args.insert(name.clone(), wire_ty);
             seed_live_type_args.insert(name, live_ty);
+        }
+
+        // Build VM args: the receiver as `self` in slot 0 (bound methods), then
+        // each provided arg, admitted to its declared param type (offset by
+        // `self` for bound methods). A callable that declares no parameter
+        // types takes each value as what it is. A runtime declaration the
+        // callable's type arguments name resolves through the call's overlay.
+        let runtime_named_objects =
+            Self::runtime_named_objects(&indexmap::IndexMap::new(), &seed_live_type_args);
+        let overlay = crate::conversion::InboundRuntimeOverlay::new(&runtime_named_objects);
+        let mut vm_args: Vec<Value> = Vec::with_capacity(args.len() + self_offset);
+        if let Some(receiver) = receiver {
+            vm_args.push(receiver);
+        }
+        for (idx, arg) in args.into_iter().enumerate() {
+            vm_args.push(match arg {
+                BexCallArg::Provided(value) => match param_types.get(idx + self_offset) {
+                    Some(ty) => self.admit_to_heap(&mut thread, &value, ty, overlay)?,
+                    None => self.convert_external_to_vm_value(&mut thread, *value)?,
+                },
+                BexCallArg::OmittedDefault => Value::OMITTED_ARG,
+            });
         }
         self.prepare_entry_point(
             thread,
@@ -5662,7 +5679,11 @@ impl BexEngine {
                         return Ok(ThreadOutcome::RootValue(return_value));
                     }
 
-                    VmExecState::SysOp { operation, args } => {
+                    VmExecState::SysOp {
+                        operation,
+                        args,
+                        return_type,
+                    } => {
                         // Single round-trip sys-op call. Convert args, race
                         // the op against the active cancel token, and push the
                         // resulting value back on the VM stack. No
@@ -5773,16 +5794,10 @@ impl BexEngine {
                         // a catchable throw.
                         // Host-facing validation reads these in the wire's
                         // spelling, so convert once at the read.
-                        let host_ret_ty: Option<baml_type::RuntimeTy> =
-                            if operation == SysOp::BamlHostCallHostValue {
-                                Some(crate::conversion::overlay_wire_ty_under_permit(
-                                    &host_call_type_arg(args.get(2).copied(), 2, "ret_ty")
-                                        .map_err(EngineError::VmInternalError)?,
-                                    thread.proof(),
-                                ))
-                            } else {
-                                None
-                            };
+                        // The op's declared return type, held across the await:
+                        // a runtime declaration it names is rooted, since a
+                        // collection may move it while the permit is released.
+                        let declared_ret = self.hold_ty(return_type.into());
                         let host_throws_ty: Option<baml_type::RuntimeTy> =
                             if operation == SysOp::BamlHostCallHostValue {
                                 Some(crate::conversion::overlay_wire_ty_under_permit(
@@ -5985,18 +6000,31 @@ impl BexEngine {
 
                         match outcome {
                             Ok(external) => {
-                                // The return value of a host callback is
-                                // admitted to the declared return type
-                                // (`host_ret_ty`, captured from `args[2]` before
-                                // the await), as an argument is to its
-                                // parameter. One that does not inhabit it is a
-                                // breach of the callback's contract.
-                                let landed = if operation == SysOp::BamlHostCallHostValue
-                                    && let Some(ret_ty) = host_ret_ty.as_ref()
-                                {
-                                    self.admit_host_return(thread, &external, ret_ty)?
+                                // The result is admitted to the op's declared
+                                // return type, as an argument is to its
+                                // parameter. A host callback's return that does
+                                // not inhabit it is a breach of the callback's
+                                // contract; any other op's is a fault of the op.
+                                let declared_ret = self.release_ty(thread.proof(), declared_ret)?;
+                                let landed = if operation == SysOp::BamlHostCallHostValue {
+                                    self.admit_host_return(thread, &external, &declared_ret)?
                                 } else {
-                                    Ok(self.convert_external_to_vm_value(thread, external)?)
+                                    Ok(self
+                                        .admit_realized_to_heap(thread, &external, &declared_ret)
+                                        .map_err(|error| match error {
+                                            EngineError::TypeMismatch { message } => {
+                                                EngineError::VmInternalError(
+                                                    bex_vm::errors::VmInternalError::BridgeFailure {
+                                                        message: format!(
+                                                            "sys-op `{operation}` returned a value \
+                                                             that does not inhabit its declared \
+                                                             return type `{declared_ret}`: {message}"
+                                                        ),
+                                                    },
+                                                )
+                                            }
+                                            other => other,
+                                        })?)
                                 };
                                 match landed {
                                     // Push the value onto the eval stack. The
@@ -6011,7 +6039,7 @@ impl BexEngine {
                                         let op_err = OpError::new(
                                             SysOp::BamlHostCallHostValue,
                                             sys_types::VmPanic::HostContractViolation {
-                                                message: mismatch.message,
+                                                message: mismatch.to_string(),
                                                 class_name: None,
                                                 language: None,
                                             },

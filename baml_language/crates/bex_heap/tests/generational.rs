@@ -1281,6 +1281,11 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         panic!("field runtime type ceased to wrap an enum")
     };
     assert_eq!(head.tag(), enum_tag, "a move must not change identity");
+    // BUG: flaky. `HeapPtr` equality is by address, and a collection may place
+    // the moved enum at the address it vacated (seen once in a full run as
+    // `0x78d400040@3` vs `0x78d400040@0`), so this inequality can fail with the
+    // head correctly repointed. The property to pin is that the head points at
+    // the live enum, which the match below already checks.
     assert_ne!(
         head.ptr(),
         enum_ptr,
