@@ -11,15 +11,16 @@
 //!
 //! # Counting
 //!
-//! A tracked object's header is one word of state (the count, a color and
-//! a buffered bit) and a pointer to its type's operations table: 16 bytes, an `Rc`'s
-//! two counts. A copy increments. A drop decrements, and then:
+//! A tracked object's header is 32 bits of state (the count, a color and
+//! a buffered bit), the object's 32-bit index in the root buffer and a
+//! pointer to its type's operations table: 16 bytes on a 64-bit target,
+//! an `Rc`'s two counts. A copy increments. A drop decrements, and then:
 //!
-//! - at zero the object is freed: its value is dropped and its box
-//!   deallocated, unless it sits in the root buffer, which deallocates it
-//!   at the next collection or the next sweep of the buffer (once dead
-//!   roots are half of it). Frees are iterative: a free that drops more
-//!   handles to zero queues them, so a long chain never recurses;
+//! - at zero the object is freed: its value is dropped, it leaves the root
+//!   buffer if it is in it (swapping the last root into its slot, by the
+//!   index in its header), and its box is deallocated. Frees are
+//!   iterative: a free that drops more handles to zero queues them, so a
+//!   long chain never recurses;
 //! - above zero it may have just become the last link into a garbage cycle,
 //!   so it is buffered as a possible root (once: the buffered bit stays set
 //!   until a collection takes it out).
@@ -52,10 +53,12 @@
 //!   [`crate::mem`]). `mark_gray` takes one count away per reported edge,
 //!   so an extra edge would whiten a live object and free it; a missing one
 //!   only keeps a cycle alive.
-//! - **A box stays allocated while its count is nonzero or it is in the
-//!   root buffer.** A free drops the value at count zero but leaves a
-//!   buffered box to whoever takes it out of the buffer (a collection, a
-//!   sweep, or the thread's teardown), so the buffer never dangles.
+//! - **Every object in the root buffer has a nonzero count, and its
+//!   header holds its index there.** A free takes a buffered object out of
+//!   the buffer before deallocating its box, so the buffer never dangles.
+//!   A collection takes the whole buffer and clears every root's buffered
+//!   bit before it drops any value, so a free during a collection only
+//!   ever looks up the new buffer.
 //! - **Values are dropped only outside a collection's walks.** `freeing`
 //!   queues frees that a drop triggers and blocks collections; `collecting`
 //!   blocks nested ones. Dropping a value (which drops the handles it
@@ -107,36 +110,41 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tracked {}
 
-// The state word: the count in the low bits, then the color, the buffered
-// bit and the acyclic bit in the top four bits: a count stays below 2^60
-// on a 64-bit target and below 2^28 on a 32-bit one (wasm32).
-const COLOR_SHIFT: u32 = usize::BITS - 4;
-const RC_MASK: usize = (1 << COLOR_SHIFT) - 1;
-const COLOR_MASK: usize = 0b11 << COLOR_SHIFT;
+/// The state word: the count in the low bits, then the color, the buffered
+/// bit and the acyclic bit in the top four bits, so a count stays below
+/// 2^28 (a copy past that aborts, as `Rc`'s count overflow does). 32 bits,
+/// so that with the root index beside it the header is two words.
+type State = u32;
+const COLOR_SHIFT: u32 = State::BITS - 4;
+const RC_MASK: State = (1 << COLOR_SHIFT) - 1;
+const COLOR_MASK: State = 0b11 << COLOR_SHIFT;
 /// In use, or found live by the last collection.
-const BLACK: usize = 0;
+const BLACK: State = 0;
 /// Reached by `mark_gray`; its count has had the internal references taken
 /// away.
-const GRAY: usize = 1 << COLOR_SHIFT;
+const GRAY: State = 1 << COLOR_SHIFT;
 /// Garbage, once `scan` is done.
-const WHITE: usize = 2 << COLOR_SHIFT;
+const WHITE: State = 2 << COLOR_SHIFT;
 /// Garbage being freed by `collect`: its count is the sentinel below, and
 /// drops of handles to it change nothing else.
-const FREEING: usize = 3 << COLOR_SHIFT;
+const FREEING: State = 3 << COLOR_SHIFT;
 /// In the root buffer.
-const BUFFERED: usize = 1 << (usize::BITS - 2);
+const BUFFERED: State = 1 << (State::BITS - 2);
 /// Never on a cycle: a function value's object that holds no tracked
 /// handle. Allocated with `BUFFERED` set too, so a decrement never buffers
 /// it; a free deallocates it whatever `BUFFERED` says.
-const ACYCLIC: usize = 1 << (usize::BITS - 1);
+const ACYCLIC: State = 1 << (State::BITS - 1);
 /// The count a white object is given while its cycle is freed, so the
 /// decrements the cycle's own handles make never reach zero.
-const SENTINEL: usize = 1 << (COLOR_SHIFT - 1);
+const SENTINEL: State = 1 << (COLOR_SHIFT - 1);
 
 /// An object's header, at the start of its box.
 #[repr(C)]
 pub(crate) struct Header {
-    state: Cell<usize>,
+    state: Cell<State>,
+    /// The object's index in the root buffer while `BUFFERED` is set (and
+    /// `ACYCLIC` is not): a free takes it out of the buffer in O(1).
+    root: Cell<u32>,
     ops: &'static Ops,
 }
 
@@ -264,6 +272,7 @@ fn alloc<T: Trace>(value: T, acyclic: bool) -> Ptr<T> {
     let boxed = Box::new(CcBox {
         header: Header {
             state: Cell::new(state),
+            root: Cell::new(0),
             ops: &OpsOf::<T>::OPS,
         },
         value,
@@ -313,7 +322,7 @@ impl Kind for Tracked {
 
     #[inline]
     fn strong_count<T: ?Sized>(ptr: &Ptr<T>) -> usize {
-        ptr.header().state.get() & RC_MASK
+        (ptr.header().state.get() & RC_MASK) as usize
     }
 
     #[inline]
@@ -333,9 +342,6 @@ pub struct Stats {
     pub traced: u64,
     /// Objects freed as garbage cycles.
     pub freed: u64,
-    /// Boxes of roots that died buffered, deallocated by a sweep of the
-    /// buffer between collections.
-    pub swept: u64,
     /// Total time inside collections, in nanoseconds.
     pub pause_total_ns: u64,
     /// The longest collection, in nanoseconds.
@@ -344,8 +350,8 @@ pub struct Stats {
 
 /// The collector's state for this thread: a native program runs on one.
 struct Gc {
-    /// Possible roots: objects decremented to a nonzero count since the last
-    /// collection, or freed while buffered.
+    /// Possible roots: live objects decremented to a nonzero count since
+    /// the last collection.
     roots: RefCell<Vec<NonNull<Header>>>,
     /// Objects whose count reached zero while another free was running.
     pending: RefCell<Vec<NonNull<Header>>>,
@@ -361,9 +367,6 @@ struct Gc {
     floor: Cell<usize>,
     /// Whether the threshold adapts to how much the collections free.
     adaptive: Cell<bool>,
-    /// Buffered roots freed by their counts since the buffer was last
-    /// swept: boxes kept only because the buffer points to them.
-    dead: Cell<usize>,
     stats: Cell<Stats>,
     /// Every pause, in nanoseconds, when `BAML_CC_STATS=1`.
     pauses: RefCell<Option<Vec<u64>>>,
@@ -379,13 +382,11 @@ thread_local! {
             threshold: Cell::new(0),
             floor: Cell::new(0),
             adaptive: Cell::new(false),
-            dead: Cell::new(0),
             stats: Cell::new(Stats {
                 collections: 0,
                 roots: 0,
                 traced: 0,
                 freed: 0,
-                swept: 0,
                 pause_total_ns: 0,
                 pause_max_ns: 0,
             }),
@@ -399,24 +400,13 @@ thread_local! {
 pub const DEFAULT_THRESHOLD: usize = 10_000;
 /// The adaptive threshold's ceiling.
 const MAX_THRESHOLD: usize = 1 << 22;
-/// The fewest dead roots worth a sweep of the buffer.
-const SWEEP_MIN: usize = 4096;
 
 impl Drop for Gc {
     // `BAML_CC_STATS=1` asks for the report on stderr: the measurement hook.
     #[allow(clippy::print_stderr)]
     fn drop(&mut self) {
-        // Boxes freed while buffered are deallocated; live roots (garbage
-        // nobody collected) are left to the process.
-        for header in self.roots.get_mut().drain(..) {
-            // SAFETY: a buffered box stays allocated until a collection or
-            // this takes it out.
-            unsafe {
-                if header.as_ref().state.get() & RC_MASK == 0 {
-                    (header.as_ref().ops.dealloc)(header);
-                }
-            }
-        }
+        // Buffered roots are live (garbage nobody collected is left to the
+        // process); objects freed from now on find no buffer to leave.
         if let Some(pauses) = self.pauses.get_mut() {
             eprintln!("{}", report_text(self.stats.get(), pauses));
         }
@@ -460,39 +450,36 @@ unsafe fn released(header: NonNull<Header>) {
         }
         gc.freeing.set(true);
         // SAFETY: the caller's contract, and every queued object's.
-        let mut dead = usize::from(unsafe { free(header) });
+        unsafe { free(Some(gc), header) };
         loop {
             let next = gc.pending.borrow_mut().pop();
             match next {
                 // SAFETY: queued objects had no handle left either.
-                Some(next) => dead += usize::from(unsafe { free(next) }),
+                Some(next) => unsafe { free(Some(gc), next) },
                 None => break,
             }
         }
         gc.freeing.set(false);
-        if dead > 0 {
-            gc.dead.set(gc.dead.get() + dead);
-            sweep(gc);
-        }
         if gc.roots.borrow().len() >= gc.threshold.get() {
             maybe_collect(gc);
         }
         true
     });
     if queued.is_err() {
-        // The thread is exiting and its collector is gone: free directly.
+        // The thread is exiting and its collector (with its buffer) is
+        // gone: free directly.
         // SAFETY: the caller's contract.
-        unsafe { free(header) };
+        unsafe { free(None, header) };
     }
 }
 
-/// Drop the value of an object no handle reaches, and deallocate its box
-/// unless the root buffer still points to it. Returns whether it did not:
-/// a dead root, which the next sweep or collection deallocates.
+/// Drop the value of an object no handle reaches, take it out of the root
+/// buffer if it is there (`gc` is `None` once the thread's collector is
+/// gone, buffer and all), and deallocate its box.
 ///
 /// # Safety
 /// No handle to the object is left and its value is not dropped.
-unsafe fn free(header: NonNull<Header>) -> bool {
+unsafe fn free(gc: Option<&Gc>, header: NonNull<Header>) {
     // SAFETY: the caller's contract.
     unsafe {
         let ops = header.as_ref().ops;
@@ -500,44 +487,29 @@ unsafe fn free(header: NonNull<Header>) -> bool {
         #[cfg(feature = "mem-stats")]
         crate::mem::on_free();
         let state = header.as_ref().state.get();
-        if state & BUFFERED == 0 || state & ACYCLIC != 0 {
-            (ops.dealloc)(header);
-            false
-        } else {
-            true
+        if let Some(gc) = gc
+            && state & BUFFERED != 0
+            && state & ACYCLIC == 0
+        {
+            unbuffer(gc, header);
         }
+        (ops.dealloc)(header);
     }
 }
 
-/// Deallocate the dead roots once they are at least half the buffer (and
-/// enough to bother): without it, objects that die after being buffered
-/// keep their boxes until the next collection, as many as the threshold
-/// allows. Never runs while values are being freed, so every root with a
-/// zero count has its value dropped.
-fn sweep(gc: &Gc) {
-    let dead = gc.dead.get();
-    if dead < SWEEP_MIN || gc.freeing.get() || gc.collecting.get() {
-        return;
-    }
+/// Take a buffered object out of the root buffer, moving the last root
+/// into its slot.
+fn unbuffer(gc: &Gc, header: NonNull<Header>) {
+    // SAFETY: the object's box is allocated (its free is running).
+    let index = unsafe { header.as_ref().root.get() };
+    let slot = index as usize;
     let mut roots = gc.roots.borrow_mut();
-    if dead * 2 < roots.len() {
-        return;
+    debug_assert_eq!(roots.get(slot), Some(&header), "a stale root index");
+    roots.swap_remove(slot);
+    if let Some(&moved) = roots.get(slot) {
+        // SAFETY: buffered objects are allocated.
+        unsafe { moved.as_ref().root.set(index) };
     }
-    let before = roots.len();
-    roots.retain(|&header| {
-        if state_of(header).get() & RC_MASK == 0 {
-            // SAFETY: a dead root's value is dropped and nothing else
-            // points to its box.
-            unsafe { (header.as_ref().ops.dealloc)(header) };
-            false
-        } else {
-            true
-        }
-    });
-    let mut stats = gc.stats.get();
-    stats.swept += (before - roots.len()) as u64;
-    gc.stats.set(stats);
-    gc.dead.set(0);
 }
 
 /// The object's count went down and it lives: buffer it as a possible root
@@ -550,10 +522,16 @@ fn possible_root(header: NonNull<Header>) {
     if state.get() & COLOR_MASK == FREEING {
         return;
     }
-    state.set(state.get() | BUFFERED);
     let _ = GC.try_with(|gc| {
+        state.set(state.get() | BUFFERED);
         let len = {
             let mut roots = gc.roots.borrow_mut();
+            let Ok(index) = u32::try_from(roots.len()) else {
+                // 2^32 buffered roots: as a count overflow, abort.
+                std::process::abort();
+            };
+            // SAFETY: as above.
+            unsafe { header.as_ref().root.set(index) };
             roots.push(header);
             roots.len()
         };
@@ -625,12 +603,11 @@ fn report_text(stats: Stats, pauses: &[u64]) -> String {
         sorted[(sorted.len() * 99).div_ceil(100).saturating_sub(1)]
     };
     format!(
-        "baml-cc collections={} roots={} traced={} freed={} swept={} pause_total_ns={} pause_max_ns={} pause_p99_ns={}",
+        "baml-cc collections={} roots={} traced={} freed={} pause_total_ns={} pause_max_ns={} pause_p99_ns={}",
         stats.collections,
         stats.roots,
         stats.traced,
         stats.freed,
-        stats.swept,
         stats.pause_total_ns,
         stats.pause_max_ns,
         p99
@@ -638,19 +615,19 @@ fn report_text(stats: Stats, pauses: &[u64]) -> String {
 }
 
 #[inline]
-fn state_of(header: NonNull<Header>) -> &'static Cell<usize> {
+fn state_of(header: NonNull<Header>) -> &'static Cell<State> {
     // SAFETY: only called on boxes the collector knows are allocated, and
     // the reference does not outlive the collection.
     unsafe { &(*header.as_ptr()).state }
 }
 
 #[inline]
-fn color(state: usize) -> usize {
+fn color(state: State) -> State {
     state & COLOR_MASK
 }
 
 #[inline]
-fn set_color(header: NonNull<Header>, color: usize) {
+fn set_color(header: NonNull<Header>, color: State) {
     let state = state_of(header);
     state.set((state.get() & !COLOR_MASK) | color);
 }
@@ -705,25 +682,15 @@ fn collect_in(gc: &Gc) {
     if roots.is_empty() {
         return;
     }
-    // Every dead root is in `roots` and is deallocated below.
-    gc.dead.set(0);
     gc.collecting.set(true);
     let start = clock::now();
     let mut stats = gc.stats.get();
     stats.collections += 1;
     stats.roots += roots.len() as u64;
 
-    // Roots freed while buffered: only the box is left. Sorted out before
-    // any marking, which takes counts down to zero on live objects too.
-    let mut live = Vec::with_capacity(roots.len());
-    for header in roots {
-        if state_of(header).get() & RC_MASK == 0 {
-            // SAFETY: its value is dropped and nothing points to it.
-            unsafe { (header.as_ref().ops.dealloc)(header) };
-        } else {
-            live.push(header);
-        }
-    }
+    // A free takes its object out of the buffer, so every root is live.
+    let live = roots;
+    debug_assert!(live.iter().all(|&root| state_of(root).get() & RC_MASK > 0));
     // Mark: subtract the internal counts below every live root.
     let mut stack = Vec::new();
     let mut traced = 0;
@@ -766,16 +733,16 @@ fn collect_in(gc: &Gc) {
         #[cfg(feature = "mem-stats")]
         crate::mem::on_free();
     }
-    let mut dead = 0;
     loop {
         let next = gc.pending.borrow_mut().pop();
         match next {
-            // SAFETY: queued objects had no handle left.
-            Some(next) => dead += usize::from(unsafe { free(next) }),
+            // SAFETY: queued objects had no handle left. Every root of this
+            // collection had its buffered bit cleared above, so a buffered
+            // one is in the new buffer.
+            Some(next) => unsafe { free(Some(gc), next) },
             None => break,
         }
     }
-    gc.dead.set(dead);
     for &header in &whites {
         // SAFETY: every value in the cycle is dropped; nothing points to
         // the boxes any more.
@@ -947,7 +914,7 @@ pub(crate) unsafe fn inspect(header: NonNull<Header>, visitor: &mut dyn Visitor)
             return None;
         }
         (header.as_ref().ops.trace)(header, visitor);
-        Some(count)
+        Some(count as usize)
     }
 }
 
@@ -1356,31 +1323,61 @@ mod tests {
         assert!(report().starts_with("baml-cc collections="));
     }
 
+    fn buffered() -> usize {
+        GC.with(|gc| gc.roots.borrow().len())
+    }
+
     #[test]
-    fn roots_that_die_buffered_are_swept_between_collections() {
+    fn roots_that_die_buffered_leave_the_buffer() {
+        if torture() {
+            // Torture collects at every buffered decrement: nothing stays.
+            return;
+        }
         let threshold = threshold();
         set_threshold(1 << 30, false);
         collect();
         let start = stats();
-        let count = if cfg!(miri) {
-            SWEEP_MIN + 10
-        } else {
-            3 * SWEEP_MIN
-        };
+        let count = if cfg!(miri) { 64 } else { 4096 };
         let freed = freed_by(|| {
-            for value in 0..count {
-                let a = node(i64::try_from(value).unwrap());
-                // Buffered by the copy's drop, then freed by its count.
-                drop(a.clone());
+            let mut kept: Vec<_> = (0..count)
+                .map(|value| {
+                    let a = node(i64::try_from(value).unwrap());
+                    // Buffered by the copy's drop.
+                    drop(a.clone());
+                    a
+                })
+                .collect();
+            assert_eq!(buffered(), count);
+            // Free every third root, from the back and the middle, so
+            // removals move the last root into freed slots.
+            let mut index = kept.len();
+            while index > 0 {
+                index -= 1;
+                if index % 3 == 0 {
+                    drop(kept.swap_remove(index));
+                }
             }
-            if !torture() {
-                // (Torture collects at every buffered decrement instead.)
-                assert_eq!(stats().collections, start.collections, "no collection");
-                assert!(stats().swept - start.swept >= SWEEP_MIN as u64, "swept");
+            assert_eq!(buffered(), kept.len());
+            // The rest leave in an order unrelated to their slots.
+            kept.reverse();
+            while kept.len() > 1 {
+                let middle = kept.len() / 2;
+                drop(kept.swap_remove(middle));
+                assert_eq!(buffered(), kept.len());
             }
+            drop(kept);
+            assert_eq!(buffered(), 0);
+            assert_eq!(stats().collections, start.collections, "no collection");
         });
         assert_eq!(freed, count);
+        assert_eq!(stats().roots, start.roots, "no root was left to collect");
         set_threshold(threshold, true);
+    }
+
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn the_header_is_as_big_as_an_rc_s_counts() {
+        assert_eq!(size_of::<Header>(), 16);
     }
 
     #[test]

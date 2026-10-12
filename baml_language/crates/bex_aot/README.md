@@ -45,8 +45,9 @@ also get a cycle collector, as in Nim's ORC.
 
 - **Handle kinds.** Every handle type takes a kind, `handle::Kind`.
   `Untracked` (the default) is a plain `Rc`. `Tracked` (`Cc<T>`, `CcMap`,
-  `CcFunc`, `CcCell`) is a counted box in `cc` with a 16-byte header (the
-  count, a color, a buffered bit, and a per-type ops table). The backend
+  `CcFunc`, `CcCell`) is a counted box in `cc` with a 16-byte header (a
+  32-bit state word with the count, a color and a buffered bit, the
+  object's index in the root buffer, and a per-type ops table). The backend
   tracks exactly the types whose type graph has a cycle through them
   (`baml_compiler2_rust`'s `memory.rs`); in the test corpus that is about 1%
   of heap types, and a program with none runs exactly as under `Rc`.
@@ -61,8 +62,9 @@ also get a cycle collector, as in Nim's ORC.
   is still referenced from outside, free the rest. It runs itself when the
   buffer reaches the threshold (`BAML_CC_THRESHOLD`, default
   `cc::DEFAULT_THRESHOLD` = 10,000; it doubles while collections mostly
-  retrace live data, `BAML_CC_ADAPTIVE=0` fixes it). Roots freed by their
-  counts while buffered are swept out between collections. A host may also
+  retrace live data, `BAML_CC_ADAPTIVE=0` fixes it). An object freed by its
+  count while buffered leaves the buffer at once (by the index in its
+  header), so the buffer only ever holds live objects. A host may also
   call `mem::collect()` at an idle point; generated code never does.
 - **The seam.** Generated code allocates and reads heap objects only
   through `handle::shared` / `cc`, `Shared::borrow` / `borrow_mut`,
@@ -79,8 +81,8 @@ also get a cycle collector, as in Nim's ORC.
   `unsafe` code (plus one block in the `mem-stats` registry); its module
   docs list what the blocks rely on.
 - **Observability.** `cc::stats()` and `BAML_CC_STATS=1` (printed to stderr
-  when the thread exits) give collections, roots, objects traced, freed and
-  swept, and the pause total, maximum and p99 (pauses read as 0 on
+  when the thread exits) give collections, roots, objects traced and freed,
+  and the pause total, maximum and p99 (pauses read as 0 on
   wasm32-unknown-unknown, which has no clock). With the `mem-stats` feature
   (tests only), `mem::stats()` counts allocations and frees per thread,
   `mem::unreachable()` counts live objects no outside handle reaches (trial
