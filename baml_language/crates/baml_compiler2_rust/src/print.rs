@@ -681,6 +681,19 @@ impl<'a, 'db> Printer<'a, 'db> {
         self.sites.set(sites);
     }
 
+    /// The allocator for a heap literal of type `ty`, counted as one site:
+    /// `tracked` when the cycle collector tracks the type, else `untracked`.
+    fn allocator(
+        &self,
+        ty: &NativeTy<'db>,
+        untracked: TokenStream,
+        tracked: TokenStream,
+    ) -> TokenStream {
+        let is_tracked = self.types.tracking.value(ty);
+        self.site(is_tracked);
+        if is_tracked { tracked } else { untracked }
+    }
+
     /// The unwind site of `block`: the error local of its handler and the
     /// jump the structurer gave it.
     fn unwind_site(&self, block: BlockId) -> Result<Option<UnwindSite>, Rejection> {
@@ -2586,13 +2599,8 @@ impl<'a, 'db> Printer<'a, 'db> {
                     .iter()
                     .map(|element| self.operand(element, Some(element_ty)))
                     .collect::<Result<Vec<_>, _>>()?;
-                let tracked = self.types.tracking.value(literal_ty);
-                self.site(tracked);
-                let new = if tracked {
-                    quote! { array::new_cc }
-                } else {
-                    quote! { array::new }
-                };
+                let new =
+                    self.allocator(literal_ty, quote! { array::new }, quote! { array::new_cc });
                 let value = if elements.is_empty() {
                     quote! { #new::<#element_tokens>(Vec::new()) }
                 } else {
@@ -2624,13 +2632,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                         Ok(quote! { (#key, #value) })
                     })
                     .collect::<Result<Vec<_>, Rejection>>()?;
-                let tracked = self.types.tracking.value(literal_ty);
-                self.site(tracked);
-                let new = if tracked {
-                    quote! { map::new_cc }
-                } else {
-                    quote! { map::new }
-                };
+                let new = self.allocator(literal_ty, quote! { map::new }, quote! { map::new_cc });
                 let value = if entries.is_empty() {
                     quote! { #new::<#key_tokens, #value_tokens>(Vec::new()) }
                 } else {
@@ -2662,13 +2664,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                         Ok(quote! { #ident: #value })
                     })
                     .collect::<Result<Vec<_>, Rejection>>()?;
-                let alloc = if self.types.class_tracked(class) {
-                    self.site(true);
-                    quote! { cc }
-                } else {
-                    self.site(false);
-                    quote! { shared }
-                };
+                let alloc = self.allocator(literal_ty, quote! { shared }, quote! { cc });
                 (
                     quote! { #alloc(#name { #(#fields),* }) },
                     NativeTy::Class(class.clone()),
