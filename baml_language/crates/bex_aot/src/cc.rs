@@ -519,9 +519,8 @@ fn unbuffer(gc: &Gc, header: NonNull<Header>) {
 fn possible_root(header: NonNull<Header>) {
     // SAFETY: the object is alive (its count is not zero).
     let state = unsafe { &header.as_ref().state };
-    if state.get() & COLOR_MASK == FREEING {
-        return;
-    }
+    // A white being freed has `BUFFERED` set, so `decrement` never gets here.
+    debug_assert_ne!(color(state.get()), FREEING);
     let _ = GC.try_with(|gc| {
         state.set(state.get() | BUFFERED);
         let len = {
@@ -614,11 +613,19 @@ fn report_text(stats: Stats, pauses: &[u64]) -> String {
     )
 }
 
+/// The state word of an object the collector holds (a buffered root, or
+/// one reached from it during a collection: allocated by the invariants
+/// above). Read and written by value, so no reference outlives the call.
 #[inline]
-fn state_of(header: NonNull<Header>) -> &'static Cell<State> {
-    // SAFETY: only called on boxes the collector knows are allocated, and
-    // the reference does not outlive the collection.
-    unsafe { &(*header.as_ptr()).state }
+fn state(header: NonNull<Header>) -> State {
+    // SAFETY: the box is allocated; the header is only ever shared.
+    unsafe { header.as_ref().state.get() }
+}
+
+#[inline]
+fn set_state(header: NonNull<Header>, state: State) {
+    // SAFETY: as in `state`.
+    unsafe { header.as_ref().state.set(state) }
 }
 
 #[inline]
@@ -628,8 +635,7 @@ fn color(state: State) -> State {
 
 #[inline]
 fn set_color(header: NonNull<Header>, color: State) {
-    let state = state_of(header);
-    state.set((state.get() & !COLOR_MASK) | color);
+    set_state(header, (state(header) & !COLOR_MASK) | color);
 }
 
 /// The collector's visitor: every tracked child, by header.
@@ -690,7 +696,7 @@ fn collect_in(gc: &Gc) {
 
     // A free takes its object out of the buffer, so every root is live.
     let live = roots;
-    debug_assert!(live.iter().all(|&root| state_of(root).get() & RC_MASK > 0));
+    debug_assert!(live.iter().all(|&root| state(root) & RC_MASK > 0));
     // Mark: subtract the internal counts below every live root.
     let mut stack = Vec::new();
     let mut traced = 0;
@@ -698,27 +704,15 @@ fn collect_in(gc: &Gc) {
         traced += mark_gray(header, &mut stack);
     }
     // Scan: what keeps a count is live, with everything it reaches.
-    let mut black = Vec::new();
+    let mut blacken = Vec::new();
     for &header in &live {
-        scan(header, &mut stack, &mut black);
+        scan(header, &mut stack, &mut blacken);
     }
     // Collect: gather the white objects, giving each the sentinel count.
     let mut whites = Vec::new();
     for &header in &live {
-        let state = state_of(header);
-        state.set(state.get() & !BUFFERED);
+        set_state(header, state(header) & !BUFFERED);
         collect_white(header, &mut whites, &mut stack);
-    }
-    // An edge from a white object to one that lives was taken away by
-    // `mark_gray` and never given back; the white value's drop below takes
-    // it away again. Give it back first.
-    for &header in &whites {
-        children(header, |child| {
-            let state = state_of(child);
-            if color(state.get()) != FREEING {
-                state.set(state.get() + 1);
-            }
-        });
     }
     stats.traced += traced;
     stats.freed += whites.len() as u64;
@@ -822,7 +816,7 @@ fn torture() -> bool {
 /// Gray everything reachable from `root`, taking one count away for every
 /// edge followed. Returns how many objects it grayed.
 fn mark_gray(root: NonNull<Header>, stack: &mut Vec<NonNull<Header>>) -> u64 {
-    if color(state_of(root).get()) == GRAY {
+    if color(state(root)) == GRAY {
         return 0;
     }
     set_color(root, GRAY);
@@ -830,11 +824,10 @@ fn mark_gray(root: NonNull<Header>, stack: &mut Vec<NonNull<Header>>) -> u64 {
     let mut grayed = 1;
     while let Some(header) = stack.pop() {
         children(header, |child| {
-            let state = state_of(child);
-            let next = state.get() - 1;
-            state.set(next);
+            let next = state(child) - 1;
+            set_state(child, next);
             if color(next) != GRAY {
-                state.set((next & !COLOR_MASK) | GRAY);
+                set_state(child, (next & !COLOR_MASK) | GRAY);
                 stack.push(child);
                 grayed += 1;
             }
@@ -845,15 +838,20 @@ fn mark_gray(root: NonNull<Header>, stack: &mut Vec<NonNull<Header>>) -> u64 {
 
 /// Whiten the gray objects below `root` that kept no count, and blacken
 /// (restoring counts) what a counted one reaches.
-fn scan(root: NonNull<Header>, stack: &mut Vec<NonNull<Header>>, black: &mut Vec<NonNull<Header>>) {
+/// `blacken` is `scan_black`'s stack.
+fn scan(
+    root: NonNull<Header>,
+    stack: &mut Vec<NonNull<Header>>,
+    blacken: &mut Vec<NonNull<Header>>,
+) {
     stack.push(root);
     while let Some(header) = stack.pop() {
-        let state = state_of(header).get();
-        if color(state) != GRAY {
+        let current = state(header);
+        if color(current) != GRAY {
             continue;
         }
-        if state & RC_MASK > 0 {
-            scan_black(header, black);
+        if current & RC_MASK > 0 {
+            scan_black(header, blacken);
         } else {
             set_color(header, WHITE);
             children(header, |child| stack.push(child));
@@ -868,11 +866,10 @@ fn scan_black(root: NonNull<Header>, stack: &mut Vec<NonNull<Header>>) {
     stack.push(root);
     while let Some(header) = stack.pop() {
         children(header, |child| {
-            let state = state_of(child);
-            let next = state.get() + 1;
-            state.set(next);
+            let next = state(child) + 1;
+            set_state(child, next);
             if color(next) != BLACK {
-                state.set((next & !COLOR_MASK) | BLACK);
+                set_state(child, (next & !COLOR_MASK) | BLACK);
                 stack.push(child);
             }
         });
@@ -881,7 +878,8 @@ fn scan_black(root: NonNull<Header>, stack: &mut Vec<NonNull<Header>>) {
 
 /// Gather the white objects below `root` that are not still buffered (a
 /// buffered one is gathered from its own root; an acyclic one is never in
-/// the buffer), marking each as being freed.
+/// the buffer), marking each as being freed, and give back the count of
+/// every edge out of it.
 fn collect_white(
     root: NonNull<Header>,
     whites: &mut Vec<NonNull<Header>>,
@@ -889,12 +887,21 @@ fn collect_white(
 ) {
     stack.push(root);
     while let Some(header) = stack.pop() {
-        let state = state_of(header);
-        let current = state.get();
+        let current = state(header);
         if color(current) == WHITE && (current & BUFFERED == 0 || current & ACYCLIC != 0) {
-            state.set(SENTINEL | BUFFERED | FREEING);
+            set_state(header, SENTINEL | BUFFERED | FREEING);
             whites.push(header);
-            children(header, |child| stack.push(child));
+            children(header, |child| {
+                // `mark_gray` took this edge's count away and nothing gave
+                // it back; the white value's drop takes it away again, so
+                // give it back now. A child that is garbage too gets the
+                // sentinel (overwriting this) when it is gathered.
+                let count = state(child);
+                if color(count) != FREEING {
+                    set_state(child, count + 1);
+                }
+                stack.push(child);
+            });
         }
     }
 }
