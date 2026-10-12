@@ -5,10 +5,12 @@ Work
   prepare builds `live` items, each a class instance with a one-element tags
   array and a pointer to its heap-order parent (so the graph is a tree of
   depth log2(live): 2 * live + 1 objects). Each job then takes `churn` steps:
-  pick a pseudo-random item (x = (x * 1103515245 + 12345) mod live), replace
-  it with an equal fresh item (the old one stays alive while its children
-  point at it), allocate a short-lived item pointing at the fresh one, and
-  walk four hops up the parent chain, folding values into a checksum.
+  pick a pseudo-random item (s = (s * 1103515245 + 12345) mod 2^31,
+  x = (s / 256) mod live; an LCG mod `live` itself has period 32 at
+  live = 500,000, so it would churn the same few items), replace it with
+  an equal fresh item (the old one stays alive while its children point at
+  it), allocate a short-lived item pointing at the fresh one, and walk four
+  hops up the parent chain, folding values into a checksum.
 
 BAML path
   Allocation with a large live heap: a tracing collector has to mark the

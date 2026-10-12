@@ -386,9 +386,10 @@ def live_heap_oracle(live, churn, seed):
     the item, its parent and grandparent in heap order, weighted by hop."""
     if live == 0:
         return [0, 0]
-    checksum, x = 0, seed % live
+    checksum, state = 0, seed % 2147483648
     for _ in range(churn):
-        x = (x * 1103515245 + 12345) % live
+        state = (state * 1103515245 + 12345) % 2147483648
+        x = (state // 256) % live
         chain, i = [x], x
         while len(chain) < 4 and i is not None:
             chain.append((i * 7 + seed) % 1000)
