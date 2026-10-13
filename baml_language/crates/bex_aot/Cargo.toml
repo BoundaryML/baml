@@ -15,6 +15,17 @@ indexmap = { workspace = true }
 num-bigint = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# Telemetry (the `telemetry` feature): the VM's recording pipeline.
+baml_env = { workspace = true, optional = true }
+btel_clock = { workspace = true, optional = true }
+btel_file = { workspace = true, optional = true }
+btel_processor = { workspace = true, optional = true }
+btel_recorder = { workspace = true, optional = true }
+btel_records = { workspace = true, optional = true }
+btel_settings = { workspace = true, optional = true }
+btel_snapshot = { workspace = true, optional = true }
+btel_types = { workspace = true, optional = true }
+rustc-hash = { workspace = true, optional = true }
 
 [features]
 # Count heap allocations and frees (`bex_aot::mem::stats`), keep a weak
@@ -23,6 +34,21 @@ serde_json = { workspace = true }
 # untracked handle is exactly `Rc<RefCell<T>>`, and a tracked one (`Cc`) is
 # the cycle collector's box with no registry.
 mem-stats = [  ]
+# Record telemetry (`bex_aot::telemetry`) as the VM does, at the level
+# `BAML_TELEMETRY` names. On in every generated program; without it the
+# instrumentation the backend emits compiles to nothing.
+telemetry = [
+  "dep:baml_env",
+  "dep:btel_clock",
+  "dep:btel_file",
+  "dep:btel_processor",
+  "dep:btel_recorder",
+  "dep:btel_records",
+  "dep:btel_settings",
+  "dep:btel_snapshot",
+  "dep:btel_types",
+  "dep:rustc-hash",
+]
 
 [lints]
 workspace = true

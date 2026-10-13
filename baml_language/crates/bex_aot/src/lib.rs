@@ -39,6 +39,11 @@ pub mod mem;
 pub mod readable;
 pub mod render;
 pub mod string;
+#[cfg(feature = "telemetry")]
+pub mod telemetry;
+#[cfg(not(feature = "telemetry"))]
+#[path = "telemetry_off.rs"]
+pub mod telemetry;
 pub mod thrown;
 
 pub use baml_type::Int63;
