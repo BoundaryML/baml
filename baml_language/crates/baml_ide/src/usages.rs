@@ -152,6 +152,10 @@ fn find_item_usages(
             }
 
             // Confirm this token resolves to the same definition.
+            // BUG: by its bare name only — a token inside a qualified path
+            // (`root.Dog`) is confirmed as the reader's own `Dog` and a use
+            // of another namespace's item is missed, so rename rewrites the
+            // wrong tokens and skips the right ones.
             let same = match def {
                 DeclRef::Source(def) => {
                     match resolve_name_at(db, sf, tok.text_range().start(), &name) {

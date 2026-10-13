@@ -15,7 +15,7 @@ use baml_base::Name;
 use baml_compiler2_ast::{AstSourceMap, BodyNode, Expr, ExprBody, Literal};
 use baml_compiler2_hir::{
     contributions::Definition,
-    package::{PackageItems, accessible_package},
+    package::{PackageItems, PathHead, path_head},
 };
 use baml_type::{Ty, throw_facts::FunctionThrowFacts};
 
@@ -408,25 +408,22 @@ fn resolve_path_to_ty<'db>(
     ns_context: &[Name],
     segments: &[Name],
 ) -> Option<Ty> {
+    let head = path_head(db, pkg_items.root, segments);
     // Try treating the last segment as an enum variant and the prefix as
     // the enum path (e.g. `Status.HttpError` or `root.Status.Failed`).
-    if segments.len() >= 2 {
-        let enum_path = &segments[..segments.len() - 1];
-        let variant = &segments[segments.len() - 1];
+    if let [enum_path @ .., variant] = segments
+        && !enum_path.is_empty()
+        && let Some(def @ Definition::Enum(_)) =
+            lookup_type_in_scope(db, pkg_items, ns_context, head, enum_path)
+    {
         let enum_name = enum_path.last().expect("enum_path is non-empty");
-        let enum_ns = &enum_path[..enum_path.len() - 1];
-        if let Some(def @ Definition::Enum(_)) =
-            lookup_type_in_scope(db, pkg_items, ns_context, enum_ns, enum_name)
-        {
-            let qtn = qualify_def(db, def, enum_name);
-            return Some(Ty::EnumVariant(qtn, variant.clone()));
-        }
+        let qtn = qualify_def(db, def, enum_name);
+        return Some(Ty::EnumVariant(qtn, variant.clone()));
     }
 
     // Otherwise resolve the full path as a type.
     let name = segments.last().expect("segments is non-empty");
-    let seg_ns = &segments[..segments.len() - 1];
-    let def = lookup_type_in_scope(db, pkg_items, ns_context, seg_ns, name)?;
+    let def = lookup_type_in_scope(db, pkg_items, ns_context, head, segments)?;
     match def {
         Definition::Class(_) => Some(Ty::Class(qualify_def(db, def, name), Box::new([]))),
         Definition::Enum(_) => Some(Ty::Enum(qualify_def(db, def, name))),
@@ -439,30 +436,33 @@ fn resolve_path_to_ty<'db>(
     }
 }
 
-/// Resolve `type_name` qualified by `ns`, by the rule declaration path
-/// lowering applies, so throw-set recovery resolves a path identically
-/// whether it appears as an enum-variant prefix or a plain type:
-///
-/// - a bare name (`ns` empty) is an item of the namespace it is written in
-///   (`ns_context`), and nothing else;
-/// - a `root.`-prefixed `ns` is the rest of the path in the current package;
-/// - any other leading segment is a package this one reaches.
+/// The type `path` names, read from `head`, by the rule declaration path
+/// lowering applies (`LowerCtx::resolve_type`), so throw-set recovery
+/// resolves a path identically whether it appears as an enum-variant prefix
+/// or a plain type: a bare name is an item of the namespace it is written in
+/// (`ns_context`) and nothing else; a `Package` head reads the rest of the
+/// path as `<namespaces>.<Item>` in that package — `root.` in this one.
 fn lookup_type_in_scope<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
-    ns: &[Name],
-    type_name: &Name,
+    head: PathHead,
+    path: &[Name],
 ) -> Option<Definition<'db>> {
-    let Some((first, rest)) = ns.split_first() else {
-        return pkg_items.lookup_type(ns_context, type_name);
-    };
-    if first.as_str() == "root" {
-        pkg_items.lookup_type(rest, type_name)
-    } else {
-        let package = accessible_package(db, pkg_items.root, first)?;
-        baml_compiler2_hir::package::package_items(db, package).lookup_type(rest, type_name)
+    if let PathHead::Package(package) = head
+        && let Some((type_name, namespace)) = path[1..].split_last()
+    {
+        let items = if package == pkg_items.root {
+            pkg_items
+        } else {
+            baml_compiler2_hir::package::package_items(db, package)
+        };
+        return items.lookup_type(namespace, type_name);
     }
+    let [type_name] = path else {
+        return None;
+    };
+    pkg_items.lookup_type(ns_context, type_name)
 }
 
 /// Collect, for each `catch` clause binding, the `(binding-name, arm-body-expr)`

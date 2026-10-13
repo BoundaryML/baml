@@ -27,7 +27,7 @@ use baml_compiler2_hir::{
     contributions::Definition,
     item_data::MethodOwner,
     loc::{ClassLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
-    package::{accessible_package, is_served_from_interface},
+    package::{PathHead, is_served_from_interface},
     type_ref::{TypeRefId, TypeRefKind, TypeRefStore},
 };
 use baml_type::{
@@ -386,14 +386,15 @@ impl<'db> LowerCtx<'db> {
     /// [`Self::lower_type_path`] through the same body-local overlay.
     pub fn lower_type_path_with_overlay(
         &self,
+        head: PathHead,
         segments: &[Name],
         overlay: &[ParamTy],
     ) -> LoweringTy {
         if overlay.is_empty() {
-            return self.lower_type_path(segments);
+            return self.lower_type_path(head, segments);
         }
         let fork = self.fork_with_overlay(overlay);
-        let ty = fork.lower_type_path(segments);
+        let ty = fork.lower_type_path(head, segments);
         self.merge_fork_diagnostics(&fork);
         ty
     }
@@ -523,7 +524,7 @@ impl<'db> LowerCtx<'db> {
                     .iter()
                     .map(|binding| (binding.name.clone(), self.lower_type_ref(store, binding.ty)))
                     .collect();
-                self.lower_path(segments, args, bindings, position)
+                self.lower_path(self.path_head(segments), segments, args, bindings, position)
             }
             // A projection node: `T.Output` / `(T as I).Output`. The
             // qualifying interface is the written one, or determined from
@@ -619,8 +620,8 @@ impl<'db> LowerCtx<'db> {
     /// an interface-named prefix reaches the caller's projection-base
     /// rejection intact instead of tripping the existential completeness
     /// check first.
-    fn probe_projection_prefix(&self, prefix: &[Name]) -> Option<LoweringTy> {
-        let resolved = self.resolve_type(prefix);
+    fn probe_projection_prefix(&self, head: PathHead, prefix: &[Name]) -> Option<LoweringTy> {
+        let resolved = self.resolve_type(head, prefix);
         if matches!(
             resolved,
             Some(ResolvedTypeDefinition::Source(Definition::Enum(_)))
@@ -632,7 +633,13 @@ impl<'db> LowerCtx<'db> {
             return None;
         }
         let saved = self.diags.as_ref().map(|d| d.borrow().len());
-        let ty = self.lower_path(prefix, Vec::new(), Vec::new(), TypePosition::ConstraintHead);
+        let ty = self.lower_path(
+            head,
+            prefix,
+            Vec::new(),
+            Vec::new(),
+            TypePosition::ConstraintHead,
+        );
         let clean = match (&self.diags, saved) {
             (Some(diags), Some(saved)) => {
                 let mut diags = diags.borrow_mut();
@@ -782,9 +789,12 @@ impl<'db> LowerCtx<'db> {
 
     /// Lowers a resolved (or fallback-resolved) type path. Mirrors TIR's
     /// `lower_path` dispatch and its failure fallbacks: in-scope type var,
-    /// then enum-variant reading, then `Error`.
+    /// then enum-variant reading, then `Error`. `head` is HIR's reading of
+    /// the first segment ([`PathHead`]); a lexical type name (a generic
+    /// parameter, `Self`) shadows it, as a binding shadows it in a body.
     fn lower_path(
         &self,
+        head: PathHead,
         segments: &[Name],
         args: Vec<LoweringTy>,
         bindings: Vec<(Name, LoweringTy)>,
@@ -793,12 +803,15 @@ impl<'db> LowerCtx<'db> {
         let short = segments.last().expect("type paths are never empty");
 
         // Lexical generic names (including a body-local overlay appended to
-        // the frame) shadow nominal type definitions. A multi-segment path
-        // rooted in such a name is an associated projection, never a package
-        // or namespace path with the same spelling. Associated types are NOT
-        // in the frame and have no bare spelling: a reference must be written
-        // `Self.X` (the projection road below), so a bare associated-type
-        // name falls through to ordinary resolution and diagnoses unresolved.
+        // the frame) shadow nominal type definitions, as in Rust: a path
+        // rooted in such a name is a projection off the type variable,
+        // whatever follows — never a package or namespace path with the same
+        // spelling, and never a generic instantiation (a projection takes no
+        // arguments; written ones are an arity error). Associated types are
+        // NOT in the frame and have no bare spelling: a reference must be
+        // written `Self.X` (the projection road below), so a bare
+        // associated-type name falls through to ordinary resolution and
+        // diagnoses unresolved.
         let generic_head = self
             .generic_params
             .iter()
@@ -810,10 +823,11 @@ impl<'db> LowerCtx<'db> {
             return LoweringTy::TypeVar(param.clone());
         }
         if segments.len() > 1
-            && args.is_empty()
-            && bindings.is_empty()
             && let Some(param) = generic_head
         {
+            if !args.is_empty() || !bindings.is_empty() {
+                self.record_arity(short, args.len() + bindings.len(), 0);
+            }
             let mut ty = LoweringTy::TypeVar(param.clone());
             for member in &segments[1..] {
                 if let Some(interface) = self.projection_interface_for(&ty, member) {
@@ -847,7 +861,7 @@ impl<'db> LowerCtx<'db> {
             return ty;
         }
 
-        if let Some(def) = self.resolve_type(segments) {
+        if let Some(def) = self.resolve_type(head, segments) {
             return match def {
                 ResolvedTypeDefinition::Source(def) => {
                     self.lower_definition(def, short, args, bindings, position)
@@ -858,11 +872,10 @@ impl<'db> LowerCtx<'db> {
             };
         }
 
-        // Fallback 1: a single segment naming an in-scope generic param
-        // (inner frames shadow outer: search in reverse).
-        // Fallback 1b: bare `Self` under a concrete impl owner (r-a's
-        // resolver-provided self type). Interface frames never reach
-        // here - their `Self` is a param, caught by fallback 1.
+        // Fallback 1: bare `Self` under a concrete impl owner (r-a's
+        // resolver-provided self type). A lexical generic name was read
+        // above, before any item; interface frames never reach here -
+        // their `Self` is a param.
         if segments.len() == 1
             && segments[0].as_str() == "Self"
             && let Some(self_ty) = &self.self_ty
@@ -874,7 +887,7 @@ impl<'db> LowerCtx<'db> {
         if segments.len() >= 2
             && args.is_empty()
             && bindings.is_empty()
-            && let Some(enum_def) = self.resolve_type(&segments[..segments.len() - 1])
+            && let Some(enum_def) = self.resolve_type(head, &segments[..segments.len() - 1])
         {
             let enum_qtn = match enum_def {
                 ResolvedTypeDefinition::Source(Definition::Enum(enum_loc)) => {
@@ -965,12 +978,14 @@ impl<'db> LowerCtx<'db> {
             // enum variants had first refusal. Probed with the sink
             // muted so an unresolvable prefix falls through to the
             // ordinary unresolved-path report below.
-            if let Some(head) = self.probe_projection_prefix(&segments[..segments.len() - 1]) {
+            if let Some(prefix_ty) =
+                self.probe_projection_prefix(head, &segments[..segments.len() - 1])
+            {
                 let member = segments.last().expect("checked len > 1");
                 // A hole-carrying prefix cannot host a member projection;
                 // degrade to `Error` inside the prefix (the ordinary
                 // determination failure diagnostics still apply).
-                let head_plain = reject_holes(&head);
+                let head_plain = reject_holes(&prefix_ty);
                 if let Some(iface_qtn) = crate::interfaces::interface_base_without_member_pin(
                     self.db,
                     &head_plain,
@@ -1396,64 +1411,124 @@ impl<'db> LowerCtx<'db> {
         }
     }
 
-    /// The package this context's package spells as `name` (itself, or a
-    /// declared dependency) — see `hir::package::accessible_package`.
-    pub(crate) fn accessible_package(&self, name: &Name) -> Option<baml_base::SourceRoot> {
-        accessible_package(self.db, self.package_items.root, name)
+    /// HIR's reading of a type path's first segment
+    /// ([`baml_compiler2_hir::package::path_head`]), for the paths that have
+    /// no recorded head: annotations, constructor heads, pattern classes.
+    pub fn path_head(&self, segments: &[Name]) -> PathHead {
+        baml_compiler2_hir::package::path_head(self.db, self.package_items.root, segments)
     }
 
-    /// The type `segments` names, when the WHOLE path is the item's own
-    /// path. There are two ways to name an item, and no third:
+    /// The lexical generic parameter named `name`, innermost frame first:
+    /// the names that shadow every item in a type position.
+    pub(crate) fn lexical_generic(&self, name: &Name) -> Option<&ParamTy> {
+        self.generic_params
+            .iter()
+            .rev()
+            .find(|param| param.name() == name)
+    }
+
+    /// The type `<namespace>.<item>` of the language package `package`,
+    /// named by IDENTITY: the compiler's own reference, which nothing in the
+    /// writer's scope — a binding, an item, or a generic parameter spelled
+    /// like the package — shadows. `None` when the package is not installed
+    /// or declares no such type.
+    pub(crate) fn lower_lang_type(
+        &self,
+        package: baml_base::LangPackage,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<LoweringTy> {
+        let root = self.lang_package(package)?;
+        // Under a `Package` head the first segment is the package and is
+        // not read; the package's name stands in for it.
+        let mut segments = Vec::with_capacity(namespace.len() + 2);
+        segments.push(Name::new(package.manifest_name()));
+        segments.extend_from_slice(namespace);
+        segments.push(item.clone());
+        let lowered = match self.resolve_type(PathHead::Package(root), &segments)? {
+            ResolvedTypeDefinition::Source(def) => {
+                self.lower_definition(def, item, Vec::new(), Vec::new(), TypePosition::Existential)
+            }
+            ResolvedTypeDefinition::Exported(exported) => self.lower_exported_type(
+                *exported,
+                item,
+                Vec::new(),
+                Vec::new(),
+                TypePosition::Existential,
+            ),
+        };
+        Some(lowered)
+    }
+
+    /// The items of a source-served package this context can read: its own
+    /// (the context's table) or another's.
+    fn source_items(
+        &self,
+        package: baml_base::SourceRoot,
+    ) -> &'db baml_compiler2_hir::package::PackageItems<'db> {
+        if package == self.package_items.root {
+            self.package_items
+        } else {
+            baml_compiler2_hir::package::package_items(self.db, package)
+        }
+    }
+
+    /// The type `segments` names, read from `head`, when the WHOLE path is
+    /// the item's own path. There are two ways to name an item, and no third:
     /// (1) its bare name, from the namespace that declares it;
     /// (2) its fully qualified path — `root.<namespaces>.<Item>` in this
-    /// package, `<edge>.<namespaces>.<Item>` in one it reaches.
+    /// package, `<edge>.<namespaces>.<Item>` in one it reaches — which is
+    /// what a [`PathHead::Package`] head reads.
     ///
-    /// What decides is the path's HEAD — `root`, an edge, or an item of the
-    /// current namespace — not how long the path is. `Cart.empty` starts at
-    /// a local item and continues with a member of it, so it is not an item
-    /// path and is not answered here: the caller resolves the item (`Cart`)
-    /// and reads the rest as members. What is never done is reading the
-    /// head as a NAMESPACE relative to the current one: `sub.Item` does not
-    /// reach a child namespace `sub`.
-    pub(crate) fn resolve_type(&self, segments: &[Name]) -> Option<ResolvedTypeDefinition<'db>> {
-        let (item, seg_ns) = segments.split_last().expect("type paths are never empty");
+    /// `Cart.empty` starts at a local item and continues with a member of
+    /// it, so it is not an item path and is not answered here: the caller
+    /// resolves the item (`Cart`, a one-segment prefix under the same head)
+    /// and reads the rest as members. A plain head is never read as a
+    /// NAMESPACE relative to the current one: `sub.Item` does not reach a
+    /// child namespace `sub`.
+    ///
+    /// A package and an own item spelled alike (`#4543`, pinned by
+    /// `ns_fixtures/ns_reflect_shadowing`): the package answers first, and
+    /// the own item answers what the package does not — so a one-segment
+    /// prefix under a `Package` head still reads as that bare name.
+    pub(crate) fn resolve_type(
+        &self,
+        head: PathHead,
+        segments: &[Name],
+    ) -> Option<ResolvedTypeDefinition<'db>> {
+        if let PathHead::Package(package) = head
+            && let Some((item, namespace)) = segments[1..].split_last()
+        {
+            // A served dependency answers from its interface ONLY: it has
+            // no files (`definition_of`).
+            if is_served_from_interface(self.db, package) {
+                if let Some(exported) =
+                    crate::package_interface::exported_type_row(self.db, package, namespace, item)
+                {
+                    return Some(ResolvedTypeDefinition::Exported(Box::new(exported.clone())));
+                }
+            } else if let Some(def) = self.source_items(package).lookup_type(namespace, item) {
+                return Some(ResolvedTypeDefinition::Source(def));
+            }
+        }
 
-        if seg_ns.is_empty()
+        if let [item] = segments
             && let Some(def) = self.package_items.lookup_type(&self.ns_context, item)
         {
             return Some(ResolvedTypeDefinition::Source(def));
         }
 
-        if segments.len() >= 2 {
-            let prefix_ns = &segments[1..segments.len() - 1];
-            if segments[0].as_str() == "root" {
-                if let Some(def) = self.package_items.lookup_type(prefix_ns, item) {
-                    return Some(ResolvedTypeDefinition::Source(def));
-                }
-            } else if let Some(package) = self.accessible_package(&segments[0]) {
-                // A served dependency answers from its interface ONLY: it
-                // has no files (`definition_of`).
-                if is_served_from_interface(self.db, package) {
-                    if let Some(exported) = crate::package_interface::exported_type_row(
-                        self.db, package, prefix_ns, item,
-                    ) {
-                        return Some(ResolvedTypeDefinition::Exported(Box::new(exported.clone())));
-                    }
-                } else if let Some(def) =
-                    baml_compiler2_hir::package::package_items(self.db, package)
-                        .lookup_type(prefix_ns, item)
-                {
-                    return Some(ResolvedTypeDefinition::Source(def));
-                }
-            }
-        }
-
         None
     }
 
-    /// Value-namespace resolution, mirroring `LowerCtx::resolve_type`'s
+    /// Where `package` is installed in this database, by identity.
+    fn lang_package(&self, package: baml_base::LangPackage) -> Option<baml_base::SourceRoot> {
+        baml_compiler2_hir::package::lang_roots(self.db).get(package)
+    }
+
+    /// Value-namespace resolution, mirroring `resolve_type`'s
     /// algorithm over `lookup_value` (functions, clients, lets): a bare name
-    /// in the current namespace, or a fully qualified path.
+    /// in the current namespace, or a fully qualified path read from `head`.
     /// TIR's value-path ladder, mirrored, with ONE answer per lane: a
     /// source-served package's definition, or a served package's exported
     /// function by its identity. A served dependency answers from its
@@ -1462,41 +1537,38 @@ impl<'db> LowerCtx<'db> {
     /// interface exports functions and types.
     pub fn resolve_value(
         &self,
+        head: PathHead,
         segments: &[Name],
     ) -> Option<crate::package_interface::ResolvedValue<'db>> {
         use crate::package_interface::ResolvedValue;
-        let (item, seg_ns) = segments.split_last()?;
-        if seg_ns.is_empty()
+        if let PathHead::Package(package) = head
+            && let Some((item, namespace)) = segments[1..].split_last()
+        {
+            if is_served_from_interface(self.db, package) {
+                if let Some(function) =
+                    crate::extern_loc::mounted_function_named(self.db, package, namespace, item)
+                {
+                    return Some(ResolvedValue::External(function));
+                }
+            } else if let Some(def) = self.source_items(package).lookup_value(namespace, item) {
+                return Some(ResolvedValue::Source(def));
+            }
+        }
+        if let [item] = segments
             && let Some(def) = self.package_items.lookup_value(&self.ns_context, item)
         {
             return Some(ResolvedValue::Source(def));
-        }
-        if segments.len() >= 2 {
-            let prefix_ns = &segments[1..segments.len() - 1];
-            if segments[0].as_str() == "root" {
-                if let Some(def) = self.package_items.lookup_value(prefix_ns, item) {
-                    return Some(ResolvedValue::Source(def));
-                }
-            } else if let Some(package) = self.accessible_package(&segments[0]) {
-                if is_served_from_interface(self.db, package) {
-                    return crate::extern_loc::mounted_function_named(
-                        self.db, package, prefix_ns, item,
-                    )
-                    .map(ResolvedValue::External);
-                }
-                if let Some(def) = baml_compiler2_hir::package::package_items(self.db, package)
-                    .lookup_value(prefix_ns, item)
-                {
-                    return Some(ResolvedValue::Source(def));
-                }
-            }
         }
         None
     }
 
     /// Type-namespace resolution, exposed for constructor and member typing.
-    pub fn resolve_type_definition(&self, segments: &[Name]) -> Option<Definition<'db>> {
-        match self.resolve_type(segments) {
+    pub fn resolve_type_definition(
+        &self,
+        head: PathHead,
+        segments: &[Name],
+    ) -> Option<Definition<'db>> {
+        match self.resolve_type(head, segments) {
             Some(ResolvedTypeDefinition::Source(def)) => Some(def),
             _ => None,
         }
@@ -1504,9 +1576,10 @@ impl<'db> LowerCtx<'db> {
 
     pub fn resolve_exported_type_definition(
         &self,
+        head: PathHead,
         segments: &[Name],
     ) -> Option<Box<crate::package_interface::ExportedType>> {
-        match self.resolve_type(segments) {
+        match self.resolve_type(head, segments) {
             Some(ResolvedTypeDefinition::Exported(exported)) => Some(exported),
             _ => None,
         }
@@ -1516,8 +1589,14 @@ impl<'db> LowerCtx<'db> {
     /// `Type.from_json`), resolved exactly as a written annotation path -
     /// classes, enums, aliases, and in-scope generic params - with no
     /// written args or bindings.
-    pub fn lower_type_path(&self, segments: &[Name]) -> LoweringTy {
-        self.lower_path(segments, Vec::new(), Vec::new(), TypePosition::Existential)
+    pub fn lower_type_path(&self, head: PathHead, segments: &[Name]) -> LoweringTy {
+        self.lower_path(
+            head,
+            segments,
+            Vec::new(),
+            Vec::new(),
+            TypePosition::Existential,
+        )
     }
 
     /// `LowerCtx::qualify`, exposed for constructor typing.

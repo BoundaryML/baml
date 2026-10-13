@@ -157,6 +157,13 @@ impl<'db> SemanticIndexBuilder<'db> {
             file_range,
         );
         for ns in &pkg_info.namespace_path {
+            // `ns_root/` would make `root.root.X` a path: refused like every
+            // other `root`, once per file in the directory.
+            if ns.as_str() == crate::package::ROOT_SEGMENT {
+                self.diagnostics.push(Hir2Diagnostic::RootNamespace {
+                    span: TextRange::empty(file_range.start()),
+                });
+            }
             self.push_scope(ScopeKind::Namespace, Some(ns.clone()), file_range);
         }
         let file_name = self
@@ -332,7 +339,26 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// [`DESUGAR_PATH_ROOTS`]: the compiler emits paths rooted at those names,
     /// and a binding shadows a package root where an item does not, so it
     /// would break every desugared path in scope.
+    /// `root` is the path to the package itself
+    /// ([`crate::package::ROOT_SEGMENT`]) and names nothing else: not a
+    /// binding, an item, or a type parameter — so `root.X` always means this
+    /// package's `X`.
+    fn reject_root_name(&mut self, name: &Name, span: TextRange) {
+        if name.as_str() == crate::package::ROOT_SEGMENT {
+            self.diagnostics
+                .push(Hir2Diagnostic::RootIsReserved { span });
+        }
+    }
+
+    /// [`Self::reject_root_name`] over an item's type parameters.
+    fn reject_root_generics(&mut self, generics: &[ast::GenericParam]) {
+        for generic in generics {
+            self.reject_root_name(&generic.name, generic.name_span);
+        }
+    }
+
     fn reject_reserved_binding_name(&mut self, name: &Name, span: TextRange) {
+        self.reject_root_name(name, span);
         if baml_base::lang::is_reserved_binding_name(name.as_str()) {
             self.diagnostics.push(Hir2Diagnostic::ReservedBindingName {
                 name: name.clone(),
@@ -735,7 +761,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     let use_scope = self.current_scope_id();
                     let use_offset = source_map.expr_span(expr_id).start();
                     self.record_path_root_reference(root, use_scope, use_offset);
-                    self.resolve_path_expr(expr_id, root, use_scope, use_offset);
+                    self.resolve_path_expr(expr_id, segments, use_scope, use_offset);
                 }
             }
             ast::Expr::GenericApply { base, .. } => {
@@ -1234,16 +1260,25 @@ impl<'db> SemanticIndexBuilder<'db> {
         false
     }
 
+    /// Record how the path's first segment reads here: a binding in scope,
+    /// else the package it names or a plain name
+    /// ([`crate::package::path_head`]).
     fn resolve_path_expr(
         &mut self,
         expr_id: ast::ExprId,
-        root: &Name,
+        segments: &[Name],
         use_scope: FileScopeId,
         use_offset: TextSize,
     ) {
-        let resolution = self
-            .visible_binding_at(use_scope, use_offset, root)
-            .map_or(PathResolution::Unknown, PathResolution::Local);
+        let root = segments.first().expect("paths are never empty");
+        let resolution = match self.visible_binding_at(use_scope, use_offset, root) {
+            Some(binding) => PathResolution::Local(binding),
+            None => PathResolution::Item(crate::package::path_head(
+                self.db,
+                self.file.source_root(self.db),
+                segments,
+            )),
+        };
         let key = self.current_expr_metadata_key(expr_id);
         self.path_resolutions.push((key, resolution));
     }
@@ -1286,10 +1321,12 @@ impl<'db> SemanticIndexBuilder<'db> {
         );
         let local_id = self.item_tree.alloc_function(f);
         let loc = FunctionLoc::new(self.db, self.file, local_id);
+        self.reject_root_generics(&f.generic_params);
 
         // Only contribute as a top-level symbol if not inside a class.
         // Methods belong to the class scope, not the package namespace.
         if self.class_depth == 0 {
+            self.reject_root_name(&f.name, f.name_span);
             self.value_contributions.push((
                 f.name.clone(),
                 Contribution {
@@ -1342,6 +1379,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         );
         let local_id = self.item_tree.alloc_class(c, attrs, field_attrs);
         let loc = ClassLoc::new(self.db, self.file, local_id);
+        self.reject_root_name(&c.name, c.name_span);
+        self.reject_root_generics(&c.generic_params);
         self.type_contributions.push((
             c.name.clone(),
             Contribution {
@@ -1456,6 +1495,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_implements_for(&mut self, imp: &ast::ImplementsForDef) {
         self.class_depth += 1;
+        self.reject_root_generics(&imp.generic_params);
         // For blanket impls (implements<T> I for C<T>), push a class-like scope
         // so TIR can resolve `self` and type variables in method bodies.
         let has_generic_params = !imp.generic_params.is_empty();
@@ -1541,13 +1581,18 @@ impl<'db> SemanticIndexBuilder<'db> {
             .collect();
         self.class_depth -= 1;
         // Required signatures are the SAME item kind, just bodyless
-        // (r-a's shape); no body walk, so no scope coverage needed.
+        // (r-a's shape); no body walk, so no scope coverage needed — but
+        // the names a signature declares are checked like a body's.
         method_ids.extend(i.required_methods.iter().map(|m| {
             crate::attrs::reject_attributes(
                 &m.attributes,
                 AttributePosition::Function,
                 &mut self.diagnostics,
             );
+            self.reject_root_generics(&m.generic_params);
+            for param in &m.params {
+                self.reject_reserved_binding_name(&param.name, param.name_span);
+            }
             self.item_tree.alloc_function_signature(m)
         }));
 
@@ -1569,6 +1614,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         let local_id = self.item_tree.alloc_interface(i, method_ids);
         self.record_scope_owner(interface_scope, ItemScopeOwner::Interface(local_id));
         let loc = InterfaceLoc::new(self.db, self.file, local_id);
+        self.reject_root_name(&i.name, i.name_span);
+        self.reject_root_generics(&i.generic_params);
         self.type_contributions.push((
             i.name.clone(),
             Contribution {
@@ -1634,6 +1681,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         );
         let local_id = self.item_tree.alloc_enum(e, attrs, variant_attrs);
         let loc = EnumLoc::new(self.db, self.file, local_id);
+        self.reject_root_name(&e.name, e.name_span);
         self.type_contributions.push((
             e.name.clone(),
             Contribution {
@@ -1664,6 +1712,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     fn lower_type_alias(&mut self, ta: &ast::TypeAliasDef) {
         let local_id = self.item_tree.alloc_type_alias(ta);
         let loc = TypeAliasLoc::new(self.db, self.file, local_id);
+        self.reject_root_name(&ta.name, ta.name_span);
         self.type_contributions.push((
             ta.name.clone(),
             Contribution {
@@ -1681,6 +1730,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     fn lower_let(&mut self, l: &ast::LetDef) {
         let local_id = self.item_tree.alloc_let(l);
         let loc = LetLoc::new(self.db, self.file, local_id);
+        self.reject_root_name(&l.name, l.name_span);
         self.value_contributions.push((
             l.name.clone(),
             Contribution {

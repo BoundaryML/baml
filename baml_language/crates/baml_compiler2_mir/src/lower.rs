@@ -2621,7 +2621,7 @@ impl<'db> LoweringContext<'db> {
     fn hir_binding_id_for_path(&self, expr_id: AstExprId) -> Option<BindingId> {
         match self.path_resolution(expr_id)? {
             PathResolution::Local(binding_id) => Some(binding_id),
-            PathResolution::Unknown => None,
+            PathResolution::Item(_) => None,
         }
     }
 

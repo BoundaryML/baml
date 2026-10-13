@@ -350,7 +350,11 @@ impl<'db> InferenceContext<'db> {
                     .iter()
                     .map(|s| baml_type::Name::new(s.as_str()))
                     .collect();
-                let def = self.lower.resolve_type_definition(&segments)?;
+                let head = self.lower.path_head(&segments);
+                if self.scoped_type_param_heads(head, &segments) {
+                    return None;
+                }
+                let def = self.lower.resolve_type_definition(head, &segments)?;
                 let baml_compiler2_hir::contributions::Definition::Class(class_loc) = def else {
                     return None;
                 };
@@ -1182,7 +1186,12 @@ impl<'db> InferenceContext<'db> {
                 consumes_matched: false,
             };
         }
-        let definition = self.lower.resolve_type_definition(class_path);
+        // A type parameter or scoped `type` binding at the head shadows
+        // every item (as for a type pattern): no class is named.
+        let head = self.lower.path_head(class_path);
+        let definition = (!self.scoped_type_param_heads(head, class_path))
+            .then(|| self.lower.resolve_type_definition(head, class_path))
+            .flatten();
         // Destructure spelled with an INTERFACE name: the existential's
         // declared FIELDS destructure like a class's.
         if let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =

@@ -1286,19 +1286,15 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
                         let TypeExprKind::Path { segments, .. } = &bound.kind else {
                             return false;
                         };
-                        segments.first().is_some_and(|package| {
-                            baml_compiler2_hir::package::accessible_package(
-                                db,
-                                pkg_items.root,
-                                package,
-                            )
-                            .and_then(|root| {
+                        match baml_compiler2_hir::package::path_head(db, pkg_items.root, segments) {
+                            baml_compiler2_hir::package::PathHead::Package(root) => {
                                 baml_compiler2_hir_ty::package_interface::mounted_interface(
                                     db, root,
                                 )
-                            })
-                            .is_some()
-                        })
+                                .is_some()
+                            }
+                            baml_compiler2_hir::package::PathHead::Plain => false,
+                        }
                     });
                     if has_mounted_bound {
                         return;
@@ -1972,7 +1968,8 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::InvalidRegexPattern { .. } => DiagnosticId::InvalidRegexPattern,
         TirTypeError::CannotConstructReflectionKind { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::CannotConstructAlias { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::CannotConstructAlias { .. }
+        | TirTypeError::ConstructedTypeParameter { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::CannotConstructBuiltinCompanion { .. } => {
             DiagnosticId::CannotConstructBuiltinCompanion
         }

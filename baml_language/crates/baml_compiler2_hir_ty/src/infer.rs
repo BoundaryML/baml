@@ -35,6 +35,7 @@ use baml_compiler2_hir::{
     body_type_refs::{BodyTypeRefId, BodyTypeRefs},
     contributions::Definition,
     loc::DeclRef,
+    package::PathHead,
     scope::FileScopeId,
     semantic_index::{
         BindingId, BindingKind, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex,
@@ -752,6 +753,9 @@ enum ConstructorMiss {
     /// The head resolves to nothing, or to an item that is neither a class
     /// nor an alias: reported as an unresolved constructor type.
     Unresolved,
+    /// The head is a type parameter or a scoped `type` binding: it shadows
+    /// every item and denotes no class to construct.
+    TypeParameter,
     /// The head is an alias of a type no object literal can construct:
     /// already reported precisely.
     Reported,
@@ -1023,6 +1027,12 @@ enum PendingDiag<'db> {
         expr: ExprId,
         name: baml_type::Name,
         suggestions: Box<[baml_type::Name]>,
+    },
+    /// A constructor head that is a type parameter or a scoped `type`
+    /// binding.
+    ConstructedTypeParameter {
+        expr: ExprId,
+        name: baml_type::Name,
     },
     /// A constructor head that is an alias of a type no object literal can
     /// construct.
@@ -3806,6 +3816,18 @@ impl<'db> InferenceContext<'db> {
             .map(|binding| &binding.parameter)
     }
 
+    /// Whether a lexical name claims the head of a path — a body `type`
+    /// binding or a generic parameter in scope — and so shadows every item
+    /// and package of that spelling, as in Rust. The one answer every path
+    /// form reads: type paths, value paths, constructors, patterns.
+    fn scoped_type_param_heads(&self, head: PathHead, segments: &[baml_type::Name]) -> bool {
+        match head {
+            PathHead::Package(_) | PathHead::Plain => segments.first().is_some_and(|name| {
+                self.scoped_type_param(name).is_some() || self.lower.lexical_generic(name).is_some()
+            }),
+        }
+    }
+
     /// Lower a body-owned type reference through the lexical `type T = …`
     /// overlay, so a scoped name resolves to its rigid parameter.
     fn lower_scoped_type_ref_at(
@@ -3854,9 +3876,13 @@ impl<'db> InferenceContext<'db> {
         )
     }
 
-    fn lower_scoped_type_path(&self, segments: &[baml_type::Name]) -> baml_type::LoweringTy {
+    fn lower_scoped_type_path(
+        &self,
+        head: PathHead,
+        segments: &[baml_type::Name],
+    ) -> baml_type::LoweringTy {
         self.lower
-            .lower_type_path_with_overlay(segments, &self.scoped_type_params())
+            .lower_type_path_with_overlay(head, segments, &self.scoped_type_params())
     }
 
     /// The `let` rule: with an annotation, the initializer is CHECKED
@@ -5506,13 +5532,8 @@ impl<'db> InferenceContext<'db> {
             Some(MemberResolution::Free {
                 func: DeclRef::Source(func),
             }) => {
-                let segments = [
-                    baml_type::Name::new("baml"),
-                    baml_type::Name::new("regex"),
-                    baml_type::Name::new("new"),
-                ];
                 matches!(
-                    self.lower.resolve_value(&segments),
+                    self.lang_value(baml_base::LangPackage::Baml, &["regex"], "new"),
                     Some(ResolvedValue::Source(Definition::Function(target)))
                         if target == func
                 )
@@ -5784,7 +5805,7 @@ impl<'db> InferenceContext<'db> {
             function_name.split('.').map(baml_type::Name::new).collect();
         let Some(ResolvedValue::Source(baml_compiler2_hir::contributions::Definition::Function(
             target,
-        ))) = self.lower.resolve_value(&path)
+        ))) = self.lower.resolve_value(self.lower.path_head(&path), &path)
         else {
             return;
         };
@@ -6233,8 +6254,10 @@ impl<'db> InferenceContext<'db> {
                 || self.qualified_path_root_is_top_level_let(segments))
         {
             let segments = segments.clone();
+            let head = self.item_head(callee, &segments);
             let (prefix, member) = segments.split_at(segments.len() - 1);
             if let Some(fn_ty) = self.interface_static_value(
+                head,
                 prefix,
                 &member[0],
                 OwnArgs::Call(call),
@@ -6268,10 +6291,18 @@ impl<'db> InferenceContext<'db> {
                 .first()
                 .is_some_and(|root| self.template_param_root(root))
         {
+            // A type parameter or scoped `type` binding at the head shadows
+            // every item: the path names no package's function.
+            let head = self.item_head(callee, segments);
+            let head = if self.scoped_type_param_heads(head, segments) {
+                PathHead::Plain
+            } else {
+                head
+            };
             // A path that names a function is a direct call.
             if let Some(ResolvedValue::Source(
                 baml_compiler2_hir::contributions::Definition::Function(function),
-            )) = self.lower.resolve_value(segments)
+            )) = self.lower.resolve_value(head, segments)
             {
                 let signature = function_signature(self.db, function);
                 let callee_name = baml_compiler2_hir::item_data::function_data(self.db, function)
@@ -6299,7 +6330,9 @@ impl<'db> InferenceContext<'db> {
                 );
                 return (fn_ty, false);
             }
-            if let Some(ResolvedValue::External(function)) = self.lower.resolve_value(segments) {
+            if let Some(ResolvedValue::External(function)) =
+                self.lower.resolve_value(head, segments)
+            {
                 let callable = DeclRef::External(function);
                 let row = extern_function_row(self.db, function);
                 let instantiation = self.instantiation_args_at(
@@ -6325,6 +6358,7 @@ impl<'db> InferenceContext<'db> {
             if segments.len() >= 2 {
                 let (prefix, member) = segments.split_at(segments.len() - 1);
                 if let Some(fn_ty) = self.class_static_value(
+                    head,
                     prefix,
                     &member[0],
                     OwnArgs::Call(call),
@@ -6353,9 +6387,10 @@ impl<'db> InferenceContext<'db> {
                 {
                     let base_expr = *base;
                     let segments = segments.clone();
-                    if let Some(fn_ty) = self
-                        .type_qualified_member_callee(call, base_expr, &segments, &member, callee)
-                    {
+                    let head = self.item_head(base_expr, &segments);
+                    if let Some(fn_ty) = self.type_qualified_member_callee(
+                        call, base_expr, head, &segments, &member, callee,
+                    ) {
                         self.result.type_of_expr.insert(callee, fn_ty.clone());
                         return (fn_ty, false);
                     }
@@ -6897,9 +6932,16 @@ impl<'db> InferenceContext<'db> {
         segments: &[baml_type::Name],
         expected: &Expectation,
     ) -> Ty {
+        let head = self.item_head(expr, segments);
+        // A type parameter or scoped `type` binding at the head shadows
+        // every item, as in Rust: the path names members of that type
+        // variable, never a package's or namespace's items — so below, the
+        // head is read as a plain name and no package lane answers.
+        let lexical_head = self.scoped_type_param_heads(head, segments);
+        let head = if lexical_head { PathHead::Plain } else { head };
         let top_level_let_qualified_item = self.qualified_path_root_is_top_level_let(segments)
             && matches!(
-                self.lower.resolve_value(segments),
+                self.lower.resolve_value(head, segments),
                 Some(ResolvedValue::Source(Definition::Function(_)) | ResolvedValue::External(_))
             );
         if self.path_resolves_locally(expr) && !top_level_let_qualified_item {
@@ -6925,7 +6967,7 @@ impl<'db> InferenceContext<'db> {
         }
         if let Some(ResolvedValue::Source(
             baml_compiler2_hir::contributions::Definition::Function(function),
-        )) = self.lower.resolve_value(segments)
+        )) = self.lower.resolve_value(head, segments)
         {
             let had_context =
                 expected.only_has_type().is_some() || self.optional_call_callee_depth > 0;
@@ -7020,7 +7062,7 @@ impl<'db> InferenceContext<'db> {
                 &instantiation,
             );
         }
-        if let Some(ResolvedValue::External(function)) = self.lower.resolve_value(segments) {
+        if let Some(ResolvedValue::External(function)) = self.lower.resolve_value(head, segments) {
             let had_context =
                 expected.only_has_type().is_some() || self.optional_call_callee_depth > 0;
             let callable = DeclRef::External(function);
@@ -7095,8 +7137,9 @@ impl<'db> InferenceContext<'db> {
         // `reflect`, or `type` cannot shadow those package paths. A single
         // segment still reaches this value tier.
         if let Some(root) = segments.first()
-            && let Some(ResolvedValue::Source(Definition::Let(let_binding))) =
-                self.lower.resolve_value(std::slice::from_ref(root))
+            && let Some(ResolvedValue::Source(Definition::Let(let_binding))) = self
+                .lower
+                .resolve_value(PathHead::Plain, std::slice::from_ref(root))
         {
             if self.body_owner_id == Some(BodyOwnerId::Let(let_binding))
                 || let_owner_is_in_flight(self.db, let_binding)
@@ -7132,9 +7175,16 @@ impl<'db> InferenceContext<'db> {
         if segments.len() >= 2 {
             let (prefix, member) = segments.split_at(segments.len() - 1);
             if let Some(fn_ty) = self
-                .interface_static_value(prefix, &member[0], OwnArgs::Fresh, expr, Some(expr))
+                .interface_static_value(head, prefix, &member[0], OwnArgs::Fresh, expr, Some(expr))
                 .or_else(|| {
-                    self.class_static_value(prefix, &member[0], OwnArgs::Fresh, expr, Some(expr))
+                    self.class_static_value(
+                        head,
+                        prefix,
+                        &member[0],
+                        OwnArgs::Fresh,
+                        expr,
+                        Some(expr),
+                    )
                 })
             {
                 return fn_ty;
@@ -7152,13 +7202,31 @@ impl<'db> InferenceContext<'db> {
         // literal type - the same product the type-position path gives
         // (`lower_path` fallback 2; r-a resolves the value namespace to
         // the variant the same way).
-        if let Some(ty) = self.enum_variant_value(segments, Some(expr)) {
+        if let Some(ty) = self.enum_variant_value(head, segments, Some(expr)) {
             return ty;
+        }
+        // Every reading of a type variable's members has declined above
+        // (a static through its bound, `T.from_json`): the path names a
+        // member the variable does not have — never the package item its
+        // spelling would otherwise reach.
+        if lexical_head
+            && let [root, member, ..] = segments
+            && let Some(param) = self
+                .scoped_type_param(root)
+                .or_else(|| self.lower.lexical_generic(root))
+                .cloned()
+        {
+            self.pending_diags.push(PendingDiag::UnresolvedMember {
+                expr,
+                base: Ty::from_plain(&baml_type::Ty::TypeVar(param)),
+                member: member.clone(),
+            });
+            return Ty::error();
         }
         // A name that RESOLVES to a definition kind this road doesn't
         // type (clients, top-level lets outside their tier) is not
         // unresolved - it stays the silent sentinel it always was.
-        if self.lower.resolve_value(segments).is_none() {
+        if self.lower.resolve_value(head, segments).is_none() {
             // When a proper prefix resolves (`baml.media.Image.missing`
             // has the valid type `baml.media.Image`), the segment AFTER
             // the longest valid prefix is what failed - report it alone,
@@ -7166,12 +7234,12 @@ impl<'db> InferenceContext<'db> {
             // rule). A path with no valid prefix reports in full.
             let failed = (1..segments.len()).rev().find_map(|cut| {
                 let prefix = &segments[..cut];
-                (self.lower.resolve_type_definition(prefix).is_some()
+                (self.lower.resolve_type_definition(head, prefix).is_some()
                     || self
                         .lower
-                        .resolve_exported_type_definition(prefix)
+                        .resolve_exported_type_definition(head, prefix)
                         .is_some()
-                    || self.lower.resolve_value(prefix).is_some())
+                    || self.lower.resolve_value(head, prefix).is_some())
                 .then(|| segments[cut].clone())
             });
             // A served dependency answers from its interface alone
@@ -7652,13 +7720,14 @@ impl<'db> InferenceContext<'db> {
     /// instantiation, whatever the spelling.
     fn interface_static_value(
         &mut self,
+        head: PathHead,
         prefix: &[baml_type::Name],
         member: &baml_type::Name,
         own: OwnArgs,
         anchor: ExprId,
         record_at: Option<ExprId>,
     ) -> Option<Ty> {
-        let (interface, _) = self.interface_static_method(prefix, member)?;
+        let (interface, _) = self.interface_static_method(head, prefix, member)?;
         self.item_projection_value(interface, None, member, own, anchor, record_at)
     }
 
@@ -7672,6 +7741,7 @@ impl<'db> InferenceContext<'db> {
     /// the same way, deep in the resolving fn).
     fn class_static_value(
         &mut self,
+        head: PathHead,
         prefix: &[baml_type::Name],
         member: &baml_type::Name,
         own: OwnArgs,
@@ -7680,8 +7750,8 @@ impl<'db> InferenceContext<'db> {
     ) -> Option<Ty> {
         // The qualifier is resolved ONCE, to the class it denotes wherever
         // that class is declared; each tier below then reads that class.
-        let Some((class, pinned)) = self.static_class_for(prefix) else {
-            let written = self.lower_scoped_type_path(prefix);
+        let Some((class, pinned)) = self.static_class_for(head, prefix) else {
+            let written = self.lower_scoped_type_path(head, prefix);
             if written.contains_error() {
                 return None;
             }
@@ -8010,13 +8080,14 @@ impl<'db> InferenceContext<'db> {
     /// discipline, as in `class_static_value`).
     fn enum_variant_value(
         &mut self,
+        head: PathHead,
         segments: &[baml_type::Name],
         record_at: Option<ExprId>,
     ) -> Option<Ty> {
         if segments.len() < 2 {
             return None;
         }
-        let lowered = self.lower_scoped_type_path(segments);
+        let lowered = self.lower_scoped_type_path(head, segments);
         let baml_type::LoweringTy::EnumVariant(qtn, variant) = &lowered else {
             return None;
         };
@@ -8052,17 +8123,18 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         call: ExprId,
         _base_expr: ExprId,
+        head: PathHead,
         prefix: &[baml_type::Name],
         member: &baml_type::Name,
         record_at: ExprId,
     ) -> Option<Ty> {
         let own = OwnArgs::Call(call);
-        self.interface_static_value(prefix, member, own, call, Some(record_at))
-            .or_else(|| self.class_static_value(prefix, member, own, call, Some(record_at)))
+        self.interface_static_value(head, prefix, member, own, call, Some(record_at))
+            .or_else(|| self.class_static_value(head, prefix, member, own, call, Some(record_at)))
             .or_else(|| {
                 let mut full = prefix.to_vec();
                 full.push(member.clone());
-                self.enum_variant_value(&full, Some(record_at))
+                self.enum_variant_value(head, &full, Some(record_at))
             })
     }
 
@@ -8079,6 +8151,7 @@ impl<'db> InferenceContext<'db> {
     /// args).
     fn static_class_for(
         &self,
+        head: PathHead,
         prefix: &[baml_type::Name],
     ) -> Option<(ClassRef<'db>, Option<Vec<Ty>>)> {
         use baml_compiler2_hir::contributions::Definition;
@@ -8091,7 +8164,7 @@ impl<'db> InferenceContext<'db> {
         {
             return None;
         }
-        match self.lower.resolve_type(prefix) {
+        match self.lower.resolve_type(head, prefix) {
             Some(ResolvedTypeDefinition::Source(Definition::Class(class))) => {
                 return Some((DeclRef::Source(class), None));
             }
@@ -8104,7 +8177,7 @@ impl<'db> InferenceContext<'db> {
             }
             Some(ResolvedTypeDefinition::Source(_)) | None => {}
         }
-        let ty = self.static_qualifier_ty(prefix)?;
+        let ty = self.static_qualifier_ty(head, prefix)?;
         if let Some((class, args)) = crate::method_resolution::receiver_class(&self.facts, &ty, 8) {
             return Some((DeclRef::Source(class), Some(args)));
         }
@@ -8135,7 +8208,7 @@ impl<'db> InferenceContext<'db> {
     /// correspondence maps type to class, the same table instance receivers
     /// use. rust-analyzer expands aliases at lowering so every consumer sees
     /// the target; our lazy-alias design expands at the demand point.
-    fn static_qualifier_ty(&self, prefix: &[baml_type::Name]) -> Option<Ty> {
+    fn static_qualifier_ty(&self, head: PathHead, prefix: &[baml_type::Name]) -> Option<Ty> {
         let builtin = match prefix {
             [single] => baml_type::compiler_aliases::by_spelling(single.as_str())
                 .and_then(|alias| alias.lower_class(&[])),
@@ -8143,7 +8216,7 @@ impl<'db> InferenceContext<'db> {
         };
         let ty = builtin.unwrap_or_else(|| {
             crate::impls::interned_ty(&crate::lower::reject_holes(
-                &self.lower_scoped_type_path(prefix),
+                &self.lower_scoped_type_path(head, prefix),
             ))
         });
         if ty.has_error() {
@@ -8161,6 +8234,7 @@ impl<'db> InferenceContext<'db> {
     /// solved by the call's arguments.
     fn interface_static_method(
         &self,
+        head: PathHead,
         prefix: &[baml_type::Name],
         member: &baml_type::Name,
     ) -> Option<(InterfaceRef<'db>, FunctionRef<'db>)> {
@@ -8172,7 +8246,7 @@ impl<'db> InferenceContext<'db> {
         {
             return None;
         }
-        match self.lower.resolve_type(prefix)? {
+        match self.lower.resolve_type(head, prefix)? {
             ResolvedTypeDefinition::Source(Definition::Interface(interface)) => {
                 let method = self.interface_method_loc(interface, member)?;
                 Some((DeclRef::Source(interface), DeclRef::Source(method)))
@@ -8672,8 +8746,14 @@ impl<'db> InferenceContext<'db> {
         }
         let name = &segments[0];
         let is_value = self.local_binding_names_at(site).contains(name)
-            || self.lower.resolve_value(segments).is_some();
-        let is_type = self.lower.resolve_type_definition(segments).is_some()
+            || self
+                .lower
+                .resolve_value(PathHead::Plain, segments)
+                .is_some();
+        let is_type = self
+            .lower
+            .resolve_type_definition(PathHead::Plain, segments)
+            .is_some()
             || self.scoped_type_param(name).is_some()
             || self
                 .lower
@@ -8799,18 +8879,31 @@ impl<'db> InferenceContext<'db> {
                     .iter()
                     .map(|segment| baml_type::Name::new(segment.as_str()))
                     .collect();
-                if matches!(miss, ConstructorMiss::Unresolved) && !segments.is_empty() {
-                    self.pending_diags.push(PendingDiag::UnresolvedCtor {
-                        expr: object,
-                        name: baml_type::Name::new(
-                            segments
-                                .iter()
-                                .map(smol_str::SmolStr::as_str)
-                                .collect::<Vec<_>>()
-                                .join("."),
-                        ),
-                        suggestions: self.lower.type_suggestions(&segments),
-                    });
+                let name = || {
+                    baml_type::Name::new(
+                        segments
+                            .iter()
+                            .map(smol_str::SmolStr::as_str)
+                            .collect::<Vec<_>>()
+                            .join("."),
+                    )
+                };
+                match miss {
+                    ConstructorMiss::Unresolved if !segments.is_empty() => {
+                        self.pending_diags.push(PendingDiag::UnresolvedCtor {
+                            expr: object,
+                            name: name(),
+                            suggestions: self.lower.type_suggestions(&segments),
+                        });
+                    }
+                    ConstructorMiss::TypeParameter => {
+                        self.pending_diags
+                            .push(PendingDiag::ConstructedTypeParameter {
+                                expr: object,
+                                name: name(),
+                            });
+                    }
+                    ConstructorMiss::Unresolved | ConstructorMiss::Reported => {}
                 }
                 for field in fields {
                     self.infer_expr(body, field.value, &Expectation::None);
@@ -8834,8 +8927,9 @@ impl<'db> InferenceContext<'db> {
     /// The class a written constructor head denotes, wherever it is
     /// declared, with the instantiation an alias pins (`None` when the head
     /// names the class itself and the arguments are the object's own). A
-    /// scoped type parameter shadows every item and denotes no class; an
-    /// alias of anything but a class denotes none either.
+    /// scoped type parameter or a lexical generic parameter shadows every
+    /// item and denotes no class; an alias of anything but a class denotes
+    /// none either.
     fn constructor_head(
         &mut self,
         object: ExprId,
@@ -8845,15 +8939,12 @@ impl<'db> InferenceContext<'db> {
 
         use crate::{lower::ResolvedTypeDefinition, package_interface::ExportedType};
 
-        if type_name
-            .0
-            .first()
-            .is_some_and(|name| self.scoped_type_param(name).is_some())
-        {
-            return Err(ConstructorMiss::Unresolved);
-        }
         let db = self.db;
-        let alias_value = match self.lower.resolve_type(&type_name.0) {
+        let head = self.lower.path_head(&type_name.0);
+        if self.scoped_type_param_heads(head, &type_name.0) {
+            return Err(ConstructorMiss::TypeParameter);
+        }
+        let alias_value = match self.lower.resolve_type(head, &type_name.0) {
             None => return Err(ConstructorMiss::Unresolved),
             Some(ResolvedTypeDefinition::Source(Definition::Class(class))) => {
                 return Ok((DeclRef::Source(class), None));
@@ -9763,6 +9854,26 @@ impl<'db> InferenceContext<'db> {
         ))
     }
 
+    /// A function of an installed language package, by that package's
+    /// IDENTITY — the road for every path the compiler itself writes
+    /// (`baml.json.to`, `baml.regex.new`), which no name in the body's scope
+    /// can capture. `None` when the package is not installed or declares no
+    /// such function.
+    fn lang_value(
+        &self,
+        package: baml_base::LangPackage,
+        namespace: &[&str],
+        name: &str,
+    ) -> Option<ResolvedValue<'db>> {
+        let root = self.lang().get(package)?;
+        let segments: Vec<baml_type::Name> = std::iter::once(package.manifest_name())
+            .chain(namespace.iter().copied())
+            .chain(std::iter::once(name))
+            .map(baml_type::Name::new)
+            .collect();
+        self.lower.resolve_value(PathHead::Package(root), &segments)
+    }
+
     /// The interface existential `package.namespace.name`, or the error
     /// sentinel when the package is not installed.
     fn lang_interface_ty(
@@ -10262,7 +10373,8 @@ impl<'db> InferenceContext<'db> {
         segments.len() > 1
             && segments.first().is_some_and(|root| {
                 matches!(
-                    self.lower.resolve_value(std::slice::from_ref(root)),
+                    self.lower
+                        .resolve_value(PathHead::Plain, std::slice::from_ref(root)),
                     Some(ResolvedValue::Source(Definition::Let(_)))
                 )
             })
@@ -10273,12 +10385,25 @@ impl<'db> InferenceContext<'db> {
     /// `current_scope`: a lambda body's expressions live in the semantic
     /// index under the LAMBDA's scope, not the owner's.
     fn path_resolves_locally(&self, expr: ExprId) -> bool {
-        self.metadata_key(expr).is_some_and(|key| {
-            matches!(
-                self.index.path_resolution(key),
-                Some(PathResolution::Local(_))
-            )
-        })
+        matches!(self.path_resolution(expr), Some(PathResolution::Local(_)))
+    }
+
+    /// HIR's recorded reading of a value path's first segment.
+    fn path_resolution(&self, expr: ExprId) -> Option<PathResolution> {
+        self.metadata_key(expr)
+            .and_then(|key| self.index.path_resolution(key))
+    }
+
+    /// The head an ITEM reading of a value path is read from: HIR's
+    /// recorded reading when no binding claims the path. A binding-headed
+    /// path is read as an item in exactly one case — a session root `let`
+    /// spelled like a package path (`qualified_path_root_is_top_level_let`)
+    /// — and then the head is the one its name has.
+    fn item_head(&self, expr: ExprId, segments: &[baml_type::Name]) -> PathHead {
+        match self.path_resolution(expr) {
+            Some(PathResolution::Item(head)) => head,
+            Some(PathResolution::Local(_)) | None => self.lower.path_head(segments),
+        }
     }
 
     /// The `BindingId` a pattern introduces, searched within the current
@@ -10374,7 +10499,7 @@ impl<'db> InferenceContext<'db> {
                         .unwrap_or_else(Ty::error)
                 }
             },
-            Some(PathResolution::Unknown) | None => Ty::error(),
+            Some(PathResolution::Item(_)) | None => Ty::error(),
         }
     }
 
@@ -11692,6 +11817,9 @@ impl<'db> InferenceContext<'db> {
                             .unwrap_or(TirTypeError::UnresolvedType { name, suggestions }),
                         expr,
                     ),
+                    PendingDiag::ConstructedTypeParameter { expr, name } => {
+                        (TirTypeError::ConstructedTypeParameter { name }, expr)
+                    }
                     PendingDiag::AliasNotConstructible {
                         expr,
                         name,

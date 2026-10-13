@@ -308,45 +308,30 @@ pub fn type_names_in_scope_at<'db>(
     out
 }
 
-/// The package `file`'s package spells as `name`, with its items
-/// ([`accessible_package`](crate::package::accessible_package):
-/// itself by its own name, else the dependency reached by the edge named
-/// `name`). Anything else is invisible (`None`) — the same access rule the
-/// type resolver applies.
-fn accessible_package<'db>(
-    db: &'db dyn crate::Db,
-    file: SourceFile,
-    name: &Name,
-) -> Option<(SourceRoot, &'db PackageItems<'db>)> {
-    let own = crate::file_package::file_package(db, file).root;
-    let package = crate::package::accessible_package(db, own, name)?;
-    Some((package, crate::package::package_items(db, package)))
-}
-
-/// Resolve the package and namespace split for a qualified path.
-///
-/// `root` names the file's own package; otherwise the first segment must be
-/// a package the file's package can spell ([`accessible_package`]).
+/// The package a QUALIFIER names, with its items and the index of the
+/// first namespace segment. `segments` is what stands before a `.` — a
+/// whole path's prefix, or the `baml` of a `baml.` the cursor sits after —
+/// so its first segment is read as a package head
+/// ([`path_package`](crate::package::path_package)) however many segments
+/// follow here: the dot is the follower. `None` when the first segment names
+/// no package the file's package can see.
 fn accessible_path_package<'db>(
     db: &'db dyn crate::Db,
     file: SourceFile,
     segments: &[Name],
 ) -> Option<(SourceRoot, &'db PackageItems<'db>, usize)> {
+    let own = file.source_root(db);
     let first = segments.first()?;
-    if first.as_str() == "root" {
-        let own = crate::file_package::file_package(db, file).root;
-        return Some((own, crate::package::package_items(db, own), 1));
-    }
-    let (package, items) = accessible_package(db, file, first)?;
-    Some((package, items, 1))
+    let package = crate::package::path_package(db, own, first)?;
+    Some((package, crate::package::package_items(db, package), 1))
 }
 
 /// Resolve a path expression at a given position.
 ///
 /// Single-segment paths are resolved via `resolve_name_at`. Multi-segment
 /// paths treat the first segment as either `root` (the current file's
-/// package), a literal package name, or the builtin `json` namespace shorthand;
-/// the remaining segments look up inside that package.
+/// package) or a package the file's package can spell; the remaining
+/// segments look up inside that package.
 pub fn resolve_path_at<'db>(
     db: &'db dyn crate::Db,
     file: SourceFile,

@@ -428,6 +428,7 @@ pub struct AssociatedTypeBinding {
 pub struct GenericParam {
     pub name: Name,
     pub bounds: Vec<TypeExpr>,
+    pub name_span: TextRange,
 }
 
 // ── Expression Bodies ───────────────────────────────────────────

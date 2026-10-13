@@ -1,0 +1,3 @@
+class Thing {
+    x int
+}

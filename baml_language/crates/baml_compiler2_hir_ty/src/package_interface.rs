@@ -17,7 +17,7 @@ use baml_compiler2_hir::{
     file_package,
     loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, TypeAliasLoc},
     package::{
-        DependencyTable, PackageItems, accessible_package, edge_table, is_precompiled_stdlib,
+        DependencyTable, PackageItems, PathHead, edge_table, is_precompiled_stdlib,
         is_served_from_interface,
     },
 };
@@ -2344,25 +2344,6 @@ pub fn package_resolution_context(
 // ── PackageResolutionContext lookup methods ─────────────────────────────────
 
 impl<'db> PackageResolutionContext<'db> {
-    /// Get `PackageItems` for an accessible package (own or declared dependency).
-    ///
-    /// Returns `Some` for the own package and any declared dependency,
-    /// `None` for undeclared packages.
-    pub fn items_for_package(
-        &'db self,
-        db: &'db dyn baml_compiler2_hir::Db,
-        pkg_name: &Name,
-    ) -> Option<&'db PackageItems<'db>> {
-        let package = accessible_package(db, self.own, pkg_name)?;
-        if package == self.own {
-            return Some(&self.own_items);
-        }
-        // A served dependency has no semantic items for a consumer: it has
-        // no files; its rows are the answer.
-        (!is_served_from_interface(db, package))
-            .then(|| baml_compiler2_hir::package::package_items(db, package))
-    }
-
     /// The items of the package `root`, when this package can see it: itself
     /// or a declared dependency.
     pub fn items_for_root(
@@ -2380,36 +2361,40 @@ impl<'db> PackageResolutionContext<'db> {
 
     /// Resolve a type by path: a bare name in the namespace `ns_context`, or
     /// a fully qualified path (`root.…` in this package, `<edge>.…` in a
-    /// dependency). A qualified path is never read relative to `ns_context`,
-    /// and a bare name never falls through into a dependency.
+    /// dependency), read from the head HIR gives it
+    /// ([`baml_compiler2_hir::package::path_head`]). A qualified path is
+    /// never read relative to `ns_context`, and a bare name never falls
+    /// through into a dependency.
     pub fn resolve_type(
         &self,
         db: &'db dyn baml_compiler2_hir::Db,
         path: &[Name],
         ns_context: &[Name],
     ) -> Option<(ResolvedSource, Ty)> {
-        let item = path.last()?;
-        if path.len() == 1 {
-            let def = self.own_items.lookup_type(ns_context, item)?;
-            return def_to_ty(db, def).map(|ty| (ResolvedSource::Item, ty));
-        }
-
-        // Package-prefixed path (first segment is `root` or an edge name)
-        if path[0].as_str() == "root"
-            && let Some(def) = self.own_items.lookup_type(&path[1..path.len() - 1], item)
-        {
-            return def_to_ty(db, def).map(|ty| (ResolvedSource::Item, ty));
-        }
-        for (dep_name, dep_root, _) in &self.dep_interfaces {
-            if &path[0] == dep_name
-                && let Some(exported) =
-                    exported_type_row(db, *dep_root, &path[1..path.len() - 1], item)
-            {
-                return Some((ResolvedSource::Builtin, exported.to_ty()));
+        match baml_compiler2_hir::package::path_head(db, self.own, path) {
+            PathHead::Package(package) => {
+                let (item, namespace) = path[1..].split_last()?;
+                if package == self.own {
+                    let def = self.own_items.lookup_type(namespace, item)?;
+                    return def_to_ty(db, def).map(|ty| (ResolvedSource::Item, ty));
+                }
+                let dependency = self
+                    .dep_interfaces
+                    .iter()
+                    .any(|(_, dependency, _)| *dependency == package);
+                let exported = dependency
+                    .then(|| exported_type_row(db, package, namespace, item))
+                    .flatten()?;
+                Some((ResolvedSource::Builtin, exported.to_ty()))
+            }
+            PathHead::Plain => {
+                let [item] = path else {
+                    return None;
+                };
+                let def = self.own_items.lookup_type(ns_context, item)?;
+                def_to_ty(db, def).map(|ty| (ResolvedSource::Item, ty))
             }
         }
-
-        None
     }
 
     /// Resolve a function/value by path, preserving source versus source-less
@@ -2421,35 +2406,40 @@ impl<'db> PackageResolutionContext<'db> {
         path: &[Name],
         ns_context: &[Name],
     ) -> Option<ResolvedValue<'db>> {
-        let item = path.last()?;
-        if path.len() == 1 {
-            return self
-                .own_items
-                .lookup_value(ns_context, item)
-                .map(ResolvedValue::Source);
-        }
-        if path[0].as_str() == "root"
-            && let Some(def) = self.own_items.lookup_value(&path[1..path.len() - 1], item)
-        {
-            return Some(ResolvedValue::Source(def));
-        }
-        for (dep_name, dep_root, _) in &self.dep_interfaces {
-            if &path[0] == dep_name {
-                if is_served_from_interface(db, *dep_root) {
+        match baml_compiler2_hir::package::path_head(db, self.own, path) {
+            PathHead::Package(package) => {
+                let (item, namespace) = path[1..].split_last()?;
+                if package == self.own {
+                    return self
+                        .own_items
+                        .lookup_value(namespace, item)
+                        .map(ResolvedValue::Source);
+                }
+                if !self
+                    .dep_interfaces
+                    .iter()
+                    .any(|(_, dependency, _)| *dependency == package)
+                {
+                    return None;
+                }
+                if is_served_from_interface(db, package) {
                     return Some(ResolvedValue::External(extern_function_named(
-                        db,
-                        *dep_root,
-                        &path[1..path.len() - 1],
-                        item,
+                        db, package, namespace, item,
                     )?));
                 }
-                let dep_items = baml_compiler2_hir::package::package_items(db, *dep_root);
-                if let Some(def) = dep_items.lookup_value(&path[1..path.len() - 1], item) {
-                    return Some(ResolvedValue::Source(def));
-                }
+                baml_compiler2_hir::package::package_items(db, package)
+                    .lookup_value(namespace, item)
+                    .map(ResolvedValue::Source)
+            }
+            PathHead::Plain => {
+                let [item] = path else {
+                    return None;
+                };
+                self.own_items
+                    .lookup_value(ns_context, item)
+                    .map(ResolvedValue::Source)
             }
         }
-        None
     }
 }
 

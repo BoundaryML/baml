@@ -57,6 +57,11 @@ pub enum Hir2Diagnostic {
     /// A value binding or body type binding named a package root the
     /// compiler emits in a desugar.
     ReservedBindingName { name: Name, span: TextRange },
+    /// A binding, item, or type parameter named `root`, the path to the
+    /// package itself.
+    RootIsReserved { span: TextRange },
+    /// A file under a directory `ns_root/`: a namespace named `root`.
+    RootNamespace { span: TextRange },
     /// Generic single-span diagnostic for builtin contract validation.
     DiagnosticMessage {
         diagnostic_id: DiagnosticId,
@@ -424,6 +429,34 @@ impl Hir2Diagnostic {
                     range: *span,
                 },
                 "reserved binding name",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::RootIsReserved { span } => Diagnostic::error(
+                DiagnosticId::ReservedBindingName,
+                "`root` is the path to this package and cannot name a binding, an item, or a \
+                 type parameter"
+                    .to_string(),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "`root` is this package",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::RootNamespace { span } => Diagnostic::error(
+                DiagnosticId::ReservedBindingName,
+                "`root` is the path to this package and cannot name a namespace: rename the \
+                 directory `ns_root/`"
+                    .to_string(),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "this file is in `ns_root/`",
             )
             .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::BuiltinOnlySyntax { feature, span } => Diagnostic::error(

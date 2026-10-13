@@ -328,6 +328,9 @@ pub enum TirTypeError {
     /// A constructor head that is an alias of a type no object literal can
     /// construct (anything but a class).
     CannotConstructAlias { name: Name, denotes: baml_type::Ty },
+    /// A constructor head that is a type parameter or a scoped `type`
+    /// binding: it shadows every item and names no class.
+    ConstructedTypeParameter { name: Name },
     /// A builtin that is lowered where it is called (`log.info`,
     /// `baml.spawn.__spawn`, ...) was referenced as a value.
     CallSiteBuiltinValue { reference: String },
@@ -1277,6 +1280,10 @@ impl TirTypeError {
                     f,
                     "cannot construct `{name}`: it is an alias of `{}`, not a class",
                     denotes.spell(vp)
+                ),
+                TirTypeError::ConstructedTypeParameter { name } => write!(
+                    f,
+                    "cannot construct `{name}`: it is a type parameter here, not a class"
                 ),
                 TirTypeError::MountedPackageCallUnsupported { path } => {
                     let diagnostic =

@@ -124,12 +124,25 @@ fn checked_declaration<'db>(
         .with_frame(function_generic_frame(db, function))
         .with_bounds(bounds.clone())
         .with_self_ty(crate::lower::owner_self_ty(db, function));
-    let options = crate::lower::reject_holes(
-        &lower.lower_type_path(&[Name::new("trace"), Name::new("Options")]),
-    );
-    let settings = crate::lower::reject_holes(
-        &lower.lower_type_path(&[Name::new("trace"), Name::new("Settings")]),
-    );
+    // The compiler names `trace.Options` and `trace.Settings` by identity —
+    // the `trace` package's own declarations, whatever the target's scope
+    // calls `trace` (a generic parameter of that name shadows nothing here).
+    // Without the package installed there is nothing to check the hook
+    // against.
+    let trace = baml_base::LangPackage::Trace;
+    let Some((options, settings)) = lower
+        .lower_lang_type(trace, &[], &Name::new("Options"))
+        .zip(lower.lower_lang_type(trace, &[], &Name::new("Settings")))
+    else {
+        return (
+            vec![invalid(
+                "The `trace` package is not available, so the hook cannot be checked.".into(),
+            )],
+            None,
+        );
+    };
+    let options = crate::lower::reject_holes(&options);
+    let settings = crate::lower::reject_holes(&settings);
     let expected = Ty::from_plain(&baml_type::Ty::Union(
         vec![options, baml_type::Ty::Null].into(),
     ));

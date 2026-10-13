@@ -1183,13 +1183,13 @@ pub(crate) fn extract_generic_params_with_bounds(
             if param_node.kind() != SyntaxKind::GENERIC_PARAM {
                 continue;
             }
-            let mut name: Option<Name> = None;
+            let mut name: Option<(Name, text_size::TextRange)> = None;
             for elem in param_node.children_with_tokens() {
                 if let Some(token) = elem.as_token()
                     && token.kind() == SyntaxKind::WORD
                     && name.is_none()
                 {
-                    name = Some(Name::new(token.text()));
+                    name = Some((Name::new(token.text()), token.text_range()));
                 }
             }
             let bounds: Vec<crate::ast::TypeExpr> = param_node
@@ -1217,8 +1217,12 @@ pub(crate) fn extract_generic_params_with_bounds(
                         .collect()
                 })
                 .unwrap_or_default();
-            if let Some(name) = name {
-                out.push(crate::ast::GenericParam { name, bounds });
+            if let Some((name, name_span)) = name {
+                out.push(crate::ast::GenericParam {
+                    name,
+                    bounds,
+                    name_span,
+                });
             }
         }
     }
