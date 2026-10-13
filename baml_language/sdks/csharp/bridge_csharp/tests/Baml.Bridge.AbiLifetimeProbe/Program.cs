@@ -7,7 +7,7 @@ using System.Text;
 internal static unsafe partial class Program
 {
     private const string NativeLibraryName = "bridge_cffi";
-    private const uint BamlApiV1AbiVersion = 2;
+    private const uint BamlApiV1AbiVersion = 4;
     private const uint BamlBridgeLanguageCSharp = 5;
     private const uint BamlBridgeLanguageRust = 4;
     private const uint StatusOk = 0;
@@ -21,7 +21,7 @@ internal static unsafe partial class Program
     private const int HandleTypeMediaAudio = 7;
 
     private static readonly nuint RequiredV1PrefixSize = ApiFieldEnd(
-        nameof(BamlApiV1.RegisterBridge));
+        nameof(BamlApiV1.MediaFromFileContent));
 
     private static readonly ConcurrentDictionary<
         uint,
@@ -152,8 +152,8 @@ internal static unsafe partial class Program
                 "hello world"),
             "hello_world returned an unexpected value");
         Require(
-            api->CancelFunctionCall(helloCallId) == 0,
-            "completed call ID was not reserved against reuse");
+            api->CancelFunctionCall(helloCallId) == 1,
+            "completed call ID was accepted for cancellation");
 
         const string utf8Boundary = "héllo\0雪\u0001";
         ulong stringCallId = api->NewFunctionCall();
@@ -247,18 +247,16 @@ internal static unsafe partial class Program
             "pre-registration cancellation was rejected");
         byte[] preCancelled = CallFunction(
             api,
-            "slow_cancel_probe",
-            EncodeCallArguments(preCancelledId, null, null));
-        RequireNonSuccess(
-            preCancelled,
-            "pre-cancelled call returned success");
+            "throws_test.SleepMs",
+            EncodeSleepArguments(preCancelledId));
+        RequireCancellation(preCancelled);
 
         ulong inFlightId = api->NewFunctionCall();
         Require(inFlightId != 0, "in-flight call ID allocation failed");
         Task<byte[]> inFlight = DispatchFunction(
             api,
-            "slow_cancel_probe",
-            EncodeCallArguments(inFlightId, null, null));
+            "throws_test.SleepMs",
+            EncodeSleepArguments(inFlightId));
         Thread.Sleep(TimeSpan.FromMilliseconds(100));
         var started = System.Diagnostics.Stopwatch.StartNew();
         Require(
@@ -269,9 +267,7 @@ internal static unsafe partial class Program
             .GetAwaiter()
             .GetResult();
         started.Stop();
-        RequireNonSuccess(
-            cancelled,
-            "in-flight cancelled call returned success");
+        RequireCancellation(cancelled);
         Require(
             started.Elapsed < TimeSpan.FromSeconds(2),
             $"in-flight cancellation completed too slowly: {started.Elapsed}");
@@ -324,8 +320,8 @@ internal static unsafe partial class Program
             api->CancelFunctionCall(0) == 1,
             "zero call ID was accepted for cancellation");
         Require(
-            api->CancelFunctionCall(ulong.MaxValue) == 0,
-            "nonzero pre-registration cancellation was rejected");
+            api->CancelFunctionCall(ulong.MaxValue) == 1,
+            "unknown call ID was accepted for cancellation");
 
         var identifiers = new HashSet<ulong>();
         for (int index = 0; index < 1_024; index++)
@@ -335,6 +331,12 @@ internal static unsafe partial class Program
             Require(
                 identifiers.Add(identifier),
                 $"new_function_call repeated {identifier}");
+            Require(
+                api->ReleaseFunctionCall(identifier) == 0,
+                "unused call allocation was not released");
+            Require(
+                api->ReleaseFunctionCall(identifier) == 1,
+                "released call allocation was accepted twice");
         }
     }
 
@@ -377,6 +379,19 @@ internal static unsafe partial class Program
         return completion.Task;
     }
 
+    private static byte[] EncodeSleepArguments(ulong callId)
+    {
+        var value = new List<byte>();
+        WriteTag(value, 3, 0);
+        WriteVarint(value, 10_000); // InboundValue.int_value: milliseconds.
+        var argument = new List<byte>();
+        WriteLengthDelimited(argument, 1, Encoding.UTF8.GetBytes("ms"));
+        WriteLengthDelimited(argument, 6, value);
+        var call = new List<byte>(EncodeCallArguments(callId, null, null));
+        WriteLengthDelimited(call, 1, argument);
+        return [.. call];
+    }
+
     private static byte[] EncodeCallArguments(
         ulong callId,
         string? argumentName,
@@ -405,6 +420,8 @@ internal static unsafe partial class Program
 
         WriteTag(output, 2, 0);
         WriteVarint(output, callId);
+        // An explicit default InvocationOptions is required; omission is a legacy call.
+        WriteLengthDelimited(output, 6, []);
         return [.. output];
     }
 
@@ -441,6 +458,17 @@ internal static unsafe partial class Program
 
         throw new InvalidDataException(
             $"successful result is not a string or string literal: {Convert.ToHexString(encodedResult)}");
+    }
+
+    private static void RequireCancellation(byte[] encodedResult)
+    {
+        Require(
+            TryGetLengthDelimited(encodedResult, 3, out var error)
+                && TryGetLengthDelimited(error, 1, out var value)
+                && TryGetLengthDelimited(value, 7, out var errorClass)
+                && TryGetLengthDelimited(errorClass, 1, out var name)
+                && DecodeUtf8(name, "error class") == "baml.panics.Cancelled",
+            $"expected cancellation, received {Convert.ToHexString(encodedResult)}");
     }
 
     private static void RequireNonSuccess(
@@ -888,6 +916,12 @@ internal static unsafe partial class Program
             api->MediaMimeType is not null,
             "media_mime_type is null");
         Require(api->RegisterBridge is not null, "register_bridge is null");
+        Require(api->ReleaseFunctionCall is not null, "release_function_call is null");
+        Require(api->InvocationClockNs is not null, "invocation_clock_ns is null");
+        Require(api->InvocationProtocolVersion is not null, "invocation_protocol_version is null");
+        Require(api->InvocationProtocolVersion() == 1, "unexpected invocation protocol");
+        Require(api->MediaName is not null, "media_name is null");
+        Require(api->MediaFromFileContent is not null, "media_from_file_content is null");
     }
 
     private static nuint ApiFieldEnd(string field) =>
@@ -1108,6 +1142,18 @@ internal static unsafe partial class Program
         public readonly delegate* unmanaged[Cdecl]<
             BamlBridgeInfoV1*,
             BamlBuffer> RegisterBridge;
+        public readonly delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<sbyte*, nuint, int, void>, void> RegisterUnhandledSpawnErrorCallback;
+        public readonly delegate* unmanaged[Cdecl]<BamlBuffer> ShutdownRuntime;
+        public readonly delegate* unmanaged[Cdecl]<byte*, nuint, byte*, BamlBuffer> InitializeRuntimeFromBlobWithMetadata;
+        public readonly delegate* unmanaged[Cdecl]<uint> InvocationProtocolVersion;
+        public readonly delegate* unmanaged[Cdecl]<ulong, ulong*, uint> InvocationClockNs;
+        public readonly delegate* unmanaged[Cdecl]<ulong, int> ReleaseFunctionCall;
+        public readonly delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<byte*, nuint, void>, void> RegisterHostDispatchV2;
+        public readonly delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<uint, void>, void> RegisterHostCancelCallback;
+        public readonly delegate* unmanaged[Cdecl]<ulong, ulong, BamlBuffer*, ulong*, uint> TraceSelection;
+        public readonly delegate* unmanaged[Cdecl]<ulong, BamlBuffer*, uint> InvocationContext;
+        public readonly delegate* unmanaged[Cdecl]<ulong, int, BamlBuffer*, uint> MediaName;
+        public readonly delegate* unmanaged[Cdecl]<int, byte*, byte*, byte*, ulong*, int*, uint> MediaFromFileContent;
     }
 
     private static partial class NativeMethods

@@ -628,7 +628,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.22.1"
+version = "0.22.2"
 dependencies = [
  "hex",
  "indexmap",
@@ -6839,6 +6839,7 @@ dependencies = [
 name = "sdk_test_csharp"
 version = "0.1.0"
 dependencies = [
+ "baml_version",
  "base64",
  "bex_project",
  "bridge_ctypes",
