@@ -317,19 +317,34 @@ function predicate(n: float, ty: reflect.Type) -> unknown {
     ) -> {
         let cl = openai.DecisionsClient.new(api_key = "test-key", base_url = mock.base_url());
         let turn = cl.invoke(input(ty));
-        assert.equal(turn.usage?.input_tokens, 142);
-        assert.equal(turn.usage?.output_tokens, 0);
+        assert.equal(
+            turn.usage.to_json(),
+            {
+                "input_tokens": 142,
+                "output_tokens": 0,
+                "cached_input_tokens": null,
+                "reasoning_tokens": null,
+                "cache_write_input_tokens": null,
+                "uncached_input_tokens": 142,
+            },
+        );
         assert.equal(turn.model, "gpt-6-luna");
         let sent = mock.last_request();
         assert.equal(sent.path(), "/decisions");
         assert.equal(sent.header("authorization"), "Bearer test-key");
-        assert.equal(baml.json.path<string>(sent.json(), ".model"), "gpt-6-luna");
-        assert.equal(baml.json.path<string>(sent.json(), ".input"), "Production is down.");
-        assert.equal(baml.json.path<string>(sent.json(), ".questions[0].type"), "predicate");
-        assert.equal(baml.json.path<string>(sent.json(), ".questions[0].name"), "result");
         assert.equal(
-            baml.json.path<string>(sent.json(), ".questions[0].instructions"),
-            "Does this ticket require immediate attention?",
+            sent.json(),
+            {
+                "model": "gpt-6-luna",
+                "input": "Production is down.",
+                "questions": [
+                    {
+                        "type": "predicate",
+                        "name": "result",
+                        "instructions": "Does this ticket require immediate attention?",
+                    },
+                ],
+            },
         );
         turn.parsed_output?.value
     })
@@ -369,53 +384,101 @@ test "enum aliases, finite unions, optional null and bigint choices" {
 
 test "defaults, lazy credentials, preview and both shorthand paths" {
     let cl = openai.DecisionsClient.new();
-    let credential: baml.env.Ref = cl.api_key else {
-        throw "expected an environment reference"
-    };
-    assert.equal(credential.name, "OPENAI_API_KEY");
-    assert.equal(cl.base_url, "https://api.openai.com/v1");
+    assert.is_type<baml.env.Ref>(cl.api_key);
+    assert.equal(
+        cl.to_json(),
+        {
+            "model": "gpt-6-luna",
+            "api_key": { "name": "OPENAI_API_KEY" },
+            "base_url": "https://api.openai.com/v1",
+            "timeout": null,
+            "capture_wire": true,
+        },
+    );
     assert.equal(cl.id(), "openai-decisions/gpt-6-luna");
     assert.equal(Urgent@spec("x").client_id(), cl.id());
     let provider = "openai-decisions";
     assert.equal(ai.clients.resolve(`${provider}/gpt-6-luna`).id(), cl.id());
     let req = cl.render(input(reflect.Type.of<Override>(), instructions = false));
-    assert.equal(req.url, "https://api.openai.com/v1/decisions");
-    assert.equal(req.method, "POST");
-    assert.equal(req.headers.has("authorization"), false);
     assert.equal(
-        baml.json.path<string>(baml.json.parse(req.body), ".questions[0].instructions"),
-        "Who owns the escalation?",
+        req.to_json(),
+        {
+            "method": "POST",
+            "url": "https://api.openai.com/v1/decisions",
+            "headers": { "content-type": "application/json" },
+            "body": baml.json.stringify(
+                {
+                    "model": "gpt-6-luna",
+                    "input": "Production is down.",
+                    "questions": [
+                        {
+                            "type": "choice",
+                            "name": "route",
+                            "instructions": "Who owns the escalation?",
+                            "choices": [
+                                { "value": "Billing", "description": "Payments and refunds" },
+                                { "value": "tech", "description": "Bugs and outages" },
+                                { "value": "Account" },
+                            ],
+                        },
+                    ],
+                },
+            ),
+            "timeout": null,
+            "connect_timeout": null,
+        },
     );
     let custom = openai.DecisionsClient.new(
         model = "custom-model",
         api_key = "secret",
         base_url = "http://localhost:1234",
     );
+    let custom_req = custom.render(input(reflect.Type.of<bool>()));
     assert.equal(
-        custom.render(input(reflect.Type.of<bool>())).url,
-        "http://localhost:1234/decisions",
-    );
-    assert.equal(custom.render(input(reflect.Type.of<bool>())).headers.has("authorization"), false)
+        custom_req.to_json(),
+        {
+            "method": "POST",
+            "url": "http://localhost:1234/decisions",
+            "headers": { "content-type": "application/json" },
+            "body": baml.json.stringify(
+                {
+                    "model": "custom-model",
+                    "input": "Production is down.",
+                    "questions": [
+                        {
+                            "type": "predicate",
+                            "name": "result",
+                            "instructions": "Does this ticket require immediate attention?",
+                        },
+                    ],
+                },
+            ),
+            "timeout": null,
+            "connect_timeout": null,
+        },
+    )
 }
 
 test "enum descriptions, aliases and skips become choice options" {
     let req = openai.DecisionsClient.new().render(input(reflect.Type.of<Team>(), instructions = false));
-    let body = baml.json.parse(req.body);
     assert.equal(
-        baml.json.path<string>(body, ".questions[0].instructions"),
-        "Which team should handle this ticket?",
-    );
-    let choices = baml.json.path<baml.json.json[]>(body, ".questions[0].choices");
-    assert.equal(choices.length(), 3);
-    assert.equal(baml.json.path<string>(choices.at(0), ".value"), "Billing");
-    assert.equal(baml.json.path<string>(choices.at(1), ".value"), "tech");
-    assert.equal(baml.json.path<string>(choices.at(1), ".description"), "Bugs and outages");
-    assert.equal(baml.json.path<string>(choices.at(2), ".value"), "Account");
-    assert.equal(
-        baml.json.path<map<string, baml.json.json>>(body, ".questions[0].choices[2]").has(
-            "description",
-        ),
-        false,
+        baml.json.parse(req.body),
+        {
+            "model": "gpt-6-luna",
+            "input": "Production is down.",
+            "questions": [
+                {
+                    "type": "choice",
+                    "name": "result",
+                    "instructions": "Which team should handle this ticket?",
+                    "choices": [
+                        { "value": "Billing", "description": "Payments and refunds" },
+                        { "value": "tech", "description": "Bugs and outages" },
+                        { "value": "Account" },
+                    ],
+                },
+            ],
+        },
     )
 }
 
@@ -437,17 +500,59 @@ function nested_result() -> bool {
     ) -> {
         let cl = openai.DecisionsClient.new(api_key = "k", base_url = mock.base_url());
         let result = ai.Agent.new(client = cl).run(Assess@spec("outage")).value;
-        assert.equal(result.route, Team.Technical);
-        assert.equal(result.mood, "angry");
-        assert.equal(result.customer.angry, true);
-        assert.equal(result.customer.churn, 0.8);
-        assert.equal(result.agent.angry, false);
-        let questions = baml.json.path<baml.json.json[]>(mock.last_request().json(), ".questions");
-        assert.equal(questions.length(), 6);
-        assert.equal(baml.json.path<string>(questions.at(0), ".name"), "route");
         assert.equal(
-            baml.json.path<string>(questions.at(0), ".instructions"),
-            "You are triaging support tickets.\n\ndepartment: Which team should handle this ticket?",
+            result.to_json(),
+            {
+                "route": "Technical",
+                "customer": { "angry": true, "churn": 0.8 },
+                "agent": { "angry": false, "churn": 0.2 },
+                "mood": "angry",
+            },
+        );
+        assert.equal(
+            mock.last_request().json(),
+            {
+                "model": "gpt-6-luna",
+                "input": "outage",
+                "questions": [
+                    {
+                        "type": "choice",
+                        "name": "route",
+                        "instructions": "You are triaging support tickets.\n\ndepartment: Which team should handle this ticket?",
+                        "choices": [
+                            { "value": "Billing", "description": "Payments and refunds" },
+                            { "value": "tech", "description": "Bugs and outages" },
+                            { "value": "Account" },
+                        ],
+                    },
+                    {
+                        "type": "predicate",
+                        "name": "customer.angry",
+                        "instructions": "You are triaging support tickets.\n\nthe customer.angry: Is the customer angry?",
+                    },
+                    {
+                        "type": "predicate",
+                        "name": "customer.churn",
+                        "instructions": "You are triaging support tickets.\n\nthe customer.churn: How likely is cancellation?",
+                    },
+                    {
+                        "type": "predicate",
+                        "name": "agent.angry",
+                        "instructions": "You are triaging support tickets.\n\nthe agent.angry: Is the customer angry?",
+                    },
+                    {
+                        "type": "predicate",
+                        "name": "agent.churn",
+                        "instructions": "You are triaging support tickets.\n\nthe agent.churn: How likely is cancellation?",
+                    },
+                    {
+                        "type": "choice",
+                        "name": "mood",
+                        "instructions": "You are triaging support tickets.\n\nWhat is the mood?",
+                        "choices": [{ "value": "calm" }, { "value": "angry" }],
+                    },
+                ],
+            },
         );
         true
     })
@@ -463,14 +568,28 @@ function skipped_result() -> bool {
     ) -> {
         let cl = openai.DecisionsClient.new(api_key = "k", base_url = mock.base_url());
         let value = ai.Agent.new(client = cl).run(SkipFields@spec("outage")).value;
-        assert.equal(value.route, Team.Technical);
-        assert.equal(value.notes, null);
-        assert.equal(value.internal, null);
-        assert.equal(value.flag, null);
-        assert.equal(value.media, null);
         assert.equal(
-            baml.json.path<baml.json.json[]>(mock.last_request().json(), ".questions").length(),
-            1,
+            value.to_json(),
+            { "route": "Technical", "notes": null, "internal": null, "flag": null, "media": null },
+        );
+        assert.equal(
+            mock.last_request().json(),
+            {
+                "model": "gpt-6-luna",
+                "input": "outage",
+                "questions": [
+                    {
+                        "type": "choice",
+                        "name": "route",
+                        "instructions": "Which team should handle this ticket?",
+                        "choices": [
+                            { "value": "Billing", "description": "Payments and refunds" },
+                            { "value": "tech", "description": "Bugs and outages" },
+                            { "value": "Account" },
+                        ],
+                    },
+                ],
+            },
         );
         true
     })
@@ -526,8 +645,14 @@ function refuses() -> bool {
             input(reflect.Type.of<bool>()),
         ) catch (e) {
             ai.errors.Refused => {
-                assert.equal(e.provider, "openai-decisions");
-                assert.contains(e.reason, "result");
+                assert.equal(
+                    e.to_json(),
+                    {
+                        "provider": "openai-decisions",
+                        "reason": "Decisions refused question result",
+                        "raw_body": null,
+                    },
+                );
                 return true;
             },
         };
@@ -567,12 +692,27 @@ function inline_image() -> bool {
         let media = baml.media.Image.from_base64("YWJj", "image/png");
         let turn = cl.invoke(media_input(media));
         assert.equal(turn.parsed_output?.value, true);
-        let body = mock.last_request().json();
-        assert.equal(baml.json.path<string>(body, ".input[0].role"), "user");
-        assert.equal(baml.json.path<string>(body, ".input[0].content[1].type"), "input_image");
         assert.equal(
-            baml.json.path<string>(body, ".input[0].content[1].image_url"),
-            "data:image/png;base64,YWJj",
+            mock.last_request().json(),
+            {
+                "model": "gpt-6-luna",
+                "input": [
+                    {
+                        "role": "user",
+                        "content": [
+                            { "type": "input_text", "text": "Inspect this product:" },
+                            { "type": "input_image", "image_url": "data:image/png;base64,YWJj" },
+                        ],
+                    },
+                ],
+                "questions": [
+                    {
+                        "type": "predicate",
+                        "name": "result",
+                        "instructions": "Is there visible damage?",
+                    },
+                ],
+            },
         );
         assert.equal(cl.render(media_input(media)).body, mock.last_request().body);
         true
@@ -743,11 +883,36 @@ function fetched_image() -> bool {
         assert.equal(turn.parsed_output?.value, true);
         assert.equal(mock.request_count(), 2);
         let download = mock.requests.at(0);
-        assert.equal(download?.method, "GET");
-        assert.equal(download?.headers.get("authorization"), null);
         assert.equal(
-            baml.json.path<string>(mock.last_request().json(), ".input[0].content[1].image_url"),
-            "data:image/png;base64,YWJj",
+            download.to_json(),
+            {
+                "method": "GET",
+                "url": "/photo.png",
+                "headers": { "accept": "*/*", "host": mock.server.addr },
+                "body": "",
+            },
+        );
+        assert.equal(
+            mock.last_request().json(),
+            {
+                "model": "gpt-6-luna",
+                "input": [
+                    {
+                        "role": "user",
+                        "content": [
+                            { "type": "input_text", "text": "Inspect this product:" },
+                            { "type": "input_image", "image_url": "data:image/png;base64,YWJj" },
+                        ],
+                    },
+                ],
+                "questions": [
+                    {
+                        "type": "predicate",
+                        "name": "result",
+                        "instructions": "Is there visible damage?",
+                    },
+                ],
+            },
         );
         true
     })
@@ -775,12 +940,17 @@ function usage_breakdown() -> bool {
         let turn = openai.DecisionsClient.new(api_key = "k", base_url = mock.base_url()).invoke(
             input(reflect.Type.of<bool>()),
         );
-        assert.equal(turn.usage?.input_tokens, 100);
-        assert.equal(turn.usage?.output_tokens, 10);
-        assert.equal(turn.usage?.cached_input_tokens, 25);
-        assert.equal(turn.usage?.cache_write_input_tokens, 15);
-        assert.equal(turn.usage?.reasoning_tokens, 7);
-        assert.equal(turn.usage?.uncached_input_tokens, 60);
+        assert.equal(
+            turn.usage.to_json(),
+            {
+                "input_tokens": 100,
+                "output_tokens": 10,
+                "cached_input_tokens": 25,
+                "reasoning_tokens": 7,
+                "cache_write_input_tokens": 15,
+                "uncached_input_tokens": 60,
+            },
+        );
         true
     })
 }
