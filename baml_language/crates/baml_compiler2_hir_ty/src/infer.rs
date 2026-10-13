@@ -9641,13 +9641,21 @@ impl<'db> InferenceContext<'db> {
                 (Ty::error(), None)
             }
             crate::method_resolution::UnionMemberLookup::NoCommonInterface => {
-                if self.member_probe_depth == 0 && !union_ty.has_error() && !union_ty.has_infer() {
-                    self.pending_diags
-                        .push(PendingDiag::UnionNoCommonInterface {
+                // An unsolved arm contributes no interfaces, so the miss may
+                // only mean "not inferred yet" - still a permanent `Error`.
+                if self.member_probe_depth == 0 && !union_ty.has_error() {
+                    self.pending_diags.push(if union_ty.has_infer() {
+                        PendingDiag::ReceiverTypeMustBeKnown {
+                            expr: at,
+                            member: member.clone(),
+                        }
+                    } else {
+                        PendingDiag::UnionNoCommonInterface {
                             expr: at,
                             base: union_ty.clone(),
                             member: member.clone(),
-                        });
+                        }
+                    });
                 }
                 (Ty::error(), None)
             }

@@ -25,3 +25,11 @@ source: crates/baml_tests/src/generated_tests.rs
  23 │     let r = xs[0].abs();
     ·             ─────────
     ╰────
+
+  [type] E0155
+
+  × type annotations needed: the type of this value must be known before accessing `x`
+    ╭─[receiver_type_must_be_known.baml:33:9]
+ 33 │         u.x
+    ·         ───
+    ╰────

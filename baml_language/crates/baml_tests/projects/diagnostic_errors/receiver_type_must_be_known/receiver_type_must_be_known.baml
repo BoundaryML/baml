@@ -24,3 +24,13 @@ function empty_array_element_method(n: int) -> int {
     xs.push(n);
     r
 }
+
+// A union with an unsolved arm shares no interface yet; that miss is the same
+// not-yet-inferred receiver, not a missing member.
+function union_with_lambda_param_field(p: P, c: bool) -> int {
+    let g = (a) -> {
+        let u = if (c) { a } else { p };
+        u.x
+    };
+    g(p)
+}
