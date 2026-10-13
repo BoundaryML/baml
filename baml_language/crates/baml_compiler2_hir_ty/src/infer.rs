@@ -787,6 +787,11 @@ enum PendingDiag<'db> {
         base: Ty,
         member: baml_type::Name,
     },
+    /// Member lookup ran while the base was still an inference variable.
+    ReceiverTypeMustBeKnown {
+        expr: ExprId,
+        member: baml_type::Name,
+    },
     /// A body annotation failing the written-type well-formedness
     /// judgment (generic-argument bounds).
     AnnotWf {
@@ -6613,12 +6618,18 @@ impl<'db> InferenceContext<'db> {
             // here (probes above stayed silent). A union base says "no
             // common interface" - each arm may well declare `member` via
             // different interfaces, so the bare "no member" would mislead.
-            if field.has_error()
-                && self.member_probe_depth == 0
-                && !resolved.has_error()
-                && !resolved.has_infer()
-            {
-                if matches!(resolved.kind(), InferTy::Union(..)) {
+            if field.has_error() && self.member_probe_depth == 0 && !resolved.has_error() {
+                if resolved.has_infer() {
+                    // Not a cascade: nothing failed, the receiver is just
+                    // not inferred yet. The call is already typed `Error`
+                    // with no member recorded, so a later solve cannot
+                    // repair it - report rather than reach lowering.
+                    self.pending_diags
+                        .push(PendingDiag::ReceiverTypeMustBeKnown {
+                            expr: member_expr,
+                            member: member.clone(),
+                        });
+                } else if matches!(resolved.kind(), InferTy::Union(..)) {
                     self.pending_diags
                         .push(PendingDiag::UnionNoCommonInterface {
                             expr: call,
@@ -9544,17 +9555,26 @@ impl<'db> InferenceContext<'db> {
             }
             crate::method_resolution::InterfaceMemberLookup::NotFound => {}
         }
-        // A definitely-missing member on a KNOWN base reports; an
-        // error/var-carrying base is a cascade of an earlier failure
-        // (rustc's tainted_by_errors discipline), and a PROBE leaves
-        // the report to its committed frame. `unknown` reports too:
-        // it is a first-class user type that must be narrowed before
-        // member access, not an error sentinel.
-        if self.member_probe_depth == 0 && !resolved.has_error() && !resolved.has_infer() {
-            self.pending_diags.push(PendingDiag::UnresolvedMember {
-                expr: at,
-                base: resolved.clone(),
-                member: member.clone(),
+        // A definitely-missing member on a KNOWN base reports; an error
+        // base is a cascade of an earlier failure (rustc's
+        // tainted_by_errors discipline), and a PROBE leaves the report to
+        // its committed frame. A var-carrying base is no cascade: it is
+        // not inferred yet, and the `Error` returned here is permanent,
+        // so it must report (rustc's E0282) rather than reach lowering.
+        // `unknown` reports too: it is a first-class user type that must
+        // be narrowed before member access, not an error sentinel.
+        if self.member_probe_depth == 0 && !resolved.has_error() {
+            self.pending_diags.push(if resolved.has_infer() {
+                PendingDiag::ReceiverTypeMustBeKnown {
+                    expr: at,
+                    member: member.clone(),
+                }
+            } else {
+                PendingDiag::UnresolvedMember {
+                    expr: at,
+                    base: resolved.clone(),
+                    member: member.clone(),
+                }
             });
         }
         (Ty::error(), None)
@@ -11708,6 +11728,9 @@ impl<'db> InferenceContext<'db> {
                         },
                         expr,
                     ),
+                    PendingDiag::ReceiverTypeMustBeKnown { expr, member } => {
+                        (TirTypeError::ReceiverTypeMustBeKnown { member }, expr)
+                    }
                     PendingDiag::AnnotWf { type_ref, error } => {
                         diags.push(TirDiagnostic {
                             error,

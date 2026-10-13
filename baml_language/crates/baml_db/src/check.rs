@@ -2064,6 +2064,7 @@ fn tir_type_error_to_diagnostic_id(
         // A `_` placeholder in a non-inferable position.
         TirTypeError::CannotInferType => DiagnosticId::WildcardTypeNotAllowed,
         TirTypeError::TypeMustBeKnown { .. } => DiagnosticId::TypeMustBeKnown,
+        TirTypeError::ReceiverTypeMustBeKnown { .. } => DiagnosticId::TypeMustBeKnown,
         TirTypeError::AmbiguousImplementation { .. } => DiagnosticId::TypeMustBeKnown,
         // Generic-parameter / associated-type declaration hygiene.
         TirTypeError::TypeParamShadowedImplParam { .. } => DiagnosticId::TypeMismatch,
