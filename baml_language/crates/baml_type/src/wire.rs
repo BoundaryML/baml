@@ -64,10 +64,10 @@ pub enum Locator {
     /// this compile read of it. The digest is Merkle over the dependency's
     /// own table, so it covers everything the dependency's interface names.
     Direct { edge: Name, digest: Digest },
-    /// A language package under its fixed name in the artifact's own edge
-    /// table. It has no payload by design: the toolchain pairing is the build
-    /// fingerprint's.
-    Prelude { edge: Name },
+    /// A language package, by identity: bound to the installed package of
+    /// that kind, not located through any edge table. It has no payload by
+    /// design: the toolchain pairing is the build fingerprint's.
+    Prelude(baml_base::LangPackage),
     /// A transitive root: `edge` in the edge table of the package bound to
     /// `via`. It carries no digest of its own — the parent's covers it.
     Transitive { via: DepSlot, edge: Name },
@@ -75,22 +75,22 @@ pub enum Locator {
 
 impl Locator {
     /// The edge name that locates the package, in the edge table of
-    /// [`Self::via`].
+    /// [`Self::via`]. `None` for a prelude entry, which no edge locates.
     #[must_use]
-    pub fn edge(&self) -> &Name {
+    pub fn edge(&self) -> Option<&Name> {
         match self {
-            Self::Direct { edge, .. } | Self::Prelude { edge } | Self::Transitive { edge, .. } => {
-                edge
-            }
+            Self::Direct { edge, .. } | Self::Transitive { edge, .. } => Some(edge),
+            Self::Prelude(_) => None,
         }
     }
 
     /// Whose edge table [`Self::edge`] is read from: the artifact's own for a
-    /// direct or prelude entry, an earlier slot's for a transitive one.
+    /// direct entry, an earlier slot's for a transitive one. A prelude entry
+    /// is bound by identity; its answer is the artifact's own slot.
     #[must_use]
     pub fn via(&self) -> DepSlot {
         match self {
-            Self::Direct { .. } | Self::Prelude { .. } => DepSlot::SELF,
+            Self::Direct { .. } | Self::Prelude(_) => DepSlot::SELF,
             Self::Transitive { via, .. } => *via,
         }
     }

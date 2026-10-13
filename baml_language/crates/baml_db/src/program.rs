@@ -245,6 +245,21 @@ fn link_set<'a>(
             .iter()
             .map(|package| LinkPackage {
                 name: spelling.of(package.root).clone(),
+                // The language packages are the prelude: reached under fixed
+                // names by every package, declared by none. The fact is which
+                // one the root is installed as; the edges to them are edges
+                // like any other.
+                kind: match baml_compiler2_hir::package::lang_roots(db).package_of(package.root) {
+                    Some(language) => bex_vm_types::types::PackageKind::Language(language),
+                    None => {
+                        debug_assert_ne!(
+                            package.root.kind(db),
+                            baml_base::SourceRootKind::Stdlib,
+                            "a stdlib root is installed as a language package"
+                        );
+                        bex_vm_types::types::PackageKind::Ordinary
+                    }
+                },
                 edges: package
                     .edges
                     .iter()
@@ -252,13 +267,7 @@ fn link_set<'a>(
                         Some(baml_linker::LinkEdge {
                             name: edge.clone(),
                             target: position(*target)?,
-                            // The language packages are the prelude: reached
-                            // under fixed names, never declared.
-                            kind: if target.kind(db) == baml_base::SourceRootKind::Stdlib {
-                                bex_vm_types::types::EdgeKind::Prelude
-                            } else {
-                                bex_vm_types::types::EdgeKind::Declared
-                            },
+                            kind: bex_vm_types::types::EdgeKind::Dependency,
                         })
                     })
                     .collect(),

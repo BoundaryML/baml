@@ -191,7 +191,9 @@ fn wire_contract(unit: &CompilationUnit) -> String {
             baml_linker_types::Locator::Direct { edge, .. } => {
                 format!("dep @{slot} {edge} direct, digested")
             }
-            baml_linker_types::Locator::Prelude { edge } => format!("dep @{slot} {edge} prelude"),
+            baml_linker_types::Locator::Prelude(language) => {
+                format!("dep @{slot} {} prelude", language.manifest_name())
+            }
             baml_linker_types::Locator::Transitive { via, edge } => {
                 format!("dep @{slot} {edge} via @{}", via.0)
             }
@@ -253,7 +255,7 @@ fn runtime_mount_consumer_unit_is_byte_identical_to_the_source_dependency_compil
     let app_slot = mounted_unit
         .dependencies
         .iter()
-        .position(|locator| locator.edge().as_str() == "app")
+        .position(|locator| locator.edge().is_some_and(|edge| edge.as_str() == "app"))
         .map(baml_linker_types::DepSlot::of_dependency_index)
         .expect("the consumer reaches `app`");
     assert!(
@@ -379,14 +381,14 @@ fn with_types_consumer_wire_contract_is_pinned() {
                 Name::new("$0"),
                 RuntimeMountEdge {
                     target: minted,
-                    kind: EdgeKind::Anonymous,
+                    kind: EdgeKind::Dependency,
                 },
             ),
             (
                 Name::new("$1"),
                 RuntimeMountEdge {
                     target: level,
-                    kind: EdgeKind::Anonymous,
+                    kind: EdgeKind::Dependency,
                 },
             ),
         ]

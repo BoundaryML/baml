@@ -191,7 +191,11 @@ use sha2::{Digest, Sha256};
 /// pooled `Class`, `Enum`, `Interface` and `TypeAlias` carries its path
 /// inside its package (`path`) where it used to carry a package-qualified
 /// name. `Class::has_cleanup` became `Class::cleanup`, the finalizer's
-/// position in the class's method table.
+/// position in the class's method table. A `ProgramPackage` carries its
+/// `PackageKind` (`Language(LangPackage)` or `Ordinary`) and each edge its
+/// `EdgeKind` (`Dependency` or `ReExported`); a dependency table's prelude
+/// entry is `Locator::Prelude(LangPackage)`, bound by identity through no
+/// edge.
 pub const FORMAT_VERSION: u32 = 20;
 
 const MAGIC: [u8; 4] = *b"BEXC";

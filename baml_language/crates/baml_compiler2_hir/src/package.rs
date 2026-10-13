@@ -1047,13 +1047,14 @@ impl DependencyTable {
     /// The table as an artifact carries it: a direct entry is
     /// [`Locator::Direct`] with `digest(root)` — the interface payload the
     /// owner compiled against — or [`Locator::Prelude`] for a language
-    /// package (a `Stdlib` root; no payload by design); a transitive entry is
+    /// package (by identity; no payload by design); a transitive entry is
     /// [`Locator::Transitive`], covered by its parent's digest.
     pub fn locators(
         &self,
         db: &dyn crate::Db,
         mut digest: impl FnMut(SourceRoot) -> Digest,
     ) -> Vec<Locator> {
+        let lang = lang_roots(db);
         self.entries
             .iter()
             .map(|(root, via, edge)| {
@@ -1062,8 +1063,8 @@ impl DependencyTable {
                         via: *via,
                         edge: edge.clone(),
                     }
-                } else if root.kind(db) == SourceRootKind::Stdlib {
-                    Locator::Prelude { edge: edge.clone() }
+                } else if let Some(language) = lang.package_of(*root) {
+                    Locator::Prelude(language)
                 } else {
                     Locator::Direct {
                         edge: edge.clone(),

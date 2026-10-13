@@ -37,6 +37,12 @@ pub enum LinkError {
     /// Two packages with `let`s reach each other, so neither can initialize
     /// after the other.
     InitCycle { package: Name, other: Name },
+    /// A unit's dependency table names a language package the link set does
+    /// not hold.
+    MissingLanguagePackage {
+        package: Name,
+        language: baml_base::LangPackage,
+    },
     /// A unit is malformed: an index outside its declared space, a table that
     /// contradicts its buckets, an entry that violates the format's laws.
     InvalidUnit(String),
@@ -92,6 +98,12 @@ impl std::fmt::Display for LinkError {
                 f,
                 "packages `{package}` and `{other}` reach each other and both have `let`s, so \
                  neither can initialize first"
+            ),
+            Self::MissingLanguagePackage { package, language } => write!(
+                f,
+                "package `{package}` depends on the language package `{}`, which the link set \
+                 does not hold",
+                language.manifest_name()
             ),
             Self::InvalidUnit(message) => write!(f, "invalid unit: {message}"),
         }

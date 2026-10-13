@@ -55,7 +55,7 @@ pub fn stdlib_honest_derivations() -> usize {
 /// Fully-resolved typed interface for a package.
 /// Consumers never touch dependency `ItemTree` or raw `TypeExpr`.
 ///
-/// Serializes with Borsh so the six stdlib packages' interfaces can be cached
+/// Serializes with Borsh so the stdlib packages' interfaces can be cached
 /// once per compiler build (B-694 "export data") and seeded back into a fresh
 /// database, skipping the cold re-derivation. Every leaf (`Ty`,
 /// `DeclName`, `Name`, `FunctionParamTy`, `BuiltinKind`,
@@ -654,9 +654,9 @@ pub enum ImportError {
     /// A direct entry names a language package: the prelude carries no
     /// payload to bind against.
     PreludeAsDependency { edge: Name },
-    /// A prelude entry names an ordinary dependency, whose payload the
-    /// compile should have read.
-    DependencyAsPrelude { edge: Name },
+    /// A prelude entry names a language package this database has not
+    /// installed.
+    PreludeMissing { package: baml_base::LangPackage },
     /// The interface the blob was compiled against is not the interface the
     /// package bound to the edge serves or exports here (OCaml's
     /// "inconsistent assumptions over interface").
@@ -743,9 +743,10 @@ impl std::fmt::Display for ImportError {
                 "dependency `{edge}` is a language package but the interface records an interface \
                  digest for it"
             ),
-            Self::DependencyAsPrelude { edge } => write!(
+            Self::PreludeMissing { package } => write!(
                 f,
-                "dependency `{edge}` is not a language package but the interface records it as one"
+                "the interface depends on the language package `{}`, which is not installed",
+                package.manifest_name()
             ),
             Self::DependencyMismatch {
                 edge,
@@ -895,19 +896,34 @@ fn bind_locators(
                 via: via.0,
             });
         };
+        // A prelude entry is bound by identity — the installed language
+        // package, whatever any edge table calls it; the other two locate an
+        // edge in the parent's table.
+        let edge_name = match locator {
+            Locator::Prelude(package) => {
+                let Some(target) = baml_compiler2_hir::package::lang_roots(db).get(*package) else {
+                    return Err(ImportError::PreludeMissing { package: *package });
+                };
+                bound.push(target);
+                continue;
+            }
+            Locator::Direct { edge, .. } | Locator::Transitive { edge, .. } => edge,
+        };
         let Some((_, target)) = edge_table(db, parent)
             .into_iter()
-            .find(|(edge, _)| edge == locator.edge())
+            .find(|(edge, _)| edge == edge_name)
         else {
             return Err(ImportError::UnknownDependency {
                 slot: slot.0,
-                edge: locator.edge().clone(),
+                edge: edge_name.clone(),
             });
         };
-        let is_prelude = target.kind(db) == baml_base::SourceRootKind::Stdlib;
         match locator {
             Locator::Direct { edge, digest } => {
-                if is_prelude {
+                if baml_compiler2_hir::package::lang_roots(db)
+                    .package_of(target)
+                    .is_some()
+                {
                     return Err(ImportError::PreludeAsDependency { edge: edge.clone() });
                 }
                 let found = interface_digest(db, target);
@@ -919,11 +935,7 @@ fn bind_locators(
                     });
                 }
             }
-            Locator::Prelude { edge } => {
-                if !is_prelude {
-                    return Err(ImportError::DependencyAsPrelude { edge: edge.clone() });
-                }
-            }
+            Locator::Prelude(_) => unreachable!("a prelude entry binds by identity above"),
             Locator::Transitive { .. } => {}
         }
         bound.push(target);

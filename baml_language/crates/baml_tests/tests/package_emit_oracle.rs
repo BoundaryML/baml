@@ -514,7 +514,7 @@ fn app_fingerprint(consumer: &baml_linker_types::EmittedPackage) -> [u8; 32] {
                 Some(*digest)
             }
             baml_linker_types::Locator::Direct { .. }
-            | baml_linker_types::Locator::Prelude { .. }
+            | baml_linker_types::Locator::Prelude(_)
             | baml_linker_types::Locator::Transitive { .. } => None,
         })
         .expect("the consumer reaches `app` directly, fingerprinted")

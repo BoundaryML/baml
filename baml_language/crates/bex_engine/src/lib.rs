@@ -2448,7 +2448,7 @@ impl BexEngine {
             if self.heap.is_compile_time_ptr(owner) {
                 continue;
             }
-            pending.extend(package.declared());
+            pending.extend(package.dependencies());
             let handle = self.heap.create_handle(owner);
             for ptr in package.classes.values().copied() {
                 let Object::Class(class) = vm.get_object(ptr) else {
@@ -6573,12 +6573,13 @@ impl BexEngine {
     }
 
     /// Every mount a compile against `aliased` can reach, by identity: the
-    /// aliased packages and, transitively, everything their edges reach (the
-    /// prelude excepted — every package reaches it under its fixed names) —
-    /// packages, and the anonymous declarations views export, each a mount
-    /// of its own. A consumer names a re-exported declaration by where it is
-    /// defined, so that must be in the compile's world even when no alias
-    /// reaches it.
+    /// aliased packages and, transitively, everything their edges reach (a
+    /// plain dependency edge to the prelude excepted — every package reaches
+    /// it under its fixed names; a view's RE-EXPORT of a language package's
+    /// declaration is a surface of the view and stays) — packages, and the
+    /// anonymous declarations views export, each a mount of its own. A
+    /// consumer names a re-exported declaration by where it is defined, so
+    /// that must be in the compile's world even when no alias reaches it.
     fn mounts_reached(
         vm: &BexVm,
         aliased: &IndexMap<String, bex_vm_types::HeapPtr>,
@@ -6598,7 +6599,10 @@ impl BexEngine {
                     let edges: IndexMap<_, _> = package
                         .edges
                         .iter()
-                        .filter(|(_, edge)| edge.kind != bex_vm_types::types::EdgeKind::Prelude)
+                        .filter(|(_, edge)| {
+                            edge.kind == bex_vm_types::types::EdgeKind::ReExported
+                                || !vm.is_language_package(edge.target)
+                        })
                         .map(|(name, edge)| (name.clone(), *edge))
                         .collect();
                     let surface = match &package.surface {
@@ -6690,18 +6694,21 @@ impl BexEngine {
         }
         let mut edges = IndexMap::new();
         for reached in bex_vm::reachable::defined_in(vm, heads) {
-            let (target, kind) = match reached {
+            let target = match reached {
                 Reached::Package(package) => {
-                    if vm.packages.is_prelude(package) {
+                    if vm.is_language_package(package) {
                         continue;
                     }
-                    (package, bex_vm_types::types::EdgeKind::Declared)
+                    package
                 }
-                Reached::Anonymous(other) => (other, bex_vm_types::types::EdgeKind::Anonymous),
+                Reached::Anonymous(other) => other,
             };
             edges.insert(
                 baml_type::Name::new(format!("${}", edges.len())),
-                bex_vm_types::types::Edge { target, kind },
+                bex_vm_types::types::Edge {
+                    target,
+                    kind: bex_vm_types::types::EdgeKind::Dependency,
+                },
             );
         }
         let surface = Self::projected_surface(
@@ -6760,10 +6767,11 @@ impl BexEngine {
             }
         };
         // The declaration at `declaration`, spelled from this mount's
-        // viewpoint: its own `Local`, the prelude by the fixed name its
-        // declared name carries, anything else through the edge that
-        // reaches where it is defined — which exists, since the edges were
-        // computed from exactly these heads.
+        // viewpoint: its own `Local`; the prelude by the fixed name the root
+        // reaches its package under (the prelude never crosses the seam as
+        // an edge — every package reaches it under those names); anything
+        // else through the edge that reaches where it is defined — which
+        // exists, since the edges were computed from exactly these heads.
         let spell =
             |declaration: bex_vm_types::HeapPtr| -> Result<baml_type::TypeName, EngineError> {
                 let path = path_of(declaration)?;
@@ -6776,18 +6784,9 @@ impl BexEngine {
                 }
                 let target = match declared_in(vm.get_object(declaration), declaration) {
                     Some(Reached::Package(package)) => {
-                        if vm.packages.is_prelude(package) {
-                            return bex_vm_types::TypeHead::new(
-                                declaration,
-                                bex_heap::BexHeap::declaration_tag(vm.get_object(declaration))
-                                    .ok_or_else(|| {
-                                        internal("a prelude head is a declaration".to_string())
-                                    })?,
-                            )
-                            .to_name()
-                            .map_err(|_| {
-                                internal("a prelude declaration has a declared name".to_string())
-                            });
+                        if let Some((edge, _)) = vm.prelude().find(|(_, target)| *target == package)
+                        {
+                            return Ok(baml_type::TypeName::new(edge, path.namespace, path.name));
                         }
                         package
                     }
@@ -7151,7 +7150,7 @@ impl BexEngine {
             let mounts = package
                 .edges
                 .iter()
-                .filter(|(_, edge)| edge.kind != bex_vm_types::types::EdgeKind::Prelude)
+                .filter(|(_, edge)| !vm.is_language_package(edge.target))
                 .map(|(alias, edge)| (alias.to_string(), edge.target))
                 .collect::<IndexMap<String, HeapPtr>>();
             (

@@ -221,7 +221,13 @@ impl<'vm> ImplResolver<'vm> {
             if let Some(rules) = package.impl_rules.get(&iface_ptr) {
                 pointers.extend(rules);
             }
-            packages.extend(package.declared());
+            // The chain is the ordinary packages reached from here; the
+            // language packages' rules are in the static index already.
+            packages.extend(
+                package
+                    .dependencies()
+                    .filter(|&dependency| !self.vm.is_language_package(dependency)),
+            );
         }
         // A rule can be reached more than once — through the static index
         // and the package that owns it, or through two packages of one

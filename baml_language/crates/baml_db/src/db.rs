@@ -572,8 +572,6 @@ impl ProjectDatabase {
     ///
     /// Invariants enforced (each is a [`SourceRootError`]):
     /// - at most one live root per canonical path;
-    /// - one live root per wire name (`self_name`, else the unnamed default)
-    ///   — the interim consequence of name-spelled type heads;
     /// - every declared dependency names a live root, under a name that is
     ///   neither reserved nor declared twice;
     /// - a served-from-interface root's bytes decode as a `PackageInterface`.

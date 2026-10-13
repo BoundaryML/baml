@@ -108,6 +108,10 @@ pub struct LinkPackage<'a> {
     /// [`Program::packages`](bex_vm_types::Program::packages). Names that
     /// reach a package live on edges, so two packages may carry this one.
     pub name: Name,
+    /// What the package is: a language package (the prelude, bound by
+    /// identity without a fingerprint) or an ordinary one. Carried into the
+    /// executable as `ProgramPackage::kind`.
+    pub kind: bex_vm_types::types::PackageKind,
     /// The package's edge table: every direct dependency and prelude package
     /// by the name this package reaches it under. Each name reaches one
     /// package ([`LinkError::DuplicateEdge`]); the table is carried into the
@@ -138,6 +142,14 @@ pub struct LinkSet<'a> {
 impl<'a> LinkSet<'a> {
     fn ids(&self) -> impl Iterator<Item = LinkPackageId> + '_ {
         (0..self.packages.len()).map(LinkPackageId::of)
+    }
+
+    /// The set's package that IS the language package `language`, if the
+    /// set holds it.
+    fn language_package(&self, language: baml_base::LangPackage) -> Option<LinkPackageId> {
+        self.ids().find(|&id| {
+            self.package(id).kind == bex_vm_types::types::PackageKind::Language(language)
+        })
     }
 
     fn package(&self, id: LinkPackageId) -> &LinkPackage<'a> {

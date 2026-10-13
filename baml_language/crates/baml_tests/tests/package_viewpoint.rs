@@ -8,7 +8,10 @@ use baml_base::{Dependency, Name};
 use baml_db::{OptLevel, ProjectDatabase, SourceRootKind, SourceRootSpec, compile_program};
 use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
-use bex_vm_types::{Program, types::EdgeKind};
+use bex_vm_types::{
+    Program,
+    types::{EdgeKind, PackageKind},
+};
 use sys_native::SysOpsExt;
 
 fn engine(program: Program) -> Arc<BexEngine> {
@@ -44,10 +47,13 @@ async fn a_root_without_files_is_still_the_program_root() {
     let root_package = &program.packages[program.root as usize];
     assert!(root_package.globals.is_empty() && root_package.classes.is_empty());
     assert!(
-        root_package
-            .edges
-            .iter()
-            .any(|edge| edge.name.as_str() == "baml" && edge.kind == EdgeKind::Prelude),
+        root_package.edges.iter().any(|edge| {
+            edge.name.as_str() == "baml"
+                && matches!(
+                    program.packages[edge.target as usize].kind,
+                    PackageKind::Language(_)
+                )
+        }),
         "the root reaches the prelude: {:?}",
         root_package.edges
     );
@@ -118,7 +124,7 @@ async fn a_host_names_a_dependency_as_the_root_reaches_it() {
     };
     assert_eq!(
         edge_to("gadgets").map(|(package, kind)| (package.name.as_str(), kind)),
-        Some(("lib", EdgeKind::Declared))
+        Some(("lib", EdgeKind::Dependency))
     );
     assert!(
         edge_to("lib").is_none(),

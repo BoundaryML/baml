@@ -42,6 +42,7 @@ impl Assembler<'_, '_> {
             .iter()
             .map(|package| ProgramPackage {
                 name: package.name.clone(),
+                kind: package.kind,
                 edges: package
                     .edges
                     .iter()

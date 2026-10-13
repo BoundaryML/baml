@@ -91,7 +91,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// package-qualified name (`name`): a declaration's name is put together from
 /// its package's display name when one is wanted, so no serialized
 /// declaration states which package it belongs to or what that package is
-/// called.
+/// called. An interface's dependency table names a language package by
+/// identity (`Locator::Prelude(LangPackage)`) rather than by an edge name;
+/// a `ProgramPackage` carries its `PackageKind` (`Language(LangPackage)` or
+/// `Ordinary`) and each of its edges an `EdgeKind` (`Dependency` or
+/// `ReExported`).
 pub const FORMAT_VERSION: u32 = 18;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's

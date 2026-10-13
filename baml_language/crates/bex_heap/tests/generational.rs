@@ -14,7 +14,7 @@ use bex_vm_types::{
     Class, ClassField, GenericFunction, GlobalIndex, Object, RealizedTy,
     types::{
         Edge, EdgeKind, ExportSurface, InterfaceDef, LocalName, MethodImpl, Objects, Package,
-        RuntimeImplRule, Slots, TypeAliasDef, TypeValue,
+        PackageKind, RuntimeImplRule, Slots, TypeAliasDef, TypeValue,
     },
 };
 use indexmap::IndexMap;
@@ -110,6 +110,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
         let mut tlab = Tlab::new(Arc::clone(heap));
         let package = Package {
             name: Name::default(),
+            kind: PackageKind::Ordinary,
             edges: IndexMap::new(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
@@ -1033,6 +1034,7 @@ fn test_gen1_container_acquires_young_ref_survives_minor_gc_chain() {
 fn empty_package() -> Package {
     Package {
         name: Name::default(),
+        kind: PackageKind::Ordinary,
         edges: IndexMap::new(),
         classes: IndexMap::new(),
         enums: IndexMap::new(),
@@ -1120,7 +1122,7 @@ fn package_edges_are_traced_and_forwarded() {
         Name::new("gadgets"),
         Edge {
             target: dependency_ptr,
-            kind: EdgeKind::Declared,
+            kind: EdgeKind::Dependency,
         },
     );
     let package_ptr = tlab.alloc(Object::Package(Box::new(package)));

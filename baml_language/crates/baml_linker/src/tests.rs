@@ -8,7 +8,7 @@ use bex_vm_types::{
     bytecode::{Bytecode, SwitchDispatch, SwitchEntry, SwitchKey, SwitchTable},
     types::{
         Class, EdgeKind, Function, FunctionKind, FunctionOrigin, GenericFunction, LocalName,
-        ProgramEdge, ProgramPackage,
+        PackageKind, ProgramEdge, ProgramPackage,
     },
 };
 
@@ -108,12 +108,12 @@ fn import(dep: u32, path: DeclPath) -> ImportEntry {
     }
 }
 
-/// A declared edge of the executable's record.
+/// A dependency edge of the executable's record.
 fn declared(name: &str, target: u32) -> ProgramEdge {
     ProgramEdge {
         name: Name::new(name),
         target,
-        kind: EdgeKind::Declared,
+        kind: EdgeKind::Dependency,
     }
 }
 
@@ -126,11 +126,9 @@ fn direct(edge: &str, digest: Digest) -> Locator {
     }
 }
 
-/// A prelude entry: `edge` in the owner's own table, no payload.
-fn prelude(edge: &str) -> Locator {
-    Locator::Prelude {
-        edge: Name::new(edge),
-    }
+/// A prelude entry: the language package by identity, no payload.
+fn prelude(language: baml_base::LangPackage) -> Locator {
+    Locator::Prelude(language)
 }
 
 /// A record carrying a valid interface artifact around `payload`: the linker
@@ -217,12 +215,13 @@ fn package<'a>(
 ) -> LinkPackage<'a> {
     LinkPackage {
         name: Name::new(name),
+        kind: PackageKind::Ordinary,
         edges: edges
             .into_iter()
             .map(|(edge, id)| LinkEdge {
                 name: Name::new(edge),
                 target: LinkPackageId(id),
-                kind: EdgeKind::Declared,
+                kind: EdgeKind::Dependency,
             })
             .collect(),
         unit,
@@ -1149,38 +1148,118 @@ fn a_unit_compiled_against_another_interface_is_refused() {
 }
 
 #[test]
-fn a_direct_dependency_without_a_fingerprint_is_malformed() {
+fn a_prelude_entry_for_an_absent_language_package_is_refused() {
     let record = interface_record(b"iface");
     let provider = unit_with_class("Widget", "Widget");
     let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
-    // A declared edge recorded as a prelude entry: no digest to bind by.
-    consumer.dependencies.push(prelude("app"));
+    // A prelude entry binds by identity: no package of that identity, no
+    // binding — an edge named like the package does not stand in for it.
+    consumer
+        .dependencies
+        .push(prelude(baml_base::LangPackage::Baml));
     consumer
         .object_imports
         .push(import(1, DeclPath::Class(item("Widget"))));
     let set = LinkSet {
         root: LinkPackageId(1),
         packages: vec![
-            package("app", vec![], &provider, &record),
-            package("user", vec![("app", 0)], &consumer, &record),
+            package("baml", vec![], &provider, &record),
+            package("user", vec![("baml", 0)], &consumer, &record),
         ],
     };
-    assert!(matches!(
-        link(&set),
-        Err(LinkError::InvalidUnit(message)) if message.contains("no interface fingerprint")
-    ));
+    assert_eq!(
+        link(&set).err(),
+        Some(LinkError::MissingLanguagePackage {
+            package: Name::new("user"),
+            language: baml_base::LangPackage::Baml,
+        })
+    );
+}
+
+#[test]
+fn a_prelude_entry_binds_through_no_edge() {
+    // The prelude is bound by identity: the owner need not reach the
+    // language package under any edge name for its prelude entry to bind.
+    let record = interface_record(b"iface");
+    let stdlib = unit_with_class("S", "S");
+    let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
+    consumer
+        .dependencies
+        .push(prelude(baml_base::LangPackage::Baml));
+    consumer
+        .object_imports
+        .push(import(1, DeclPath::Class(item("S"))));
+    let empty = PackageRecord {
+        interface_blob: Vec::new(),
+    };
+    let set = LinkSet {
+        root: LinkPackageId(1),
+        packages: vec![
+            LinkPackage {
+                kind: bex_vm_types::types::PackageKind::Language(baml_base::LangPackage::Baml),
+                ..package("baml", vec![], &stdlib, &empty)
+            },
+            package("user", vec![], &consumer, &record),
+        ],
+    };
+    let program = linked(&set);
+    assert_eq!(
+        function_names(&program),
+        vec!["class S", "user.make"],
+        "the consumer's import binds to the language package's class"
+    );
+}
+
+#[test]
+fn a_transitive_entry_may_reach_a_language_package() {
+    // A transitive entry binds whatever the parent's edge reaches; a
+    // language package there is accepted without a fingerprint, as a
+    // prelude entry is.
+    let record = interface_record(b"iface");
+    let stdlib = unit_with_class("S", "S");
+    let middle = unit_with_fn("lib.noop", vec![Instruction::Return]);
+    let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
+    consumer.dependencies = vec![
+        direct("lib", fingerprint_of(&record)),
+        Locator::Transitive {
+            via: DepSlot(1),
+            edge: Name::new("baml"),
+        },
+    ];
+    consumer
+        .object_imports
+        .push(import(2, DeclPath::Class(item("S"))));
+    let empty = PackageRecord {
+        interface_blob: Vec::new(),
+    };
+    let set = LinkSet {
+        root: LinkPackageId(2),
+        packages: vec![
+            LinkPackage {
+                kind: bex_vm_types::types::PackageKind::Language(baml_base::LangPackage::Baml),
+                ..package("baml", vec![], &stdlib, &empty)
+            },
+            package("lib", vec![("baml", 0)], &middle, &record),
+            package("user", vec![("lib", 1)], &consumer, &record),
+        ],
+    };
+    let program = linked(&set);
+    assert_eq!(
+        function_names(&program),
+        vec!["class S", "lib.noop", "user.make"]
+    );
 }
 
 #[test]
 fn a_prelude_dependency_carries_no_fingerprint() {
-    // The prelude is bound by its fixed name and carries no blob; a unit
-    // recording a fingerprint for it is malformed, one recording none links.
+    // The prelude is bound by identity and carries no blob; a unit recording
+    // a fingerprint for it is malformed, one recording none links.
     let stdlib = unit_with_class("S", "S");
     let make_consumer = |fingerprint: Option<Digest>| {
         let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
         consumer.dependencies.push(match fingerprint {
             Some(digest) => direct("baml", digest),
-            None => prelude("baml"),
+            None => prelude(baml_base::LangPackage::Baml),
         });
         consumer
             .object_imports
@@ -1198,7 +1277,7 @@ fn a_prelude_dependency_carries_no_fingerprint() {
                 package("user", vec![("baml", 0)], consumer, &empty),
             ],
         };
-        set.packages[1].edges[0].kind = EdgeKind::Prelude;
+        set.packages[0].kind = PackageKind::Language(baml_base::LangPackage::Baml);
         set
     };
     let unfingerprinted = make_consumer(None);
@@ -1470,20 +1549,18 @@ fn a_runtime_only_edge_kind_is_refused() {
     consumer
         .dependencies
         .push(direct("app", fingerprint_of(&record)));
-    for kind in [EdgeKind::ReExported, EdgeKind::Anonymous] {
-        let mut set = LinkSet {
-            root: LinkPackageId(1),
-            packages: vec![
-                package("app", vec![], &provider, &record),
-                package("user", vec![("app", 0)], &consumer, &record),
-            ],
-        };
-        set.packages[1].edges[0].kind = kind;
-        assert!(matches!(
-            link(&set),
-            Err(LinkError::InvalidUnit(message)) if message.contains("runtime-only")
-        ));
-    }
+    let mut set = LinkSet {
+        root: LinkPackageId(1),
+        packages: vec![
+            package("app", vec![], &provider, &record),
+            package("user", vec![("app", 0)], &consumer, &record),
+        ],
+    };
+    set.packages[1].edges[0].kind = EdgeKind::ReExported;
+    assert!(matches!(
+        link(&set),
+        Err(LinkError::InvalidUnit(message)) if message.contains("runtime-only")
+    ));
 }
 
 #[test]

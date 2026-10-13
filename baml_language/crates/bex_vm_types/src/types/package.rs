@@ -77,15 +77,22 @@ pub struct Package {
     // tables are keyed by it — so two packages carrying one label collide
     // there.
     pub name: Name,
+    /// What the package is ([`PackageKind`]): a language package — one of
+    /// the prelude every package reaches under a fixed name — or an ordinary
+    /// one. A fact about the package, carried from the compiler's root kind
+    /// by the linker and set by whatever creates a package at run time; never
+    /// decided from a name or from how an edge reaches it.
+    pub kind: PackageKind,
     /// The package's edge table: every package it reaches, by the name it
     /// reaches it under — its declared dependencies, then the language
-    /// packages under their fixed names ([`EdgeKind`]). The runtime mirror of
-    /// the compiler's edge table, and the only way a name becomes a package
-    /// at run time: a host names a package as the world's root reaches it,
-    /// and a runtime package's wire names resolve through its own edges.
-    /// Names live on edges, so two packages may share a spelling. An edge
-    /// of kind [`EdgeKind::ReExported`] makes every export of its target an
-    /// export of this package too (a `with_types` view of its base).
+    /// packages under their fixed names. The runtime mirror of the compiler's
+    /// edge table, and the only way a name becomes a package at run time: a
+    /// host names a package as the world's root reaches it, and a runtime
+    /// package's wire names resolve through its own edges. Names live on
+    /// edges, so two packages may share a spelling. What an edge reaches —
+    /// a language package, an ordinary one, an anonymous declaration — is
+    /// read off the target; the edge itself records only how the target's
+    /// exports relate to this package ([`EdgeKind`]).
     pub edges: IndexMap<Name, Edge>,
     /// Classes defined in the package.
     pub classes: IndexMap<LocalName, HeapPtr>,
@@ -128,21 +135,36 @@ pub struct Package {
     pub session: Option<Box<SessionState>>,
 }
 
-/// How a package reaches what an edge points at: a package it declared (a
-/// manifest edge or a `Package.compile` mount); a package it re-exports
+/// What a package is, as opposed to how another package reaches it
+/// ([`EdgeKind`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub enum PackageKind {
+    /// One of the standard library's packages, which one by identity:
+    /// shipped with the toolchain and reached by every package under its
+    /// fixed name without being declared — the prelude. A dependency slot
+    /// binds one by this identity and carries no interface fingerprint
+    /// (`Locator::Prelude`).
+    Language(baml_base::LangPackage),
+    /// Any other package: the program's root or one of its dependencies, a
+    /// `Package.compile` result, a session, a `with_types` view.
+    #[default]
+    Ordinary,
+}
+
+/// How the exports of what an edge points at relate to the package holding
+/// the edge: reachable under the edge's name (a manifest dependency, a
+/// `Package.compile` mount, the prelude under its fixed name, an anonymous
+/// declaration a `with_types` view exports — the edge's target is then the
+/// declaration itself, which the compile seam treats as a root of one row
+/// and the loader binds a dependency slot to); or additionally re-exported
 /// wholesale (a `with_types` view reaches its base this way: every export of
-/// the target is an export of the package — Rust's `pub use base::*`); a
-/// declaration belonging to no package that it exports (a `with_types` view
-/// reaches a minted class this way — the edge's target is the declaration
-/// itself, which the compile seam treats as a root of one row and the loader
-/// binds a dependency slot to); or the language's prelude, which every
-/// package reaches under fixed names without declaring.
+/// the target is an export of the package — Rust's `pub use base::*`).
+/// What the target IS — a language package, an ordinary one, a declaration —
+/// is read off the target, never recorded here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum EdgeKind {
-    Declared,
+    Dependency,
     ReExported,
-    Anonymous,
-    Prelude,
 }
 
 /// How a dependent's compiler learns what a package exports.
@@ -160,8 +182,9 @@ pub enum ExportSurface {
     Projected,
 }
 
-/// An entry of a package's edge table on the heap: a package, or — for
-/// [`EdgeKind::Anonymous`] — a class or enum declaration.
+/// An entry of a package's edge table on the heap: a package, or a class or
+/// enum declaration belonging to no package (a `with_types` view's minted
+/// declaration); the object at `target` says which.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Edge {
     pub target: HeapPtr,
@@ -228,12 +251,13 @@ impl Slots {
 }
 
 impl Package {
-    /// A package labelled `name` that declares, reaches and runs nothing,
-    /// with tables of its own.
+    /// An ordinary package labelled `name` that declares, reaches and runs
+    /// nothing, with tables of its own.
     #[must_use]
     pub fn empty(name: Name) -> Self {
         Self {
             name,
+            kind: PackageKind::Ordinary,
             edges: IndexMap::new(),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
@@ -270,22 +294,12 @@ impl Package {
         self.edges.get(name).map(|edge| edge.target)
     }
 
-    /// The packages this one declared as dependencies, in declaration order
-    /// — its package edges minus the prelude, a re-exported base included.
-    pub fn declared(&self) -> impl Iterator<Item = HeapPtr> + '_ {
-        self.edges
-            .values()
-            .filter(|edge| matches!(edge.kind, EdgeKind::Declared | EdgeKind::ReExported))
-            .map(|edge| edge.target)
-    }
-
-    /// The declarations belonging to no package this one exports, in edge
-    /// order: the targets of its [`EdgeKind::Anonymous`] edges.
-    pub fn anonymous(&self) -> impl Iterator<Item = HeapPtr> + '_ {
-        self.edges
-            .values()
-            .filter(|edge| edge.kind == EdgeKind::Anonymous)
-            .map(|edge| edge.target)
+    /// Everything this package reaches, in edge order: ordinary packages,
+    /// the prelude, a re-exported base, anonymous declarations alike. What
+    /// each target is, the object at it says ([`PackageKind`], or a class or
+    /// enum for an anonymous declaration).
+    pub fn dependencies(&self) -> impl Iterator<Item = HeapPtr> + '_ {
+        self.edges.values().map(|edge| edge.target)
     }
 
     /// The packages every export of which is also an export of this one, in
@@ -333,6 +347,9 @@ pub struct ProgramPackage {
     /// [`Program::packages`](crate::Program::packages), and two packages may
     /// carry the same label.
     pub name: Name,
+    /// What the package is — [`Package::kind`], from the compiler's root
+    /// kind: a language package or an ordinary one.
+    pub kind: PackageKind,
     /// The package's edge table: every package it reaches, by the name it
     /// reaches it under, as ordinals into
     /// [`Program::packages`](crate::Program::packages) — its declared

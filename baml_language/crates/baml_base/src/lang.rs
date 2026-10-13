@@ -23,8 +23,12 @@
 use crate::PathOrigin;
 use crate::files::SourceRoot;
 
-/// A stdlib package, by identity.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// A stdlib package, by identity. Serialized by discriminant (a dependency
+/// table's prelude entry, a package record's kind): the order of the
+/// variants is a wire contract — append, never reorder.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, borsh::BorshSerialize, borsh::BorshDeserialize,
+)]
 pub enum LangPackage {
     /// The core package: builtin companion classes, `baml.panics`, `baml.ops`.
     Baml,
@@ -219,6 +223,13 @@ pub struct LangRoots {
 }
 
 impl LangRoots {
+    /// The language package installed at `root`, if `root` is one.
+    pub fn package_of(self, root: SourceRoot) -> Option<LangPackage> {
+        LangPackage::ALL
+            .into_iter()
+            .find(|package| self.get(*package) == Some(root))
+    }
+
     /// The root `package` is installed at, if any.
     #[must_use]
     pub fn get(self, package: LangPackage) -> Option<SourceRoot> {

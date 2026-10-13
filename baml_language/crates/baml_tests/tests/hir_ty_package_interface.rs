@@ -216,13 +216,22 @@ fn named(wire: &WireInterface) -> PackageInterface<TypeName> {
                     name.name().clone(),
                 ),
                 Some(index) => TypeName::new(
-                    wire.dependencies[index].edge().clone(),
+                    locator_spelling(&wire.dependencies[index]),
                     name.namespace().clone(),
                     name.name().clone(),
                 ),
             })
         })
         .unwrap_or_else(|never| match never {})
+}
+
+/// The name a dependency-table entry is spelled by in these forges: its
+/// edge, or a language package's fixed name.
+fn locator_spelling(locator: &Locator) -> Name {
+    match locator {
+        Locator::Prelude(language) => Name::new(language.manifest_name()),
+        Locator::Direct { edge, .. } | Locator::Transitive { edge, .. } => edge.clone(),
+    }
 }
 
 /// Rows spelled by edge name, back onto a dependency table: `own` (and
@@ -236,11 +245,17 @@ fn slotted(own: &str, mut table: Vec<Locator>, rows: PackageInterface<TypeName>)
             }
             let index = table
                 .iter()
-                .position(|locator| locator.edge() == name.package())
+                .position(|locator| locator_spelling(locator) == *name.package())
                 .unwrap_or_else(|| {
-                    table.push(Locator::Prelude {
-                        edge: name.package().clone(),
-                    });
+                    let language =
+                        baml_base::LangPackage::from_manifest_name(name.package().as_str())
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "the forges name language packages only, not `{}`",
+                                    name.package()
+                                )
+                            });
+                    table.push(Locator::Prelude(language));
                     table.len() - 1
                 });
             Ok(WireName::qualified(
@@ -2099,11 +2114,19 @@ fn a_blob_compiled_against_another_interface_is_refused_at_the_mount() {
         "{stale}"
     );
 
+    // Slot 1 names an edge the view does not have; the binder stops there
+    // (slot 2 carries `app`, so the rows have a slot to spell it by).
     assert_eq!(
-        refusal(vec![Locator::Direct {
-            edge: Name::new("nope"),
-            digest: [7; 32],
-        }]),
+        refusal(vec![
+            Locator::Direct {
+                edge: Name::new("nope"),
+                digest: [7; 32],
+            },
+            Locator::Direct {
+                edge: Name::new("app"),
+                digest: [7; 32],
+            },
+        ]),
         "dependency slot 1 is located by edge `nope`, which the package it is located through does \
          not have"
     );

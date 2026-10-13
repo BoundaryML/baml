@@ -22,8 +22,8 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{
     DeclPath, FnPath, HeapPtr, Interface, Object, RealizedTy, SessionEvalLease, Ty, TyTemplate,
     types::{
-        Edge, EdgeKind, ExportSurface, LocalName, Objects, Package, SessionState, Slots,
-        TypeAliasDef, TypeValue, Value,
+        Edge, EdgeKind, ExportSurface, LocalName, Objects, Package, PackageKind, SessionState,
+        Slots, TypeAliasDef, TypeValue, Value,
     },
 };
 use indexmap::IndexMap;
@@ -107,12 +107,12 @@ fn runtime_edges(
                 baml_type::Name::new(alias),
                 Edge {
                     target: *ptr,
-                    kind: EdgeKind::Declared,
+                    kind: EdgeKind::Dependency,
                 },
             )
         })
         .collect();
-    add_prelude(vm, &mut edges);
+    vm.add_prelude(&mut edges);
     edges
 }
 
@@ -141,47 +141,31 @@ fn view_edges(
     );
     let mut next = 0;
     for &reached in reached {
-        let (target, kind) = match reached {
-            Reached::Package(package) => (package, EdgeKind::Declared),
-            Reached::Anonymous(declaration) => (declaration, EdgeKind::Anonymous),
+        let target = match reached {
+            Reached::Package(package) => package,
+            Reached::Anonymous(declaration) => declaration,
         };
         if target == base
-            || (kind == EdgeKind::Declared && vm.packages.is_prelude(target))
+            || vm.is_language_package(target)
             || edges.values().any(|edge| edge.target == target)
         {
             continue;
         }
         edges.insert(
             baml_type::Name::new(format!("${next}")),
-            Edge { target, kind },
+            Edge {
+                target,
+                kind: EdgeKind::Dependency,
+            },
         );
         next += 1;
     }
-    add_prelude(vm, &mut edges);
+    vm.add_prelude(&mut edges);
     edges
 }
 
 /// The edge name a view reaches its base under.
 const REEXPORTED_BASE_EDGE: &str = "$base";
-
-/// The language packages under their fixed names, as the host image's root
-/// reaches them, added to `edges` where the name is free.
-fn add_prelude(vm: &BexVm, edges: &mut IndexMap<baml_type::Name, Edge>) {
-    for name in baml_builtins2::stdlib_package_names() {
-        let name = baml_type::Name::new(name);
-        if !edges.contains_key(&name)
-            && let Some(target) = vm.packages.accessible(&name)
-        {
-            edges.insert(
-                name,
-                Edge {
-                    target,
-                    kind: EdgeKind::Prelude,
-                },
-            );
-        }
-    }
-}
 
 fn package_ptr(vm: &BexVm, value: Value) -> Result<HeapPtr, VmRustFnError> {
     let Some(wrapper_ptr) = value.as_object_ptr() else {
@@ -1034,6 +1018,7 @@ impl BamlClassPackage for PackageReflectImpl {
         };
         let package = Package {
             name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: PackageKind::Ordinary,
             edges: runtime_edges(vm, &dependencies),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
@@ -1207,6 +1192,7 @@ impl BamlClassPackage for PackageReflectImpl {
         };
         let view = Package {
             name: base.name.clone(),
+            kind: PackageKind::Ordinary,
             edges: view_edges(vm, base_ptr, &reached),
             classes: additions.classes,
             enums: additions.enums,
@@ -1666,6 +1652,7 @@ impl BamlClassSession for PackageReflectImpl {
         }
         let package = Package {
             name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: PackageKind::Ordinary,
             edges: runtime_edges(vm, &dependencies),
             classes: IndexMap::new(),
             enums: IndexMap::new(),

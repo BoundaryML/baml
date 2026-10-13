@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_base::Name;
+use baml_base::{LangPackage, Name};
 use baml_compiler_diagnostics::{
     DiagnosticId, DiagnosticIdentifierKind, DiagnosticMessageHighlight, DiagnosticMessageKind,
     DiagnosticPhase, ParseError, Severity,
@@ -355,16 +355,18 @@ fn projected_interface(
         });
     }
     // Every edge of the mount is a slot, in edge order; a language package
-    // the surface names by its fixed name — the engine spells the prelude by
-    // its declared names, never through an edge — joins the table on demand.
+    // the surface names by its fixed name — the prelude never crosses the
+    // seam as an edge; the engine spells it by the fixed names the root
+    // reaches it under — joins the table on demand.
     let mut table: Vec<(Name, Locator)> = edges
         .iter()
         .map(|(edge, mount_edge)| {
+            // Every edge of the mount is a digested entry, located by its
+            // target's surface; the prelude joins the table by identity, on
+            // demand (`Slots::prelude`).
             let locator = match mount_edge.kind {
-                bex_vm_types::types::EdgeKind::Prelude => Locator::Prelude { edge: edge.clone() },
-                bex_vm_types::types::EdgeKind::Declared
-                | bex_vm_types::types::EdgeKind::ReExported
-                | bex_vm_types::types::EdgeKind::Anonymous => Locator::Direct {
+                bex_vm_types::types::EdgeKind::Dependency
+                | bex_vm_types::types::EdgeKind::ReExported => Locator::Direct {
                     edge: edge.clone(),
                     digest: digest_of(mount_edge.target),
                 },
@@ -377,13 +379,14 @@ fn projected_interface(
             return Ok(WireName::own(name.namespace().clone(), name.name().clone()));
         }
         let edge = name.package();
-        let index = match table.iter().position(|(slotted, _)| slotted == edge) {
-            Some(index) => index,
-            None if baml_builtins2::stdlib_package_names().contains(&edge.as_str()) => {
-                table.push((edge.clone(), Locator::Prelude { edge: edge.clone() }));
+        let position = table.iter().position(|(slotted, _)| slotted == edge);
+        let index = match (position, LangPackage::from_manifest_name(edge.as_str())) {
+            (Some(index), _) => index,
+            (None, Some(language)) => {
+                table.push((edge.clone(), Locator::Prelude(language)));
                 table.len() - 1
             }
-            None => {
+            (None, None) => {
                 return Err(mount_diagnostic(
                     "E_RUNTIME_MOUNT",
                     format!("the projected surface names `{name}` through no edge of the mount"),

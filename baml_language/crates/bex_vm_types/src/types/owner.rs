@@ -16,9 +16,9 @@ pub enum Owner {
     /// reference (its name is display). It holds what a package would hold
     /// for it — the `Object::ImplRule`s witnessing the interfaces it
     /// implements, alive exactly as long as it is. A `with_types` view
-    /// exports such a declaration under an [`EdgeKind::Anonymous`](
-    /// super::EdgeKind::Anonymous) edge, and the compile seam gives it a
-    /// root of its own.
+    /// exports such a declaration through an edge whose target is the
+    /// declaration itself ([`Edge`](super::Edge)), and the compile seam gives
+    /// it a root of its own.
     Anonymous { witnesses: Vec<HeapPtr> },
 }
 

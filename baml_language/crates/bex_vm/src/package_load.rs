@@ -23,7 +23,10 @@ use baml_type::{MediaKind, Name};
 use bex_heap::{BexHeap, Generation};
 use bex_vm_types::{
     HeapPtr, Object, ObjectIndex, TypeHead,
-    types::{LocalName, MethodImpl, Package, ProgramImplRule, ProgramPackage, RuntimeImplRule},
+    types::{
+        LocalName, MethodImpl, Package, PackageKind, ProgramImplRule, ProgramPackage,
+        RuntimeImplRule,
+    },
 };
 use indexmap::IndexMap;
 
@@ -331,15 +334,6 @@ impl PackageIndex {
         root.accessible(self.root, name)
     }
 
-    /// Whether `package` is one of the language packages the root reaches
-    /// under a fixed name — the prelude every package reaches without
-    /// declaring an edge to it.
-    pub fn is_prelude(&self, package: HeapPtr) -> bool {
-        baml_builtins2::stdlib_package_names()
-            .iter()
-            .any(|name| self.accessible(&Name::new(name)) == Some(package))
-    }
-
     /// Every loaded package's `Object::Package` pointer, by ordinal.
     pub fn package_ptrs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
         self.packages.iter().copied()
@@ -445,6 +439,7 @@ fn fill_package_slots(
         }
         let package = Package {
             name: pkg.name.clone(),
+            kind: pkg.kind,
             edges: pkg
                 .edges
                 .iter()
@@ -503,6 +498,70 @@ fn fill_package_slots(
         }
     }
     index
+}
+
+impl crate::BexVm {
+    /// Whether the object at `ptr` is a language package — one of the
+    /// standard library's, the prelude ([`PackageKind::Language`]). `false`
+    /// for an ordinary package and for anything that is not a package (an
+    /// anonymous declaration an edge reaches).
+    pub fn is_language_package(&self, ptr: HeapPtr) -> bool {
+        matches!(
+            self.get_object(ptr),
+            Object::Package(package) if matches!(package.kind, PackageKind::Language(_))
+        )
+    }
+
+    /// The loaded package that IS the language package `language`, if the
+    /// executable holds it: the prelude by identity, whatever the root's
+    /// edges call it.
+    pub fn language_package(&self, language: baml_base::LangPackage) -> Option<HeapPtr> {
+        self.prelude().map(|(_, ptr)| ptr).find(|&ptr| {
+            matches!(
+                self.get_object(ptr),
+                Object::Package(package) if package.kind == PackageKind::Language(language)
+            )
+        })
+    }
+
+    /// The prelude under the fixed names the root reaches it by: the root's
+    /// edges whose target is a language package, in edge order. Empty for a
+    /// VM with no executable.
+    pub fn prelude(&self) -> impl Iterator<Item = (Name, HeapPtr)> + '_ {
+        let root = self.packages.root();
+        let root = (!root.is_null())
+            .then(|| self.get_object(root).as_package())
+            .flatten();
+        root.into_iter().flat_map(|root| {
+            root.edges
+                .iter()
+                .filter(|(_, edge)| self.is_language_package(edge.target))
+                .map(|(name, edge)| (name.clone(), edge.target))
+        })
+    }
+
+    /// Add the prelude to a runtime package's edge table, under the fixed
+    /// names the root reaches it by: a runtime package (a `Package.compile`
+    /// result, a `with_types` view) reaches the same language packages as the
+    /// host image. Its own edges are `$`-named, which no identifier spells,
+    /// or aliases already refused when they take a reserved name, so a
+    /// prelude name is always free.
+    pub fn add_prelude(&self, edges: &mut IndexMap<Name, bex_vm_types::types::Edge>) {
+        for (name, target) in self.prelude() {
+            let previous = edges.insert(
+                name,
+                bex_vm_types::types::Edge {
+                    target,
+                    kind: bex_vm_types::types::EdgeKind::Dependency,
+                },
+            );
+            debug_assert!(
+                previous.is_none(),
+                "a runtime package's own edges cannot take a prelude name: they are `$`-named \
+                 or aliases validated against the reserved names"
+            );
+        }
+    }
 }
 
 /// Look up a class, enum, or interface object pointer by its fully-qualified
