@@ -17,7 +17,7 @@ use std::{
     cell::Cell,
     mem::size_of,
     num::NonZeroU64,
-    sync::atomic::{AtomicU16, AtomicU64, Ordering},
+    sync::atomic::{AtomicU16, AtomicU32, AtomicU64, Ordering},
 };
 
 use btel_settings::identity::ID_RANGE_SIZE;
@@ -183,6 +183,24 @@ impl CallPathId {
 }
 
 const _: () = assert!(size_of::<CallPathId>() == 4);
+
+/// The process's last allocated call-path ID. Every producer in a process
+/// (the VM, natively compiled code) allocates from it, so their paths never
+/// collide in one recording.
+pub static LAST_CALL_PATH_ID: AtomicU32 = AtomicU32::new(0);
+
+/// Allocate the call-path ID after `last` (in production
+/// [`LAST_CALL_PATH_ID`]). Panics when the 32-bit space is exhausted.
+pub fn allocate_call_path_id(last: &AtomicU32) -> CallPathId {
+    // Exhaustion stays terminal even if a caller catches the panic. A wrapping
+    // fetch_add could otherwise reuse live IDs after the first overflow.
+    let previous = last
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+            value.checked_add(1)
+        })
+        .expect("call-path identity space exhausted");
+    CallPathId::new_non_root(previous + 1).expect("call-path identity is nonzero")
+}
 
 /// Identity of an aggregation node: one base call path and its reentry variant.
 /// All 32 path bits survive; reentry occupies an additional bit after widening.

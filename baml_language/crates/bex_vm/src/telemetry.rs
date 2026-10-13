@@ -10,14 +10,7 @@
     reason = "producer fast paths are benchmarked and keep cold work out of line"
 )]
 
-use std::{
-    collections::HashMap,
-    mem::size_of,
-    sync::{
-        Arc,
-        atomic::{AtomicU32, Ordering},
-    },
-};
+use std::{collections::HashMap, mem::size_of, sync::Arc};
 
 use bex_vm_types::{Function, FunctionKind, FunctionMeta, HeapPtr, Value};
 use btel_clock::ClockEpoch;
@@ -66,18 +59,8 @@ const POLICY_CAPTURE_ERROR: u8 = 1 << 2;
 const REENTRY: u8 = 1 << 3;
 const REQUIRES_ANNOUNCEMENT: u8 = 1 << 4;
 
-static LAST_CALL_PATH_ID: AtomicU32 = AtomicU32::new(0);
-
-fn allocate_call_path_id(last: &AtomicU32) -> CallPathId {
-    // Exhaustion stays terminal even if a caller catches the panic. A wrapping
-    // fetch_add could otherwise reuse live IDs after the first overflow.
-    let previous = last
-        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-            value.checked_add(1)
-        })
-        .expect("call-path identity space exhausted");
-    CallPathId::new_non_root(previous + 1).expect("call-path identity is nonzero")
-}
+// Shared with every producer in the process (natively compiled code too).
+use btel_types::{LAST_CALL_PATH_ID, allocate_call_path_id};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct CallPathKey {
@@ -1567,6 +1550,8 @@ mod tests {
     fn test_clock() -> std::sync::Arc<btel_clock::ClockEpoch> {
         btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run()
     }
+
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     use super::*;
 
