@@ -1,49 +1,62 @@
-// Regression for B-1788: a method called on the result of an operator whose
-// operand type is still being inferred (here, the return of a generic call)
-// panicked during emission with "indirect calls require an explicit caller
-// layout". Method lookup ran before the pending operator was resolved, so no
-// method or call plan was recorded.
+// Regression for B-1788: an inherent method on an operator result whose
+// operand comes from a generic still being inferred. Method lookup ran before
+// the operator resolved, typed the call `Error` with no diagnostic, and
+// emission panicked with "indirect calls require an explicit caller layout".
+// One case per way a generic can leave its result bounded but unsolved.
 function id<T>(x: T) -> T {
     x
 }
 
-function negated_abs(n: int) -> int {
-    (-id(n)).abs()
+class Box<T> {
+    value: T,
 }
 
-test "method on unary operator over generic result" {
-    assert.equal(negated_abs(3), 3)
+function from_generic_function(x: float) -> float {
+    (id(x) * 100.0).round()
 }
 
-function incremented_abs(n: int) -> int {
-    (id(n) + 1).abs()
+test "inherent method on operator over generic function result" {
+    assert.equal(from_generic_function(0.123), 12.0)
 }
 
-test "method on binary operator over generic result" {
-    assert.equal(incremented_abs(-5), 4)
+function from_generic_class(n: int) -> int {
+    (-Box { value: n }.value).abs()
 }
 
-// The originally reported shape: a reduce accumulator is bounded by its own
-// callback's output, so resolving the receiver must break that cycle.
-function rounded_total(values: int[]) -> float {
-    let total = values.reduce(
-        (sum, n) -> {
-            sum + n
-        },
-        0,
-    );
-    (total * 1.0).round()
+test "inherent method on operator over generic class field" {
+    assert.equal(from_generic_class(3), 3)
 }
 
-test "method on operator over reduce accumulator" {
-    assert.equal(rounded_total([1, 2]), 3.0);
-    assert.equal(rounded_total([]), 0.0)
+function from_untyped_lambda(s: string) -> string {
+    let g = (a) -> {
+        a
+    };
+    (g(s) + " ").trim()
 }
 
-test "method on operator through nested generic aliases" {
+test "inherent method on operator over untyped lambda result" {
+    assert.equal(from_untyped_lambda(" hi"), "hi")
+}
+
+function from_generic_method(values: int[]) -> int {
+    (
+        -values.reduce(
+            (sum, n) -> {
+                sum + n
+            },
+            0,
+        )
+    )
+        .abs()
+}
+
+test "inherent method on operator over generic method result" {
+    assert.equal(from_generic_method([1, 2]), 3)
+}
+
+test "resolving a receiver leaves unrelated inference deferred" {
     let later = [];
     assert.equal(id(id(-id(3))).abs(), 3);
-    // Demanding the receiver must not finalize unrelated inference variables.
     later.push("hello");
     assert.equal(later[0], "hello");
 }

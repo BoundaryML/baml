@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0155
+
+  × type annotations needed: the type of this value must be known before accessing `abs`
+    ╭─[receiver_type_must_be_known.baml:11:22]
+ 11 │     let g = (a) -> { a.abs() };
+    ·                      ─────
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed: the type of this value must be known before accessing `x`
+    ╭─[receiver_type_must_be_known.baml:17:22]
+ 17 │     let g = (a) -> { a.x };
+    ·                      ───
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed: the type of this value must be known before accessing `abs`
+    ╭─[receiver_type_must_be_known.baml:23:13]
+ 23 │     let r = xs[0].abs();
+    ·             ─────────
+    ╰────

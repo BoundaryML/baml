@@ -3,27 +3,30 @@
 // resolution and the call plan are recorded during the body walk.
 function id<T>(x: T) -> T { x }
 
-function unary_receiver(n: int) -> int {
-    let r = (-id(n)).abs();
-     // ^ int
-    r
-}
+class Box<T> { value: T }
 
-function binary_receiver(n: int) -> int {
-    let r = (id(n) + 1).abs();
-     // ^ int
-    r
-}
-
-// The accumulator is bounded by its own callback output; the cycle must break.
-function reduce_receiver(values: int[]) -> float {
-    let r = (values.reduce((sum, n) -> { sum + n }, 0) * 1.0).round();
+function generic_function(x: float) -> float {
+    let r = (id(x) * 100.0).round();
      // ^ float
     r
 }
 
-function aliased_receiver(n: int) -> int {
-    let r = id(id(-id(n))).abs();
+function generic_class(n: int) -> int {
+    let r = (-Box { value: n }.value).abs();
+     // ^ int
+    r
+}
+
+function untyped_lambda(s: string) -> string {
+    let g = (a) -> { a };
+    let r = (g(s) + " ").trim();
+     // ^ string
+    r
+}
+
+// The accumulator is bounded by its own callback output; the cycle must break.
+function generic_method(values: int[]) -> int {
+    let r = (-values.reduce((sum, n) -> { sum + n }, 0)).abs();
      // ^ int
     r
 }

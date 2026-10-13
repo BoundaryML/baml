@@ -1,0 +1,26 @@
+// B-1788: member lookup needs the receiver's type at the access. A receiver
+// with no evidence yet must report E0155, not type the access `Error`
+// silently and crash lowering. Each body's receiver is solved later, so
+// nothing else reports.
+class P {
+    x: int,
+}
+
+// Inherent builtin method: emission panicked on a call with no layout.
+function lambda_param_method(n: int) -> int {
+    let g = (a) -> { a.abs() };
+    g(n)
+}
+
+// Field: runtime type lowering panicked on the `Error` type.
+function lambda_param_field(p: P) -> int {
+    let g = (a) -> { a.x };
+    g(p)
+}
+
+function empty_array_element_method(n: int) -> int {
+    let xs = [];
+    let r = xs[0].abs();
+    xs.push(n);
+    r
+}
