@@ -2286,36 +2286,43 @@ pub fn function_throw_sets(
             }
             let data = baml_compiler2_hir::item_data::function_data(db, *func_loc);
             let key = throw_set_key(ns_path, &data.name);
-            // The runtime boundary's shape: literals widen to their
-            // primitives, `void` drops, and error-recovery sentinels
-            // degrade to the top type (RuntimeTy has no Error).
-            let facts: BTreeSet<ThrowFact> = crate::throw_facts::flatten_declared_ty_to_facts(
-                &crate::callable::callable_throws(db, *func_loc).0,
-            )
-            .into_iter()
-            .filter_map(|fact| {
-                // A bare rigid var (a callback's synthetic effect param in
-                // `throws int | E`) has no runtime representation and
-                // DROPS from the runtime set - the SDK recovers the
-                // host-error arm through its untagged decode fallback
-                // (TIR's runtime sets never carried the var either).
-                // Tagging it as the top type instead would mis-tag the
-                // thrown value's wire envelope and break that fallback.
-                if matches!(fact, Ty::TypeVar(..)) {
-                    return None;
-                }
-                Some(if baml_type_runtime::contains_error_recovery(&fact) {
-                    Ty::Unknown
-                } else {
-                    fact
-                })
-            })
-            .collect();
+            let facts = runtime_throw_facts(db, *func_loc);
             sets.direct.insert(key.clone(), facts.clone());
             sets.transitive.insert(key, facts);
         }
     }
     sets
+}
+
+/// The types a function may throw, in the runtime boundary's shape: literals
+/// widen to their primitives, `void` drops, and error-recovery sentinels
+/// degrade to the top type (`RuntimeTy` has no `Error`). The same answer for
+/// a free function and a method.
+pub fn runtime_throw_facts(
+    db: &dyn baml_compiler2_hir::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
+) -> BTreeSet<ThrowFact> {
+    crate::throw_facts::flatten_declared_ty_to_facts(
+        &crate::callable::callable_throws(db, func_loc).0,
+    )
+    .into_iter()
+    .filter_map(|fact| {
+        // A bare rigid var (a callback's synthetic effect param in
+        // `throws int | E`) has no runtime representation and DROPS from the
+        // runtime set - the SDK recovers the host-error arm through its
+        // untagged decode fallback (TIR's runtime sets never carried the var
+        // either). Tagging it as the top type instead would mis-tag the
+        // thrown value's wire envelope and break that fallback.
+        if matches!(fact, Ty::TypeVar(..)) {
+            return None;
+        }
+        Some(if baml_type_runtime::contains_error_recovery(&fact) {
+            Ty::Unknown
+        } else {
+            fact
+        })
+    })
+    .collect()
 }
 
 // ── package_resolution_context Salsa query ─────────────────────────────────

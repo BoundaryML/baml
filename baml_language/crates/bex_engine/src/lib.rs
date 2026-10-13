@@ -1130,11 +1130,9 @@ fn truncate_preview(mut value: String, max_chars: usize) -> String {
 /// (see `bex_vm::vm`'s `CallIndirect`-`HostClosure` path): `ret_ty` is
 /// `type_arg_0` (`T`, the declared return type) and `throws_ty` is `type_arg_1`
 /// (`E`, the declared error contract). Returns `Err` if the slot is absent or
-/// not a `Type` object — for `BamlHostCallHostValue` that's an engine/compiler
-/// ABI bug and a missing slot would silently skip both the admission of the
-/// return value and `enforce_host_throw_contract`, so the
-/// caller surfaces it as a fatal internal error rather than soft-failing the
-/// contract checks. `slot_name` is used only for the diagnostic message.
+/// not a `Type` object — an engine/compiler ABI bug, which the caller surfaces
+/// as a fatal internal error rather than soft-failing the check it was going to
+/// make. `slot_name` is used only for the diagnostic message.
 fn host_call_type_arg(
     ty_arg: Option<Value>,
     slot_index: usize,
@@ -1224,7 +1222,7 @@ enum Park<T> {
 #[derive(Clone, Copy)]
 enum CancelSite {
     /// Suspended in a sys-op call: the panic is that op's error.
-    SysOp(SysOp),
+    SysOp,
     /// Suspended at an `Await` / `AwaitAny` opcode: the panic is raised at
     /// the await.
     Await,
@@ -1299,106 +1297,6 @@ impl EntryTicket {
     }
 }
 
-/// Enforce the host callable's declared throws contract `E` on a
-/// materialized thrown `Value`. Returns the value unchanged on a contract
-/// match; on mismatch returns a fresh `baml.panics.HostContractViolation`
-/// panic `Value` carrying the host class identity for diagnostics.
-///
-/// Operates on the post-materialization `Value` (not the source
-/// `BexExternalValue` or `VmBamlError`) so the check applies uniformly to
-/// every shape a host-callable throw can take —
-/// `OpErrorPayload::HostThrown` (wire-routed) and
-/// `OpErrorPayload::Vm(BamlError(HostCallable))` (engine-internal) both
-/// materialize into the same `Object::Instance` of
-/// `baml.errors.HostCallable`.
-///
-/// The check reads the value's runtime BAML type via
-/// [`value_runtime_baml_ty`] and tests `value_ty ⊑ contract` via the canonical,
-/// program-aware type algebra ([`baml_type::normalize::is_subtype`] over the VM
-/// as its [`TypeContext`](baml_type::normalize::TypeContext)), so a thrown
-/// concrete that *implements* a declared interface contract is on-contract (the
-/// context-free `RuntimeTy::is_subtype_of` fork could not see that membership).
-/// `Unknown` accepts everything (the "throws unknown" fallback for
-/// undeclared host contracts); concrete classes reject anything not in their
-/// subtype lattice.
-///
-/// Panic-class values (`baml.panics.*`) bypass the contract entirely:
-/// panics are not catchable errors and a fn's `throws E` clause never
-/// includes them. This also avoids re-wrapping an engine-generated
-/// `HostContractViolation` (from a wrong-return-type check upstream)
-/// into a second `HostContractViolation` with a corrupted message.
-fn enforce_host_throw_contract(
-    thread: &mut ActiveHeapPermit<BexThread>,
-    value: Value,
-    contract: &RuntimeTy,
-) -> Value {
-    // `Unknown` is the top type — short-circuit before any heap
-    // walking.
-    if matches!(contract, RuntimeTy::Unknown) {
-        return value;
-    }
-    let runtime_ty = value_runtime_baml_ty(value, thread.proof());
-    // Panics propagate as panics regardless of `E` — they're an
-    // engine-level failure mode, not something the user's callable opts
-    // into via `throws`.
-    if let Some(bex_vm_types::RuntimeTy::Class(head, _)) = runtime_ty.as_ref()
-        && head
-            .declared_name()
-            .is_some_and(|name| name.is_panic_type())
-    {
-        return value;
-    }
-    // The contract arrives in the wire's spelling; anchor it so both operands
-    // and the context share the runtime's head before asking the algebra.
-    let Ok(anchored_contract) = crate::conversion::anchor_wire_ty(&thread.vm, contract) else {
-        // The CONTRACT is the unresolvable side here — it names a
-        // declaration this engine cannot anchor (an unmounted anonymous
-        // type overlaid as a bare name). Blaming the thrown value would
-        // report a contract violation the value may never have committed,
-        // so name the actual defect instead. Still a panic: a throw that
-        // cannot be checked must not silently pass as on-contract.
-        let (host_class, host_language) =
-            extract_host_diagnostics_from_value(value, thread.proof());
-        let panic = bex_vm::errors::VmPanic::HostContractViolation {
-            message: format!(
-                "host callable's declared throws contract (`{contract}`) names a \
-                 declaration this engine cannot resolve, so the thrown value cannot \
-                 be checked against it",
-            ),
-            class_name: host_class,
-            language: host_language,
-        };
-        return thread.vm.panic_to_exception_value(panic);
-    };
-    let on_contract = runtime_ty
-        .as_ref()
-        .is_some_and(|rt: &bex_vm_types::RuntimeTy| {
-            // The VM is the runtime `TypeContext`; operands upcast to `Ty` by a
-            // zero-cost borrow.
-            baml_type::normalize::is_subtype(rt.as_ty(), anchored_contract.as_ty(), &thread.vm)
-        });
-    if on_contract {
-        return value;
-    }
-    // Off-contract: build the `HostContractViolation` panic. Echo the
-    // host's `class_name` / `language` from the `HostCallable` wrapper's
-    // fields when present — the common case where a bridge SDK wraps a
-    // native exception with its host-class identity in those fields.
-    let (host_class, host_language) = extract_host_diagnostics_from_value(value, thread.proof());
-    let runtime_ty_str = runtime_ty
-        .as_ref()
-        .map_or_else(|| "<unknown>".to_string(), std::string::ToString::to_string);
-    let panic = bex_vm::errors::VmPanic::HostContractViolation {
-        message: format!(
-            "host callable threw a value of type `{runtime_ty_str}` that is not in its \
-             declared throws contract (`{contract}`)",
-        ),
-        class_name: host_class,
-        language: host_language,
-    };
-    thread.vm.panic_to_exception_value(panic)
-}
-
 /// Extract a materialized `Value`'s runtime BAML type for the purpose of
 /// host-throw contract checking — the class FQN + type args for
 /// `Object::Instance`, the scalar tag for primitives. Returns `None` for
@@ -1461,41 +1359,35 @@ fn value_runtime_baml_ty(
     }
 }
 
-/// Pull `class_name` / `language` String fields out of a thrown
-/// `Object::Instance` (the common `baml.errors.HostCallable` wrapper
-/// shape) so a `HostContractViolation` panic can echo the host's
-/// exception identity in its diagnostics. Non-Instance values or
-/// missing fields return `(None, None)`.
-///
-/// `_proof` ensures the caller holds an active heap permit so the
-/// `HeapPtr` derefs in this function are sound.
-fn extract_host_diagnostics_from_value(
-    value: Value,
-    _proof: bex_heap::PermitProof<'_>,
-) -> (Option<String>, Option<String>) {
-    let Some(ptr) = value.as_object_ptr() else {
-        return (None, None);
-    };
-    // SAFETY: caller holds an active heap permit.
-    let Object::Instance(instance) = (unsafe { ptr.get() }) else {
-        return (None, None);
-    };
-    let Object::Class(class) = (unsafe { instance.class.get() }) else {
-        return (None, None);
-    };
-    let read_string_field = |field_name: &str| -> Option<String> {
-        let idx = class.fields.iter().position(|f| f.name == field_name)?;
-        let field_value = instance.try_load_field(idx)?;
-        let ptr = field_value.as_object_ptr()?;
-        match unsafe { ptr.get() } {
-            Object::String(s) if !s.is_empty() => Some(s.as_str().to_string()),
-            _ => None,
+/// Whether a value a host threw is an instance of a `baml.panics.*` class:
+/// named on the instance or by the type the host stated for it.
+fn thrown_value_is_panic(value: &BexExternalValue) -> bool {
+    match value {
+        BexExternalValue::Instance { class_name, .. } if !class_name.is_empty() => {
+            baml_type::TypeName::from_dotted_path(class_name).is_panic_type()
         }
+        BexExternalValue::Union { value, metadata } => match &metadata.selected_option {
+            RuntimeTy::Class(name, _) => name.is_panic_type(),
+            _ => thrown_value_is_panic(value),
+        },
+        _ => false,
+    }
+}
+
+/// The host's own exception identity carried on a thrown
+/// `baml.errors.HostCallable` (its `class_name` and `language` fields), for a
+/// `HostContractViolation` panic to echo. `(None, None)` for any other value.
+fn host_throw_diagnostics(value: &BexExternalValue) -> (Option<String>, Option<String>) {
+    let fields = match value {
+        BexExternalValue::Instance { fields, .. } => fields,
+        BexExternalValue::Union { value, .. } => return host_throw_diagnostics(value),
+        _ => return (None, None),
     };
-    (
-        read_string_field("class_name"),
-        read_string_field("language"),
-    )
+    let string_field = |name: &str| match fields.get(name) {
+        Some(BexExternalValue::String(s)) if !s.is_empty() => Some(s.as_str().to_string()),
+        _ => None,
+    };
+    (string_field("class_name"), string_field("language"))
 }
 
 // ── Friendly generic-inference errors ───────────────────────────────────────
@@ -4896,7 +4788,7 @@ impl BexEngine {
         // union would call `find_matching_member`, which never matches a
         // `baml.panics.*` instance and would surface an internal
         // `TypeMismatch` leak instead of the clean panic. This mirrors the
-        // panic bypass in [`enforce_host_throw_contract`].
+        // panic bypass in `land_host_throw`.
         let value_is_panic = value_runtime_baml_ty(value, thread.proof()).is_some_and(|rt| {
             matches!(&rt, bex_vm_types::RuntimeTy::Class(head, _)
                     if head.declared_name().is_some_and(|n| n.is_panic_type()))
@@ -4951,38 +4843,78 @@ impl BexEngine {
     /// `baml.errors.HostCallable`, so applying the contract check
     /// post-materialization handles both paths with a single code path.
     ///
-    /// `host_callable_throws_contract` is the host callable's declared
-    /// `E` (the second generic of `call_host_value<T, E>`), specifically
-    /// for the throws-contract check. Distinct from `throws_type` (the
-    /// *outer* BAML function's declared throws) — that one drives the
-    /// `route_unhandled_vm_throw` re-typing when the throw escapes all
-    /// in-BAML catches. For non-host-callable sysops (which never produce
-    /// `HostThrown` payloads), pass `None` for the throws contract.
+    /// `declared_throws` is the op's declared throws type: for a host
+    /// callable its `E` (the second generic of `call_host_value<T, E>`),
+    /// which a value the host throws is admitted to. Distinct from
+    /// `throws_type` (the *outer* BAML function's declared throws) — that one
+    /// drives the `route_unhandled_vm_throw` re-typing when the throw escapes
+    /// all in-BAML catches.
+    /// Land a value a host callback threw. It is admitted to the callable's
+    /// declared throws type, as a return is to the return type; one that does
+    /// not inhabit it is a breach of the callback's contract and lands as a
+    /// `baml.panics.HostContractViolation` panic instead. A panic the host
+    /// raised is a panic whatever the callable declares.
+    fn land_host_throw(
+        &self,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        thrown: &BexExternalValue,
+        declared_throws: &bex_vm_types::RuntimeTy,
+    ) -> Result<Value, EngineError> {
+        let any = bex_vm_types::RuntimeTy::Unknown;
+        let slot = if thrown_value_is_panic(thrown) {
+            &any
+        } else {
+            declared_throws
+        };
+        let overlay = crate::conversion::InboundRuntimeOverlay::none();
+        match self.admit_realized(thread, thrown, slot, overlay) {
+            Ok(admitted) => self.land(thread, admitted, overlay),
+            Err(mismatch) => {
+                let (class_name, language) = host_throw_diagnostics(thrown);
+                let panic = bex_vm::errors::VmPanic::HostContractViolation {
+                    message: format!(
+                        "host callable threw a value that is not in its declared throws \
+                         contract (`{declared_throws}`): {mismatch}"
+                    ),
+                    class_name,
+                    language,
+                };
+                Ok(thread.vm.panic_to_exception_value(panic))
+            }
+        }
+    }
+
     async fn inject_sysop_throw(
         self: &Arc<Self>,
         thread: &mut ActiveHeapPermit<BexThread>,
         call_id: CallId,
         op_err: OpError,
         throws_type: Option<&RuntimeTy>,
-        host_callable_throws_contract: Option<&RuntimeTy>,
+        declared_throws: &bex_vm_types::RuntimeTy,
     ) -> Result<Option<ThreadOutcome>, EngineError> {
-        let (materialized, mut throw_kind) = match op_err.payload {
+        let (vm_value, throw_kind) = match op_err.payload {
             sys_types::OpErrorPayload::HostThrown(thrown) => (
-                self.convert_external_to_vm_value(thread, *thrown)?,
+                self.land_host_throw(thread, &thrown, declared_throws)?,
                 bex_vm::errors::ThrowKind::Fresh,
             ),
             sys_types::OpErrorPayload::Vm(kind) => op_error_to_throw_value(&mut thread.vm, kind)
                 .map_err(EngineError::VmInternalError)?,
         };
-        let vm_value = if let Some(contract) = host_callable_throws_contract {
-            enforce_host_throw_contract(thread, materialized, contract)
-        } else {
-            materialized
-        };
+        self.inject_thrown_value(thread, call_id, vm_value, throw_kind, throws_type)
+            .await
+    }
+
+    /// Inject a value as a throw at the sys-op call site, as
+    /// [`Self::inject_sysop_throw`] does once the value is landed.
+    async fn inject_thrown_value(
+        self: &Arc<Self>,
+        thread: &mut ActiveHeapPermit<BexThread>,
+        call_id: CallId,
+        vm_value: Value,
+        throw_kind: bex_vm::errors::ThrowKind,
+        throws_type: Option<&RuntimeTy>,
+    ) -> Result<Option<ThreadOutcome>, EngineError> {
         Self::close_network_on_throw(thread, vm_value);
-        if vm_value != materialized {
-            throw_kind = bex_vm::errors::ThrowKind::Fresh;
-        }
         let thrown = bex_vm::errors::VmThrown {
             value: vm_value,
             throw_kind,
@@ -5095,17 +5027,14 @@ impl BexEngine {
             "a shielded thread never observes the token"
         );
         match site {
-            CancelSite::SysOp(operation) => {
+            CancelSite::SysOp => {
                 // The panic is the op's error: unwind from the call site like
                 // any sys-op error.
-                self.inject_sysop_throw(
-                    thread,
-                    call_id,
-                    OpError::new(operation, sys_types::VmPanic::Cancelled),
-                    throws_type,
-                    None,
-                )
-                .await
+                let (value, throw_kind) =
+                    op_error_to_throw_value(&mut thread.vm, sys_types::VmPanic::Cancelled.into())
+                        .map_err(EngineError::VmInternalError)?;
+                self.inject_thrown_value(thread, call_id, value, throw_kind, throws_type)
+                    .await
             }
             CancelSite::Await => {
                 // `pc` sits on the `Await` / `AwaitAny` opcode (the VM puts
@@ -5683,6 +5612,7 @@ impl BexEngine {
                         operation,
                         args,
                         return_type,
+                        throws_type: op_throws_type,
                     } => {
                         // Single round-trip sys-op call. Convert args, race
                         // the op against the active cancel token, and push the
@@ -5701,7 +5631,7 @@ impl BexEngine {
                                 .inject_cancellation(
                                     thread,
                                     call_id,
-                                    CancelSite::SysOp(operation),
+                                    CancelSite::SysOp,
                                     throws_type.as_ref(),
                                 )
                                 .await?
@@ -5776,38 +5706,12 @@ impl BexEngine {
                                 .collect()
                         };
 
-                        // Capture the host-call type args (`type_arg_0`/`args[2]`
-                        // = return type `T`; `type_arg_1`/`args[3]` = throws
-                        // contract `E`) as OWNED `RuntimeTy` values now, while the heap
-                        // permit is still held and the packed `Object::Type`
-                        // pointers are live. The async wait below releases the
-                        // permit, and a moving GC can then relocate/collect the
-                        // object; the engine-local `args` Vec is not a GC root
-                        // and is never forwarded, so re-reading the raw pointer
-                        // post-await would be a use-after-free. Cloning the
-                        // `RuntimeTy`s here sidesteps that.
-                        //
-                        // `host_throws_ty` drives the throws-contract check at
-                        // the host-throw injection site below: a host throw
-                        // that doesn't match `E` becomes a
-                        // `baml.panics.HostContractViolation` panic instead of
-                        // a catchable throw.
-                        // Host-facing validation reads these in the wire's
-                        // spelling, so convert once at the read.
-                        // The op's declared return type, held across the await:
-                        // a runtime declaration it names is rooted, since a
-                        // collection may move it while the permit is released.
+                        // The op's declared return and throws types, held across
+                        // the await: a runtime declaration either names is
+                        // rooted, since a collection may move it while the
+                        // permit is released.
                         let declared_ret = self.hold_ty(return_type.into());
-                        let host_throws_ty: Option<baml_type::RuntimeTy> =
-                            if operation == SysOp::BamlHostCallHostValue {
-                                Some(crate::conversion::overlay_wire_ty_under_permit(
-                                    &host_call_type_arg(args.get(3).copied(), 3, "throws_ty")
-                                        .map_err(EngineError::VmInternalError)?,
-                                    thread.proof(),
-                                ))
-                            } else {
-                                None
-                            };
+                        let declared_throws = self.hold_ty(op_throws_type.into());
 
                         let network = self.network_before(thread, operation, &args);
                         // A synchronous sysop does its work inside the call below.
@@ -5974,7 +5878,7 @@ impl BexEngine {
                                             .inject_cancellation(
                                                 thread,
                                                 call_id,
-                                                CancelSite::SysOp(operation),
+                                                CancelSite::SysOp,
                                                 throws_type.as_ref(),
                                             )
                                             .await?
@@ -5998,6 +5902,8 @@ impl BexEngine {
                             }
                         }
 
+                        let declared_ret = self.release_ty(thread.proof(), declared_ret)?;
+                        let declared_throws = self.release_ty(thread.proof(), declared_throws)?;
                         match outcome {
                             Ok(external) => {
                                 // The result is admitted to the op's declared
@@ -6005,7 +5911,6 @@ impl BexEngine {
                                 // parameter. A host callback's return that does
                                 // not inhabit it is a breach of the callback's
                                 // contract; any other op's is a fault of the op.
-                                let declared_ret = self.release_ty(thread.proof(), declared_ret)?;
                                 let landed = if operation == SysOp::BamlHostCallHostValue {
                                     self.admit_host_return(thread, &external, &declared_ret)?
                                 } else {
@@ -6050,7 +5955,7 @@ impl BexEngine {
                                                 call_id,
                                                 op_err,
                                                 throws_type.as_ref(),
-                                                host_throws_ty.as_ref(),
+                                                &declared_throws,
                                             )
                                             .await?
                                         {
@@ -6082,7 +5987,7 @@ impl BexEngine {
                                         call_id,
                                         op_err,
                                         throws_type.as_ref(),
-                                        host_throws_ty.as_ref(),
+                                        &declared_throws,
                                     )
                                     .await?
                                 {
@@ -6114,6 +6019,16 @@ impl BexEngine {
                         // parent's heap permit. Cooperate only after the child
                         // is registered and its future is rooted on our stack;
                         // collection can now move both VMs' reachable objects.
+                        //
+                        // BUG: parking here releases the permit before the
+                        // parent's next instruction, and the child just fired
+                        // may take it and run first. A read the parent makes
+                        // between `spawn` and its next `await` then sees the
+                        // child's writes (`cells_read_then_spawn_writes` fails
+                        // under a full-corpus load, when another thread's
+                        // collection request lands on this safepoint). The
+                        // child should become runnable only when the parent
+                        // yields at an await.
                         let gc_requested = self.heap.should_gc();
                         #[cfg(not(target_arch = "wasm32"))]
                         let gc_requested =
