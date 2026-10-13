@@ -3,7 +3,7 @@
 use bridge_ctypes::baml_bridge::cffi::CallFunctionArgs;
 use prost::Message;
 use pyo3::{
-    Bound, Py, Python,
+    Bound, IntoPyObjectExt, Py, Python,
     prelude::{PyResult, pyfunction, pymethods},
     pyclass,
     types::{PyAny, PyDict},
@@ -81,10 +81,10 @@ submit! {
         import typing
 
         class BamlRuntime:
-            def call_function(self, args_proto: bytes, kwargs: typing.Optional[dict] = None, cancel: typing.Any = None) -> typing.Any:
+            def call_function(self, args_proto: bytes, kwargs: typing.Optional[dict] = None, cancel: typing.Any = None, *, stream: bool = False) -> typing.Any:
                 """Call a BAML function asynchronously."""
 
-            def call_function_sync(self, args_proto: bytes, kwargs: typing.Optional[dict] = None, cancel: typing.Any = None) -> bytes:
+            def call_function_sync(self, args_proto: bytes, kwargs: typing.Optional[dict] = None, cancel: typing.Any = None, *, stream: bool = False) -> typing.Any:
                 """Call a BAML function synchronously (blocking)."""
         "#
     }
@@ -100,13 +100,15 @@ impl BamlRuntime {
     /// * `kwargs` - The arguments by declared parameter name, as Python values;
     ///   encoded here against the target's declared types
     /// * `cancel` - The `_baml.cancel` token, if any
-    #[pyo3(signature = (args_proto, kwargs=None, cancel=None))]
+    /// * `stream` - Whether the call pulls a stream step
+    #[pyo3(signature = (args_proto, kwargs=None, cancel=None, *, stream=false))]
     fn call_function<'py>(
         &self,
         py: Python<'py>,
         args_proto: Vec<u8>,
         kwargs: Option<&Bound<'py, PyDict>>,
         cancel: Option<&Bound<'py, PyAny>>,
+        stream: bool,
     ) -> PyResult<Py<PyAny>> {
         // A value that does not fit its declared type is the caller's error
         // and raises here, before anything is sent. Byte-returning site (32c)
@@ -129,11 +131,8 @@ impl BamlRuntime {
         // return the encoded envelope bytes for Python to decode + raise.
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let _environment = environment;
-            let bytes = match request {
-                Ok(request) => bridge_cffi::execute_invocation(request).await,
-                Err(e) => bridge_cffi::error_to_outbound(e),
-            };
-            Ok(bytes)
+            let (bytes, retained) = execute_python_invocation(request, stream).await;
+            Python::attach(|py| result_with_stream(py, bytes, retained, stream))
         })
         .map(pyo3::Bound::into)
     }
@@ -146,14 +145,16 @@ impl BamlRuntime {
     /// * `kwargs` - The arguments by declared parameter name, as Python values;
     ///   encoded here against the target's declared types
     /// * `cancel` - The `_baml.cancel` token, if any
-    #[pyo3(signature = (args_proto, kwargs=None, cancel=None))]
+    /// * `stream` - Whether the call pulls a stream step
+    #[pyo3(signature = (args_proto, kwargs=None, cancel=None, *, stream=false))]
     fn call_function_sync(
         &self,
         py: Python<'_>,
         args_proto: Vec<u8>,
         kwargs: Option<&Bound<'_, PyDict>>,
         cancel: Option<&Bound<'_, PyAny>>,
-    ) -> PyResult<Vec<u8>> {
+        stream: bool,
+    ) -> PyResult<Py<PyAny>> {
         // A value that does not fit its declared type raises here. Otherwise
         // byte-returning site (32c): pre-call host-boundary failures
         // (uninitialized runtime, malformed call-args, no tokio runtime) don't
@@ -168,7 +169,9 @@ impl BamlRuntime {
 
         let (request, rt) = match request {
             Ok(v) => v,
-            Err(e) => return Ok(bridge_cffi::error_to_outbound(e)),
+            Err(e) => {
+                return result_with_stream(py, bridge_cffi::error_to_outbound(e), None, stream);
+            }
         };
 
         // Same shared execute_invocation as the async + C-ABI paths — returns the
@@ -176,7 +179,12 @@ impl BamlRuntime {
         let call_id = request.host_call_id();
         let (sender, mut receiver) = std::sync::mpsc::channel();
         let _environment = DispatchScope::synchronous(call_id, sender.clone())?;
-        let task = rt.spawn(bridge_cffi::execute_invocation(request));
+        let (retained_sender, retained_receiver) = std::sync::mpsc::channel();
+        let task = rt.spawn(async move {
+            let (bytes, retained) = execute_python_invocation(Ok(request), stream).await;
+            let _ = retained_sender.send(retained);
+            bytes
+        });
         // Observe panics/cancellation of the engine task as well as normal
         // results; a producer disappearing must never strand the caller queue.
         rt.spawn(async move {
@@ -199,7 +207,14 @@ impl BamlRuntime {
             }
             match message {
                 Ok(SyncMessage::Dispatch(dispatch)) => crate::host_value::dispatch_sync(dispatch),
-                Ok(SyncMessage::Finished(bytes)) => return Ok(bytes),
+                Ok(SyncMessage::Finished(bytes)) => {
+                    return result_with_stream(
+                        py,
+                        bytes,
+                        retained_receiver.try_recv().ok().flatten(),
+                        stream,
+                    );
+                }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     return Err(py_sdk_panic(
@@ -256,4 +271,47 @@ pub fn get_runtime() -> PyResult<BamlRuntime> {
         other => bridge_error_to_sdk_panic(other),
     })?;
     Ok(BamlRuntime)
+}
+
+type RetainedStream = (bex_project::HostInvocation, crate::py_handle::BamlPyHandle);
+
+async fn execute_python_invocation(
+    request: Result<bridge_cffi::InvocationRequest, bridge_cffi::BridgeError>,
+    stream: bool,
+) -> (Vec<u8>, Option<RetainedStream>) {
+    let mut request = match request {
+        Ok(request) => request,
+        Err(error) => return (bridge_cffi::error_to_outbound(error), None),
+    };
+    let retained = if stream {
+        match request.retain_stream().await {
+            Ok((execution, key)) => Some((
+                execution,
+                crate::py_handle::BamlPyHandle::new(
+                    key,
+                    bridge_ctypes::baml_bridge::cffi::BamlHandleType::InvocationState as u64,
+                ),
+            )),
+            Err(error) => return (bridge_cffi::error_to_outbound(error), None),
+        }
+    } else {
+        None
+    };
+    (bridge_cffi::execute_invocation(request).await, retained)
+}
+
+fn result_with_stream(
+    py: Python<'_>,
+    bytes: Vec<u8>,
+    retained: Option<RetainedStream>,
+    stream: bool,
+) -> PyResult<Py<PyAny>> {
+    if stream {
+        let frame = retained
+            .map(|(execution, key)| crate::invocation::stream_frame(execution, key))
+            .transpose()?;
+        (bytes, frame).into_py_any(py)
+    } else {
+        bytes.into_py_any(py)
+    }
 }

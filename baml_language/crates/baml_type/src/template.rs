@@ -255,7 +255,6 @@ fn walk_template<N: Clone>(
         | TyTemplate::Type
         | TyTemplate::Resource
         | TyTemplate::PromptAst
-        | TyTemplate::Void
         | TyTemplate::TypeAlias(..)
         | TyTemplate::Unknown
         | TyTemplate::Never => {}
@@ -323,7 +322,6 @@ fn visit_template<N: Clone>(template: &TyTemplate<N>, visitor: &mut impl FnMut(&
         | TyTemplate::Type
         | TyTemplate::Resource
         | TyTemplate::PromptAst
-        | TyTemplate::Void
         | TyTemplate::TypeAlias(..)
         | TyTemplate::Unknown
         | TyTemplate::Never => {}

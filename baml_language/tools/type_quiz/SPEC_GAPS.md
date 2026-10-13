@@ -31,23 +31,17 @@ Cited by: rule `flow/requires-subtype`.
 
 ## G-002: `void` against `null` in function types
 
-Kind: under-specified.
+Kind: under-specified. Closed.
 
-Principle: "Functions" says `void` is valid only as a return type and that a
-side-effect block's unit value is `null`, but the subtyping rules never say
-how `() -> void` relates to `() -> null`. The question is not academic: the
-stdlib declares `Package.tests()` as `map<string, () -> null throws unknown>`
-while the values it produces reflect as `() -> void throws never`, and a
-run-time membership test between the two is `false`. Either `void` is a
-spelling of `null` in return position, in which case the two function types
-are related by error covariance alone and the run-time test is a compiler
-defect, or `void` is a distinct type and the stdlib signature is wrong.
+Principle: `void` in return position denotes the unit type, whose only value
+is `null`; `() -> void` and `() -> null` are the same type, statically and at
+run time.
 
-Proposed wording, for "Functions": "`void` in return position denotes the
-unit type, whose only value is `null`; `() -> void` and `() -> null` are the
-same type." Or the alternative, if `void` is meant to be distinct.
+Closed by: the spec now states it. "Unit Type" says `null` is the unit type
+and `void` an alias for it (BEP-079). The id stays retired so that nothing
+cites a different gap under it.
 
-Cited by: nothing yet; recorded from the engine's `passes` workaround.
+Cited by: nothing.
 
 ## G-003: precedence between an inherent member and an interface member
 

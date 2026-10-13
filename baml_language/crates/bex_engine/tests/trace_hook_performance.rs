@@ -9,7 +9,7 @@ const SOURCE: &str = r#"
 function baseline(n: int) -> int { n }
 /// baml:$trace=trace.hidden
 function hidden(n: int) -> int { n }
-/// baml:$trace=trace.rich
+/// baml:$trace=trace.empty_span
 function rich(n: int) -> int { n }
 /// baml:$trace=trace.span
 function span(n: int) -> int { n }

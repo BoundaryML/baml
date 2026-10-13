@@ -243,8 +243,8 @@ function render_output_format(t: reflect.Type) -> string throws reflect.errors.C
     root.internal.render_output_format(t)
 }
 
-/// Provider-neutral media payload after resolving local files and, when
-/// requested, ordinary HTTP(S) URLs. Google Cloud `gs://` URLs remain URLs.
+/// Provider-neutral media payload after resolving, when requested, ordinary
+/// HTTP(S) URLs. Google Cloud `gs://` URLs remain URLs.
 class ResolvedMedia {
     url: string?,
     base64: string?,
@@ -252,92 +252,77 @@ class ResolvedMedia {
 }
 
 /// Resolve BAML media for provider request lowering. This mirrors the media
-/// resolution pass in `sys_llm`: local files become base64, existing base64 is
-/// retained, and URL fetching is selected by the provider.
+/// resolution pass in `sys_llm`: existing base64 is retained, and URL fetching
+/// is selected by the provider. Media built from a file already holds its
+/// content as base64.
 function resolve_media(media: ai.MediaPart, fetch_url: bool) -> ResolvedMedia {
     match (media) {
         let image: baml.media.Image => {
-            let source = image.file() ?? image.url() ?? "";
             root.internal._resolve_media_content(
                 image.url(),
-                image.file(),
                 image.base64(),
-                root.internal._media_mime_type(image.mime_type(), source, "image"),
+                image.mime_type() ?? baml.media.Image.infer_mime_type(image.url() ?? ""),
                 fetch_url,
             )
         },
         let audio: baml.media.Audio => {
-            let source = audio.file() ?? audio.url() ?? "";
             root.internal._resolve_media_content(
                 audio.url(),
-                audio.file(),
                 audio.base64(),
-                root.internal._media_mime_type(audio.mime_type(), source, "audio"),
+                audio.mime_type() ?? baml.media.Audio.infer_mime_type(audio.url() ?? ""),
                 fetch_url,
             )
         },
         let video: baml.media.Video => {
-            let source = video.file() ?? video.url() ?? "";
             root.internal._resolve_media_content(
                 video.url(),
-                video.file(),
                 video.base64(),
-                root.internal._media_mime_type(video.mime_type(), source, "video"),
+                video.mime_type() ?? baml.media.Video.infer_mime_type(video.url() ?? ""),
                 fetch_url,
             )
         },
         let pdf: baml.media.Pdf => {
-            let source = pdf.file() ?? pdf.url() ?? "";
             root.internal._resolve_media_content(
                 pdf.url(),
-                pdf.file(),
                 pdf.base64(),
-                root.internal._media_mime_type(pdf.mime_type(), source, "pdf"),
+                pdf.mime_type() ?? baml.media.Pdf.infer_mime_type(pdf.url() ?? ""),
                 fetch_url,
             )
         },
     }
 }
 
-/// Resolve media for a request preview without reading a file or fetching a
-/// URL. Existing base64 and `data:` payloads are preserved; provider-specific
-/// renderers decide whether an ordinary URL is supported on their wire form.
+/// Resolve media for a request preview without fetching a URL. Existing base64
+/// and `data:` payloads are preserved; provider-specific renderers decide
+/// whether an ordinary URL is supported on their wire form.
 function resolve_media_preview(media: ai.MediaPart) -> ResolvedMedia {
     match (media) {
         let image: baml.media.Image => {
-            let source = image.file() ?? image.url() ?? "";
             root.internal._resolve_media_preview_content(
                 image.url(),
-                image.file(),
                 image.base64(),
-                root.internal._media_mime_type(image.mime_type(), source, "image"),
+                image.mime_type() ?? baml.media.Image.infer_mime_type(image.url() ?? ""),
             )
         },
         let audio: baml.media.Audio => {
-            let source = audio.file() ?? audio.url() ?? "";
             root.internal._resolve_media_preview_content(
                 audio.url(),
-                audio.file(),
                 audio.base64(),
-                root.internal._media_mime_type(audio.mime_type(), source, "audio"),
+                audio.mime_type() ?? baml.media.Audio.infer_mime_type(audio.url() ?? ""),
             )
         },
         let video: baml.media.Video => {
-            let source = video.file() ?? video.url() ?? "";
             root.internal._resolve_media_preview_content(
                 video.url(),
-                video.file(),
                 video.base64(),
-                root.internal._media_mime_type(video.mime_type(), source, "video"),
+                video.mime_type() ?? baml.media.Video.infer_mime_type(video.url() ?? ""),
             )
         },
         let pdf: baml.media.Pdf => {
-            let source = pdf.file() ?? pdf.url() ?? "";
             root.internal._resolve_media_preview_content(
                 pdf.url(),
-                pdf.file(),
                 pdf.base64(),
-                root.internal._media_mime_type(pdf.mime_type(), source, "pdf"),
+                pdf.mime_type() ?? baml.media.Pdf.infer_mime_type(pdf.url() ?? ""),
             )
         },
     }

@@ -30,7 +30,7 @@ func Init(libraryPath string) error {
 	getAPI, err := resolveSymbol(handle, "baml_get_api_v1")
 	if err != nil || C.validateInvocationApi(getAPI) == 0 {
 		C.dlclose(handle)
-		return fmt.Errorf("incompatible BAML invocation ABI: revision 3 required")
+		return fmt.Errorf("incompatible BAML invocation ABI: revision 4 required")
 	}
 	symbols := map[string]func(unsafe.Pointer){
 		"new_function_call":             func(p unsafe.Pointer) { C.setNewFunctionCallFn(p) },

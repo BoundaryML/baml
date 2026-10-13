@@ -192,8 +192,8 @@ pub enum DiagnosticId {
     // Byte string literal errors (E0109)
     InvalidByteStringEscape,
 
-    // Void type position errors (E0110)
-    VoidInNonReturnPosition,
+    // E0110 is retired and not to be reused: it reported `void` outside a
+    // return position, and `void` is a type like any other (BEP-079).
 
     // Wildcard `_` type in a non-inferable position (E0147)
     WildcardTypeNotAllowed,
@@ -562,8 +562,6 @@ impl DiagnosticId {
             // Byte string literal errors
             DiagnosticId::InvalidByteStringEscape => "E0109",
 
-            // Void type position errors
-            DiagnosticId::VoidInNonReturnPosition => "E0110",
             DiagnosticId::WildcardTypeNotAllowed => "E0147",
 
             // Interface diagnostics
@@ -953,7 +951,7 @@ mod tests {
         // new variants are appended.
         assert_eq!(
             borsh::to_vec(&DiagnosticId::ScopedTypeEscapesBlock).unwrap(),
-            vec![140]
+            vec![139]
         );
         assert_eq!(borsh::to_vec(&Severity::Error).unwrap(), vec![0]);
         assert_eq!(borsh::to_vec(&Severity::Warning).unwrap(), vec![1]);

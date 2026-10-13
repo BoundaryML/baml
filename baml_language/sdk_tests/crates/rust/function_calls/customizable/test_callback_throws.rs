@@ -12,8 +12,8 @@
 //! - re-thrown → a generic union that carries the effect param.
 //!
 //! Python/TS erase `throws`, so these cases have no cross-language counterpart
-//! — hence a Rust-only file. (Callback return types are concrete `int`, not
-//! `void`: the engine validates the host's returned value against them.)
+//! — hence a Rust-only file. (Callback return types are concrete: the engine
+//! validates the host's returned value against them.)
 
 use baml_bridge::Error;
 use baml_sdk::host_callable_tests::{

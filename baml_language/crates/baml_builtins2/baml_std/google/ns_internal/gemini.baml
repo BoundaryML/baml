@@ -431,8 +431,8 @@ function _gm_mime_for_uri(url: string, mime: string) -> string? {
 /// media defaults: the Gemini Developer API has no server-side URL fetch, so an
 /// http(s) URL is downloaded and inlined (`true`), while Vertex takes the URL
 /// through as `fileData.fileUri` (`false`) — which also keeps large media out
-/// of the inline request-size cap. Local files always become base64 and
-/// existing base64 is retained on both backends, and a `_gm_is_provider_uri`
+/// of the inline request-size cap. Existing base64, which is what media built
+/// from a file holds, is retained on both backends, and a `_gm_is_provider_uri`
 /// URL is passed through even when `fetch_url` is set.
 function _gm_media_part(media: ai.MediaPart, fetch_url: bool, preview: bool = false) -> GmPart {
     let source = _gm_media_url(media);

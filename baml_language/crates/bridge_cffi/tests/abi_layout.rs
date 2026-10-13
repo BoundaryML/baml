@@ -288,6 +288,8 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
     field!("BamlApiV1", BamlApiV1, register_host_cancel_callback);
     field!("BamlApiV1", BamlApiV1, trace_selection);
     field!("BamlApiV1", BamlApiV1, invocation_context);
+    field!("BamlApiV1", BamlApiV1, media_name);
+    field!("BamlApiV1", BamlApiV1, media_from_file_content);
     assert_eq!(actual, expected, "C and Rust ABI layouts differ");
     assert_eq!(BamlCffiStatus::Ok as u32, 0);
     assert_eq!(BamlCffiStatus::InvalidHandle as u32, 1);

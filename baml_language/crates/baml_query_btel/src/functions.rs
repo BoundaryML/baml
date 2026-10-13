@@ -1378,7 +1378,7 @@ struct Usage {
     cache_write: Option<i64>,
     reasoning: Option<i64>,
     /// `None` once any turn's model has no price or the amount overflows.
-    cost: Option<crate::pricing::Usd>,
+    cost: Option<btel_pricing::Usd>,
 }
 
 struct UsageSum;
@@ -1393,7 +1393,7 @@ impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
         let (cache_read, cache_write, reasoning) =
             (opt_i64(ctx, 3)?, opt_i64(ctx, 4)?, opt_i64(ctx, 5)?);
         let usage = acc.get_or_insert_with(|| Usage {
-            cost: Some(crate::pricing::Usd::default()),
+            cost: Some(btel_pricing::Usd::default()),
             ..Usage::default()
         });
         let add = |sum: Option<i64>, n: Option<i64>| match (sum, n) {
@@ -1402,7 +1402,7 @@ impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
         };
         usage.cost = usage
             .cost
-            .zip(crate::pricing::cost_nano_usd(
+            .zip(btel_pricing::cost_nano_usd(
                 model.as_deref(),
                 input,
                 output,
@@ -1433,7 +1433,7 @@ impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
         };
         let int = |n: Option<i64>| n.map_or(Inline::Null, Inline::Int);
         // The local-query cost column remains dollars; convert only at presentation.
-        let dollars = |cost: crate::pricing::Usd| {
+        let dollars = |cost: btel_pricing::Usd| {
             #[expect(
                 clippy::cast_precision_loss,
                 reason = "local queries expose dollar floats after integer estimation and aggregation"

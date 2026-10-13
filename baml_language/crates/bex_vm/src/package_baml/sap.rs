@@ -633,7 +633,6 @@ fn empty_value(
         | RealizedTy::Type
         | RealizedTy::Resource
         | RealizedTy::PromptAst
-        | RealizedTy::Void
         | RealizedTy::Never => return Ok(None),
     }))
 }

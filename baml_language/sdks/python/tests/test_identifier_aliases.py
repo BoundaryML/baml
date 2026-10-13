@@ -114,11 +114,11 @@ def test_stream_companion_calls_its_exact_fqn(monkeypatch):
     encoded_calls = []
 
     class FakeRuntime:
-        def call_function_sync(self, args, kwargs=None, cancel=None):
+        def call_function_sync(self, args, kwargs=None, cancel=None, *, stream=False):
             assert args == b"encoded"
             return b"stream"
 
-        async def call_function(self, args, kwargs=None, cancel=None):
+        async def call_function(self, args, kwargs=None, cancel=None, *, stream=False):
             assert args == b"encoded"
             return b"stream"
 
@@ -132,6 +132,13 @@ def test_stream_companion_calls_its_exact_fqn(monkeypatch):
     monkeypatch.setattr(baml_bridge, "decode_call_result", lambda _value: "stream")
     monkeypatch.setattr(
         baml_bridge, "_decode_call_result_async", lambda _value: "stream"
+    )
+    # A stream companion's result is decoded into a `BamlStream`; this test
+    # pins the call's spelling, not the stream.
+    monkeypatch.setattr(
+        baml_bridge._stream,
+        "_decode_stream_result",
+        lambda result, *, asynchronous=False: "stream",
     )
 
     listener = object()

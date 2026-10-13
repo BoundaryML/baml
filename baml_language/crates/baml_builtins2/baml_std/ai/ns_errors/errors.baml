@@ -189,8 +189,8 @@ class PromptRenderError {
 }
 
 /// A request preview cannot represent this input without performing the I/O
-/// that the preview API explicitly forbids (for example, reading a local media
-/// file or downloading a URL for a provider that has no URL wire form).
+/// that the preview API explicitly forbids (for example, downloading a URL
+/// for a provider that has no URL wire form).
 class PreviewUnsupported {
     provider: string,
     detail: string,

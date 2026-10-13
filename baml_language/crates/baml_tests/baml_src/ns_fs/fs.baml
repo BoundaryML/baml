@@ -57,6 +57,63 @@ test "fs_open_and_read_bytes" {
 }
 
 // ============================================================================
+// File.bytes — everything that remains, in one read
+// ============================================================================
+
+function fs_file_bytes_reads_past_one_chunk_fn() -> string {
+    let path = fs_tmp("bytes_large.txt");
+    // Longer than the 64 KiB a single `read` returns.
+    baml.fs.write(path, "0123456789".repeat(20000));
+    let file = baml.fs.open(path, "r");
+    let direct = file.bytes();
+    file.close();
+    let again = baml.fs.open(path, "r");
+    let through_read = again.as<baml.io.Read>.bytes();
+    again.close();
+    baml.fs.remove(path);
+    `${direct.length()}|${through_read.length()}|${direct.to_base64() == through_read.to_base64()}`
+}
+
+test "fs_file_bytes_reads_past_one_chunk" {
+    assert.equal(fs_file_bytes_reads_past_one_chunk_fn(), "200000|200000|true")
+}
+
+function fs_file_bytes_reads_what_remains_fn() -> string {
+    let path = fs_tmp("bytes_remaining.txt");
+    baml.fs.write(path, "Hello from BAML!");
+    let file = baml.fs.open(path, "r");
+    let head = file.read(6) ?? b"";
+    let rest = file.bytes();
+    let after = file.bytes();
+    file.close();
+    baml.fs.remove(path);
+    `${head.length()}|${rest.length()}|${after.length()}`
+}
+
+test "fs_file_bytes_reads_what_remains" {
+    // 16 bytes: 6 by `read`, the other 10 by `bytes`, then nothing is left.
+    assert.equal(fs_file_bytes_reads_what_remains_fn(), "6|10|0")
+}
+
+function fs_file_bytes_on_a_closed_file_fn() -> string {
+    let path = fs_tmp("bytes_closed.txt");
+    baml.fs.write(path, "x");
+    let file = baml.fs.open(path, "r");
+    file.close();
+    baml.fs.remove(path);
+    {
+        file.bytes();
+        "read"
+    } catch (e) {
+        baml.errors.Io => "io"
+    }
+}
+
+test "fs_file_bytes_on_a_closed_file" {
+    assert.equal(fs_file_bytes_on_a_closed_file_fn(), "io")
+}
+
+// ============================================================================
 // write string — returns byte count
 // ============================================================================
 

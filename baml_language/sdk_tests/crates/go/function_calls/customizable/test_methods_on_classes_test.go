@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	_ func(baml_sdk.MethodSelfEdgesMethodSelfEdges, context.Context, string, ...baml_go.CallOption) (string, error)      = baml_sdk.MethodSelfEdgesMethodSelfEdges.ThrowError
-	_ func(baml_sdk.MethodSelfEdgesMethodSelfEdges, context.Context, string, ...baml_go.CallOption) error                = baml_sdk.MethodSelfEdgesMethodSelfEdges.Panic
-	_ func(baml_sdk.MethodSelfEdgesMethodSelfEdges, context.Context, int64, ...baml_go.CallOption) (baml_go.Null, error) = baml_sdk.MethodSelfEdgesMethodSelfEdges.SleepMs
+	_ func(baml_sdk.MethodSelfEdgesMethodSelfEdges, context.Context, string, ...baml_go.CallOption) (string, error) = baml_sdk.MethodSelfEdgesMethodSelfEdges.ThrowError
+	_ func(baml_sdk.MethodSelfEdgesMethodSelfEdges, context.Context, string, ...baml_go.CallOption) error           = baml_sdk.MethodSelfEdgesMethodSelfEdges.Panic
+	_ func(baml_sdk.MethodSelfEdgesMethodSelfEdges, context.Context, int64, ...baml_go.CallOption) error            = baml_sdk.MethodSelfEdgesMethodSelfEdges.SleepMs
 	_ func(
 		baml_sdk.MethodSelfEdgesMethodSelfEdges,
 		context.Context,
@@ -192,7 +192,7 @@ func Test_instance_method_cancellation_returns_exact_context_error(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	_, err := value.SleepMs(ctx, 2000)
+	err := value.SleepMs(ctx, 2000)
 	if err != ctx.Err() {
 		t.Fatalf("SleepMs error identity = %v, want exact ctx.Err() %v", err, ctx.Err())
 	}

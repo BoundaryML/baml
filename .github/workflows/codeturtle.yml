@@ -1,0 +1,33 @@
+name: CodeTurtle
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review, labeled]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  codeturtle:
+    if: github.event.action != 'labeled' || github.event.label.name == 'codeturtle-refresh'
+    concurrency:
+      group: codeturtle-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Fetch PR history without checking out PR code
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c http.extraheader="AUTHORIZATION: basic $auth" fetch --no-tags origin "refs/pull/$PR_NUMBER/head"
+      - uses: BoundaryML/codeturtle/cli@2e85410d0b2fd2b4894da533f5777441f79ca7ca
+        with:
+          api-url: 'https://boundary-codeturtle-staging.fly.dev'
+          runtime-url: 'https://github.com/BoundaryML/baml/releases/download/baml-language-0.20.2-nightly.20261004.a/baml-language-0.20.2-nightly.20261004.a-x86_64-unknown-linux-musl.tar.gz'
+          runtime-sha256: 'f04ac48a55c52a97c3b8ace0db0d0da351d85ab6f9bb14e79ebab817a7b5777c'

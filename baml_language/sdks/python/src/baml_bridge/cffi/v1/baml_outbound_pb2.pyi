@@ -173,18 +173,26 @@ class BamlValueUnionVariant(_message.Message):
     def __init__(self, name: _Optional[str] = ..., is_optional: bool = ..., is_single_pattern: bool = ..., self_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., value_option_name: _Optional[str] = ..., value: _Optional[_Union[BamlOutboundValue, _Mapping]] = ..., selected_option_index: _Optional[int] = ...) -> None: ...
 
 class BamlValueMedia(_message.Message):
-    __slots__ = ("media", "mime_type", "url", "base64", "file")
+    __slots__ = ("media", "mime_type", "url", "base64", "file_content")
     MEDIA_FIELD_NUMBER: _ClassVar[int]
     MIME_TYPE_FIELD_NUMBER: _ClassVar[int]
     URL_FIELD_NUMBER: _ClassVar[int]
     BASE64_FIELD_NUMBER: _ClassVar[int]
-    FILE_FIELD_NUMBER: _ClassVar[int]
+    FILE_CONTENT_FIELD_NUMBER: _ClassVar[int]
     media: MediaTypeEnum
     mime_type: str
     url: str
     base64: str
-    file: str
-    def __init__(self, media: _Optional[_Union[MediaTypeEnum, str]] = ..., mime_type: _Optional[str] = ..., url: _Optional[str] = ..., base64: _Optional[str] = ..., file: _Optional[str] = ...) -> None: ...
+    file_content: BamlValueMediaFileContent
+    def __init__(self, media: _Optional[_Union[MediaTypeEnum, str]] = ..., mime_type: _Optional[str] = ..., url: _Optional[str] = ..., base64: _Optional[str] = ..., file_content: _Optional[_Union[BamlValueMediaFileContent, _Mapping]] = ...) -> None: ...
+
+class BamlValueMediaFileContent(_message.Message):
+    __slots__ = ("name", "base64")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    BASE64_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    base64: str
+    def __init__(self, name: _Optional[str] = ..., base64: _Optional[str] = ...) -> None: ...
 
 class BamlValuePromptAst(_message.Message):
     __slots__ = ("simple", "message", "multiple")

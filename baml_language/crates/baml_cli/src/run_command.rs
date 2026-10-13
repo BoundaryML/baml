@@ -1076,9 +1076,9 @@ impl RunArgs {
 
     /// Evaluate a BAML expression.
     ///
-    /// Wraps the expression in a synthetic `function $expr_main() { <body> }`
-    /// and compiles/runs it. An explicit `--file` is compiled with the
-    /// expression as its standalone context. Otherwise, expressions are first
+    /// Wraps the expression in a synthetic function (see
+    /// [`expression_source`]) and compiles/runs it. An explicit `--file` is
+    /// compiled with the expression as its standalone context. Otherwise, expressions are first
     /// compiled with only the standard library in scope, so unrelated project
     /// errors cannot block an independent probe. If that fails and a project is
     /// available, retry with project context so expressions can reference its
@@ -1092,9 +1092,6 @@ impl RunArgs {
             "Expression mode: evaluating {} byte(s)",
             expr_body.len()
         ));
-
-        // `-> unknown` lets any return type through.
-        let synthetic = format!("function baml_run_expr_main__() -> unknown {{\n{expr_body}\n}}");
 
         // An explicit standalone file is always part of the expression's
         // compilation context. Without one, preserve the isolation-first path
@@ -1128,7 +1125,12 @@ impl RunArgs {
             Some(standalone) => (standalone.db, standalone.package),
             None => workspace_db(&isolated_root),
         };
-        expression_db.add_or_update_file_in(expression_workspace, &expression_path, &synthetic);
+        let synthetic = expression_source(
+            &mut expression_db,
+            expression_workspace,
+            &expression_path,
+            expr_body,
+        );
         let expression_diagnostics = baml_db::collect_diagnostics(&expression_db);
         let expression_has_errors = expression_diagnostics
             .iter()
@@ -1196,14 +1198,14 @@ impl RunArgs {
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
         let return_type = engine
-            .function_return_type("baml_run_expr_main__")
+            .function_return_type(EXPRESSION_ENTRY)
             .unwrap_or(bex_engine::RuntimeTy::Null);
         let output_format = self.output_format;
         let (call_context, logs) = self.call_context(CallId::next());
         let helper_context = baml_exec::HelperCallContext::from_call_context(&call_context);
         let call_result = self.block_on_with_logs(
             &rt,
-            engine.call_function("baml_run_expr_main__", vec![], call_context, true),
+            engine.call_function(EXPRESSION_ENTRY, vec![], call_context, true),
             logs.as_ref(),
         );
         let output_succeeded: std::result::Result<bool, bex_engine::EngineError> = self
@@ -1211,22 +1213,23 @@ impl RunArgs {
                 &rt,
                 async {
                     let value = call_result?;
-                    if !matches!(return_type, bex_engine::RuntimeTy::Void) {
-                        if let Err(e) = baml_exec::write_output_with_context(
-                            &engine,
-                            value,
-                            &return_type,
-                            output_format,
-                            &helper_context,
-                            || self.print_logs(logs.as_ref()),
-                        )
-                        .await
-                        {
-                            crate::reporter::print_error(format_args!(
-                                "failed to serialize output: {e}"
-                            ));
-                            return Ok(false);
-                        }
+                    // An expression always prints its value: the synthetic
+                    // main is declared `-> unknown`, so there is no unit
+                    // return type to elide the way a named target's is.
+                    if let Err(e) = baml_exec::write_output_with_context(
+                        &engine,
+                        value,
+                        &return_type,
+                        output_format,
+                        &helper_context,
+                        || self.print_logs(logs.as_ref()),
+                    )
+                    .await
+                    {
+                        crate::reporter::print_error(format_args!(
+                            "failed to serialize output: {e}"
+                        ));
+                        return Ok(false);
                     }
                     Ok(true)
                 },
@@ -1897,6 +1900,49 @@ fn load_expression_source(source: &str) -> Result<String> {
 }
 
 /// Choose a synthetic expression path that cannot replace a loaded source.
+/// The function a `-e` expression is compiled into.
+const EXPRESSION_ENTRY: &str = "baml_run_expr_main__";
+
+/// Writes the synthetic source for a `-e` expression to `path` and returns
+/// it. The expression's text keeps its own lines in either form, so its
+/// positions are the same.
+///
+/// The text is the body of [`EXPRESSION_ENTRY`], declared `-> unknown` so
+/// that any value is let through, one typed by a `type T = …` of the body
+/// included. That holds when the body ends in a final expression. One that
+/// ends in a statement (`log.info(1);`, `return 5;`, nothing at all) has no
+/// value for that return type to take, so it runs as a lambda instead: a
+/// lambda's return type is what its `return`s make it, and `null` when it
+/// has none.
+fn expression_source(
+    db: &mut ProjectDatabase,
+    package: SourceRoot,
+    path: &Path,
+    expr_body: &str,
+) -> String {
+    use baml_db::baml_compiler2_hir::{
+        body::function_body,
+        item_data::{file_functions, function_data},
+    };
+
+    let as_body = format!("function {EXPRESSION_ENTRY}() -> unknown {{\n{expr_body}\n}}");
+    let file = db.add_or_update_file_in(package, path, &as_body);
+    let entry = file_functions(db, file)
+        .iter()
+        .copied()
+        .find(|&function| function_data(db, function).name.as_str() == EXPRESSION_ENTRY);
+    // Text that leaves no such function did not parse as a body; its
+    // diagnostics read best against the plain form.
+    if entry.is_none_or(|entry| function_body(db, entry).has_final_expr()) {
+        return as_body;
+    }
+    let as_lambda = format!(
+        "function {EXPRESSION_ENTRY}() -> unknown {{ let baml_run_expr_body__ = () -> {{\n{expr_body}\n}}\n; baml_run_expr_body__() }}"
+    );
+    db.add_or_update_file_in(package, path, &as_lambda);
+    as_lambda
+}
+
 fn synthetic_expression_path(root: &Path, occupied: &[PathBuf]) -> PathBuf {
     let mut suffix = 0;
     loop {

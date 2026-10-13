@@ -298,3 +298,18 @@ function on_event_probe(text: string) -> Resume {
     JSON:
   `
 }
+
+
+// Keyless tracing regressions use a lazy client: the HTTP request starts in
+// next/final, after the host has received the stream handle.
+client StreamTraceStub = ai.clients.Retry.new(inner = StreamStub, max_attempts = 1);
+
+function trace_stream_string(text: string) -> string {
+  client: StreamTraceStub
+  prompt: `${text}`
+}
+
+function trace_stream_doc(text: string) -> StreamingDoc {
+  client: StreamTraceStub
+  prompt: `${text}`
+}

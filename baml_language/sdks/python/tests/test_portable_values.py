@@ -40,6 +40,22 @@ def test_media_decodes_and_reencodes_as_portable_payload():
     assert inbound.media_value.mime_type == "image/png"
 
 
+def test_named_media_keeps_its_name_across_the_boundary():
+    outbound = baml_outbound_pb2.BamlOutboundValue()
+    outbound.media_value.media = baml_outbound_pb2.PDF
+    outbound.media_value.file_content.name = "q3.pdf"
+    outbound.media_value.file_content.base64 = "JVBERi0xLjc="
+
+    media = decode_value(outbound, BamlTypeMap())
+    assert media.name() == "q3.pdf"
+    assert media.mime_type() == "application/pdf"
+
+    inbound = baml_inbound_pb2.InboundValue.FromString(_encode_inbound(media, "media"))
+    assert inbound.media_value.WhichOneof("value") == "file_content"
+    assert inbound.media_value.file_content.name == "q3.pdf"
+    assert inbound.media_value.file_content.base64 == "JVBERi0xLjc="
+
+
 def test_prompt_wrapper_reencodes_repeatedly_without_a_handle():
     outbound = baml_outbound_pb2.BamlOutboundValue()
     message = outbound.prompt_ast_value.message

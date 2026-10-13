@@ -21,7 +21,7 @@ function integration_dependency() -> reflect.Package {
                 }
                 function choose_generic<T>(counts: Counts, value: T, settings: trace.Settings) -> trace.Options throws never {
                     counts.hooks += 1;
-                    trace.rich().context(metadata = { "selected": true })
+                    trace.span(inputs = true).context(metadata = { "selected": true })
                 }
                 /// baml:$trace=choose_generic
                 function generic<T>(counts: Counts, value: T) -> T throws never {
@@ -59,7 +59,7 @@ function integration_dependency() -> reflect.Package {
                 function timing() -> bool throws never { trace.current_span_id() != null }
                 /// baml:$trace=trace.span
                 function span() -> bool throws never { trace.current_span_id() != null }
-                /// baml:$trace=trace.rich
+                /// baml:$trace=trace.empty_span
                 function rich() -> bool throws never { trace.current_span_id() != null }
             `,
         },
@@ -90,12 +90,12 @@ function integration_consumer(dependency: reflect.Package) -> reflect.Package {
                     assert.equal(counts.hooks, 7);
                     assert.equal(counts.bodies, 7);
                     assert.equal(counts.defaults, 1);
-                    assert.equal(dep.hidden($trace = trace.rich()), false);
-                    assert.equal(dep.timing($trace = trace.rich()), false);
+                    assert.equal(dep.hidden($trace = trace.span(inputs = true)), false);
+                    assert.equal(dep.timing($trace = trace.span(inputs = true)), false);
                     assert.equal(dep.span($trace = trace.hidden()), true);
                     assert.equal(dep.rich($trace = trace.hidden()), true);
-                    assert.equal(call_mode(dep.hidden, trace.rich()), false);
-                    assert.equal(call_mode(dep.timing, trace.rich()), false);
+                    assert.equal(call_mode(dep.hidden, trace.span(inputs = true)), false);
+                    assert.equal(call_mode(dep.timing, trace.span(inputs = true)), false);
                     assert.equal(call_mode(dep.span, trace.hidden()), true);
                     assert.equal(call_mode(dep.rich, trace.hidden()), true);
                     42
@@ -138,8 +138,8 @@ function integration_mount_in_hook() -> trace.Options throws never {
         _ => baml.sys.panic("builtin lookup failed inside hook")
     }
         ?? baml.sys.panic("missing builtin");
-    assert.equal(custom($trace = trace.rich()), true);
-    assert.equal(builtin($trace = trace.rich()), true);
+    assert.equal(custom($trace = trace.span(inputs = true)), true);
+    assert.equal(builtin($trace = trace.span(inputs = true)), true);
     trace.context(metadata = { "late_compiled": true })
 }
 

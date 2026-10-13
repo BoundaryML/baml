@@ -159,15 +159,22 @@ pub fn media_from_url(
     )))
 }
 
-/// Construct an owned media handle from a file-path descriptor.
-pub fn media_from_file(
+/// Construct an owned media handle from base64 content read from `file`.
+pub fn media_from_file_content(
     kind: MediaKind,
     file: &str,
+    base64: &str,
     mime_type: Option<&str>,
 ) -> Result<HandleParts, HandleError> {
     validate_media_input(file, mime_type)?;
+    validate_input(base64, "base64")?;
     Ok(insert_entry(CffiHandleTableEntry::Adt(
-        BexExternalAdt::Media(MediaValue::from_file(kind, file, mime_type)),
+        BexExternalAdt::Media(MediaValue::from_file_content(
+            kind,
+            file,
+            base64.into(),
+            mime_type,
+        )),
     )))
 }
 
@@ -187,8 +194,11 @@ pub fn media_url(key: u64, handle_type: i32) -> Result<Option<String>, HandleErr
     Ok(resolve_media(key, handle_type)?.url())
 }
 
+/// A media value holds content, never a path: there is none to return. The
+/// handle is still checked, as for every accessor.
 pub fn media_file(key: u64, handle_type: i32) -> Result<Option<String>, HandleError> {
-    Ok(resolve_media(key, handle_type)?.file())
+    resolve_media(key, handle_type)?;
+    Ok(None)
 }
 
 pub fn media_base64(key: u64, handle_type: i32) -> Result<String, HandleError> {
@@ -200,6 +210,10 @@ pub fn media_base64(key: u64, handle_type: i32) -> Result<String, HandleError> {
 
 pub fn media_mime_type(key: u64, handle_type: i32) -> Result<Option<String>, HandleError> {
     Ok(resolve_media(key, handle_type)?.mime_type())
+}
+
+pub fn media_name(key: u64, handle_type: i32) -> Result<Option<String>, HandleError> {
+    Ok(resolve_media(key, handle_type)?.name())
 }
 
 /// Convert a protocol media discriminant, rejecting unspecified and unknown values.

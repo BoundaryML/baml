@@ -369,7 +369,7 @@ fn admit_at<'a, N: Head>(
         Ty::Unknown | Ty::TypeVar(_) => {
             Ok(admit_as_itself(cx, value, ty, depth)?.leaf(Leaf::CatchAll))
         }
-        Ty::Null | Ty::Void => match value {
+        Ty::Null => match value {
             BexExternalValue::Null => Ok(Admission::of(Admitted::Null)),
             _ => Err(Mismatch::kind(value, ty)),
         },
@@ -1238,7 +1238,6 @@ fn structurally_equal<N: Head>(left: &Ty<N>, right: &Ty<N>) -> bool {
         | (Ty::Type, Ty::Type)
         | (Ty::Resource, Ty::Resource)
         | (Ty::PromptAst, Ty::PromptAst)
-        | (Ty::Void, Ty::Void)
         | (Ty::Never, Ty::Never) => true,
         (Ty::Media(left), Ty::Media(right)) => left == right,
         (Ty::Literal(left, ..), Ty::Literal(right, ..)) => left == right,
@@ -1424,7 +1423,6 @@ fn has_erased_position<N: Head>(ty: &Ty<N>) -> bool {
         | Ty::String
         | Ty::Bool
         | Ty::Null
-        | Ty::Void
         | Ty::Never
         | Ty::Uint8Array
         | Ty::Media(_)

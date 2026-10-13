@@ -109,11 +109,11 @@ fn type_bytes(root: &OwnedType) -> usize {
         use baml_type::RealizedTy::{
             Bigint, Bool, Class, Enum, EnumVariant, Float, Function, Future, Int, Interface, List,
             Literal, Map, Media, Never, Null, PromptAst, Resource, RustType, String, Type,
-            TypeAlias, Uint8Array, Union, Unknown, Void,
+            TypeAlias, Uint8Array, Union, Unknown,
         };
         match ty {
             Int | Bigint | Float | String | Bool | Null | Uint8Array | Media(..) | RustType
-            | Type | Resource | PromptAst | Void | Unknown | Never => {}
+            | Type | Resource | PromptAst | Unknown | Never => {}
             Literal(literal, ..) => add(match literal {
                 baml_type::Literal::Bigint(value) => bigint_limb_bytes(value),
                 baml_type::Literal::String(value) | baml_type::Literal::Float(value) => {

@@ -393,6 +393,7 @@ pub enum BuiltinTraceHook {
     Timing,
     Span,
     Rich,
+    EmptySpan,
 }
 
 /// The kind of a MIR statement.

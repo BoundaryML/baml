@@ -24,8 +24,8 @@ export type BamlJsMedia = {
   mime_type?: string;
 } & (
   | { content_type: 'url'; url: string }
-  | { content_type: 'base64'; base64: string }
-  | { content_type: 'file'; file: string }
+  // `name` is the base name of the file the content was read from.
+  | { content_type: 'base64'; base64: string; name?: string }
 );
 
 export type BamlJsPromptAstSimple = {

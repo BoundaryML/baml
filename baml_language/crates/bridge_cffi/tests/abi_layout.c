@@ -98,5 +98,7 @@ int main(void) {
   PRINT_OFFSET(BamlApiV1, register_host_cancel_callback);
   PRINT_OFFSET(BamlApiV1, trace_selection);
   PRINT_OFFSET(BamlApiV1, invocation_context);
+  PRINT_OFFSET(BamlApiV1, media_name);
+  PRINT_OFFSET(BamlApiV1, media_from_file_content);
   return 0;
 }

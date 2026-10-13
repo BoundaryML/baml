@@ -41,10 +41,10 @@ use crate::routing::{PackagePath, java_identifier, route};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TyPosition {
     /// Field declarations, parameters, return types: primitives stay
-    /// unboxed (`long`, `double`, `boolean`; `void` returns).
+    /// unboxed (`long`, `double`, `boolean`).
     TopLevel,
     /// Generic type arguments and nullable positions: primitives box
-    /// (`java.lang.Long`, …; `java.lang.Void`).
+    /// (`java.lang.Long`, …).
     Boxed,
 }
 
@@ -66,8 +66,19 @@ pub(crate) struct CallbackInterface {
     pub(crate) required: Vec<(String, String)>,
     /// Optional params folded into the `Opts` bag: `(BAML wire name, boxed java type)`.
     pub(crate) optionals: Vec<(String, String)>,
-    /// The boxed return type of the SAM.
-    pub(crate) ret: String,
+    /// What the SAM returns.
+    pub(crate) ret: CallbackReturn,
+}
+
+/// The result of a minted callback interface's SAM.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CallbackReturn {
+    /// The unit type: the SAM is a Java `void` method, like the
+    /// `java.util.function` shapes (`Runnable`, `Consumer`) a unit callback of
+    /// arity ≤ 2 takes.
+    Unit,
+    /// A value of this boxed Java type.
+    Value(String),
 }
 
 /// Collects the host-callable functional interfaces
@@ -182,10 +193,6 @@ pub(crate) fn translate_ty(
         Ty::Union(items) => translate_union(items, ctx, sink),
         Ty::Unknown => "java.lang.Object".to_string(),
         Ty::Function { params, ret, .. } => translate_callable(params, ret, ctx, sink),
-        Ty::Void => match pos {
-            TyPosition::TopLevel => "void".to_string(),
-            TyPosition::Boxed => "java.lang.Void".to_string(),
-        },
         Ty::RustType => "baml_bridge.BamlHandle".to_string(),
         // Types the Java SDK does not model yet: fall back to the opaque
         // `java.lang.Object` (mirrors python's `typing.Any` / TS's
@@ -666,7 +673,6 @@ pub(crate) fn union_arm_token(ty: &Ty) -> String {
         },
         Ty::Unknown => "Unknown".to_string(),
         Ty::Function { .. } => "Callable".to_string(),
-        Ty::Void => "Void".to_string(),
         Ty::Never => "Never".to_string(),
         Ty::RustType => "Handle".to_string(),
         Ty::Interface(..) => "Interface".to_string(),
@@ -714,7 +720,7 @@ fn translate_callable_profile(
         .any(|p| matches!(p.mode, CodegenFunctionParamMode::Optional));
     if !owning && !has_optional && params.len() <= 2 {
         // Plain arity-≤-2 all-required callable → a java.util.function shape.
-        let ret_is_unit = matches!(ret, Ty::Void);
+        let ret_is_unit = ret.is_unit();
         let p: Vec<String> = params
             .iter()
             .map(|p| translate_ty(&p.ty, TyPosition::Boxed, ctx, sink))
@@ -766,7 +772,11 @@ fn translate_callable_profile(
             }
         }
     }
-    let ret_ty = translate_ty(ret, TyPosition::Boxed, ctx, sink);
+    let ret_ty = if ret.is_unit() {
+        CallbackReturn::Unit
+    } else {
+        CallbackReturn::Value(translate_ty(ret, TyPosition::Boxed, ctx, sink))
+    };
     let base = callback_base_name(params, has_optional);
 
     let entries = sink.callbacks.entry(ctx.pkg.clone()).or_default();
@@ -907,9 +917,6 @@ mod tests {
     fn uint8array() -> Ty {
         Ty::Uint8Array
     }
-    fn void() -> Ty {
-        Ty::Void
-    }
     fn unknown() -> Ty {
         Ty::Unknown
     }
@@ -964,12 +971,6 @@ mod tests {
         assert_eq!(tr(&bigint(), TyPosition::TopLevel), "java.math.BigInteger");
         assert_eq!(tr(&uint8array(), TyPosition::TopLevel), "byte[]");
         assert_eq!(tr(&null(), TyPosition::TopLevel), "java.lang.Void");
-    }
-
-    #[test]
-    fn unit_is_void_only_at_top_level() {
-        assert_eq!(tr(&void(), TyPosition::TopLevel), "void");
-        assert_eq!(tr(&void(), TyPosition::Boxed), "java.lang.Void");
     }
 
     #[test]
@@ -1172,17 +1173,56 @@ mod tests {
             tr(&f, TyPosition::TopLevel),
             "java.util.function.Function<java.lang.Long, java.lang.String>"
         );
+    }
+
+    #[test]
+    fn callable_returning_unit_is_a_consumer() {
+        // A callback returning the unit type (`null`, also spelled `void`)
+        // hands nothing back, so it takes Java's value-less shapes.
         let c = callable(
             vec![CallableParam {
                 name: Some(BaseName::new("x")),
                 ty: int(),
                 mode: CodegenFunctionParamMode::Required,
             }],
-            void(),
+            null(),
         );
         assert_eq!(
             tr(&c, TyPosition::TopLevel),
             "java.util.function.Consumer<java.lang.Long>"
+        );
+        assert_eq!(
+            tr(&callable(vec![], null()), TyPosition::TopLevel),
+            "java.lang.Runnable"
+        );
+    }
+
+    /// A callback with no `java.util.function` shape still returns nothing when
+    /// its result is the unit type: the minted SAM is a `void` method, matching
+    /// `Runnable`/`Consumer`, so a host lambda needs no `return null;`.
+    #[test]
+    fn minted_unit_callback_is_a_void_method() {
+        let aliases = AliasTable::new();
+        let ctx = ctx_in(&aliases);
+        let mut sink = UnionSink::default();
+        let param = |name: &str| CallableParam {
+            name: Some(BaseName::new(name)),
+            ty: int(),
+            mode: CodegenFunctionParamMode::Required,
+        };
+        let f = callable(vec![param("a"), param("b"), param("c")], null());
+        translate_ty(&f, TyPosition::TopLevel, &ctx, &mut sink);
+        let pkg = PackagePath {
+            segments: vec!["callables".to_string()],
+        };
+        let iface = &sink.callbacks.get(&pkg).expect("interface registered")[0].1;
+        assert_eq!(iface.ret, CallbackReturn::Unit);
+        let source = crate::emit::render_callback_interface(iface);
+        assert!(source.contains("    void apply("), "{source}");
+        assert!(source.contains("return null;"), "{source}");
+        assert!(
+            source.contains("java.util.concurrent.CompletableFuture<java.lang.Void> callAsync("),
+            "{source}"
         );
     }
 
@@ -1234,7 +1274,10 @@ mod tests {
                 ("z".to_string(), "java.lang.Long".to_string()),
             ]
         );
-        assert_eq!(iface.ret, "java.lang.Long");
+        assert_eq!(
+            iface.ret,
+            CallbackReturn::Value("java.lang.Long".to_string())
+        );
 
         // The same signature reuses the interface (deduped, no second entry).
         let again = translate_ty(&f, TyPosition::TopLevel, &ctx, &mut sink);

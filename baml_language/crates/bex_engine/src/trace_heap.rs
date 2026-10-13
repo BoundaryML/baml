@@ -82,8 +82,11 @@ pub struct TraceMediaValue {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TraceMediaContent {
     Url(String),
-    Base64(String),
-    File(String),
+    Base64 {
+        base64: String,
+        /// The base name of the file the content was read from.
+        name: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -507,10 +510,10 @@ impl TraceSnapshotBuilder {
     fn copy_media(&mut self, media: &MediaValue) -> Result<TraceValueRef, CopyError> {
         let content = media.read_content(|content| match content {
             MediaContent::Url { url, .. } => Self::copy_str(url).map(TraceMediaContent::Url),
-            MediaContent::Base64 { base64_data } => {
-                Self::copy_str(base64_data).map(TraceMediaContent::Base64)
-            }
-            MediaContent::File { file, .. } => Self::copy_str(file).map(TraceMediaContent::File),
+            MediaContent::Base64 { base64_data, name } => Ok(TraceMediaContent::Base64 {
+                base64: Self::copy_str(base64_data)?,
+                name: name.as_deref().map(Self::copy_str).transpose()?,
+            }),
         })?;
         let mime_type = media
             .read_mime_type(|mime_type| mime_type.map(Self::copy_str))
@@ -784,7 +787,10 @@ mod tests {
         assert_eq!(media.mime_type.as_deref(), Some("image/png"));
         assert_eq!(
             media.content,
-            TraceMediaContent::Base64("aW1hZ2UtYnl0ZXM=".to_string())
+            TraceMediaContent::Base64 {
+                base64: "aW1hZ2UtYnl0ZXM=".to_string(),
+                name: None,
+            }
         );
     }
 

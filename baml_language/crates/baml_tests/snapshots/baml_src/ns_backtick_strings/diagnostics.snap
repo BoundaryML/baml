@@ -4,18 +4,17 @@ source: crates/baml_tests/src/corpus.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0167
 
-  ⚠ this condition is always falsy: a value of type `false` can never be truthy
-     ╭─[backtick_strings.baml:176:14]
- 176 │     `a${ if (false) { "x" } }b`
-     ·              ─────  ───┬───
-     ·                │       ╰── this branch is unreachable
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+     ╭─[backtick_strings.baml:177:14]
+ 177 │     `a${ if (true) { seen.push("ran"); } }b`
+     ·              ────
      ╰────
 
   [hir] E0010
 
   ⚠ empty interpolation ${} has no expression
-     ╭─[backtick_strings.baml:253:7]
- 253 │     `a${}b`
+     ╭─[backtick_strings.baml:256:7]
+ 256 │     `a${}b`
      ·       ─┬─
      ·        ╰── expected an expression inside ${…}
      ╰────
@@ -23,7 +22,7 @@ source: crates/baml_tests/src/corpus.rs
   [type] E0146
 
   ⚠ unreachable code: 1 statement(s) after diverging statement
-     ╭─[backtick_strings.baml:455:27]
- 455 │     `x: ${ throw "boom" }`
+     ╭─[backtick_strings.baml:458:27]
+ 458 │     `x: ${ throw "boom" }`
      ·                           ▲
      ╰────

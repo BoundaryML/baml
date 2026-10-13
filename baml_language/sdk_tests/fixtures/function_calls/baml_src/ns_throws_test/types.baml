@@ -45,5 +45,5 @@ function SleepMs(ms: int) -> null throws baml.errors.Io {
 function SleepThenMarkMs(ms: int, entry_path: string, later_path: string) -> null throws baml.errors.Io {
   baml.fs.write(entry_path, "entered");
   baml.sys.sleep(baml.time.Duration.from_nanoseconds(ms * 1000000n));
-  baml.fs.write(later_path, "later")
+  baml.fs.write(later_path, "later");
 }

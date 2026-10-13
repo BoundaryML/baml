@@ -1738,13 +1738,10 @@ impl BexEngine {
                 // as "accept anything" — letting the host inject a value of any
                 // type into a position BAML treats as the instantiated type
                 // variable. Reject such a callable at bind time rather than
-                // admit an unvalidatable return. (This also rejects a genuine
-                // bare `-> void` host callable; such a callable must declare a
-                // concrete return type.)
-                // A top-level `void` callback has one canonical host wire
-                // representation: Null. Nested void positions remain invalid
-                // (they indicate an erased/unresolved type).
-                if !matches!(ret, RuntimeTy::Void) && ret_ty_has_unvalidatable_position(&ret) {
+                // admit an unvalidatable return. A unit (`-> void`) callback is
+                // validatable like any other: its one value crosses the wire
+                // as Null.
+                if ret_ty_has_unvalidatable_position(&ret) {
                     return Err(EngineError::TypeMismatch {
                         message: format!(
                             "host callable cannot be bound: its return type `{ret}` contains an \
@@ -1753,23 +1750,18 @@ impl BexEngine {
                     });
                 }
                 // `throws` is the callable's declared error contract `E`
-                // (`call_host_value<T, E>`). When the parameter pins no
-                // concrete error type the throws lowers to the unit shape
-                // `Void`, which names no error the host is obligated to honor
-                // — and the host is foreign code that may surface a native
-                // exception regardless (materialized as
-                // `baml.errors.HostCallable`). Normalize it to `Unknown` so
-                // such a throw is accepted opaquely and an in-BAML `catch` can
-                // match it, rather than being rejected as a
-                // `HostContractViolation`. Every declared contract passes
-                // through unchanged and stays enforced — including an explicit
-                // `throws never`, which promises BAML the callback cannot
-                // throw at all, so a native throw against it is a violation
-                // like any other off-contract throw.
-                let normalized_throws = match throws {
-                    RuntimeTy::Void => RuntimeTy::Unknown,
-                    other => other,
-                };
+                // (`call_host_value<T, E>`). A parameter that pins no error
+                // type arrives here as `unknown` (its synthesized effect
+                // parameter has no frame slot to instantiate against), which
+                // names no error the host is obligated to honor — and the host
+                // is foreign code that may surface a native exception
+                // regardless (materialized as `baml.errors.HostCallable`). Such
+                // a throw is accepted opaquely and an in-BAML `catch` can match
+                // it, rather than being rejected as a `HostContractViolation`.
+                // Every declared contract stays enforced — including an
+                // explicit `throws never`, which promises BAML the callback
+                // cannot throw at all, so a native throw against it is a
+                // violation like any other off-contract throw.
                 // The VM heap stores the callable's signature as `RealizedTy`
                 // (`HostClosure`'s fields). A bound host callable's declared
                 // function type is realized here; a non-realized position (an
@@ -1812,7 +1804,7 @@ impl BexEngine {
                     )?),
                     throws_ty: Box::new(self.realize_host_ty_with_runtime(
                         &holder.holder().vm,
-                        &normalized_throws,
+                        &throws,
                         overlay,
                     )?),
                     arity: params.len(),
@@ -2740,7 +2732,6 @@ fn ret_ty_has_unvalidatable_position(ty: &RuntimeTy) -> bool {
 
         // Directly validated by the host-return validator.
         RuntimeTy::Null
-        | RuntimeTy::Void
         | RuntimeTy::Bool
         | RuntimeTy::Int
         | RuntimeTy::Float
@@ -2921,7 +2912,6 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         // accepts any partial-stream payload as the `T` arm.
         (_, RuntimeTy::Unknown) => true,
         (BexExternalValue::Null, RuntimeTy::Null) => true,
-        (BexExternalValue::Null, RuntimeTy::Void) => true,
         (BexExternalValue::Int(_), RuntimeTy::Int) => true,
         (BexExternalValue::Bigint(_), RuntimeTy::Bigint) => true,
         (BexExternalValue::Float(_), RuntimeTy::Float) => true,
@@ -3835,7 +3825,7 @@ mod peel_function_ty_tests {
         RuntimeTy::Function {
             params: Box::new([RuntimeFunctionParamTy::required(None, RuntimeTy::Int)]),
             ret: Box::new(RuntimeTy::String),
-            throws: Box::new(RuntimeTy::Void),
+            throws: Box::new(RuntimeTy::Never),
         }
     }
 
@@ -3845,7 +3835,7 @@ mod peel_function_ty_tests {
         RuntimeTy::Function {
             params: Box::new([]),
             ret: Box::new(RuntimeTy::Int),
-            throws: Box::new(RuntimeTy::Void),
+            throws: Box::new(RuntimeTy::Never),
         }
     }
 

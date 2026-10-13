@@ -1609,11 +1609,86 @@ fn run_execute_function_without_baml_toml_succeeds() {
     );
 }
 
+/// A unit return carries no information, so `baml run` prints nothing for it —
+/// however the unit type is spelled (`void`, `null`, an alias, `null | null`).
+/// The decision is the declared type's, not the returned value's: a type that
+/// merely admits the unit value (`int?`) still prints its `null`, and so does
+/// `-e`, whose synthetic main is declared `-> unknown`. JSON output always
+/// prints a document.
+#[test]
+fn run_prints_nothing_for_a_unit_return() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        r#"
+function as_void() -> void {
+}
+
+function as_null() -> null {
+  null
+}
+
+function optional_null() -> int? {
+  null
+}
+
+type Nothing = null
+
+function via_alias() -> Nothing {
+  null
+}
+
+function via_union() -> null | null {
+  null
+}
+"#,
+    );
+
+    let stdout_of = |args: &[&str]| {
+        let output = run_baml_cli(built, tmp.path(), args);
+        assert!(
+            output.status.success(),
+            "Expected exit 0 for `baml {}`, got: {:?}\nstdout: {}\nstderr: {}",
+            args.join(" "),
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_owned()
+    };
+
+    assert_eq!(stdout_of(&["run", "as_void", "--from", "."]), "");
+    assert_eq!(stdout_of(&["run", "as_null", "--from", "."]), "");
+    assert_eq!(stdout_of(&["run", "via_alias", "--from", "."]), "");
+    assert_eq!(stdout_of(&["run", "via_union", "--from", "."]), "");
+    assert_eq!(stdout_of(&["run", "optional_null", "--from", "."]), "null");
+    assert_eq!(
+        stdout_of(&["run", "-e", "as_void()", "--from", "."]),
+        "null"
+    );
+    // A statement-only expression has no value of its own: it evaluates to
+    // the unit value, like any block with no final expression.
+    assert_eq!(
+        stdout_of(&["run", "-e", "as_void();", "--from", "."]),
+        "null"
+    );
+    // JSON output is a document a consumer parses, so it prints one even for
+    // a unit return.
+    for target in ["as_void", "as_null", "via_union"] {
+        assert_eq!(
+            stdout_of(&["run", target, "--from", ".", "--output-format", "json"]),
+            "null",
+            "{target}"
+        );
+    }
+}
+
 /// Associated type projections that resolve to concrete value types must still
 /// produce stdout through `baml run`. This catches a real boundary bug where the
-/// VM metadata erased `(Class as Interface).Assoc` to `void`; dispatch treats
-/// `void` as "do not print", so a value-returning function silently produced no
-/// output.
+/// VM metadata erased `(Class as Interface).Assoc` to the unit type; dispatch
+/// prints nothing for a unit return, so a value-returning function silently
+/// produced no output.
 #[test]
 fn run_prints_concrete_associated_type_projection_return() {
     let built = &common::baml_cli();
@@ -1771,8 +1846,8 @@ function read_item<T extends BoxLike>(box: T) -> T.Item {
         "Generic associated projection signatures must not be erased in list output:\n{stdout}"
     );
     assert!(
-        !stdout.contains("-> void"),
-        "Projected value-returning functions must not be listed as void:\n{stdout}"
+        !stdout.contains("-> null"),
+        "Projected value-returning functions must not be listed as returning unit:\n{stdout}"
     );
 
     let json_output = run_baml_cli(
@@ -2043,6 +2118,83 @@ fn run_expr_ignores_unrelated_project_compile_errors() {
         !stderr.contains("unresolved name: Int"),
         "Unrelated project diagnostic leaked into expression evaluation:\n{stderr}"
     );
+}
+
+/// An expression is evaluated as a block of statements, whatever its first
+/// tokens: text that would open a map literal after a bare `{` (a lone name,
+/// a leading string, nothing at all) is still the expression's value.
+#[test]
+fn run_expr_is_a_block_whatever_it_starts_with() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path(), "function num() -> int {\n  4\n}\n");
+
+    for (expression, printed) in [
+        ("\"hello\"", "\"hello\""),
+        ("\"a\" + \"b\"", "\"ab\""),
+        ("true", "true"),
+        ("null", "null"),
+        ("let num = 5; num", "5"),
+        ("", "null"),
+        ("// nothing", "null"),
+    ] {
+        let output = run_baml_cli(built, tmp.path(), &["run", "-e", expression, "--from", "."]);
+        assert!(
+            output.status.success(),
+            "Expected `-e {expression:?}` to evaluate, got: {:?}\nstdout: {}\nstderr: {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            printed,
+            "{expression:?}"
+        );
+    }
+}
+
+/// An expression that ends in a value is checked as the body of a function
+/// returning `unknown`, so a value typed by a `type T = …` of the expression
+/// leaves it. One that ends in a statement has no such value and returns what
+/// its `return`s say, `null` when it has none.
+#[test]
+fn run_expr_takes_its_value_from_a_final_expression_or_its_returns() {
+    let built = &common::baml_cli();
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(
+        tmp.path(),
+        "function make<T>() -> T[] {\n  []\n}\n\nfunction note() -> void {}\n",
+    );
+
+    for (expression, printed) in [
+        (
+            "type T = unreflect(reflect.Type.of<int>()); make<T>()",
+            "[]",
+        ),
+        (
+            "type T = unreflect(reflect.Type.of<int>()); make<T>();",
+            "null",
+        ),
+        ("note();", "null"),
+        ("return;", "null"),
+        ("return 5;", "5"),
+        ("if (true) { return; } note();", "null"),
+    ] {
+        let output = run_baml_cli(built, tmp.path(), &["run", "-e", expression, "--from", "."]);
+        assert!(
+            output.status.success(),
+            "Expected `-e {expression:?}` to evaluate, got: {:?}\nstdout: {}\nstderr: {}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            printed,
+            "{expression:?}"
+        );
+    }
 }
 
 /// `baml test` reaches test discovery on a manifest-less `baml_src/`

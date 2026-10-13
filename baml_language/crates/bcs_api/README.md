@@ -26,7 +26,7 @@ Credentials are sent only to their configured API endpoint. Upload bodies retain
 ```toml
 [boundary]
 project = "publisher/app"
-api_url = "https://api.cloud.boundaryml.com"
+api_url = "https://api.prod.bcs.boundaryml.com"
 
 [pack]
 telemetry_environment = "staging"

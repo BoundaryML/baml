@@ -1792,7 +1792,6 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<baml_base::SourceRoot>) {
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
-        | Ty::Void
         | Ty::Unknown
         | Ty::Never
         | Ty::Error => {}

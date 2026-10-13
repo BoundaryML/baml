@@ -170,14 +170,17 @@ test "backtick_cross_site_let_leaks_to_later_segment" {
 }
 
 // BEP §4: a block whose tail evaluates to unit renders "". An `if` without
-// `else` is void-typed; it renders "" rather than erroring on a missing
-// `to_string`.
-function bt_void_tail() -> string {
-    `a${ if (false) { "x" } }b`
+// `else` is unit-typed, and so is its branch: it runs for its effects and
+// renders "" rather than erroring on a missing `to_string`. A branch that
+// produces a value is a compile error (`projects/diagnostic_errors/unit_type`).
+function bt_void_tail(seen: string[]) -> string {
+    `a${ if (true) { seen.push("ran"); } }b`
 }
 
 test "backtick_void_tail_renders_empty" {
-    assert.equal(bt_void_tail(), "ab")
+    let seen: string[] = []
+    assert.equal(bt_void_tail(seen), "ab")
+    assert.equal(seen, ["ran"])
 }
 
 // A backtick string inside an interpolation inside another backtick string.

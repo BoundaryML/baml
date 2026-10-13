@@ -335,7 +335,8 @@ function params(symbol: BamlSymbol, refs: Refs) {
 }
 
 function returns(ty: string, refs: Refs) {
-  if (ty === 'void') return nothing;
+  // The unit type: a function that returns no information shows no return.
+  if (ty === 'null') return nothing;
   return html`<span class=${PUNCT}> -&gt; </span><span class=${TYPE}>${typeText(ty, refs)}</span>`;
 }
 

@@ -10,8 +10,9 @@ use crate::{
     BexEngine, CallId, EngineError, InheritedInvocationState, RootCallWork, thread::TaskCancel,
 };
 
-/// Owns actual host work. The SDK separately retains `inherited_state()` in
-/// its language carrier; that copy owns neither this guard nor the producer.
+/// Owns an externally executed span. Ordinary host bodies also retain work
+/// registration; idle stream handles retain only recording lifetime. The SDK
+/// separately retains `inherited_state()`; that carrier owns no producer.
 pub struct HostInvocation {
     state: InheritedInvocationState,
     telemetry: Option<TelemetryState>,
@@ -19,7 +20,8 @@ pub struct HostInvocation {
     output: bool,
     error: bool,
     // Execution registration drops after recording completion.
-    registration: RootCallWork,
+    engine: Arc<BexEngine>,
+    registration: Option<RootCallWork>,
 }
 
 impl BexEngine {
@@ -48,11 +50,6 @@ impl BexEngine {
                 message: "host context belongs to a different runtime".into(),
             });
         }
-        let context = inherited.map_or_else(Default::default, |state| state.context.clone());
-        let context = options
-            .context
-            .as_ref()
-            .map_or(context.clone(), |patch| context.with_patch(patch));
         let cancellation = inherited.map_or_else(
             || TaskCancel::detached([]),
             |state| state.cancellation.child([]),
@@ -111,6 +108,104 @@ impl BexEngine {
                 metadata
             }
         };
+        self.begin_external_invocation(
+            &metadata,
+            inherited,
+            options,
+            caller,
+            inputs,
+            reserved_id,
+            cancellation,
+            Some(registration),
+        )
+    }
+
+    /// A host-held stream owns telemetry, but idle stream handles are not
+    /// executable work that runtime shutdown must wait for.
+    pub async fn begin_stream_invocation(
+        self: &Arc<Self>,
+        function_name: &str,
+        call: &crate::FunctionCallContext,
+        inputs: Option<&btel_snapshot::host::HostValue>,
+    ) -> Result<HostInvocation, EngineError> {
+        let (function, _) = self
+            .resolved_function_names
+            .get(function_name)
+            .ok_or_else(|| EngineError::Other(format!("Function not found: {function_name}")))?;
+        // SAFETY: named entry functions are sealed compile-time objects.
+        let bex_vm_types::Object::Function(function) = (unsafe { function.get() }) else {
+            return Err(EngineError::Other("stream entry is not a function".into()));
+        };
+        let metadata = function
+            .runtime_metadata()
+            .ok_or_else(|| EngineError::Other("stream entry has no function metadata".into()))?;
+        let mut options = call
+            .trace_reservation
+            .as_ref()
+            .map(|reservation| reservation.options.clone())
+            .or_else(|| call.trace_options.clone())
+            .unwrap_or_default();
+        options.mode.get_or_insert(InvocationMode::Span);
+        options.error.get_or_insert(true);
+        let mut thread = self
+            .new_entry_thread(call.cancel.clone(), call.inherited_state.as_ref())
+            .await;
+        self.prepare_cancellation(
+            &mut thread,
+            None,
+            call.cancel.clone(),
+            &call.cancel_tokens,
+            call.inherited_state.clone(),
+            call.deadline,
+        )?;
+        let cancellation = thread.cancel.clone();
+        drop(thread);
+        // Reject pre-cancelled/shutdown entries and claim reservations at
+        // the same locked boundary as ordinary SDK invocation admission.
+        // Release this transient work registration before returning an idle
+        // handle; subsequent pulls register their own executable work.
+        let admission = RootCallWork::register(
+            Arc::clone(self),
+            call.host_call_id,
+            cancellation.clone(),
+            call.trace_reservation.as_deref(),
+        )?;
+        let reserved_id = admission.reserved_id;
+        self.begin_external_invocation(
+            &metadata,
+            call.inherited_state.as_ref(),
+            &options,
+            &HostCallSite {
+                source_file: String::new(),
+                line: 0,
+            },
+            inputs,
+            reserved_id,
+            cancellation,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn begin_external_invocation(
+        self: &Arc<Self>,
+        metadata: &FunctionMetadata,
+        inherited: Option<&InheritedInvocationState>,
+        options: &bex_vm_types::trace::TraceOptionsData,
+        caller: &HostCallSite,
+        inputs: Option<&btel_snapshot::host::HostValue>,
+        reserved_id: Option<btel_types::TelemetryId>,
+        cancellation: TaskCancel,
+        registration: Option<RootCallWork>,
+    ) -> Result<HostInvocation, EngineError> {
+        let context = inherited.map_or_else(
+            || self.launch_context.clone(),
+            |state| state.context.clone(),
+        );
+        let context = options
+            .context
+            .as_ref()
+            .map_or(context.clone(), |patch| context.with_patch(patch));
         let caller_pc = if caller.line == 0 {
             0 // The core's absent-call-site representation.
         } else {
@@ -153,7 +248,7 @@ impl BexEngine {
                         })
                     });
             telemetry.enter_host(
-                &metadata,
+                metadata,
                 caller_pc,
                 options.mode.unwrap_or(InvocationMode::Span),
                 captured_inputs,
@@ -177,6 +272,7 @@ impl BexEngine {
             frame,
             output: options.output == Some(true),
             error: options.error == Some(true),
+            engine: Arc::clone(self),
             registration,
         })
     }
@@ -214,7 +310,7 @@ impl HostInvocation {
                     .filter(|_| self.wants_value(outcome))
                     .and_then(|value| {
                         telemetry.capture_host_with(value, |name| {
-                            self.registration.engine.host_capture_declarations.get(name)
+                            self.engine.host_capture_declarations.get(name)
                         })
                     });
                 telemetry.complete_host(frame, outcome, captured);
@@ -331,9 +427,7 @@ pub(crate) fn resolve_callback_options(
     }
 }
 
-pub(crate) fn capture_callback_inputs(
-    value: &crate::BexExternalValue,
-) -> btel_snapshot::host::HostValue {
+pub fn capture_callback_inputs(value: &crate::BexExternalValue) -> btel_snapshot::host::HostValue {
     use btel_snapshot::{
         Limit,
         host::{HostValue as H, MAX_BYTES, MAX_DEPTH, MAX_VALUES},

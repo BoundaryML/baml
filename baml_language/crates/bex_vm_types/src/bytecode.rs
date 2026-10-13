@@ -1083,7 +1083,9 @@ pub enum Instruction {
     TraceHookHidden,
     TraceHookTiming,
     TraceHookSpan,
+    /// Legacy opcode retained so existing serialized bytecode keeps its meaning.
     TraceHookRich,
+    TraceHookEmptySpan,
 }
 
 /// Compact bytecode opcodes.
@@ -1297,7 +1299,9 @@ pub enum OpCode {
     TraceHookHidden,
     TraceHookTiming,
     TraceHookSpan,
+    // Preserve the legacy discriminant; new compilers select Span or EmptySpan.
     TraceHookRich,
+    TraceHookEmptySpan,
 }
 
 impl OpCode {
@@ -1442,7 +1446,8 @@ impl OpCode {
             | Self::TraceHookHidden
             | Self::TraceHookTiming
             | Self::TraceHookSpan
-            | Self::TraceHookRich => 1,
+            | Self::TraceHookRich
+            | Self::TraceHookEmptySpan => 1,
             Self::AllocInstance | Self::Call | Self::CallExactArgs | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
@@ -1601,6 +1606,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::TraceHookTiming as u8 => Ok(Self::TraceHookTiming),
             x if x == Self::TraceHookSpan as u8 => Ok(Self::TraceHookSpan),
             x if x == Self::TraceHookRich as u8 => Ok(Self::TraceHookRich),
+            x if x == Self::TraceHookEmptySpan as u8 => Ok(Self::TraceHookEmptySpan),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
@@ -1619,6 +1625,7 @@ impl std::fmt::Display for OpCode {
             Self::TraceHookTiming => "TRACE_HOOK_TIMING",
             Self::TraceHookSpan => "TRACE_HOOK_SPAN",
             Self::TraceHookRich => "TRACE_HOOK_RICH",
+            Self::TraceHookEmptySpan => "TRACE_HOOK_EMPTY_SPAN",
 
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
@@ -1936,6 +1943,7 @@ impl std::fmt::Display for Instruction {
             Instruction::TraceHookTiming => f.write_str("TRACE_HOOK_TIMING"),
             Instruction::TraceHookSpan => f.write_str("TRACE_HOOK_SPAN"),
             Instruction::TraceHookRich => f.write_str("TRACE_HOOK_RICH"),
+            Instruction::TraceHookEmptySpan => f.write_str("TRACE_HOOK_EMPTY_SPAN"),
 
             Instruction::CallHooked { callee, ntypeargs } => {
                 write!(f, "CALL_HOOKED {callee} {ntypeargs}")
@@ -2474,6 +2482,7 @@ impl Bytecode {
                 | Instruction::TraceHookTiming
                 | Instruction::TraceHookSpan
                 | Instruction::TraceHookRich
+                | Instruction::TraceHookEmptySpan
                 | Instruction::Return
                 | Instruction::Await
                 | Instruction::Throw
@@ -2859,6 +2868,7 @@ impl Bytecode {
                             | Instruction::TraceHookTiming
                             | Instruction::TraceHookSpan
                             | Instruction::TraceHookRich
+                            | Instruction::TraceHookEmptySpan
                     )
                 })
                 .map(|index| index_to_offset[index]),
@@ -2972,6 +2982,7 @@ impl Bytecode {
             Instruction::TraceHookTiming => OpCode::TraceHookTiming,
             Instruction::TraceHookSpan => OpCode::TraceHookSpan,
             Instruction::TraceHookRich => OpCode::TraceHookRich,
+            Instruction::TraceHookEmptySpan => OpCode::TraceHookEmptySpan,
 
             Instruction::Call { .. } => OpCode::Call,
 

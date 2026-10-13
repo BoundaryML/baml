@@ -77,8 +77,8 @@ async fn shutdown_finalizes_telemetry_once_without_guessing_the_host_outcome() {
     bridge_cffi::shutdown_runtime(None).await.unwrap();
     assert!(bridge_cffi::get_runtime().is_err());
 
-    let home = std::path::PathBuf::from(baml_env::raw_var("HOME").unwrap());
-    let recordings = std::fs::read_dir(home.join(btel_settings::local_files::RECORDINGS_DIRECTORY))
+    let baml_home = std::path::PathBuf::from(baml_env::os_var("BAML_HOME").unwrap());
+    let recordings = std::fs::read_dir(baml_home.join("btel/recordings"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect::<Vec<_>>();

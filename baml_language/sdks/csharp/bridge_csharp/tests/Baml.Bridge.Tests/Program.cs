@@ -29,6 +29,7 @@ internal static unsafe class Program
     private static string fakeMediaUrl = string.Empty;
     private static string fakeMediaBase64 = string.Empty;
     private static string fakeMediaFile = string.Empty;
+    private static string fakeMediaName = string.Empty;
     private static string fakeMediaMimeType = string.Empty;
 
     public static int Main(string[] args)
@@ -1252,7 +1253,7 @@ internal static unsafe class Program
     {
         Require(sizeof(BamlBuffer) == 16, "BamlBuffer layout changed");
         Require(sizeof(BamlBridgeInfoV1) == 64, "BamlBridgeInfoV1 layout changed");
-        Require(sizeof(BamlApiV1) == 240, "BamlApiV1 layout changed");
+        Require(sizeof(BamlApiV1) == 272, "BamlApiV1 layout changed");
         (string Field, int Offset)[] layout =
         [
             (nameof(BamlApiV1.AbiVersion), 0),
@@ -1285,6 +1286,10 @@ internal static unsafe class Program
             (nameof(BamlApiV1.ReleaseFunctionCall), 216),
             (nameof(BamlApiV1.RegisterHostDispatchV2), 224),
             (nameof(BamlApiV1.RegisterHostCancelCallback), 232),
+            (nameof(BamlApiV1.TraceSelection), 240),
+            (nameof(BamlApiV1.InvocationContext), 248),
+            (nameof(BamlApiV1.MediaName), 256),
+            (nameof(BamlApiV1.MediaFromFileContent), 264),
         ];
         foreach ((string field, int offset) in layout)
         {
@@ -1296,7 +1301,7 @@ internal static unsafe class Program
         BamlApiV1 table = CreateValidTable();
         NativeApi.ValidateTable(&table);
         Require(
-            BamlApiV1Layout.RequiredPrefixSize == 240,
+            BamlApiV1Layout.RequiredPrefixSize == 272,
             "BamlApiV1 required prefix changed");
         table = CreateValidTable();
         table.StructSize += 64;
@@ -1312,7 +1317,7 @@ internal static unsafe class Program
         table = CreateValidTable();
         table.RegisterBridge = null;
         ExpectInvalidTable(table);
-        for (int field = 0; field < 28; field++)
+        for (int field = 0; field < 32; field++)
         {
             table = CreateValidTable();
             ClearRequiredFunction(ref table, field);
@@ -1596,8 +1601,9 @@ internal static unsafe class Program
             Require(
                 fileAudio.TryGetBytes(out ReadOnlyMemory<byte> fileBytes, out string? fileType)
                     && fileBytes.Span.SequenceEqual(new byte[] { 3, 4, 5 })
-                    && fileType == "audio/test",
-                "file media was not eagerly owned");
+                    && fileType == "audio/test"
+                    && fileAudio.Name == Path.GetFileName(mediaPath),
+                "file media was not eagerly owned with its base name");
         }
         finally
         {
@@ -2732,7 +2738,7 @@ internal static unsafe class Program
 
     private static BamlApiV1 CreateValidTable() => new()
     {
-        AbiVersion = 3,
+        AbiVersion = 4,
         StructSize = (nuint)sizeof(BamlApiV1),
         Version = &Version,
         InitializeRuntimeFromBlob = &Initialize,
@@ -2753,6 +2759,8 @@ internal static unsafe class Program
         MediaFile = &MediaFile,
         MediaBase64 = &MediaBase64,
         MediaMimeType = &MediaMimeType,
+        MediaName = &MediaName,
+        MediaFromFileContent = &MediaFromFileContent,
         RegisterBridge = &RegisterBridge,
         RegisterUnhandledSpawnErrorCallback = &RegisterUnhandledSpawnError,
         ShutdownRuntime = &Shutdown,
@@ -2810,6 +2818,10 @@ internal static unsafe class Program
             case 25: table.ReleaseFunctionCall = null; break;
             case 26: table.RegisterHostDispatchV2 = null; break;
             case 27: table.RegisterHostCancelCallback = null; break;
+            case 28: table.TraceSelection = null; break;
+            case 29: table.InvocationContext = null; break;
+            case 30: table.MediaName = null; break;
+            case 31: table.MediaFromFileContent = null; break;
             default: throw new ArgumentOutOfRangeException(nameof(field));
         }
     }
@@ -2974,6 +2986,7 @@ internal static unsafe class Program
         fakeMediaUrl = isUrl ? representation : string.Empty;
         fakeMediaBase64 = isUrl ? string.Empty : representation;
         fakeMediaFile = string.Empty;
+        fakeMediaName = string.Empty;
         fakeMediaMimeType = mime is null ? string.Empty : Marshal.PtrToStringUTF8((nint)mime)!;
         *key = unchecked((ulong)Interlocked.Increment(ref nextFakeHandleKey));
         return BamlCffiStatus.Ok;
@@ -3024,6 +3037,35 @@ internal static unsafe class Program
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static BamlCffiStatus MediaFile(ulong key, int handleType, BamlBuffer* output) =>
         FakeMediaField(key, output, fakeMediaFile);
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static BamlCffiStatus MediaName(ulong key, int handleType, BamlBuffer* output) =>
+        FakeMediaField(key, output, fakeMediaName);
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static BamlCffiStatus MediaFromFileContent(
+        int kind,
+        byte* file,
+        byte* base64,
+        byte* mime,
+        ulong* key,
+        int* handleType)
+    {
+        fakeMediaUrl = string.Empty;
+        fakeMediaBase64 = Marshal.PtrToStringUTF8((nint)base64)!;
+        fakeMediaFile = string.Empty;
+        fakeMediaName = Path.GetFileName(Marshal.PtrToStringUTF8((nint)file)!);
+        fakeMediaMimeType = mime is null ? string.Empty : Marshal.PtrToStringUTF8((nint)mime)!;
+        *handleType = kind switch
+        {
+            (int)MediaTypeEnum.Image => (int)BamlHandleType.AdtMediaImage,
+            (int)MediaTypeEnum.Audio => (int)BamlHandleType.AdtMediaAudio,
+            (int)MediaTypeEnum.Pdf => (int)BamlHandleType.AdtMediaPdf,
+            _ => (int)BamlHandleType.AdtMediaVideo,
+        };
+        *key = unchecked((ulong)Interlocked.Increment(ref nextFakeHandleKey));
+        return BamlCffiStatus.Ok;
+    }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static BamlCffiStatus MediaBase64(ulong key, int handleType, BamlBuffer* output) =>

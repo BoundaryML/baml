@@ -441,7 +441,6 @@ impl TypeCtx {
             | SapTy::Resource
             | SapTy::PromptAst
             | SapTy::Function { .. }
-            | SapTy::Void
             | SapTy::Unknown
             | SapTy::Future(_, _)
             | SapTy::TypeVar(_)
@@ -556,7 +555,6 @@ fn is_sap_parseable(ty: &SapTy) -> Result<Vec<DefKey>, ()> {
         SapTy::Resource
         | SapTy::PromptAst
         | SapTy::Function { .. }
-        | SapTy::Void
         | SapTy::Unknown
         | SapTy::Future(..)
         | SapTy::TypeVar(..)

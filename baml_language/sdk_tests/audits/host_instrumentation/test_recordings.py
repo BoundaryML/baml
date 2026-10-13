@@ -44,7 +44,7 @@ def recording(request, tmp_path_factory):
     }
     env.update(
         HOME=str(tmp_path),
-        BAML_HOME=str(tmp_path / "config"),
+        BAML_HOME=str(tmp_path / "config" / ".baml"),
         BAML_TELEMETRY="low",
         BOUNDARY_API_KEY="local",
         DO_NOT_TRACK="1",
@@ -68,7 +68,7 @@ def recording(request, tmp_path_factory):
         ]
         cwd = TYPESCRIPT_SDK
     run(command, cwd, env, tmp_path, "execution")
-    assert list((tmp_path / ".baml/btel/recordings").glob("*")), (
+    assert list((tmp_path / "config/.baml/btel/recordings").glob("*")), (
         "native runtime wrote no recording"
     )
 
@@ -79,7 +79,7 @@ def recording(request, tmp_path_factory):
                 "query",
                 "--local",
                 "--from",
-                str(tmp_path),
+                str(tmp_path / "config"),
                 "--format",
                 "json",
                 sql,

@@ -279,7 +279,6 @@ pub(crate) fn unify(
         | RuntimeTy::Type
         | RuntimeTy::Resource
         | RuntimeTy::PromptAst
-        | RuntimeTy::Void
         | RuntimeTy::Unknown
         | RuntimeTy::Never => Ok(()),
     }

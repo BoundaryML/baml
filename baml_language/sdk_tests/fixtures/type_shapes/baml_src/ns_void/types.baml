@@ -1,6 +1,6 @@
-// `void` return — only legal in bare return-type position. Codegen lowers
-// to `Unit`, which Python renders as `None`. Any expression body works as
-// long as it type-checks; we use a no-op for the simplest possible body.
+// `void` return: the unit type, also spelled `null`. Codegen gives a unit
+// return the host's own, which Python renders as `None`. A unit body may
+// leave out its final expression; a no-op is the simplest possible body.
 
 function no_op() -> void {
 }

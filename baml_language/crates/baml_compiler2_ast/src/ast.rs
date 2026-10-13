@@ -60,8 +60,6 @@ pub enum TypeExprKind {
     Bool,
     Null,
     Never,
-    /// The `void` type — valid only as a function return type.
-    Void,
     /// `Uint8Array` (binary data) type
     Uint8Array,
     /// Media types
@@ -243,7 +241,6 @@ impl TypeExpr {
             | TypeExprKind::Null
             | TypeExprKind::Uint8Array
             | TypeExprKind::Never
-            | TypeExprKind::Void
             | TypeExprKind::Rust
             | TypeExprKind::Literal { .. }
             | TypeExprKind::Media { .. }
@@ -335,7 +332,6 @@ impl std::fmt::Display for TypeExprKind {
             TypeExprKind::Bool => write!(f, "bool"),
             TypeExprKind::Null => write!(f, "null"),
             TypeExprKind::Never => write!(f, "never"),
-            TypeExprKind::Void => write!(f, "void"),
             TypeExprKind::Uint8Array => write!(f, "uint8array"),
             TypeExprKind::Media { kind, .. } => write!(f, "{}", format!("{kind:?}").to_lowercase()),
             TypeExprKind::Optional { inner, .. } => {
@@ -458,6 +454,12 @@ pub struct ExprBody {
     pub catch_arms: Arena<CatchArm>,
     /// Type annotations on let bindings etc.
     pub type_annotations: Arena<TypeExpr>,
+    /// Every `${expr}` a tagged template hands its tag as a value, in source
+    /// order. A tag takes its values as they are, so what holds of them is
+    /// checked here rather than at a parameter; and an LLM function's
+    /// `prompt:` is flattened in place with no [`Expr::Template`] of its own
+    /// to find them through.
+    pub tag_values: Vec<ExprId>,
     /// Root expression of the function body.
     pub root_expr: Option<ExprId>,
 }
@@ -471,6 +473,7 @@ impl Default for ExprBody {
             match_arms: Arena::new(),
             catch_arms: Arena::new(),
             type_annotations: Arena::new(),
+            tag_values: Vec::new(),
             root_expr: None,
         }
     }
@@ -1078,6 +1081,19 @@ pub enum TemplateSegment {
     /// A `${expr}` interpolation. The wrapped `ExprId` is the lowered
     /// inner expression (already a block expression per BEP §4).
     Interp(ExprId),
+    /// A `${…}` that produces no value (BEP §4): a block with no final
+    /// expression, or one ending in an `if` with no `else`. It contributes
+    /// nothing to the template, neither text nor a value for a tag, and runs
+    /// for its effects in the template's own scope, so a `let` it makes is
+    /// visible to the segments after it.
+    Effect {
+        /// The interpolation as written. It locates the segment in the
+        /// source and is not itself evaluated.
+        block: ExprId,
+        /// What runs in its place: the block's statements, its final
+        /// expression (if any) last and held to the unit type.
+        stmts: Vec<StmtId>,
+    },
     /// A `${for (let p in c)}...${endfor}` block (iterator form).
     For {
         binding: PatId,

@@ -41,7 +41,7 @@ pub fn _invocation_context(handle: Option<&BamlPyHandle>) -> PyResult<Vec<u8>> {
 #[pyo3_stub_gen::derive::gen_stub_pyclass]
 #[pyclass]
 pub struct _HostExecution {
-    execution: std::sync::Mutex<Option<bex_project::HostInvocation>>,
+    pub(crate) execution: std::sync::Mutex<Option<bex_project::HostInvocation>>,
 }
 
 #[pyo3_stub_gen::derive::gen_stub_pymethods]
@@ -167,5 +167,26 @@ pub fn _define_host_marker(
     Ok(BamlPyHandle::new(
         key,
         BamlHandleType::UntaggedRustData as u64,
+    ))
+}
+
+/// Transfer the lifetime owner and its separate inherited carrier to Python.
+pub(crate) fn stream_frame(
+    execution: bex_project::HostInvocation,
+    state: BamlPyHandle,
+) -> PyResult<(_HostExecution, BamlPyHandle, Vec<u8>)> {
+    use prost::Message;
+    let cancel = bridge_ctypes::external_to_outbound(
+        &execution.inherited_state().cancellation_projection(),
+        &bridge_ctypes::CffiHandleTableOptions::for_wire(),
+    )
+    .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?
+    .encode_to_vec();
+    Ok((
+        _HostExecution {
+            execution: std::sync::Mutex::new(Some(execution)),
+        },
+        state,
+        cancel,
     ))
 }

@@ -401,7 +401,6 @@ fn write_ty_identity<N: baml_type::Head + CtorHead>(out: &mut String, ty: &Ty<N>
             let _ = write!(out, "V:{name}");
         }
         Ty::Never => out.push_str("Never"),
-        Ty::Void => out.push_str("Void"),
         Ty::Unknown => out.push_str("BUnk"),
         Ty::Error => out.push_str("Err"),
         Ty::RustType => out.push_str("Rust"),

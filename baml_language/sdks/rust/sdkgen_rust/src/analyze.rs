@@ -283,7 +283,6 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
         | Ty::String
         | Ty::Bool
         | Ty::Null
-        | Ty::Void
         | Ty::Literal(..)
         | Ty::Uint8Array => Ok(()),
         Ty::List(inner) => field_deps(inner, generic_params, deps),

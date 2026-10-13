@@ -75,7 +75,7 @@ function off_main() -> int {
     42
 }
 
-/// baml:$trace=trace.rich
+/// baml:$trace=trace.empty_span
 function off_builtin(counts: OffCounts) -> int {
     counts.bodies += 1;
     assert.equal(trace.current_span_id(), null);

@@ -245,6 +245,9 @@ fn template_segment_children(segment: &TemplateSegment, out: &mut Vec<BodyNode>)
     match segment {
         TemplateSegment::Text(_) => {}
         TemplateSegment::Interp(expr) => out.push(BodyNode::Expr(*expr)),
+        TemplateSegment::Effect { stmts, .. } => {
+            out.extend(stmts.iter().copied().map(BodyNode::Stmt));
+        }
         TemplateSegment::For {
             collection, body, ..
         } => {

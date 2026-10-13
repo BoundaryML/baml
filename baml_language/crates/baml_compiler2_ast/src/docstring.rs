@@ -163,7 +163,7 @@ pub fn trace_hook(
                 message: if hook.is_some() {
                     format!("Function `{function_name}` declares more than one trace hook.\nhelp: Keep one `/// baml:$trace=...` directive.")
                 } else {
-                    format!("Invalid trace hook directive on function `{function_name}`.\nExpected `/// baml:$trace=hook_name` with a function reference.\nhelp: Use a function name without call parentheses, for example `/// baml:$trace=trace.rich`.")
+                    format!("Invalid trace hook directive on function `{function_name}`.\nExpected `/// baml:$trace=hook_name` with a function reference.\nhelp: Use a function name without call parentheses, for example `/// baml:$trace=trace.empty_span`.")
                 },
                 span: token.text_range(),
             });

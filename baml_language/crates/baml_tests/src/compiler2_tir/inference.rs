@@ -1027,7 +1027,7 @@ fn optional_callback_effect_survives_narrowing_and_invocation() {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.apply_optional(callback: ((value: int) -> int throws __effect_param_0) | null, value: int) -> int throws never {
       { : int
-        if (callback != null : bool) : void
+        if (callback != null : bool) : null
           { : never
             return callback<__effect_param_0>(value) : int
           }

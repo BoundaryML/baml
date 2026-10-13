@@ -356,9 +356,11 @@ impl CloudPublisher {
             .map(|blob| (blob.index(), blob.id(), blob.encoded_len()))
             .collect();
         // A capture with nothing left to write is let go too.
-        let structure = structure
-            .filter(|_| !kept.is_empty())
-            .map(|structure| (structure, whole.saturating_sub(given)));
+        let structure = structure.filter(|_| !kept.is_empty()).map(|structure| {
+            // Measurement may allocate component indexes after preflight.
+            let size = whole.saturating_sub(given).max(structure.retained_bytes());
+            (structure, size)
+        });
         let size = leaves
             .iter()
             .map(Leaf::retained_bytes)
@@ -1329,6 +1331,8 @@ mod tests {
         let mut window = publisher.take_window();
         assert_eq!(window.candidates.len(), 4);
         assert_eq!(window.owners.len(), 1);
+        // Include component-index storage allocated while splitting the capture.
+        assert_eq!(window.sizes[0], window.owners[0].retained_bytes());
         publisher.release_window(&window);
         assert_eq!(publisher.retained_bytes, 0);
         assert!(held > 600);

@@ -56,8 +56,6 @@ pub enum TypeRefKind {
     Bool,
     Null,
     Never,
-    /// The `void` type — valid only as a function return type.
-    Void,
     /// `Uint8Array` (binary data).
     Uint8Array,
     Media {
@@ -243,7 +241,6 @@ impl std::fmt::Display for TypeRefDisplay<'_> {
             TypeRefKind::Bool => write!(f, "bool"),
             TypeRefKind::Null => write!(f, "null"),
             TypeRefKind::Never => write!(f, "never"),
-            TypeRefKind::Void => write!(f, "void"),
             TypeRefKind::Uint8Array => write!(f, "uint8array"),
             TypeRefKind::Media { kind } => write!(f, "{}", format!("{kind:?}").to_lowercase()),
             TypeRefKind::Optional { inner } => {
@@ -409,7 +406,6 @@ impl TypeRefBuilder {
             TypeExprKind::Bool => TypeRefKind::Bool,
             TypeExprKind::Null => TypeRefKind::Null,
             TypeExprKind::Never => TypeRefKind::Never,
-            TypeExprKind::Void => TypeRefKind::Void,
             TypeExprKind::Uint8Array => TypeRefKind::Uint8Array,
             TypeExprKind::Media { kind, .. } => TypeRefKind::Media { kind: *kind },
             TypeExprKind::Optional { inner, .. } => TypeRefKind::Optional {
@@ -612,7 +608,7 @@ mod tests {
             }
             .at(sp),
             map_of_string_to_int_list(0),
-            // `int | string`, and `int | (() -> void)` (union parenthesizes fns).
+            // `int | string`, and `int | (() -> null)` (union parenthesizes fns).
             TypeExprKind::Union {
                 variants: vec![prim(TypeExprKind::Int), prim(TypeExprKind::String)],
             }
@@ -620,7 +616,7 @@ mod tests {
             TypeExprKind::Union {
                 variants: vec![
                     prim(TypeExprKind::Int),
-                    func(vec![], prim(TypeExprKind::Void), None),
+                    func(vec![], prim(TypeExprKind::Null), None),
                 ],
             }
             .at(sp),
@@ -641,8 +637,8 @@ mod tests {
                 prim(TypeExprKind::Bool),
                 Some(Box::new(path("MyError"))),
             ),
-            // `() -> (() -> void)` — a function return parenthesizes a function.
-            func(vec![], func(vec![], prim(TypeExprKind::Void), None), None),
+            // `() -> (() -> null)` — a function return parenthesizes a function.
+            func(vec![], func(vec![], prim(TypeExprKind::Null), None), None),
             // `T.Item` and `(T as Iterator).Item`.
             TypeExprKind::AssociatedTypeProjection {
                 base: Box::new(path("T")),

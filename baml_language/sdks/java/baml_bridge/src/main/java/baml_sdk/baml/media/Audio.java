@@ -1,5 +1,6 @@
 package baml_sdk.baml.media;
 
+import baml_bridge.BamlFfi;
 import baml_bridge.BamlHandle;
 import baml_bridge.BamlMedia;
 
@@ -15,6 +16,7 @@ public final class Audio implements BamlMedia {
     private static final int KIND = 2;
     /** Wire {@code BamlHandleType.ADT_MEDIA_AUDIO}. */
     private static final int HANDLE_TYPE = BamlHandle.ADT_MEDIA_AUDIO;
+    private static final String[] FROM_FILE_NAMES = {"file", "mime_type"};
 
     private final BamlHandle handle;
 
@@ -39,8 +41,30 @@ public final class Audio implements BamlMedia {
         return from_file(path, null);
     }
 
+    /**
+     * Reads the file now, through {@code baml.media.Audio.from_file}: the value
+     * holds its content and base name, never its path. Throws the BAML error
+     * {@code baml.errors.Io} when the file cannot be read.
+     */
     public static Audio from_file(String path, String mimeType) {
-        return new Audio(BamlHandle.mediaFromFile(KIND, HANDLE_TYPE, path, mimeType));
+        return (Audio)
+                BamlFfi.callSync(
+                        "baml.media.Audio.from_file",
+                        FROM_FILE_NAMES,
+                        new Object[] {path, mimeType});
+    }
+
+    public static Audio from_file_content(String file, String base64) {
+        return from_file_content(file, base64, null);
+    }
+
+    /**
+     * Base64 content that was read from {@code file}: named by its base name,
+     * with the MIME type it implies unless one is given. Reads nothing.
+     */
+    public static Audio from_file_content(String file, String base64, String mimeType) {
+        return new Audio(
+                BamlHandle.mediaFromFileContent(KIND, HANDLE_TYPE, file, base64, mimeType));
     }
 
     public static Audio from_base64(String base64) {
@@ -56,9 +80,9 @@ public final class Audio implements BamlMedia {
         return handle.mediaUrl();
     }
 
-    /** Local file path, or {@code null} when not file-backed. */
-    public String file() {
-        return handle.mediaFile();
+    /** Base name of the file the content was read from, or {@code null}. */
+    public String name() {
+        return handle.mediaName();
     }
 
     /** Base64 payload (never {@code null}). */

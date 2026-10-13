@@ -6,7 +6,7 @@ require "thread"
 module Baml
   module Bridge
     module Native
-      ABI_VERSION = 3
+      ABI_VERSION = 4
       RUBY_BRIDGE_LANGUAGE = 10
       BRIDGE_RUNTIME_NAME = "Baml::Bridge"
       MAX_OWNED_BUFFER_BYTES = 16 * 1024 * 1024

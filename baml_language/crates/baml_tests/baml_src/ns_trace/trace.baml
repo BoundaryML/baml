@@ -9,11 +9,40 @@ test "defaults preserve automatic capture" {
     assert.equal(trace.hidden().inspect().mode, trace.Mode.Hidden);
     assert.equal(trace.timing().inspect().mode, trace.Mode.Timing);
     assert.equal(trace.span().inspect().mode, trace.Mode.Span);
-    let rich = trace.rich().inspect();
-    assert.equal(rich.mode, trace.Mode.Span);
-    assert.equal(rich.capture.inputs, true);
-    assert.equal(rich.capture.output, true);
-    assert.equal(rich.capture.error, true);
+}
+
+test "span defaults capture outputs and errors with explicit inputs" {
+    let direct = trace.span().inspect();
+    let chained = trace.options().span().inspect();
+    assert.equal(direct.capture.inputs, null);
+    assert.equal(direct.capture.output, true);
+    assert.equal(direct.capture.error, true);
+    assert.equal(chained.capture.inputs, null);
+    assert.equal(chained.capture.output, true);
+    assert.equal(chained.capture.error, true);
+    assert.equal(trace.span(inputs = true).inspect().capture.inputs, true);
+    assert.equal(trace.span(output = null, error = null).inspect().capture.output, null);
+    assert.equal(trace.span(output = null, error = null).inspect().capture.error, null);
+}
+
+test "empty spans clear capture requests and preserve context" {
+    let direct = trace.empty_span().inspect();
+    let base = trace.context(metadata = { "key": "value" }).span(inputs = true);
+    let empty = base.empty_span();
+    let chained = empty.inspect();
+    assert.equal(direct.mode, trace.Mode.Span);
+    assert.equal(direct.capture.inputs, false);
+    assert.equal(direct.capture.output, false);
+    assert.equal(direct.capture.error, false);
+    assert.equal(chained.mode, trace.Mode.Span);
+    assert.equal(chained.capture.inputs, false);
+    assert.equal(chained.capture.output, false);
+    assert.equal(chained.capture.error, false);
+    assert.equal(chained.context.metadata["key"], "value");
+    assert.equal(base.inspect().capture.inputs, true);
+    assert.equal(base.inspect().capture.output, true);
+    assert.equal(base.inspect().capture.error, true);
+    assert.equal(empty.reserve().inspect().capture.output, false);
 }
 
 test "builders are immutable and mode preserves capture" {
@@ -29,7 +58,7 @@ test "builders are immutable and mode preserves capture" {
     assert.equal(restored.inspect().capture.output, true);
     assert.equal(restored.inspect().capture.error, null);
     assert.equal(replaced.inspect().capture.inputs, null);
-    assert.equal(replaced.inspect().capture.output, null);
+    assert.equal(replaced.inspect().capture.output, true);
     assert.equal(replaced.inspect().capture.error, true);
     assert.equal(base.inspect().capture.error, null);
 }

@@ -21,7 +21,7 @@ def test_sdk_shutdown_finalizes_the_profiler(language, mode, tmp_path):
     }
     env.update(
         HOME=str(tmp_path),
-        BAML_HOME=str(tmp_path / "config"),
+        BAML_HOME=str(tmp_path / "config" / ".baml"),
         BAML_TELEMETRY="high",
         BOUNDARY_API_KEY="local",
         DO_NOT_TRACK="1",
@@ -75,7 +75,7 @@ if ({json.dumps(mode)} === 'nonzero') process.exitCode = 7;
                 "query",
                 "--local",
                 "--from",
-                str(tmp_path),
+                str(tmp_path / "config"),
                 "--format",
                 "json",
                 sql,

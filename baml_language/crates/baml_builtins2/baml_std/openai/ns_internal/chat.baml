@@ -698,7 +698,7 @@ function _chat_media_part(
                     // is more useful than a constant, and this is the same
                     // derivation the Responses client uses (query stripped,
                     // `document.pdf` when there is nothing to derive).
-                    filename: _file_name(pdf.file() ?? pdf.url()),
+                    filename: _file_name(pdf.name() ?? pdf.url()),
                     file_data: `data:${resolved.mime_type};base64,${data}`,
                 },
             }
@@ -1311,7 +1311,7 @@ function chat_render(
 }
 
 /// The request one chat `render` would send. Media is lowered through the
-/// preview-only resolver and never reads files or downloads URLs.
+/// preview-only resolver and never downloads URLs.
 function chat_preview(
     compat: ChatCompat,
     params: ChatParams,

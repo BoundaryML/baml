@@ -137,7 +137,7 @@ def _handle_unhandled_spawn_error(error_bytes: bytes, cancelled: bool) -> None:
 
 register_unhandled_spawn_error_callback(_handle_unhandled_spawn_error)
 
-__version__ = "0.20.1"
+__version__ = "0.22.1"
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +193,21 @@ async def call_function(rt, function_name, kwargs, *, _baml=None):
         cancel_function_call(call_id)
         raise
     return FunctionResult(_decode_call_result_async(result_bytes))
+
+
+def _media_from_file(class_fqn, file, mime_type):
+    """`from_file` of a media class: the BAML function `<class_fqn>.from_file`,
+    which reads the file. The media classes call this for their own
+    `from_file`, so a file that cannot be read is the same `baml.errors.Io`
+    here as in BAML code."""
+    encoded = encode_call_args(
+        {"file": file, "mime_type": mime_type},
+        new_function_call(),
+        function_name=f"{class_fqn}.from_file",
+    )
+    return decode_call_result(
+        get_runtime().call_function_sync(encoded, encoded.kwargs, encoded.cancel)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -499,6 +514,13 @@ def define_function(
                 function_name=baml_fqn,
                 _baml=options,
             )
+            if baml_fqn.endswith("@stream"):
+                from ._stream import _decode_stream_result
+                return _decode_stream_result(
+                    rt.call_function_sync(
+                        args_proto, args_proto.kwargs, args_proto.cancel, stream=True
+                    )
+                )
             result_bytes = rt.call_function_sync(args_proto, args_proto.kwargs, args_proto.cancel)
             return decode_call_result(result_bytes)
 
@@ -537,10 +559,18 @@ def define_function(
                 _baml=options,
             )
             try:
-                result_bytes = await rt.call_function(args_proto, args_proto.kwargs, args_proto.cancel)
+                result_bytes = await rt.call_function(
+                    args_proto,
+                    args_proto.kwargs,
+                    args_proto.cancel,
+                    stream=baml_fqn.endswith("@stream"),
+                )
             except asyncio.CancelledError:
                 cancel_function_call(call_id)
                 raise
+            if baml_fqn.endswith("@stream"):
+                from ._stream import _decode_stream_result
+                return _decode_stream_result(result_bytes, asynchronous=True)
             return _decode_call_result_async(result_bytes)
 
         _set_binding_metadata(_async)

@@ -36,10 +36,11 @@ class File {
             $rust_io_function
         }
 
-        // // reimplemented for perf reasons
-        // function bytes(self) -> uint8array throws root.errors.Io {
-        //     $rust_io_function
-        // }
+        // The default reads in chunks and joins them one at a time, which
+        // copies what it has read so far for every chunk.
+        function bytes(self) -> uint8array throws root.errors.Io {
+            $rust_io_function
+        }
     }
 
     /// Closes the file handle, flushing any pending writes.

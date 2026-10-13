@@ -652,12 +652,12 @@ nonisolated struct BamlBridge_Cffi_V1_BamlValueMedia: Sendable {
     set {value = .base64(newValue)}
   }
 
-  var file: String {
+  var fileContent: BamlBridge_Cffi_V1_BamlValueMediaFileContent {
     get {
-      if case .file(let v)? = value {return v}
-      return String()
+      if case .fileContent(let v)? = value {return v}
+      return BamlBridge_Cffi_V1_BamlValueMediaFileContent()
     }
-    set {value = .file(newValue)}
+    set {value = .fileContent(newValue)}
   }
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -665,13 +665,28 @@ nonisolated struct BamlBridge_Cffi_V1_BamlValueMedia: Sendable {
   nonisolated enum OneOf_Value: Equatable, Sendable {
     case url(String)
     case base64(String)
-    case file(String)
+    case fileContent(BamlBridge_Cffi_V1_BamlValueMediaFileContent)
 
   }
 
   init() {}
 
   fileprivate var _mimeType: String? = nil
+}
+
+/// Base64 content that was read from a file, with the base name of that file.
+nonisolated struct BamlBridge_Cffi_V1_BamlValueMediaFileContent: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  var name: String = String()
+
+  var base64: String = String()
+
+  var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  init() {}
 }
 
 nonisolated struct BamlBridge_Cffi_V1_BamlValuePromptAst: Sendable {
@@ -1875,7 +1890,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueUnionVariant: SwiftProtobuf.Me
 
 nonisolated extension BamlBridge_Cffi_V1_BamlValueMedia: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".BamlValueMedia"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}media\0\u{3}mime_type\0\u{1}url\0\u{1}base64\0\u{1}file\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}media\0\u{3}mime_type\0\u{1}url\0\u{1}base64\0\u{4}\u{2}file_content\0\u{b}file\0\u{c}\u{5}\u{1}")
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1901,12 +1916,17 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueMedia: SwiftProtobuf.Message, 
           self.value = .base64(v)
         }
       }()
-      case 5: try {
-        var v: String?
-        try decoder.decodeSingularStringField(value: &v)
+      case 6: try {
+        var v: BamlBridge_Cffi_V1_BamlValueMediaFileContent?
+        var hadOneofValue = false
+        if let current = self.value {
+          hadOneofValue = true
+          if case .fileContent(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
         if let v = v {
-          if self.value != nil {try decoder.handleConflictingOneOf()}
-          self.value = .file(v)
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.value = .fileContent(v)
         }
       }()
       default: break
@@ -1934,9 +1954,9 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueMedia: SwiftProtobuf.Message, 
       guard case .base64(let v)? = self.value else { preconditionFailure() }
       try visitor.visitSingularStringField(value: v, fieldNumber: 4)
     }()
-    case .file?: try {
-      guard case .file(let v)? = self.value else { preconditionFailure() }
-      try visitor.visitSingularStringField(value: v, fieldNumber: 5)
+    case .fileContent?: try {
+      guard case .fileContent(let v)? = self.value else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
     }()
     case nil: break
     }
@@ -1947,6 +1967,41 @@ nonisolated extension BamlBridge_Cffi_V1_BamlValueMedia: SwiftProtobuf.Message, 
     if lhs.media != rhs.media {return false}
     if lhs._mimeType != rhs._mimeType {return false}
     if lhs.value != rhs.value {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension BamlBridge_Cffi_V1_BamlValueMediaFileContent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  static let protoMessageName: String = _protobuf_package + ".BamlValueMediaFileContent"
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}base64\0")
+
+  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.base64) }()
+      default: break
+      }
+    }
+  }
+
+  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.base64.isEmpty {
+      try visitor.visitSingularStringField(value: self.base64, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  static func ==(lhs: BamlBridge_Cffi_V1_BamlValueMediaFileContent, rhs: BamlBridge_Cffi_V1_BamlValueMediaFileContent) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.base64 != rhs.base64 {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -30,11 +30,27 @@ class BamlAudio:
     @staticmethod
     def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
     @staticmethod
-    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
+    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio:
+        r"""
+        Read the file now, through the BAML function `from_file` of
+        this media class: the value holds its content and its base
+        name, never its path. Raises `BamlError` (`baml.errors.Io`)
+        when the file cannot be read.
+        """
+    @staticmethod
+    def from_file_content(file: builtins.str, base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio:
+        r"""
+        Base64 content that was read from `file`: named by its base
+        name, with the MIME type it implies unless one is given.
+        Reads nothing.
+        """
     @staticmethod
     def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlAudio: ...
     def url(self) -> typing.Optional[builtins.str]: ...
-    def file(self) -> typing.Optional[builtins.str]: ...
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base name of the file the content was read from, if any.
+        """
     def base64(self) -> builtins.str: ...
     def mime_type(self) -> typing.Optional[builtins.str]: ...
     @classmethod
@@ -56,11 +72,27 @@ class BamlImage:
     @staticmethod
     def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlImage: ...
     @staticmethod
-    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlImage: ...
+    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlImage:
+        r"""
+        Read the file now, through the BAML function `from_file` of
+        this media class: the value holds its content and its base
+        name, never its path. Raises `BamlError` (`baml.errors.Io`)
+        when the file cannot be read.
+        """
+    @staticmethod
+    def from_file_content(file: builtins.str, base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlImage:
+        r"""
+        Base64 content that was read from `file`: named by its base
+        name, with the MIME type it implies unless one is given.
+        Reads nothing.
+        """
     @staticmethod
     def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlImage: ...
     def url(self) -> typing.Optional[builtins.str]: ...
-    def file(self) -> typing.Optional[builtins.str]: ...
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base name of the file the content was read from, if any.
+        """
     def base64(self) -> builtins.str: ...
     def mime_type(self) -> typing.Optional[builtins.str]: ...
     @classmethod
@@ -82,11 +114,27 @@ class BamlPdf:
     @staticmethod
     def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPdf: ...
     @staticmethod
-    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPdf: ...
+    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPdf:
+        r"""
+        Read the file now, through the BAML function `from_file` of
+        this media class: the value holds its content and its base
+        name, never its path. Raises `BamlError` (`baml.errors.Io`)
+        when the file cannot be read.
+        """
+    @staticmethod
+    def from_file_content(file: builtins.str, base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPdf:
+        r"""
+        Base64 content that was read from `file`: named by its base
+        name, with the MIME type it implies unless one is given.
+        Reads nothing.
+        """
     @staticmethod
     def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlPdf: ...
     def url(self) -> typing.Optional[builtins.str]: ...
-    def file(self) -> typing.Optional[builtins.str]: ...
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base name of the file the content was read from, if any.
+        """
     def base64(self) -> builtins.str: ...
     def mime_type(self) -> typing.Optional[builtins.str]: ...
     @classmethod
@@ -150,11 +198,11 @@ class BamlRuntime:
         # Arguments
         * `bytecode` - borsh-encoded BAML bytecode program
         """
-    def call_function(self, args_proto: bytes, kwargs: typing.Optional[dict] = None, cancel: typing.Any = None) -> typing.Any:
+    def call_function(self, args_proto: bytes, kwargs: typing.Optional[dict] = None, cancel: typing.Any = None, *, stream: bool = False) -> typing.Any:
         r"""
         Call a BAML function asynchronously.
         """
-    def call_function_sync(self, args_proto: bytes, kwargs: typing.Optional[dict] = None, cancel: typing.Any = None) -> bytes:
+    def call_function_sync(self, args_proto: bytes, kwargs: typing.Optional[dict] = None, cancel: typing.Any = None, *, stream: bool = False) -> typing.Any:
         r"""
         Call a BAML function synchronously (blocking).
         """
@@ -164,11 +212,27 @@ class BamlVideo:
     @staticmethod
     def from_url(url: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlVideo: ...
     @staticmethod
-    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlVideo: ...
+    def from_file(file: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlVideo:
+        r"""
+        Read the file now, through the BAML function `from_file` of
+        this media class: the value holds its content and its base
+        name, never its path. Raises `BamlError` (`baml.errors.Io`)
+        when the file cannot be read.
+        """
+    @staticmethod
+    def from_file_content(file: builtins.str, base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlVideo:
+        r"""
+        Base64 content that was read from `file`: named by its base
+        name, with the MIME type it implies unless one is given.
+        Reads nothing.
+        """
     @staticmethod
     def from_base64(base64: builtins.str, mime_type: typing.Optional[builtins.str] = None) -> BamlVideo: ...
     def url(self) -> typing.Optional[builtins.str]: ...
-    def file(self) -> typing.Optional[builtins.str]: ...
+    def name(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base name of the file the content was read from, if any.
+        """
     def base64(self) -> builtins.str: ...
     def mime_type(self) -> typing.Optional[builtins.str]: ...
     @classmethod

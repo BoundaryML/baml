@@ -47,10 +47,10 @@ enum BamlApi {
     static let handleClone = v1.handle_clone!
     static let handleRelease = v1.handle_release!
     static let mediaFromUrl = v1.media_from_url!
-    static let mediaFromFile = v1.media_from_file!
     static let mediaFromBase64 = v1.media_from_base64!
     static let mediaUrl = v1.media_url!
-    static let mediaFile = v1.media_file!
+    static let mediaName = v1.media_name!
+    static let mediaFromFileContent = v1.media_from_file_content!
     static let mediaBase64 = v1.media_base64!
     static let mediaMimeType = v1.media_mime_type!
     static let registerBridge = v1.register_bridge!

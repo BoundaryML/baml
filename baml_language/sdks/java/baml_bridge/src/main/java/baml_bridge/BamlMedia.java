@@ -9,7 +9,7 @@ package baml_bridge;
  *
  * <p>The Java objects remain native-handle-backed, but bridge traffic uses the
  * canonical portable media representation ({@code kind}, optional MIME type,
- * and a URL/file/base64 payload). This keeps runtime-local handles out of the
+ * and a URL or base64 payload). This keeps runtime-local handles out of the
  * wire format; outbound decode reconstructs a fresh wrapper in this runtime.
  */
 public interface BamlMedia {

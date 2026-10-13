@@ -826,7 +826,7 @@ impl RenderContext<'_> {
             Ty::Media(MediaKind::Audio) => "global::Baml.BamlAudio".to_string(),
             Ty::Media(MediaKind::Video) => "global::Baml.BamlVideo".to_string(),
             Ty::Media(MediaKind::Pdf) => "global::Baml.BamlPdf".to_string(),
-            Ty::Null | Ty::Unknown | Ty::Void | Ty::Never => "global::Baml.BamlValue".to_string(),
+            Ty::Null | Ty::Unknown | Ty::Never => "global::Baml.BamlValue".to_string(),
             Ty::Literal(literal, ..) => literal_source(literal).to_string(),
             Ty::TypeAlias(name) => self.type_source(self.alias_target(name)),
             Ty::Class(name, arguments) => {
@@ -1092,7 +1092,6 @@ impl RenderContext<'_> {
             | Ty::Map { .. }
             | Ty::Function { .. }
             | Ty::Unknown
-            | Ty::Void
             | Ty::Never => false,
             _ => unreachable!("unsupported type reached projection classification"),
         }
@@ -1116,7 +1115,7 @@ fn function_type_source(
         })
         .collect::<Vec<_>>();
 
-    let task = if matches!(ret, Ty::Void) {
+    let task = if ret.is_unit() {
         "global::System.Threading.Tasks.Task".to_string()
     } else {
         format!("global::System.Threading.Tasks.Task<{}>", project(ret))
@@ -1779,7 +1778,6 @@ fn require_supported_type_inner(
         | Ty::Unknown
         | Ty::Literal(..)
         | Ty::TypeVar(..)
-        | Ty::Void
         | Ty::Never => Ok(()),
         Ty::Media(MediaKind::Image | MediaKind::Audio | MediaKind::Video | MediaKind::Pdf) => {
             Ok(())
@@ -1891,10 +1889,10 @@ fn require_supported_type_inner(
                 }
                 require_supported_type(&parameter.ty, model, path)?;
             }
-            if !matches!(ret.as_ref(), Ty::Void) {
+            if !ret.is_unit() {
                 require_supported_type(ret, model, path)?;
             }
-            if !matches!(throws.as_ref(), Ty::Never | Ty::Void) && !is_host_callable_error(throws) {
+            if !matches!(throws.as_ref(), Ty::Never) && !is_host_callable_error(throws) {
                 require_supported_type(throws, model, path)?;
             }
             Ok(())
@@ -2015,7 +2013,7 @@ fn csharp_projection_key(ty: &Ty, model: &CodegenModel) -> String {
         Ty::Float | Ty::Literal(Literal::Float(_), ..) => "double".to_string(),
         Ty::String | Ty::Literal(Literal::String(_), ..) => "string".to_string(),
         Ty::Uint8Array => "System.ReadOnlyMemory<byte>".to_string(),
-        Ty::Null | Ty::Unknown | Ty::Void | Ty::Never => "Baml.BamlValue".to_string(),
+        Ty::Null | Ty::Unknown | Ty::Never => "Baml.BamlValue".to_string(),
         Ty::Media(kind) => format!("Baml.Media::{kind:?}"),
         Ty::TypeVar(name) => format!("type parameter `{name}`"),
         Ty::TypeAlias(name) => match model.symbols.get(name) {
@@ -2203,7 +2201,6 @@ fn codec_type(ty: &Ty) -> Ty {
         },
         Ty::TypeAlias(name) => Ty::TypeAlias(name.clone()),
         Ty::TypeVar(name) => Ty::TypeVar(name.clone()),
-        Ty::Void => Ty::Void,
         Ty::Never => Ty::Never,
         _ => ty.clone(),
     }
@@ -2226,10 +2223,10 @@ fn collect_argument_type_closure(
         for parameter in params {
             collect_type_closure(&parameter.ty, model, types)?;
         }
-        if !matches!(ret.as_ref(), Ty::Void) {
+        if !ret.is_unit() {
             collect_type_closure(ret, model, types)?;
         }
-        if !matches!(throws.as_ref(), Ty::Never | Ty::Void) && !is_host_callable_error(throws) {
+        if !matches!(throws.as_ref(), Ty::Never) && !is_host_callable_error(throws) {
             collect_type_closure(throws, model, types)?;
         }
         return Ok(());
@@ -2319,10 +2316,10 @@ fn collect_type_closure(
             for parameter in params {
                 collect_type_closure(&parameter.ty, model, types)?;
             }
-            if !matches!(ret.as_ref(), Ty::Void) {
+            if !ret.is_unit() {
                 collect_type_closure(ret, model, types)?;
             }
-            if !matches!(throws.as_ref(), Ty::Never | Ty::Void) && !is_host_callable_error(throws) {
+            if !matches!(throws.as_ref(), Ty::Never) && !is_host_callable_error(throws) {
                 collect_type_closure(throws, model, types)?;
             }
         }
@@ -2670,7 +2667,7 @@ fn render_generic_host_callable_add(
         })
         .collect::<Vec<_>>()
         .join(", ");
-    let result = if matches!(ret.as_ref(), Ty::Void) {
+    let result = if ret.is_unit() {
         format!("{context}.VoidResult()")
     } else {
         format!("{context}.Result({})", type_token(ret))
@@ -3504,12 +3501,6 @@ fn render_codec(render: &RenderContext<'_>, ty: &Ty, codec_name: &str) -> String
             "            if (!value.IsNull)\n            {\n                return context.Fail<global::Baml.BamlValue>(\n                    \"The native bridge returned a non-null value for a generated null position.\",\n                    \"Standalone BAML null requires BamlValue.Null.\");\n            }\n            return context.ReadValue(value);\n"
                 .to_string(),
         ),
-        Ty::Void => (
-            "            if (value is null || value.Kind != global::Baml.BamlValueKind.Null)\n            {\n                return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                    \"A generated void codec received a non-null BAML value.\",\n                    \"BAML void is represented by the null wire value.\");\n            }\n            return context.Null();\n"
-                .to_string(),
-            "            if (!value.IsNull)\n            {\n                return context.Fail<global::Baml.BamlValue>(\n                    \"The native bridge returned a non-null value for BAML void.\",\n                    \"BAML void is represented by the null wire value.\");\n            }\n            return context.ReadValue(value);\n"
-                .to_string(),
-        ),
         Ty::Never => (
             "            return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                \"A generated never codec cannot encode a value.\",\n                \"A BAML never position is uninhabited.\");\n"
                 .to_string(),
@@ -3572,7 +3563,7 @@ fn render_function_codec(
         })
         .collect::<Vec<_>>()
         .join(", ");
-    let result = if matches!(ret, Ty::Void) {
+    let result = if ret.is_unit() {
         "context.VoidResult()".to_string()
     } else {
         format!("context.Result({})", render.type_field(ret))
@@ -3635,7 +3626,7 @@ fn render_function_codec(
             }
         })
         .collect::<String>();
-    let decode_result = if matches!(ret, Ty::Void) {
+    let decode_result = if ret.is_unit() {
         "                _ = await nativeFunction(arguments, global::Baml.Generated.V1.BamlInvocationPreparation.CurrentOptions?.CancellationToken ?? default).ConfigureAwait(false);\n".to_string()
     } else {
         format!(
@@ -4515,7 +4506,6 @@ fn encode_type_metadata(ty: &Ty) -> Vec<u8> {
             push_message(&mut function, 5, &encode_type_metadata(throws));
             push_message(&mut message, 14, &function);
         }
-        Ty::Void => push_message(&mut message, 20, &[]),
         Ty::TypeVar(name) => {
             let mut encoded = Vec::new();
             push_string(&mut encoded, 1, name.as_str());
@@ -4992,7 +4982,7 @@ mod tests {
         );
         symbols.insert(
             void_name.clone(),
-            Symbol::Function(make_function("MakeVoid", Ty::Void)),
+            Symbol::Function(make_function("MakeVoid", Ty::Null)),
         );
         let mut callables = HashMap::new();
         for (name, wire) in [
@@ -6117,6 +6107,20 @@ mod tests {
     }
 
     #[test]
+    fn unit_returning_callback_is_a_plain_task() {
+        // A callback returning the unit type (`null`, also spelled `void`) is
+        // a value-less `Task`, never a `Task<BamlValue>`.
+        let unit = Ty::Null;
+        let source = function_type_source(&[], &unit, |_| {
+            unreachable!("a unit result is never projected")
+        });
+        assert_eq!(
+            source,
+            "global::System.Func<global::System.Threading.Tasks.Task>"
+        );
+    }
+
+    #[test]
     fn returned_callable_decode_lambdas_preserve_task_shapes_and_optional_presence() {
         let source = returned_callable_codec_source();
         assert!(source.contains("public static class BamlProgram"));
@@ -6460,15 +6464,17 @@ fn render_returned_callable_wrappers(render: &RenderContext<'_>) -> String {
         }
         let name = render.returned_callable_name(&spec.ty);
         let delegate = render.type_source(&spec.ty);
-        let result = if matches!(ret.as_ref(), Ty::Void) {
-            "void".into()
+        // Same decision as `function_type_source`: a unit result is a plain `Task`.
+        let returns_unit = ret.is_unit();
+        let (result, task) = if returns_unit {
+            (
+                "void".to_string(),
+                "global::System.Threading.Tasks.Task".to_string(),
+            )
         } else {
-            render.type_source(ret)
-        };
-        let task = if result == "void" {
-            "global::System.Threading.Tasks.Task".into()
-        } else {
-            format!("global::System.Threading.Tasks.Task<{result}>")
+            let result = render.type_source(ret);
+            let task = format!("global::System.Threading.Tasks.Task<{result}>");
+            (result, task)
         };
         let mut parameters = params
             .iter()
@@ -6493,7 +6499,7 @@ fn render_returned_callable_wrappers(render: &RenderContext<'_>) -> String {
         } else {
             format!("{arguments}, baml")
         };
-        let return_kw = if result == "void" { "" } else { "return " };
+        let return_kw = if returns_unit { "" } else { "return " };
         output.push_str(&format!("    public sealed class {name} {{\n        private readonly {delegate} body;\n        internal {name}({delegate} body) {{ this.body = body; }}\n        internal static async global::System.Threading.Tasks.Task<{name}> FromAsync(global::System.Threading.Tasks.Task<{delegate}> task) => new(await task.ConfigureAwait(false));\n        public {result} Invoke({signature}) {{ {return_kw}InvokeAsync({sync_arguments}).GetAwaiter().GetResult(); }}\n        public {task} InvokeAsync({signature}) {{ using var prepared = global::Baml.Generated.V1.BamlInvocationPreparation.Begin(baml); return body({arguments}); }}\n    }}\n"));
     }
     output

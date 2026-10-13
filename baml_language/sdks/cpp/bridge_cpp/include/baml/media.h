@@ -2,11 +2,16 @@
 #define BAML_MEDIA_H_
 
 // Portable BAML media values. The protobuf payload (kind, optional MIME type,
-// and URL/base64/file source) is copied across the boundary; media is data,
-// not an engine-owned capability handle.
+// a URL or base64 content, and the name of the file the content was read from)
+// is copied across the boundary; media is data, not an engine-owned
+// capability handle. A media value never holds a path to read later: reading
+// a file is the BAML function `from_file` of the media class, which the
+// generated SDK exposes.
 
+#include <baml/buffer.h>
 #include <baml/codec.h>
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
@@ -85,7 +90,10 @@ class basic_media {
            lhs.value_.value_case() == rhs.value_.value_case() &&
            lhs.value_.url() == rhs.value_.url() &&
            lhs.value_.base64() == rhs.value_.base64() &&
-           lhs.value_.file() == rhs.value_.file();
+           lhs.value_.file_content().name() ==
+               rhs.value_.file_content().name() &&
+           lhs.value_.file_content().base64() ==
+               rhs.value_.file_content().base64();
   }
 
   friend bool operator!=(const basic_media& lhs, const basic_media& rhs) {
@@ -107,11 +115,15 @@ class basic_media {
     return from_base64(Expected, std::move(base64), std::move(mime_type));
   }
 
-  static basic_media from_file(
-      std::string file, std::optional<std::string> mime_type = std::nullopt) {
+  // Base64 content that was read from `file`: named by its base name, with the
+  // MIME type it implies unless one is given. Reads nothing.
+  static basic_media from_file_content(
+      std::string file, std::string base64,
+      std::optional<std::string> mime_type = std::nullopt) {
     static_assert(Expected != media_kind::generic,
                   "generic media needs an explicit media kind");
-    return from_file(Expected, std::move(file), std::move(mime_type));
+    return from_file_content(Expected, std::move(file), std::move(base64),
+                             std::move(mime_type));
   }
 
   // Constructors for the generic `image | audio | video | pdf` host type.
@@ -131,12 +143,54 @@ class basic_media {
     });
   }
 
-  static basic_media from_file(
-      media_kind kind, std::string file,
+  static basic_media from_file_content(
+      media_kind kind, std::string file, std::string base64,
       std::optional<std::string> mime_type = std::nullopt) {
-    return make(kind, std::move(mime_type), [&](detail::pb::BamlValueMedia& v) {
-      v.set_file(std::move(file));
-    });
+    check_kind(kind);
+    // The runtime names the content and, with no MIME type given, infers
+    // one: build the value there, read both back, and let its handle go.
+    const BamlApiV1& table = detail::api();
+    uint64_t key = 0;
+    int32_t handle_type = 0;
+    BamlCffiStatus status = table.media_from_file_content(
+        static_cast<int32_t>(detail::media_wire_kind(kind)),
+        c_string(file, "file"), c_string(base64, "base64"),
+        optional_c_string(mime_type), &key, &handle_type);
+    if (status != BAML_CFFI_STATUS_OK || key == 0) {
+      throw error("BAML media from_file_content failed with status " +
+                  std::to_string(static_cast<int>(status)));
+    }
+    struct release_handle {
+      const BamlApiV1& table;
+      uint64_t key;
+      ~release_handle() { table.handle_release(key); }
+    } guard{table, key};
+    auto read = [&](BamlMediaAccessorFn accessor) {
+      BamlBuffer buffer{nullptr, 0};
+      if (accessor(key, handle_type, &buffer) != BAML_CFFI_STATUS_OK) {
+        detail::owned_buffer release{buffer};
+        throw error(
+            "BAML media from_file_content could not read back the value it "
+            "built");
+      }
+      return detail::owned_buffer(buffer);
+    };
+    detail::pb::BamlValueMedia value;
+    value.set_media(detail::media_wire_kind(kind));
+    detail::owned_buffer inferred_mime_type = read(table.media_mime_type);
+    if (!inferred_mime_type.empty()) {
+      value.set_mime_type(inferred_mime_type.to_string());
+    }
+    detail::owned_buffer name = read(table.media_name);
+    if (name.empty()) {
+      value.set_base64(std::move(base64));
+    } else {
+      detail::pb::BamlValueMediaFileContent* content =
+          value.mutable_file_content();
+      content->set_name(name.to_string());
+      content->set_base64(std::move(base64));
+    }
+    return basic_media(std::move(value));
   }
 
   media_kind kind() const noexcept {
@@ -156,20 +210,47 @@ class basic_media {
   }
 
   std::optional<std::string> base64() const {
-    return value_.value_case() == detail::pb::BamlValueMedia::kBase64
-               ? std::optional<std::string>(value_.base64())
-               : std::nullopt;
+    switch (value_.value_case()) {
+      case detail::pb::BamlValueMedia::kBase64:
+        return value_.base64();
+      case detail::pb::BamlValueMedia::kFileContent:
+        return value_.file_content().base64();
+      case detail::pb::BamlValueMedia::kUrl:
+      case detail::pb::BamlValueMedia::VALUE_NOT_SET:
+        return std::nullopt;
+    }
+    return std::nullopt;
   }
 
-  std::optional<std::string> file() const {
-    return value_.value_case() == detail::pb::BamlValueMedia::kFile
-               ? std::optional<std::string>(value_.file())
+  // The base name of the file the content was read from, if any.
+  std::optional<std::string> name() const {
+    return value_.value_case() == detail::pb::BamlValueMedia::kFileContent
+               ? std::optional<std::string>(value_.file_content().name())
                : std::nullopt;
   }
 
  private:
   explicit basic_media(detail::pb::BamlValueMedia value)
       : value_(std::move(value)) {}
+
+  static void check_kind(media_kind kind) {
+    if (kind == media_kind::generic ||
+        (Expected != media_kind::generic && kind != Expected)) {
+      throw error("invalid BAML media kind");
+    }
+  }
+
+  static const char* c_string(const std::string& value, const char* field) {
+    if (value.find('\0') != std::string::npos) {
+      throw error(std::string("BAML media ") + field + " contains a NUL byte");
+    }
+    return value.c_str();
+  }
+
+  static const char* optional_c_string(
+      const std::optional<std::string>& value) {
+    return value ? c_string(*value, "MIME type") : nullptr;
+  }
 
   template <typename SetValue>
   static basic_media make(media_kind kind, std::optional<std::string> mime_type,

@@ -246,7 +246,6 @@ mod tests {
             TypeExprKind::Null => TypeExprKind::Null,
             TypeExprKind::Uint8Array => TypeExprKind::Uint8Array,
             TypeExprKind::Never => TypeExprKind::Never,
-            TypeExprKind::Void => TypeExprKind::Void,
             TypeExprKind::Rust => TypeExprKind::Rust,
             TypeExprKind::Path {
                 segments,

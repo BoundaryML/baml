@@ -59,16 +59,16 @@ You can pass arguments from the CLI or keep the call in a BAML function.
 Call `ask_image` directly to change the image or question without editing BAML:
 
 ```bash
-baml run ask_image -- \
-  --question "Which items on this receipt are drinks?" \
-  --json-args '{"photo": {
-    "kind": "image", "source": "file",
-    "value": "receipt.png", "mime": "image/png"
-  }}'
+printf '{"photo": {"kind": "image", "source": "base64", "mime": "image/png", "value": "%s"}}' \
+  "$(base64 < receipt.png | tr -d '\n')" |
+  baml run ask_image -- \
+    --question "Which items on this receipt are drinks?" \
+    --json-args -
 ```
 
 - Put function arguments after `--`.
 - Pass the string argument with `--question` and the image value with `--json-args`.
+- An image argument is JSON that holds the image's content as base64. `--json-args -` reads the JSON from standard input, which has no length limit.
 - Run `baml run ask_image -- --help` to see the arguments generated from the function signature.
 
 **Keep the call in BAML**
@@ -204,6 +204,8 @@ Use a direct image URL that can be fetched without your browser session. Dependi
 
 The file must exist on the machine running BAML. In these CLI examples, `receipt.png` is relative to the directory you run the command from. Use an absolute path if needed.
 
+`image.from_file` reads the file when it is called. A missing or unreadable file throws `baml.errors.Io` at that call, before any request is built. Changing or deleting the file afterwards does not change the image.
+
 ### Upload or base64 content
 
 <BamlProject id="vision" file="baml_src/main.baml" regions={["input-upload"]} />
@@ -332,8 +334,8 @@ The client translates the prompt, sends the request, and returns the model's tex
 </details>
 
 - **Keep your prompt and return type.** `input.prompt(...)` renders the system instructions, output schema, user text, and image. BAML parses the returned text into `Receipt`.
-- **Translate the image.** `build_request` preserves message roles and puts the image in Cloudflare's separate field. During a call, `resolve_media` reads files or downloads URLs and produces base64 data.
-- **Preview without I/O.** `render` requires a base64 image and redacts the token. It does not read image files or fetch URLs.
+- **Translate the image.** `build_request` preserves message roles and puts the image in Cloudflare's separate field. During a call, `resolve_media` downloads URL images and produces base64 data.
+- **Preview without I/O.** `render` requires a base64 image and redacts the token. It does not fetch URLs.
 - **Handle HTTP failures.** `send_as` checks the status and decodes the JSON envelope; the request carries a 60-second timeout. `to_turn` checks the envelope's `success` field before returning text.
 
 This example supports one image per call, system and user messages, and non-streaming text responses. It rejects tools, conversation history, and extra images. It does not record usage or call traces. The request and response handling is tested with fixtures; a live Cloudflare model call requires your account and token.
@@ -345,7 +347,6 @@ This example supports one image per call, system and user messages, and non-stre
 - **The request is too large.** Reduce the number of images or resize them within the provider's limits. Keep text large enough to read.
 - **Small or rotated text is misread.** Rotate the image upright, use a sharper original, or send a crop around the relevant content.
 - **Fields are missing or wrong.** Allow `null` where information may be absent. Inspect the source image and refine field descriptions rather than assuming every image contains every field.
-- **A local image fails in request preview.** `@build_request` does not read local image files. Use a URL or base64 value to inspect the request, then use a normal function call to process the local file.
 
 ## Share your provider
 

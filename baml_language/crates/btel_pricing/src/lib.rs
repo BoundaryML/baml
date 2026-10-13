@@ -1,9 +1,9 @@
-//! Mirrored by the BCS projector:
-//! <https://github.com/BoundaryML/bcs/blob/main/data-plane/crates/dataplane/src/projector/usage/pricing.rs>
-//! Update both copies until a shared-file arrangement replaces the copy.
-
 //! Estimated model prices in integer nanodollars (10^-9 USD).
 //! Rates are nanodollars per token; cache factors stay rational until the turn is rounded.
+//!
+//! `baml query` prices usage with this crate when it reads a recording. The BCS projector
+//! depends on it at `BAML_REV` and stores the price when it writes a span, so a price
+//! added here reaches the cloud when bcs moves `BAML_REV`.
 
 use serde::{Deserialize, Serialize};
 
@@ -13,18 +13,18 @@ use serde::{Deserialize, Serialize};
     Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
 )]
 #[serde(transparent)]
-pub(crate) struct Usd(i64);
+pub struct Usd(i64);
 
 impl Usd {
-    pub(crate) const fn from_nano_usd(amount: i64) -> Self {
+    pub const fn from_nano_usd(amount: i64) -> Self {
         Self(amount)
     }
 
-    pub(crate) const fn as_nano_usd(self) -> i64 {
+    pub const fn as_nano_usd(self) -> i64 {
         self.0
     }
 
-    pub(crate) fn checked_add(self, other: Self) -> Option<Self> {
+    pub fn checked_add(self, other: Self) -> Option<Self> {
         self.0.checked_add(other.0).map(Self)
     }
 
@@ -123,6 +123,19 @@ const PRICES: &[Price] = &[
             cache_read: Usd::from_nano_usd(400),
         }),
     },
+    Price {
+        model: "gpt-6-luna",
+        input: Usd::from_nano_usd(100),
+        output: Usd::from_nano_usd(500),
+        cache_read: Some(Usd::from_nano_usd(10)),
+        // Over 272K prompt tokens: 2x input and cache rates, 1.5x output.
+        long_context: Some(LongContext {
+            above: 272_000,
+            input: Usd::from_nano_usd(200),
+            output: Usd::from_nano_usd(750),
+            cache_read: Usd::from_nano_usd(20),
+        }),
+    },
 ];
 
 // Twentieths keep both the 5/4 cache-write and 1/10 fallback cache-read rates exact.
@@ -141,7 +154,7 @@ fn price(model: &str) -> Option<&'static Price> {
 
 /// Nanodollars for one model turn; unknown for an unpriced model or an overflowing amount.
 /// `input` excludes cache reads and writes. Negative counters contribute zero.
-pub(crate) fn cost_nano_usd(
+pub fn cost_nano_usd(
     model: Option<&str>,
     input: i64,
     output: i64,
@@ -240,6 +253,21 @@ mod tests {
         assert_eq!(
             cost_nano_usd(model, i64::MAX, 0, Some(i64::MAX), Some(i64::MAX)),
             None
+        );
+    }
+
+    #[test]
+    fn prices_gpt_6_luna_in_both_context_tiers() {
+        let model = Some("gpt-6-luna");
+        // $0.10/M input, $0.125/M cache writes, $0.01/M cache reads, $0.50/M output.
+        assert_eq!(
+            cost_nano_usd(model, 100_000, 10_000, Some(100_000), Some(10_000)),
+            Some(Usd(17_250_000))
+        );
+        // Over 272K prompt tokens: $0.20/M input, $0.75/M output.
+        assert_eq!(
+            cost_nano_usd(model, 300_000, 10_000, None, None),
+            Some(Usd(67_500_000))
         );
     }
 

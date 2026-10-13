@@ -399,7 +399,6 @@ pub fn display_type_ref(store: &TypeRefStore, id: TypeRefId) -> String {
         }
         K::Unknown => "unknown".to_string(),
         K::Never => "never".to_string(),
-        K::Void => "void".to_string(),
         K::Type => "type".to_string(),
         K::Rust => "$rust_type".to_string(),
         K::Infer => "_".to_string(),

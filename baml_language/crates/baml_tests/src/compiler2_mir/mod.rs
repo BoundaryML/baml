@@ -615,15 +615,14 @@ fn generic_class_destructure_field_projection_uses_instantiated_type() {
         "#,
     );
     let output = render_mir(&db, file);
-    // Scope the check to `user.f`'s body — auto-derived `to_json` /
-    // `from_json` methods on `Box<T>` legitimately have `void` locals
-    // because T isn't instantiated in the auto-derive body.
+    // The destructured field's local carries the field type at the
+    // instantiation the pattern names, `int`, not the declaration's `T`.
     let f_body = function_mir(&output, "f");
     assert!(
-        !f_body
+        f_body
             .lines()
-            .any(|line| line.trim_start().starts_with("let _") && line.contains(": void")),
-        "generic class destructure lowered a projected field through a void local:\n{output}"
+            .any(|line| line.trim_start().starts_with("let _") && line.contains(": int // value")),
+        "generic class destructure did not type the projected field's local `int`:\n{output}"
     );
 }
 

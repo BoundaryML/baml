@@ -24,11 +24,10 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use crate::py_handle::{BamlPyHandle, handle_clone, status_to_pyerr};
 
-type MediaConstructor = fn(MediaKind, &str, Option<&str>) -> Result<HandleParts, HandleError>;
 type MediaAccessor<T> = fn(u64, i32) -> Result<T, HandleError>;
 
 fn create_media(
-    constructor: MediaConstructor,
+    constructor: impl FnOnce(MediaKind, &str, Option<&str>) -> Result<HandleParts, HandleError>,
     media_kind: MediaKind,
     value: String,
     mime_type: Option<String>,
@@ -77,7 +76,7 @@ fn pydantic_is_instance_schema<'py>(
 // ---------------------------------------------------------------------------
 
 macro_rules! define_media_pyclass {
-    ($name:ident, $media_kind:expr, $expected_ht:expr) => {
+    ($name:ident, $baml_class:literal, $media_kind:expr, $expected_ht:expr) => {
         // `module` sets the class's reported `__module__`. PyO3 defaults
         // it to `"builtins"`, but these types are imported from
         // `baml_bridge.baml_py` (where the extension `.so` lives), and the
@@ -110,19 +109,48 @@ macro_rules! define_media_pyclass {
                 })
             }
 
+            /// Read the file now, through the BAML function `from_file` of
+            /// this media class: the value holds its content and its base
+            /// name, never its path. Raises `BamlError` (`baml.errors.Io`)
+            /// when the file cannot be read.
             #[staticmethod]
             #[pyo3(signature = (file, mime_type=None))]
             fn from_file(
                 py: Python<'_>,
                 file: String,
                 mime_type: Option<String>,
+            ) -> PyResult<Py<Self>> {
+                // The call goes through the Python layer, which owns the
+                // argument encoding and the decoding of BAML errors.
+                let media = py
+                    .import("baml_bridge")?
+                    .getattr("_media_from_file")?
+                    .call1(($baml_class, file, mime_type))?;
+                Ok(media.cast_into::<Self>()?.unbind())
+            }
+
+            /// Base64 content that was read from `file`: named by its base
+            /// name, with the MIME type it implies unless one is given.
+            /// Reads nothing.
+            #[staticmethod]
+            #[pyo3(signature = (file, base64, mime_type=None))]
+            fn from_file_content(
+                py: Python<'_>,
+                file: String,
+                base64: String,
+                mime_type: Option<String>,
             ) -> PyResult<Self> {
+                if base64.contains('\0') {
+                    return Err(PyValueError::new_err("base64 cannot contain NUL"));
+                }
                 let (key, handle_type) = create_media(
-                    handle_cffi::media_from_file,
+                    |kind, file, mime_type| {
+                        handle_cffi::media_from_file_content(kind, file, &base64, mime_type)
+                    },
                     $media_kind,
                     file,
                     mime_type,
-                    "from_file",
+                    "from_file_content",
                 )?;
                 Ok(Self {
                     handle: Py::new(py, BamlPyHandle::new(key, handle_type))?,
@@ -152,8 +180,9 @@ macro_rules! define_media_pyclass {
                 self.access_optional_string(py, handle_cffi::media_url, "url")
             }
 
-            fn file(&self, py: Python<'_>) -> PyResult<Option<String>> {
-                self.access_optional_string(py, handle_cffi::media_file, "file")
+            /// The base name of the file the content was read from, if any.
+            fn name(&self, py: Python<'_>) -> PyResult<Option<String>> {
+                self.access_optional_string(py, handle_cffi::media_name, "name")
             }
 
             fn base64(&self, py: Python<'_>) -> PyResult<String> {
@@ -208,13 +237,15 @@ macro_rules! define_media_pyclass {
 
         impl $name {
             /// The media's canonical payload as the inbound wire carries it:
-            /// kind, mime type, and exactly one of url / base64 / file.
+            /// kind, mime type, and exactly one of url / base64 / named
+            /// content (base64 read from a file, with that file's base name).
             pub(crate) fn wire_payload(
                 &self,
                 py: Python<'_>,
             ) -> PyResult<bridge_ctypes::baml_bridge::cffi::BamlValueMedia> {
                 use bridge_ctypes::baml_bridge::cffi::{
-                    BamlValueMedia, MediaTypeEnum, baml_value_media::Value,
+                    BamlValueMedia, BamlValueMediaFileContent, MediaTypeEnum,
+                    baml_value_media::Value,
                 };
                 let media = match $media_kind {
                     MediaKind::Image => MediaTypeEnum::Image,
@@ -225,8 +256,11 @@ macro_rules! define_media_pyclass {
                 };
                 let value = if let Some(url) = self.url(py)? {
                     Value::Url(url)
-                } else if let Some(file) = self.file(py)? {
-                    Value::File(file)
+                } else if let Some(name) = self.name(py)? {
+                    Value::FileContent(BamlValueMediaFileContent {
+                        name,
+                        base64: self.base64(py)?,
+                    })
                 } else {
                     Value::Base64(self.base64(py)?)
                 };
@@ -262,20 +296,28 @@ macro_rules! define_media_pyclass {
 
 define_media_pyclass!(
     BamlImage,
+    "baml.media.Image",
     MediaKind::Image,
     BamlHandleType::AdtMediaImage as u64
 );
 define_media_pyclass!(
     BamlAudio,
+    "baml.media.Audio",
     MediaKind::Audio,
     BamlHandleType::AdtMediaAudio as u64
 );
 define_media_pyclass!(
     BamlVideo,
+    "baml.media.Video",
     MediaKind::Video,
     BamlHandleType::AdtMediaVideo as u64
 );
-define_media_pyclass!(BamlPdf, MediaKind::Pdf, BamlHandleType::AdtMediaPdf as u64);
+define_media_pyclass!(
+    BamlPdf,
+    "baml.media.Pdf",
+    MediaKind::Pdf,
+    BamlHandleType::AdtMediaPdf as u64
+);
 
 pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     use pyo3::types::PyModuleMethods;

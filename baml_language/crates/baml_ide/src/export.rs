@@ -154,7 +154,7 @@ fn ty_head(spelling: &Spelling, ty: &Ty) -> Option<TyHead> {
         Ty::TypeVar(_) => Some(TyHead::Blanket),
         Ty::Union(_) => None,
         Ty::AssociatedTypeProjection { .. } => None,
-        Ty::RustType | Ty::Type | Ty::Resource | Ty::PromptAst | Ty::Void => None,
+        Ty::RustType | Ty::Type | Ty::Resource | Ty::PromptAst => None,
         Ty::Unknown | Ty::Never | Ty::Error => None,
     }
 }

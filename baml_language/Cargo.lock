@@ -628,7 +628,7 @@ dependencies = [
 
 [[package]]
 name = "baml_bridge"
-version = "0.20.1"
+version = "0.22.1"
 dependencies = [
  "hex",
  "indexmap",
@@ -1144,6 +1144,7 @@ dependencies = [
  "bex_heap",
  "bex_vm_types",
  "btel_clock",
+ "btel_pricing",
  "btel_reader",
  "btel_recorder",
  "btel_settings",
@@ -1878,6 +1879,7 @@ dependencies = [
  "baml_sdkgen_types",
  "baml_type",
  "baml_version",
+ "base64",
  "bex_project",
  "bridge_cffi",
  "bridge_ctypes",
@@ -1998,6 +2000,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "btel_pricing"
+version = "0.0.0-beta"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "btel_processor"
 version = "0.0.0-beta"
 dependencies = [
@@ -2088,6 +2098,7 @@ name = "btel_snapshot"
 version = "0.0.0-beta"
 dependencies = [
  "baml_type",
+ "base64",
  "bex_str",
  "borsh",
  "btel_settings",

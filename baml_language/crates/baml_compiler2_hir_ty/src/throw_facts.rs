@@ -545,8 +545,8 @@ fn collect_widened_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
                 Literal::Bool(_) => Ty::Bool,
             });
         }
-        // Bottom/void: no facts
-        Ty::Never | Ty::Void => {}
+        // Bottom: no facts
+        Ty::Never => {}
         // Everything else: keep as-is
         _ => {
             out.insert(ty.clone());

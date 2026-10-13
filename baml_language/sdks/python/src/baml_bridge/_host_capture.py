@@ -2,7 +2,9 @@
 
 from contextvars import ContextVar
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from enum import Enum
+from uuid import UUID
 import inspect
 import json
 import math
@@ -12,12 +14,14 @@ import typing
 import weakref
 
 from .typemap import get_type_map
+from ._error_capture import _exception_capture
+from ._capture_adapters import http_summary, NO_PROJECTION
 
 try:
-    from pydantic import BaseModel
+    from pydantic import BaseModel, ValidationError
     from pydantic.fields import FieldInfo
 except ImportError:
-    BaseModel = FieldInfo = None
+    BaseModel = FieldInfo = ValidationError = None
 
 try:
     from zoneinfo import ZoneInfo
@@ -281,6 +285,31 @@ def capture(value):
             if BaseModel is not None and _inherits(mro, BaseModel):
                 fields = model_fields(value, cls, depth)
                 return ["map", fields] if fields is not None else ["values"]
+            if cls is UUID:
+                return copy(UUID.__str__(value), depth)
+            if cls is Decimal:
+                return copy(Decimal.__str__(value), depth)
+            if _inherits(mro, Enum):
+                stored = Enum.__dict__["__dict__"].__get__(value)
+                return copy(dict.get(stored, "_value_"), depth + 1)
+            if cls is bytes or cls is bytearray:
+                if len(value) * 2 > bytes_left:
+                    return ["bytes"]
+                return copy({"encoding": "hex", "data": value.hex()}, depth)
+            if cls is set or cls is frozenset:
+                if len(value) > remaining:
+                    return ["values"]
+                return ["list", [copy(item, depth + 1) for item in value]]
+            dataclass_fields = _class_value(cls, "__dataclass_fields__")
+            if type(dataclass_fields) is dict:
+                if len(dataclass_fields) > remaining:
+                    return ["values"]
+                from ._capture_adapters import dataclass_values
+
+                return copy(dataclass_values(value, dataclass_fields, mro), depth)
+            summary = http_summary(value)
+            if summary is not NO_PROJECTION:
+                return copy(summary, depth)
             if _inherits(mro, datetime):
                 zone = datetime.__dict__["tzinfo"].__get__(value)
                 if (
@@ -293,11 +322,17 @@ def capture(value):
             if _inherits(mro, date):
                 return copy(date.isoformat(value), depth)
             if _inherits(mro, BaseException):
-                name = type.__dict__["__qualname__"].__get__(cls)
-                args = BaseException.__dict__["args"].__get__(value)
-                return copy({"type": name, "args": args}, depth)
+                fields = _exception_capture(value)
+                if ValidationError is not None and _inherits(mro, ValidationError):
+                    fields["validation_errors"] = ValidationError.errors(
+                        value,
+                        include_url=False,
+                        include_context=False,
+                        include_input=False,
+                    )
+                return copy(fields, depth)
             return ["unavailable"]
-        except Exception:
+        except BaseException:
             _diagnostic()
             return ["unavailable"]
         finally:

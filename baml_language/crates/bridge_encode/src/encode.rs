@@ -140,7 +140,7 @@ impl Walk<'_> {
             }
             RuntimeTy::Union(members) => self.union(value, members),
             // `void` is the language's spelling of `null` in a result position.
-            RuntimeTy::Null | RuntimeTy::Void => {
+            RuntimeTy::Null => {
                 if value.is_null() {
                     Ok(exact(InboundValue::default(), RuntimeTy::Null))
                 } else {
@@ -753,7 +753,7 @@ impl Walk<'_> {
                 Some((_, value)) => walk.encode(value, &slot)?,
                 None => {
                     let expanded = walk.facts.expand(&slot).map_err(|kind| walk.err(kind))?;
-                    let nullable = matches!(expanded, RuntimeTy::Null | RuntimeTy::Void)
+                    let nullable = matches!(expanded, RuntimeTy::Null)
                         || matches!(expanded, RuntimeTy::Union(members)
                             if members.iter().any(RuntimeTy::is_null));
                     if let (FieldSource::Mapping, true) = (source, nullable) {
@@ -1207,7 +1207,7 @@ mod tests {
                     param("q", Ty::Media(MediaKind::Image)),
                     param("r", union(vec![Ty::Media(MediaKind::Pdf), Ty::Null])),
                 ],
-                ret: Ty::Void,
+                ret: Ty::Null,
                 throws: Ty::Never,
             }],
             classes: vec![
@@ -1519,7 +1519,7 @@ mod tests {
         let encoded = encode(
             &f.facts,
             &Mock::Null,
-            &RuntimeTy::Void,
+            &RuntimeTy::Null,
             vec![PathSegment::Result],
         )
         .unwrap();
@@ -1528,7 +1528,7 @@ mod tests {
         let kind = encode(
             &f.facts,
             &Mock::Int(1),
-            &RuntimeTy::Void,
+            &RuntimeTy::Null,
             vec![PathSegment::Result],
         )
         .unwrap_err();

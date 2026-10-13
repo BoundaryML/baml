@@ -50,6 +50,104 @@ pub enum ScopedTypeEscapeKind {
     Inferred,
 }
 
+/// A form that evaluates to the unit value without the author writing it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImplicitUnitForm {
+    /// A block with no final expression.
+    BlockWithoutTail {
+        /// Its last statement is an expression of the expected type,
+        /// discarded by its `;`.
+        discards_value: bool,
+    },
+    /// An `if` / `if let` with no `else`.
+    IfWithoutElse,
+    /// `return;`.
+    BareReturn,
+}
+
+impl ImplicitUnitForm {
+    /// The message, as the text before and after the expected type.
+    /// `admits_unit`: the expected type admits `null`, which then has to be
+    /// written.
+    pub fn around_expected(self, admits_unit: bool) -> (&'static str, &'static str) {
+        match (self, admits_unit) {
+            // The value at hand is the likelier intent than a `null`.
+            (
+                Self::BlockWithoutTail {
+                    discards_value: true,
+                },
+                true | false,
+            ) => (
+                "expected ",
+                ", but this value is discarded; remove the `;` to use it",
+            ),
+            (
+                Self::BlockWithoutTail {
+                    discards_value: false,
+                },
+                true,
+            ) => (
+                "expected ",
+                ", but this block ends without a value; write `null` as its final expression to produce it",
+            ),
+            (
+                Self::BlockWithoutTail {
+                    discards_value: false,
+                },
+                false,
+            ) => ("expected ", ", but this block ends without a value"),
+            // Whatever the context admits, both branches have to produce it.
+            (Self::IfWithoutElse, true | false) => (
+                "expected ",
+                ", but an `if` without `else` evaluates to `null`; add an `else` branch",
+            ),
+            (Self::BareReturn, true) => (
+                "expected a value of type ",
+                ", but a bare `return` returns `null` only where the return type is `null` itself; write `return null`",
+            ),
+            (Self::BareReturn, false) => (
+                "expected a value of type ",
+                ", but a bare `return` returns `null`",
+            ),
+        }
+    }
+}
+
+/// Where a value was produced although only the unit type is admitted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnitContext {
+    /// The final expression of a block the unit type is expected of — the
+    /// body of a unit-returning function, most often.
+    Block,
+    /// The branch of an `if` / `if let` with no `else`, where the unit type
+    /// is expected of the `if`.
+    IfWithoutElse,
+    /// The branch of an `if` / `if let` with no `else` whose value is used:
+    /// bound to a name, say. Discarding the branch's value would leave the
+    /// author with a `null` they did not ask for.
+    UsedIfWithoutElse,
+}
+
+impl UnitContext {
+    /// The message, as the text before and after the type that was found.
+    pub fn around_found(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Block => (
+                "expected `null`, found ",
+                "; end this with `;` to discard the value",
+            ),
+            Self::IfWithoutElse => (
+                "an `if` without `else` evaluates to `null`, so its branch cannot produce ",
+                "; add an `else` branch, or end this with `;` to discard the value",
+            ),
+            Self::UsedIfWithoutElse => (
+                "an `if` without `else` evaluates to `null`, so its branch cannot produce ",
+                "; add an `else` branch",
+            ),
+        }
+    }
+}
+
 /// The syntactic context an irrefutable-pattern rule fires in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IrrefutableContextKind {
@@ -231,12 +329,11 @@ pub enum TirTypeError {
     CallSiteBuiltinValue { reference: String },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode { unreachable_count: usize },
-    /// A `void` expression (e.g. `if` without `else`) was used where a value
-    /// is required — assigned to a variable, passed as an argument, or returned.
-    VoidUsedAsValue,
-    /// The return value of a void-returning function was used where a value
-    /// is required — assigned to a variable, passed as an argument, etc.
-    VoidFunctionResultUsed,
+    /// A value was produced where only the unit type is admitted: the final
+    /// expression of a block expected to be unit, the branch of an `if` with
+    /// no `else`. The value would be dropped silently, so the author
+    /// discards it with `;`.
+    UnitExpected { context: UnitContext, found: Ty },
     /// Expression is not callable (e.g. `42(1)` or `Foo(1)` where Foo is a class).
     NotCallable { ty: Ty },
     /// Expression is not iterable (e.g. `for let i in 42 { ... }` where 42 is an int).
@@ -360,8 +457,16 @@ pub enum TirTypeError {
     SelfParamDefault,
     /// A default expression referenced a later parameter from the same signature.
     DefaultParamForwardReference { param: Name, referenced: Name },
-    /// Function body ends without returning a value.
-    MissingReturn { expected: Ty },
+    /// An implicit unit — a block with no final expression, an `if` with no
+    /// `else`, a bare `return;` — stands where a type other than the unit
+    /// type is expected. `null <: int?` does not admit it: the value the
+    /// author left out must be written.
+    ImplicitUnit {
+        form: ImplicitUnitForm,
+        expected: Ty,
+        /// `expected` admits `null`.
+        admits_unit: bool,
+    },
     /// Type alias participates in an invalid (unguarded) cycle.
     ///
     /// Examples: `type A = A`, `type A = B; type B = A`.
@@ -1189,14 +1294,9 @@ impl TirTypeError {
                         "unreachable code: {unreachable_count} statement(s) after diverging statement"
                     )
                 }
-                TirTypeError::VoidUsedAsValue => {
-                    write!(
-                        f,
-                        "`if` without `else` cannot be used as a value; add an `else` branch"
-                    )
-                }
-                TirTypeError::VoidFunctionResultUsed => {
-                    write!(f, "cannot use return value of a void function")
+                TirTypeError::UnitExpected { context, found } => {
+                    let (before, after) = context.around_found();
+                    write!(f, "{before}`{}`{after}", found.spell(vp))
                 }
                 TirTypeError::NotCallable { ty } => {
                     write!(
@@ -1448,8 +1548,13 @@ impl TirTypeError {
                         "default for parameter `{param}` cannot reference later parameter `{referenced}`"
                     )
                 }
-                TirTypeError::MissingReturn { expected } => {
-                    write!(f, "missing return: expected `{}`", expected.spell(vp))
+                TirTypeError::ImplicitUnit {
+                    form,
+                    expected,
+                    admits_unit,
+                } => {
+                    let (before, after) = form.around_expected(*admits_unit);
+                    write!(f, "{before}`{}`{after}", expected.spell(vp))
                 }
                 TirTypeError::AliasCycle { name } => {
                     write!(f, "recursive type alias cycle: {name}")
@@ -1780,6 +1885,12 @@ impl TirTypeError {
                 TirTypeError::TaggedTagBadBodyParam { name } => write!(
                     f,
                     "the first parameter of tagged-string function `{name}` must be `body: (...) -> baml.TaggedString`"
+                ),
+                // A value that is only ever `null` has nothing to coalesce:
+                // it is a unit expression, written for its effect.
+                TirTypeError::InterpolatedValueMaybeNull { ty: Ty::Null } => write!(
+                    f,
+                    "cannot interpolate a value of type `null`; to run the expression without rendering it, end it with `;`"
                 ),
                 TirTypeError::InterpolatedValueMaybeNull { ty } => write!(
                     f,

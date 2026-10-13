@@ -353,14 +353,6 @@ fn lower_function(
             lower_type_expr::lower_type_expr_node(&te, diags, TypeExprOwner::Declaration);
         let te_span = te.syntax().span_range();
         check_missing_type(&expr, format!("return type of `{name}`"), te_span, diags);
-        // void is allowed as a bare return type, but not wrapped (void?, void[], etc.).
-        lower_type_expr::check_void_type(
-            &expr,
-            format!("return type of `{name}`"),
-            te_span,
-            true,
-            diags,
-        );
         lower_type_expr::check_wildcard_type(&mut expr, "a return type", te_span, diags);
         expr.with_span(te_span)
     });
@@ -661,13 +653,6 @@ pub(crate) fn lower_param(
                 te_span,
                 diags,
             );
-            lower_type_expr::check_void_type(
-                &expr,
-                "a parameter type".to_string(),
-                te_span,
-                false,
-                diags,
-            );
             lower_type_expr::check_wildcard_type(&mut expr, "a parameter type", te_span, diags);
             expr.with_span(te_span)
         }),
@@ -772,7 +757,7 @@ pub(crate) fn append_spec_on_event_param(
             optional: false,
             ty: event_ty,
         }],
-        ret: Box::new(TypeExprKind::Void.at(span)),
+        ret: Box::new(TypeExprKind::Null.at(span)),
         throws: None,
     }
     .at(span);
@@ -1106,13 +1091,6 @@ fn lower_class(
                         te_span,
                         diags,
                     );
-                    lower_type_expr::check_void_type(
-                        &expr,
-                        "a class field type".to_string(),
-                        te_span,
-                        false,
-                        diags,
-                    );
                     lower_type_expr::check_wildcard_type(
                         &mut expr,
                         "a class field type",
@@ -1360,13 +1338,6 @@ fn lower_interface(
                         te_span,
                         diags,
                     );
-                    lower_type_expr::check_void_type(
-                        &expr,
-                        "an interface field type".to_string(),
-                        te_span,
-                        false,
-                        diags,
-                    );
                     lower_type_expr::check_wildcard_type(
                         &mut expr,
                         "an interface field type",
@@ -1518,13 +1489,6 @@ fn lower_method_sig(
             lower_type_expr::lower_type_expr_node(&te, diags, TypeExprOwner::Declaration);
         let te_span = te.syntax().span_range();
         check_missing_type(&expr, format!("return type of `{name}`"), te_span, diags);
-        lower_type_expr::check_void_type(
-            &expr,
-            format!("return type of `{name}`"),
-            te_span,
-            true,
-            diags,
-        );
         lower_type_expr::check_wildcard_type(&mut expr, "a return type", te_span, diags);
         expr.with_span(te_span)
     });
@@ -1759,13 +1723,6 @@ fn lower_type_alias(
                 lower_type_expr::lower_type_expr_node(&te, diags, TypeExprOwner::Declaration);
             let te_span = te.syntax().span_range();
             check_missing_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
-            lower_type_expr::check_void_type(
-                &expr,
-                "a type alias".to_string(),
-                te_span,
-                false,
-                diags,
-            );
             lower_type_expr::check_wildcard_type(&mut expr, "a type alias", te_span, diags);
             expr.with_span(te_span)
         }),
@@ -2059,7 +2016,7 @@ fn synthesize_register_call(
                 kind: LambdaKind::Anonymous,
                 params: vec![],
                 defaults: FunctionDefaults::empty(),
-                return_type: Some(crate::ast::TypeExprKind::Void.at(span)),
+                return_type: Some(crate::ast::TypeExprKind::Null.at(span)),
                 throws: None,
                 body: Some(lambda_body),
                 span,
@@ -2130,7 +2087,7 @@ fn synthesize_register_call(
                 kind: LambdaKind::Anonymous,
                 params: vec![testset_param],
                 defaults: FunctionDefaults::empty(),
-                return_type: Some(crate::ast::TypeExprKind::Void.at(span)),
+                return_type: Some(crate::ast::TypeExprKind::Null.at(span)),
                 throws: None,
                 body: Some(collector_exprs),
                 span,

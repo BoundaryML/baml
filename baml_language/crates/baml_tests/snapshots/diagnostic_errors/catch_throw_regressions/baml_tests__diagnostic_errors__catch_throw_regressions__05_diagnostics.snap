@@ -5,33 +5,19 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[regressions.baml:24:46]
- 24 │ ╭─▶ function CatchAlwaysThrows(n: int) -> string {
- 25 │ │       WrapperAlwaysThrows(n) catch (e) {
- 26 │ │           string => "http!"
- 27 │ │       } catch (e2) {
- 28 │ │           int => "index!"
- 29 │ │       }
- 30 │ ├─▶ }
-    · ╰──── expected `string`, found `"http!" | "index!" | Status`
+    ╭─[regressions.baml:25:5]
+ 25 │     WrapperAlwaysThrows(n) catch (e) {
+    ·     ───────────┬──────────
+    ·                ╰── expected `string`, found `Status`
     ╰────
 
   [type] E0001
 
   × mismatched types
-    ╭─[regressions.baml:42:51]
- 42 │ ╭─▶ function CatchAllStatusVariants(n: int) -> string {
- 43 │ │       ThrowsAllStatusVariants(n) catch (e) {
- 44 │ │           Status.HttpError => "http!"
- 45 │ │       } catch (e) {
- 46 │ │           Status.IndexError => "index!"
- 47 │ │       } catch (e) {
- 48 │ │           Status.AuthError => "auth!"
- 49 │ │       } catch (e) {
- 50 │ │           Status.SomeOtherError => "other!"
- 51 │ │       }
- 52 │ ├─▶ }
-    · ╰──── expected `string`, found `"auth!" | "http!" | "index!" | "other!" | Status`
+    ╭─[regressions.baml:43:5]
+ 43 │     ThrowsAllStatusVariants(n) catch (e) {
+    ·     ─────────────┬────────────
+    ·                  ╰── expected `string`, found `Status`
     ╰────
 
   [type] E0146

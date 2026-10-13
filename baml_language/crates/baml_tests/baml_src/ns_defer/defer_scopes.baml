@@ -170,7 +170,7 @@ function closure_does_not_replay_parent_defers() -> string[] {
     let log: string[] = []
     {
         defer { log.push("outer") }
-        let g = () -> void { log.push("g") }
+        let g = () -> void { log.push("g"); }
         g()
         g()
     }
@@ -843,7 +843,7 @@ function nested_int_body(log: string[]) -> void {
         }
     } catch (_) {
         string => { log.push("outer:string") }
-    }
+    };
 }
 test "an int lands in the inner catch after the defer" {
     let log: string[] = []
@@ -861,7 +861,7 @@ function nested_string_body(log: string[]) -> void {
         }
     } catch (_) {
         string => { log.push("outer:string") }
-    }
+    };
 }
 test "a string passes the inner arms and lands in the outer catch after the defer" {
     let log: string[] = []
@@ -885,7 +885,7 @@ function nested_throwing_defer_body(log: string[]) -> void {
                 _ => { log.push("nocause") },
             }
         }
-    }
+    };
 }
 test "a defer that throws while unwinding replaces the error and chains it" {
     let log: string[] = []
@@ -904,7 +904,7 @@ function nested_normal_exit_body(log: string[]) -> void {
         log.push("after inner")
     } catch (_) {
         string => { log.push("outer:string") }
-    }
+    };
 }
 test "with no throw the defer runs once and nothing is caught" {
     let log: string[] = []

@@ -385,6 +385,7 @@ def encode_call_args(
     function_name: Optional[str] = None,
     function_handle: Optional[int] = None,
     _baml: Any = None,
+    _stream_step: bool = False,
 ) -> _EncodedCall:
     """Build the control part of a `CallFunctionArgs` for a call.
 
@@ -403,6 +404,11 @@ def encode_call_args(
         from ._invocation import normalize
 
         controls, cancel, retained = normalize(_baml, call_id)
+        if _stream_step and controls.trace.WhichOneof("selection") != "reservation":
+            # Keep explicit context/capture patches while leaving pulls in
+            # timing mode. The retained stream function span records errors.
+            if controls.trace.options.mode != baml_inbound_pb2.TRACE_MODE_HIDDEN:
+                controls.trace.options.mode = baml_inbound_pb2.TRACE_MODE_TIMING
         args.invocation.CopyFrom(controls)
         if function_name is not None:
             args.function_name = function_name
@@ -512,7 +518,7 @@ def _ty_to_python_type(ty: "baml_type_pb2.BamlTy", type_map: TypeLookup) -> Any:
             return typing.Any
         return typing.Any if media_cls is None else media_cls
     # enum_variant / interface / function / future / rust_type / meta_type /
-    # resource / prompt_ast / void / type_var /
+    # resource / prompt_ast / type_var /
     # associated_type_projection / never — no concrete Python binding in a
     # generic-arg position; treat as an unbound wildcard.
     return typing.Any
@@ -566,6 +572,10 @@ def _decode_media(media) -> Any:
     if source is None:
         raise BamlError("BEX emitted a portable media value with no content")
     mime_type = media.mime_type if media.HasField("mime_type") else None
+    if source == "file_content":
+        # Content read from a file keeps the file's name.
+        content = media.file_content
+        return cls.from_file_content(content.name, content.base64, mime_type=mime_type)
     constructor = getattr(cls, f"from_{source}")
     return constructor(getattr(media, source), mime_type=mime_type)
 

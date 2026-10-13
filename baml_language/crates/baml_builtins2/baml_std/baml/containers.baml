@@ -151,7 +151,7 @@ class Array<T> {
         $rust_function
     }
 
-    /// Calls `fn` once for each element, left to right, discarding its result.
+    /// Calls `fn` once for each element, left to right.
     function for_each<E>(self, fn: (T) -> void throws E) -> void throws E {
         for (let x in self.slice(0, self.length())) {
             fn(x);

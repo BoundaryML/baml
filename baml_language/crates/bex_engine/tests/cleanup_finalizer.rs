@@ -23,7 +23,7 @@ const SOURCE: &str = r#"
 class Resource {
   log string[]
   function cleanup(self) -> void {
-    self.log.push("cleaned")
+    self.log.push("cleaned");
   }
 }
 function make_log() -> string[] { [] }

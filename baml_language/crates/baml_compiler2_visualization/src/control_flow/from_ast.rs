@@ -1279,6 +1279,7 @@ mod tests {
             match_arms,
             catch_arms,
             type_annotations: Arena::new(),
+            tag_values: Vec::new(),
             root_expr,
         }
     }
@@ -1303,6 +1304,7 @@ mod tests {
             match_arms: Arena::new(),
             catch_arms: Arena::new(),
             type_annotations: Arena::new(),
+            tag_values: Vec::new(),
             root_expr: None,
         };
         let graph = build_control_flow_graph_from_ast("MyFunc", &body);
@@ -2105,6 +2107,7 @@ mod tests {
             match_arms,
             catch_arms,
             type_annotations: Arena::new(),
+            tag_values: Vec::new(),
             root_expr: Some(obj),
         };
 

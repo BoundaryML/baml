@@ -438,11 +438,11 @@ impl TelemetryRecording {
         }
     }
 
-    /// Write beneath the current user's home: `~/.baml/btel/recordings`.
-    /// Packed programs share `~/.baml/btel/cas/v4` on this machine.
-    /// Resolve the home directory only when the enabled engine starts recording.
-    /// Fail explicitly if no home directory can be determined; never fall back
-    /// to the working directory. Intended for packed programs without a project.
+    /// Write recordings and shared CAS blobs beneath the BAML home: `BAML_HOME`
+    /// when non-empty, otherwise `~/.baml` (or `.baml` when no home is available).
+    /// Uses `btel/recordings` and `btel/cas` within that root.
+    /// Resolve the BAML home only when the enabled engine starts recording.
+    /// Intended for packed programs and SDK hosts without a project.
     pub fn user_files(config: RecordingConfig) -> Self {
         Self {
             id: RecordingId::generate(),
@@ -566,14 +566,12 @@ impl TelemetryRecording {
                     process,
                 );
             }
-            Destination::UserFiles => std::env::home_dir()
-                .map(|home| {
-                    (
-                        home.join(btel_settings::local_files::RECORDINGS_DIRECTORY),
-                        home.join(btel_settings::local_files::CAS_DIRECTORY),
-                    )
-                })
-                .ok_or_else(|| std::io::Error::other("cannot determine telemetry home directory")),
+            Destination::UserFiles => {
+                let home =
+                    baml_env::baml_home_from(baml_env::os_var("BAML_HOME"), std::env::home_dir());
+                let btel = home.join("btel");
+                Ok((btel.join("recordings"), btel.join("cas")))
+            }
             Destination::LocalFiles { recordings, cas } => Ok((recordings, cas)),
         };
         let mut delivery = None;

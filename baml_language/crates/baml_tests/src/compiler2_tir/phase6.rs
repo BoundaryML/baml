@@ -104,8 +104,8 @@ function pdf_url_returns_optional_string(doc: pdf) -> string? { doc.url() }
 // audio_base64_returns_string
 function audio_base64_returns_string(a: audio) -> string { a.base64() }
 
-// video_file_returns_optional_string
-function video_file_returns_optional_string(v: video) -> string? { v.file() }
+// video_name_returns_optional_string
+function video_name_returns_optional_string(v: video) -> string? { v.name() }
 "#,
     );
     insta::assert_snapshot!(render_tir(&db, file));

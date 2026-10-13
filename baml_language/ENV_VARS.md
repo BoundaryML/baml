@@ -41,7 +41,7 @@ Windows keeps an empty `login/cache/<endpoint-hash>.lock` beside each credential
 | `BAML_BUILD_CACHE_REMOTE`, `BAML_BUILD_CACHE_REMOTE_TOKEN` | Shared build cache for CI. URL must be https (or localhost). |
 | `BAML_LOG` | Level for `log.*` output and bridge loader messages: `off`, `error`, `warn`, `info` (default), `debug`, `trace`. |
 | `BAML_TELEMETRY` | Runtime tracing level: `off`, `low`, `medium` (default), `high`. |
-| `BOUNDARY_API_URL` | Boundary API gateway for login, cloud queries and telemetry. Overrides `[boundary].api_url`; default `https://api.cloud.boundaryml.com`. |
+| `BOUNDARY_API_URL` | Boundary API gateway for login, cloud queries and telemetry. Overrides `[boundary].api_url`; default `https://api.prod.bcs.boundaryml.com`. |
 | `BOUNDARY_API_KEY` | Non-interactive Boundary credential for cloud queries and telemetry. Takes precedence over saved user login. |
 | `BOUNDARY_PROJECT` | Cloud target as `org_handle/project_name`. Overrides `[boundary].project`; query's `--project` flag takes precedence. |
 | `BAML_CLI_ALLOW_DIRECT` | Hides the "don't run baml-cli directly" warning. The wrapper sets it. |

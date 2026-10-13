@@ -260,7 +260,7 @@ fn translate_ty_from(ty: &Ty, ctx: &TranslateCtx, side: CallableSide) -> String 
                 )
             }
         }
-        Ty::Void | Ty::Never => "None".to_string(),
+        Ty::Never => "None".to_string(),
         // `$rust_type` fields in stdlib stubs (Response._body, SseStream._handle, …).
         // The host-language opaque-handle wrapper is `BamlPyHandle` from the
         // bridge runtime, imported as `_BamlPyHandle` to keep `baml` (the
@@ -557,7 +557,6 @@ mod tests {
             | Ty::Unknown
             | Ty::Function { .. }
             | Ty::Future(..)
-            | Ty::Void
             | Ty::Never
             | Ty::RustType
             | Ty::Type
@@ -678,12 +677,6 @@ mod tests {
                 ty: Ty::Unknown,
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Any",
-            },
-            Case {
-                label: "unit",
-                ty: Ty::Void,
-                ctx: ctx(&["lorem"]),
-                expected: "None",
             },
             Case {
                 label: "baml options",
@@ -924,7 +917,7 @@ mod tests {
             },
             Case {
                 label: "callable no params",
-                ty: callable(vec![], Box::new(Ty::Void)),
+                ty: callable(vec![], Box::new(Ty::Null)),
                 ctx: ctx(&["lorem"]),
                 expected: "typing.Callable[[], typing.Union[None, typing.Coroutine[typing.Any, typing.Any, None]]]",
             },

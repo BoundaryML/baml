@@ -186,13 +186,12 @@ function MediaShape(photo: image) -> string {
     prompt: `${role("user")}Inspect:${photo}`
 }
 
-test "preview media never reads files or fetches urls" {
-    assert.equal(
-        MediaShape@build_request(image.from_file("/definitely/not-a-real-preview-file.png", "image/png")).body catch_all (e) {
-            ai.errors.PreviewUnsupported => "preview",
+test "preview media never fetches urls" {
+    // Content read from a file is already in the value: a preview sends it.
+    assert.is_true(
+        (MediaShape@build_request(image.from_file_content("/photos/cat.png", "aGk=", null)).body catch_all (e) {
             _ => `wrong:${e.to_string()}`,
-        },
-        "preview",
+        }).includes("data:image/png;base64,aGk="),
     );
     assert.is_true(
         (MediaShape@build_request(image.from_url("http://127.0.0.1:9/image.png", "image/png")).body catch_all (e) {

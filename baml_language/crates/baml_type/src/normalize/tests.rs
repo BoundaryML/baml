@@ -1509,7 +1509,6 @@ fn kind_corpus() -> (Ctx, Vec<Ty>) {
         Ty::Uint8Array,
         Ty::Media(MediaKind::Image),
         Ty::Media(MediaKind::Generic),
-        Ty::Void,
         Ty::RustType,
         Ty::Type,
         Ty::Resource,

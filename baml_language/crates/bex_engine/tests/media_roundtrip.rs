@@ -91,7 +91,9 @@ class Holder {
                 MediaContent::Url { url, .. } => {
                     assert_eq!(url, "https://example.test/sample.pdf");
                 }
-                other => panic!("expected Url media content, got {other:?}"),
+                other @ MediaContent::Base64 { .. } => {
+                    panic!("expected Url media content, got {other:?}")
+                }
             });
         }
         other => panic!("expected canonical Adt(Media(_)) for unwrapped pdf, got {other:?}"),
