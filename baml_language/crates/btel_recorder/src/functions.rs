@@ -106,6 +106,7 @@ fn convert(m: &FunctionMetadata) -> proto::FunctionMetadata {
                     .collect(),
             }),
         source_map: m.source_map.as_ref().map(|map| source_map(m, map)),
+        inlined: m.inlined,
     }
 }
 

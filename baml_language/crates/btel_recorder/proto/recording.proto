@@ -95,6 +95,10 @@ message FunctionMetadata {
   // Minor 2. Absent: no map was recorded (older producers, functions without
   // compact bytecode). Never inferred from today's source.
   SourceMap source_map = 15;
+  // Minor 11. A compiled function that records nothing of its own: its
+  // calls may run inlined into the caller, and their time is the nearest
+  // recorded ancestor's. It still names call sites as a visible caller.
+  bool inlined = 16;
 }
 
 // Source table sorted by strictly increasing PC. Byte-offset entries cover

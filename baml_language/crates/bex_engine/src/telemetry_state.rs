@@ -76,6 +76,7 @@ impl GcTelemetry {
                         namespace: vec![],
                         argument_layout: None,
                         source_map: None,
+                        inlined: false,
                     })
             })
             .as_ref()

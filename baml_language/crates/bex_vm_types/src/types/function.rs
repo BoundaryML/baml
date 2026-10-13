@@ -523,6 +523,7 @@ impl Function {
             namespace,
             argument_layout: self.telemetry_argument_layout(),
             source_map: self.telemetry_source_map(),
+            inlined: false,
         })
     }
 

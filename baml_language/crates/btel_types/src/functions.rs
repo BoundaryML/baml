@@ -101,6 +101,9 @@ pub struct FunctionMetadata {
     /// PC-to-source table of the code the VM executes; `None` when the
     /// function has no compact code (native functions, unlowered bytecode).
     pub source_map: Option<SourceMap>,
+    /// A compiled function the producer never records (its calls may be
+    /// inlined); its time is its nearest recorded ancestor's.
+    pub inlined: bool,
 }
 
 /// What a function's metadata derives from its fully qualified name: the
