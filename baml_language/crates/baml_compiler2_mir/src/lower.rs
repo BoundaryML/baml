@@ -9859,7 +9859,7 @@ impl<'db> LoweringContext<'db> {
     /// `caught_error_context`).
     fn lower_throw_operand(&mut self, expr_id: AstExprId) -> Lowered<Operand<'db>> {
         if let AstExpr::Path(segments) = &self.body.exprs[expr_id]
-            && let [name] = segments.as_slice()
+            && let [name] = segments.segments()
             && let Some(local) = self.local_for_path(expr_id, name)
         {
             return Ok(Operand::Copy(self.value_place(local)));

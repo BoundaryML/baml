@@ -1,17 +1,29 @@
-//! The stdlib packages the compiler knows by language identity.
+//! The stdlib packages, by language identity.
 //!
 //! Every package is an anonymous [`SourceRoot`]; names live on dependency
-//! edges. A handful of stdlib packages are nevertheless special to the
-//! compiler itself — `baml` declares the builtin companions and the panic
-//! classes, `reflect` the sealed reflection views, and so on — the way rustc
-//! knows `core` and `std`. The compiler refers to those by [`LangPackage`],
-//! and the database records which root each one was installed at in a
-//! [`LangRoots`]. The manifest name is consulted exactly once, at install;
-//! nothing downstream compares a package name string.
+//! edges. The stdlib's packages are nevertheless known to the compiler itself
+//! — `baml` declares the builtin companions and the panic classes, `reflect`
+//! the sealed reflection views, `ai` what an LLM function lowers to, a
+//! provider package the client a `"provider/model"` shorthand constructs —
+//! the way rustc knows `core` and `std`. The compiler refers to them by
+//! [`LangPackage`], and the database records which root each one was
+//! installed at in a [`LangRoots`]. The manifest name is consulted exactly
+//! once, at install; nothing downstream compares a package name string
+//! except to read back a name the compiler itself wrote
+//! ([`LangPackage::from_manifest_name`]).
+//!
+//! The compiler's own desugars name these packages. A desugar lowers to a
+//! source-shaped path (`spawn { .. }` becomes a call of
+//! `baml.spawn.Plan.new`) marked [`PathOrigin::Compiler`], and HIR reads its
+//! first segment as the package by identity: a parameter called `ai` does
+//! not capture it, and inside the `baml` package itself — where no edge is
+//! called `baml` — it still means the package.
 
+#[cfg(doc)]
+use crate::PathOrigin;
 use crate::files::SourceRoot;
 
-/// A stdlib package the compiler special-cases by identity.
+/// A stdlib package, by identity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LangPackage {
     /// The core package: builtin companion classes, `baml.panics`, `baml.ops`.
@@ -27,37 +39,50 @@ pub enum LangPackage {
     Log,
     /// Invocation tracing options accepted by the reserved `$trace` argument.
     Trace,
-}
-
-/// The package roots the COMPILER itself spells in the paths its desugars
-/// emit, and which a binding in a body therefore may not shadow.
-///
-/// A desugar lowers to source-level paths (`spawn { .. }` becomes
-/// `baml.spawn.Plan.new(..)`, `env.X` becomes `baml.env.ref(..)`), and those
-/// paths resolve in the user's own scope: a local named `baml`, or a body
-/// `type baml = ..` binding, wins over the package, and every `spawn` in its
-/// scope fails. Items do NOT shadow a package root this way, so a user class
-/// or function may still be named `baml` - only a binding is reserved.
-///
-/// Deliberately not every language package: `#4543` ruled that a language
-/// root is an ordinary package a user name shadows like any other (a local
-/// named `reflect` is legal and tested). Only the roots the compiler emits
-/// are reserved, which is why this list is here rather than being derived
-/// from [`LangPackage::ALL`].
-pub const DESUGAR_PATH_ROOTS: &[&str] = &[LangPackage::Baml.manifest_name()];
-
-/// Whether a binding named `name` is refused (E0176): it would shadow one of
-/// [`DESUGAR_PATH_ROOTS`]. The one rule behind both the report, at every
-/// binding declaration, and the checker's treatment of a refused binding.
-pub fn is_reserved_binding_name(name: &str) -> bool {
-    DESUGAR_PATH_ROOTS.contains(&name)
+    /// The test harness: a `test` block lowers to a registrar over its
+    /// `TestCollector`.
+    Testing,
+    /// Assertions for test bodies.
+    Assert,
+    /// A provider package: the client classes a `"provider/model"` shorthand
+    /// constructs.
+    Openai,
+    /// See [`Self::Openai`].
+    Anthropic,
+    /// See [`Self::Openai`].
+    Typesafeai,
+    /// See [`Self::Openai`].
+    Google,
+    /// See [`Self::Openai`].
+    Aws,
+    /// See [`Self::Openai`].
+    Vercel,
+    /// See [`Self::Openai`].
+    ClaudeCode,
 }
 
 impl LangPackage {
-    pub const ALL: [Self; 5] = [Self::Baml, Self::Reflect, Self::Ai, Self::Log, Self::Trace];
+    /// Every stdlib package, in declaration order: `ALL[i] as usize == i`.
+    pub const ALL: [Self; 14] = [
+        Self::Baml,
+        Self::Reflect,
+        Self::Ai,
+        Self::Log,
+        Self::Trace,
+        Self::Testing,
+        Self::Assert,
+        Self::Openai,
+        Self::Anthropic,
+        Self::Typesafeai,
+        Self::Google,
+        Self::Aws,
+        Self::Vercel,
+        Self::ClaudeCode,
+    ];
 
     /// The package's `[package].name` in the stdlib manifests — the ONE
-    /// spelling the installer matches to find the root.
+    /// spelling the installer matches to find the root, and the segment a
+    /// compiler-written path spells it by.
     pub const fn manifest_name(self) -> &'static str {
         match self {
             Self::Baml => "baml",
@@ -65,33 +90,74 @@ impl LangPackage {
             Self::Ai => "ai",
             Self::Log => "log",
             Self::Trace => "trace",
+            Self::Testing => "testing",
+            Self::Assert => "assert",
+            Self::Openai => "openai",
+            Self::Anthropic => "anthropic",
+            Self::Typesafeai => "typesafeai",
+            Self::Google => "google",
+            Self::Aws => "aws",
+            Self::Vercel => "vercel",
+            Self::ClaudeCode => "claude_code",
         }
+    }
+
+    /// The package a compiler-written path's first segment spells
+    /// ([`PathOrigin::Compiler`]): the inverse of [`Self::manifest_name`].
+    /// `None` names no stdlib package — a desugar wrote a path into a
+    /// package that does not exist, which is a compiler bug.
+    #[must_use]
+    pub fn from_manifest_name(name: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|package| package.manifest_name() == name)
+    }
+
+    /// Whether `name` is some language package's manifest name. `const`, so
+    /// [`compiler_path!`](crate::compiler_path) rejects a misspelled package
+    /// when the compiler is built rather than when the path is read.
+    pub const fn is_manifest_name(name: &str) -> bool {
+        let mut i = 0;
+        while i < Self::ALL.len() {
+            if str_eq(Self::ALL[i].manifest_name(), name) {
+                return true;
+            }
+            i += 1;
+        }
+        false
     }
 }
 
-/// Where the language packages are installed. A package is absent when the
+/// `a == b` for `const` evaluation.
+const fn str_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// Where the stdlib packages are installed. A package is absent when the
 /// stdlib (or that package) is not installed in the database, in which case
 /// every identity test against it is `false`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct LangRoots {
-    baml: Option<SourceRoot>,
-    reflect: Option<SourceRoot>,
-    ai: Option<SourceRoot>,
-    log: Option<SourceRoot>,
-    trace: Option<SourceRoot>,
+    /// Indexed by the package's position in [`LangPackage::ALL`].
+    roots: [Option<SourceRoot>; LangPackage::ALL.len()],
 }
 
 impl LangRoots {
     /// The root `package` is installed at, if any.
     #[must_use]
     pub fn get(self, package: LangPackage) -> Option<SourceRoot> {
-        match package {
-            LangPackage::Baml => self.baml,
-            LangPackage::Reflect => self.reflect,
-            LangPackage::Ai => self.ai,
-            LangPackage::Log => self.log,
-            LangPackage::Trace => self.trace,
-        }
+        self.roots[package as usize]
     }
 
     /// Whether `root` is the installed `package`.
@@ -103,14 +169,24 @@ impl LangRoots {
     /// This table with `package` installed at `root`.
     #[must_use]
     pub fn with(mut self, package: LangPackage, root: SourceRoot) -> Self {
-        let slot = match package {
-            LangPackage::Baml => &mut self.baml,
-            LangPackage::Reflect => &mut self.reflect,
-            LangPackage::Ai => &mut self.ai,
-            LangPackage::Log => &mut self.log,
-            LangPackage::Trace => &mut self.trace,
-        };
-        *slot = Some(root);
+        self.roots[package as usize] = Some(root);
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LangPackage;
+
+    #[test]
+    fn every_package_is_at_its_own_index_and_round_trips_its_name() {
+        for (index, package) in LangPackage::ALL.into_iter().enumerate() {
+            assert_eq!(package as usize, index);
+            assert_eq!(
+                LangPackage::from_manifest_name(package.manifest_name()),
+                Some(package)
+            );
+        }
+        assert_eq!(LangPackage::from_manifest_name("user"), None);
     }
 }

@@ -1272,7 +1272,9 @@ function extract(client: string, text: string) -> string {
         let callee = defaults
             .exprs
             .exprs
-            .alloc(ast::Expr::Path(vec![Name::new("default_filter")]));
+            .alloc(ast::Expr::Path(baml_base::Path::bare(Name::new(
+                "default_filter",
+            ))));
         let expression = alloc_default(
             &mut defaults,
             function,

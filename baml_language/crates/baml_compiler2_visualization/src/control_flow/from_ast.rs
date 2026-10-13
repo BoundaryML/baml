@@ -1253,7 +1253,7 @@ fn format_literal_ast(lit: &ast::Literal) -> String {
 
 #[cfg(test)]
 mod tests {
-    use baml_base::TypePath;
+    use baml_base::Path;
     use la_arena::Arena;
 
     use super::*;
@@ -1485,7 +1485,7 @@ mod tests {
     #[test]
     fn match_creates_branch_group_with_arms() {
         let body = make_ast_body(|exprs, _, patterns, match_arms| {
-            let scrutinee = exprs.alloc(ast::Expr::Path(vec!["x".into()]));
+            let scrutinee = exprs.alloc(ast::Expr::Path(baml_base::Path::bare("x".into())));
             let pat1 = patterns.alloc(ast::Pattern::Type(
                 ast::TypeExprKind::Literal {
                     value: ast::Literal::Int(1),
@@ -1547,7 +1547,7 @@ mod tests {
         // `let x: int` is now Bind { name: x, subpat: Some(Type(int)) }.
         let body = make_ast_body(|_, _, patterns, _| {
             let int_ty = ast::TypeExprKind::Path {
-                segments: vec!["int".into()],
+                path: baml_base::Path::bare("int".into()),
                 generic_args: vec![],
                 associated_type_bindings: vec![],
             }
@@ -1701,8 +1701,8 @@ mod tests {
     #[test]
     fn call_scope_has_source_expr() {
         let body = make_ast_body(|exprs, _, _, _| {
-            let callee = exprs.alloc(ast::Expr::Path(vec!["Summarize".into()]));
-            let arg = exprs.alloc(ast::Expr::Path(vec!["text".into()]));
+            let callee = exprs.alloc(ast::Expr::Path(baml_base::Path::bare("Summarize".into())));
+            let arg = exprs.alloc(ast::Expr::Path(baml_base::Path::bare("text".into())));
             let call = exprs.alloc(ast::Expr::Call {
                 callee,
                 type_args: vec![],
@@ -1726,8 +1726,8 @@ mod tests {
     #[test]
     fn named_call_scope_preserves_label() {
         let body = make_ast_body(|exprs, _, _, _| {
-            let callee = exprs.alloc(ast::Expr::Path(vec!["Summarize".into()]));
-            let arg = exprs.alloc(ast::Expr::Path(vec!["text".into()]));
+            let callee = exprs.alloc(ast::Expr::Path(baml_base::Path::bare("Summarize".into())));
+            let arg = exprs.alloc(ast::Expr::Path(baml_base::Path::bare("text".into())));
             let call = exprs.alloc(ast::Expr::Call {
                 callee,
                 args: vec![ast::CallArg::named("query", arg)],
@@ -1748,8 +1748,8 @@ mod tests {
     #[test]
     fn named_optional_call_scope_preserves_label() {
         let body = make_ast_body(|exprs, _, _, _| {
-            let callee = exprs.alloc(ast::Expr::Path(vec!["client".into()]));
-            let arg = exprs.alloc(ast::Expr::Path(vec!["text".into()]));
+            let callee = exprs.alloc(ast::Expr::Path(baml_base::Path::bare("client".into())));
+            let arg = exprs.alloc(ast::Expr::Path(baml_base::Path::bare("text".into())));
             let call = exprs.alloc(ast::Expr::OptionalCall {
                 callee,
                 args: vec![ast::CallArg::named("query", arg)],
@@ -1875,7 +1875,7 @@ mod tests {
         let body = make_ast_body(|exprs, stmts, _, _| {
             let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let obj = exprs.alloc(ast::Expr::Object {
-                type_name: TypePath::bare("MyResponse".into()),
+                type_name: Path::bare("MyResponse".into()),
                 type_args: vec![],
                 fields: vec![ast::ObjectExprField::explicit("ok".into(), field_val)],
                 spreads: vec![],
@@ -1909,8 +1909,8 @@ mod tests {
     #[test]
     fn return_call_does_not_double_node() {
         let body = make_ast_body(|exprs, stmts, _, _| {
-            let callee = exprs.alloc(ast::Expr::Path(vec!["Process".into()]));
-            let arg = exprs.alloc(ast::Expr::Path(vec!["input".into()]));
+            let callee = exprs.alloc(ast::Expr::Path(baml_base::Path::bare("Process".into())));
+            let arg = exprs.alloc(ast::Expr::Path(baml_base::Path::bare("input".into())));
             let call = exprs.alloc(ast::Expr::Call {
                 callee,
                 type_args: vec![],
@@ -1970,7 +1970,7 @@ mod tests {
         let body = make_ast_body(|exprs, stmts, _, _| {
             let one = exprs.alloc(ast::Expr::Literal(ast::Literal::Int(1)));
             let ret = stmts.alloc(ast::Stmt::Return(Some(one)));
-            let callee = exprs.alloc(ast::Expr::Path(vec!["Cleanup".into()]));
+            let callee = exprs.alloc(ast::Expr::Path(baml_base::Path::bare("Cleanup".into())));
             let call = exprs.alloc(ast::Expr::Call {
                 callee,
                 type_args: vec![],
@@ -1998,7 +1998,7 @@ mod tests {
     fn for_in_loop_creates_loop_node_and_visits_body() {
         // for (let item in items) { //# Inside }
         let body = make_ast_body(|exprs, stmts, patterns, _| {
-            let collection = exprs.alloc(ast::Expr::Path(vec!["items".into()]));
+            let collection = exprs.alloc(ast::Expr::Path(baml_base::Path::bare("items".into())));
             let binding = patterns.alloc(ast::Pattern::Bind {
                 name: "item".into(),
                 subpat: None,
@@ -2041,7 +2041,7 @@ mod tests {
         let body = make_ast_body(|exprs, stmts, _, _| {
             let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
             let obj_true = exprs.alloc(ast::Expr::Object {
-                type_name: TypePath::bare("Result".into()),
+                type_name: Path::bare("Result".into()),
                 type_args: vec![],
                 fields: vec![],
                 spreads: vec![],
@@ -2054,7 +2054,7 @@ mod tests {
 
             let err_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(false)));
             let obj_false = exprs.alloc(ast::Expr::Object {
-                type_name: TypePath::bare("Result".into()),
+                type_name: Path::bare("Result".into()),
                 type_args: vec![],
                 fields: vec![ast::ObjectExprField::explicit("err".into(), err_val)],
                 spreads: vec![],
@@ -2094,7 +2094,7 @@ mod tests {
 
         let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
         let obj = exprs.alloc(ast::Expr::Object {
-            type_name: TypePath::bare("Resp".into()),
+            type_name: Path::bare("Resp".into()),
             type_args: vec![],
             fields: vec![ast::ObjectExprField::explicit("ok".into(), field_val)],
             spreads: vec![],
@@ -2142,22 +2142,29 @@ mod tests {
     fn embedded_calls_in_if_condition_surface_in_callee_names() {
         let body = make_ast_body(|exprs, stmts, _, _| {
             // LineTotal(inv.line_items)
-            let line_total_callee = exprs.alloc(ast::Expr::Path(vec!["LineTotal".into()]));
-            let line_items = exprs.alloc(ast::Expr::Path(vec!["inv".into(), "line_items".into()]));
+            let line_total_callee =
+                exprs.alloc(ast::Expr::Path(baml_base::Path::bare("LineTotal".into())));
+            let line_items = exprs.alloc(ast::Expr::Path(baml_base::Path::new(vec![
+                "inv".into(),
+                "line_items".into(),
+            ])));
             let line_total_call = exprs.alloc(ast::Expr::Call {
                 callee: line_total_callee,
                 type_args: vec![],
                 args: vec![ast::CallArg::positional(line_items)],
             });
             // LineTotal(inv.line_items) - inv.total
-            let inv_total = exprs.alloc(ast::Expr::Path(vec!["inv".into(), "total".into()]));
+            let inv_total = exprs.alloc(ast::Expr::Path(baml_base::Path::new(vec![
+                "inv".into(),
+                "total".into(),
+            ])));
             let diff = exprs.alloc(ast::Expr::Binary {
                 op: ast::BinaryOp::Sub,
                 lhs: line_total_call,
                 rhs: inv_total,
             });
             // Abs(...)
-            let abs_callee = exprs.alloc(ast::Expr::Path(vec!["Abs".into()]));
+            let abs_callee = exprs.alloc(ast::Expr::Path(baml_base::Path::bare("Abs".into())));
             let abs_call = exprs.alloc(ast::Expr::Call {
                 callee: abs_callee,
                 type_args: vec![],
@@ -2226,14 +2233,16 @@ mod tests {
     #[test]
     fn nested_call_arguments_surface_in_callee_names() {
         let body = make_ast_body(|exprs, _, _, _| {
-            let helper_callee = exprs.alloc(ast::Expr::Path(vec!["Helper".into()]));
-            let x = exprs.alloc(ast::Expr::Path(vec!["x".into()]));
+            let helper_callee =
+                exprs.alloc(ast::Expr::Path(baml_base::Path::bare("Helper".into())));
+            let x = exprs.alloc(ast::Expr::Path(baml_base::Path::bare("x".into())));
             let helper_call = exprs.alloc(ast::Expr::Call {
                 callee: helper_callee,
                 type_args: vec![],
                 args: vec![ast::CallArg::positional(x)],
             });
-            let process_callee = exprs.alloc(ast::Expr::Path(vec!["Process".into()]));
+            let process_callee =
+                exprs.alloc(ast::Expr::Path(baml_base::Path::bare("Process".into())));
             Some(exprs.alloc(ast::Expr::Call {
                 callee: process_callee,
                 type_args: vec![],

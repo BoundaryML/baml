@@ -281,7 +281,7 @@ fn apply_signature_metadata(
 /// A bare single-segment path type expression for `name`.
 fn type_expr_for_name(name: Name) -> TypeExpr {
     baml_compiler2_ast::TypeExprKind::Path {
-        segments: vec![name],
+        path: baml_base::Path::bare(name),
         generic_args: Vec::new(),
         associated_type_bindings: Vec::new(),
     }
@@ -296,7 +296,7 @@ fn type_expr_for_name_with_generic_args(
     generic_params: &[GenericParamData],
 ) -> TypeExpr {
     baml_compiler2_ast::TypeExprKind::Path {
-        segments: vec![name],
+        path: baml_base::Path::bare(name),
         generic_args: generic_params
             .iter()
             .map(|param| type_expr_for_name(param.name.clone()))

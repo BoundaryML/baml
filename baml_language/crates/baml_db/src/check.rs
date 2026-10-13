@@ -1268,26 +1268,31 @@ fn validate_ambiguous_typevar_associated_projection_in_type_expr(
 
     match &expr.kind {
         TypeExprKind::Path {
-            segments,
+            path,
             generic_args,
             associated_type_bindings,
             ..
         } => {
-            if segments.len() == 2 && generic_args.is_empty() && associated_type_bindings.is_empty()
-            {
-                let base = &segments[0];
-                let member = &segments[1];
+            if path.len() == 2 && generic_args.is_empty() && associated_type_bindings.is_empty() {
+                let base = &path[0];
+                let member = &path[1];
                 if let Some(bounds) = generic_bounds.get(base) {
                     // The legacy structural renderer below is loc-based. A
                     // mounted bound has no InterfaceLoc; hir_ty's ordinary
                     // projection lowering owns its loc-free requires walk and
                     // diagnostics, so do not manufacture an "unknown" here.
                     let has_mounted_bound = bounds.iter().any(|bound| {
-                        let TypeExprKind::Path { segments, .. } = &bound.kind else {
+                        let TypeExprKind::Path { path, .. } = &bound.kind else {
                             return false;
                         };
-                        match baml_compiler2_hir::package::path_head(db, pkg_items.root, segments) {
-                            baml_compiler2_hir::package::PathHead::Package(root) => {
+                        match baml_compiler2_hir::package::path_head(
+                            db,
+                            pkg_items.root,
+                            namespace_path,
+                            path,
+                        ) {
+                            baml_compiler2_hir::package::PathHead::Package(root)
+                            | baml_compiler2_hir::package::PathHead::Lang(root) => {
                                 baml_compiler2_hir_ty::package_interface::mounted_interface(
                                     db, root,
                                 )
@@ -1988,6 +1993,7 @@ fn tir_type_error_to_diagnostic_id(
         | TirTypeError::ComparisonAlwaysDisjoint { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::InvalidUnaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::UnresolvedType { .. } => DiagnosticId::UnknownType,
+        TirTypeError::ItemShadowsPackage { .. } => DiagnosticId::UnknownVariable,
         TirTypeError::RemovedReflectSpelling { .. } => DiagnosticId::RemovedFeature,
         TirTypeError::NonInterfaceProjectionQualifier => DiagnosticId::TypeMismatch,
         TirTypeError::UnknownAssociatedType { .. } => DiagnosticId::UnknownType,

@@ -772,8 +772,8 @@ impl<'a> ImplReceiver<'a> {
             TypeExprKind::Uint8Array => Self::Builtin("Uint8Array"),
             TypeExprKind::List { .. } => Self::Builtin("Array"),
             TypeExprKind::Map { .. } => Self::Builtin("Map"),
-            TypeExprKind::Path { segments, .. } => {
-                let [name] = segments.as_slice() else {
+            TypeExprKind::Path { path, .. } => {
+                let [name] = path.segments() else {
                     return None;
                 };
                 return items.iter().find_map(|item| match item {
@@ -820,9 +820,7 @@ fn type_expr_to_baml_type_with_self(
 ) -> BamlType {
     let recurse = |inner: &TypeExpr| type_expr_to_baml_type_with_self(inner, generics, self_baml);
     match &ty.kind {
-        TypeExprKind::Path { segments, .. }
-            if segments.len() == 1 && segments[0].as_str() == "Self" =>
-        {
+        TypeExprKind::Path { path, .. } if path.len() == 1 && path[0].as_str() == "Self" => {
             self_baml.clone()
         }
         TypeExprKind::Optional { inner, .. } => BamlType::Optional(Box::new(recurse(inner))),
@@ -873,13 +871,15 @@ fn extract_throws(func: &FunctionDef) -> Option<Vec<String>> {
 #[allow(clippy::redundant_closure_for_method_calls)]
 fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
     match &ty.kind {
-        TypeExprKind::Path { segments, .. } => {
-            let path: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
+        TypeExprKind::Path {
+            path: type_path, ..
+        } => {
+            let path: Vec<&str> = type_path.iter().map(|s| s.as_str()).collect();
             if path.len() >= 3 && (path[0] == "baml" || path[0] == "root") && path[1] == "errors" {
                 vec![path[2..].join(".")]
             } else {
                 vec![
-                    segments
+                    type_path
                         .iter()
                         .map(|s| s.as_str())
                         .collect::<Vec<_>>()
@@ -990,10 +990,10 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             Box::new(type_expr_to_baml_type(value, generics)),
         ),
 
-        TypeExprKind::Path { segments, .. } => {
+        TypeExprKind::Path { path, .. } => {
             // Single-segment path may be a generic type param or a named type.
-            if segments.len() == 1 {
-                let name = segments[0].as_str();
+            if path.len() == 1 {
+                let name = path[0].as_str();
                 if generics.iter().any(|g| g == name) {
                     BamlType::Generic(name.to_string())
                 } else {
@@ -1001,7 +1001,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
                 }
             } else {
                 // Multi-segment path (e.g. `baml.errors.Io`) — treat as Named.
-                let name = segments
+                let name = path
                     .iter()
                     .map(|s| s.as_str())
                     .collect::<Vec<_>>()

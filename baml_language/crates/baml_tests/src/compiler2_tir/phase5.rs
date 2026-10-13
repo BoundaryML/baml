@@ -510,7 +510,7 @@ fn cross_namespace_type_resolution_via_root() {
         &db,
         _root_file,
         &baml_compiler2_ast::TypeExprKind::Path {
-            segments,
+            path: baml_base::Path::new(segments),
             generic_args: vec![],
             associated_type_bindings: vec![],
         }
@@ -532,7 +532,7 @@ fn cross_namespace_type_resolution_via_root() {
         &db,
         ns_file,
         &baml_compiler2_ast::TypeExprKind::Path {
-            segments,
+            path: baml_base::Path::new(segments),
             generic_args: vec![],
             associated_type_bindings: vec![],
         }
@@ -564,7 +564,7 @@ fn same_namespace_resolution_no_prefix() {
         &db,
         _f1,
         &baml_compiler2_ast::TypeExprKind::Path {
-            segments,
+            path: baml_base::Path::new(segments),
             generic_args: vec![],
             associated_type_bindings: vec![],
         }
@@ -616,7 +616,7 @@ fn nested_namespace_resolution() {
         &db,
         _root_file,
         &baml_compiler2_ast::TypeExprKind::Path {
-            segments,
+            path: baml_base::Path::new(segments),
             generic_args: vec![],
             associated_type_bindings: vec![],
         }
@@ -646,7 +646,7 @@ fn bare_name_cross_namespace_rejected() {
         &db,
         _ns_file,
         &baml_compiler2_ast::TypeExprKind::Path {
-            segments,
+            path: baml_base::Path::new(segments),
             generic_args: vec![],
             associated_type_bindings: vec![],
         }
@@ -683,7 +683,7 @@ fn multi_segment_bare_path_rejected() {
         &db,
         _f1,
         &baml_compiler2_ast::TypeExprKind::Path {
-            segments,
+            path: baml_base::Path::new(segments),
             generic_args: vec![],
             associated_type_bindings: vec![],
         }

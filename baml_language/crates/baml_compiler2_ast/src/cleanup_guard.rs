@@ -88,15 +88,18 @@ pub fn maybe_inject_cleanup_guard(class: &mut ClassDef) {
             id
         };
 
-        // `baml._cleanup_begin` — the fully-qualified public path, as seen from
-        // user code (the stdlib's internal `root.` self-reference is not in
-        // scope here; user code reaches stdlib functions via `baml.*`).
+        // `baml._cleanup_begin`, named by identity (`compiler_path!`): nothing
+        // in the guarded body's scope can shadow it.
         let callee = expr(
             body,
             source_map,
-            Expr::Path(vec![Name::new("baml"), Name::new("_cleanup_begin")]),
+            Expr::Path(baml_base::compiler_path!(baml._cleanup_begin)),
         );
-        let self_arg = expr(body, source_map, Expr::Path(vec![Name::new("self")]));
+        let self_arg = expr(
+            body,
+            source_map,
+            Expr::Path(baml_base::Path::bare(Name::new("self"))),
+        );
         let first_call = expr(
             body,
             source_map,

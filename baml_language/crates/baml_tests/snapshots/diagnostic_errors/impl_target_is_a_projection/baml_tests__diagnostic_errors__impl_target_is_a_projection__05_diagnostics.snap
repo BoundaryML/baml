@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0002
+
+  × unknown associated type `ToString` for class `baml`
+    ╭─[main.baml:15:12]
+ 15 │ implements baml.ToString for Widget {
+    ·            ─────────────
+    ╰────

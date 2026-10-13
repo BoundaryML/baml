@@ -415,7 +415,7 @@ fn lower_from_type_name_with_generic_args(
         compiler_aliases::{self, AliasTarget},
     };
     let path = |generic_args, associated_type_bindings| TypeExprKind::Path {
-        segments: name.split('.').map(Name::new).collect(),
+        path: baml_base::Path::new(name.split('.').map(Name::new).collect()),
         generic_args,
         associated_type_bindings,
     };
@@ -468,7 +468,7 @@ fn lower_from_type_name_with_generic_args(
             AliasTarget::Json => {
                 let definition = alias.definition.expect("json has an alias declaration");
                 TypeExprKind::Path {
-                    segments: definition.source_segments().map(Name::new).collect(),
+                    path: definition.source_path(),
                     generic_args,
                     associated_type_bindings,
                 }

@@ -1097,6 +1097,11 @@ struct SessionCompile {
 /// its edges names, else the package the compile world spells that way
 /// within its dependency closure (a contract may name a type the submission
 /// only reaches through a mount). `None` when the submission cannot reach it.
+// BUG: a session enforces neither the `root` reservation nor an own item's
+// precedence over a package spelled alike: a submission may declare `let root`,
+// `function root()` or a `class root`, and `function log()` beside `log.info(x)`
+// still reaches the stdlib, where a file and `reflect.Package.compile` refuse
+// both. Session submissions should be checked by the same HIR rules.
 // BUG: the contract crosses the compile seam by NAME (the engine spells it
 // with `TypeHead::to_name`), so it is read back by spelling. A session that
 // mounts a package under another name than the one its declarations display,

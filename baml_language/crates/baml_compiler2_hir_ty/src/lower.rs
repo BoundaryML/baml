@@ -512,7 +512,7 @@ impl<'db> LowerCtx<'db> {
                     .into(),
             },
             TypeRefKind::Path {
-                segments,
+                path,
                 generic_args,
                 associated_type_bindings,
             } => {
@@ -524,7 +524,8 @@ impl<'db> LowerCtx<'db> {
                     .iter()
                     .map(|binding| (binding.name.clone(), self.lower_type_ref(store, binding.ty)))
                     .collect();
-                self.lower_path(self.path_head(segments), segments, args, bindings, position)
+                let head = self.type_path_head(path.origin(), path);
+                self.lower_path(head, path, args, bindings, position)
             }
             // A projection node: `T.Output` / `(T as I).Output`. The
             // qualifying interface is the written one, or determined from
@@ -811,12 +812,16 @@ impl<'db> LowerCtx<'db> {
         // NOT in the frame and have no bare spelling: a reference must be
         // written `Self.X` (the projection road below), so a bare
         // associated-type name falls through to ordinary resolution and
-        // diagnoses unresolved.
-        let generic_head = self
-            .generic_params
-            .iter()
-            .rev()
-            .find(|param| param.name() == &segments[0]);
+        // diagnoses unresolved. Nothing shadows a package the compiler named
+        // by identity.
+        let generic_head = match head {
+            PathHead::Lang(_) => None,
+            PathHead::Package(_) | PathHead::Plain => self
+                .generic_params
+                .iter()
+                .rev()
+                .find(|param| param.name() == &segments[0]),
+        };
         if segments.len() == 1
             && let Some(param) = generic_head
         {
@@ -1026,6 +1031,11 @@ impl<'db> LowerCtx<'db> {
                     suggestions: self.type_suggestions(segments),
                 },
             });
+        }
+        if let Some(package) = self.package_shadowed_by_item(head, segments) {
+            self.record_type_errors(vec![crate::diagnostics::TirTypeError::ItemShadowsPackage {
+                name: package,
+            }]);
         }
         LoweringTy::error()
     }
@@ -1411,11 +1421,16 @@ impl<'db> LowerCtx<'db> {
         }
     }
 
-    /// HIR's reading of a type path's first segment
+    /// HIR's reading of a WRITTEN type path's first segment
     /// ([`baml_compiler2_hir::package::path_head`]), for the paths that have
-    /// no recorded head: annotations, constructor heads, pattern classes.
+    /// no recorded head: pattern classes, paths the checker spells itself.
     pub fn path_head(&self, segments: &[Name]) -> PathHead {
-        baml_compiler2_hir::package::path_head(self.db, self.package_items.root, segments)
+        baml_compiler2_hir::package::path_head(
+            self.db,
+            self.package_items.root,
+            &self.ns_context,
+            segments,
+        )
     }
 
     /// The lexical generic parameter named `name`, innermost frame first:
@@ -1427,37 +1442,47 @@ impl<'db> LowerCtx<'db> {
             .find(|param| param.name() == name)
     }
 
-    /// The type `<namespace>.<item>` of the language package `package`,
-    /// named by IDENTITY: the compiler's own reference, which nothing in the
-    /// writer's scope — a binding, an item, or a generic parameter spelled
-    /// like the package — shadows. `None` when the package is not installed
-    /// or declares no such type.
-    pub(crate) fn lower_lang_type(
+    /// The package `segments` would have started at, had an item of this
+    /// namespace not claimed its head: `Some` exactly when `head` is plain
+    /// for that reason. The item is what the path reads; the package is
+    /// unreachable by that name from here (`TYPE_SYSTEM.md` § Declarations,
+    /// Packages, and Names) — what a diagnostic about the path should say.
+    pub(crate) fn package_shadowed_by_item(
         &self,
-        package: baml_base::LangPackage,
-        namespace: &[Name],
-        item: &Name,
-    ) -> Option<LoweringTy> {
-        let root = self.lang_package(package)?;
-        // Under a `Package` head the first segment is the package and is
-        // not read; the package's name stands in for it.
-        let mut segments = Vec::with_capacity(namespace.len() + 2);
-        segments.push(Name::new(package.manifest_name()));
-        segments.extend_from_slice(namespace);
-        segments.push(item.clone());
-        let lowered = match self.resolve_type(PathHead::Package(root), &segments)? {
-            ResolvedTypeDefinition::Source(def) => {
-                self.lower_definition(def, item, Vec::new(), Vec::new(), TypePosition::Existential)
+        head: PathHead,
+        segments: &[Name],
+    ) -> Option<Name> {
+        match (head, segments) {
+            (PathHead::Plain, [first, _, ..])
+                if baml_compiler2_hir::namespace::namespace_declares(
+                    self.db,
+                    self.package_items.root,
+                    &self.ns_context,
+                    first,
+                ) && baml_compiler2_hir::package::path_package(
+                    self.db,
+                    self.package_items.root,
+                    first,
+                )
+                .is_some() =>
+            {
+                Some(first.clone())
             }
-            ResolvedTypeDefinition::Exported(exported) => self.lower_exported_type(
-                *exported,
-                item,
-                Vec::new(),
-                Vec::new(),
-                TypePosition::Existential,
-            ),
-        };
-        Some(lowered)
+            _ => None,
+        }
+    }
+
+    /// HIR's reading of a type path's first segment as `origin` says it was
+    /// written ([`baml_compiler2_hir::package::path_head_for`]): annotations
+    /// and constructor heads carry their origin with them.
+    pub fn type_path_head(&self, origin: baml_base::PathOrigin, segments: &[Name]) -> PathHead {
+        baml_compiler2_hir::package::path_head_for(
+            self.db,
+            self.package_items.root,
+            &self.ns_context,
+            origin,
+            segments,
+        )
     }
 
     /// The items of a source-served package this context can read: its own
@@ -1488,15 +1513,17 @@ impl<'db> LowerCtx<'db> {
     /// child namespace `sub`.
     ///
     /// A package and an own item spelled alike (`#4543`, pinned by
-    /// `ns_fixtures/ns_reflect_shadowing`): the package answers first, and
-    /// the own item answers what the package does not — so a one-segment
-    /// prefix under a `Package` head still reads as that bare name.
+    /// `ns_reflect_shadowing`): the item claims the head
+    /// ([`baml_compiler2_hir::package::path_head`]), so the path arrives
+    /// `Plain` and the caller reads its one-segment prefix as the bare name. A `Lang`
+    /// head — a package the compiler named by identity — has no such
+    /// fallback: nothing in scope is read for it.
     pub(crate) fn resolve_type(
         &self,
         head: PathHead,
         segments: &[Name],
     ) -> Option<ResolvedTypeDefinition<'db>> {
-        if let PathHead::Package(package) = head
+        if let PathHead::Package(package) | PathHead::Lang(package) = head
             && let Some((item, namespace)) = segments[1..].split_last()
         {
             // A served dependency answers from its interface ONLY: it has
@@ -1512,18 +1539,14 @@ impl<'db> LowerCtx<'db> {
             }
         }
 
-        if let [item] = segments
+        if let PathHead::Package(_) | PathHead::Plain = head
+            && let [item] = segments
             && let Some(def) = self.package_items.lookup_type(&self.ns_context, item)
         {
             return Some(ResolvedTypeDefinition::Source(def));
         }
 
         None
-    }
-
-    /// Where `package` is installed in this database, by identity.
-    fn lang_package(&self, package: baml_base::LangPackage) -> Option<baml_base::SourceRoot> {
-        baml_compiler2_hir::package::lang_roots(self.db).get(package)
     }
 
     /// Value-namespace resolution, mirroring `resolve_type`'s
@@ -1541,7 +1564,7 @@ impl<'db> LowerCtx<'db> {
         segments: &[Name],
     ) -> Option<crate::package_interface::ResolvedValue<'db>> {
         use crate::package_interface::ResolvedValue;
-        if let PathHead::Package(package) = head
+        if let PathHead::Package(package) | PathHead::Lang(package) = head
             && let Some((item, namespace)) = segments[1..].split_last()
         {
             if is_served_from_interface(self.db, package) {
@@ -1554,7 +1577,8 @@ impl<'db> LowerCtx<'db> {
                 return Some(ResolvedValue::Source(def));
             }
         }
-        if let [item] = segments
+        if let PathHead::Package(_) | PathHead::Plain = head
+            && let [item] = segments
             && let Some(def) = self.package_items.lookup_value(&self.ns_context, item)
         {
             return Some(ResolvedValue::Source(def));

@@ -10,7 +10,7 @@
 //! a wire name ([`TypeName`]) by the package's manifest spelling. Neither
 //! lookup compares a package name string of its own.
 
-use baml_base::{LangPackage, LangRoots, Name};
+use baml_base::{LangPackage, LangRoots, Name, Path, static_path};
 
 use crate::{DeclName, PrimitiveType, QualifiedTypeName, TypeName};
 
@@ -36,11 +36,17 @@ pub enum Spelling {
 }
 
 /// The declaration that carries a builtin's members: a language package and
-/// the `[...namespace, name]` path inside it.
+/// the declaration's path, spelled as the compiler writes it —
+/// `[package name, ...namespace, name]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Definition {
     pub package: LangPackage,
-    pub path: &'static [&'static str],
+    /// `package`'s fixed name, then the namespace path, then the item
+    /// ([`static_path!`](baml_base::static_path)). The first segment is
+    /// `package.manifest_name()`: the spelling a compiler-written path
+    /// carries, which HIR reads back as the package by identity
+    /// (`compiler_path_head`); `package` states the same fact directly.
+    pub spelled: &'static [Name],
 }
 
 impl Definition {
@@ -50,8 +56,8 @@ impl Definition {
         let (name, namespace) = self.split_path();
         Some(DeclName::in_root(
             lang.get(self.package)?,
-            namespace.iter().map(Name::new).collect(),
-            Name::new(name),
+            namespace.to_vec(),
+            name.clone(),
         ))
     }
 
@@ -61,16 +67,21 @@ impl Definition {
         let (name, namespace) = self.split_path();
         TypeName::new(
             Name::new(self.package.manifest_name()),
-            namespace.iter().map(Name::new).collect(),
-            Name::new(name),
+            namespace.to_vec(),
+            name.clone(),
         )
     }
 
-    /// The declaration as source spells it, `[package, ...path]` — what a
-    /// desugaring (`json` → `baml.json.json`) writes into the AST for the
-    /// ordinary path resolver to look up through the package's edges.
+    /// The declaration as the compiler writes it (`json` → `baml.json.json`):
+    /// a path into its package by identity, which no name in the scope it
+    /// lands in captures.
+    pub const fn source_path(self) -> Path {
+        Path::compiler(self.spelled)
+    }
+
+    /// The declaration as source spells it, `[package, ...path]`.
     pub fn source_segments(self) -> impl Iterator<Item = &'static str> {
-        std::iter::once(self.package.manifest_name()).chain(self.path.iter().copied())
+        self.spelled.iter().map(Name::as_str)
     }
 
     /// Whether `name` is this declaration under `lang`'s installation.
@@ -89,16 +100,18 @@ impl Definition {
         name.namespace()
             .iter()
             .chain(std::iter::once(name.name()))
-            .map(Name::as_str)
-            .eq(self.path.iter().copied())
+            .eq(self.path())
     }
 
-    fn split_path(self) -> (&'static str, &'static [&'static str]) {
-        let (name, namespace) = self
-            .path
+    /// The path inside the package: the spelling without its package segment.
+    pub fn path(self) -> &'static [Name] {
+        &self.spelled[1..]
+    }
+
+    fn split_path(self) -> (&'static Name, &'static [Name]) {
+        self.path()
             .split_last()
-            .expect("builtin definition paths are nonempty");
-        (name, namespace)
+            .expect("builtin definition paths are nonempty")
     }
 }
 
@@ -207,7 +220,7 @@ impl CompilerAlias {
 const fn primitive(
     primitive: PrimitiveType,
     spelling: &'static str,
-    path: &'static [&'static str],
+    spelled: &'static [Name],
     origin: &'static str,
     carries_methods: bool,
 ) -> CompilerAlias {
@@ -217,7 +230,7 @@ const fn primitive(
         arity: 0,
         definition: Some(Definition {
             package: LangPackage::Baml,
-            path,
+            spelled,
         }),
         construction: Construction::Builtin {
             origin,
@@ -237,62 +250,80 @@ const fn intrinsic(target: AliasTarget, spelling: &'static str) -> CompilerAlias
 }
 
 pub const ALL: &[CompilerAlias] = &[
-    primitive(PrimitiveType::Int, "int", &["Int"], "literals", true),
+    primitive(
+        PrimitiveType::Int,
+        "int",
+        static_path!(baml.Int),
+        "literals",
+        true,
+    ),
     primitive(
         PrimitiveType::Bigint,
         "bigint",
-        &["Bigint"],
+        static_path!(baml.Bigint),
         "literals",
         true,
     ),
-    primitive(PrimitiveType::Float, "float", &["Float"], "literals", true),
+    primitive(
+        PrimitiveType::Float,
+        "float",
+        static_path!(baml.Float),
+        "literals",
+        true,
+    ),
     primitive(
         PrimitiveType::String,
         "string",
-        &["String"],
+        static_path!(baml.String),
         "literals",
         true,
     ),
-    primitive(PrimitiveType::Bool, "bool", &["Bool"], "literals", false),
+    primitive(
+        PrimitiveType::Bool,
+        "bool",
+        static_path!(baml.Bool),
+        "literals",
+        false,
+    ),
     primitive(
         PrimitiveType::Null,
         "null",
-        &["Null"],
+        static_path!(baml.Null),
         "the `null` literal",
         false,
     ),
     primitive(
         PrimitiveType::Uint8Array,
         "uint8array",
-        &["Uint8Array"],
+        static_path!(baml.Uint8Array),
         "byte-string literals",
         true,
     ),
     primitive(
         PrimitiveType::Image,
         "image",
-        &["media", "Image"],
+        static_path!(baml.media.Image),
         "image factory methods",
         true,
     ),
     primitive(
         PrimitiveType::Audio,
         "audio",
-        &["media", "Audio"],
+        static_path!(baml.media.Audio),
         "audio factory methods",
         true,
     ),
     primitive(
         PrimitiveType::Video,
         "video",
-        &["media", "Video"],
+        static_path!(baml.media.Video),
         "video factory methods",
         true,
     ),
     primitive(
         PrimitiveType::Pdf,
         "pdf",
-        &["media", "Pdf"],
+        static_path!(baml.media.Pdf),
         "pdf factory methods",
         true,
     ),
@@ -302,7 +333,7 @@ pub const ALL: &[CompilerAlias] = &[
         arity: 1,
         definition: Some(Definition {
             package: LangPackage::Baml,
-            path: &["Array"],
+            spelled: static_path!(baml.Array),
         }),
         construction: Construction::Builtin {
             origin: "array literals",
@@ -315,7 +346,7 @@ pub const ALL: &[CompilerAlias] = &[
         arity: 2,
         definition: Some(Definition {
             package: LangPackage::Baml,
-            path: &["Map"],
+            spelled: static_path!(baml.Map),
         }),
         construction: Construction::Builtin {
             origin: "map literals",
@@ -328,7 +359,7 @@ pub const ALL: &[CompilerAlias] = &[
         arity: 2,
         definition: Some(Definition {
             package: LangPackage::Baml,
-            path: &["future", "Future"],
+            spelled: static_path!(baml.future.Future),
         }),
         construction: Construction::Builtin {
             origin: "spawn expressions",
@@ -341,7 +372,7 @@ pub const ALL: &[CompilerAlias] = &[
         arity: 0,
         definition: Some(Definition {
             package: LangPackage::Reflect,
-            path: &["Type"],
+            spelled: static_path!(reflect.Type),
         }),
         construction: Construction::Builtin {
             origin: "`reflect.Type.of<T>()` and reflection",
@@ -354,7 +385,7 @@ pub const ALL: &[CompilerAlias] = &[
         arity: 0,
         definition: Some(Definition {
             package: LangPackage::Baml,
-            path: &["json", "json"],
+            spelled: static_path!(baml.json.json),
         }),
         construction: Construction::Alias,
     },
@@ -429,9 +460,14 @@ pub fn by_type_name(name: &TypeName) -> Option<&'static CompilerAlias> {
 /// [`by_definition`] for a path inside a language package.
 pub fn by_definition_path(package: LangPackage, path: &[&str]) -> Option<&'static CompilerAlias> {
     ALL.iter().find(|entry| {
-        entry
-            .definition
-            .is_some_and(|definition| definition.package == package && definition.path == path)
+        entry.definition.is_some_and(|definition| {
+            definition.package == package
+                && definition
+                    .path()
+                    .iter()
+                    .map(Name::as_str)
+                    .eq(path.iter().copied())
+        })
     })
 }
 
@@ -541,7 +577,14 @@ mod tests {
             assert_eq!(by_definition(lang, &head), Some(alias));
             assert_eq!(by_type_name(&definition.type_name()), Some(alias));
             assert_eq!(
-                by_definition_path(definition.package, definition.path),
+                by_definition_path(
+                    definition.package,
+                    &definition
+                        .path()
+                        .iter()
+                        .map(Name::as_str)
+                        .collect::<Vec<_>>(),
+                ),
                 Some(alias)
             );
         }

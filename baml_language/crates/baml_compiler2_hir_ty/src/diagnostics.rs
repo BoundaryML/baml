@@ -258,6 +258,9 @@ pub enum TirTypeError {
     /// declare it independently (via distinct interfaces), but those are different
     /// members — the union has no single agreed-upon one.
     UnionMemberNoCommonInterface { union: Ty, member: Name },
+    /// A path that resolved to nothing started at an item of this namespace
+    /// spelled like a package: the package is out of reach by that name.
+    ItemShadowsPackage { name: Name },
     /// Name could not be resolved at all.
     UnresolvedName {
         name: Name,
@@ -1163,6 +1166,11 @@ impl TirTypeError {
                         union.spell(vp)
                     )
                 }
+                TirTypeError::ItemShadowsPackage { name } => write!(
+                    f,
+                    "`{name}` is an item of this namespace, which shadows the package `{name}`: \
+                     the package cannot be reached by that name from here"
+                ),
                 TirTypeError::UnresolvedName { name, suggestions } => {
                     write!(f, "unresolved name: {name}")?;
                     match &**suggestions {

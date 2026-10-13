@@ -217,8 +217,10 @@ fn served_item_at<'db>(
     file: SourceFile,
     chain: &[Name],
 ) -> Option<SymbolTarget<'db>> {
-    let baml_compiler2_hir::package::PathHead::Package(root) =
-        baml_compiler2_hir::package::path_head(db, file.source_root(db), chain)
+    let namespace = &baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
+    let (baml_compiler2_hir::package::PathHead::Package(root)
+    | baml_compiler2_hir::package::PathHead::Lang(root)) =
+        baml_compiler2_hir::package::path_head(db, file.source_root(db), namespace, chain)
     else {
         return None;
     };

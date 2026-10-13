@@ -1997,11 +1997,9 @@ fn collect_type_expr_deps(
     use baml_compiler2_ast::TypeExprKind;
     match &te.kind {
         TypeExprKind::Path {
-            segments,
-            generic_args,
-            ..
+            path, generic_args, ..
         } => {
-            if let Some(last) = segments.last() {
+            if let Some(last) = path.last() {
                 let name_str = last.as_str().to_string();
                 if seen.insert(name_str.clone()) {
                     // Try to resolve this name to find its definition.
@@ -2061,11 +2059,9 @@ fn collect_type_ref_deps(
     use baml_compiler2_hir::type_ref::TypeRefKind;
     match &store[id].kind {
         TypeRefKind::Path {
-            segments,
-            generic_args,
-            ..
+            path, generic_args, ..
         } => {
-            if let Some(last) = segments.last() {
+            if let Some(last) = path.last() {
                 let name_str = last.as_str().to_string();
                 if seen.insert(name_str.clone()) {
                     // Try to resolve this name to find its definition.

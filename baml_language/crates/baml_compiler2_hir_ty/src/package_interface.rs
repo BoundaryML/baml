@@ -2371,8 +2371,8 @@ impl<'db> PackageResolutionContext<'db> {
         path: &[Name],
         ns_context: &[Name],
     ) -> Option<(ResolvedSource, Ty)> {
-        match baml_compiler2_hir::package::path_head(db, self.own, path) {
-            PathHead::Package(package) => {
+        match baml_compiler2_hir::package::path_head(db, self.own, ns_context, path) {
+            PathHead::Package(package) | PathHead::Lang(package) => {
                 let (item, namespace) = path[1..].split_last()?;
                 if package == self.own {
                     let def = self.own_items.lookup_type(namespace, item)?;
@@ -2406,8 +2406,8 @@ impl<'db> PackageResolutionContext<'db> {
         path: &[Name],
         ns_context: &[Name],
     ) -> Option<ResolvedValue<'db>> {
-        match baml_compiler2_hir::package::path_head(db, self.own, path) {
-            PathHead::Package(package) => {
+        match baml_compiler2_hir::package::path_head(db, self.own, ns_context, path) {
+            PathHead::Package(package) | PathHead::Lang(package) => {
                 let (item, namespace) = path[1..].split_last()?;
                 if package == self.own {
                     return self

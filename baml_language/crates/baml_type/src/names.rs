@@ -456,9 +456,9 @@ mod alias_tests {
     #[test]
     fn primitive_alias_class_path_roundtrips() {
         for p in PrimitiveType::ALL {
-            let path = p.builtin_class_path();
+            let path: Vec<&str> = p.builtin_class_path().iter().map(Name::as_str).collect();
             assert_eq!(
-                PrimitiveType::from_builtin_class_path(path),
+                PrimitiveType::from_builtin_class_path(&path),
                 Some(p),
                 "round-trip failed for {p:?} via {path:?}"
             );

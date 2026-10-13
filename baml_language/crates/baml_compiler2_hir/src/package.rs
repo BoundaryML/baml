@@ -9,7 +9,7 @@
 
 use std::collections::{HashMap, VecDeque};
 
-use baml_base::{LangRoots, Name, SourceFile, SourceRoot, SourceRootKind, Span};
+use baml_base::{LangRoots, Name, PathOrigin, SourceFile, SourceRoot, SourceRootKind, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
 use baml_type::{
     DeclName, PathName, RESERVED_USER_PACKAGE, TypeName,
@@ -179,15 +179,31 @@ pub const ROOT_SEGMENT: &str = "root";
 /// How the first segment of a path is read. Decided ONCE, here in HIR, and
 /// handed to every consumer: nothing downstream maps a head name to a
 /// package. The reading of the segments after the head follows from it.
+///
+/// Precedence for a WRITTEN path, outermost claim last: a binding in scope
+/// (the caller's, before [`path_head`] is asked), an item of the writer's
+/// own namespace, then `root` or an edge of the writer's package. An item
+/// spelled like a package shadows the package entirely (`#4543`): with a
+/// class `reflect` in the namespace, `reflect.signature` is a member of that
+/// class, and the package `reflect` is unreachable by that name from there.
+/// A compiler-written path is read by identity instead ([`PathHead::Lang`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PathHead {
     /// `root`, or a dependency edge of the reading package: the package it
     /// reaches. The rest of the path is `<namespaces>.<item>` inside that
-    /// package, then members of the item.
+    /// package, then members of the item. A lexical name shadows it, as a
+    /// binding does in a body.
     Package(SourceRoot),
+    /// A language package the COMPILER named, by identity
+    /// ([`PathOrigin::Compiler`]): read exactly like `Package`, except that
+    /// no name in any scope shadows it — rustc's `$crate`. What lowered
+    /// syntax reaches the standard library through.
+    Lang(SourceRoot),
     /// A plain name of the surrounding scope: an item of the file's own
     /// namespace, or a name only a lexical scope declares (a generic
-    /// parameter). The rest of the path are members of what it names.
+    /// parameter). The rest of the path are members of what it names. Also
+    /// the head of an item the COMPILER named (`Owner.Method@spec`), which
+    /// is the namespace's item and nothing a binding can shadow.
     Plain,
 }
 
@@ -205,16 +221,69 @@ pub fn path_package(db: &dyn crate::Db, own: SourceRoot, first: &Name) -> Option
     accessible_package(db, own, first)
 }
 
-/// The [`PathHead`] of `segments`, written in `own`, once no binding has
-/// claimed the first segment. A package segment is a QUALIFIER — it has a
-/// path after it — so a lone name is never a package: `log` alone is the
-/// item `log`, `log.info` starts at the package. Nothing else about the
-/// path's length decides anything: `Cart.empty` is `Plain` and reads as the
-/// item `Cart` followed by its member.
-pub fn path_head(db: &dyn crate::Db, own: SourceRoot, segments: &[Name]) -> PathHead {
+/// The [`PathHead`] of `segments`, written in the namespace `namespace` of
+/// `own`, once no binding has claimed the first segment. An item of that
+/// namespace claims it next ([`crate::namespace::namespace_declares`]); only
+/// then is the segment read as `root` or an edge. A package segment is a
+/// QUALIFIER — it has a path after it — so a lone name is never a package:
+/// `log` alone is the item `log`, `log.info` starts at the package. Nothing
+/// else about the path's length decides anything: `Cart.empty` is `Plain`
+/// and reads as the item `Cart` followed by its member.
+pub fn path_head(
+    db: &dyn crate::Db,
+    own: SourceRoot,
+    namespace: &[Name],
+    segments: &[Name],
+) -> PathHead {
     match segments {
-        [first, _, ..] => path_package(db, own, first).map_or(PathHead::Plain, PathHead::Package),
+        // `root` first: nothing may be named `root` (E0176), so a refused
+        // item of that name cannot take every `root.X` of its namespace
+        // down with it.
+        [first, _, ..] if first.as_str() == ROOT_SEGMENT => PathHead::Package(own),
+        [first, _, ..] => {
+            if crate::namespace::namespace_declares(db, own, namespace, first) {
+                return PathHead::Plain;
+            }
+            path_package(db, own, first).map_or(PathHead::Plain, PathHead::Package)
+        }
         [] | [_] => PathHead::Plain,
+    }
+}
+
+/// The [`PathHead`] of a path the COMPILER wrote ([`PathOrigin::Compiler`]),
+/// never looked up in any scope: a language package's fixed name is read by
+/// identity from where the stdlib is installed (with the package not
+/// installed the path names nothing, and reads as a plain name that resolves
+/// to nothing); any other first segment is an item of the writer's own
+/// namespace ([`baml_base::Path::compiler_item`]), read as a plain name —
+/// the semantic index records no binding for it, so none shadows it.
+pub fn compiler_path_head(db: &dyn crate::Db, segments: &[Name]) -> PathHead {
+    let [first, _, ..] = segments else {
+        unreachable!("a compiler-written path names a package or item and a member: {segments:?}")
+    };
+    match baml_base::LangPackage::from_manifest_name(first.as_str()) {
+        Some(package) => lang_roots(db)
+            .get(package)
+            .map_or(PathHead::Plain, PathHead::Lang),
+        None => PathHead::Plain,
+    }
+}
+
+/// The [`PathHead`] of `segments` as `origin` says it was written: a written
+/// path's head is a name of `own`'s scope, read from the namespace
+/// `namespace` it was written in ([`path_head`]); a compiler-written path's
+/// is a language package by identity or an item of the writer's namespace,
+/// in no scope ([`compiler_path_head`]).
+pub fn path_head_for(
+    db: &dyn crate::Db,
+    own: SourceRoot,
+    namespace: &[Name],
+    origin: PathOrigin,
+    segments: &[Name],
+) -> PathHead {
+    match origin {
+        PathOrigin::Written => path_head(db, own, namespace, segments),
+        PathOrigin::Compiler => compiler_path_head(db, segments),
     }
 }
 
@@ -762,24 +831,27 @@ mod tests {
 
         // `root` is the package itself; an edge name is the package it reaches.
         assert_eq!(
-            path_head(&db, app, &path(&["root", "Foo"])),
+            path_head(&db, app, &[], &path(&["root", "Foo"])),
             PathHead::Package(app)
         );
         assert_eq!(
-            path_head(&db, app, &path(&["util", "Foo"])),
+            path_head(&db, app, &[], &path(&["util", "Foo"])),
             PathHead::Package(lib)
         );
         // A name no edge carries - the dependency's OWN name included - is a
         // plain name of the scope: `Cart.empty` starts at the item `Cart`.
-        assert_eq!(path_head(&db, app, &path(&["lib", "Foo"])), PathHead::Plain);
         assert_eq!(
-            path_head(&db, app, &path(&["Cart", "empty"])),
+            path_head(&db, app, &[], &path(&["lib", "Foo"])),
+            PathHead::Plain
+        );
+        assert_eq!(
+            path_head(&db, app, &[], &path(&["Cart", "empty"])),
             PathHead::Plain
         );
         // A package segment qualifies what follows it; alone, a name is the
         // item of that name, whatever packages are called.
-        assert_eq!(path_head(&db, app, &path(&["util"])), PathHead::Plain);
-        assert_eq!(path_head(&db, app, &path(&["root"])), PathHead::Plain);
+        assert_eq!(path_head(&db, app, &[], &path(&["util"])), PathHead::Plain);
+        assert_eq!(path_head(&db, app, &[], &path(&["root"])), PathHead::Plain);
     }
 }
 

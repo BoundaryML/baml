@@ -315,6 +315,26 @@ pub fn impl_facts<'db>(
     let ctx = crate::lower::lower_ctx_for_file(db, file)
         .with_frame(params.clone())
         .with_bounds(bounds_map.clone());
+    // An impl names its interface by path. A path headed by an item of this
+    // namespace (`baml.ToString` beside a `class baml`) is a projection off
+    // that item, which names no interface — and determining what it does
+    // name asks the impls for that item, this one included: a cycle. The
+    // header resolves to nothing; the diagnostics lane reports the path.
+    if let baml_compiler2_hir::type_ref::TypeRefKind::Path { path, .. } =
+        &data.type_refs.get(data.interface_target).kind
+        && let [first, _, ..] = path.segments()
+        && let baml_compiler2_hir::package::PathHead::Plain =
+            ctx.type_path_head(path.origin(), path.segments())
+        && ctx.lexical_generic(first).is_none()
+        && baml_compiler2_hir::namespace::namespace_declares(
+            db,
+            file.source_root(db),
+            ctx.namespace_context(),
+            first,
+        )
+    {
+        return ImplHeaderResolution::Unresolved;
+    }
     let Some(interface) = crate::lower::reject_holes(&ctx.lower_type_ref_at(
         &data.type_refs,
         data.interface_target,

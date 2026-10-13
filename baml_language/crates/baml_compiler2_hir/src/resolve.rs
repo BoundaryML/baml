@@ -103,9 +103,8 @@ pub fn resolve_name_at_in_scope<'db>(
         //
         // A bare name reaches what the file's namespace declares, and
         // nothing else: everything outside it is written qualified. That is
-        // the language's rule, and the same one the TYPE resolver states
-        // ("namespace-relative in the current package (no outward walk);
-        // `root.`-absolute or package-prefixed" - `lower::resolve_type`).
+        // the language's rule, and the one the type resolver applies
+        // (`lower::resolve_type`).
         // There is no outward walk to a parent namespace and no fall
         // through into a dependency; `resolve_path_at` is where a qualified
         // name is resolved.
@@ -311,10 +310,11 @@ pub fn type_names_in_scope_at<'db>(
 /// The package a QUALIFIER names, with its items and the index of the
 /// first namespace segment. `segments` is what stands before a `.` — a
 /// whole path's prefix, or the `baml` of a `baml.` the cursor sits after —
-/// so its first segment is read as a package head
-/// ([`path_package`](crate::package::path_package)) however many segments
-/// follow here: the dot is the follower. `None` when the first segment names
-/// no package the file's package can see.
+/// so its first segment is read as a package head however many segments
+/// follow here: the dot is the follower. The reading is the checker's
+/// ([`path_head`](crate::package::path_head)): an item of the file's own
+/// namespace spelled like a package claims the head, `root` is this package,
+/// anything else is an edge of it. `None` when no package is named.
 fn accessible_path_package<'db>(
     db: &'db dyn crate::Db,
     file: SourceFile,
@@ -322,6 +322,12 @@ fn accessible_path_package<'db>(
 ) -> Option<(SourceRoot, &'db PackageItems<'db>, usize)> {
     let own = file.source_root(db);
     let first = segments.first()?;
+    if first.as_str() != crate::package::ROOT_SEGMENT {
+        let namespace = crate::file_package::file_package(db, file).namespace_path;
+        if crate::namespace::namespace_declares(db, own, &namespace, first) {
+            return None;
+        }
+    }
     let package = crate::package::path_package(db, own, first)?;
     Some((package, crate::package::package_items(db, package), 1))
 }

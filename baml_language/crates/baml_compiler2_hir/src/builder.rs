@@ -52,10 +52,9 @@ struct PatternNames {
 /// `LocalItemId` collision index disambiguates anything that shares a head.
 fn impl_head_name(te: &ast::TypeExpr) -> Name {
     match &te.kind {
-        ast::TypeExprKind::Path { segments, .. } => segments
-            .last()
-            .cloned()
-            .unwrap_or_else(|| Name::new("#path")),
+        ast::TypeExprKind::Path { path, .. } => {
+            path.last().cloned().unwrap_or_else(|| Name::new("#path"))
+        }
         _ => Name::new("#nonpath"),
     }
 }
@@ -63,6 +62,9 @@ fn impl_head_name(te: &ast::TypeExpr) -> Name {
 pub struct SemanticIndexBuilder<'db> {
     db: &'db dyn crate::Db,
     file: SourceFile,
+    /// The namespace the file's items belong to, whose own items claim a
+    /// written path's first segment before any package does.
+    namespace_path: Vec<Name>,
 
     scopes: Vec<Scope>,
     scope_bindings: Vec<ScopeBindings>,
@@ -104,6 +106,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         Self {
             db,
             file,
+            namespace_path: Vec::new(),
             scopes: Vec::new(),
             scope_bindings: Vec::new(),
             item_scopes: FxHashMap::default(),
@@ -146,6 +149,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// Project/Package/Namespace/File scopes).
     pub fn build(mut self, items: &[ast::Item], file_range: TextRange) -> FileSemanticIndex<'db> {
         let pkg_info = file_package(self.db, self.file);
+        self.namespace_path.clone_from(&pkg_info.namespace_path);
 
         // Build scope chain: Project → Package → Namespace* → File
         self.push_scope(ScopeKind::Project, None, file_range);
@@ -335,10 +339,6 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_diagnostics(seen);
     }
 
-    /// Reject a value binding or body type binding that takes one of
-    /// [`DESUGAR_PATH_ROOTS`]: the compiler emits paths rooted at those names,
-    /// and a binding shadows a package root where an item does not, so it
-    /// would break every desugared path in scope.
     /// `root` is the path to the package itself
     /// ([`crate::package::ROOT_SEGMENT`]) and names nothing else: not a
     /// binding, an item, or a type parameter — so `root.X` always means this
@@ -354,16 +354,6 @@ impl<'db> SemanticIndexBuilder<'db> {
     fn reject_root_generics(&mut self, generics: &[ast::GenericParam]) {
         for generic in generics {
             self.reject_root_name(&generic.name, generic.name_span);
-        }
-    }
-
-    fn reject_reserved_binding_name(&mut self, name: &Name, span: TextRange) {
-        self.reject_root_name(name, span);
-        if baml_base::lang::is_reserved_binding_name(name.as_str()) {
-            self.diagnostics.push(Hir2Diagnostic::ReservedBindingName {
-                name: name.clone(),
-                span,
-            });
         }
     }
 
@@ -467,10 +457,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         match &body.stmts[stmt_id] {
             ast::Stmt::Expr(expr) => self.walk_expr(*expr, body, source_map, true),
             ast::Stmt::TypeBinding { name, value } => {
-                // A body type binding shadows a package root in value paths
-                // just as a value binding does.
                 if let Some(span) = source_map.type_binding_name_span(stmt_id) {
-                    self.reject_reserved_binding_name(name, span);
+                    self.reject_root_name(name, span);
                 }
                 match value {
                     // The runtime operand is an ordinary expression in the
@@ -756,12 +744,18 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.walk_expr(*base, body, source_map, true);
                 self.walk_expr(*index, body, source_map, true);
             }
-            ast::Expr::Path(segments) => {
-                if let Some(root) = segments.first() {
+            ast::Expr::Path(path) => {
+                if let Some(root) = path.first() {
                     let use_scope = self.current_scope_id();
                     let use_offset = source_map.expr_span(expr_id).start();
-                    self.record_path_root_reference(root, use_scope, use_offset);
-                    self.resolve_path_expr(expr_id, segments, use_scope, use_offset);
+                    // A compiler-written path names its package by identity
+                    // or an item of this namespace: its first segment refers
+                    // to nothing in scope, so a lambda it sits in captures no
+                    // binding spelled like it.
+                    if matches!(path.origin(), baml_base::PathOrigin::Written) {
+                        self.record_path_root_reference(root, use_scope, use_offset);
+                    }
+                    self.resolve_path_expr(expr_id, path, use_scope, use_offset);
                 }
             }
             ast::Expr::GenericApply { base, .. } => {
@@ -884,7 +878,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
 
         for (name, (name_range, bind_pattern)) in names.names {
-            self.reject_reserved_binding_name(&name, name_range);
+            self.reject_root_name(&name, name_range);
             self.scope_bindings[scope_id.index() as usize]
                 .bindings
                 .push(LocalBinding {
@@ -1174,7 +1168,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         let scope_id = self.current_scope_id();
         self.lambda_scopes.push((key, scope_id));
         for (idx, param) in lambda.params.iter().enumerate() {
-            self.reject_reserved_binding_name(&param.name, param.name_span);
+            self.reject_root_name(&param.name, param.name_span);
             self.scope_bindings[scope_id.index() as usize]
                 .params
                 .push((param.name.clone(), idx));
@@ -1260,24 +1254,34 @@ impl<'db> SemanticIndexBuilder<'db> {
         false
     }
 
-    /// Record how the path's first segment reads here: a binding in scope,
-    /// else the package it names or a plain name
-    /// ([`crate::package::path_head`]).
+    /// Record how the path's first segment reads here. A path source wrote
+    /// starts at a binding in scope, else at the package it names or a plain
+    /// name ([`crate::package::path_head`]). A path the compiler wrote names
+    /// a language package by identity or an item of this namespace, whatever
+    /// the scope binds ([`crate::package::compiler_path_head`]).
     fn resolve_path_expr(
         &mut self,
         expr_id: ast::ExprId,
-        segments: &[Name],
+        path: &baml_base::Path,
         use_scope: FileScopeId,
         use_offset: TextSize,
     ) {
-        let root = segments.first().expect("paths are never empty");
-        let resolution = match self.visible_binding_at(use_scope, use_offset, root) {
-            Some(binding) => PathResolution::Local(binding),
-            None => PathResolution::Item(crate::package::path_head(
-                self.db,
-                self.file.source_root(self.db),
-                segments,
-            )),
+        let root = path.first().expect("paths are never empty");
+        let resolution = match path.origin() {
+            baml_base::PathOrigin::Compiler => {
+                PathResolution::Item(crate::package::compiler_path_head(self.db, path))
+            }
+            baml_base::PathOrigin::Written => {
+                match self.visible_binding_at(use_scope, use_offset, root) {
+                    Some(binding) => PathResolution::Local(binding),
+                    None => PathResolution::Item(crate::package::path_head(
+                        self.db,
+                        self.file.source_root(self.db),
+                        &self.namespace_path,
+                        path,
+                    )),
+                }
+            }
         };
         let key = self.current_expr_metadata_key(expr_id);
         self.path_resolutions.push((key, resolution));
@@ -1341,7 +1345,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.record_scope_owner(scope_id, ItemScopeOwner::Function(local_id));
 
         for (idx, param) in f.params.iter().enumerate() {
-            self.reject_reserved_binding_name(&param.name, param.name_span);
+            self.reject_root_name(&param.name, param.name_span);
             self.scope_bindings[scope_id.index() as usize]
                 .params
                 .push((param.name.clone(), idx));
@@ -1504,9 +1508,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             // Derive a synthetic scope name from the for_target for `self` resolution.
             // Use the for_target's root name (e.g. "Container" from "Container<T>").
             let scope_name = match &imp.for_target.kind {
-                baml_compiler2_ast::TypeExprKind::Path { segments, .. } => {
-                    segments.first().cloned()
-                }
+                baml_compiler2_ast::TypeExprKind::Path { path, .. } => path.first().cloned(),
                 _ => None,
             };
             self.push_scope(ScopeKind::Class, scope_name, imp.span);
@@ -1591,7 +1593,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             );
             self.reject_root_generics(&m.generic_params);
             for param in &m.params {
-                self.reject_reserved_binding_name(&param.name, param.name_span);
+                self.reject_root_name(&param.name, param.name_span);
             }
             self.item_tree.alloc_function_signature(m)
         }));
@@ -1933,40 +1935,36 @@ impl<'db> SemanticIndexBuilder<'db> {
     ) {
         match &type_expr.kind {
             ast::TypeExprKind::Path {
-                segments,
-                generic_args,
-                ..
+                path, generic_args, ..
             } => {
                 // Allow `baml.errors.*`, `root.errors.*`, `baml.json.*`, and
                 // BEP-066's `reflect.errors.*` (fully qualified).
                 // `baml.json.ParseError` / `baml.json.DecodeError` /
                 // `baml.json.SerializationError` are stdlib error types just like
                 // `baml.errors.*` ones; they need the same exemption.
-                let is_core_builtin_error = segments.len() >= 3
-                    && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
-                    && (segments[1].as_str() == "errors" || segments[1].as_str() == "json");
-                let is_reflection_error = segments.len() >= 3
-                    && segments[0].as_str() == "reflect"
-                    && segments[1].as_str() == "errors";
+                let is_core_builtin_error = path.len() >= 3
+                    && (path[0].as_str() == "baml" || path[0].as_str() == "root")
+                    && (path[1].as_str() == "errors" || path[1].as_str() == "json");
+                let is_reflection_error = path.len() >= 3
+                    && path[0].as_str() == "reflect"
+                    && path[1].as_str() == "errors";
                 let is_builtin_error = is_core_builtin_error || is_reflection_error;
                 // Allow single-segment class names (e.g. `ParseError`) in
                 // builtin files — the class is resolvable in the current namespace
                 // and TIR will type-check it.  This allows builtin functions to
                 // declare `throws` for classes defined in the same stdlib namespace
                 // without requiring the full `baml.json.ParseError` path.
-                let is_builtin_class_ref = segments.len() == 1
+                let is_builtin_class_ref = path.len() == 1
                     && generic_args.is_empty()
-                    && segments[0]
+                    && path[0]
                         .as_str()
                         .chars()
                         .next()
                         .is_some_and(char::is_uppercase);
-                let is_allowed_generic = segments.len() == 1
+                let is_allowed_generic = path.len() == 1
                     && generic_args.is_empty()
                     && !is_builtin_class_ref
-                    && allowed_generic_params
-                        .iter()
-                        .any(|name| name == &segments[0]);
+                    && allowed_generic_params.iter().any(|name| name == &path[0]);
                 // A projection off one of the function's own generic params —
                 // e.g. `T.Error` for `<T extends Iface>`, which parses as a
                 // dotted path at this phase. The concrete error is the
@@ -1975,11 +1973,9 @@ impl<'db> SemanticIndexBuilder<'db> {
                 // (the declared `throws` is erased for builtins). Lets a builtin
                 // declare `throws T.Error` instead of an unconstrained error
                 // param that call sites cannot pin.
-                let is_generic_param_projection = segments.len() >= 2
+                let is_generic_param_projection = path.len() >= 2
                     && generic_args.is_empty()
-                    && allowed_generic_params
-                        .iter()
-                        .any(|name| name == &segments[0]);
+                    && allowed_generic_params.iter().any(|name| name == &path[0]);
                 if !is_builtin_error
                     && !is_builtin_class_ref
                     && !is_allowed_generic
@@ -2003,10 +1999,10 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::TypeExprKind::AssociatedTypeProjection { base, .. }
                 if matches!(
                     &base.kind,
-                    ast::TypeExprKind::Path { segments, generic_args, .. }
+                    ast::TypeExprKind::Path { path, generic_args, .. }
                         if generic_args.is_empty()
-                            && segments.len() == 1
-                            && allowed_generic_params.iter().any(|name| name == &segments[0])
+                            && path.len() == 1
+                            && allowed_generic_params.iter().any(|name| name == &path[0])
                 ) => {}
             // `throws never` and `throws unknown` are the two explicit effect
             // bounds and are both valid for host-bound functions. The latter
@@ -2018,11 +2014,9 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn render_type_expr(type_expr: &ast::TypeExpr) -> String {
         match &type_expr.kind {
-            ast::TypeExprKind::Path { segments, .. } => segments
-                .iter()
-                .map(Name::as_str)
-                .collect::<Vec<_>>()
-                .join("."),
+            ast::TypeExprKind::Path { path, .. } => {
+                path.iter().map(Name::as_str).collect::<Vec<_>>().join(".")
+            }
             ast::TypeExprKind::AssociatedTypeProjection { .. } => type_expr.to_string(),
             ast::TypeExprKind::Int => "int".to_string(),
             ast::TypeExprKind::Bigint => "bigint".to_string(),

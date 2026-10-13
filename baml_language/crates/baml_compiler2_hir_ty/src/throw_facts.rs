@@ -11,11 +11,11 @@
 
 use std::collections::BTreeSet;
 
-use baml_base::Name;
+use baml_base::{Name, PathOrigin};
 use baml_compiler2_ast::{AstSourceMap, BodyNode, Expr, ExprBody, Literal};
 use baml_compiler2_hir::{
     contributions::Definition,
-    package::{PackageItems, PathHead, path_head},
+    package::{PackageItems, PathHead, path_head_for},
 };
 use baml_type::{Ty, throw_facts::FunctionThrowFacts};
 
@@ -315,10 +315,10 @@ fn is_catch_rethrow(
     let Some(source_map) = source_map else {
         return false;
     };
-    let Expr::Path(segments) = &body.exprs[value] else {
+    let Expr::Path(path) = &body.exprs[value] else {
         return false;
     };
-    let [name] = segments.as_slice() else {
+    let [name] = path.segments() else {
         return false;
     };
     let value_span = source_map.expr_span(value);
@@ -360,22 +360,23 @@ fn throw_fact_from_expr<'db>(
         Expr::Literal(Literal::Float(_)) => Some(Ty::Float),
         Expr::Literal(Literal::Bool(_)) => Some(Ty::Bool),
         Expr::Null => Some(Ty::Null),
-        Expr::Path(segments) if !segments.is_empty() => {
+        Expr::Path(path) if !path.is_empty() => {
             // A thrown bare identifier naming a parameter (`throw s`) carries
             // that parameter's declared type — it is a value, not a type path.
-            if let [name] = segments.as_slice()
+            if let [name] = path.segments()
                 && let Some((_, ty)) = param_types.iter().find(|(param, _)| param == name)
             {
                 Some(ty.clone())
             } else {
-                resolve_path_to_ty(db, pkg_items, ns_context, segments)
+                resolve_path_to_ty(db, pkg_items, ns_context, path.origin(), path)
             }
         }
-        Expr::MemberAccess { .. } => expr_to_path(expr_id, body)
-            .and_then(|segments| resolve_path_to_ty(db, pkg_items, ns_context, &segments)),
+        Expr::MemberAccess { .. } => expr_to_path(expr_id, body).and_then(|segments| {
+            resolve_path_to_ty(db, pkg_items, ns_context, PathOrigin::Written, &segments)
+        }),
         Expr::Object {
             type_name: path, ..
-        } => resolve_path_to_ty(db, pkg_items, ns_context, path.segments()),
+        } => resolve_path_to_ty(db, pkg_items, ns_context, path.origin(), path.segments()),
         _ => None,
     };
     // This lightweight, cycle-avoiding pass can't statically name every thrown
@@ -406,9 +407,10 @@ fn resolve_path_to_ty<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     pkg_items: &PackageItems<'db>,
     ns_context: &[Name],
+    origin: PathOrigin,
     segments: &[Name],
 ) -> Option<Ty> {
-    let head = path_head(db, pkg_items.root, segments);
+    let head = path_head_for(db, pkg_items.root, ns_context, origin, segments);
     // Try treating the last segment as an enum variant and the prefix as
     // the enum path (e.g. `Status.HttpError` or `root.Status.Failed`).
     if let [enum_path @ .., variant] = segments
@@ -449,7 +451,7 @@ fn lookup_type_in_scope<'db>(
     head: PathHead,
     path: &[Name],
 ) -> Option<Definition<'db>> {
-    if let PathHead::Package(package) = head
+    if let PathHead::Package(package) | PathHead::Lang(package) = head
         && let Some((type_name, namespace)) = path[1..].split_last()
     {
         let items = if package == pkg_items.root {
@@ -497,7 +499,7 @@ fn body_nodes(body: &ExprBody) -> Vec<BodyNode> {
 
 fn expr_to_path(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<Vec<Name>> {
     match &body.exprs[expr_id] {
-        Expr::Path(segments) if !segments.is_empty() => Some(segments.clone()),
+        Expr::Path(path) if !path.is_empty() => Some(path.to_vec()),
         Expr::MemberAccess { base, member } => {
             let mut base_path = expr_to_path(*base, body)?;
             base_path.push(member.clone());

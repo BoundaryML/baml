@@ -8,7 +8,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_base::{Name, TypePath};
+use baml_base::{Name, Path};
 use la_arena::{Arena, Idx};
 use text_size::TextRange;
 
@@ -40,7 +40,7 @@ pub struct RawAttributeArg {
 pub enum TypeExprKind {
     /// Named type path: `User`, `baml.http.Request`, `Stream<T>`
     Path {
-        segments: Vec<Name>,
+        path: Path,
         /// Generic type arguments (e.g., `<T>` in `Stream<T>`). Empty for non-generic paths.
         generic_args: Vec<TypeExpr>,
         /// Named associated type bindings in type positions, e.g. `Iterator<Item = int>`.
@@ -280,17 +280,17 @@ impl std::fmt::Display for TypeExprKind {
 
         match self {
             TypeExprKind::Path {
-                segments,
+                path,
                 generic_args,
                 associated_type_bindings,
                 ..
             } => {
-                let path = segments
+                let dotted = path
                     .iter()
                     .map(smol_str::SmolStr::as_str)
                     .collect::<Vec<_>>()
                     .join(".");
-                write!(f, "{path}")?;
+                write!(f, "{dotted}")?;
                 if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
                     write!(f, "<")?;
                     let mut first = true;
@@ -854,8 +854,9 @@ pub enum Expr {
     /// Stores the fully-resolved bytes (escape sequences already processed).
     ByteStringLiteral(Vec<u8>),
     Null,
-    /// Path expression: `x`, `user.name`, `Status.Active`
-    Path(Vec<Name>),
+    /// Path expression: `x`, `user.name`, `Status.Active` — with who wrote
+    /// it, which decides how its first segment is read.
+    Path(Path),
     /// Generic instantiation as a value: `foo<int>` — a generic callable
     /// referenced with explicit type arguments but NOT called. The result is
     /// the specialized function value (`(int) -> int`). Distinct from
@@ -940,7 +941,7 @@ pub enum Expr {
         /// object literal when a type name precedes the brace
         /// (`looks_like_object_constructor`), so a name-less `{ .. }` is a map or
         /// block, never an object literal.
-        type_name: TypePath,
+        type_name: Path,
         /// Explicit generic type args from syntax like `Foo<int> { ... }`.
         /// Empty when no `<...>` was written (e.g. bare `Foo { ... }`).
         type_args: Vec<TypeExpr>,
