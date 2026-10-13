@@ -1897,12 +1897,12 @@ mod tests {
             "the stored output is the fresh one"
         );
 
-        // The same output with its first function renamed.
+        // The same output with its first function's source file changed.
         let mut forged = fresh.clone();
         let Some(bex_vm_types::Object::Function(function)) = forged.unit.code.first_mut() else {
             panic!("the user package's code starts with a function");
         };
-        function.name.push('!');
+        function.source_file.push('!');
         ctx.cache
             .store_package_shared(&key, &forged)
             .expect("the forged entry stores");

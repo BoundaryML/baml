@@ -987,12 +987,14 @@ fn field_links<'db>(
 
 /// A synthesized zero-arity function: no source, no signature, `Internal`
 /// origin, `null` return.
-fn synthesized_function(name: String, bytecode: Bytecode) -> Function {
+fn synthesized_function(
+    identity: bex_vm_types::types::FunctionIdentity,
+    bytecode: Bytecode,
+) -> Function {
     Function {
-        name,
+        identity,
         source_file: String::new(),
         docstring: None,
-        declared_name: None,
         arity: 0,
         real_local_count: 0,
         bytecode,
@@ -1014,10 +1016,9 @@ fn synthesized_function(name: String, bytecode: Bytecode) -> Function {
         display_return_type: "null".to_string(),
         throws_type: TyTemplate::Never,
         origin: FunctionOrigin::Internal,
-        is_interface_body: false,
         native_key: None,
         body_meta: None,
-        runtime_package: bex_vm_types::HeapPtr::null(),
+        owner: bex_vm_types::HeapPtr::null(),
     }
 }
 
@@ -1044,7 +1045,9 @@ pub(crate) fn compile_let_helper<'db>(
     opt: OptLevel,
 ) -> Result<Function, LoweringError> {
     let file = binding.file(db);
-    let name = format!("$init_let_{ordinal}");
+    let identity = bex_vm_types::types::FunctionIdentity::InitLet(
+        u32::try_from(ordinal).expect("let ordinals fit u32"),
+    );
     let lowered = lower_let_body(db, binding, opt).map_err(|error| {
         crate::internal_lowering_error(
             db,
@@ -1058,7 +1061,7 @@ pub(crate) fn compile_let_helper<'db>(
         bytecode.constants.push(ConstValue::Null);
         bytecode.instructions.push(Instruction::LoadConst(0));
         bytecode.instructions.push(Instruction::Return);
-        return Ok(synthesized_function(name, bytecode));
+        return Ok(synthesized_function(identity, bytecode));
     };
     let line_starts = crate::build_line_starts(file.text(db));
     let source_file = crate::relative_source_path(db, file);
@@ -1091,8 +1094,7 @@ pub(crate) fn compile_let_helper<'db>(
         capture_types: &empty_capture_types,
         spawn_capture_indices: &empty_spawn_capture_indices,
     };
-    let mut helper = compile_mir_function(&mir_body, 0, None, &line_starts, ctx, opt);
-    helper.name = name;
+    let mut helper = compile_mir_function(&mir_body, 0, identity, None, &line_starts, ctx, opt);
     helper.source_file = source_file;
     helper.arity = 0;
     Ok(helper)
@@ -1138,7 +1140,7 @@ pub(crate) fn build_init_function(steps: &[InitStep]) -> Function {
     instructions.push(Instruction::Return);
     meta.push(InstructionMeta::default());
     synthesized_function(
-        "$init".to_string(),
+        bex_vm_types::types::FunctionIdentity::Init,
         Bytecode {
             instructions,
             constants,
@@ -1179,7 +1181,7 @@ pub(crate) fn build_init_test_chainer(parts: &[GlobalIndex]) -> Function {
         param_has_default: vec![false],
         display_param_types: vec!["unknown".to_string()],
         ..synthesized_function(
-            "$init_test".to_string(),
+            bex_vm_types::types::FunctionIdentity::InitTest,
             Bytecode {
                 instructions,
                 constants,

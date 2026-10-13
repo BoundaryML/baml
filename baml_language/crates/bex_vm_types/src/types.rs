@@ -168,6 +168,27 @@ impl Program {
         }
     }
 
+    /// The rendered name of the function at `index` as the loader will render
+    /// it: under the display label of the package that placed it
+    /// ([`ProgramPackage::objects`]), which the loader binds as the
+    /// function's owner. `None` when `index` is not a function.
+    pub fn function_name(&self, index: ObjectIndex) -> Option<String> {
+        let Object::Function(function) = &self.objects[index] else {
+            return None;
+        };
+        let owner = self.package_placing(index);
+        Some(function.identity.render(owner.map(|package| &package.name)))
+    }
+
+    /// The package whose placed objects hold `index`, if any package does
+    /// (a hand-built program may list no ranges).
+    pub fn package_placing(&self, index: ObjectIndex) -> Option<&ProgramPackage> {
+        let raw = u32::try_from(index.raw()).ok()?;
+        self.packages
+            .iter()
+            .find(|package| package.objects.contains(&raw))
+    }
+
     /// Check the executable against the format's laws — every index within
     /// its pool, every table naming an object of the kind it says, every
     /// head bindable to the declaration its tag encodes, every type switch
@@ -194,7 +215,7 @@ impl Program {
         let function =
             |index: ObjectIndex, role: &str, is_body: bool| -> Result<(), InvalidProgram> {
                 match object(index, role)? {
-                    Object::Function(function) if function.is_interface_body == is_body => Ok(()),
+                    Object::Function(function) if function.is_interface_body() == is_body => Ok(()),
                     other => Err(invalid(format!(
                         "{role} names a {:?} object where {} is required",
                         ObjectType::of(other),
@@ -217,6 +238,14 @@ impl Program {
                     class.methods.len()
                 )));
             }
+            if let Object::Function(function) = pooled
+                && matches!(function.identity, FunctionIdentity::Entry(_))
+            {
+                return Err(invalid(format!(
+                    "function object {index} is an entry trampoline, which the VM synthesizes and \
+                     no executable carries"
+                )));
+            }
         }
 
         let package_count = self.packages.len();
@@ -226,8 +255,56 @@ impl Program {
                 self.root
             )));
         }
+        // The packages' placed objects are disjoint and contiguous from the
+        // start of the pool: every object the linker placed belongs to
+        // exactly one package. Objects after the last range belong to none
+        // — the linker places none, but a program a test extends by hand
+        // may hold some.
+        let mut placed: Vec<&ProgramPackage> = self.packages.iter().collect();
+        placed.sort_by_key(|package| (package.objects.start, package.objects.end));
+        let mut next = 0u32;
+        for package in placed {
+            let objects = &package.objects;
+            if objects.start != next || objects.end < objects.start {
+                return Err(invalid(format!(
+                    "package `{}` places objects {}..{} where {next} was expected next",
+                    package.name, objects.start, objects.end
+                )));
+            }
+            next = objects.end;
+        }
+        if next as usize > object_count {
+            return Err(invalid(format!(
+                "the packages place {next} objects of {object_count}"
+            )));
+        }
         for package in &self.packages {
             let name = &package.name;
+            let placed_here = |index: ObjectIndex, role: &str| -> Result<(), InvalidProgram> {
+                let raw = u32::try_from(index.raw()).expect("object pools fit u32");
+                if package.objects.contains(&raw) {
+                    Ok(())
+                } else {
+                    Err(invalid(format!(
+                        "{role} names object {raw}, which the package did not place"
+                    )))
+                }
+            };
+            for (role, index) in [
+                ("`$init`", package.init),
+                ("`$init_test`", package.test_init),
+            ] {
+                if let Some(index) = index {
+                    function(index, &format!("package `{name}` {role}"), false)?;
+                    placed_here(index, &format!("package `{name}` {role}"))?;
+                }
+            }
+            for (path, ordinal) in &package.globals {
+                let slot = package.slot_base.raw() + *ordinal as usize;
+                if let Some(ConstValue::Object(index)) = self.globals.get(slot) {
+                    placed_here(*index, &format!("package `{name}` cell `{path}`"))?;
+                }
+            }
             let mut edge_names = HashSet::new();
             for edge in &package.edges {
                 if edge.target as usize >= package_count {
@@ -256,6 +333,7 @@ impl Program {
                             ObjectType::of(pooled)
                         )));
                     }
+                    placed_here(index, &role)?;
                 }
                 Ok(())
             };
@@ -402,7 +480,7 @@ impl Program {
                         if !in_range {
                             failure = Some(invalid(format!(
                                 "{role} (function `{}`) references an operand outside the program",
-                                function.name
+                                function.name()
                             )));
                         }
                     });
@@ -417,7 +495,7 @@ impl Program {
                                 return Err(invalid(format!(
                                     "{role} (function `{}`) loads package {package} of \
                                      {package_count}",
-                                    function.name
+                                    function.name()
                                 )));
                             }
                             // The VM reads the dispatch value at `args_offset +
@@ -428,7 +506,7 @@ impl Program {
                                 return Err(invalid(format!(
                                     "{role} (function `{}`) dispatches a virtual call on \
                                      argument {self_arg} of {nargs}",
-                                    function.name
+                                    function.name()
                                 )));
                             }
                             _ => {}
@@ -443,7 +521,7 @@ impl Program {
                     {
                         return Err(invalid(format!(
                             "{role} (function `{}`) switch table {table} is not solved",
-                            function.name
+                            function.name()
                         )));
                     }
                 }

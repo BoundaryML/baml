@@ -89,7 +89,13 @@ fn function_metadata_is_spelled_from_the_package_root() {
         .objects
         .iter()
         .find_map(|object| match object {
-            bex_vm_types::Object::Function(function) if function.name.ends_with("util.make") => {
+            bex_vm_types::Object::Function(function)
+                if function
+                    .identity
+                    .declared_name()
+                    .map(baml_base::Name::as_str)
+                    == Some("make") =>
+            {
                 Some(function)
             }
             _ => None,

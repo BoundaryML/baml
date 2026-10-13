@@ -2,9 +2,9 @@
 //! (in-class or free) and interface default-method bodies are pooled and
 //! slotted like any function — direct calls stay `Call(GlobalIndex)` — but
 //! they are not addressable items AT ALL: no name map of the compiled
-//! `Program` carries them (their `Function::name` is display-only), and
-//! every runtime name surface (the runtime name maps, entry-point
-//! resolution, suffix matching) skips them.
+//! `Program` carries them (their rendered name is display-only), and every
+//! runtime name surface (the runtime name maps, entry-point resolution,
+//! suffix matching) skips them.
 
 use baml_tests::{
     baml_test,
@@ -46,12 +46,14 @@ function main() -> string throws never {
 }
 "#;
 
-/// The three body shapes this fixture produces, by their display spellings:
-/// the interface default body, the in-class override, and the free-impl
+/// The three body shapes this fixture produces, by their display spellings
+/// (rendered from each body's identity under its package's label): the
+/// interface default body, the in-class override, and the free-impl
 /// override. An impl block is anonymous, so overrides spell the synthesized
-/// `<(target as iface)>` segment (the lambda convention) — canonical, fully
-/// qualified, and identical for the in-class and out-of-body spellings
-/// (block syntax is not identity).
+/// `<(target as iface)>` segment (the lambda convention), every head of the
+/// body's own package spelled by the owner's label (`user.X`, the label the
+/// name is prefixed with) and a dependency's by edge path, and identical for
+/// the in-class and out-of-body spellings (block syntax is not identity).
 const BODY_SPELLINGS: [&str; 3] = [
     "user.Greeter.greet",
     "user.<(user.Overrides as user.Greeter)>.greet",
@@ -71,13 +73,18 @@ fn interface_bodies_are_pooled_and_slotted_but_in_no_name_map() {
             .iter()
             .enumerate()
             .find_map(|(idx, obj)| match obj {
-                Object::Function(f) if f.name == spelling => Some((idx, f)),
+                Object::Function(f)
+                    if program.function_name(bex_vm_types::ObjectIndex::from_raw(idx))
+                        == Some(spelling.to_string()) =>
+                {
+                    Some((idx, f))
+                }
                 _ => None,
             })
             .unwrap_or_else(|| panic!("`{spelling}` has no pooled function object"));
         assert!(
-            function.is_interface_body,
-            "`{spelling}` must carry the body flag"
+            function.is_interface_body(),
+            "`{spelling}` must be an interface body"
         );
         assert!(
             program.globals.contains(&bex_vm_types::ConstValue::Object(
@@ -98,6 +105,37 @@ fn interface_bodies_are_pooled_and_slotted_but_in_no_name_map() {
         matches!(program.globals[main.slot.raw()], bex_vm_types::ConstValue::Object(object) if object == main.object),
         "`user.main`'s cell holds it"
     );
+}
+
+/// MIR's display spelling of an impl-provided body (`definition_link_name`,
+/// what operand metadata and dumps show) and the loaded function's rendered
+/// name are ONE spelling: the package label, then `<(target as iface)>.m`
+/// with every head located from the body's own package by edge path.
+#[test]
+fn an_impl_body_is_spelled_once_by_mir_and_the_runtime() {
+    use baml_compiler2_hir::{contributions::Definition, item_data};
+    use baml_db::{OptLevel, compile_program};
+    use baml_tests::engine::{TestDbExt, db_with_root};
+
+    let root_path = std::path::Path::new("/anonymity/spelling");
+    let mut db = db_with_root(root_path);
+    let file = db.file("/anonymity/spelling/main.baml", SOURCE);
+    let program = compile_program(&db, file.source_root(&db), OptLevel::One).expect("compiles");
+    let runtime_names: Vec<String> = (0..program.objects.len())
+        .filter_map(|index| program.function_name(bex_vm_types::ObjectIndex::from_raw(index)))
+        .collect();
+    let mut checked = 0;
+    for &block in item_data::file_impls(&db, file) {
+        for &method in &item_data::impl_block_data(&db, block).methods {
+            let mir = baml_compiler2_mir::definition_link_name(&db, Definition::Function(method));
+            assert!(
+                runtime_names.contains(&mir),
+                "MIR spells `{mir}`, which no loaded function renders as; loaded: {runtime_names:?}"
+            );
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 2, "both provided `greet` bodies were compared");
 }
 
 #[tokio::test]

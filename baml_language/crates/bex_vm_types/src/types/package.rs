@@ -382,6 +382,15 @@ pub struct ProgramPackage {
     /// The first of the package's cells in the program's global pool: the
     /// linker lays them out contiguously, functions then `let`s.
     pub slot_base: GlobalIndex,
+    /// The pool objects the package's units and tails were placed as — the
+    /// linker lays a package out contiguously. Every object in the range
+    /// belongs to this package: its declarations, named functions and
+    /// bodies, its initializers and their helpers, its closure bodies; no
+    /// other package's object lies in it. What the loader binds every
+    /// function's owner from, and `Program::validate` holds every table to.
+    /// A pooled object past every package's range (a program a test extends
+    /// by hand) is owned by none.
+    pub objects: std::ops::Range<u32>,
 }
 
 impl ProgramPackage {

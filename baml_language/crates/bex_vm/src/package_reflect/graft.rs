@@ -435,7 +435,7 @@ impl Image {
                 let is_body = matches!(path, DeclPath::InterfaceBody(_));
                 if !matches!(
                     vm.get_object(ptr),
-                    Object::Function(function) if function.is_interface_body == is_body
+                    Object::Function(function) if function.is_interface_body() == is_body
                 ) {
                     return Err(link_error(format!(
                         "the unit exports `{path}` as a {:?} object",
@@ -1096,7 +1096,7 @@ fn adopt(object: &mut Object, package_ptr: HeapPtr) {
             alias.type_tag = TypeTag::fresh_dynamic();
             alias.owner = package_ptr;
         }
-        Object::Function(function) => function.runtime_package = package_ptr,
+        Object::Function(function) => function.owner = package_ptr,
         Object::GenericFunction(function) => function.runtime_package = package_ptr,
         // Neither a declaration nor a body: nothing to mint or own.
         Object::String(_)
@@ -1199,7 +1199,7 @@ fn relocate(
                 let SwitchDispatch::Keys(keys) = &switch.dispatch else {
                     return Err(link_error(format!(
                         "function `{}` states a switch by values instead of keys",
-                        function.name
+                        function.name()
                     )));
                 };
                 if let Some(index) = keys.iter().find_map(|key| match key {
@@ -1346,7 +1346,8 @@ fn load_rule(
                 ))
             })?;
         let fqn = image.objects[*local];
-        if !matches!(vm.get_object(fqn), Object::Function(function) if function.is_interface_body) {
+        if !matches!(vm.get_object(fqn), Object::Function(function) if function.is_interface_body())
+        {
             return Err(link_error(format!(
                 "impl method `{name}` resolves to an object that is not an interface body"
             )));

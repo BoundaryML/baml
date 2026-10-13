@@ -18,12 +18,13 @@ fn item(name: &str) -> LocalName {
     LocalName::new(Vec::new(), Name::new(name))
 }
 
+/// A test function: `name` is `pkg.ns.f`, kept as the ITEM path `ns.f` (the
+/// package segment is the owner's, which a pooled function has none of).
 fn func(name: &str, instructions: Vec<Instruction>) -> Object {
     Object::Function(Box::new(Function {
-        name: name.to_string(),
+        identity: test_identity(name),
         source_file: "user.baml".to_string(),
         docstring: None,
-        declared_name: None,
         arity: 0,
         real_local_count: 0,
         bytecode: Bytecode {
@@ -48,11 +49,25 @@ fn func(name: &str, instructions: Vec<Instruction>) -> Object {
         display_return_type: String::new(),
         throws_type: bex_vm_types::TyTemplate::Never,
         origin: FunctionOrigin::Internal,
-        is_interface_body: false,
         native_key: None,
         body_meta: None,
-        runtime_package: bex_vm_types::HeapPtr::null(),
+        owner: bex_vm_types::HeapPtr::null(),
     }))
+}
+
+/// `pkg.ns.f` → the declared identity of `ns.f` (every test function is a
+/// free function; the package segment is dropped, since a pooled function's
+/// package is its owner, not part of its identity).
+fn test_identity(name: &str) -> bex_vm_types::types::FunctionIdentity {
+    let mut segments: Vec<&str> = name.split('.').collect();
+    let leaf = segments.pop().expect("a test function has a name");
+    if leaf == "$init" {
+        return bex_vm_types::types::FunctionIdentity::Init;
+    }
+    let namespace = segments.into_iter().skip(1).map(Name::new).collect();
+    bex_vm_types::types::FunctionIdentity::Declared(bex_vm_types::types::FnPath::Free(
+        bex_vm_types::types::LocalName::new(namespace, Name::new(leaf)),
+    ))
 }
 
 /// A function whose constants reference local objects `refs`.
@@ -161,12 +176,17 @@ fn package_named<'p>(program: &'p Program, name: &str) -> &'p ProgramPackage {
         .unwrap_or_else(|| panic!("no package `{name}`"))
 }
 
+/// Every pooled object's display: functions as the loader will render them
+/// (under the label of the package whose cells hold them).
 fn function_names(program: &Program) -> Vec<String> {
     program
         .objects
         .iter()
-        .map(|object| match object {
-            Object::Function(function) => function.name.clone(),
+        .enumerate()
+        .map(|(index, object)| match object {
+            Object::Function(_) => program
+                .function_name(ObjectIndex::from_raw(index))
+                .expect("a function renders"),
             Object::Class(class) => format!("class {}", class.path),
             Object::GenericFunction(generic) => format!("generic@{}", generic.function.raw()),
             other => format!("{other:?}"),
@@ -781,10 +801,12 @@ fn init_order_is_topological_with_ties_by_position() {
     .unwrap();
     assert_eq!(program.init_order, vec![1, 2, 0]);
     // Placement is set order; only the execution order is topological.
-    assert_eq!(
-        function_names(&program),
-        vec!["a.$init", "z.$init", "c.$init"]
-    );
+    let placed: Vec<usize> = program
+        .packages
+        .iter()
+        .map(|package| package.init.expect("every package has an init").raw())
+        .collect();
+    assert_eq!(placed, vec![0, 1, 2]);
 }
 
 #[test]
@@ -1388,7 +1410,12 @@ fn an_exported_function_must_be_a_function() {
     let Object::Function(function) = &mut unit.code[0] else {
         unreachable!()
     };
-    function.is_interface_body = true;
+    function.identity = bex_vm_types::types::FunctionIdentity::InterfaceBody(
+        bex_vm_types::types::BodyKey::Default {
+            interface: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("I")),
+            method: Name::new("f"),
+        },
+    );
     assert!(refused(&unit, None, &record).contains("exports function f"));
 }
 

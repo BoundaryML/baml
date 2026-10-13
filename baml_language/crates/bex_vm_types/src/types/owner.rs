@@ -81,9 +81,20 @@ pub fn declaration_name(
     package: Option<HeapPtr>,
     path: &super::LocalName,
 ) -> crate::DeclarationName {
-    let Some(package) = package else {
-        return crate::DeclarationName::Anonymous(baml_base::Name::new(path.to_string()));
-    };
+    match package.and_then(package_label) {
+        Some(label) => crate::DeclarationName::Declared(path.under(&label)),
+        None => crate::DeclarationName::Anonymous(baml_base::Name::new(path.to_string())),
+    }
+}
+
+/// The display label of the package at `package` ([`super::Package::name`]),
+/// or `None` for a null pointer — a declaration or function no package has
+/// placed yet. Lossy display only, as the label is.
+#[must_use]
+pub fn package_label(package: HeapPtr) -> Option<baml_base::Name> {
+    if package.is_null() {
+        return None;
+    }
     // SAFETY: a declaration's package is a GC edge of the declaration —
     // traced and forwarded with it — so it is live wherever the declaration
     // is, which the caller's heap permit (or the compile-time region) holds.
@@ -96,7 +107,7 @@ pub fn declaration_name(
     let crate::Object::Package(package) = (unsafe { package.get() }) else {
         unreachable!("a declaration's owner edge points at a package")
     };
-    crate::DeclarationName::Declared(path.under(&package.name))
+    Some(package.name.clone())
 }
 
 impl Default for Owner {

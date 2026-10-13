@@ -436,7 +436,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                     // `NativeUnresolved` at first call.
                     let Some(key) = function.native_key.as_deref() else {
                         return Err(VmInternalError::MissingNativeFunction {
-                            name: function.name.clone(),
+                            name: function.name(),
                         });
                     };
                     // Only VM-owned packages resolve here; keyed functions
@@ -468,10 +468,9 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 bex_vm_types::FunctionKind::Native(ptr) => bex_vm_types::FunctionKind::Native(ptr),
             };
             Object::Function(Box::new(bex_vm_types::Function {
-                name: function.name,
+                identity: function.identity,
                 source_file: function.source_file,
                 docstring: function.docstring,
-                declared_name: function.declared_name,
                 arity: function.arity,
                 real_local_count: function.real_local_count,
                 bytecode: function.bytecode,
@@ -493,11 +492,9 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 display_return_type: function.display_return_type,
                 throws_type: function.throws_type,
                 origin: function.origin,
-                is_interface_body: function.is_interface_body,
                 native_key: function.native_key,
                 body_meta: function.body_meta,
-
-                runtime_package: function.runtime_package,
+                owner: function.owner,
             }))
         }
         other => other,

@@ -92,6 +92,26 @@ fn a_root_outside_the_packages_is_refused() {
 }
 
 #[test]
+fn an_entry_trampoline_in_the_pool_is_refused() {
+    let mut program = program();
+    let function = some_function(&program);
+    let Some(Object::Function(pooled)) = program.objects.get_mut(function) else {
+        unreachable!("the position was of a function")
+    };
+    pooled.identity = bex_vm_types::types::FunctionIdentity::Entry("main".into());
+    assert!(refused(program).contains("entry trampoline"));
+}
+
+#[test]
+fn packages_placing_objects_out_of_order_are_refused() {
+    let mut program = program();
+    let root = program.root as usize;
+    // Shift the root's range by one: the ranges no longer partition the pool.
+    program.packages[root].objects.start += 1;
+    assert!(refused(program).contains("places objects"));
+}
+
+#[test]
 fn a_declaration_table_naming_another_kind_is_refused() {
     let mut program = program();
     let function = some_function(&program);

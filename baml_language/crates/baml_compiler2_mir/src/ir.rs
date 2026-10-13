@@ -145,9 +145,6 @@ pub struct RuntimeSignature {
     pub throws_type: TyTemplate,
     /// The declaration's joined `///` doc-comment lines, if any.
     pub docstring: Option<String>,
-    /// The name the declaration was written with; `None` for lambdas
-    /// (which have no source-level name).
-    pub name: Option<String>,
     /// Display strings for the generic type parameters (`T extends Bound`).
     pub display_type_params: Vec<String>,
     /// The name of each type-argument slot in the callee frame, in slot

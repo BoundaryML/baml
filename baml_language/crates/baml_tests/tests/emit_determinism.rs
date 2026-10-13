@@ -184,15 +184,17 @@ fn a_dependency_emits_identically_wherever_its_root_lives() {
     for object in &here.code {
         if let bex_vm_types::Object::Function(function) = object {
             assert_eq!(
-                function.source_file, "lib.baml",
+                function.source_file,
+                "lib.baml",
                 "`{}` carries its root's location",
-                function.name
+                function.name()
             );
-            names.push(function.name.as_str());
+            names.push(function.name());
         }
     }
+    // Unplaced, so unlabelled: the loader prefixes the package's label.
     assert!(
-        names.contains(&"lib.$init_test_lib"),
+        names.iter().any(|name| name == "$init_test_lib"),
         "the test initializer is named from the root-relative path, found {names:?}"
     );
     assert_eq!(

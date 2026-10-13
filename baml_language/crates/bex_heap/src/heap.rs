@@ -547,7 +547,7 @@ impl BexHeap {
                     Object::Enum(enm) => format!("enum {}", enm.name()),
                     Object::Interface(interface) => format!("interface {}", interface.name()),
                     Object::TypeAlias(alias) => format!("type alias {}", alias.name()),
-                    Object::Function(function) => format!("function {}", function.name),
+                    Object::Function(function) => format!("function {}", function.name()),
                     Object::ImplRule(rule) => format!("impl rule at {:?}", rule.interface_head),
                     other => format!("{:?} object", bex_vm_types::ObjectType::of(other)),
                 };
@@ -591,7 +591,7 @@ impl BexHeap {
                     .map(|(index, table)| {
                         format!(
                             "  function {}: switch table {index} over [{}]",
-                            function.name,
+                            function.name(),
                             table.key_names.join(", ")
                         )
                     })
@@ -1343,10 +1343,14 @@ mod tests {
             Bytecode, Function, FunctionKind, bytecode::Instruction, types::FunctionOrigin,
         };
         Object::Function(Box::new(Function {
-            name: "user.pick".to_string(),
+            identity: bex_vm_types::types::FunctionIdentity::Declared(
+                bex_vm_types::types::FnPath::Free(bex_vm_types::types::LocalName::new(
+                    Vec::new(),
+                    baml_base::Name::new("pick"),
+                )),
+            ),
             source_file: "user.baml".to_string(),
             docstring: None,
-            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode: Bytecode {
@@ -1372,10 +1376,9 @@ mod tests {
             display_return_type: String::new(),
             throws_type: bex_vm_types::TyTemplate::Never,
             origin: FunctionOrigin::Internal,
-            is_interface_body: false,
             native_key: None,
             body_meta: None,
-            runtime_package: HeapPtr::null(),
+            owner: HeapPtr::null(),
         }))
     }
 
@@ -1404,7 +1407,7 @@ mod tests {
     /// image that holds one is refused where it is loaded rather than where
     /// a value first reaches the switch.
     #[test]
-    #[should_panic(expected = "function user.pick: switch table 0 over [one, hundred]")]
+    #[should_panic(expected = "function pick: switch table 0 over [one, hundred]")]
     fn an_image_with_an_unsolved_switch_is_refused() {
         use bex_vm_types::bytecode::SwitchTable;
         let heap = BexHeap::build_unsealed_default(vec![function_switching_through(

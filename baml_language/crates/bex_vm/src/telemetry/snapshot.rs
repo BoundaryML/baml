@@ -185,7 +185,7 @@ impl Scratch {
                 }
                 Object::Function(f) => SnapshotObject::Descriptive {
                     kind: Description::Function,
-                    name: b.leaves().label(&f.name.as_str().into()),
+                    name: b.leaves().label(&f.name().as_str().into()),
                 },
                 Object::Closure(_) => describe(Description::Closure),
                 Object::BoundMethod(_) => describe(Description::BoundMethod),

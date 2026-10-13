@@ -25,6 +25,15 @@ const STUB_SOURCE: &str = r#"
 function _stub() -> int { 42 }
 "#;
 
+/// The identity of an injected test function named `name`: a free function at
+/// the root namespace (a pooled function's package is its owner, which these
+/// tests never bind).
+fn test_identity(name: &str) -> bex_vm_types::types::FunctionIdentity {
+    bex_vm_types::types::FunctionIdentity::Declared(bex_vm_types::types::FnPath::Free(
+        bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name)),
+    ))
+}
+
 /// Add a synthetic bytecode function to an existing `Program`.
 fn inject_function(
     program: &mut Program,
@@ -39,10 +48,9 @@ fn inject_function(
         ..Bytecode::default()
     };
     let func = Function {
-        name: fn_name.to_string(),
+        identity: test_identity(fn_name),
         source_file: String::new(),
         docstring: None,
-        declared_name: None,
         arity,
         real_local_count: 0,
         bytecode,
@@ -64,11 +72,9 @@ fn inject_function(
         display_return_type: "int".to_string(),
         throws_type: baml_type::TyTemplate::Never,
         origin: FunctionOrigin::UserDefined,
-        is_interface_body: false,
         native_key: None,
         body_meta: None,
-
-        runtime_package: bex_vm_types::HeapPtr::null(),
+        owner: bex_vm_types::HeapPtr::null(),
     };
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));
     program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));

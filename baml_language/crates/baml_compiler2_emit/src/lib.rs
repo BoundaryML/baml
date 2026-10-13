@@ -40,20 +40,13 @@ use bex_vm_types::{
 pub(crate) use emit::compile_mir_function;
 pub use package::{emit_package, emit_session_submission};
 
-/// Is `name` spelled under a language package? Such a function is a builtin
-/// whatever file it comes from.
-fn is_builtin_function_name(name: &str) -> bool {
-    name.split('.')
-        .next()
-        .is_some_and(|package| baml_builtins2::stdlib_package_names().contains(&package))
-}
-
+/// The wire origin of an emitted function: every function of a stdlib file
+/// is a builtin, whatever its metadata says; otherwise the metadata's.
 fn emitted_function_origin(
-    fq_name: &str,
     is_builtin_file: bool,
     origin: baml_compiler2_ast::FunctionOrigin,
 ) -> FunctionOrigin {
-    if is_builtin_file || is_builtin_function_name(fq_name) {
+    if is_builtin_file {
         FunctionOrigin::Builtin
     } else {
         match origin {
@@ -249,7 +242,6 @@ fn apply_signature_metadata(
     f.return_type = anchor.anchor_template(&sig.return_type);
     f.throws_type = anchor.anchor_template(&sig.throws_type);
     f.docstring.clone_from(&sig.docstring);
-    f.declared_name.clone_from(&sig.name);
     f.display_type_params.clone_from(&sig.display_type_params);
     f.type_param_names.clone_from(&sig.type_param_names);
     f.generic_param_bounds = sig
@@ -704,7 +696,6 @@ fn compute_function_metadata<'db>(
         // clause (a declared clause is a firewall the inference respects).
         throws_type: compute_throws_type(db, file, &func.name, cache, &frame_params),
         docstring: func.docstring.clone(),
-        name: Some(func.name.to_string()),
         display_type_params,
         type_param_names: baml_type::RuntimeGenericLayout::new(&frame_params)
             .params()
@@ -1098,7 +1089,7 @@ impl GenericFunctionInterner {
 /// a `Terminator::AwaitAny` suspend point).
 fn builtin_emit_function(
     kind: BuiltinKind,
-    fq_name: &str,
+    identity: bex_vm_types::types::FunctionIdentity,
     native_path: &str,
     arity: usize,
 ) -> Option<Function> {
@@ -1116,10 +1107,9 @@ fn builtin_emit_function(
     // spelling); `fq_name` is the display name and need not coincide.
     let native_key = matches!(kind, FunctionKind::NativeUnresolved).then(|| native_path.into());
     Some(Function {
-        name: fq_name.to_string(),
+        identity,
         source_file: String::new(), // builtins have no source file
         docstring: None,
-        declared_name: None,
         arity,
         real_local_count: 0,
         bytecode: Bytecode::default(),
@@ -1141,11 +1131,9 @@ fn builtin_emit_function(
         display_return_type: "null".to_string(),
         throws_type: bex_vm_types::TyTemplate::Never,
         origin: FunctionOrigin::Builtin,
-        is_interface_body: false, // set from the item tree by attach_function_metadata
         native_key,
         body_meta: None,
-
-        runtime_package: bex_vm_types::HeapPtr::null(),
+        owner: bex_vm_types::HeapPtr::null(),
     })
 }
 
@@ -1159,7 +1147,6 @@ fn attach_function_metadata<'db>(
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     cache: &RuntimeLowering<'_>,
     is_builtin_file: bool,
-    fq_name: &str,
     anchor: &mut refs::PackageRefs<'_, '_>,
     compiled_fn: &mut Function,
 ) {
@@ -1169,8 +1156,7 @@ fn attach_function_metadata<'db>(
         baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
     let signature_metadata = compute_function_metadata(db, func_loc, &parameter_defaults, cache);
     apply_signature_metadata(compiled_fn, &signature_metadata, anchor);
-    compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata.origin);
-    compiled_fn.is_interface_body = baml_compiler2_mir::function_is_interface_body(db, func_loc);
+    compiled_fn.origin = emitted_function_origin(is_builtin_file, func.metadata.origin);
 
     // Set LLM-specific body_meta if this is an LLM function with a client.
     //
@@ -1226,7 +1212,10 @@ fn compile_lambdas<'db>(
     let mut result = Vec::with_capacity(lambdas.len());
     for (lambda_idx, lambda) in lambdas.iter().enumerate() {
         let capture_info = capture_infos.get(lambda_idx).cloned().unwrap_or_default();
-        let lambda_name = lambda.identity.link_name(db);
+        let identity = refs::function_identity(db, &lambda.identity);
+        // The operand metadata spells the closure as its identity renders with
+        // no package segment — the historical `.<lambda(parent, i)>`.
+        let lambda_name = identity.render(None);
         let obj_idx = match &lambda.kind {
             MirFunctionKind::Bytecode(body) => {
                 // Recursively compile any nested lambdas within this lambda.
@@ -1259,9 +1248,15 @@ fn compile_lambdas<'db>(
                     capture_types: &capture_info.capture_types,
                     spawn_capture_indices: &capture_info.spawn_capture_indices,
                 };
-                let mut f =
-                    compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
-                f.name.clone_from(&lambda_name);
+                let mut f = compile_mir_function(
+                    body,
+                    lambda.arity,
+                    identity,
+                    lambda.span,
+                    line_starts,
+                    ctx,
+                    opt,
+                );
                 f.source_file = source_file.to_string();
                 // Stamp the runtime signature `lower_lambda` recorded — the
                 // same struct and writer as a top-level declaration (lambdas
@@ -1298,24 +1293,6 @@ mod tests {
     use salsa::Setter;
 
     use super::*;
-
-    #[test]
-    fn builtin_function_names_follow_the_stdlib_inventory() {
-        for package in baml_builtins2::stdlib_package_names() {
-            assert!(is_builtin_function_name(&format!(
-                "{package}.nested.function"
-            )));
-        }
-        for name in [
-            "",
-            "root.function",
-            "user.function",
-            "env.function",
-            "boundary.function",
-        ] {
-            assert!(!is_builtin_function_name(name), "{name}");
-        }
-    }
 
     #[salsa::db]
     pub(crate) struct TestDb {

@@ -495,10 +495,14 @@ pub(crate) mod tests {
     fn native_function_object() -> Object {
         let native: NativeFunction = native_done;
         Object::Function(Box::new(Function {
-            name: "test_native".to_string(),
+            identity: bex_vm_types::types::FunctionIdentity::Declared(
+                bex_vm_types::types::FnPath::Free(bex_vm_types::types::LocalName::new(
+                    Vec::new(),
+                    baml_type::Name::new("test_native"),
+                )),
+            ),
             source_file: String::new(),
             docstring: None,
-            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode: Bytecode::default(),
@@ -520,11 +524,9 @@ pub(crate) mod tests {
             display_return_type: "int".to_string(),
             throws_type: bex_vm_types::TyTemplate::Never,
             origin: FunctionOrigin::Internal,
-            is_interface_body: false,
             native_key: None,
             body_meta: None,
-
-            runtime_package: HeapPtr::null(),
+            owner: HeapPtr::null(),
         }))
     }
 
@@ -1102,7 +1104,7 @@ pub(crate) mod tests {
 
         let moved_trampoline = trampoline_ptr(&vm);
         assert!(
-            matches!(vm.get_object(moved_trampoline), Object::Function(f) if f.name == "$entry::test_native" && f.telemetry_function_id.is_none()),
+            matches!(vm.get_object(moved_trampoline), Object::Function(f) if f.name() == "$entry::test_native" && f.telemetry_function_id.is_none()),
             "frame should point at the moved trampoline function after forwarding"
         );
 
@@ -2138,7 +2140,7 @@ fn function_callable_signature<C: baml_type::normalize::TypeContext<bex_vm_types
         unreachable!("function_object_ty always builds a Function type")
     };
     Ok(CallableSignature {
-        name: f.declared_name.clone(),
+        name: f.declared_name().map(ToString::to_string),
         params,
         ret: *ret,
         throws: *throws,
@@ -3312,14 +3314,14 @@ impl BexVm {
             .rev()
             .find_map(|frame| match frame {
                 Frame::Bytecode(frame) => Some(match self.get_object(frame.function) {
-                    Object::Function(function) => function.runtime_package,
+                    Object::Function(function) => self.runtime_package_of(function),
                     Object::GenericFunction(function) => function.runtime_package,
                     Object::Closure(closure) => match unsafe { closure.function.get() } {
-                        Object::Function(function) => function.runtime_package,
+                        Object::Function(function) => self.runtime_package_of(function),
                         _ => HeapPtr::null(),
                     },
                     Object::BoundMethod(method) => match unsafe { method.function.get() } {
-                        Object::Function(function) => function.runtime_package,
+                        Object::Function(function) => self.runtime_package_of(function),
                         _ => HeapPtr::null(),
                     },
                     _ => HeapPtr::null(),
@@ -3813,9 +3815,8 @@ impl BexVm {
 
     fn callable_display_name(function: &Function) -> String {
         function
-            .declared_name
-            .clone()
-            .unwrap_or_else(|| function.name.clone())
+            .declared_name()
+            .map_or_else(|| function.name(), ToString::to_string)
     }
 
     /// Name an otherwise callable value whose generic frame is incomplete.
@@ -4184,6 +4185,16 @@ impl BexVm {
         (!owner.is_null() && !self.heap.is_compile_time_ptr(owner)).then_some(owner)
     }
 
+    /// The runtime package a function addresses its operands through
+    /// ([`Function::owner`]), or null for a static function — whose owner is
+    /// a compile-time package and whose operands live in the program's pools
+    /// — and for the VM's own entry trampolines, which have no owner.
+    #[inline]
+    pub(crate) fn runtime_package_of(&self, function: &Function) -> HeapPtr {
+        self.runtime_owner(function.owner)
+            .unwrap_or_else(HeapPtr::null)
+    }
+
     /// Runtime package that owns a value's nominal/callable definition.
     /// Static values return null.
     pub(crate) fn value_runtime_package(&self, value: Value) -> HeapPtr {
@@ -4218,14 +4229,14 @@ impl BexVm {
                 }
                 _ => None,
             },
-            Object::Function(function) => Some(function.runtime_package),
+            Object::Function(function) => Some(self.runtime_package_of(function)),
             Object::GenericFunction(function) => Some(function.runtime_package),
             Object::Closure(closure) => match unsafe { closure.function.get() } {
-                Object::Function(function) => Some(function.runtime_package),
+                Object::Function(function) => Some(self.runtime_package_of(function)),
                 _ => None,
             },
             Object::BoundMethod(method) => match unsafe { method.function.get() } {
-                Object::Function(function) => Some(function.runtime_package),
+                Object::Function(function) => Some(self.runtime_package_of(function)),
                 _ => None,
             },
             Object::Cell(cell) => return self.value_runtime_package(cell.load()),
@@ -4781,7 +4792,7 @@ impl BexVm {
         let ntypeargs = u16::try_from(type_args.len()).expect("entry type args fit in u16");
 
         let (callee_name, return_type, throws_type) = match self.get_object(function) {
-            Object::Function(f) => (f.name.clone(), f.return_type.clone(), f.throws_type.clone()),
+            Object::Function(f) => (f.name(), f.return_type.clone(), f.throws_type.clone()),
             other => unreachable!("expect function as entry point, got {other:?}"),
         };
 
@@ -4826,10 +4837,9 @@ impl BexVm {
 
         let display_return_type = return_type.to_string();
         let entry_function = Function {
-            name: format!("$entry::{callee_name}"),
+            identity: bex_vm_types::types::FunctionIdentity::Entry(callee_name.into_boxed_str()),
             source_file: String::new(),
             docstring: None,
-            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode,
@@ -4851,11 +4861,9 @@ impl BexVm {
             display_return_type,
             throws_type,
             origin: FunctionOrigin::Internal,
-            is_interface_body: false,
             native_key: None,
             body_meta: None,
-
-            runtime_package: HeapPtr::null(),
+            owner: HeapPtr::null(),
         };
         let explicit_trace = self.entry_trace.is_some();
         let entry_ptr = if explicit_trace {
@@ -4935,10 +4943,9 @@ impl BexVm {
 
         let display_return_type = return_type.to_string();
         let entry_function = Function {
-            name: "$entry::<host-callable>".to_string(),
+            identity: bex_vm_types::types::FunctionIdentity::Entry("<host-callable>".into()),
             source_file: String::new(),
             docstring: None,
-            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode,
@@ -4960,11 +4967,9 @@ impl BexVm {
             display_return_type,
             throws_type,
             origin: FunctionOrigin::Internal,
-            is_interface_body: false,
             native_key: None,
             body_meta: None,
-
-            runtime_package: HeapPtr::null(),
+            owner: HeapPtr::null(),
         };
         let explicit_trace = self.entry_trace.is_some();
         let entry_ptr = if explicit_trace {
@@ -5936,7 +5941,7 @@ impl BexVm {
     pub fn current_function_name(&self) -> Option<String> {
         let frame = self.frames.last()?;
         let func = self.get_object(frame.function()).as_callable().ok()?;
-        Some(func.name.clone())
+        Some(func.name())
     }
 
     fn capture_stack_trace(&self) -> Vec<StackFrame> {
@@ -5971,13 +5976,13 @@ impl BexVm {
                             func.bytecode.source_line_for_pc(pc)
                         };
                         Some(StackFrame {
-                            function_name: func.name.clone(),
+                            function_name: func.name(),
                             file_path: func.source_file.clone(),
                             error_line,
                         })
                     }
                     Frame::Native(_) => Some(StackFrame {
-                        function_name: func.name.clone(),
+                        function_name: func.name(),
                         file_path: func.source_file.clone(),
                         error_line: 0,
                     }),
@@ -7141,7 +7146,7 @@ impl BexVm {
             FunctionKind::NativeUnresolved => {
                 // This should never happen - native functions should be resolved
                 // by attach_builtins() before the VM runs.
-                let callee_name = callee.name.clone();
+                let callee_name = callee.name();
                 panic!(
                     "Unresolved native function '{callee_name}' - did you forget to call attach_builtins()?"
                 );
@@ -8669,7 +8674,8 @@ impl BexVm {
                     OpCode::LoadGlobal => {
                         let raw = { read_u32_unchecked(code, pc) };
                         let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                        let value = self.load_global_in(function.runtime_package, global_idx);
+                        let value =
+                            self.load_global_in(self.runtime_package_of(function), global_idx);
                         self.stack.push(value);
                     }
 
@@ -8679,7 +8685,7 @@ impl BexVm {
                         let value = self.stack.ensure_pop();
                         // Only valid during `$init`; post-init globals are frozen in `Arc<[Value]>`
                         // and a write here is a VM internal error.
-                        self.store_global_in(function.runtime_package, global_idx, value)?;
+                        self.store_global_in(self.runtime_package_of(function), global_idx, value)?;
                     }
 
                     // ── LoadField / StoreField / InitField ────────────────────────
@@ -8990,7 +8996,8 @@ impl BexVm {
                         let raw = { read_u32_unchecked(code, pc) };
 
                         let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                        let callee_value = self.load_global_in(function.runtime_package, callee);
+                        let callee_value =
+                            self.load_global_in(self.runtime_package_of(function), callee);
                         // `as_object_ptr` only unwraps the value to a heap pointer
                         // (the `FunctionType` argument is error-message metadata, not
                         // an assertion). `dispatch_sysop_yield`'s own kind check is
@@ -9119,7 +9126,7 @@ impl BexVm {
 
                         let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                         let callee_value =
-                            self.load_global_in(function.runtime_package, callee_global);
+                            self.load_global_in(self.runtime_package_of(function), callee_global);
 
                         if op == OpCode::CallExactArgs
                             && self.pending_call_trace.is_none()
@@ -9323,7 +9330,7 @@ impl BexVm {
                         // lane. The rule borrows `self`; scope it so the borrow ends
                         // before the `&mut self` call below.
                         let receiver = self.stack[StackIndex::from_raw(args_offset + self_arg)];
-                        let cache_key = if function.runtime_package.is_null() {
+                        let cache_key = if self.runtime_package_of(function).is_null() {
                             let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
                             let Object::Type(type_value) = self.get_object(iface_ptr) else {
                                 unreachable!("as_object_ptr(Type) guarantees a Type object")
@@ -10043,7 +10050,7 @@ impl BexVm {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let static_cache_key = match &function.bytecode.constants[idx] {
                             ConstValue::Type(template)
-                                if function.runtime_package.is_null()
+                                if self.runtime_package_of(function).is_null()
                                     && <&bex_vm_types::RealizedTy>::try_from(template).is_ok()
                                     && matches!(&self.frames[*frame_idx],
                                     Frame::Bytecode(frame)
@@ -10052,7 +10059,9 @@ impl BexVm {
                             {
                                 Some((std::ptr::from_ref(*function) as usize, idx))
                             }
-                            ConstValue::Type(template) if !function.runtime_package.is_null() => {
+                            ConstValue::Type(template)
+                                if !self.runtime_package_of(function).is_null() =>
+                            {
                                 self.runtime_load_type_cache_key(*frame_idx, template, idx)
                             }
                             _ => None,
@@ -10156,7 +10165,7 @@ impl BexVm {
                         let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                         let receiver = self.stack.ensure_pop();
                         let callee_value =
-                            self.load_global_in(function.runtime_package, global_idx);
+                            self.load_global_in(self.runtime_package_of(function), global_idx);
                         let function_ptr =
                             self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
                         // Curry the receiver's class type args (→ `Self`) into the
@@ -10269,7 +10278,7 @@ impl BexVm {
                         let gf = Object::GenericFunction(bex_vm_types::GenericFunction {
                             function: function_global,
                             type_args: type_args.tys.into_boxed_slice(),
-                            runtime_package: function.runtime_package,
+                            runtime_package: self.runtime_package_of(function),
                         });
                         let ptr = self.tlab.alloc(gf);
                         self.stack.push(Value::object(ptr));

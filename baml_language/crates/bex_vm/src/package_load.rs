@@ -496,6 +496,16 @@ fn fill_package_slots(
                 ),
             }
         }
+        // So does every function the package placed in the pool
+        // (`ProgramPackage::objects`): named functions and bodies, its
+        // initializers and their helpers, its closure bodies — which is what
+        // renders a static function's name, and its telemetry's parent and
+        // package, under its package.
+        for index in pkg.objects.clone() {
+            if let Object::Function(function) = heap.compile_time_object_mut(index as usize) {
+                function.owner = owner;
+            }
+        }
     }
     index
 }

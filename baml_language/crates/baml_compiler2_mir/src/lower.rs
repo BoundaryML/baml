@@ -1032,10 +1032,22 @@ use baml_compiler2_hir::{contributions::Definition, file_package::file_package};
 /// link symbols, `Function.name`, display metadata, and the incremental
 /// edge grain.
 pub fn definition_link_name<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> String {
+    use baml_compiler2_hir::item_data::{MethodOwner, method_owner};
     let pkg_info = file_package(db, def.file(db));
+    // An impl-provided body is no item of a namespace: it is identified by
+    // the implements relation, so its spelling is the package label and the
+    // `<(target as iface)>.m` tail alone — the runtime's `Function::name`.
+    let namespace: &[Name] = match def {
+        Definition::Function(func)
+            if matches!(method_owner(db, func), Some(MethodOwner::Impl(_))) =>
+        {
+            &[]
+        }
+        _ => &pkg_info.namespace_path,
+    };
     link_name(
         spelling(db).of(pkg_info.root),
-        &pkg_info.namespace_path,
+        namespace,
         &[&definition_short_name(db, def)],
     )
 }
@@ -1093,11 +1105,13 @@ pub(crate) fn definition_short_name<'db>(db: &'db dyn crate::Db, def: Definition
             // The identity is the DECLARATION (an opaque session id);
             // only the DISPLAY segment is synthesized (the lambda
             // convention), spelled with the language's own qualification
-            // syntax: `<(target as iface)>` — both halves canonically
-            // resolved and fully qualified; generic and interface
-            // arguments appear in the spelling, associated-type pins do
-            // NOT (members of the impl, outputs of the match); the
-            // impl's own type variables render as frame indices (`#0`).
+            // syntax: `<(target as iface)>` — both halves resolved and
+            // spelled from the body's own package by edge path (`root.X`,
+            // `edge.ns.X`), exactly as the runtime renders the body's
+            // key; generic and interface arguments appear in the
+            // spelling, associated-type pins do NOT (members of the impl,
+            // outputs of the match); the impl's own type variables render
+            // as frame indices (`#0`).
             format!("{}.{}", impl_display_segment(db, impl_loc), name.as_str())
         }
         None => name.as_str().to_string(),
@@ -1140,11 +1154,48 @@ fn impl_display_segment<'db>(
         _ => iface_ty,
     };
     let target_ty = baml_compiler2_hir_ty::lower::impl_self_ty(db, impl_loc);
+    let spelling = BodyPackageSpelling {
+        db,
+        body_root: file_package(db, impl_loc.file(db)).root,
+    };
     format!(
         "<({} as {})>",
-        render_with_frame_indices(db, &target_ty, &impl_params),
-        render_with_frame_indices(db, &iface_ty, &impl_params),
+        render_with_frame_indices(&target_ty, &impl_params, &spelling),
+        render_with_frame_indices(&iface_ty, &impl_params, &spelling),
     )
+}
+
+/// Heads spelled from an impl body's own package: its own declarations by
+/// the package's display label (`user.ns.X`, the label the loaded function's
+/// name is prefixed with), a dependency's by the edges that reach it
+/// (`edge.ns.X`) — which is how the runtime renders the body's key
+/// (`PathName`), so MIR's display of the body and the loaded function's name
+/// are one spelling.
+struct BodyPackageSpelling<'db> {
+    db: &'db dyn crate::Db,
+    body_root: baml_base::SourceRoot,
+}
+
+impl baml_type::TyRenderStrategy<baml_type::DeclName> for BodyPackageSpelling<'_> {
+    fn qtn(&self, qtn: &baml_type::DeclName) -> String {
+        let package = if qtn.root() == self.body_root {
+            baml_compiler2_hir::package::spelling(self.db)
+                .of(self.body_root)
+                .to_string()
+        } else {
+            baml_compiler2_hir::package::edge_spelling(self.db, self.body_root, qtn.root())
+                .to_string()
+        };
+        std::iter::once(package)
+            .chain(qtn.namespace().iter().map(ToString::to_string))
+            .chain(std::iter::once(qtn.name().to_string()))
+            .collect::<Vec<_>>()
+            .join(".")
+    }
+
+    fn type_var(&self, name: &Name) -> String {
+        name.to_string()
+    }
 }
 
 /// The link-key `where` suffix for an impl-provided interface body: the
@@ -1177,6 +1228,10 @@ pub fn interface_body_link_bounds_suffix<'db>(
     };
     let impl_params = baml_compiler2_hir_ty::lower::impl_frame(db, impl_loc);
     let impl_bounds = baml_compiler2_hir_ty::lower::impl_generic_bounds(db, impl_loc);
+    let spelling = BodyPackageSpelling {
+        db,
+        body_root: file_package(db, impl_loc.file(db)).root,
+    };
     let mut parts: Vec<String> = Vec::new();
     for (index, param) in impl_params.iter().enumerate() {
         let Some(bounds) = impl_bounds.get(param) else {
@@ -1187,7 +1242,7 @@ pub fn interface_body_link_bounds_suffix<'db>(
         }
         let mut rendered: Vec<String> = bounds
             .iter()
-            .map(|bound| render_with_frame_indices(db, &bound.to_ty(), &impl_params))
+            .map(|bound| render_with_frame_indices(&bound.to_ty(), &impl_params, &spelling))
             .collect();
         rendered.sort_unstable();
         parts.push(format!("#{index}: {}", rendered.join(" + ")));
@@ -1202,9 +1257,9 @@ pub fn interface_body_link_bounds_suffix<'db>(
 /// their frame indices (`#0`) instead of their declared names — the declared
 /// names are the block's private spelling, not part of its identity.
 fn render_with_frame_indices(
-    db: &dyn crate::Db,
     ty: &baml_type::Ty,
     frame: &[baml_type::ParamTy],
+    spelling: &impl baml_type::TyRenderStrategy<baml_type::DeclName>,
 ) -> String {
     use baml_type::interned::ClosedTy;
     fn rewrite(ty: &ClosedTy, frame: &[baml_type::ParamTy]) -> ClosedTy {
@@ -1220,7 +1275,7 @@ fn render_with_frame_indices(
     }
     rewrite(&ClosedTy::from_plain(ty), frame)
         .to_plain()
-        .render_with(&baml_compiler2_hir_ty::render::Viewpoint::canonical(db))
+        .render_with(spelling)
 }
 
 /// The codegen-lockstep NATIVE KEY for a builtin body: the dot-free
@@ -5079,9 +5134,6 @@ impl<'db> LoweringContext<'db> {
         // Attach nested lambdas as direct children.
         lambda_mir.lambdas = nested_lambdas;
         lambda_mir.signature = Some(crate::ir::RuntimeSignature {
-            // A lambda has no source-level name; its `Function::name` is a
-            // synthetic debug identity.
-            name: None,
             // A lambda carries neither a docstring nor generic parameters.
             docstring: None,
             display_type_params: Vec::new(),

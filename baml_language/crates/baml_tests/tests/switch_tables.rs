@@ -16,12 +16,15 @@ use bex_vm_types::{
 
 /// The function of `program` whose item name is `name`.
 fn function_named<'p>(program: &'p Program, name: &str) -> &'p Function {
-    let suffix = format!(".{name}");
     program
         .objects
         .iter()
         .find_map(|object| match object {
-            Object::Function(function) if function.name.ends_with(&suffix) => {
+            Object::Function(function)
+                if function
+                    .declared_name()
+                    .is_some_and(|declared| declared == name) =>
+            {
                 Some(function.as_ref())
             }
             _ => None,
@@ -43,7 +46,7 @@ fn only_table(function: &Function) -> &SwitchTable {
     let [table] = tables.as_slice() else {
         panic!(
             "`{}` dispatches through {} switch tables, expected one",
-            function.name,
+            function.name(),
             tables.len()
         );
     };

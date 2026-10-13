@@ -50,7 +50,7 @@ fn impl_methods(program: &Program, iface: &str, for_type: &str) -> Vec<(String, 
         .iter()
         .map(|(name, method)| {
             let fqn = match &program.objects[method.fqn] {
-                Object::Function(f) => f.name.clone(),
+                Object::Function(f) => f.name(),
                 other => panic!("method callee is not a Function: {other:?}"),
             };
             (name.as_str().to_string(), fqn)

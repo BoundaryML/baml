@@ -108,10 +108,11 @@ function generic<T>(value: T) -> map<string, T> {
         let bex_vm_types::Object::Function(function) = object else {
             continue;
         };
-        if !["maps", "nested", "generic"]
-            .iter()
-            .any(|name| function.name.ends_with(name))
-        {
+        if !["maps", "nested", "generic"].iter().any(|name| {
+            function
+                .declared_name()
+                .is_some_and(|declared| declared == *name)
+        }) {
             continue;
         }
         for instruction in &function.bytecode.instructions {
@@ -123,7 +124,7 @@ function generic<T>(value: T) -> map<string, T> {
                         | bex_vm_types::Instruction::AllocMap(1..)
                 ),
                 "legacy map instruction in {}: {instruction:?}",
-                function.name,
+                function.name(),
             );
         }
     }
@@ -160,7 +161,11 @@ function roundtrip(value: int) -> bool {
         .objects
         .iter()
         .find_map(|object| match object {
-            bex_vm_types::Object::Function(function) if function.name.ends_with("roundtrip") => {
+            bex_vm_types::Object::Function(function)
+                if function
+                    .declared_name()
+                    .is_some_and(|declared| declared == "roundtrip") =>
+            {
                 Some(function)
             }
             _ => None,

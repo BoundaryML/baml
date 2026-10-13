@@ -19,7 +19,7 @@ use baml_db::{
     CompileProgramError, OptLevel, ProjectDatabase, SourceRootKind, SourceRootSpec, compile_program,
 };
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
-use bex_vm_types::{Object, Program};
+use bex_vm_types::Program;
 use sys_native::SysOpsExt;
 
 /// A database with the stdlib and two unnamed workspace roots, each with
@@ -53,17 +53,12 @@ fn object_bytes(program: &Program) -> Vec<Vec<u8>> {
         .collect()
 }
 
-/// The user-defined function names in `program`.
+/// The user-defined function names in `program`, rendered under the label of
+/// the package holding each.
 fn function_names(program: &Program) -> Vec<String> {
-    program
-        .objects
-        .iter()
-        .filter_map(|object| match object {
-            Object::Function(function) if function.name.starts_with("user.") => {
-                Some(function.name.clone())
-            }
-            _ => None,
-        })
+    (0..program.objects.len())
+        .filter_map(|index| program.function_name(bex_vm_types::ObjectIndex::from_raw(index)))
+        .filter(|name| name.starts_with("user."))
         .collect()
 }
 

@@ -84,8 +84,8 @@ pub fn function_index(program: &Program, name: &str) -> Option<usize> {
 /// The program's named functions plus its interface bodies, as
 /// `(fq name, object index)` pairs. Named callables come from the package
 /// tables' rendered view; bodies are anonymous (in no table), so they are
-/// enumerated straight off the object pool — their `Function::name` display
-/// field is exactly the spelling bytecode snapshots show.
+/// enumerated straight off the object pool and rendered under the label of
+/// the package whose cells hold them — the spelling bytecode snapshots show.
 pub fn named_and_interface_body_functions(
     program: &Program,
 ) -> impl Iterator<Item = (String, usize)> + '_ {
@@ -93,18 +93,19 @@ pub fn named_and_interface_body_functions(
         .rendered_callables()
         .into_iter()
         .map(|(name, callable)| (name, callable.object.raw()))
-        .chain(
-            program
-                .objects
-                .iter()
-                .enumerate()
-                .filter_map(|(idx, obj)| match obj {
-                    bex_vm_types::Object::Function(f) if f.is_interface_body => {
-                        Some((f.name.clone(), idx))
-                    }
-                    _ => None,
-                }),
-        )
+        .chain(program.objects.iter().enumerate().filter_map(|(idx, obj)| {
+            match obj {
+                bex_vm_types::Object::Function(f) if f.is_interface_body() => Some((
+                    program
+                        .function_name(bex_vm_types::ObjectIndex::from_raw(idx))
+                        .unwrap_or_else(|| {
+                            unreachable!("every pooled function is placed by a package")
+                        }),
+                    idx,
+                )),
+                _ => None,
+            }
+        }))
 }
 
 /// Like [`display_user_functions`], but lets the caller include auto-derived

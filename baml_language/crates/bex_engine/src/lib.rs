@@ -3989,7 +3989,7 @@ impl BexEngine {
                     // entry point (parity with `call_function_bound_args`).
                     if matches!(func.kind, bex_vm_types::FunctionKind::NativeUnresolved) {
                         return Err(EngineError::NotInvokableAsEntry {
-                            name: func.name.clone(),
+                            name: func.name(),
                             kind: format!("{:?}", func.kind),
                         });
                     }

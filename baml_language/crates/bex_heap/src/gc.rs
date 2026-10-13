@@ -764,8 +764,8 @@ impl BexHeap {
                 }
             }
             Object::Function(function) => {
-                if !function.runtime_package.as_ptr().is_null() {
-                    worklist.push(function.runtime_package);
+                if !function.owner.as_ptr().is_null() {
+                    worklist.push(function.owner);
                     worklist.extend(
                         function
                             .bytecode
@@ -1026,10 +1026,10 @@ impl BexHeap {
                     .collect();
             }
             Object::Function(function) => {
-                if let Some(&new_ptr) = forwarding.get(&function.runtime_package) {
-                    function.runtime_package = new_ptr;
+                if let Some(&new_ptr) = forwarding.get(&function.owner) {
+                    function.owner = new_ptr;
                 }
-                if !function.runtime_package.as_ptr().is_null() {
+                if !function.owner.as_ptr().is_null() {
                     for value in &mut function.bytecode.resolved_constants {
                         self.fixup_value(value, forwarding);
                     }
@@ -1357,12 +1357,12 @@ impl BexHeap {
                 }
             }
             Object::Function(function) => {
-                if !function.runtime_package.as_ptr().is_null()
-                    && self.generation_of(function.runtime_package).is_young()
+                if !function.owner.as_ptr().is_null()
+                    && self.generation_of(function.owner).is_young()
                 {
-                    worklist.push(function.runtime_package);
+                    worklist.push(function.owner);
                 }
-                if !function.runtime_package.as_ptr().is_null() {
+                if !function.owner.as_ptr().is_null() {
                     worklist.extend(
                         function
                             .bytecode

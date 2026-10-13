@@ -83,7 +83,10 @@ fn assert_identity_tables(label: &str, program: &Program) {
         );
         if let Some(init) = package.init {
             assert!(
-                matches!(&program.objects[init], Object::Function(f) if f.name == "$init"),
+                matches!(
+                    &program.objects[init],
+                    Object::Function(f) if f.identity == bex_vm_types::types::FunctionIdentity::Init
+                ),
                 "{label}: package `{}` init is not its `$init`",
                 package.name
             );
@@ -113,10 +116,12 @@ fn assert_identity_tables(label: &str, program: &Program) {
                 )
             };
             assert!(
-                function.name.ends_with(&format!(".{name}")),
+                function
+                    .declared_name()
+                    .is_some_and(|declared| declared == name),
                 "{label}: class `{}` method `{name}` points at `{}`",
                 class.path,
-                function.name
+                function.name()
             );
         }
         classes_with_methods += usize::from(!class.methods.is_empty());

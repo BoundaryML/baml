@@ -195,7 +195,11 @@ use sha2::{Digest, Sha256};
 /// `PackageKind` (`Language(LangPackage)` or `Ordinary`) and each edge its
 /// `EdgeKind` (`Dependency` or `ReExported`); a dependency table's prelude
 /// entry is `Locator::Prelude(LangPackage)`, bound by identity through no
-/// edge.
+/// edge. A pooled `Function` carries a structural `FunctionIdentity` (its
+/// path, body key, closure parent or initializer role) where it carried a
+/// rendered name (`name`, `declared_name`, `is_interface_body` are gone), and
+/// a `ProgramPackage` carries `objects`, the pool range the linker placed it
+/// as, which owns every function in it.
 pub const FORMAT_VERSION: u32 = 20;
 
 const MAGIC: [u8; 4] = *b"BEXC";

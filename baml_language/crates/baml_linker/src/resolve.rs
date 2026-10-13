@@ -63,7 +63,7 @@ pub(super) fn export_objects(
             // up front); a code export must be the function its path says.
             let (bucket, k) = Bucket::of(*local);
             let object = &bucket.objects(package.unit)[k];
-            let is_body = |object: &Object| matches!(object, Object::Function(function) if function.is_interface_body);
+            let is_body = |object: &Object| matches!(object, Object::Function(function) if function.is_interface_body());
             let exported_kind_holds = match path {
                 DeclPath::Function(_) => matches!(object, Object::Function(_)) && !is_body(object),
                 DeclPath::InterfaceBody(_) => is_body(object),

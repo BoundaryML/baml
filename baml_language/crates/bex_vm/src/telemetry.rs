@@ -2267,10 +2267,14 @@ mod tests {
 
     fn function(kind: FunctionKind, body_meta: Option<FunctionMeta>) -> Function {
         Function {
-            name: "telemetry_test".to_string(),
+            identity: bex_vm_types::types::FunctionIdentity::Declared(
+                bex_vm_types::types::FnPath::Free(bex_vm_types::types::LocalName::new(
+                    Vec::new(),
+                    baml_type::Name::new("telemetry_test"),
+                )),
+            ),
             source_file: String::new(),
             docstring: None,
-            declared_name: Some("telemetry_test".to_string()),
             arity: 0,
             real_local_count: 0,
             bytecode: bex_vm_types::Bytecode::default(),
@@ -2296,10 +2300,9 @@ mod tests {
             display_return_type: "null".to_string(),
             throws_type: bex_vm_types::TyTemplate::Never,
             origin: bex_vm_types::FunctionOrigin::Internal,
-            is_interface_body: false,
             native_key: None,
             body_meta,
-            runtime_package: HeapPtr::null(),
+            owner: HeapPtr::null(),
         }
     }
 

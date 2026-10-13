@@ -738,7 +738,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     }
 
     /// Compile a MIR function to bytecode.
-    fn compile(mut self) -> Function {
+    fn compile(mut self, identity: bex_vm_types::types::FunctionIdentity) -> Function {
         let mir = self.body;
         // 1. Allocate stack slots only for real locals
         self.allocate_real_locals(mir);
@@ -865,13 +865,11 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         let debug_locals = Self::build_debug_locals(mir, &self.local_slots);
 
         // 5. Build the Function
-        // Note: `name` is set by the caller after `compile_mir_function` returns.
         // `span` is set by `compile_mir_function` from the MIR function span.
         Function {
-            name: String::new(),
+            identity,
             source_file: String::new(), // caller sets this after compile_mir_function returns
             docstring: None,
-            declared_name: None,
             arity: self.arity,
             real_local_count: self.real_local_count,
             bytecode: self.bytecode,
@@ -893,11 +891,9 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             display_return_type: "null".to_string(),
             throws_type: bex_vm_types::TyTemplate::Never,
             origin: FunctionOrigin::Internal,
-            is_interface_body: false, // set from the item tree by attach_function_metadata
             native_key: None,
             body_meta: None,
-
-            runtime_package: bex_vm_types::HeapPtr::null(),
+            owner: bex_vm_types::HeapPtr::null(),
         }
     }
 
@@ -3652,6 +3648,7 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
 pub(crate) fn compile_mir_function<'db: 'mir, 'mir>(
     body: &'mir MirFunctionBody,
     arity: usize,
+    identity: bex_vm_types::types::FunctionIdentity,
     mir_span: Option<baml_base::Span>,
     line_starts: &'mir [u32],
     ctx: MirCodegenContext<'db, 'mir, '_, '_>,
@@ -3664,7 +3661,7 @@ pub(crate) fn compile_mir_function<'db: 'mir, 'mir>(
 
     // Compile with stackification
     let codegen = StackifyCodegen::new(body, arity, line_starts, ctx, analysis);
-    let mut f = codegen.compile();
+    let mut f = codegen.compile(identity);
     if let Some(span) = mir_span {
         f.span = span;
     }
@@ -3738,6 +3735,7 @@ mod tests {
         let function = compile_mir_function(
             &body,
             1,
+            bex_vm_types::types::FunctionIdentity::Init,
             None,
             &line_starts,
             MirCodegenContext {
