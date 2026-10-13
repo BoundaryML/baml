@@ -20,7 +20,7 @@ FAMILIES = [("BAML native", ["native-off", "native-low", "native-medium", "nativ
 LABELS = {"native-off": "native · telemetry off", "native-low": "native · low", "native-medium": "native · medium", "native-high": "native · high",
           "vm-off": "VM · telemetry off", "vm-low": "VM · low", "vm-medium": "VM · medium", "vm-high": "VM · high",
           "rust": "Rust", "go": "Go", "node": "Node", "bun": "Bun", "python": "Python", "control": "control"}
-UNSUPPORTED = {"native-low", "native-medium", "native-high"}
+UNSUPPORTED: set[str] = set()
 SCENARIO_LABELS = {
     "startup": "process start to ready", "array-empty": "call with an empty array", "array-small": "sum 128 integers",
     "array-iterator": "iterate 8,192 integers", "array-indexed": "index 8,192 integers", "array-build": "build and sum 8,192 integers",
@@ -49,7 +49,7 @@ MEASURE = {
 }
 # Why a row can be empty, shown on the chart and in the footer.
 REASONS = {
-    "unsupported": "native telemetry does not exist yet; it arrives with the telemetry PR, and these rows fill in then",
+    "unsupported": "this row is not implemented",
     "not_run": "added to the protocol after this run; present from the next run",
     "not_in_protocol": "this run's protocol has no startup scenario",
     "pending_http": "needs sys ops compiled natively (PR 8); the VM's HTTP harness has not been run on this machine yet",

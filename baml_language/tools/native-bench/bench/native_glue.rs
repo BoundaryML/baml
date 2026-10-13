@@ -74,13 +74,24 @@ fn main() {
         .and_then(|v| v.parse().ok())
         .unwrap_or_else(|| fail("BENCH_WORKERS must be set".into()));
     let telemetry = std::env::var("BAML_TELEMETRY").unwrap_or_default();
-    // Generated code has no telemetry subsystem: any policy other than off is
-    // an unsupported feature and must fail explicitly rather than report success.
-    let telemetry_ok = telemetry == "off";
+    // The VM host's rule: a `local` sink records into OUTPUT at the level
+    // `BAML_TELEMETRY` names; `off` records nothing. A recording that cannot
+    // start fails the trial rather than measuring an unrecorded run.
+    if telemetry != "off" {
+        if a[6] != "local" {
+            fail(format!("BAML_TELEMETRY={telemetry:?} needs the local sink, not {:?}", a[6]));
+        }
+        bex_aot::telemetry::start(
+            baml_native::BAML_TELEMETRY,
+            bex_aot::telemetry::Destination::Directory(a[7].clone().into()),
+        )
+        .unwrap_or_else(|e| fail(format!("telemetry: {e}")));
+    }
 
     let origin = Instant::now();
     let raw = std::fs::read_to_string(&a[3]).unwrap_or_else(|e| fail(format!("INPUT: {e}")));
-    let state = match baml_native::user_prepare(raw.into()) {
+    // Every call into the program is a root, as every engine call is on the VM.
+    let state = match bex_aot::telemetry::root(|| baml_native::user_prepare(raw.into())) {
         Ok(state) => state,
         Err(thrown) => fail(format!("prepare threw: {thrown:?}")),
     };
@@ -91,7 +102,7 @@ fn main() {
     ));
 
     for _ in 0..warmup {
-        match baml_native::user_run(std::hint::black_box(state.clone())) {
+        match bex_aot::telemetry::root(|| baml_native::user_run(std::hint::black_box(state.clone()))) {
             Ok(value) => drop(std::hint::black_box(value)),
             Err(thrown) => fail(format!("run threw during warmup: {thrown:?}")),
         }
@@ -100,7 +111,7 @@ fn main() {
     let cpu = cpu_ns();
     let mut last = None;
     for _ in 0..jobs {
-        match baml_native::user_run(std::hint::black_box(state.clone())) {
+        match bex_aot::telemetry::root(|| baml_native::user_run(std::hint::black_box(state.clone()))) {
             Ok(value) => last = Some(std::hint::black_box(value)),
             Err(thrown) => fail(format!("run threw: {thrown:?}")),
         }
@@ -113,16 +124,21 @@ fn main() {
         quote(&result)
     ));
 
-    // Drain is state reclamation; nothing else is pending in a native program.
+    // Drain is state reclamation and, when recording, the recording's
+    // flush: the processor drains, the recording ends, the files are synced.
     let start = Instant::now();
     drop(state);
+    let finished = bex_aot::telemetry::finish();
     let drain_ns = start.elapsed().as_nanos();
+    let telemetry_ok = finished.is_ok();
     emit(format!(
-        "{{\"event\":\"drained\",\"drain_ns\":{drain_ns},\"gc_drain\":null,\"telemetry_ok\":{telemetry_ok},\"delivery_loss\":0,\"telemetry_reason\":\"no telemetry subsystem in generated code; off policy only\"}}"
+        "{{\"event\":\"drained\",\"drain_ns\":{drain_ns},\"gc_drain\":null,\"telemetry_ok\":{telemetry_ok},\"delivery_loss\":0,\"telemetry_reason\":{}}}",
+        quote(match &finished {
+            Ok(()) => "bex_aot::telemetry, local files",
+            Err(error) => error,
+        })
     ));
-    if !telemetry_ok {
-        fail(format!(
-            "BAML_TELEMETRY={telemetry:?} is unsupported by native code; only off is implemented"
-        ));
+    if let Err(error) = finished {
+        fail(format!("telemetry recording failed: {error}"));
     }
 }

@@ -87,7 +87,7 @@ Twenty trials per bar, seed 1729, CPU 3, one worker, 600 s timeout per trial.
 | row | what runs | `BAML_TELEMETRY` | recording |
 |---|---|---|---|
 | `native-off` | the candidate's emitted executable, built on the VM from a clean target | off | none |
-| `native-low`, `native-medium`, `native-high` | not supported yet: drawn as "not yet" on every chart, never run | | |
+| `native-low`, `native-medium`, `native-high` | the same executable, recording through `bex_aot::telemetry` to a local sink, as the VM rows do: the recording must exist and report no delivery loss. Only the functions the backend observes (loops and large bodies) record calls; the rest are folded into their callers | low / medium / high | local |
 | `control` | the snapshot's native executable of the same case, frozen when the snapshot was made | off | none |
 | `vm-off` | the pinned VM host running the candidate's bytecode | off | none |
 | `vm-low`, `vm-medium`, `vm-high` | same, recording to a local sink; the recording must exist and report no delivery loss | low / medium / high | local |
