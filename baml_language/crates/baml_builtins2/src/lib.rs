@@ -241,6 +241,8 @@ pub const ALL: &[BuiltinFile] = &[
     // lives here; the render-context classes sit in ai/context.baml.
     builtin!("ai", "ns_internal/prompt.baml"),
     // --- provider client packages ---
+    builtin!("openai", "decisions.baml"),
+    builtin!("openai", "ns_internal/ns_decisions/decisions.baml"),
     builtin!("openai", "responses.baml"),
     builtin!("openai", "ns_internal/responses.baml"),
     builtin!("openai", "chat.baml"),

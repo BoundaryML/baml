@@ -873,6 +873,7 @@ fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
 pub const SHORTHAND_PROVIDERS: &[(&str, &str, &str)] = &[
     ("openai", "openai", "ResponsesClient"),
     ("openai-chat", "openai", "ChatClient"),
+    ("openai-decisions", "openai", "DecisionsClient"),
     ("openai-images", "openai", "ImageClient"),
     ("ollama", "openai", "OllamaClient"),
     ("openrouter", "openai", "OpenRouterClient"),
