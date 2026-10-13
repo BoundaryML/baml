@@ -607,7 +607,7 @@ a function type with an optional parameter, a class field of function
 type, an interface that is not a closed set (see [Interfaces](#interfaces)),
 a class with such a field (the field is named), a type argument that is
 `unknown` or has no native type, and an `unknown` or open-typed local no
-definition refines. 
+definition refines.
 Constructs: `throw` of a value that is not a class instance (`throw
 "text"`, which BAML allows), a `catch` arm that is not a class test, a class
 binding or a wildcard (`let s: string => ..`), a binding of a generic class,

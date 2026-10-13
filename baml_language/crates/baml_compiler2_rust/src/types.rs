@@ -489,7 +489,7 @@ impl<'db> NativeTy<'db> {
     /// `tracked` says which heap types (arrays, maps, classes, function
     /// types) the cycle collector tracks, whose handles are spelled `Cc<..>`,
     /// `CcMap<..>` and `func::CcFunc<..>` rather than `Shared<..>`, `Map<..>`
-    /// and `func::Func<..>` (see [`crate::memory`]).
+    /// and `func::Func<..>` (see `memory.rs`).
     pub fn to_tokens(
         &self,
         name: &dyn Fn(TypeDecl<'db>) -> Ident,
