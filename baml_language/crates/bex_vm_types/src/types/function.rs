@@ -492,20 +492,14 @@ impl Function {
     pub fn runtime_metadata(&self) -> Option<btel_types::FunctionMetadata> {
         let function_id = self.telemetry_function_id?;
         let fqn = self.name.clone();
-        let owner_type = derive_owner_type_definition_key(&fqn);
-        let (parent_function, lambda_path) = derive_lambda_metadata(&fqn);
-        let mut parts = fqn.split('.').map(str::to_string).collect::<Vec<_>>();
-        let display_name = parts.last().cloned().unwrap_or_else(|| fqn.clone());
-        let package_name = if parts.len() > 1 {
-            Some(parts.remove(0))
-        } else {
-            None
-        };
-        let namespace = if parts.len() > 1 {
-            parts[..parts.len() - 1].to_vec()
-        } else {
-            Vec::new()
-        };
+        let btel_types::FunctionNames {
+            display_name,
+            package_name,
+            namespace,
+            owner_type,
+            parent_function,
+            lambda_path,
+        } = btel_types::FunctionNames::from_fqn(&fqn);
         let source_file = (!self.source_file.is_empty()).then(|| self.source_file.clone());
         let source_span = Some(btel_types::SourceSpan {
             file_id: self.span.file_id.as_u32(),
@@ -558,44 +552,6 @@ impl Function {
                 .collect(),
         })
     }
-}
-
-// TODO(bep-053): replace with compiler-owned metadata — capital-letter
-// sniffing on FQN segments is an acknowledged-interim heuristic and must not
-// become load-bearing.
-fn derive_owner_type_definition_key(fqn: &str) -> Option<btel_types::DefinitionKey> {
-    let parts = fqn.split('.').collect::<Vec<_>>();
-    if parts.len() < 3 {
-        return None;
-    }
-
-    let owner = parts[parts.len() - 2];
-    if !owner
-        .chars()
-        .next()
-        .is_some_and(|ch| ch.is_ascii_uppercase())
-    {
-        return None;
-    }
-
-    Some(btel_types::DefinitionKey(format!(
-        "class:{}",
-        parts[..parts.len() - 1].join(".")
-    )))
-}
-
-// TODO(bep-053): replace with compiler-owned lambda identity — the
-// `find("<lambda")` name sniff is an acknowledged-interim heuristic.
-fn derive_lambda_metadata(fqn: &str) -> (Option<btel_types::DefinitionKey>, Option<String>) {
-    let Some(lambda_start) = fqn.find("<lambda") else {
-        return (None, None);
-    };
-
-    let parent = fqn[..lambda_start].trim_end_matches(['.', ':']).to_string();
-    let parent_function =
-        (!parent.is_empty()).then(|| btel_types::DefinitionKey(format!("function:{parent}")));
-    let lambda_path = Some(fqn[lambda_start..].to_string());
-    (parent_function, lambda_path)
 }
 
 impl From<crate::FunctionKind> for btel_types::RuntimeFunctionKind {
