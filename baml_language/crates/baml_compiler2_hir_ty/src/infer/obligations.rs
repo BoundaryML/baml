@@ -250,7 +250,7 @@ impl<'db> InferenceContext<'db> {
         if !visiting.insert(root) {
             return false;
         }
-        if self.obligations.iter().any(|obligation| {
+        if self.obligations.iter().any(|Pending { obligation, .. }| {
             let Obligation::Operator { out, .. } = obligation else {
                 return false;
             };
@@ -312,24 +312,27 @@ impl<'db> InferenceContext<'db> {
             .table
             .unsolved_root_var(*var)
             .expect("resolve_completely leaves only unsolved variables");
-        let operator = self.obligations.iter().find_map(|obligation| {
-            let Obligation::Operator {
-                interface,
-                lhs,
-                rhs,
-                out,
-                ..
-            } = obligation
-            else {
-                return None;
-            };
-            let out = self.table.resolve_completely(out);
-            let InferTy::InferVar { var, .. } = out.kind() else {
-                return None;
-            };
-            (self.table.unsolved_root_var(*var) == Some(root))
-                .then(|| (*interface, lhs.clone(), rhs.clone()))
-        });
+        let operator = self
+            .obligations
+            .iter()
+            .find_map(|Pending { obligation, .. }| {
+                let Obligation::Operator {
+                    interface,
+                    lhs,
+                    rhs,
+                    out,
+                    ..
+                } = obligation
+                else {
+                    return None;
+                };
+                let out = self.table.resolve_completely(out);
+                let InferTy::InferVar { var, .. } = out.kind() else {
+                    return None;
+                };
+                (self.table.unsolved_root_var(*var) == Some(root))
+                    .then(|| (*interface, lhs.clone(), rhs.clone()))
+            });
         if let Some((interface, lhs, rhs)) = operator {
             let lhs = self.resolve_structure_operand(&lhs, visiting);
             let rhs = rhs.map(|rhs| self.resolve_structure_operand(&rhs, visiting));
