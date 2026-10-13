@@ -543,7 +543,8 @@ impl Function {
         let compact = self.bytecode.compact.as_ref()?;
         let clamp = |value: usize| u32::try_from(value).unwrap_or(u32::MAX);
         Some(btel_types::SourceMap {
-            code_bytes: clamp(compact.code.len()),
+            coordinate: btel_types::SourceCoordinate::CompactByteOffset,
+            extent: clamp(compact.code.len()),
             entries: compact
                 .line_table
                 .iter()

@@ -47,6 +47,7 @@ pub struct SourceSpan {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RuntimeFunctionKind {
     Bytecode,
+    Compiled,
     SysOp(String),
     Native,
     NativeUnresolved,
@@ -102,14 +103,22 @@ pub struct FunctionMetadata {
     pub source_map: Option<SourceMap>,
 }
 
-/// Line table of one function's compact bytecode. PCs are byte offsets into
-/// that code, the same coordinate as call-path and error PCs. Entries are
-/// sorted by PC and each applies until the next one. Cold metadata: copied
-/// once per recording, never consulted by the VM.
+/// Coordinate system used by a function's recorded call and error locations.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SourceCoordinate {
+    #[default]
+    CompactByteOffset,
+    /// An exact source-site index, independent of compiled continuation state.
+    CompiledSite,
+}
+
+/// Cold source metadata copied once per recording. Bytecode entries cover
+/// ranges; compiled entries identify exact sites and never cover missing sites.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SourceMap {
-    /// Length of the compact code; a valid PC is below it.
-    pub code_bytes: u32,
+    pub coordinate: SourceCoordinate,
+    /// Exclusive upper bound in this map's coordinate system.
+    pub extent: u32,
     pub entries: Vec<SourceMapEntry>,
 }
 

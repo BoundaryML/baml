@@ -77,7 +77,8 @@ struct Entry {
 /// definition span; entries in another file are not resolved.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceMap {
-    code_bytes: u32,
+    extent: u32,
+    exact_sites: bool,
     own_file: Option<u32>,
     entries: Vec<Entry>,
 }
@@ -95,9 +96,13 @@ pub enum InvalidMap {
 impl SourceMap {
     /// Validate a wire map. `own_file` comes from the same definition's span.
     pub fn from_wire(map: &proto::SourceMap, own_file: Option<u32>) -> Result<Self, InvalidMap> {
-        if map.coordinate != proto::PcCoordinate::CompactByteOffset as i32 {
-            return Err(InvalidMap::Coordinate);
-        }
+        let (extent, exact_sites) = match proto::PcCoordinate::try_from(map.coordinate) {
+            Ok(proto::PcCoordinate::CompactByteOffset) if map.site_count == 0 => {
+                (map.code_bytes, false)
+            }
+            Ok(proto::PcCoordinate::CompiledSite) if map.code_bytes == 0 => (map.site_count, true),
+            _ => return Err(InvalidMap::Coordinate),
+        };
         let n = map.pc.len();
         if map.start.len() != n
             || map.end.len() != n
@@ -122,7 +127,7 @@ impl SourceMap {
             if entry.start > entry.end {
                 return Err(InvalidMap::Range);
             }
-            if entry.pc >= map.code_bytes {
+            if entry.pc >= extent {
                 return Err(InvalidMap::PcBeyondCode);
             }
             if entries
@@ -134,7 +139,8 @@ impl SourceMap {
             entries.push(entry);
         }
         Ok(Self {
-            code_bytes: map.code_bytes,
+            extent,
+            exact_sites,
             own_file,
             entries,
         })
@@ -145,13 +151,16 @@ impl SourceMap {
         if pc == u32::MAX {
             return Err(SiteState::SentinelPc);
         }
-        if pc >= self.code_bytes {
+        if pc >= self.extent {
             return Err(SiteState::PcOutOfRange);
         }
         let index = self.entries.partition_point(|entry| entry.pc <= pc);
         let Some(entry) = index.checked_sub(1).map(|i| self.entries[i]) else {
             return Err(SiteState::UnmappedPc);
         };
+        if self.exact_sites && entry.pc != pc {
+            return Err(SiteState::UnmappedPc);
+        }
         if self.own_file != Some(entry.file_id) {
             return Err(SiteState::ForeignFile);
         }
@@ -165,9 +174,11 @@ impl SourceMap {
     /// Stable storage encoding for an index: little-endian u32 fields.
     pub fn encode(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(12 + self.entries.len() * 20);
-        out.extend_from_slice(&self.code_bytes.to_le_bytes());
+        out.extend_from_slice(&self.extent.to_le_bytes());
         out.extend_from_slice(&self.own_file.unwrap_or(u32::MAX).to_le_bytes());
-        out.push(u8::from(self.own_file.is_some()));
+        // Old bytecode maps used 0/1; preserve those bytes. Bit 1 records
+        // exact compiled sites so an indexed map keeps its lookup semantics.
+        out.push(u8::from(self.own_file.is_some()) | (u8::from(self.exact_sites) << 1));
         for entry in &self.entries {
             for value in [entry.pc, entry.file_id, entry.start, entry.end, entry.line] {
                 out.extend_from_slice(&value.to_le_bytes());
@@ -180,9 +191,14 @@ impl SourceMap {
         let word = |at: usize| -> Option<u32> {
             Some(u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?))
         };
-        let code_bytes = word(0)?;
+        let extent = word(0)?;
         let file = word(4)?;
-        let own_file = match *bytes.get(8)? {
+        let flags = *bytes.get(8)?;
+        if flags & !3 != 0 {
+            return None;
+        }
+        let exact_sites = flags & 2 != 0;
+        let own_file = match flags & 1 {
             0 => None,
             1 => Some(file),
             _ => return None,
@@ -204,7 +220,8 @@ impl SourceMap {
             })
             .collect::<Option<Vec<_>>>()?;
         Some(Self {
-            code_bytes,
+            extent,
+            exact_sites,
             own_file,
             entries,
         })
@@ -220,12 +237,33 @@ mod tests {
         proto::SourceMap {
             coordinate: proto::PcCoordinate::CompactByteOffset as i32,
             code_bytes,
+            site_count: 0,
             start: (0..n).map(|i| i * 10).collect(),
             end: (0..n).map(|i| i * 10 + 5).collect(),
             line: (1..=n).collect(),
             pc,
             file_id,
         }
+    }
+
+    #[test]
+    fn compiled_sites_are_exact_and_survive_index_storage() {
+        let mut wire = wire(vec![0, 2], vec![], 0);
+        wire.coordinate = proto::PcCoordinate::CompiledSite as i32;
+        wire.site_count = 3;
+        let map = SourceMap::from_wire(&wire, Some(3)).unwrap();
+        assert_eq!(map.resolve(0).unwrap().line, 1);
+        assert_eq!(map.resolve(1), Err(SiteState::UnmappedPc));
+        assert_eq!(map.resolve(2).unwrap().line, 2);
+        assert_eq!(map.resolve(3), Err(SiteState::PcOutOfRange));
+        let restored = SourceMap::decode(&map.encode()).unwrap();
+        assert_eq!(restored, map);
+        assert_eq!(restored.resolve(1), Err(SiteState::UnmappedPc));
+        wire.code_bytes = 1;
+        assert_eq!(
+            SourceMap::from_wire(&wire, Some(3)),
+            Err(InvalidMap::Coordinate)
+        );
     }
 
     #[test]

@@ -264,7 +264,8 @@ impl RecordingBuilder {
                         } else {
                             0
                         },
-                    ),
+                    )
+                    .max(self.buffer.functions.required_minor()),
                 recording_id: self.id.as_bytes().to_vec(),
                 source_snapshot_id: self.source_snapshot_id.map(|id| id.to_vec()),
                 process_id: self.process.as_ref().map(|p| p.info.process_id.to_vec()),

@@ -135,6 +135,7 @@ impl ArgumentNames {
 pub fn function_kind_label(kind: i32) -> Option<&'static str> {
     Some(match proto::FunctionKind::try_from(kind).ok()? {
         proto::FunctionKind::Bytecode => "bytecode",
+        proto::FunctionKind::Compiled => "compiled",
         // The old catalog's spelling.
         proto::FunctionKind::SysOp => "sysop",
         proto::FunctionKind::Native => "native",

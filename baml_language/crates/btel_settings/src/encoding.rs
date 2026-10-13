@@ -43,3 +43,5 @@ pub const PROCESS_CONTEXT_FORMAT_MINOR: u32 = 9;
 /// A terminal recording can report SDK lifetime completion with an unknown
 /// OS process outcome (`ProcessStatus.UNKNOWN`).
 pub const UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR: u32 = 10;
+/// Compiled BAML function definitions and exact source-site coordinates.
+pub const COMPILED_FORMAT_MINOR: u32 = 11;

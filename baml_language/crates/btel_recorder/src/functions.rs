@@ -13,9 +13,13 @@ pub(crate) struct FunctionDefinitions {
     host: FxHashMap<FunctionId, FunctionMetadata>,
     // Functions whose metadata this recording already published.
     published: FxHashSet<FunctionId>,
+    required_minor: u32,
 }
 
 impl FunctionDefinitions {
+    pub(crate) fn required_minor(&self) -> u32 {
+        self.required_minor
+    }
     pub(crate) fn set_table(&mut self, table: Arc<FunctionMetadataTable>) {
         self.table = Some(table);
     }
@@ -40,6 +44,13 @@ impl FunctionDefinitions {
             .or_else(|| self.table.as_ref().and_then(|table| table.get(function)))
         {
             Some(metadata) => {
+                if matches!(metadata.kind, btel_types::RuntimeFunctionKind::Compiled)
+                    || metadata.source_map.as_ref().is_some_and(|map| {
+                        map.coordinate == btel_types::SourceCoordinate::CompiledSite
+                    })
+                {
+                    self.required_minor = btel_settings::encoding::COMPILED_FORMAT_MINOR;
+                }
                 self.published.insert(function);
                 Some(Resolution::Metadata(convert(metadata)))
             }
@@ -52,6 +63,7 @@ fn convert(m: &FunctionMetadata) -> proto::FunctionMetadata {
     use btel_types::{RuntimeFunctionKind as Kind, RuntimeFunctionOrigin as Origin};
     let (kind, sys_op_name) = match &m.kind {
         Kind::Bytecode => (proto::FunctionKind::Bytecode, None),
+        Kind::Compiled => (proto::FunctionKind::Compiled, None),
         Kind::SysOp(name) => (proto::FunctionKind::SysOp, Some(name.clone())),
         Kind::Native => (proto::FunctionKind::Native, None),
         Kind::NativeUnresolved => (proto::FunctionKind::NativeUnresolved, None),
@@ -103,8 +115,22 @@ fn source_map(m: &FunctionMetadata, map: &btel_types::SourceMap) -> proto::Sourc
     let own_file = m.source_span.as_ref().map(|span| span.file_id);
     let same_file = own_file.is_some_and(|file| map.entries.iter().all(|e| e.file_id == file));
     proto::SourceMap {
-        coordinate: proto::PcCoordinate::CompactByteOffset as i32,
-        code_bytes: map.code_bytes,
+        coordinate: match map.coordinate {
+            btel_types::SourceCoordinate::CompactByteOffset => {
+                proto::PcCoordinate::CompactByteOffset
+            }
+            btel_types::SourceCoordinate::CompiledSite => proto::PcCoordinate::CompiledSite,
+        } as i32,
+        code_bytes: if map.coordinate == btel_types::SourceCoordinate::CompactByteOffset {
+            map.extent
+        } else {
+            0
+        },
+        site_count: if map.coordinate == btel_types::SourceCoordinate::CompiledSite {
+            map.extent
+        } else {
+            0
+        },
         pc: map.entries.iter().map(|e| e.pc).collect(),
         file_id: if same_file {
             Vec::new()

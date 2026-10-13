@@ -38,6 +38,7 @@ message RecordingHeader {
                                  // 8 adds generic call type arguments.
                                  // 9 adds process launch context.
                                  // 10 adds completion with an unknown host outcome.
+                                 // 11 adds compiled BAML functions and source sites.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
   // Minor 3. The OS process that ran this engine. Every engine of one
@@ -96,12 +97,12 @@ message FunctionMetadata {
   SourceMap source_map = 15;
 }
 
-// Line table of the code the VM executed, sorted by strictly increasing PC.
-// Parallel arrays: entry i applies from pc[i] up to pc[i + 1], the last one
-// up to code_bytes. A PC before pc[0] or at/after code_bytes has no source.
+// Source table sorted by strictly increasing PC. Byte-offset entries cover
+// ranges up to the next entry or code_bytes. Compiled-site entries match
+// exactly; a missing site has no source. The coordinate defines the bound.
 message SourceMap {
   PcCoordinate coordinate = 1;
-  uint32 code_bytes = 2;        // Executed code length in the coordinate's unit.
+  uint32 code_bytes = 2;        // Bytecode length; zero for compiled-site maps.
   repeated uint32 pc = 3;
   // Compiler-local file of each entry. Empty means every entry is in the
   // function's own source_span file.
@@ -109,6 +110,9 @@ message SourceMap {
   repeated uint32 start = 5;    // Half-open source byte range.
   repeated uint32 end = 6;
   repeated uint32 line = 7;     // One-based line of start.
+  // Exclusive site-ID bound when coordinate is COMPILED_SITE. code_bytes
+  // must be zero in that case; bytecode maps leave site_count zero.
+  uint32 site_count = 8;
 }
 
 enum PcCoordinate {
@@ -116,6 +120,9 @@ enum PcCoordinate {
   // Byte offset of an instruction's opcode in the function's compact code.
   // Call-path caller_pc and error PCs use this coordinate.
   PC_COORDINATE_COMPACT_BYTE_OFFSET = 1;
+  // Exact source site of a compiled BAML operation. Not a machine address
+  // or a continuation-state number; absent sites must not inherit a span.
+  PC_COORDINATE_COMPILED_SITE = 2;
 }
 
 // Names for FunctionArgs capture slots, which record positions only.
@@ -140,6 +147,7 @@ enum FunctionKind {
   FUNCTION_KIND_SYS_OP = 2;
   FUNCTION_KIND_NATIVE = 3;
   FUNCTION_KIND_NATIVE_UNRESOLVED = 4;
+  FUNCTION_KIND_COMPILED = 5;
 }
 
 enum FunctionOrigin {
@@ -156,7 +164,7 @@ message CallPathDefinition {
   uint64 thread_id = 2;        // From selector context when path was defined.
   uint32 parent_call_path_id = 3; // Zero is the root sentinel.
   optional uint64 visible_caller_function_id = 4; // Nonzero when present.
-  uint32 caller_pc = 5;        // Existing bytecode instruction coordinate.
+  uint32 caller_pc = 5;        // In the visible caller's source-map coordinate.
   uint64 callee_function_id = 6; // Nonzero.
   CallPathEdge edge = 7;
 }
@@ -454,10 +462,10 @@ message ErrorRaise {
   uint64 thread_id = 2;         // Telemetry thread that unwound.
   fixed64 raised_at_ticks = 3;  // That thread's clock epoch.
   RaiseKind kind = 4;
-  // Innermost bytecode frame when unwinding started, and its live PC. For a
+  // Innermost BAML frame when unwinding started, and its live source site. For a
   // boundary kind this is the BAML call site, not a location in native code.
   optional uint64 function_id = 5;
-  optional uint32 pc = 6;       // PC_COORDINATE_COMPACT_BYTE_OFFSET.
+  optional uint32 pc = 6;       // In that function's source-map coordinate.
   OriginState origin_state = 7;
   // PROVEN only: the occurrence's first raise.
   optional uint64 origin_raise_id = 8;
