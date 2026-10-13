@@ -27,6 +27,23 @@ if (-not [System.IO.Path]::IsPathRooted($TargetDir)) {
 $TargetDir = [System.IO.Path]::GetFullPath($TargetDir)
 $NativeLibrary = Join-Path $TargetDir "debug/bridge_cffi.dll"
 
+# Exercise the release ABI probe in source CI, before publishing any packages.
+$AbiProbe = Join-Path $WorkspaceRoot "sdks/csharp/bridge_csharp/tests/Baml.Bridge.AbiLifetimeProbe/Baml.Bridge.AbiLifetimeProbe.csproj"
+$AbiBytecode = Join-Path $TargetDir "csharp-abi-probe.bytecode"
+Push-Location $WorkspaceRoot
+try {
+    cargo run --quiet -p sdk_test_codegen -- emit-bytecode --fixture function_calls --out $AbiBytecode
+    if ($LASTEXITCODE -ne 0) {
+        throw "ABI probe bytecode generation failed with exit code $LASTEXITCODE"
+    }
+    dotnet build $AbiProbe --configuration Debug --nologo -p:BamlNativeProbeMode=Direct -p:NuGetAudit=false
+    if ($LASTEXITCODE -ne 0) {
+        throw "ABI probe build failed with exit code $LASTEXITCODE"
+    }
+} finally {
+    Pop-Location
+}
+
 # Build every fixture consumer (and the union-generator tool) in ONE
 # MSBuild invocation: the projects compile in parallel across cores and the
 # shared Baml.Bridge project builds exactly once. The tests then run with
@@ -58,5 +75,6 @@ try {
 
 if ($env:NEXTEST_ENV) {
     Add-Content -Path $env:NEXTEST_ENV -Value "SDK_TEST_CSHARP_SETUP=1"
+    Add-Content -Path $env:NEXTEST_ENV -Value "BAML_CSHARP_ABI_PROBE_BYTECODE=$AbiBytecode"
     Add-Content -Path $env:NEXTEST_ENV -Value "BAML_BRIDGE_PATH=$NativeLibrary"
 }

@@ -58,6 +58,28 @@ mod tests {
         );
     }
 
+    // SDK_PARITY_LINT(skip): exercises the C# release ABI probe before publication
+    #[test]
+    fn test_release_abi_lifetimes_match_current_native_library() {
+        let project = manifest_dir().join("../../../sdks/csharp/bridge_csharp/tests/Baml.Bridge.AbiLifetimeProbe/Baml.Bridge.AbiLifetimeProbe.csproj");
+        let native = env::var("BAML_BRIDGE_PATH").expect("native library from C# setup");
+        let bytecode =
+            env::var("BAML_CSHARP_ABI_PROBE_BYTECODE").expect("ABI fixture from C# setup");
+        let output = run_project(
+            &project,
+            &[
+                "-p:BamlNativeProbeMode=Direct",
+                "--",
+                &native,
+                baml_version::CANONICAL_VERSION,
+                &bytecode,
+            ],
+        );
+        assert_stdout_contains(&output, "pre_and_inflight_cancellation=ok");
+        assert_stdout_contains(&output, "media_handle_clone_release=ok");
+        assert_stdout_contains(&output, "callback_boundary=contained");
+    }
+
     // SDK_PARITY_LINT(skip): exercises C#-specific native SDK integration coverage
     #[test]
     fn test_basic_calls_executes_sync_and_async() {
