@@ -192,8 +192,24 @@ fn every_fixture_is_structured() {
     }
 }
 
+/// Whether `source` contains `needle` as code, layout aside: whitespace and
+/// the trailing commas rustfmt adds when it breaks a line. The shape is
+/// asserted, not how deep it is indented (an observed function's body is
+/// one level deeper, inside its telemetry frame) or where rustfmt wraps it.
 fn assert_contains(source: &str, needle: &str) {
-    assert!(source.contains(needle), "missing `{needle}` in:\n{source}");
+    let squash = |text: &str| {
+        text.split_whitespace()
+            .collect::<String>()
+            .replace(",)", ")")
+            .replace(",>", ">")
+            .replace(",}", "}")
+            .trim_end_matches(',')
+            .to_owned()
+    };
+    assert!(
+        squash(source).contains(&squash(needle)),
+        "missing `{needle}` in:\n{source}"
+    );
 }
 
 // ── Scalars and control flow ────────────────────────────────────────────────
@@ -261,10 +277,8 @@ function classify(x: int) -> int {
     assert_contains(source, "0i64 =>");
     assert_contains(source, "_ =>");
     assert_contains(source, "int::neg(");
-    assert!(
-        source.contains("    Ok(_0)\n}"),
-        "tail exit is the value: {source}"
-    );
+    // The tail exit is the value.
+    assert_contains(source, "Ok(_0)\n}");
 }
 
 #[test]
@@ -816,7 +830,10 @@ function main(n: int, verbose: bool, name: string, ratio: float) -> string {
     let manifest = std::fs::read_to_string(dir.join("Cargo.toml")).unwrap();
     assert_contains(&manifest, "name = \"native-main\"");
     assert_contains(&manifest, "[workspace]");
-    assert_contains(&manifest, "bex_aot = { path = \"/tmp/runtime/bex_aot\" }");
+    assert_contains(
+        &manifest,
+        "bex_aot = { path = \"/tmp/runtime/bex_aot\", features = [\"telemetry\"] }",
+    );
     assert!(
         !manifest.contains("serde"),
         "serde comes through bex_aot:\n{manifest}"

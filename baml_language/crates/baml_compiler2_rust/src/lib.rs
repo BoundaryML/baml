@@ -32,6 +32,7 @@ mod memory;
 mod print;
 mod project;
 mod structure;
+mod telemetry;
 mod types;
 mod unions;
 
@@ -216,6 +217,16 @@ pub fn compile<'db>(
     compile_many(db, &[entry])
 }
 
+pub use telemetry::Observe;
+
+/// The source file the function `loc` is declared in.
+pub(crate) fn function_file(
+    db: &dyn baml_compiler2_mir::Db,
+    loc: FunctionLoc<'_>,
+) -> baml_base::SourceFile {
+    baml_compiler2_hir::contributions::Definition::Function(loc).file(db)
+}
+
 /// The Rust identifier the generated module gives the function `loc`: see
 /// [`rust_name`].
 pub fn rust_name_for(db: &dyn baml_compiler2_mir::Db, loc: FunctionLoc<'_>) -> String {
@@ -252,6 +263,16 @@ pub fn describe_ty(db: &dyn baml_compiler2_mir::Db, ty: &NativeTy<'_>) -> String
 pub fn compile_many<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     roots: &[FunctionLoc<'db>],
+) -> Result<NativeModule<'db>, Rejection> {
+    compile_observing(db, roots, Observe::Default)
+}
+
+/// [`compile_many`], observing the functions `observe` selects for
+/// telemetry (see [`Observe`]).
+pub fn compile_observing<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    roots: &[FunctionLoc<'db>],
+    observe: Observe,
 ) -> Result<NativeModule<'db>, Rejection> {
     let [first_root, ..] = roots else {
         return Err(Rejection::unsupported("no root function to compile"));
@@ -314,6 +335,7 @@ pub fn compile_many<'db>(
     let mut tracking = memory::analyze(&class_infos, &order, &|ty| {
         ty.describe(&|decl| classes.link_name(decl))
     });
+    let telemetry = telemetry::Plan::new(db, &order, observe)?;
     let (rust_source, sites) = print::render_module(
         &class_infos,
         &enum_infos,
@@ -325,6 +347,7 @@ pub fn compile_many<'db>(
             classes: &classes,
             tracking: &tracking,
         },
+        &telemetry,
     )?;
     tracking.report.sites = sites;
     // A lambda's MIR is printed with the function that creates it, and a

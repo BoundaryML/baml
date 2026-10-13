@@ -949,6 +949,7 @@ pub fn user_Box_map__int__string(
     let mut _3: Str;
     let mut _4: Int63;
     _4 = _1.borrow().value;
+    bex_aot::telemetry::site(4u32, 0u32);
     _3 = (_2).call((_4,))?;
     _0 = shared(user_Box__string {
         value: _3.clone(),
@@ -965,6 +966,7 @@ pub fn user_Box_map__int__user_Box__int(
     let mut _3: Shared<user_Box__int>;
     let mut _4: Int63;
     _4 = _1.borrow().value;
+    bex_aot::telemetry::site(4u32, 0u32);
     _3 = (_2).call((_4,))?;
     _0 = shared(user_Box__user_Box__int {
         value: _3.clone(),
@@ -975,6 +977,7 @@ pub fn user_Box_map__int__user_Box__int(
 pub fn user_unbox__int(mut _1: Shared<user_Box__int>) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
+    bex_aot::telemetry::site(5u32, 0u32);
     _0 = user_Box_get__int(_1.clone())?;
     Ok(_0)
 }
@@ -1064,31 +1067,42 @@ pub fn user_boxes(mut _1: Int63) -> Result<Int63, Thrown> {
     _4 = int::add(_1, int::lit(1))?;
     _3 = shared(user_Box__int { value: _4 });
     _6 = int::add(_1, int::lit(2))?;
+    bex_aot::telemetry::site(8u32, 0u32);
     _5 = user_make_box__int(_6)?;
+    bex_aot::telemetry::site(8u32, 1u32);
     _10 = user_Box_get__int(_2.clone())?;
     _9 = int::mul(_10, int::lit(2))?;
+    bex_aot::telemetry::site(8u32, 2u32);
     _8 = user_Box_set__int(_2.clone(), _9)?;
+    bex_aot::telemetry::site(8u32, 3u32);
     _13 = user_Box_swap__int(_2.clone(), _3.clone())?;
     _17 = {
         let __closure: func::Func<(Int63,), Str> = func::alloc(user_boxes__lambda0__env {});
         __closure
     };
+    bex_aot::telemetry::site(8u32, 4u32);
     _16 = user_Box_map__int__string(_2.clone(), _17.clone())?;
     _21 = {
         let __closure: func::Func<(Int63,), Shared<user_Box__int>> = func::alloc(user_boxes__lambda1__env {});
         __closure
     };
+    bex_aot::telemetry::site(8u32, 5u32);
     _20 = user_Box_map__int__user_Box__int(_5.clone(), _21.clone())?;
+    bex_aot::telemetry::site(8u32, 6u32);
     _27 = user_unbox__int(_2.clone())?;
+    bex_aot::telemetry::site(8u32, 7u32);
     _30 = user_Box_get__int(_3.clone())?;
     _26 = int::add(_27, _30)?;
+    bex_aot::telemetry::site(8u32, 8u32);
     _32 = user_unbox__int(_5.clone())?;
     _25 = int::add(_26, _32)?;
     _36 = _16.borrow().value.clone();
     bex_aot::depth::probe(1)?;
     _35 = string::length(&_36);
     _24 = int::add(_25, _35)?;
+    bex_aot::telemetry::site(8u32, 10u32);
     _38 = user_Box_get__user_Box__int(_20.clone())?;
+    bex_aot::telemetry::site(8u32, 11u32);
     _37 = user_Box_get__int(_38.clone())?;
     _0 = int::add(_24, _37)?;
     Ok(_0)
@@ -1129,6 +1143,7 @@ pub fn user_pairs(mut _1: Int63, mut _2: Str) -> Result<Str, Thrown> {
         first: _1,
         second: _2.clone(),
     });
+    bex_aot::telemetry::site(10u32, 0u32);
     _4 = user_Pair_flip__int__string(_3.clone())?;
     _8 = shared(user_Pt { x: _1, y: int::lit(1) });
     _9 = array::new::<Str>(Vec::from([_2.clone()]));
@@ -1244,86 +1259,97 @@ pub fn user_Stack_push__int(
     Ok(_0)
 }
 /// BAML function `user.stacks`.
+#[inline(never)]
 pub fn user_stacks(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Shared<user_Stack__int>;
-    let mut _3: Shared<Vec<Int63>>;
-    let mut _4: Int63;
-    let mut _5: bool;
-    let mut _6: Int63;
-    let mut _7: ();
-    let mut _8: Int63;
-    let mut _9: Int63;
-    let mut _10: Int63;
-    let mut _12: Int63;
-    let mut _13: Int63;
-    let mut _14: Int63;
-    let mut _15: Option<Int63>;
-    let mut _17: Shared<user_Stack__string>;
-    let mut _18: Shared<Vec<Str>>;
-    let mut _19: ();
-    let mut _21: Str;
-    let mut _22: Str;
-    let mut _23: Option<Str>;
-    let mut _25: Int63;
-    let mut _26: Int63;
-    let mut _27: Int63;
-    let mut _29: Int63;
-    _3 = array::new::<Int63>(Vec::new());
-    _2 = shared(user_Stack__int {
-        items: _3.clone(),
-    });
-    _4 = int::lit(0);
-    'bb1: loop {
-        _6 = _4;
-        _5 = _6 < _1;
-        if _5 {
-            _9 = _4;
-            _10 = _4;
-            _8 = int::mul(_9, _10)?;
-            _7 = user_Stack_push__int(_2.clone(), _8)?;
-            _12 = _4;
-            _4 = int::add(_12, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
+    let __telemetry = bex_aot::telemetry::enter(14u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Shared<user_Stack__int>;
+        let mut _3: Shared<Vec<Int63>>;
+        let mut _4: Int63;
+        let mut _5: bool;
+        let mut _6: Int63;
+        let mut _7: ();
+        let mut _8: Int63;
+        let mut _9: Int63;
+        let mut _10: Int63;
+        let mut _12: Int63;
+        let mut _13: Int63;
+        let mut _14: Int63;
+        let mut _15: Option<Int63>;
+        let mut _17: Shared<user_Stack__string>;
+        let mut _18: Shared<Vec<Str>>;
+        let mut _19: ();
+        let mut _21: Str;
+        let mut _22: Str;
+        let mut _23: Option<Str>;
+        let mut _25: Int63;
+        let mut _26: Int63;
+        let mut _27: Int63;
+        let mut _29: Int63;
+        _3 = array::new::<Int63>(Vec::new());
+        _2 = shared(user_Stack__int {
+            items: _3.clone(),
+        });
+        _4 = int::lit(0);
+        'bb1: loop {
+            _6 = _4;
+            _5 = _6 < _1;
+            if _5 {
+                _9 = _4;
+                _10 = _4;
+                _8 = int::mul(_9, _10)?;
+                bex_aot::telemetry::site(14u32, 5u32);
+                _7 = user_Stack_push__int(_2.clone(), _8)?;
+                _12 = _4;
+                _4 = int::add(_12, int::lit(1))?;
+                continue 'bb1;
+            } else {
+                break 'bb1;
+            }
         }
-    }
-    _15 = user_Stack_peek__int(_2.clone())?;
-    'bb5: {
-        if let Some(value) = _15 {
-            _14 = value;
-            break 'bb5;
-        } else {
-            _14 = int::neg(int::lit(1))?;
-            break 'bb5;
+        bex_aot::telemetry::site(14u32, 0u32);
+        _15 = user_Stack_peek__int(_2.clone())?;
+        'bb5: {
+            if let Some(value) = _15 {
+                _14 = value;
+                break 'bb5;
+            } else {
+                _14 = int::neg(int::lit(1))?;
+                break 'bb5;
+            }
         }
-    }
-    _13 = _14;
-    _18 = array::new::<Str>(Vec::from([string::from_literal("a")]));
-    _17 = shared(user_Stack__string {
-        items: _18.clone(),
-    });
-    _19 = user_Stack_push__string(_17.clone(), string::from_literal("b"))?;
-    _23 = user_Stack_peek__string(_17.clone())?;
-    'bb9: {
-        if let Some(value) = _23.clone() {
-            _22 = value;
-            break 'bb9;
-        } else {
-            _22 = string::from_literal("");
-            break 'bb9;
+        _13 = _14;
+        _18 = array::new::<Str>(Vec::from([string::from_literal("a")]));
+        _17 = shared(user_Stack__string {
+            items: _18.clone(),
+        });
+        bex_aot::telemetry::site(14u32, 1u32);
+        _19 = user_Stack_push__string(_17.clone(), string::from_literal("b"))?;
+        bex_aot::telemetry::site(14u32, 2u32);
+        _23 = user_Stack_peek__string(_17.clone())?;
+        'bb9: {
+            if let Some(value) = _23.clone() {
+                _22 = value;
+                break 'bb9;
+            } else {
+                _22 = string::from_literal("");
+                break 'bb9;
+            }
         }
-    }
-    _21 = _22.clone();
-    _26 = _13;
-    _27 = user_Stack_size__int(_2.clone())?;
-    _25 = int::add(_26, _27)?;
-    bex_aot::depth::probe(1)?;
-    _29 = string::length(&_21);
-    _0 = int::add(_25, _29)?;
-    Ok(_0)
+        _21 = _22.clone();
+        _26 = _13;
+        bex_aot::telemetry::site(14u32, 3u32);
+        _27 = user_Stack_size__int(_2.clone())?;
+        _25 = int::add(_26, _27)?;
+        bex_aot::depth::probe(1)?;
+        _29 = string::length(&_21);
+        _0 = int::add(_25, _29)?;
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.make_box<Box<Box<int>>>`.
 pub fn user_make_box__user_Box__user_Box__int(
@@ -1351,6 +1377,7 @@ pub fn user_unbox__user_Box__user_Box__int(
 ) -> Result<Shared<user_Box__user_Box__int>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_Box__user_Box__int>;
+    bex_aot::telemetry::site(5u32, 0u32);
     _0 = user_Box_get__user_Box__user_Box__int(_1.clone())?;
     Ok(_0)
 }
@@ -1360,6 +1387,7 @@ pub fn user_unbox__user_Box__int(
 ) -> Result<Shared<user_Box__int>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_Box__int>;
+    bex_aot::telemetry::site(5u32, 0u32);
     _0 = user_Box_get__user_Box__int(_1.clone())?;
     Ok(_0)
 }
@@ -1382,15 +1410,22 @@ pub fn user_nested(mut _1: Int63) -> Result<Int63, Thrown> {
     _2 = shared(user_Box__user_Box__int {
         value: _3.clone(),
     });
+    bex_aot::telemetry::site(15u32, 0u32);
     _4 = user_make_box__user_Box__user_Box__int(_2.clone())?;
+    bex_aot::telemetry::site(15u32, 1u32);
     _9 = user_unbox__user_Box__user_Box__int(_4.clone())?;
+    bex_aot::telemetry::site(15u32, 2u32);
     _8 = user_unbox__user_Box__int(_9.clone())?;
+    bex_aot::telemetry::site(15u32, 3u32);
     _7 = user_unbox__int(_8.clone())?;
     _15 = _2.borrow().value.clone();
     _17 = _7;
     _16 = int::add(_17, int::lit(1))?;
+    bex_aot::telemetry::site(15u32, 4u32);
     _14 = user_Box_set__int(_15.clone(), _16)?;
+    bex_aot::telemetry::site(15u32, 5u32);
     _19 = user_Box_get__user_Box__int(_2.clone())?;
+    bex_aot::telemetry::site(15u32, 6u32);
     _0 = user_Box_get__int(_19.clone())?;
     Ok(_0)
 }
@@ -1431,6 +1466,7 @@ pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
     _11 = string::concat(&_12, &_5);
     _10 = string::concat(&_11, &string::from_literal("|"));
     _20 = _7.borrow().second.clone();
+    bex_aot::telemetry::site(16u32, 4u32);
     _19 = user_Box_get__int(_20.clone())?;
     bex_aot::depth::probe(0)?;
     _18 = bex_aot::render::to_string(&_19)?;
@@ -1438,129 +1474,156 @@ pub fn user_renders(mut _1: Int63) -> Result<Str, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.type_tests`.
+#[inline(never)]
 pub fn user_type_tests(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Shared<user_Box__int>;
-    let mut _3: Union_int_or_user_Box__int_or_user_Box__string;
-    let mut _4: Union_int_or_user_Box__int_or_user_Box__string;
-    let mut _5: Union_int_or_user_Box__int_or_user_Box__string;
-    let mut _6: Int63;
-    let mut _7: bool;
-    let mut _8: bool;
-    let mut _9: Int63;
-    let mut _10: bool;
-    let mut _11: bool;
-    let mut _12: Int63;
-    let mut _13: bool;
-    let mut _14: bool;
-    let mut _15: Int63;
-    let mut _16: Union_int_or_user_Box__int_or_user_Box__string;
-    let mut _17: Int63;
-    let mut _18: Union_int_or_user_Box__int_or_user_Box__string;
-    let mut _19: Shared<user_Box__int>;
-    let mut _20: Int63;
-    let mut _21: Union_int_or_user_Box__int_or_user_Box__string;
-    let mut _22: Shared<user_Box__int>;
-    let mut _24: Union_int_or_user_Box__int_or_user_Box__string;
-    let mut _25: Shared<user_Box__string>;
-    let mut _26: Str;
-    let mut _27: Int63;
-    let mut _28: Int63;
-    let mut _29: Int63;
-    let mut _30: Int63;
-    let mut _31: Int63;
-    let mut _32: Int63;
-    let mut _33: Int63;
-    let mut _34: Int63;
-    'bb3: {
-        _2 = shared(user_Box__int { value: _1 });
-        _3 = Union_int_or_user_Box__int_or_user_Box__string::user_Box__int(_2.clone());
-        _4 = Union_int_or_user_Box__int_or_user_Box__string::user_Box__string(
-            shared(user_Box__string {
-                value: string::from_literal("s"),
-            }),
-        );
-        _5 = Union_int_or_user_Box__int_or_user_Box__string::int(_1);
-        _8 = matches!(
-            & _3, Union_int_or_user_Box__int_or_user_Box__string::user_Box__int(_)
-        );
-        if _8 {
-            _7 = true;
-            break 'bb3;
-        } else {
-            _7 = false;
-            break 'bb3;
+    let __telemetry = bex_aot::telemetry::enter(17u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Shared<user_Box__int>;
+        let mut _3: Union_int_or_user_Box__int_or_user_Box__string;
+        let mut _4: Union_int_or_user_Box__int_or_user_Box__string;
+        let mut _5: Union_int_or_user_Box__int_or_user_Box__string;
+        let mut _6: Int63;
+        let mut _7: bool;
+        let mut _8: bool;
+        let mut _9: Int63;
+        let mut _10: bool;
+        let mut _11: bool;
+        let mut _12: Int63;
+        let mut _13: bool;
+        let mut _14: bool;
+        let mut _15: Int63;
+        let mut _16: Union_int_or_user_Box__int_or_user_Box__string;
+        let mut _17: Int63;
+        let mut _18: Union_int_or_user_Box__int_or_user_Box__string;
+        let mut _19: Shared<user_Box__int>;
+        let mut _20: Int63;
+        let mut _21: Union_int_or_user_Box__int_or_user_Box__string;
+        let mut _22: Shared<user_Box__int>;
+        let mut _24: Union_int_or_user_Box__int_or_user_Box__string;
+        let mut _25: Shared<user_Box__string>;
+        let mut _26: Str;
+        let mut _27: Int63;
+        let mut _28: Int63;
+        let mut _29: Int63;
+        let mut _30: Int63;
+        let mut _31: Int63;
+        let mut _32: Int63;
+        let mut _33: Int63;
+        let mut _34: Int63;
+        'bb3: {
+            _2 = shared(user_Box__int { value: _1 });
+            _3 = Union_int_or_user_Box__int_or_user_Box__string::user_Box__int(
+                _2.clone(),
+            );
+            _4 = Union_int_or_user_Box__int_or_user_Box__string::user_Box__string(
+                shared(user_Box__string {
+                    value: string::from_literal("s"),
+                }),
+            );
+            _5 = Union_int_or_user_Box__int_or_user_Box__string::int(_1);
+            _8 = matches!(
+                & _3, Union_int_or_user_Box__int_or_user_Box__string::user_Box__int(_)
+            );
+            if _8 {
+                _7 = true;
+                break 'bb3;
+            } else {
+                _7 = false;
+                break 'bb3;
+            }
         }
-    }
-    'bb6: {
-        if _7 {
-            _6 = int::lit(1);
-            break 'bb6;
-        } else {
-            _6 = int::lit(0);
-            break 'bb6;
+        'bb6: {
+            if _7 {
+                _6 = int::lit(1);
+                break 'bb6;
+            } else {
+                _6 = int::lit(0);
+                break 'bb6;
+            }
         }
-    }
-    'bb9: {
-        _11 = matches!(
-            & _4, Union_int_or_user_Box__int_or_user_Box__string::user_Box__int(_)
-        );
-        if _11 {
-            _10 = true;
-            break 'bb9;
-        } else {
-            _10 = false;
-            break 'bb9;
+        'bb9: {
+            _11 = matches!(
+                & _4, Union_int_or_user_Box__int_or_user_Box__string::user_Box__int(_)
+            );
+            if _11 {
+                _10 = true;
+                break 'bb9;
+            } else {
+                _10 = false;
+                break 'bb9;
+            }
         }
-    }
-    'bb12: {
-        if _10 {
-            _9 = int::lit(10);
-            break 'bb12;
-        } else {
-            _9 = int::lit(0);
-            break 'bb12;
+        'bb12: {
+            if _10 {
+                _9 = int::lit(10);
+                break 'bb12;
+            } else {
+                _9 = int::lit(0);
+                break 'bb12;
+            }
         }
-    }
-    'bb15: {
-        _14 = matches!(
-            & _4, Union_int_or_user_Box__int_or_user_Box__string::user_Box__string(_)
-        );
-        if _14 {
-            _13 = true;
-            break 'bb15;
-        } else {
-            _13 = false;
-            break 'bb15;
+        'bb15: {
+            _14 = matches!(
+                & _4, Union_int_or_user_Box__int_or_user_Box__string::user_Box__string(_)
+            );
+            if _14 {
+                _13 = true;
+                break 'bb15;
+            } else {
+                _13 = false;
+                break 'bb15;
+            }
         }
-    }
-    'bb18: {
-        if _13 {
-            _12 = int::lit(100);
-            break 'bb18;
-        } else {
-            _12 = int::lit(0);
-            break 'bb18;
+        'bb18: {
+            if _13 {
+                _12 = int::lit(100);
+                break 'bb18;
+            } else {
+                _12 = int::lit(0);
+                break 'bb18;
+            }
         }
-    }
-    'bb23: {
-        _16 = _5.clone();
-        if matches!(& _16, Union_int_or_user_Box__int_or_user_Box__string::int(_)) {
-            _17 = match _16.clone() {
-                Union_int_or_user_Box__int_or_user_Box__string::int(value) => value,
-                _ => {
-                    return Err(Thrown::from(Panic::Unreachable));
+        'bb23: {
+            _16 = _5.clone();
+            if matches!(& _16, Union_int_or_user_Box__int_or_user_Box__string::int(_)) {
+                _17 = match _16.clone() {
+                    Union_int_or_user_Box__int_or_user_Box__string::int(value) => value,
+                    _ => {
+                        return Err(Thrown::from(Panic::Unreachable));
+                    }
+                };
+                _15 = _17;
+                break 'bb23;
+            } else {
+                _18 = _5.clone();
+                if matches!(
+                    & _18,
+                    Union_int_or_user_Box__int_or_user_Box__string::user_Box__int(_)
+                ) {
+                    _19 = match _18.clone() {
+                        Union_int_or_user_Box__int_or_user_Box__string::user_Box__int(
+                            value,
+                        ) => value,
+                        _ => {
+                            return Err(Thrown::from(Panic::Unreachable));
+                        }
+                    };
+                    _15 = _19.borrow().value;
+                    break 'bb23;
+                } else {
+                    _15 = int::lit(0);
+                    break 'bb23;
                 }
-            };
-            _15 = _17;
-            break 'bb23;
-        } else {
-            _18 = _5.clone();
+            }
+        }
+        'bb28: {
+            _21 = _3.clone();
             if matches!(
-                & _18, Union_int_or_user_Box__int_or_user_Box__string::user_Box__int(_)
+                & _21, Union_int_or_user_Box__int_or_user_Box__string::user_Box__int(_)
             ) {
-                _19 = match _18.clone() {
+                _22 = match _21.clone() {
                     Union_int_or_user_Box__int_or_user_Box__string::user_Box__int(
                         value,
                     ) => value,
@@ -1568,63 +1631,46 @@ pub fn user_type_tests(mut _1: Int63) -> Result<Int63, Thrown> {
                         return Err(Thrown::from(Panic::Unreachable));
                     }
                 };
-                _15 = _19.borrow().value;
-                break 'bb23;
-            } else {
-                _15 = int::lit(0);
-                break 'bb23;
-            }
-        }
-    }
-    'bb28: {
-        _21 = _3.clone();
-        if matches!(
-            & _21, Union_int_or_user_Box__int_or_user_Box__string::user_Box__int(_)
-        ) {
-            _22 = match _21.clone() {
-                Union_int_or_user_Box__int_or_user_Box__string::user_Box__int(value) => {
-                    value
-                }
-                _ => {
-                    return Err(Thrown::from(Panic::Unreachable));
-                }
-            };
-            _20 = user_Box_get__int(_22.clone())?;
-            break 'bb28;
-        } else {
-            _24 = _3.clone();
-            if matches!(
-                & _24,
-                Union_int_or_user_Box__int_or_user_Box__string::user_Box__string(_)
-            ) {
-                _25 = match _24.clone() {
-                    Union_int_or_user_Box__int_or_user_Box__string::user_Box__string(
-                        value,
-                    ) => value,
-                    _ => {
-                        return Err(Thrown::from(Panic::Unreachable));
-                    }
-                };
-                _26 = _25.borrow().value.clone();
-                bex_aot::depth::probe(1)?;
-                _20 = string::length(&_26);
+                bex_aot::telemetry::site(17u32, 1u32);
+                _20 = user_Box_get__int(_22.clone())?;
                 break 'bb28;
             } else {
-                _20 = int::lit(0);
-                break 'bb28;
+                _24 = _3.clone();
+                if matches!(
+                    & _24,
+                    Union_int_or_user_Box__int_or_user_Box__string::user_Box__string(_)
+                ) {
+                    _25 = match _24.clone() {
+                        Union_int_or_user_Box__int_or_user_Box__string::user_Box__string(
+                            value,
+                        ) => value,
+                        _ => {
+                            return Err(Thrown::from(Panic::Unreachable));
+                        }
+                    };
+                    _26 = _25.borrow().value.clone();
+                    bex_aot::depth::probe(1)?;
+                    _20 = string::length(&_26);
+                    break 'bb28;
+                } else {
+                    _20 = int::lit(0);
+                    break 'bb28;
+                }
             }
         }
-    }
-    _30 = _6;
-    _31 = _9;
-    _29 = int::add(_30, _31)?;
-    _32 = _12;
-    _28 = int::add(_29, _32)?;
-    _33 = _15;
-    _27 = int::add(_28, _33)?;
-    _34 = _20;
-    _0 = int::add(_27, _34)?;
-    Ok(_0)
+        _30 = _6;
+        _31 = _9;
+        _29 = int::add(_30, _31)?;
+        _32 = _12;
+        _28 = int::add(_29, _32)?;
+        _33 = _15;
+        _27 = int::add(_28, _33)?;
+        _34 = _20;
+        _0 = int::add(_27, _34)?;
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.nullable_boxes`.
 pub fn user_nullable_boxes(mut _1: Int63) -> Result<Int63, Thrown> {
@@ -1649,6 +1695,7 @@ pub fn user_nullable_boxes(mut _1: Int63) -> Result<Int63, Thrown> {
     'bb7: {
         _4 = !_6;
         if _4 {
+            bex_aot::telemetry::site(18u32, 1u32);
             _0 = user_Box_get__int(
                 _2.clone().expect("non-null by the checker's narrowing"),
             )?;
@@ -1660,3 +1707,399 @@ pub fn user_nullable_boxes(mut _1: Int63) -> Result<Int63, Thrown> {
     }
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.make_box",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 917u32,
+        end: 977u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.Box.get",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 100u32,
+        end: 138u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.Box.set",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 143u32,
+        end: 195u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.Box.swap",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 200u32,
+        end: 343u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.Box.map",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 348u32,
+        end: 441u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 424u32,
+                end: 437u32,
+                line: 12u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.unbox",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 979u32,
+        end: 1024u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1015u32,
+                end: 1022u32,
+                line: 35u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(boxes, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1213u32,
+        end: 1261u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1240u32,
+                end: 1253u32,
+                line: 43u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(boxes, 1)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1282u32,
+        end: 1328u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.boxes",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1026u32,
+        end: 1401u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1139u32,
+                end: 1154u32,
+                line: 40u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1166u32,
+                end: 1173u32,
+                line: 41u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1160u32,
+                end: 1178u32,
+                line: 41u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1184u32,
+                end: 1193u32,
+                line: 42u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1207u32,
+                end: 1262u32,
+                line: 43u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1276u32,
+                end: 1329u32,
+                line: 44u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1335u32,
+                end: 1343u32,
+                line: 45u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1346u32,
+                end: 1353u32,
+                line: 45u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1356u32,
+                end: 1364u32,
+                line: 45u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1367u32,
+                end: 1383u32,
+                line: 45u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1386u32,
+                end: 1393u32,
+                line: 45u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1386u32,
+                end: 1399u32,
+                line: 45u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.Pair.flip",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 497u32,
+        end: 588u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.pairs",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1403u32,
+        end: 1659u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1516u32,
+                end: 1524u32,
+                line: 50u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1600u32,
+                end: 1619u32,
+                line: 52u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1622u32,
+                end: 1643u32,
+                line: 52u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.Stack.peek",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 691u32,
+        end: 829u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.Stack.push",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 629u32,
+        end: 686u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 665u32,
+                end: 683u32,
+                line: 23u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.Stack.size",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 834u32,
+        end: 884u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.stacks",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1661u32,
+        end: 1965u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1809u32,
+                end: 1817u32,
+                line: 59u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1877u32,
+                end: 1892u32,
+                line: 61u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1909u32,
+                end: 1921u32,
+                line: 62u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1939u32,
+                end: 1947u32,
+                line: 63u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1950u32,
+                end: 1963u32,
+                line: 63u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1767u32,
+                end: 1780u32,
+                line: 58u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.nested",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1967u32,
+        end: 2184u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2077u32,
+                end: 2089u32,
+                line: 68u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2119u32,
+                end: 2131u32,
+                line: 69u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2113u32,
+                end: 2132u32,
+                line: 69u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2107u32,
+                end: 2133u32,
+                line: 69u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2139u32,
+                end: 2162u32,
+                line: 70u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2168u32,
+                end: 2176u32,
+                line: 71u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2168u32,
+                end: 2182u32,
+                line: 71u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.renders",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2186u32,
+        end: 2510u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2332u32,
+                end: 2354u32,
+                line: 77u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2371u32,
+                end: 2419u32,
+                line: 78u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2425u32,
+                end: 2438u32,
+                line: 79u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2447u32,
+                end: 2460u32,
+                line: 79u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2479u32,
+                end: 2496u32,
+                line: 79u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2479u32,
+                end: 2508u32,
+                line: 79u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.type_tests",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2512u32,
+        end: 3097u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3046u32,
+                end: 3062u32,
+                line: 91u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3015u32,
+                end: 3022u32,
+                line: 91u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.nullable_boxes",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3099u32,
+        end: 3265u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3229u32,
+                end: 3238u32,
+                line: 97u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3242u32,
+                end: 3249u32,
+                line: 97u32,
+            },
+        ],
+    },
+];

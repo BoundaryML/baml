@@ -304,6 +304,7 @@ pub fn user_defer_early_return(mut _1: bool) -> Result<Str, Thrown> {
     let mut _5: Str;
     let mut _7: Str;
     _2 = array::new::<Str>(Vec::new());
+    bex_aot::telemetry::site(3u32, 0u32);
     _3 = user_early_return(_2.clone(), _1)?;
     bex_aot::depth::probe(0)?;
     _5 = bex_aot::render::to_string(&_2)?;
@@ -313,239 +314,251 @@ pub fn user_defer_early_return(mut _1: bool) -> Result<Str, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.defer_loop`.
+#[inline(never)]
 pub fn user_defer_loop(mut _1: Int63) -> Result<Str, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Str;
-    let mut _2: Shared<Vec<Str>>;
-    let mut _3: Shared<Vec<Int63>>;
-    let mut _4: bex_aot::array::Iter<Int63>;
-    let mut _5: Option<Int63>;
-    let mut _6: bool;
-    let mut _7: Int63;
-    let mut _8: Int63;
-    let mut _9: Thrown;
-    let mut _11: bool;
-    let mut _12: Int63;
-    let mut _13: Int63;
-    let mut _14: Str;
-    let mut _15: Str;
-    let mut _18: bool;
-    let mut _19: Int63;
-    let mut _20: Int63;
-    let mut _21: Int63;
-    let mut _22: Str;
-    let mut _23: Str;
-    let mut _26: Int63;
-    let mut _27: Str;
-    let mut _28: Str;
-    let mut _31: Int63;
-    let mut _32: Str;
-    let mut _33: Str;
-    let mut _36: Int63;
-    let mut _37: Str;
-    let mut _38: Str;
-    let mut _42: Str;
-    let mut _43: Str;
-    let mut _44: Str;
-    let mut _45: Str;
-    let mut _46: Str;
-    _2 = array::new::<Str>(Vec::new());
-    _3 = array::new::<
-        Int63,
-    >(Vec::from([int::lit(1), int::lit(2), int::lit(3), int::lit(4)]));
-    bex_aot::depth::probe(1)?;
-    _4 = array::iter(&_3);
-    'bb1: loop {
-        _5 = array::next(&mut _4);
-        'bb14: {
-            _6 = _5.is_none();
-            if _6 {
-                break 'bb14;
-            } else {
-                _7 = _5.expect("non-null by the checker's narrowing");
-                _8 = _7;
-                'bb16: {
-                    _12 = _8;
-                    _11 = _12 == _1;
-                    if _11 {
-                        _42 = string::from_literal("d");
-                        bex_aot::depth::probe(0)?;
-                        _15 = bex_aot::render::to_string(&_8)?;
-                        _14 = string::concat(&_42, &_15);
-                        bex_aot::depth::probe(0)?;
-                        array::push(&_2, _14.clone());
-                        _13 = array::len(&_2);
-                        break 'bb14;
-                    } else {
-                        _20 = _8;
-                        _19 = match int::rem(_20, int::lit(2)) {
-                            Ok(value) => value,
-                            Err(error) => {
-                                _9 = Thrown::from(error);
-                                break 'bb16;
-                            }
-                        };
-                        _18 = _19 == int::lit(1);
-                        if _18 {
-                            _43 = string::from_literal("d");
+    let __telemetry = bex_aot::telemetry::enter(4u32);
+    let __result = (move || -> Result<Str, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Str;
+        let mut _2: Shared<Vec<Str>>;
+        let mut _3: Shared<Vec<Int63>>;
+        let mut _4: bex_aot::array::Iter<Int63>;
+        let mut _5: Option<Int63>;
+        let mut _6: bool;
+        let mut _7: Int63;
+        let mut _8: Int63;
+        let mut _9: Thrown;
+        let mut _11: bool;
+        let mut _12: Int63;
+        let mut _13: Int63;
+        let mut _14: Str;
+        let mut _15: Str;
+        let mut _18: bool;
+        let mut _19: Int63;
+        let mut _20: Int63;
+        let mut _21: Int63;
+        let mut _22: Str;
+        let mut _23: Str;
+        let mut _26: Int63;
+        let mut _27: Str;
+        let mut _28: Str;
+        let mut _31: Int63;
+        let mut _32: Str;
+        let mut _33: Str;
+        let mut _36: Int63;
+        let mut _37: Str;
+        let mut _38: Str;
+        let mut _42: Str;
+        let mut _43: Str;
+        let mut _44: Str;
+        let mut _45: Str;
+        let mut _46: Str;
+        _2 = array::new::<Str>(Vec::new());
+        _3 = array::new::<
+            Int63,
+        >(Vec::from([int::lit(1), int::lit(2), int::lit(3), int::lit(4)]));
+        bex_aot::depth::probe(1)?;
+        _4 = array::iter(&_3);
+        'bb1: loop {
+            _5 = array::next(&mut _4);
+            'bb14: {
+                _6 = _5.is_none();
+                if _6 {
+                    break 'bb14;
+                } else {
+                    _7 = _5.expect("non-null by the checker's narrowing");
+                    _8 = _7;
+                    'bb16: {
+                        _12 = _8;
+                        _11 = _12 == _1;
+                        if _11 {
+                            _42 = string::from_literal("d");
                             bex_aot::depth::probe(0)?;
-                            _23 = bex_aot::render::to_string(&_8)?;
-                            _22 = string::concat(&_43, &_23);
+                            _15 = bex_aot::render::to_string(&_8)?;
+                            _14 = string::concat(&_42, &_15);
                             bex_aot::depth::probe(0)?;
-                            array::push(&_2, _22.clone());
-                            _21 = array::len(&_2);
-                            continue 'bb1;
+                            array::push(&_2, _14.clone());
+                            _13 = array::len(&_2);
+                            break 'bb14;
                         } else {
-                            _44 = string::from_literal("i");
-                            match bex_aot::depth::probe(0) {
+                            _20 = _8;
+                            _19 = match int::rem(_20, int::lit(2)) {
                                 Ok(value) => value,
                                 Err(error) => {
                                     _9 = Thrown::from(error);
                                     break 'bb16;
                                 }
                             };
-                            _28 = match bex_aot::render::to_string(&_8) {
-                                Ok(value) => value,
-                                Err(error) => {
-                                    _9 = Thrown::from(error);
-                                    break 'bb16;
-                                }
-                            };
-                            _27 = string::concat(&_44, &_28);
-                            match bex_aot::depth::probe(0) {
-                                Ok(value) => value,
-                                Err(error) => {
-                                    _9 = Thrown::from(error);
-                                    break 'bb16;
-                                }
-                            };
-                            array::push(&_2, _27.clone());
-                            _26 = array::len(&_2);
-                            _45 = string::from_literal("d");
-                            bex_aot::depth::probe(0)?;
-                            _33 = bex_aot::render::to_string(&_8)?;
-                            _32 = string::concat(&_45, &_33);
-                            bex_aot::depth::probe(0)?;
-                            array::push(&_2, _32.clone());
-                            _31 = array::len(&_2);
-                            continue 'bb1;
+                            _18 = _19 == int::lit(1);
+                            if _18 {
+                                _43 = string::from_literal("d");
+                                bex_aot::depth::probe(0)?;
+                                _23 = bex_aot::render::to_string(&_8)?;
+                                _22 = string::concat(&_43, &_23);
+                                bex_aot::depth::probe(0)?;
+                                array::push(&_2, _22.clone());
+                                _21 = array::len(&_2);
+                                continue 'bb1;
+                            } else {
+                                _44 = string::from_literal("i");
+                                match bex_aot::depth::probe(0) {
+                                    Ok(value) => value,
+                                    Err(error) => {
+                                        _9 = Thrown::from(error);
+                                        break 'bb16;
+                                    }
+                                };
+                                _28 = match bex_aot::render::to_string(&_8) {
+                                    Ok(value) => value,
+                                    Err(error) => {
+                                        _9 = Thrown::from(error);
+                                        break 'bb16;
+                                    }
+                                };
+                                _27 = string::concat(&_44, &_28);
+                                match bex_aot::depth::probe(0) {
+                                    Ok(value) => value,
+                                    Err(error) => {
+                                        _9 = Thrown::from(error);
+                                        break 'bb16;
+                                    }
+                                };
+                                array::push(&_2, _27.clone());
+                                _26 = array::len(&_2);
+                                _45 = string::from_literal("d");
+                                bex_aot::depth::probe(0)?;
+                                _33 = bex_aot::render::to_string(&_8)?;
+                                _32 = string::concat(&_45, &_33);
+                                bex_aot::depth::probe(0)?;
+                                array::push(&_2, _32.clone());
+                                _31 = array::len(&_2);
+                                continue 'bb1;
+                            }
                         }
                     }
+                    _46 = string::from_literal("d");
+                    bex_aot::depth::probe(0)?;
+                    _38 = bex_aot::render::to_string(&_8)?;
+                    _37 = string::concat(&_46, &_38);
+                    bex_aot::depth::probe(0)?;
+                    array::push(&_2, _37.clone());
+                    _36 = array::len(&_2);
+                    return Err(_9.clone());
                 }
-                _46 = string::from_literal("d");
+            }
+            bex_aot::depth::probe(0)?;
+            _0 = bex_aot::render::to_string(&_2)?;
+            return Ok(_0);
+        }
+    })();
+    __telemetry.exit(&__result);
+    __result
+}
+/// BAML function `user.defer_while`.
+#[inline(never)]
+pub fn user_defer_while(mut _1: Int63) -> Result<Str, Thrown> {
+    let __telemetry = bex_aot::telemetry::enter(5u32);
+    let __result = (move || -> Result<Str, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Str;
+        let mut _2: Shared<Vec<Str>>;
+        let mut _3: Int63;
+        let mut _4: bool;
+        let mut _5: Int63;
+        let mut _6: Int63;
+        let mut _7: Thrown;
+        let mut _9: bool;
+        let mut _10: Int63;
+        let mut _11: Int63;
+        let mut _12: Str;
+        let mut _13: Str;
+        let mut _16: Int63;
+        let mut _17: Str;
+        let mut _18: Str;
+        let mut _21: Int63;
+        let mut _22: Str;
+        let mut _23: Str;
+        let mut _26: Int63;
+        let mut _27: Str;
+        let mut _28: Str;
+        let mut _32: Str;
+        let mut _33: Str;
+        let mut _34: Str;
+        let mut _35: Str;
+        _2 = array::new::<Str>(Vec::new());
+        _3 = int::lit(0);
+        'bb1: loop {
+            _5 = _3;
+            _4 = _5 < int::lit(4);
+            if _4 {
+                _6 = _3;
+                _3 = int::add(_6, int::lit(1))?;
+                'bb12: {
+                    _10 = _3;
+                    _9 = _10 == _1;
+                    if _9 {
+                        _32 = string::from_literal("w");
+                        bex_aot::depth::probe(0)?;
+                        _13 = bex_aot::render::to_string(&_3)?;
+                        _12 = string::concat(&_32, &_13);
+                        bex_aot::depth::probe(0)?;
+                        array::push(&_2, _12.clone());
+                        _11 = array::len(&_2);
+                        continue 'bb1;
+                    } else {
+                        _33 = string::from_literal("b");
+                        match bex_aot::depth::probe(0) {
+                            Ok(value) => value,
+                            Err(error) => {
+                                _7 = Thrown::from(error);
+                                break 'bb12;
+                            }
+                        };
+                        _18 = match bex_aot::render::to_string(&_3) {
+                            Ok(value) => value,
+                            Err(error) => {
+                                _7 = Thrown::from(error);
+                                break 'bb12;
+                            }
+                        };
+                        _17 = string::concat(&_33, &_18);
+                        match bex_aot::depth::probe(0) {
+                            Ok(value) => value,
+                            Err(error) => {
+                                _7 = Thrown::from(error);
+                                break 'bb12;
+                            }
+                        };
+                        array::push(&_2, _17.clone());
+                        _16 = array::len(&_2);
+                        _34 = string::from_literal("w");
+                        bex_aot::depth::probe(0)?;
+                        _23 = bex_aot::render::to_string(&_3)?;
+                        _22 = string::concat(&_34, &_23);
+                        bex_aot::depth::probe(0)?;
+                        array::push(&_2, _22.clone());
+                        _21 = array::len(&_2);
+                        continue 'bb1;
+                    }
+                }
+                _35 = string::from_literal("w");
                 bex_aot::depth::probe(0)?;
-                _38 = bex_aot::render::to_string(&_8)?;
-                _37 = string::concat(&_46, &_38);
+                _28 = bex_aot::render::to_string(&_3)?;
+                _27 = string::concat(&_35, &_28);
                 bex_aot::depth::probe(0)?;
-                array::push(&_2, _37.clone());
-                _36 = array::len(&_2);
-                return Err(_9.clone());
+                array::push(&_2, _27.clone());
+                _26 = array::len(&_2);
+                return Err(_7.clone());
+            } else {
+                break 'bb1;
             }
         }
         bex_aot::depth::probe(0)?;
         _0 = bex_aot::render::to_string(&_2)?;
-        return Ok(_0);
-    }
-}
-/// BAML function `user.defer_while`.
-pub fn user_defer_while(mut _1: Int63) -> Result<Str, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Str;
-    let mut _2: Shared<Vec<Str>>;
-    let mut _3: Int63;
-    let mut _4: bool;
-    let mut _5: Int63;
-    let mut _6: Int63;
-    let mut _7: Thrown;
-    let mut _9: bool;
-    let mut _10: Int63;
-    let mut _11: Int63;
-    let mut _12: Str;
-    let mut _13: Str;
-    let mut _16: Int63;
-    let mut _17: Str;
-    let mut _18: Str;
-    let mut _21: Int63;
-    let mut _22: Str;
-    let mut _23: Str;
-    let mut _26: Int63;
-    let mut _27: Str;
-    let mut _28: Str;
-    let mut _32: Str;
-    let mut _33: Str;
-    let mut _34: Str;
-    let mut _35: Str;
-    _2 = array::new::<Str>(Vec::new());
-    _3 = int::lit(0);
-    'bb1: loop {
-        _5 = _3;
-        _4 = _5 < int::lit(4);
-        if _4 {
-            _6 = _3;
-            _3 = int::add(_6, int::lit(1))?;
-            'bb12: {
-                _10 = _3;
-                _9 = _10 == _1;
-                if _9 {
-                    _32 = string::from_literal("w");
-                    bex_aot::depth::probe(0)?;
-                    _13 = bex_aot::render::to_string(&_3)?;
-                    _12 = string::concat(&_32, &_13);
-                    bex_aot::depth::probe(0)?;
-                    array::push(&_2, _12.clone());
-                    _11 = array::len(&_2);
-                    continue 'bb1;
-                } else {
-                    _33 = string::from_literal("b");
-                    match bex_aot::depth::probe(0) {
-                        Ok(value) => value,
-                        Err(error) => {
-                            _7 = Thrown::from(error);
-                            break 'bb12;
-                        }
-                    };
-                    _18 = match bex_aot::render::to_string(&_3) {
-                        Ok(value) => value,
-                        Err(error) => {
-                            _7 = Thrown::from(error);
-                            break 'bb12;
-                        }
-                    };
-                    _17 = string::concat(&_33, &_18);
-                    match bex_aot::depth::probe(0) {
-                        Ok(value) => value,
-                        Err(error) => {
-                            _7 = Thrown::from(error);
-                            break 'bb12;
-                        }
-                    };
-                    array::push(&_2, _17.clone());
-                    _16 = array::len(&_2);
-                    _34 = string::from_literal("w");
-                    bex_aot::depth::probe(0)?;
-                    _23 = bex_aot::render::to_string(&_3)?;
-                    _22 = string::concat(&_34, &_23);
-                    bex_aot::depth::probe(0)?;
-                    array::push(&_2, _22.clone());
-                    _21 = array::len(&_2);
-                    continue 'bb1;
-                }
-            }
-            _35 = string::from_literal("w");
-            bex_aot::depth::probe(0)?;
-            _28 = bex_aot::render::to_string(&_3)?;
-            _27 = string::concat(&_35, &_28);
-            bex_aot::depth::probe(0)?;
-            array::push(&_2, _27.clone());
-            _26 = array::len(&_2);
-            return Err(_7.clone());
-        } else {
-            break 'bb1;
-        }
-    }
-    bex_aot::depth::probe(0)?;
-    _0 = bex_aot::render::to_string(&_2)?;
-    Ok(_0)
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.unwinds`.
 pub fn user_unwinds(mut _1: Shared<Vec<Str>>, mut _2: Int63) -> Result<Int63, Thrown> {
@@ -665,6 +678,7 @@ pub fn user_defer_unwind(mut _1: Int63) -> Result<Str, Thrown> {
     _2 = array::new::<Str>(Vec::new());
     'bb9: {
         'bb2: {
+            bex_aot::telemetry::site(7u32, 0u32);
             _3 = match user_unwinds(_2.clone(), _1) {
                 Ok(value) => value,
                 Err(error) => {
@@ -798,6 +812,7 @@ pub fn user_defer_throws(mut _1: Int63) -> Result<Str, Thrown> {
     _2 = array::new::<Str>(Vec::new());
     'bb9: {
         'bb3: {
+            bex_aot::telemetry::site(9u32, 0u32);
             _6 = match user_throwing_defer(_2.clone(), _1) {
                 Ok(value) => value,
                 Err(error) => {
@@ -907,6 +922,7 @@ pub fn user_defer_in_handler(mut _1: Int63) -> Result<Str, Thrown> {
     _2 = array::new::<Str>(Vec::new());
     'bb7: {
         'bb2: {
+            bex_aot::telemetry::site(11u32, 0u32);
             _3 = match user_unwinds(_2.clone(), _1) {
                 Ok(value) => value,
                 Err(error) => {
@@ -1033,3 +1049,356 @@ pub fn user_defer_nested_blocks(mut _1: Int63) -> Result<Str, Thrown> {
     _18 = array::len(&_2);
     Err(_3.clone())
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.defer_order",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 218u32,
+        end: 429u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 382u32,
+                end: 395u32,
+                line: 12u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.defer_sees_final",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 431u32,
+        end: 631u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 601u32,
+                end: 614u32,
+                line: 22u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.early_return",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 633u32,
+        end: 784u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 758u32,
+                end: 775u32,
+                line: 30u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 704u32,
+                end: 723u32,
+                line: 28u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.defer_early_return",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 786u32,
+        end: 942u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 879u32,
+                end: 903u32,
+                line: 36u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 909u32,
+                end: 924u32,
+                line: 37u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 927u32,
+                end: 940u32,
+                line: 37u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.defer_loop",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 944u32,
+        end: 1227u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1016u32,
+                end: 1205u32,
+                line: 42u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1184u32,
+                end: 1197u32,
+                line: 46u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1169u32,
+                end: 1198u32,
+                line: 46u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1077u32,
+                end: 1090u32,
+                line: 43u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1062u32,
+                end: 1091u32,
+                line: 43u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1210u32,
+                end: 1225u32,
+                line: 48u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.defer_while",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1229u32,
+        end: 1499u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1482u32,
+                end: 1497u32,
+                line: 60u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1456u32,
+                end: 1469u32,
+                line: 58u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1441u32,
+                end: 1470u32,
+                line: 58u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1383u32,
+                end: 1396u32,
+                line: 56u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1368u32,
+                end: 1397u32,
+                line: 56u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.unwinds",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1501u32,
+        end: 1751u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1726u32,
+                end: 1742u32,
+                line: 69u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1703u32,
+                end: 1719u32,
+                line: 68u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1594u32,
+                end: 1611u32,
+                line: 65u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1562u32,
+                end: 1579u32,
+                line: 64u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.defer_unwind",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1753u32,
+        end: 2034u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1835u32,
+                end: 1850u32,
+                line: 75u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1958u32,
+                end: 1982u32,
+                line: 77u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1884u32,
+                end: 1910u32,
+                line: 76u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2001u32,
+                end: 2016u32,
+                line: 79u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2019u32,
+                end: 2032u32,
+                line: 79u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.throwing_defer",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2036u32,
+        end: 2271u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2246u32,
+                end: 2262u32,
+                line: 86u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2132u32,
+                end: 2145u32,
+                line: 84u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2104u32,
+                end: 2117u32,
+                line: 83u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.defer_throws",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2273u32,
+        end: 2518u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2355u32,
+                end: 2377u32,
+                line: 92u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2355u32,
+                end: 2389u32,
+                line: 92u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2466u32,
+                end: 2484u32,
+                line: 94u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2497u32,
+                end: 2512u32,
+                line: 96u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.defer_throw_uncaught",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2520u32,
+        end: 2702u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.defer_in_handler",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2704u32,
+        end: 2993u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2791u32,
+                end: 2806u32,
+                line: 107u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2902u32,
+                end: 2921u32,
+                line: 110u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2860u32,
+                end: 2887u32,
+                line: 109u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2960u32,
+                end: 2975u32,
+                line: 114u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2978u32,
+                end: 2991u32,
+                line: 114u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.defer_nested_blocks",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2995u32,
+        end: 3274u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3190u32,
+                end: 3205u32,
+                line: 123u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3144u32,
+                end: 3161u32,
+                line: 122u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3226u32,
+                end: 3245u32,
+                line: 125u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3094u32,
+                end: 3111u32,
+                line: 120u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3257u32,
+                end: 3272u32,
+                line: 127u32,
+            },
+        ],
+    },
+];

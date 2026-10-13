@@ -119,3 +119,97 @@ pub fn user_fdiv(mut _1: f64, mut _2: f64) -> Result<f64, Thrown> {
     _0 = _1 / _2;
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.fsum",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 79u32,
+        end: 131u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.fcmp",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 133u32,
+        end: 256u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.fmix",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 258u32,
+        end: 323u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 294u32,
+                end: 321u32,
+                line: 9u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.ffloor",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 325u32,
+        end: 373u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 362u32,
+                end: 371u32,
+                line: 11u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.fitrunc",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 375u32,
+        end: 423u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 411u32,
+                end: 421u32,
+                line: 13u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.nan_order",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 425u32,
+        end: 498u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.fneg",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 500u32,
+        end: 539u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.fdiv",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 541u32,
+        end: 593u32,
+        sites: &[],
+    },
+];

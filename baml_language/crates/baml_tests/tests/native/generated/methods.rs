@@ -112,33 +112,41 @@ pub fn user_Counter_add(
     Ok(_0)
 }
 /// BAML function `user.count`.
+#[inline(never)]
 pub fn user_count(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Shared<user_Counter>;
-    let mut _3: Int63;
-    let mut _4: bool;
-    let mut _5: Int63;
-    let mut _6: Int63;
-    let mut _7: Int63;
-    let mut _8: Int63;
-    _2 = shared(user_Counter { n: int::lit(0) });
-    _3 = int::lit(0);
-    'bb1: loop {
-        _5 = _3;
-        _4 = _5 < _1;
-        if _4 {
-            _7 = _3;
-            _6 = user_Counter_add(_2.clone(), _7)?;
-            _8 = _3;
-            _3 = int::add(_8, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
+    let __telemetry = bex_aot::telemetry::enter(2u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Shared<user_Counter>;
+        let mut _3: Int63;
+        let mut _4: bool;
+        let mut _5: Int63;
+        let mut _6: Int63;
+        let mut _7: Int63;
+        let mut _8: Int63;
+        _2 = shared(user_Counter { n: int::lit(0) });
+        _3 = int::lit(0);
+        'bb1: loop {
+            _5 = _3;
+            _4 = _5 < _1;
+            if _4 {
+                _7 = _3;
+                bex_aot::telemetry::site(2u32, 1u32);
+                _6 = user_Counter_add(_2.clone(), _7)?;
+                _8 = _3;
+                _3 = int::add(_8, int::lit(1))?;
+                continue 'bb1;
+            } else {
+                break 'bb1;
+            }
         }
-    }
-    _0 = user_Counter_get(_2.clone())?;
-    Ok(_0)
+        bex_aot::telemetry::site(2u32, 0u32);
+        _0 = user_Counter_get(_2.clone())?;
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.alias`.
 pub fn user_alias(mut _1: Int63) -> Result<Int63, Thrown> {
@@ -147,7 +155,71 @@ pub fn user_alias(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _2: Shared<user_Counter>;
     let mut _4: Int63;
     _2 = shared(user_Counter { n: _1 });
+    bex_aot::telemetry::site(3u32, 0u32);
     _4 = user_Counter_add(_2.clone(), int::lit(1))?;
+    bex_aot::telemetry::site(3u32, 1u32);
     _0 = user_Counter_get(_2.clone())?;
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.Counter.get",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 88u32,
+        end: 124u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.Counter.add",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 129u32,
+        end: 216u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.count",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 220u32,
+        end: 373u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 364u32,
+                end: 371u32,
+                line: 19u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 325u32,
+                end: 333u32,
+                line: 16u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.alias",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 375u32,
+        end: 479u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 456u32,
+                end: 464u32,
+                line: 25u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 470u32,
+                end: 477u32,
+                line: 26u32,
+            },
+        ],
+    },
+];

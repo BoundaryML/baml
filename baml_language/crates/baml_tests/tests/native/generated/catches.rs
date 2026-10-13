@@ -331,6 +331,7 @@ pub fn user_middle(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
+    bex_aot::telemetry::site(1u32, 0u32);
     _2 = user_risky(_1)?;
     _0 = int::add(_2, int::lit(1))?;
     Ok(_0)
@@ -343,6 +344,7 @@ pub fn user_catch_class(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _4: bool;
     'bb4: {
         'bb1: {
+            bex_aot::telemetry::site(2u32, 0u32);
             _0 = match user_risky(_1) {
                 Ok(value) => value,
                 Err(error) => {
@@ -371,6 +373,7 @@ pub fn user_catch_two(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _5: bool;
     'bb6: {
         'bb1: {
+            bex_aot::telemetry::site(3u32, 0u32);
             _0 = match user_risky(_1) {
                 Ok(value) => value,
                 Err(error) => {
@@ -409,6 +412,7 @@ pub fn user_catch_bind(mut _1: Int63) -> Result<Str, Thrown> {
     let mut _12: Int63;
     'bb8: {
         'bb2: {
+            bex_aot::telemetry::site(4u32, 0u32);
             _4 = match user_risky(_1) {
                 Ok(value) => value,
                 Err(error) => {
@@ -459,6 +463,7 @@ pub fn user_catch_wild(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _2: Thrown;
     'bb3: {
         'bb1: {
+            bex_aot::telemetry::site(5u32, 0u32);
             _0 = match user_risky(_1) {
                 Ok(value) => value,
                 Err(error) => {
@@ -552,6 +557,7 @@ pub fn user_catch_let_wild(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _2: Thrown;
     'bb3: {
         'bb1: {
+            bex_aot::telemetry::site(9u32, 0u32);
             _0 = match user_risky(_1) {
                 Ok(value) => value,
                 Err(error) => {
@@ -590,6 +596,7 @@ pub fn user_catch_four(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb4;
         } else {
             _11 = int::lit(10);
+            bex_aot::telemetry::site(10u32, 0u32);
             _7 = user_risky(_1)?;
             _3 = int::div(_11, _7)?;
             break 'bb4;
@@ -781,6 +788,7 @@ pub fn user_catch_nested(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _9: bool;
     'bb9: {
         'bb1: {
+            bex_aot::telemetry::site(12u32, 0u32);
             _0 = match user_risky(_1) {
                 Ok(value) => value,
                 Err(error) => {
@@ -800,6 +808,7 @@ pub fn user_catch_nested(mut _1: Int63) -> Result<Int63, Thrown> {
                         break 'bb4;
                     }
                 };
+                bex_aot::telemetry::site(12u32, 1u32);
                 _0 = match user_risky(_7) {
                     Ok(value) => value,
                     Err(error) => {
@@ -840,6 +849,7 @@ pub fn user_catch_deep(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _5: bool;
     'bb6: {
         'bb1: {
+            bex_aot::telemetry::site(13u32, 0u32);
             _0 = match user_middle(_1) {
                 Ok(value) => value,
                 Err(error) => {
@@ -866,125 +876,139 @@ pub fn user_catch_deep(mut _1: Int63) -> Result<Int63, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.catch_in_loop`.
+#[inline(never)]
 pub fn user_catch_in_loop(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Int63;
-    let mut _3: Shared<Vec<Int63>>;
-    let mut _4: Int63;
-    let mut _5: bex_aot::array::Iter<Int63>;
-    let mut _6: Option<Int63>;
-    let mut _7: bool;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    let mut _10: Int63;
-    let mut _11: Thrown;
-    let mut _13: Int63;
-    let mut _14: bool;
-    let mut _15: bool;
-    let mut _16: Int63;
-    let mut _17: Int63;
-    _2 = int::lit(0);
-    _4 = int::neg(int::lit(1))?;
-    _3 = array::new::<Int63>(Vec::from([_1, _4, int::lit(0), int::lit(3)]));
-    bex_aot::depth::probe(1)?;
-    _5 = array::iter(&_3);
-    'bb4: loop {
-        _6 = array::next(&mut _5);
-        'bb9: {
-            _7 = _6.is_none();
-            if _7 {
-                break 'bb9;
-            } else {
-                _8 = _6.expect("non-null by the checker's narrowing");
-                _9 = _8;
-                'bb1: {
-                    _13 = _9;
-                    _10 = match user_risky(_13) {
-                        Ok(value) => value,
-                        Err(error) => {
-                            _11 = Thrown::from(error);
-                            break 'bb1;
-                        }
-                    };
-                    _16 = _2;
-                    _17 = _10;
-                    _2 = int::add(_16, _17)?;
-                    continue 'bb4;
-                }
-                _14 = bex_aot::thrown::is_class(&_11, "user.Invalid");
-                if _14 {
-                    continue 'bb4;
+    let __telemetry = bex_aot::telemetry::enter(14u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Int63;
+        let mut _3: Shared<Vec<Int63>>;
+        let mut _4: Int63;
+        let mut _5: bex_aot::array::Iter<Int63>;
+        let mut _6: Option<Int63>;
+        let mut _7: bool;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        let mut _10: Int63;
+        let mut _11: Thrown;
+        let mut _13: Int63;
+        let mut _14: bool;
+        let mut _15: bool;
+        let mut _16: Int63;
+        let mut _17: Int63;
+        _2 = int::lit(0);
+        _4 = int::neg(int::lit(1))?;
+        _3 = array::new::<Int63>(Vec::from([_1, _4, int::lit(0), int::lit(3)]));
+        bex_aot::depth::probe(1)?;
+        _5 = array::iter(&_3);
+        'bb4: loop {
+            _6 = array::next(&mut _5);
+            'bb9: {
+                _7 = _6.is_none();
+                if _7 {
+                    break 'bb9;
                 } else {
-                    _15 = bex_aot::thrown::is_class(&_11, "user.Coded");
-                    if _15 {
-                        break 'bb9;
+                    _8 = _6.expect("non-null by the checker's narrowing");
+                    _9 = _8;
+                    'bb1: {
+                        _13 = _9;
+                        bex_aot::telemetry::site(14u32, 1u32);
+                        _10 = match user_risky(_13) {
+                            Ok(value) => value,
+                            Err(error) => {
+                                _11 = Thrown::from(error);
+                                break 'bb1;
+                            }
+                        };
+                        _16 = _2;
+                        _17 = _10;
+                        _2 = int::add(_16, _17)?;
+                        continue 'bb4;
+                    }
+                    _14 = bex_aot::thrown::is_class(&_11, "user.Invalid");
+                    if _14 {
+                        continue 'bb4;
                     } else {
-                        return Err(_11.clone());
+                        _15 = bex_aot::thrown::is_class(&_11, "user.Coded");
+                        if _15 {
+                            break 'bb9;
+                        } else {
+                            return Err(_11.clone());
+                        }
                     }
                 }
             }
+            _0 = _2;
+            return Ok(_0);
         }
-        _0 = _2;
-        return Ok(_0);
-    }
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.catch_returns`.
+#[inline(never)]
 pub fn user_catch_returns(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Int63;
-    let mut _3: bool;
-    let mut _4: Int63;
-    let mut _5: Int63;
-    let mut _6: Thrown;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    let mut _10: bool;
-    let mut _11: Int63;
-    let mut _12: Int63;
-    _2 = int::lit(0);
-    'bb8: {
-        'bb1: loop {
-            _4 = _2;
-            _3 = _4 < int::lit(5);
-            if _3 {
-                'bb5: {
-                    _9 = _2;
-                    _8 = match int::sub(_1, _9) {
-                        Ok(value) => value,
-                        Err(error) => {
-                            _6 = Thrown::from(error);
-                            break 'bb5;
-                        }
-                    };
-                    _5 = match user_risky(_8) {
-                        Ok(value) => value,
-                        Err(error) => {
-                            _6 = Thrown::from(error);
-                            break 'bb5;
-                        }
-                    };
-                    _12 = _2;
-                    _2 = int::add(_12, int::lit(1))?;
-                    continue 'bb1;
-                }
-                _10 = bex_aot::thrown::is_class(&_6, "user.Invalid");
-                if _10 {
-                    _11 = _2;
-                    _0 = int::mul(_11, int::lit(10))?;
-                    break 'bb8;
+    let __telemetry = bex_aot::telemetry::enter(15u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Int63;
+        let mut _3: bool;
+        let mut _4: Int63;
+        let mut _5: Int63;
+        let mut _6: Thrown;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        let mut _10: bool;
+        let mut _11: Int63;
+        let mut _12: Int63;
+        _2 = int::lit(0);
+        'bb8: {
+            'bb1: loop {
+                _4 = _2;
+                _3 = _4 < int::lit(5);
+                if _3 {
+                    'bb5: {
+                        _9 = _2;
+                        _8 = match int::sub(_1, _9) {
+                            Ok(value) => value,
+                            Err(error) => {
+                                _6 = Thrown::from(error);
+                                break 'bb5;
+                            }
+                        };
+                        bex_aot::telemetry::site(15u32, 0u32);
+                        _5 = match user_risky(_8) {
+                            Ok(value) => value,
+                            Err(error) => {
+                                _6 = Thrown::from(error);
+                                break 'bb5;
+                            }
+                        };
+                        _12 = _2;
+                        _2 = int::add(_12, int::lit(1))?;
+                        continue 'bb1;
+                    }
+                    _10 = bex_aot::thrown::is_class(&_6, "user.Invalid");
+                    if _10 {
+                        _11 = _2;
+                        _0 = int::mul(_11, int::lit(10))?;
+                        break 'bb8;
+                    } else {
+                        return Err(_6.clone());
+                    }
                 } else {
-                    return Err(_6.clone());
+                    break 'bb1;
                 }
-            } else {
-                break 'bb1;
             }
+            _0 = _2;
+            break 'bb8;
         }
-        _0 = _2;
-        break 'bb8;
-    }
-    Ok(_0)
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.catch_rethrow`.
 pub fn user_catch_rethrow(mut _1: Int63) -> Result<Int63, Thrown> {
@@ -994,6 +1018,7 @@ pub fn user_catch_rethrow(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _4: bool;
     'bb4: {
         'bb1: {
+            bex_aot::telemetry::site(16u32, 0u32);
             _0 = match user_risky(_1) {
                 Ok(value) => value,
                 Err(error) => {
@@ -1022,6 +1047,7 @@ pub fn user_catch_throw_in_arm(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _6: Shared<user_Coded>;
     let mut _7: Str;
     'bb2: {
+        bex_aot::telemetry::site(17u32, 0u32);
         _0 = match user_risky(_1) {
             Ok(value) => value,
             Err(error) => {
@@ -1050,6 +1076,7 @@ pub fn user_catch_throw_bound(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _2: Thrown;
     let mut _4: Shared<user_Invalid>;
     'bb2: {
+        bex_aot::telemetry::site(18u32, 0u32);
         _0 = match user_risky(_1) {
             Ok(value) => value,
             Err(error) => {
@@ -1072,6 +1099,7 @@ pub fn user_catch_throw_caught(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _0: Int63;
     let mut _2: Thrown;
     'bb2: {
+        bex_aot::telemetry::site(19u32, 0u32);
         _0 = match user_risky(_1) {
             Ok(value) => value,
             Err(error) => {
@@ -1145,6 +1173,7 @@ pub fn user_catch_statement(mut _1: Int63) -> Result<Int63, Thrown> {
     _2 = int::lit(0);
     'bb7: {
         'bb2: {
+            bex_aot::telemetry::site(21u32, 0u32);
             _3 = Some(
                 match user_risky(_1) {
                     Ok(value) => value,
@@ -1234,3 +1263,355 @@ pub fn user_catch_exit(mut _1: Int63) -> Result<Int63, Thrown> {
         Ok(_0)
     }
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.risky",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 226u32,
+        end: 387u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.middle",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 389u32,
+        end: 440u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 426u32,
+                end: 434u32,
+                line: 14u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_class",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 442u32,
+        end: 522u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 484u32,
+                end: 492u32,
+                line: 18u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_two",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 524u32,
+        end: 615u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 564u32,
+                end: 572u32,
+                line: 22u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_bind",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 617u32,
+        end: 794u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 661u32,
+                end: 669u32,
+                line: 26u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 661u32,
+                end: 681u32,
+                line: 26u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 767u32,
+                end: 785u32,
+                line: 28u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_wild",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 796u32,
+        end: 869u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 837u32,
+                end: 845u32,
+                line: 33u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_wild_panic",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 871u32,
+        end: 950u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_all_panic",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 952u32,
+        end: 1034u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_all_panics",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1036u32,
+        end: 1126u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_let_wild",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1128u32,
+        end: 1209u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1173u32,
+                end: 1181u32,
+                line: 49u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_four",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1211u32,
+        end: 1488u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1319u32,
+                end: 1327u32,
+                line: 54u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_panics",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1490u32,
+        end: 1937u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1583u32,
+                end: 1594u32,
+                line: 65u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1862u32,
+                end: 1875u32,
+                line: 70u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1860u32,
+                end: 1876u32,
+                line: 70u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_nested",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1939u32,
+        end: 2075u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1983u32,
+                end: 1991u32,
+                line: 75u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2015u32,
+                end: 2029u32,
+                line: 75u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_deep",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2077u32,
+        end: 2170u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2118u32,
+                end: 2127u32,
+                line: 79u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_in_loop",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2172u32,
+        end: 2419u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2233u32,
+                end: 2409u32,
+                line: 84u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2280u32,
+                end: 2288u32,
+                line: 85u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_returns",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2421u32,
+        end: 2593u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2504u32,
+                end: 2516u32,
+                line: 97u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_rethrow",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2595u32,
+        end: 2675u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2639u32,
+                end: 2647u32,
+                line: 104u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_throw_in_arm",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2677u32,
+        end: 2812u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2726u32,
+                end: 2734u32,
+                line: 108u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_throw_bound",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2814u32,
+        end: 2912u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2862u32,
+                end: 2870u32,
+                line: 112u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_throw_caught",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2914u32,
+        end: 3000u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2963u32,
+                end: 2971u32,
+                line: 116u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_identity",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3002u32,
+        end: 3216u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_statement",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3218u32,
+        end: 3351u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3279u32,
+                end: 3287u32,
+                line: 129u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_stdlib",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3353u32,
+        end: 3541u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.catch_exit",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3543u32,
+        end: 3685u32,
+        sites: &[],
+    },
+];

@@ -723,18 +723,7 @@ fn compute_function_metadata<'db>(
 /// `<builtin>/…` unit paths are a wire contract
 /// (`bex_vm_types/src/link.rs` string-matches the prefix).
 fn relative_source_path(db: &dyn baml_compiler2_mir::Db, file: baml_base::SourceFile) -> String {
-    let path = file.path(db);
-    let root = file.source_root(db);
-    match root.kind(db) {
-        baml_base::SourceRootKind::Workspace => path
-            .strip_prefix(root.path(db))
-            .unwrap_or(&path)
-            .display()
-            .to_string(),
-        baml_base::SourceRootKind::Stdlib
-        | baml_base::SourceRootKind::Dependency
-        | baml_base::SourceRootKind::Dynamic => path.display().to_string(),
-    }
+    file.relative_path(db)
 }
 
 /// Build a table of byte offsets where each line starts in the source text.

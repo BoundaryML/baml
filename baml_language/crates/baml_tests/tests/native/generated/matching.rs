@@ -77,44 +77,50 @@ pub fn user_match_returns(mut _1: Int63) -> Result<Int63, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.match_loop`.
+#[inline(never)]
 pub fn user_match_loop(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Int63;
-    let mut _3: Int63;
-    let mut _4: bool;
-    let mut _5: Int63;
-    let mut _6: Int63;
-    let mut _7: Int63;
-    let mut _8: Int63;
-    _2 = int::lit(0);
-    _3 = int::lit(0);
-    'bb1: loop {
-        _5 = _3;
-        _4 = _5 < _1;
-        if _4 {
-            _6 = _3;
-            _3 = int::add(_6, int::lit(1))?;
-            match _3.get() {
-                6i64 => {
-                    break 'bb1;
+    let __telemetry = bex_aot::telemetry::enter(2u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Int63;
+        let mut _3: Int63;
+        let mut _4: bool;
+        let mut _5: Int63;
+        let mut _6: Int63;
+        let mut _7: Int63;
+        let mut _8: Int63;
+        _2 = int::lit(0);
+        _3 = int::lit(0);
+        'bb1: loop {
+            _5 = _3;
+            _4 = _5 < _1;
+            if _4 {
+                _6 = _3;
+                _3 = int::add(_6, int::lit(1))?;
+                match _3.get() {
+                    6i64 => {
+                        break 'bb1;
+                    }
+                    3i64 => {
+                        continue 'bb1;
+                    }
+                    _ => {
+                        _7 = _2;
+                        _8 = _3;
+                        _2 = int::add(_7, _8)?;
+                        continue 'bb1;
+                    }
                 }
-                3i64 => {
-                    continue 'bb1;
-                }
-                _ => {
-                    _7 = _2;
-                    _8 = _3;
-                    _2 = int::add(_7, _8)?;
-                    continue 'bb1;
-                }
+            } else {
+                break 'bb1;
             }
-        } else {
-            break 'bb1;
         }
-    }
-    _0 = _2;
-    Ok(_0)
+        _0 = _2;
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.bool_match`.
 pub fn user_bool_match(mut _1: bool) -> Result<Int63, Thrown> {
@@ -133,3 +139,43 @@ pub fn user_bool_match(mut _1: bool) -> Result<Int63, Thrown> {
     }
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.classify",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 67u32,
+        end: 200u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.match_returns",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 202u32,
+        end: 326u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.match_loop",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 328u32,
+        end: 576u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.bool_match",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 578u32,
+        end: 678u32,
+        sites: &[],
+    },
+];

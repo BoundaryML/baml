@@ -36,36 +36,43 @@ pub fn user_square(mut _1: Int63) -> Result<Int63, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.sum_of_squares`.
+#[inline(never)]
 pub fn user_sum_of_squares(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Int63;
-    let mut _3: Int63;
-    let mut _4: bool;
-    let mut _5: Int63;
-    let mut _6: Int63;
-    let mut _7: Int63;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    _2 = int::lit(0);
-    _3 = int::lit(1);
-    'bb1: loop {
-        _5 = _3;
-        _4 = _5 <= _1;
-        if _4 {
-            _6 = _2;
-            _8 = _3;
-            _7 = user_square(_8)?;
-            _2 = int::add(_6, _7)?;
-            _9 = _3;
-            _3 = int::add(_9, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
+    let __telemetry = bex_aot::telemetry::enter(1u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Int63;
+        let mut _3: Int63;
+        let mut _4: bool;
+        let mut _5: Int63;
+        let mut _6: Int63;
+        let mut _7: Int63;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        _2 = int::lit(0);
+        _3 = int::lit(1);
+        'bb1: loop {
+            _5 = _3;
+            _4 = _5 <= _1;
+            if _4 {
+                _6 = _2;
+                _8 = _3;
+                bex_aot::telemetry::site(1u32, 0u32);
+                _7 = user_square(_8)?;
+                _2 = int::add(_6, _7)?;
+                _9 = _3;
+                _3 = int::add(_9, int::lit(1))?;
+                continue 'bb1;
+            } else {
+                break 'bb1;
+            }
         }
-    }
-    _0 = _2;
-    Ok(_0)
+        _0 = _2;
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.checked_step`.
 pub fn user_checked_step(mut _1: Int63) -> Result<Int63, Thrown> {
@@ -94,7 +101,9 @@ pub fn user_step_twice(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
+    bex_aot::telemetry::site(3u32, 0u32);
     _2 = user_checked_step(_1)?;
+    bex_aot::telemetry::site(3u32, 1u32);
     _0 = user_checked_step(_2)?;
     Ok(_0)
 }
@@ -108,41 +117,48 @@ pub fn user_is_even(mut _1: Int63) -> Result<bool, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.count_even`.
+#[inline(never)]
 pub fn user_count_even(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Int63;
-    let mut _3: Int63;
-    let mut _4: bool;
-    let mut _5: Int63;
-    let mut _6: bool;
-    let mut _7: Int63;
-    let mut _8: Int63;
-    _2 = int::lit(0);
-    _3 = int::lit(0);
-    'bb1: loop {
-        _5 = _3;
-        _4 = _5 < _1;
-        if _4 {
-            _7 = _3;
-            _6 = user_is_even(_7)?;
-            'bb7: {
-                if _6 {
-                    _8 = _2;
-                    _2 = int::add(_8, int::lit(1))?;
-                    break 'bb7;
-                } else {
-                    break 'bb7;
+    let __telemetry = bex_aot::telemetry::enter(5u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Int63;
+        let mut _3: Int63;
+        let mut _4: bool;
+        let mut _5: Int63;
+        let mut _6: bool;
+        let mut _7: Int63;
+        let mut _8: Int63;
+        _2 = int::lit(0);
+        _3 = int::lit(0);
+        'bb1: loop {
+            _5 = _3;
+            _4 = _5 < _1;
+            if _4 {
+                _7 = _3;
+                bex_aot::telemetry::site(5u32, 0u32);
+                _6 = user_is_even(_7)?;
+                'bb7: {
+                    if _6 {
+                        _8 = _2;
+                        _2 = int::add(_8, int::lit(1))?;
+                        break 'bb7;
+                    } else {
+                        break 'bb7;
+                    }
                 }
+                _3 = int::add(_3, int::lit(1))?;
+                continue 'bb1;
+            } else {
+                break 'bb1;
             }
-            _3 = int::add(_3, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
         }
-    }
-    _0 = _2;
-    Ok(_0)
+        _0 = _2;
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.noop`.
 pub fn user_noop(mut _1: Int63) -> Result<(), Thrown> {
@@ -153,3 +169,99 @@ pub fn user_noop(mut _1: Int63) -> Result<(), Thrown> {
     _0 = ();
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.square",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 80u32,
+        end: 124u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.sum_of_squares",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 126u32,
+        end: 293u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 246u32,
+                end: 255u32,
+                line: 11u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.checked_step",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 295u32,
+        end: 410u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 359u32,
+                end: 391u32,
+                line: 19u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.step_twice",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 412u32,
+        end: 484u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 466u32,
+                end: 481u32,
+                line: 25u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 453u32,
+                end: 482u32,
+                line: 25u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.is_even",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 486u32,
+        end: 537u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.count_even",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 539u32,
+        end: 716u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 644u32,
+                end: 654u32,
+                line: 35u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.noop",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 718u32,
+        end: 770u32,
+        sites: &[],
+    },
+];
