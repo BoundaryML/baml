@@ -44,9 +44,9 @@ class Row:
 
 ROWS = {r.name: r for r in [
     Row("native-off", "native", "off", "none"),
-    Row("native-low", "native", "low", "local", supported=False),
-    Row("native-medium", "native", "medium", "local", supported=False),
-    Row("native-high", "native", "high", "local", supported=False),
+    Row("native-low", "native", "low", "local"),
+    Row("native-medium", "native", "medium", "local"),
+    Row("native-high", "native", "high", "local"),
     Row("control", "control"),
     Row("vm-off", "vm", "off", "none"),
     Row("vm-low", "vm", "low", "local"),
