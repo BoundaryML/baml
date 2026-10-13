@@ -171,6 +171,8 @@ pub fn finish() -> Result<(), String> {
     let Some(recording) = RECORDING.get() else {
         return Ok(());
     };
+    // Seal this thread's partial chunks before the processor drains.
+    SCOPE.with(|scope| drop(scope.borrow_mut().take()));
     let processed = recording.runtime.finish().map_err(|error| error.0);
     let delivered = match &recording.delivery {
         Some(delivery) => delivery.finish().map_err(|error| error.to_string()),
@@ -321,6 +323,12 @@ struct PathKey {
 }
 
 thread_local! {
+    /// This thread's execution scope, open from its first root until
+    /// [`finish`].
+    static SCOPE: RefCell<Option<btel_processor::ExecutionScope>> = const { RefCell::new(None) };
+}
+
+thread_local! {
     static PRODUCER: Producer = Producer {
         thread: Cell::new(None),
         active_path: Cell::new(CallPathId::ROOT),
@@ -348,7 +356,16 @@ pub fn root<R>(call: impl FnOnce() -> Result<R, Thrown>) -> Result<R, Thrown> {
     if LEVEL.load(Ordering::Acquire) == OFF {
         return call();
     }
-    let _scope = recording.runtime.enter();
+    // One execution scope for the thread's every root: records seal into
+    // the processor's queue when a chunk fills or at `finish`, not after
+    // every call, which would wake the processor thread per call (on a
+    // single core, a context switch each: ~10 us per call).
+    SCOPE.with(|scope| {
+        let mut scope = scope.borrow_mut();
+        if scope.is_none() {
+            *scope = Some(recording.runtime.enter());
+        }
+    });
     let clock = &recording.clock;
     clock.attach_thread();
     let thread = allocate_telemetry_id();
@@ -372,13 +389,16 @@ pub fn root<R>(call: impl FnOnce() -> Result<R, Thrown>) -> Result<R, Thrown> {
             producer.active_function.replace(0),
             producer.active_span.replace(Some(thread)),
         );
+        // A call path belongs to the telemetry thread it was defined on
+        // (its definition names the thread), so each root defines its own,
+        // as each engine call does on the VM.
+        producer.paths.borrow_mut().clear();
         let mut last = producer.last.borrow_mut();
-        if last.len() != recording.functions.len() {
-            last.resize(
-                recording.functions.len(),
-                (PathKey::default(), CallPathId::ROOT),
-            );
-        }
+        last.clear();
+        last.resize(
+            recording.functions.len(),
+            (PathKey::default(), CallPathId::ROOT),
+        );
         saved
     });
     let saved_site = SITE.with(|slot| slot.replace(0));

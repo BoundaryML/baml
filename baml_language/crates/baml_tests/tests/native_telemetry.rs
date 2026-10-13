@@ -241,14 +241,17 @@ async fn vm_recording(fixture: &str, function: &str, arg: i64, level: RecordingL
         )
         .expect("engine"),
     );
-    let _ = engine
-        .call_function_bound_args(
-            &format!("user.{function}"),
-            vec![BexCallArg::Provided(Box::new(BexExternalValue::Int(arg)))],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await;
+    // Twice, as the native side makes two root calls on one recording.
+    for _ in 0..2 {
+        let _ = engine
+            .call_function_bound_args(
+                &format!("user.{function}"),
+                vec![BexCallArg::Provided(Box::new(BexExternalValue::Int(arg)))],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await;
+    }
     tokio::time::timeout(Duration::from_secs(30), engine.shutdown())
         .await
         .expect("engine shutdown");
@@ -281,8 +284,8 @@ fn native_recording(fixture: &str, function: &str, arg: i64, level: &str, dir: &
     );
 }
 
-/// The native side of one case: start a recording, make the call as the
-/// host would, finish the recording.
+/// The native side of one case: start a recording, make the call twice as
+/// the host would, finish the recording.
 #[test]
 #[ignore = "run by `native_recording_matches_the_vm` in a child process"]
 fn native_recording_child() {
@@ -301,7 +304,10 @@ fn native_recording_child() {
         bex_aot::telemetry::Destination::Directory(dir),
     )
     .expect("telemetry starts");
-    let _ = bex_aot::telemetry::root(|| native_call(fixture, function, arg));
+    // Two root calls: the producer keeps one execution scope across them.
+    for _ in 0..2 {
+        let _ = bex_aot::telemetry::root(|| native_call(fixture, function, arg));
+    }
     bex_aot::telemetry::finish().expect("telemetry finishes");
 }
 
