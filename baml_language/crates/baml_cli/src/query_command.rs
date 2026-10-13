@@ -1,6 +1,6 @@
-//! `baml query`: SQL over the project's local Btel recordings.
+//! `baml query`: SQL over local Btel recordings or an authorized cloud environment.
 //!
-//! The first query creates `<project>/.baml/btel/query.sqlite`; each query
+//! For local recordings, the first query creates `<project>/.baml/btel/query.sqlite`; each query
 //! then applies only newly completed recording files before running. Rows
 //! and a terminal outcome (indexed extents, evidence diagnostics) are
 //! printed; JSON keeps diagnostics out of row data.
@@ -24,14 +24,16 @@ pub enum QueryFormat {
     Jsonl,
 }
 
-/// Query local recordings with SQL. BAML values navigate with brackets:
+/// Query local recordings or cloud data with SQL. Learn the workflow with
+/// `baml describe query`. BAML values navigate with brackets:
 /// `SELECT output_value['items'][0]['name'] FROM spans WHERE input_args['customer']['age'] >= 30`.
 #[derive(Debug, Parser)]
 pub struct QueryArgs {
     /// One read-only SELECT (`-` reads stdin). See `--schema` for relations.
     pub sql: Option<String>,
 
-    /// Print the relations, their columns and what they mean.
+    /// Print the bundled local catalog (not live cloud metadata).
+    /// For a guided reference, use `baml describe query.tables`.
     #[arg(long)]
     pub schema: bool,
 
@@ -101,17 +103,6 @@ fn parse_duration(value: &str) -> Result<Duration, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Value functions, after the relations.
-fn print_guide() {
-    println!("BAML value functions:");
-    println!(
-        "  baml_value_state(v)  present, null, missing, omitted, no_value, or why the value is unavailable (cas_missing, value_truncated, capture_pending, ...)"
-    );
-    println!(
-        "  baml_kind(v)         null, bool, int, float, string, bigint, enum, json (structured), missing, unavailable"
-    );
-}
-
 impl QueryArgs {
     fn print_schema(&self) -> anyhow::Result<crate::ExitCode> {
         let relations: Vec<&catalog::Relation> = catalog::RELATIONS
@@ -131,21 +122,13 @@ impl QueryArgs {
                 println!("{}", serde_json::to_string_pretty(&relations)?);
             }
             QueryFormat::Table => {
+                println!("{}\n", crate::query_docs::LOCAL_CATALOG);
                 for relation in relations {
-                    println!("{}: {}", relation.name, relation.doc);
-                    for column in relation.columns {
-                        let doc = if column.doc.is_empty() {
-                            String::new()
-                        } else {
-                            format!("  {}", column.doc)
-                        };
-                        println!("  {:<26} {:<11}{doc}", column.name, column.sql_type);
-                    }
+                    crate::query_docs::write_relation(&mut std::io::stdout().lock(), relation)?;
                     println!();
                 }
-                if self.table.is_none() {
-                    print_guide();
-                }
+                println!("Guide: baml describe query.tables");
+                println!("Captured values and functions: baml describe query.values");
             }
         }
         Ok(crate::ExitCode::Success)

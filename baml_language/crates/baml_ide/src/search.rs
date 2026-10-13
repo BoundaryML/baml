@@ -166,6 +166,33 @@ pub fn search_ranked(
     hits
 }
 
+/// Rank documentation supplied by a CLI or editor with the same word scoring as symbols.
+/// Each pair is an addressable topic name and text whose first line is its summary.
+pub fn search_documentation(
+    query: &str,
+    documents: impl IntoIterator<Item = (String, String)>,
+) -> Vec<SearchHit> {
+    let query = query_tokens(query);
+    if query.is_empty() {
+        return Vec::new();
+    }
+    let mut hits = Vec::new();
+    for (path, text) in documents {
+        let leaf = path.rsplit('.').next().unwrap_or(&path);
+        let score = score(&haystack(leaf), &haystack(&path), &haystack(&text), &query);
+        if score > 0 {
+            hits.push(SearchHit {
+                kind: "topic",
+                path,
+                summary: summarize(Some(&text)),
+                score,
+            });
+        }
+    }
+    hits.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.path.cmp(&b.path)));
+    hits
+}
+
 /// Words so common that scoring them is noise rather than signal.
 const STOP_WORDS: &[&str] = &[
     "the", "and", "for", "from", "into", "with", "that", "this", "there", "then", "when", "how",

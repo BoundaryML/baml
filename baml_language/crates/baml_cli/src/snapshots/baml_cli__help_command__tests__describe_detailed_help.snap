@@ -2,7 +2,7 @@
 source: crates/baml_cli/src/help_command.rs
 expression: "normalize_snapshot(&render_for_test(&[\"describe\"]))"
 ---
-Describe BAML symbols and language concepts.
+Describe BAML symbols, language concepts, and query workflows.
 
 With no name, lists symbols in the current project. A name can identify a project symbol, builtin
 package, namespace, type, member, or BAML keyword. Builtin documentation works outside a project, so
@@ -28,6 +28,12 @@ Examples:
 
   Describe a keyword:
     baml describe match
+
+  Learn to query local recordings or cloud data:
+    baml describe query
+
+  Discover query tables and columns:
+    baml describe query.tables
 
   Search for something by what it does:
     baml describe --search 'read a file'

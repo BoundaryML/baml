@@ -9,7 +9,7 @@ use clap::Args;
 
 use crate::util::{line_number_at_offset, relative_path};
 
-/// Describe BAML symbols and language concepts.
+/// Describe BAML symbols, language concepts, and query workflows.
 ///
 /// With no name, lists symbols in the current project. A name can identify a
 /// project symbol, builtin package, namespace, type, member, or BAML keyword.
@@ -35,6 +35,12 @@ Examples:
 
   Describe a keyword:
     baml describe match
+
+  Learn to query local recordings or cloud data:
+    baml describe query
+
+  Discover query tables and columns:
+    baml describe query.tables
 
   Search for something by what it does:
     baml describe --search 'read a file'")]
@@ -306,6 +312,19 @@ fn resolve_unqualified_builtin_member<'db>(
 impl DescribeArgs {
     /// Run the describe command and return the CLI exit code.
     pub fn run(&self) -> Result<crate::ExitCode> {
+        let name = self.name.as_deref().unwrap_or("");
+        // Query documentation needs neither a compilable project nor credentials.
+        if !self.search && !self.export && crate::query_docs::owns(name) {
+            if self.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&crate::query_docs::json(name)?)?
+                );
+            } else {
+                crate::query_docs::write(&mut std::io::stdout().lock(), name)?;
+            }
+            return Ok(crate::ExitCode::Success);
+        }
         // Introspection never requires a `baml.toml`: with no project, we
         // fall back to a stdlib-only "default state" so `baml describe
         // baml.String` works anywhere. An empty user-file set is therefore
@@ -346,8 +365,11 @@ impl DescribeArgs {
                         .map(|dependency| dependency.root),
                 )
                 .collect();
-            let hits =
+            let mut hits =
                 baml_ide::search_ranked(&db, package, &packages, name, usize::from(self.limit));
+            hits.extend(crate::query_docs::search(name));
+            hits.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| a.path.cmp(&b.path)));
+            hits.truncate(usize::from(self.limit));
             if self.json {
                 println!(
                     "{}",
@@ -579,18 +601,7 @@ impl DescribeArgs {
 pub fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result<()> {
     let painter = crate::paint::Painter::stdout();
     if let Some(doc) = baml_builtins2::language_topic(name) {
-        writeln!(w, "{} — {}", painter.keyword(name), doc.summary)?;
-        if let Some(ref syntax) = doc.syntax {
-            writeln!(w)?;
-            writeln!(w, "Syntax:")?;
-            for line in syntax.trim_end().lines() {
-                writeln!(w, "  {}", painter.fragment(line))?;
-            }
-        }
-        if let Some(ref details) = doc.details {
-            writeln!(w)?;
-            writeln!(w, "{details}")?;
-        }
+        write_language_topic(w, name, doc)?;
     } else if let Some(doc) = baml_builtins2::typescript_crosswalk_topic(name) {
         writeln!(w, "{} — {}", painter.keyword(name), doc.message)?;
         if let Some(ref see) = doc.see {
@@ -601,6 +612,39 @@ pub fn write_keyword(w: &mut impl std::io::Write, name: &str) -> std::io::Result
     Ok(())
 }
 
+/// The shared topic presentation, also used by query guides without opening a project.
+pub(crate) fn write_language_topic(
+    w: &mut impl std::io::Write,
+    name: &str,
+    doc: &baml_builtins2::LanguageTopic,
+) -> std::io::Result<()> {
+    let painter = crate::paint::Painter::stdout();
+    writeln!(w, "{} — {}", painter.keyword(name), doc.summary)?;
+    if let Some(ref syntax) = doc.syntax {
+        writeln!(w, "\nSyntax:")?;
+        for line in syntax.trim_end().lines() {
+            writeln!(w, "  {}", painter.fragment(line))?;
+        }
+    }
+    if let Some(ref details) = doc.details {
+        writeln!(w, "\n{details}")?;
+    }
+    Ok(())
+}
+
+pub(crate) fn language_topic_json(
+    name: &str,
+    doc: &baml_builtins2::LanguageTopic,
+) -> serde_json::Value {
+    serde_json::json!({
+        "type": "keyword",
+        "name": name,
+        "summary": doc.summary,
+        "syntax": doc.syntax,
+        "details": doc.details,
+    })
+}
+
 /// Render keyword documentation to stdout.
 fn render_keyword(name: &str) {
     let _ = write_keyword(&mut std::io::stdout(), name);
@@ -609,13 +653,7 @@ fn render_keyword(name: &str) {
 /// Render keyword documentation as JSON.
 fn render_keyword_json(name: &str) -> serde_json::Value {
     if let Some(doc) = baml_builtins2::language_topic(name) {
-        serde_json::json!({
-            "type": "keyword",
-            "name": name,
-            "summary": doc.summary,
-            "syntax": doc.syntax,
-            "details": doc.details,
-        })
+        language_topic_json(name, doc)
     } else if let Some(doc) = baml_builtins2::typescript_crosswalk_topic(name) {
         serde_json::json!({
             "type": "crosswalk",
