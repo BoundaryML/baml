@@ -40,7 +40,8 @@
 
 use baml_type::{HeadDisplay, Literal, MediaKind, Name};
 use bex_external_types::{
-    BexExternalAdt, BexExternalValue, Handle, HostValueKind, UnionMetadata, value_satisfies_json,
+    BexExternalAdt, BexExternalValue, Handle, HostValueArc, HostValueKind, TypeDefRef,
+    UnionMetadata, value_satisfies_json,
 };
 use bex_heap::{HeapPermit, TlabHolder};
 use bex_vm_types::{HeapPtr, Object, TypeHead, Value};
@@ -49,7 +50,7 @@ use crate::{
     BexEngine, EngineError,
     conversion::{
         self, InboundDeclarationKind, InboundRuntimeOverlay, first_unbound_type_var,
-        float_literal_matches, is_structural_host_only, type_name_matches_external_name,
+        float_literal_matches, type_name_matches_external_name,
     },
     thread::BexThread,
 };
@@ -237,13 +238,104 @@ pub(crate) enum Admitted<'a, N: Head> {
         enum_head: N,
         index: usize,
     },
-    /// A value of the engine's own making that the host hands back: a live
-    /// reference, a host callable, a media value, a reflected type. It lands
-    /// through the constructor of its kind, for the slot it was admitted to.
-    Engine {
-        value: &'a BexExternalValue,
-        slot: Ty<N>,
+    /// A value of the engine's own making that the host hands back, or an
+    /// opaque one it holds for the host. It lands through the constructor of
+    /// its kind.
+    Engine(EngineValue<'a, N>),
+}
+
+/// A value that lands as a constructor of its kind, not by its shape: what
+/// the slot it was admitted to makes of it is already decided here.
+#[derive(Debug)]
+pub(crate) enum EngineValue<'a, N: Head> {
+    /// A live reference: the object itself.
+    Live(&'a Handle),
+    /// A host callable bound to the function type of its slot.
+    Callable {
+        handle: &'a std::sync::Arc<HostValueArc>,
+        params: Box<[baml_type::RuntimeFunctionParamTy<N>]>,
+        ret: Ty<N>,
+        throws: Ty<N>,
     },
+    /// An opaque host value in a `$rust_type` slot.
+    Opaque(&'a std::sync::Arc<HostValueArc>),
+    /// Structural host data riding through a `$rust_type` slot as it is.
+    Stash(&'a BexExternalValue),
+    RustData(&'a std::sync::Arc<dyn bex_vm_types::BexRustData>),
+    /// Media in a media slot: an instance of the wrapper class of its kind.
+    Media(&'a std::sync::Arc<bex_vm_types::MediaValue>),
+    /// Media in a `$rust_type` slot: the payload itself, as the wrapper
+    /// class's `_data` field holds it.
+    MediaData(&'a std::sync::Arc<bex_vm_types::MediaValue>),
+    /// A rendered prompt in a prompt slot: an instance of `ai.Prompt`.
+    Prompt(&'a std::sync::Arc<bex_vm_types::PromptAst>),
+    /// A rendered prompt in a `$rust_type` slot: the payload itself.
+    PromptData(&'a std::sync::Arc<bex_vm_types::PromptAst>),
+    /// A reflected type, by the declarations it names.
+    Type(&'a baml_type::RuntimeTy<baml_type::TaggedTypeName>),
+    /// A type definition: the live object it refers to, or one built from
+    /// its portable definition.
+    TypeDef(&'a TypeDefRef),
+    /// A reference to a function by its global index.
+    FunctionRef(usize),
+}
+
+/// Two engine values are one value where they would land the same object:
+/// opaque payloads by identity, a host value by its key, the rest by what
+/// they hold.
+impl<N: Head> PartialEq for EngineValue<'_, N> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Live(a), Self::Live(b)) => a == b,
+            (
+                Self::Callable {
+                    handle: a,
+                    params: a_params,
+                    ret: a_ret,
+                    throws: a_throws,
+                },
+                Self::Callable {
+                    handle: b,
+                    params: b_params,
+                    ret: b_ret,
+                    throws: b_throws,
+                },
+            ) => {
+                a.key == b.key
+                    && a.kind == b.kind
+                    && a_params == b_params
+                    && a_ret == b_ret
+                    && a_throws == b_throws
+            }
+            (Self::Opaque(a), Self::Opaque(b)) => a.key == b.key && a.kind == b.kind,
+            (Self::Stash(a), Self::Stash(b)) => a == b,
+            (Self::RustData(a), Self::RustData(b)) => std::sync::Arc::ptr_eq(a, b),
+            (Self::Media(a), Self::Media(b)) | (Self::MediaData(a), Self::MediaData(b)) => {
+                std::sync::Arc::ptr_eq(a, b)
+            }
+            (Self::Prompt(a), Self::Prompt(b)) | (Self::PromptData(a), Self::PromptData(b)) => {
+                a == b
+            }
+            (Self::Type(a), Self::Type(b)) => a == b,
+            (Self::TypeDef(a), Self::TypeDef(b)) => a == b,
+            (Self::FunctionRef(a), Self::FunctionRef(b)) => a == b,
+            (
+                Self::Live(_)
+                | Self::Callable { .. }
+                | Self::Opaque(_)
+                | Self::Stash(_)
+                | Self::RustData(_)
+                | Self::Media(_)
+                | Self::MediaData(_)
+                | Self::Prompt(_)
+                | Self::PromptData(_)
+                | Self::Type(_)
+                | Self::TypeDef(_)
+                | Self::FunctionRef(_),
+                _,
+            ) => false,
+        }
+    }
 }
 
 /// An integer the VM can hold. A VM integer is narrower than the host's, so
@@ -288,11 +380,8 @@ impl<'a, N: Head> Admission<'a, N> {
         }
     }
 
-    fn engine(value: &'a BexExternalValue, slot: &Ty<N>) -> Self {
-        Self::of(Admitted::Engine {
-            value,
-            slot: slot.clone(),
-        })
+    fn engine(value: EngineValue<'a, N>) -> Self {
+        Self::of(Admitted::Engine(value))
     }
 
     fn leaf(mut self, leaf: Leaf) -> Self {
@@ -332,7 +421,7 @@ fn admit_at<'a, N: Head>(
             ..
         }) => {
             return if cx.program.live_value_fits(handle, ty)? {
-                Ok(Admission::engine(value, ty))
+                Ok(Admission::engine(EngineValue::Live(handle)))
             } else {
                 Err(Mismatch::kind(value, ty))
             };
@@ -343,7 +432,7 @@ fn admit_at<'a, N: Head>(
     // A `$rust_type` slot carries a structural host value through the VM as
     // opaque data, and hands the same value back.
     if peels_to_rust_type(ty) && is_structural_host_only(value) {
-        return Ok(Admission::engine(value, ty));
+        return Ok(Admission::engine(EngineValue::Stash(value)));
     }
 
     match ty {
@@ -458,7 +547,7 @@ fn admit_at<'a, N: Head>(
             BexExternalValue::Adt(BexExternalAdt::Media(media))
                 if *kind == MediaKind::Generic || media.kind == *kind =>
             {
-                Ok(Admission::engine(value, ty))
+                Ok(Admission::engine(EngineValue::Media(media)))
             }
             // A bridge whose media type is a class sends its shell: the one
             // `_data` field holds the media value.
@@ -479,20 +568,34 @@ fn admit_at<'a, N: Head>(
             }
             _ => Err(Mismatch::kind(value, ty)),
         },
-        Ty::Function { .. } => match value {
+        Ty::Function {
+            params,
+            ret,
+            throws,
+        } => match value {
             BexExternalValue::HostValue(host) if host.kind == HostValueKind::Callable => {
-                Ok(Admission::engine(value, ty))
+                Ok(Admission::engine(EngineValue::Callable {
+                    handle: host,
+                    params: params.clone(),
+                    ret: (**ret).clone(),
+                    throws: (**throws).clone(),
+                }))
             }
-            BexExternalValue::FunctionRef { .. } => Ok(Admission::engine(value, ty)),
+            BexExternalValue::FunctionRef { global_index } => {
+                Ok(Admission::engine(EngineValue::FunctionRef(*global_index)))
+            }
             _ => Err(Mismatch::kind(value, ty)),
         },
         Ty::RustType => match value {
-            BexExternalValue::RustData(_)
-            | BexExternalValue::Adt(BexExternalAdt::Media(_) | BexExternalAdt::PromptAst(_)) => {
-                Ok(Admission::engine(value, ty))
+            BexExternalValue::RustData(data) => Ok(Admission::engine(EngineValue::RustData(data))),
+            BexExternalValue::Adt(BexExternalAdt::Media(media)) => {
+                Ok(Admission::engine(EngineValue::MediaData(media)))
+            }
+            BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt)) => {
+                Ok(Admission::engine(EngineValue::PromptData(prompt)))
             }
             BexExternalValue::HostValue(host) if host.kind == HostValueKind::Opaque => {
-                Ok(Admission::engine(value, ty))
+                Ok(Admission::engine(EngineValue::Opaque(host)))
             }
             BexExternalValue::HostValue(_) => Err(Mismatch::kind(value, ty)),
             // `$rust_type` is also what a generic call binds a type variable
@@ -501,13 +604,18 @@ fn admit_at<'a, N: Head>(
             _ => Ok(admit_as_itself(cx, value, ty, depth)?.leaf(Leaf::CatchAll)),
         },
         Ty::Type => match value {
-            BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)) => {
-                Ok(Admission::engine(value, ty))
+            BexExternalValue::Adt(BexExternalAdt::Type(reflected)) => {
+                Ok(Admission::engine(EngineValue::Type(reflected)))
+            }
+            BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => {
+                Ok(Admission::engine(EngineValue::TypeDef(definition)))
             }
             _ => Err(Mismatch::kind(value, ty)),
         },
         Ty::PromptAst => match value {
-            BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => Ok(Admission::engine(value, ty)),
+            BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt)) => {
+                Ok(Admission::engine(EngineValue::Prompt(prompt)))
+            }
             _ => Err(Mismatch::kind(value, ty)),
         },
         // No host value says which implementor it is except by being one: the
@@ -662,10 +770,12 @@ fn admit_class<'a, N: Head>(
         BexExternalValue::Adt(BexExternalAdt::Media(media))
             if args.is_empty() && cx.program.media_wrapper(head) == Some(media.kind) =>
         {
-            return Ok(Admission::engine(value, ty));
+            return Ok(Admission::engine(EngineValue::Media(media)));
         }
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) if cx.program.is_prompt_class(head) => {
-            return Ok(Admission::engine(value, ty));
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt))
+            if cx.program.is_prompt_class(head) =>
+        {
+            return Ok(Admission::engine(EngineValue::Prompt(prompt)));
         }
         _ => return Err(Mismatch::kind(value, ty)),
     };
@@ -788,7 +898,9 @@ fn admit_as_itself<'a, N: Head>(
 ) -> Result<Admission<'a, N>, Mismatch<'a, N>> {
     match value {
         // A function reference lands as the function it indexes.
-        BexExternalValue::FunctionRef { .. } => Ok(Admission::engine(value, ty)),
+        BexExternalValue::FunctionRef { global_index } => {
+            Ok(Admission::engine(EngineValue::FunctionRef(*global_index)))
+        }
         _ => {
             let own = own_type(cx, value).ok_or_else(|| {
                 Mismatch::new(format!(
@@ -1116,6 +1228,56 @@ fn media_wrapper_kind<N: Head>(cx: &Cx<'_, N>, ty: &Ty<N>) -> Option<MediaKind> 
     match ty {
         Ty::Class(head, args) if args.is_empty() => cx.program.media_wrapper(head),
         _ => None,
+    }
+}
+
+/// Whether `value` is structural host data with no engine object behind it:
+/// what a `$rust_type` slot carries through as it is.
+fn is_structural_host_only(value: &BexExternalValue) -> bool {
+    matches!(
+        value,
+        BexExternalValue::Instance { .. }
+            | BexExternalValue::Map { .. }
+            | BexExternalValue::Array { .. }
+            | BexExternalValue::Variant { .. }
+            | BexExternalValue::Uint8Array(_)
+    )
+}
+
+/// Whether a host callable's declared return type has a position its returned
+/// value cannot be checked against: a type the boundary cannot discriminate
+/// (`unknown`, a type variable, a projection, an interface, a future), at
+/// the root or inside a container, union or class argument. A callable with
+/// such a return type is not bound.
+fn has_unvalidatable_return_position<N: Head>(ty: &Ty<N>) -> bool {
+    match ty {
+        Ty::Unknown
+        | Ty::TypeVar(..)
+        | Ty::AssociatedTypeProjection { .. }
+        | Ty::Interface(..)
+        | Ty::Future(..) => true,
+        Ty::List(element) => has_unvalidatable_return_position(element),
+        Ty::Map { value, .. } => has_unvalidatable_return_position(value),
+        Ty::Union(members) => members.iter().any(has_unvalidatable_return_position),
+        Ty::Class(_, args) => args.iter().any(has_unvalidatable_return_position),
+        Ty::Null
+        | Ty::Bool
+        | Ty::Int
+        | Ty::Float
+        | Ty::Bigint
+        | Ty::String
+        | Ty::Uint8Array
+        | Ty::Literal(..)
+        | Ty::Enum(..)
+        | Ty::EnumVariant(..)
+        | Ty::Media(..)
+        | Ty::Function { .. }
+        | Ty::RustType
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::TypeAlias(..)
+        | Ty::Never => false,
     }
 }
 
@@ -1837,11 +1999,218 @@ impl BexEngine {
                     .tlab_mut()
                     .alloc_variant(enum_head.ptr(), index),
             ),
-            Admitted::Engine { value, slot } => {
-                let slot = conversion::overlay_wire_ty(&slot)?;
-                self.land_engine_value(holder, value.clone(), &slot, overlay)?
+            Admitted::Engine(engine) => self.land_engine(holder, engine, overlay)?,
+        })
+    }
+
+    /// Put a value of the engine's own kind on the heap: each kind by its own
+    /// constructor.
+    fn land_engine(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        engine: EngineValue<'_, TypeHead>,
+        overlay: InboundRuntimeOverlay<'_>,
+    ) -> Result<Value, EngineError> {
+        Ok(match engine {
+            EngineValue::Live(handle) => {
+                Value::object(self.resolve_handle(holder.proof(), handle).ok_or_else(|| {
+                    EngineError::TypeMismatch {
+                        message: "a handle is stale or belongs to a different BAML runtime"
+                            .to_string(),
+                    }
+                })?)
+            }
+            EngineValue::Callable {
+                handle,
+                params,
+                ret,
+                throws,
+            } => {
+                // The host's returned value is admitted to `ret` when the call
+                // completes; a position that cannot be checked would let the
+                // host put a value of any type where BAML expects the declared
+                // one, so such a callable is not bound.
+                if has_unvalidatable_return_position(&ret) {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "host callable cannot be bound: its return type `{ret}` contains an \
+                             unresolved position, so the host's returned value cannot be validated",
+                        ),
+                    });
+                }
+                // Dispatch addresses an optional parameter by name, so a
+                // declared type that leaves one unnamed has no slot the host
+                // could fill.
+                if params.iter().any(|param| {
+                    matches!(param.mode, baml_type::FunctionParamMode::Optional)
+                        && param.name.is_none()
+                }) {
+                    return Err(EngineError::TypeMismatch {
+                        message: "host callable cannot be bound: its declared type has an \
+                                  optional parameter without a name"
+                            .to_string(),
+                    });
+                }
+                let params = params
+                    .iter()
+                    .map(|param| {
+                        Ok(bex_vm_types::RealizedFunctionParamTy {
+                            name: param.name.clone(),
+                            ty: Self::realized(&param.ty)?,
+                            mode: param.mode,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, EngineError>>()?;
+                let closure = bex_vm_types::HostClosure {
+                    handle: handle.clone(),
+                    ret_ty: Box::new(Self::realized(&ret)?),
+                    throws_ty: Box::new(Self::realized(&throws)?),
+                    arity: params.len(),
+                    params: Box::new(params),
+                };
+                Value::object(
+                    holder
+                        .holder_mut()
+                        .tlab_mut()
+                        .alloc(Object::HostClosure(closure)),
+                )
+            }
+            EngineValue::Opaque(handle) => {
+                let data: std::sync::Arc<dyn bex_vm_types::BexRustData> = handle.clone();
+                Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(data))
+            }
+            EngineValue::Stash(value) => {
+                let data: std::sync::Arc<dyn bex_vm_types::BexRustData> =
+                    std::sync::Arc::new(bex_external_types::OpaqueExternalValue(value.clone()));
+                Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(data))
+            }
+            EngineValue::RustData(data) => {
+                Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(data.clone()))
+            }
+            EngineValue::MediaData(media) => Value::object(
+                holder
+                    .holder_mut()
+                    .tlab_mut()
+                    .alloc_rust_data(media.clone()),
+            ),
+            EngineValue::PromptData(prompt) => Value::object(
+                holder
+                    .holder_mut()
+                    .tlab_mut()
+                    .alloc_rust_data(prompt.clone()),
+            ),
+            EngineValue::Media(media) => {
+                let class = holder
+                    .holder()
+                    .vm
+                    .stdlib_heads()
+                    .media_wrapper(media.kind)
+                    .ok_or_else(|| EngineError::TypeMismatch {
+                        message: "cannot materialize a generic media value as a wrapper instance"
+                            .to_string(),
+                    })?
+                    .ptr();
+                Self::wrapper_instance(holder, class, media.clone())?
+            }
+            EngineValue::Prompt(prompt) => {
+                let class = holder
+                    .holder()
+                    .vm
+                    .lookup_type_by_fqn(conversion::PROMPT_CLASS)
+                    .ok_or_else(|| EngineError::TypeMismatch {
+                        message: format!("the program declares no `{}`", conversion::PROMPT_CLASS),
+                    })?;
+                Self::wrapper_instance(holder, class, prompt.clone())?
+            }
+            EngineValue::Type(reflected) => {
+                // A reflected type names its declarations; an anonymous one has
+                // no spelling to anchor against and should have crossed as a
+                // handle, which lands as the declaration itself.
+                let named: WireTy =
+                    reflected.try_map_heads(&mut |head: &baml_type::TaggedTypeName| {
+                        head.declared()
+                            .cloned()
+                            .ok_or_else(|| EngineError::TypeMismatch {
+                                message: format!(
+                                    "host-supplied type names the anonymous declaration `{}`, \
+                                     which has no resolvable spelling; pass it as a handle instead",
+                                    head.display_name()
+                                ),
+                            })
+                    })?;
+                let anchored =
+                    self.anchor_wire_ty_with_runtime(&holder.holder().vm, &named, overlay)?;
+                let realized = Self::realized(&anchored)?;
+                Value::object(
+                    holder
+                        .holder_mut()
+                        .vm
+                        .alloc_type(bex_vm_types::types::TypeValue::new(realized)),
+                )
+            }
+            EngineValue::TypeDef(definition) => {
+                // A live reference from this engine lands as the object itself;
+                // a foreign engine's handle does not resolve here, and lands
+                // from its portable definition with fresh identity.
+                let live = match definition {
+                    TypeDefRef::Live { handle, .. } => self.resolve_handle(holder.proof(), handle),
+                    TypeDefRef::Portable(_) => None,
+                };
+                match live {
+                    Some(ptr) => Value::object(ptr),
+                    None => {
+                        let vm = &mut holder.holder_mut().vm;
+                        let type_value = vm
+                            .materialize_portable_type_def(&definition.clone().into_def())
+                            .map_err(|message| EngineError::TypeMismatch { message })?;
+                        Value::object(vm.alloc_type(type_value))
+                    }
+                }
+            }
+            EngineValue::FunctionRef(global_index) => {
+                let proof = holder.proof();
+                let len = self.globals.len(proof);
+                if global_index >= len {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "FunctionRef global_index {global_index} out of bounds (globals len {len})"
+                        ),
+                    });
+                }
+                self.globals.as_slice(proof)[global_index]
             }
         })
+    }
+
+    /// An instance of the standard library's wrapper class `class` around
+    /// `payload`, which its one `_data` field holds as opaque data.
+    fn wrapper_instance(
+        holder: &mut impl HeapPermit<BexThread>,
+        class: HeapPtr,
+        payload: std::sync::Arc<dyn bex_vm_types::BexRustData>,
+    ) -> Result<Value, EngineError> {
+        let Object::Class(declared) = holder.holder().vm.get_object(class) else {
+            return Err(EngineError::TypeMismatch {
+                message: "a media or prompt wrapper is not a class".to_string(),
+            });
+        };
+        let fields: Vec<&str> = declared.fields.iter().map(|f| f.name.as_str()).collect();
+        if fields != [bex_external_types::MEDIA_WRAPPER_DATA_FIELD] {
+            return Err(EngineError::TypeMismatch {
+                message: format!(
+                    "wrapper class `{}` does not hold one `{}` field",
+                    declared.name,
+                    bex_external_types::MEDIA_WRAPPER_DATA_FIELD
+                ),
+            });
+        }
+        let data = Value::object(holder.holder_mut().tlab_mut().alloc_rust_data(payload));
+        Ok(Value::object(
+            holder
+                .holder_mut()
+                .tlab_mut()
+                .alloc_instance_with_type_args(class, Box::new([]), vec![data]),
+        ))
     }
 }
 
@@ -2106,9 +2475,44 @@ mod tests {
         Admitted::Int(VmInt::new::<TypeName>(int).expect("a test integer the VM holds"))
     }
 
-    /// A value of the engine's own making, admitted to `slot`.
-    fn engine(value: &BexExternalValue, slot: RuntimeTy) -> Admitted<'_, TypeName> {
-        Admitted::Engine { value, slot }
+    /// A media value admitted to a media slot: the wrapper instance of its kind.
+    fn media_engine(value: &BexExternalValue) -> Admitted<'_, TypeName> {
+        let BexExternalValue::Adt(BexExternalAdt::Media(media)) = value else {
+            panic!("not a media value")
+        };
+        Admitted::Engine(EngineValue::Media(media))
+    }
+
+    /// A media value admitted to a `$rust_type` slot: the payload itself.
+    fn media_data_engine(value: &BexExternalValue) -> Admitted<'_, TypeName> {
+        let BexExternalValue::Adt(BexExternalAdt::Media(media)) = value else {
+            panic!("not a media value")
+        };
+        Admitted::Engine(EngineValue::MediaData(media))
+    }
+
+    /// A host callable admitted to the function type `signature`.
+    fn callable_engine<'v>(
+        value: &'v BexExternalValue,
+        signature: &RuntimeTy,
+    ) -> Admitted<'v, TypeName> {
+        let BexExternalValue::HostValue(handle) = value else {
+            panic!("not a host value")
+        };
+        let RuntimeTy::Function {
+            params,
+            ret,
+            throws,
+        } = signature
+        else {
+            panic!("not a function type")
+        };
+        Admitted::Engine(EngineValue::Callable {
+            handle,
+            params: params.clone(),
+            ret: (**ret).clone(),
+            throws: (**throws).clone(),
+        })
     }
 
     /// A map as a `json` slot holds one: its values are `json` themselves.
@@ -2690,7 +3094,7 @@ mod tests {
         let callback_or_string = RuntimeTy::union([declared_member.clone(), RuntimeTy::string()]);
         assert_eq!(
             admit_in(&facts, &named, &callback_or_string),
-            Ok(engine(&callable, declared_member))
+            Ok(callable_engine(&callable, &declared_member))
         );
     }
 
@@ -2712,10 +3116,10 @@ mod tests {
             [image_ty.clone(), audio_ty.clone()],
             image_ty.clone(),
         );
-        let image_or_audio = RuntimeTy::union([image_ty.clone(), audio_ty]);
+        let image_or_audio = RuntimeTy::union([image_ty, audio_ty]);
         assert_eq!(
             admit_in(&facts, &selected, &image_or_audio),
-            Ok(engine(&image, image_ty))
+            Ok(media_engine(&image))
         );
     }
 
@@ -2724,14 +3128,16 @@ mod tests {
         let facts = Facts::default();
         let reflected = BexExternalValue::Adt(BexExternalAdt::Type(baml_type::RuntimeTy::Int));
         let selected = BexExternalValue::union(
-            reflected.clone(),
+            reflected,
             [RuntimeTy::Type, RuntimeTy::string()],
             RuntimeTy::Type,
         );
         let type_or_string = RuntimeTy::union([RuntimeTy::Type, RuntimeTy::string()]);
         assert_eq!(
             admit_in(&facts, &selected, &type_or_string),
-            Ok(engine(&reflected, RuntimeTy::Type))
+            Ok(Admitted::Engine(EngineValue::Type(
+                &baml_type::RuntimeTy::Int
+            )))
         );
     }
 
@@ -2861,10 +3267,7 @@ mod tests {
             RuntimeTy::Media(MediaKind::Image),
             RuntimeTy::Media(MediaKind::Generic),
         ] {
-            assert_eq!(
-                admit_in(&facts, &image, &slot),
-                Ok(engine(&image, slot.clone()))
-            );
+            assert_eq!(admit_in(&facts, &image, &slot), Ok(media_engine(&image)));
         }
         assert!(admit_in(&facts, &image, &RuntimeTy::Media(MediaKind::Audio)).is_err());
     }
@@ -2877,7 +3280,7 @@ mod tests {
             BexExternalValue::typed(media_shell(IMAGE_CLASS, &image), class_ty(IMAGE_CLASS));
         assert_eq!(
             admit_in(&facts, &named, &RuntimeTy::Media(MediaKind::Image)),
-            Ok(engine(&image, RuntimeTy::Media(MediaKind::Image)))
+            Ok(media_engine(&image))
         );
         // Where the wrapper class is declared, the shell is an instance of
         // it.
@@ -2886,7 +3289,7 @@ mod tests {
             Ok(Admitted::Instance {
                 class: declared(IMAGE_CLASS),
                 type_args: vec![],
-                fields: vec![engine(&image, RuntimeTy::RustType)],
+                fields: vec![media_data_engine(&image)],
             })
         );
     }
@@ -2952,7 +3355,7 @@ mod tests {
             BexExternalValue::typed(media_shell(IMAGE_CLASS, &image), class_ty(IMAGE_CLASS));
         assert_eq!(
             admit_with_aliases(&facts, &aliases, &named, &alias_or_string),
-            Ok(engine(&image, RuntimeTy::Media(MediaKind::Image)))
+            Ok(media_engine(&image))
         );
     }
 
@@ -2987,7 +3390,7 @@ mod tests {
             BexExternalValue::typed(media_shell(IMAGE_CLASS, &image), class_ty(IMAGE_CLASS));
         assert_eq!(
             admit_in(&facts, &named, &image_or_user_class),
-            Ok(engine(&image, RuntimeTy::Media(MediaKind::Image)))
+            Ok(media_engine(&image))
         );
     }
 
@@ -3005,7 +3408,7 @@ mod tests {
         );
         assert_eq!(
             admit_in(&facts, &named, &image_or_string),
-            Ok(engine(&image, RuntimeTy::Media(MediaKind::Image)))
+            Ok(media_engine(&image))
         );
         let named =
             BexExternalValue::typed(BexExternalValue::String("hi".into()), RuntimeTy::string());

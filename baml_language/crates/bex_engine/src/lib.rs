@@ -1217,6 +1217,10 @@ enum Park<T> {
     Cancelled,
 }
 
+/// The standard library's cancel token class, which a host's cancel token is
+/// an instance of.
+const CANCEL_TOKEN_CLASS: &str = "baml.spawn.CancelToken";
+
 /// Where a thread observed its cancellation: the yield point decides how the
 /// injected `baml.panics.Cancelled` enters the VM.
 #[derive(Clone, Copy)]
@@ -3889,13 +3893,9 @@ impl BexEngine {
             }
         }
 
-        // Everything below is host-facing: the args arrive in the wire's
-        // spelling and are coerced against these, so project the reconstructed
-        // signature once here rather than at each use.
-        let param_types = param_types
-            .iter()
-            .map(|ty| crate::conversion::overlay_wire_ty_under_permit(ty, thread.proof()))
-            .collect::<Vec<_>>();
+        // The arguments are admitted to the reconstructed parameter types as
+        // they are; the return and throws types face the host and are projected
+        // to the wire's spelling once here.
         let return_type =
             crate::conversion::overlay_wire_ty_under_permit(&return_type, thread.proof());
         let throws_type = throws_type
@@ -3987,21 +3987,24 @@ impl BexEngine {
         // Build VM args: the receiver as `self` in slot 0 (bound methods), then
         // each provided arg, admitted to its declared param type (offset by
         // `self` for bound methods). A callable that declares no parameter
-        // types takes each value as what it is. A runtime declaration the
-        // callable's type arguments name resolves through the call's overlay.
+        // types (a lambda stores none) takes each value as what it is. A
+        // runtime declaration a host spells in a value resolves through the
+        // call's overlay.
         let runtime_named_objects =
             Self::runtime_named_objects(&indexmap::IndexMap::new(), &seed_live_type_args);
         let overlay = crate::conversion::InboundRuntimeOverlay::new(&runtime_named_objects);
+        let any = bex_vm_types::RuntimeTy::Unknown;
         let mut vm_args: Vec<Value> = Vec::with_capacity(args.len() + self_offset);
         if let Some(receiver) = receiver {
             vm_args.push(receiver);
         }
         for (idx, arg) in args.into_iter().enumerate() {
             vm_args.push(match arg {
-                BexCallArg::Provided(value) => match param_types.get(idx + self_offset) {
-                    Some(ty) => self.admit_to_heap(&mut thread, &value, ty, overlay)?,
-                    None => self.convert_external_to_vm_value(&mut thread, *value)?,
-                },
+                BexCallArg::Provided(value) => {
+                    let ty = param_types.get(idx + self_offset).unwrap_or(&any);
+                    let admitted = self.admit_realized(&thread, &value, ty, overlay)?;
+                    self.land(&mut thread, admitted, overlay)?
+                }
                 BexCallArg::OmittedDefault => Value::OMITTED_ARG,
             });
         }
@@ -4151,20 +4154,43 @@ impl BexEngine {
                 token.clone(),
             ));
         }
-        for token in tokens {
-            if let BexExternalValue::Handle(handle) = token
-                && self.resolve_handle(thread.proof(), handle).is_none()
-            {
+        // A cancel token is an instance of the standard library's
+        // `CancelToken`, and a host hands one back as the live reference it
+        // received; it is admitted to that class like any argument.
+        let token_ty = if tokens.is_empty() {
+            None
+        } else {
+            let class = thread
+                .vm
+                .lookup_type_by_fqn(CANCEL_TOKEN_CLASS)
+                .ok_or_else(|| EngineError::TypeMismatch {
+                    message: format!("the program declares no `{CANCEL_TOKEN_CLASS}`"),
+                })?;
+            let Object::Class(declared) = thread.vm.get_object(class) else {
                 return Err(EngineError::TypeMismatch {
-                    message: "cancel token handle is stale or belongs to a different runtime"
-                        .into(),
+                    message: format!("`{CANCEL_TOKEN_CLASS}` is not a class"),
                 });
-            }
-            let value = self.convert_external_to_vm_value(thread, token.clone())?;
+            };
+            Some(bex_vm_types::RuntimeTy::Class(
+                bex_vm_types::TypeHead::new(class, declared.type_tag),
+                Box::new([]),
+            ))
+        };
+        for token in tokens {
+            let token_ty = token_ty
+                .as_ref()
+                .unwrap_or_else(|| unreachable!("a token type is built when there are tokens"));
+            let value = self
+                .admit_realized_to_heap(thread, token, token_ty)
+                .map_err(|error| EngineError::TypeMismatch {
+                    message: format!(
+                        "cancel token must be a generated {CANCEL_TOKEN_CLASS}: {error}"
+                    ),
+                })?;
             sources.extend(
                 bex_vm::package_baml::cancel_token_members(&thread.vm, value).ok_or_else(|| {
                     EngineError::TypeMismatch {
-                        message: "cancel token must be a generated baml.spawn.CancelToken".into(),
+                        message: format!("cancel token must be a generated {CANCEL_TOKEN_CLASS}"),
                     }
                 })?,
             );
@@ -7672,7 +7698,7 @@ mod type_identity_tests {
         );
 
         let landed = engine
-            .convert_external_to_vm_value(&mut thread, exported)
+            .admit_realized_to_heap(&mut thread, &exported, &bex_vm_types::RuntimeTy::Type)
             .expect("the same engine accepts its own live reference");
         assert_eq!(
             landed.as_object_ptr(),
@@ -7735,7 +7761,7 @@ mod type_identity_tests {
         }
 
         let landed = other
-            .convert_external_to_vm_value(&mut other_thread, exported)
+            .admit_realized_to_heap(&mut other_thread, &exported, &bex_vm_types::RuntimeTy::Type)
             .expect("a foreign live reference degrades to its definitions");
         let landed_ptr = landed.as_object_ptr().expect("landed on a heap object");
         assert_ne!(
