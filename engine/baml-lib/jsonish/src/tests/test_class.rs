@@ -55,6 +55,167 @@ test_deserializer!(
 );
 
 test_deserializer!(
+    test_compact_unquoted_keys_retain_nested_array_entries,
+    r#"
+class PageRoute {
+  id string
+  schema_id string?
+  reason string
+}
+
+class PageRoutes {
+  routes PageRoute[]
+}
+"#,
+    r#"{routes:[{id:"001",schema_id:null,reason:"amount -1.617,98"}]}"#,
+    TypeIR::class("PageRoutes"),
+    {
+        "routes": [{
+            "id": "001",
+            "schema_id": null,
+            "reason": "amount -1.617,98"
+        }]
+    }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_decimal_comma,
+    r#"
+class Reason {
+  reason string
+}
+"#,
+    r#"{reason:amount -1.617,98}"#,
+    TypeIR::class("Reason"),
+    { "reason": "amount -1.617,98" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_url_after_comma,
+    r#"
+class Reason {
+  reason string
+}
+"#,
+    r#"{reason:docs,https://example.com}"#,
+    TypeIR::class("Reason"),
+    { "reason": "docs,https://example.com" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_non_hierarchical_uris_after_comma,
+    r#"
+class Reason {
+  reason string
+}
+"#,
+    r#"{reason:docs,mailto:user@example.com,urn:isbn:9780141036144,sip:user@example.com}"#,
+    TypeIR::class("Reason"),
+    { "reason": "docs,mailto:user@example.com,urn:isbn:9780141036144,sip:user@example.com" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_colon_text_after_phrase,
+    r#"
+class Reason {
+  reason string
+}
+"#,
+    r#"{reason:see docs,label:value}"#,
+    TypeIR::class("Reason"),
+    { "reason": "see docs,label:value" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_uppercase_boolean_text,
+    r#"
+class Reason {
+  reason string
+}
+"#,
+    r#"{reason:TRUE,label:value}"#,
+    TypeIR::class("Reason"),
+    { "reason": "TRUE,label:value" }
+);
+
+test_deserializer!(
+    test_unquoted_object_value_retains_non_finite_number_text,
+    r#"
+class Reason {
+  reason string
+}
+"#,
+    r#"{reason:NaN,label:value}"#,
+    TypeIR::class("Reason"),
+    { "reason": "NaN,label:value" }
+);
+
+test_deserializer!(
+    test_compact_numeric_unquoted_key,
+    r#"
+class NumericKey {
+  id int
+  numeric string @alias("1")
+}
+"#,
+    r#"{id:001,1:foo}"#,
+    TypeIR::class("NumericKey"),
+    { "id": 1, "numeric": "foo" }
+);
+
+test_deserializer!(
+    test_compact_unquoted_key_with_punctuation,
+    r#"
+class PunctuationKey {
+  a string?
+  punctuation string @alias("key.with.punctuation/123")
+}
+"#,
+    r#"{a:null,key.with.punctuation/123:foo}"#,
+    TypeIR::class("PunctuationKey"),
+    { "a": null, "punctuation": "foo" }
+);
+
+test_deserializer!(
+    test_compact_quoted_key_with_comma,
+    r#"
+class QuotedCommaKey {
+  a string?
+  name string @alias("last,name")
+}
+"#,
+    r#"{a:null,"last,name":foo}"#,
+    TypeIR::class("QuotedCommaKey"),
+    { "a": null, "name": "foo" }
+);
+
+test_deserializer!(
+    test_compact_unquoted_key_with_embedded_apostrophe,
+    r#"
+class ApostropheKey {
+  a string?
+  owner string @alias("owner's_name")
+}
+"#,
+    r#"{a:null,owner's_name:foo}"#,
+    TypeIR::class("ApostropheKey"),
+    { "a": null, "owner": "foo" }
+);
+
+test_deserializer!(
+    test_compact_key_before_unquoted_unicode_value,
+    r#"
+class UnicodeCompact {
+  a string?
+  b string
+}
+"#,
+    r#"{a:null,b:x😀}"#,
+    TypeIR::class("UnicodeCompact"),
+    { "a": null, "b": "x😀" }
+);
+
+test_deserializer!(
   str_with_quotes,
   FOO_FILE,
   r#"{"foo": "[\"bar\"]"}"#,

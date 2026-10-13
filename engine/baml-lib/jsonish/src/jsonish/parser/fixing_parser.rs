@@ -29,9 +29,14 @@ pub fn parse(str: &str, _options: &ParseOptions) -> Result<Vec<(Value, Vec<Fixes
 
     let mut state = JsonParseState::new();
 
-    let mut chars = str.char_indices().peekable();
+    let mut chars = str.char_indices();
     while let Some((count, c)) = chars.next() {
-        let peekable = str[count + c.len_utf8()..].char_indices().peekable();
+        // NB: this iterator must yield CHARACTER ordinals, not byte offsets.
+        // `process_token` returns how many entries to skip, and we advance
+        // `chars` (a char iterator) by that many `next()` calls below. Using
+        // `char_indices()` here would return byte offsets, which over-advance
+        // for multi-byte UTF-8 and corrupt the following token.
+        let peekable = str[count + c.len_utf8()..].chars().enumerate().peekable();
         match state.process_token(c, peekable) {
             Ok(increments) => {
                 for _ in 0..increments {
