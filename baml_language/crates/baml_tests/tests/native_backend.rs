@@ -112,6 +112,11 @@ fn fixtures() -> Vec<String> {
 /// The module borrows the database, so the database is leaked; one per
 /// fixture per test process is a bounded cost.
 fn emit_fixture(name: &str) -> native::NativeModule<'static> {
+    emit_fixture_observing(name, native::Observe::Default)
+}
+
+/// [`emit_fixture`], observing `observe`'s functions for telemetry.
+fn emit_fixture_observing(name: &str, observe: native::Observe) -> native::NativeModule<'static> {
     let path = fixture_dir().join("fixtures").join(format!("{name}.baml"));
     let source =
         std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display()));
@@ -131,7 +136,7 @@ fn emit_fixture(name: &str) -> native::NativeModule<'static> {
             )
         })
         .collect();
-    native::compile_many(db, &roots)
+    native::compile_observing(db, &roots, observe)
         .unwrap_or_else(|rejection| panic!("fixture {name} was rejected: {rejection}"))
 }
 
@@ -152,8 +157,16 @@ fn accept_goldens() -> bool {
 fn generated_sources_are_current() {
     let accept = accept_goldens();
     let mut stale = Vec::new();
-    for name in fixtures() {
-        let module = emit_fixture(&name);
+    // Every fixture, and `telemetry` again with every function observed:
+    // the module the telemetry parity test compares with the VM unprojected.
+    let emitted = fixtures()
+        .into_iter()
+        .map(|name| (emit_fixture(&name), name))
+        .chain(std::iter::once((
+            emit_fixture_observing("telemetry", native::Observe::All),
+            "telemetry_all".to_owned(),
+        )));
+    for (module, name) in emitted {
         let path = fixture_dir().join("generated").join(format!("{name}.rs"));
         let committed = std::fs::read_to_string(&path).unwrap_or_default();
         if committed == module.rust_source {
