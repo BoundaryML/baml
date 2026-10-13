@@ -1,26 +1,29 @@
 // B-1788: a method receiver demands an operator result before finish.
-// Follow the pending operators back to the reduce accumulator's seed so
-// method resolution and the call plan are recorded during the body walk.
-function rounded_share(values: int[]) -> float {
-    let total = values.reduce((sum, n) -> { sum + n }, 0);
-    let share = 1 / (total * 1.0);
-    let rounded = (share * 100.0).round();
-     // ^^^^^^^ float
-    rounded / 100.0
+// Resolve the pending operator from its operand's bounds so method
+// resolution and the call plan are recorded during the body walk.
+function id<T>(x: T) -> T { x }
+
+function unary_receiver(n: int) -> int {
+    let r = (-id(n)).abs();
+     // ^ int
+    r
 }
 
-function negated_sum(values: int[]) -> float {
-    let total = values.reduce((sum, n) -> { sum + n }, 0.0);
-    let rounded = (-total).round();
-     // ^^^^^^^ float
-    rounded
+function binary_receiver(n: int) -> int {
+    let r = (id(n) + 1).abs();
+     // ^ int
+    r
 }
 
-function identity<T>(value: T) -> T { value }
+// The accumulator is bounded by its own callback output; the cycle must break.
+function reduce_receiver(values: int[]) -> float {
+    let r = (values.reduce((sum, n) -> { sum + n }, 0) * 1.0).round();
+     // ^ float
+    r
+}
 
-function aliased_receiver(values: int[]) -> float {
-    let total = values.reduce((sum, n) -> { sum + n }, 0);
-    let rounded = identity(identity(total * 1.0)).round();
-     // ^^^^^^^ float
-    rounded
+function aliased_receiver(n: int) -> int {
+    let r = id(id(-id(n))).abs();
+     // ^ int
+    r
 }
