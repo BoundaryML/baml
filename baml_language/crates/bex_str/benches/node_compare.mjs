@@ -35,11 +35,24 @@ function findFrom(f,pos) {
 }
 function run(f,op) {
   let out=0;
-  if(op==='at' || op==='slice') {for(let i=0;i<N;i++) out += (op==='at' ? charAt(f,i) : sliceAt(f,i)) === 'a';}
-  else if(op==='codepoint' || op==='random') {for(let i=0;i<N;i++) out += codepoint(f,op==='random' ? (i*7919)%N : i);}
-  else { let i,pos=0; while((i=findFrom(f,pos))!==-1) pos=i+1; out=pos; }
+  // Keep native ASCII/BMP loops free of the codepoint adapter. Dispatch once,
+  // as in the Rust match, rather than comparing operation names per index.
+  if(!f.idx) {
+    const s=f.s;
+    if(op==='at') {for(let i=0;i<N;i++) out += s.at(i)==='a';}
+    else if(op==='slice') {for(let i=0;i<N;i++) out += s.slice(i,i+1)==='a';}
+    else if(op==='codepoint') {for(let i=0;i<N;i++) out += s.codePointAt(i);}
+    else if(op==='random') {for(let i=0;i<N;i++) out += s.codePointAt((i*7919)%N);}
+    else {let i,pos=0;while((i=s.indexOf('a',pos))!==-1) pos=i+1;out=pos;}
+  } else {
+    if(op==='at' || op==='slice') {for(let i=0;i<N;i++) out += sliceAt(f,i)==='a';}
+    else if(op==='codepoint') {for(let i=0;i<N;i++) out += codepoint(f,i);}
+    else if(op==='random') {for(let i=0;i<N;i++) out += codepoint(f,(i*7919)%N);}
+    else {let i,pos=0;while((i=findFrom(f,pos))!==-1) pos=i+1;out=pos;}
+  }
   return out;
 }
+
 function append(read,kind) {
   let s='',hits=0;
   const part=unit(kind);

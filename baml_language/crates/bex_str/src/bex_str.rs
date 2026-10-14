@@ -66,8 +66,7 @@ pub enum BexStr {
         parent: Arc<FlatStr>,
         offset: u64,
         len: u64,
-        /// Counts that do not fit in u32 are recomputed from the view.
-        codepoint_len: u32,
+        codepoint_len: u64,
         /// Codepoint offset in the parent; u32::MAX uses the oversized fallback.
         /// Computed once when creating the view, so indexed reads need no atomics.
         char_offset: u32,
@@ -75,10 +74,24 @@ pub enum BexStr {
         /// `SLICE_ASCII_PREFIX_UNKNOWN`. Fits in the padding after the enum
         /// tag, so it doesn't grow `BexStr`.
         ascii_prefix_len: u32,
-        hash: [AtomicU64; 2],
+        /// Shared separately so the handle's metadata stays immutable to LLVM.
+        hash: Arc<SliceHash>,
     },
     /// Deferred concatenation. Flattened on first byte-level access.
     Concat(Arc<ConcatNode>),
+}
+
+/// Shared hash cache for a slice. Keeping atomics behind a pointer lets the
+/// optimizer treat BexStr's tag/metadata as immutable during indexed loops.
+pub struct SliceHash {
+    hash: [AtomicU64; 2],
+}
+impl SliceHash {
+    pub(crate) fn new() -> Self {
+        Self {
+            hash: [const { AtomicU64::new(0) }; 2],
+        }
+    }
 }
 
 /// Heap-allocated immutable string data with cached hash.
@@ -94,10 +107,73 @@ pub struct FlatStr {
     /// Immutable UTF-8 bytes. Constructors allocate tightly; an exclusively
     /// owned append chain may retain spare capacity for amortized growth.
     pub(crate) data: Vec<u8>,
-    /// Byte offsets of every codepoint after the ASCII prefix. UTF-8 remains
-    /// the only text representation. Built only after lookups pay for a scan.
-    pub(crate) char_index: OnceLock<Vec<u32>>,
+    /// Auxiliary byte offsets and scalar values after the ASCII prefix.
+    /// UTF-8 stays canonical; the read cache is built after scans pay for it.
+    pub(crate) char_index: OnceLock<CharIndex>,
     scan_debt: AtomicUsize,
+}
+
+/// Auxiliary read metadata; UTF-8 remains the canonical text buffer.
+pub(crate) struct CharIndex {
+    pub(crate) offsets: Vec<u32>,
+    points: ScalarCache,
+}
+
+enum ScalarCache {
+    Latin1(Vec<u8>),
+    Bmp(Vec<u16>),
+    Full(Vec<char>),
+}
+impl ScalarCache {
+    fn new(capacity: usize) -> Self {
+        Self::Latin1(Vec::with_capacity(capacity))
+    }
+    #[inline(always)]
+    fn get(&self, n: usize) -> Option<char> {
+        match self {
+            Self::Latin1(points) => points.get(n).map(|&point| point as char),
+            Self::Bmp(points) => points
+                .get(n)
+                .and_then(|&point| char::from_u32(u32::from(point))),
+            Self::Full(points) => points.get(n).copied(),
+        }
+    }
+    fn push(&mut self, point: char) {
+        match self {
+            Self::Latin1(points) if point as u32 <= 0xff => points.push(point as u8),
+            Self::Latin1(points) if point as u32 <= 0xffff => {
+                let mut values = Vec::with_capacity(points.capacity());
+                values.extend(points.iter().map(|&point| u16::from(point)));
+                *self = Self::Bmp(values);
+                self.push(point);
+            }
+            Self::Latin1(points) => {
+                let mut values = Vec::with_capacity(points.capacity());
+                values.extend(points.iter().map(|&point| point as char));
+                *self = Self::Full(values);
+                self.push(point);
+            }
+            Self::Bmp(points) if point as u32 <= 0xffff => points.push(point as u16),
+            Self::Bmp(points) => {
+                let mut values = Vec::with_capacity(points.capacity());
+                values.extend(
+                    points
+                        .iter()
+                        .map(|&point| char::from_u32(u32::from(point)).unwrap()),
+                );
+                *self = Self::Full(values);
+                self.push(point);
+            }
+            Self::Full(points) => points.push(point),
+        }
+    }
+    fn heap_bytes(&self) -> usize {
+        match self {
+            Self::Latin1(points) => points.capacity(),
+            Self::Bmp(points) => points.capacity() * std::mem::size_of::<u16>(),
+            Self::Full(points) => points.capacity() * std::mem::size_of::<char>(),
+        }
+    }
 }
 
 /// Deferred concatenation node.
@@ -165,7 +241,9 @@ impl BexStr {
         }
         match self {
             Self::Inline { .. } => Some(0),
-            Self::Flat(flat) | Self::Slice { parent: flat, .. } => flat_bytes(flat),
+            Self::Flat(flat) => flat_bytes(flat),
+            Self::Slice { parent, .. } => flat_bytes(parent)?
+                .checked_add(std::mem::size_of::<SliceHash>() + 2 * std::mem::size_of::<usize>()),
             Self::Concat(node) => std::mem::size_of::<ConcatNode>()
                 .checked_add(2 * std::mem::size_of::<usize>())?
                 .checked_add(flat_bytes(node.flatten())?),
@@ -183,8 +261,8 @@ impl BexStr {
         }
     }
 
-    /// Number of Unicode codepoints. O(1) except for Inline (at most 54 bytes)
-    /// and slices with at least u32::MAX codepoints, which rescan. A Concat
+    /// Number of Unicode codepoints. O(1) except for non-ASCII Inline (at most
+    /// 54 bytes). A Concat
     /// caches its count, so this never walks or recurses into the rope.
     #[inline]
     pub fn codepoint_len(&self) -> usize {
@@ -197,10 +275,6 @@ impl BexStr {
                 }
             }
             BexStr::Flat(f) => f.codepoint_len as usize,
-            BexStr::Slice {
-                codepoint_len: u32::MAX,
-                ..
-            } => bytecount::num_chars(self.as_bytes()),
             BexStr::Slice { codepoint_len, .. } => *codepoint_len as usize,
             BexStr::Concat(c) => c.codepoint_len as usize,
         }
@@ -282,7 +356,7 @@ impl BexStr {
         match self {
             Self::Inline { len, data } => xxhash_rust::xxh3::xxh3_128(&data[..inline_len(*len)]),
             Self::Flat(flat) => cached_hash(&flat.hash, &flat.data),
-            Self::Slice { hash, .. } => cached_hash(hash, self.as_bytes()),
+            Self::Slice { hash, .. } => cached_hash(&hash.hash, self.as_bytes()),
             Self::Concat(node) => {
                 let flat = node.flatten();
                 cached_hash(&flat.hash, &flat.data)
@@ -359,10 +433,10 @@ impl BexStr {
             parent,
             offset,
             len: slice_len as u64,
-            codepoint_len: u32::try_from(codepoint_len).unwrap_or(u32::MAX),
+            codepoint_len: codepoint_len as u64,
             char_offset,
             ascii_prefix_len,
-            hash: [const { AtomicU64::new(0) }; 2],
+            hash: Arc::new(SliceHash::new()),
         }
     }
 
@@ -388,7 +462,7 @@ impl BexStr {
                 ascii_prefix_len,
                 char_offset,
                 ..
-            } if *codepoint_len != u32::MAX && *ascii_prefix_len != u32::MAX => {
+            } if *ascii_prefix_len != u32::MAX => {
                 if n <= *ascii_prefix_len as usize {
                     return n;
                 }
@@ -397,7 +471,7 @@ impl BexStr {
                 }
                 if let Some(index) = parent.char_index.get() {
                     let base = slice_char_offset(parent, *offset, *char_offset);
-                    return index[base + n - parent.ascii_prefix_len as usize] as usize
+                    return index.offsets[base + n - parent.ascii_prefix_len as usize] as usize
                         - *offset as usize;
                 }
             }
@@ -552,11 +626,7 @@ impl BexStr {
                 char_offset,
                 ..
             } => {
-                let count = if *codepoint_len == u32::MAX {
-                    self.codepoint_len()
-                } else {
-                    *codepoint_len as usize
-                };
+                let count = *codepoint_len as usize;
                 if n >= count {
                     return (&[], 0);
                 }
@@ -564,7 +634,7 @@ impl BexStr {
                     *offset as usize + n
                 } else if let Some(index) = parent.char_index.get() {
                     let base = slice_char_offset(parent, *offset, *char_offset);
-                    index[base + n - parent.ascii_prefix_len as usize] as usize
+                    index.offsets[base + n - parent.ascii_prefix_len as usize] as usize
                 } else {
                     *offset as usize + self.char_to_byte(n)
                 };
@@ -574,49 +644,78 @@ impl BexStr {
         }
     }
 
-    /// The char at index `n`, or `None` if `n >= codepoint_len()`.
-    #[inline]
-    pub fn char_at(&self, n: usize) -> Option<char> {
-        if let Self::Concat(node) = self
-            && node.flat.get().is_none()
-            && let Some(ch) = node.leaf_char(n)
-        {
-            return ch;
+    #[inline(always)]
+    fn leaf_char_at(&self, n: usize) -> Option<char> {
+        match self {
+            Self::Flat(flat) => flat.char_at(n),
+            Self::Slice {
+                parent,
+                offset,
+                codepoint_len,
+                char_offset,
+                ascii_prefix_len,
+                ..
+            } => {
+                if n >= *codepoint_len as usize {
+                    return None;
+                }
+                if *ascii_prefix_len != u32::MAX && n < *ascii_prefix_len as usize {
+                    return parent
+                        .data
+                        .get(*offset as usize + n)
+                        .map(|&byte| byte as char);
+                }
+                if let Some(index) = parent.char_index.get() {
+                    let base = slice_char_offset(parent, *offset, *char_offset);
+                    return index
+                        .points
+                        .get(base + n - parent.ascii_prefix_len as usize);
+                }
+                let (bytes, b) = self.char_location(n);
+                char_at_byte(bytes, b)
+            }
+            _ => {
+                let (bytes, b) = self.char_location(n);
+                char_at_byte(bytes, b)
+            }
         }
-        let (bytes, b) = self.char_location(n);
-        char_at_byte(bytes, b)
+    }
+
+    /// The char at index `n`, or `None` if `n >= codepoint_len()`.
+    #[inline(always)]
+    pub fn char_at(&self, n: usize) -> Option<char> {
+        if let Self::Concat(node) = self {
+            if let Some(flat) = node.flat.get() {
+                return flat.char_at(n);
+            }
+            if let Some(ch) = node.leaf_char(n) {
+                return ch;
+            }
+            return node.flatten().char_at(n);
+        }
+        self.leaf_char_at(n)
     }
 
     /// One-codepoint string at `n`, or `None` past the end. Bounds checking
     /// shares the indexing work rather than counting an inline string first.
-    #[inline]
+    #[inline(always)]
     pub fn char_get(&self, n: usize) -> Option<BexStr> {
-        if let Self::Concat(node) = self
-            && node.flat.get().is_none()
-            && let Some(ch) = node.leaf_char(n)
-        {
-            return ch.map(|ch| {
-                let mut data = [0; INLINE_CAPACITY];
-                let len = inline_len_and_ascii(ch.encode_utf8(&mut data[..4]).len(), ch.is_ascii());
-                Self::Inline { len, data }
-            });
-        }
-        let (bytes, byte) = self.char_location(n);
-        let &lead = bytes.get(byte)?;
-        if lead.is_ascii() {
-            let mut data = [0; INLINE_CAPACITY];
-            data[0] = lead;
+        let point = self.char_at(n)?;
+        let mut data = [0; INLINE_CAPACITY];
+        if point.is_ascii() {
+            data[0] = point as u8;
             return Some(Self::Inline {
                 len: 1 | INLINE_ASCII_FLAG,
                 data,
             });
         }
-        Some(inline_bytes(&bytes[byte..byte + utf8_char_width(lead)]))
+        let len = point.encode_utf8(&mut data[..4]).len() as u8;
+        Some(Self::Inline { len, data })
     }
 
     /// Substring by char range. Clamps both ends to `codepoint_len()` (and `end`
     /// to at least `start`), so it never panics.
-    #[inline]
+    #[inline(always)]
     pub fn char_slice(&self, range: Range<usize>) -> BexStr {
         if range.end.checked_sub(range.start) == Some(1) {
             return self.char_get(range.start).unwrap_or_else(Self::empty);
@@ -721,13 +820,12 @@ impl BexStr {
             let bytes = right.as_bytes();
             flat.data.extend_from_slice(bytes);
             if let Some(index) = flat.char_index.get_mut() {
-                index.pop(); // replace the old end sentinel with new boundaries
-                for (i, &byte) in bytes.iter().enumerate() {
-                    if byte & 0xc0 != 0x80 {
-                        index.push((old_len + i) as u32);
-                    }
+                index.offsets.pop(); // replace the end sentinel with new boundaries
+                for (i, point) in right.as_str().char_indices() {
+                    index.offsets.push((old_len + i) as u32);
+                    index.points.push(point);
                 }
-                index.push(total_len as u32);
+                index.offsets.push(total_len as u32);
                 // u32 offsets are valid only below the index's byte limit.
                 if total_len >= u32::MAX as usize {
                     flat.char_index.take();
@@ -803,7 +901,7 @@ impl BexStr {
         match self {
             BexStr::Inline { .. } => None, // No cache for Inline
             BexStr::Flat(f) => read_hash(&f.hash),
-            BexStr::Slice { hash, .. } => read_hash(hash),
+            BexStr::Slice { hash, .. } => read_hash(&hash.hash),
             BexStr::Concat(c) => c.flat.get().and_then(|f| read_hash(&f.hash)),
         }
     }
@@ -838,9 +936,21 @@ impl FlatStr {
             return self.data.len();
         }
         if let Some(index) = self.char_index.get() {
-            return index[n - prefix] as usize;
+            return index.offsets[n - prefix] as usize;
         }
         self.scan_char_to_byte(n)
+    }
+
+    #[inline(always)]
+    fn char_at(&self, n: usize) -> Option<char> {
+        let prefix = self.ascii_prefix_len as usize;
+        if n < prefix {
+            return self.data.get(n).map(|&byte| byte as char);
+        }
+        if let Some(index) = self.char_index.get() {
+            return index.points.get(n - prefix);
+        }
+        char_at_byte(&self.data, self.char_to_byte(n))
     }
 
     fn scan_char_to_byte(&self, n: usize) -> usize {
@@ -871,10 +981,11 @@ impl FlatStr {
         }
     }
 
-    /// Four bytes per non-ASCII-tail codepoint, plus an end sentinel. Index
-    /// creation is tight; owned appends can grow its Vec capacity geometrically.
+    /// Four bytes of offset and 1/2/4 bytes of scalar per indexed codepoint,
+    /// plus an offset end sentinel. Construction is tight; owned appends grow
+    /// capacity geometrically and can promote the scalar width.
     /// Strings at or above the u32 byte limit keep the allocation-free scanner.
-    fn index(&self) -> Option<&[u32]> {
+    fn index(&self) -> Option<&CharIndex> {
         if self.data.len() >= u32::MAX as usize || self.ascii_prefix_len == self.codepoint_len {
             return None;
         }
@@ -887,20 +998,23 @@ impl FlatStr {
         Some(self.char_index.get_or_init(|| {
             let prefix = self.ascii_prefix_len as usize;
             let mut offsets = Vec::with_capacity(count);
-            for (i, &b) in self.data[prefix..].iter().enumerate() {
-                if b & 0xc0 != 0x80 {
-                    offsets.push((prefix + i) as u32);
-                }
+            let mut points = ScalarCache::new(count - 1);
+            // SAFETY: constructors and concat maintain valid canonical UTF-8.
+            #[allow(unsafe_code)]
+            let text = unsafe { std::str::from_utf8_unchecked(&self.data[prefix..]) };
+            for (i, point) in text.char_indices() {
+                offsets.push((prefix + i) as u32);
+                points.push(point);
             }
             offsets.push(self.data.len() as u32);
-            offsets
+            CharIndex { offsets, points }
         }))
     }
 
     fn index_heap_bytes(&self) -> usize {
-        self.char_index
-            .get()
-            .map_or(0, |index| index.capacity() * std::mem::size_of::<u32>())
+        self.char_index.get().map_or(0, |index| {
+            index.offsets.capacity() * std::mem::size_of::<u32>() + index.points.heap_bytes()
+        })
     }
 
     fn charge_scan(&self, bytes: usize) {
@@ -914,13 +1028,16 @@ impl FlatStr {
     fn indexed_char_to_byte(&self, n: usize) -> Option<usize> {
         self.char_index
             .get()
-            .map(|index| index[n - self.ascii_prefix_len as usize] as usize)
+            .map(|index| index.offsets[n - self.ascii_prefix_len as usize] as usize)
     }
 
     #[inline]
     fn indexed_byte_to_char(&self, b: usize) -> Option<usize> {
         self.char_index.get().map(|index| {
-            self.ascii_prefix_len as usize + index.partition_point(|&offset| (offset as usize) < b)
+            self.ascii_prefix_len as usize
+                + index
+                    .offsets
+                    .partition_point(|&offset| (offset as usize) < b)
         })
     }
 }
@@ -936,10 +1053,10 @@ impl ConcatNode {
         if let ConcatState::Deferred { left, right } = &*guard {
             let split = left.codepoint_len();
             if n >= split && !matches!(right, BexStr::Concat(_)) {
-                return Some(right.char_at(n - split));
+                return Some(right.leaf_char_at(n - split));
             }
             if n < split && !matches!(left, BexStr::Concat(_)) {
-                return Some(left.char_at(n));
+                return Some(left.leaf_char_at(n));
             }
         }
         None
@@ -1072,7 +1189,7 @@ impl Clone for BexStr {
                 codepoint_len: *codepoint_len,
                 char_offset: *char_offset,
                 ascii_prefix_len: *ascii_prefix_len,
-                hash: clone_hash(hash),
+                hash: hash.clone(),
             },
             BexStr::Concat(c) => BexStr::Concat(c.clone()),
         }
@@ -1319,19 +1436,6 @@ fn ascii_prefix_and_codepoint_len(bytes: &[u8]) -> (usize, usize) {
     }
 }
 
-/// Byte width of the UTF-8 char whose lead byte is `lead`.
-fn utf8_char_width(lead: u8) -> usize {
-    if lead < 0x80 {
-        1
-    } else if lead < 0xE0 {
-        2
-    } else if lead < 0xF0 {
-        3
-    } else {
-        4
-    }
-}
-
 impl fmt::Debug for BexStr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.as_str())
@@ -1361,12 +1465,4 @@ fn cached_hash(cache: &[AtomicU64; 2], bytes: &[u8]) -> u128 {
     cache[0].store(hash as u64, Ordering::Relaxed);
     cache[1].store((hash >> 64) as u64, Ordering::Release);
     hash
-}
-
-fn clone_hash(cache: &[AtomicU64; 2]) -> [AtomicU64; 2] {
-    let hash = read_hash(cache).unwrap_or(0);
-    [
-        AtomicU64::new(hash as u64),
-        AtomicU64::new((hash >> 64) as u64),
-    ]
 }

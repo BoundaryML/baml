@@ -1,10 +1,11 @@
 //! Semantically matched, result-consuming comparisons with node_compare.mjs.
 //! No black boxes inside the indexed loop: both engines may optimize results.
-use bex_str::BexStr;
 use std::{
     hint::black_box,
     time::{Duration, Instant},
 };
+
+use bex_str::BexStr;
 
 const N: usize = 20_000;
 fn unit(kind: &str) -> &'static str {

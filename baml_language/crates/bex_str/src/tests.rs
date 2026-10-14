@@ -14,6 +14,10 @@ fn hash_of<T: Hash>(t: &T) -> u64 {
     h.finish()
 }
 
+fn slice_hash_allocation_bytes() -> usize {
+    std::mem::size_of::<crate::bex_str::SliceHash>() + 2 * std::mem::size_of::<usize>()
+}
+
 #[test]
 fn size_assertion() {
     assert_eq!(std::mem::size_of::<BexStr>(), 56);
@@ -26,8 +30,14 @@ fn retained_heap_counts_complete_slice_parent() {
     let slice = parent.byte_slice(1..101);
     let bytes = parent.retained_heap_bytes().unwrap();
     assert!(bytes > parent.byte_len());
-    assert_eq!(slice.retained_heap_bytes(), Some(bytes));
-    assert_eq!(slice.clone().retained_heap_bytes(), Some(bytes));
+    assert_eq!(
+        slice.retained_heap_bytes(),
+        Some(bytes + slice_hash_allocation_bytes())
+    );
+    assert_eq!(
+        slice.clone().retained_heap_bytes(),
+        Some(bytes + slice_hash_allocation_bytes())
+    );
 }
 
 #[test]
@@ -786,8 +796,6 @@ fn ascii_prefix_of_deep_rope_does_not_recurse() {
 
 #[test]
 fn slice_ascii_prefix_sentinel_rescans() {
-    use std::sync::atomic::AtomicU64;
-
     use crate::bex_str::SLICE_ASCII_PREFIX_UNKNOWN;
     // A slice of 4 GiB or more stores the sentinel; build one by hand over a
     // small parent to check that reading it rescans to the exact value.
@@ -799,10 +807,10 @@ fn slice_ascii_prefix_sentinel_rescans() {
         parent,
         offset: 5,
         len: (text.len() - 10) as u64,
-        codepoint_len: (text.chars().count() - 10) as u32,
+        codepoint_len: (text.chars().count() - 10) as u64,
         char_offset: u32::MAX,
         ascii_prefix_len: SLICE_ASCII_PREFIX_UNKNOWN,
-        hash: [const { AtomicU64::new(0) }; 2],
+        hash: Arc::new(crate::bex_str::SliceHash::new()),
     };
     assert_eq!(slice.ascii_prefix_len(), 65);
     assert_ascii_prefix_exact(&slice, "sentinel slice");
@@ -873,7 +881,7 @@ fn lazy_index_is_shared_by_unicode_slices_and_stabilizes_heap_accounting() {
         .char_index
         .get()
         .expect("repeated deep lookups build the index");
-    let index_ptr = index.as_ptr();
+    let index_ptr = index.offsets.as_ptr();
     for i in 0..770 {
         assert_eq!(nested.char_at(i), Some(expected[147 + i]));
         assert_eq!(
@@ -883,10 +891,16 @@ fn lazy_index_is_shared_by_unicode_slices_and_stabilizes_heap_accounting() {
     }
     assert_eq!(nested.char_get(770), None);
     assert_eq!(nested.char_at(770), None);
-    assert_eq!(flat.char_index.get().unwrap().as_ptr(), index_ptr);
+    assert_eq!(flat.char_index.get().unwrap().offsets.as_ptr(), index_ptr);
     let retained = parent.retained_heap_bytes();
-    assert_eq!(slice.retained_heap_bytes(), retained);
-    assert_eq!(nested.retained_heap_bytes(), retained);
+    assert_eq!(
+        slice.retained_heap_bytes(),
+        retained.map(|bytes| bytes + slice_hash_allocation_bytes())
+    );
+    assert_eq!(
+        nested.retained_heap_bytes(),
+        retained.map(|bytes| bytes + slice_hash_allocation_bytes())
+    );
     for (i, &ch) in expected.iter().enumerate() {
         assert_eq!(parent.char_at(i), Some(ch));
     }
@@ -989,30 +1003,6 @@ fn unicode_index_and_rope_flatten_are_published_concurrently() {
 }
 
 #[test]
-fn oversized_slice_count_sentinel_preserves_codepoint_semantics() {
-    use std::sync::atomic::AtomicU64;
-    let text = "aé🙂前xyz".repeat(100);
-    let BexStr::Flat(parent) = BexStr::from(text.as_str()) else {
-        unreachable!()
-    };
-    let slice = BexStr::Slice {
-        parent,
-        offset: 0,
-        len: text.len() as u64,
-        codepoint_len: u32::MAX,
-        char_offset: u32::MAX,
-        ascii_prefix_len: 1,
-        hash: [const { AtomicU64::new(0) }; 2],
-    };
-    assert_eq!(slice.codepoint_len(), text.chars().count());
-    for (i, ch) in text.chars().enumerate() {
-        assert_eq!(slice.char_at(i), Some(ch));
-    }
-    assert_eq!(slice.char_at(usize::MAX), None);
-    assert_eq!(slice.char_slice(usize::MAX..usize::MAX).as_str(), "");
-}
-
-#[test]
 fn inline_ascii_flags_survive_every_constructor_clone_slice_and_append() {
     for text in ["", "abc", "abcdefghijk", "éabc", "abc🦀", "a\0b"] {
         for s in [BexStr::from(text), BexStr::from(text.to_owned())] {
@@ -1063,4 +1053,30 @@ fn byte_slice_rejects_a_split_codepoint() {
 #[should_panic(expected = "invalid UTF-8 byte slice")]
 fn byte_slice_rejects_reversed_ranges() {
     BexStr::from("hello").byte_slice(std::ops::Range { start: 4, end: 1 });
+}
+
+#[test]
+fn indexed_scalar_cache_promotes_without_changing_utf8_or_old_views() {
+    let mut s = BexStr::from("éabc".repeat(100));
+    s.retained_heap_bytes();
+    let expected = format!("{}前🦀", s.as_str());
+    s = BexStr::concat(s, BexStr::from("前"));
+    assert_eq!(s.char_at(400), Some('前'));
+    assert_eq!(s.char_to_byte(400), 500);
+    s = BexStr::concat(s, BexStr::from("🦀"));
+    assert_eq!(s.char_at(401), Some('🦀'));
+    assert_eq!(s.char_to_byte(401), 503);
+    assert_eq!(s.as_str(), expected);
+    assert_eq!(s.byte_len(), 507);
+    let view = s.char_slice(1..s.codepoint_len());
+    let clone = s.clone();
+    let new = BexStr::concat(s, BexStr::from("尾"));
+    assert_eq!(view.char_at(400), Some('🦀'));
+    assert_eq!(clone.as_str(), expected);
+    assert_eq!(new.as_str(), format!("{expected}尾"));
+    for (i, point) in expected.chars().enumerate() {
+        assert_eq!(clone.char_at(i), Some(point));
+        assert_eq!(clone.char_get(i).unwrap().as_str(), point.to_string());
+        assert_eq!(clone.byte_to_char(clone.char_to_byte(i)), i);
+    }
 }

@@ -214,6 +214,9 @@ mod tests {
         let pool = SnapshotPool::new(1, Limits::default());
         let source = bex_str::BexStr::from("a".repeat(100_000));
         let slice = source.byte_slice(0..100);
+        let slice_bytes = slice.retained_heap_bytes().unwrap();
+        // A slice retains the whole parent plus its own shared hash cache.
+        assert!(slice_bytes >= source.retained_heap_bytes().unwrap());
         let mut snapshot = scalar(&pool);
         snapshot.0.strings.reserve(1);
         snapshot.0.entries.reserve(1);
@@ -223,10 +226,7 @@ mod tests {
             key: slice,
             value: SnapshotValue::Null,
         });
-        assert_eq!(
-            snapshot.retained_bytes().unwrap() - before,
-            2 * source.retained_heap_bytes().unwrap(),
-        );
+        assert_eq!(snapshot.retained_bytes().unwrap() - before, 2 * slice_bytes,);
     }
 
     #[test]
