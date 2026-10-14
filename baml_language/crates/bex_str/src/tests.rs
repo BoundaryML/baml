@@ -1124,3 +1124,151 @@ fn narrow_unicode_slices_of_wide_parents_preserve_scalar_bounds() {
     assert_eq!(narrow.char_get(usize::MAX), None);
     assert_eq!(narrow.as_str(), expected);
 }
+
+#[test]
+fn nary_roots_fill_roll_over_and_preserve_snapshots() {
+    use crate::bex_str::{CONCAT_FANOUT, ConcatState};
+    let mut s = BexStr::from("front".repeat(12));
+    let mut snapshots = Vec::new();
+    let mut expected = s.as_str().to_owned();
+    for i in 0..CONCAT_FANOUT * 4 {
+        let text = format!("é{i}🦀{}", "x".repeat(60));
+        snapshots.push((s.clone(), expected.clone()));
+        s = BexStr::concat(s.clone(), BexStr::from(text.as_str()));
+        expected.push_str(&text);
+        let BexStr::Concat(node) = &s else {
+            panic!("expected deferred root")
+        };
+        let guard = node.state.lock().unwrap();
+        let ConcatState::Deferred { children, count } = &*guard else {
+            panic!("expected children")
+        };
+        let count = *count as usize;
+        assert!((2..=CONCAT_FANOUT).contains(&count));
+        assert!(children[..count].iter().all(Option::is_some));
+        assert!(children[count..].iter().all(Option::is_none));
+        assert_eq!(
+            children[..count]
+                .iter()
+                .flatten()
+                .map(|c| c.byte_len())
+                .sum::<usize>(),
+            s.byte_len()
+        );
+        assert_eq!(
+            children[..count]
+                .iter()
+                .flatten()
+                .map(|c| c.codepoint_len())
+                .sum::<usize>(),
+            s.codepoint_len()
+        );
+        drop(guard);
+        assert_eq!(s.char_at(s.codepoint_len() - 61), Some('🦀'));
+    }
+    assert_eq!(s.as_str(), expected);
+    for (old, text) in snapshots {
+        assert_eq!(old.as_str(), text);
+        assert_eq!(
+            old.content_hash(),
+            xxhash_rust::xxh3::xxh3_128(text.as_bytes())
+        );
+    }
+}
+
+#[test]
+fn nary_unique_roots_reuse_slots_without_mutating_shared_leaves() {
+    use crate::bex_str::ConcatState;
+    let a = BexStr::from("a".repeat(60));
+    let root = BexStr::concat(a, BexStr::from("é".repeat(30)));
+    let old = root.clone();
+    let root = BexStr::concat(root, BexStr::from("🦀".repeat(20)));
+    let BexStr::Concat(node) = &root else {
+        unreachable!()
+    };
+    let identity = std::sync::Arc::as_ptr(node);
+    let root = BexStr::concat(root, BexStr::from("tail".repeat(20)));
+    let BexStr::Concat(node) = &root else {
+        unreachable!()
+    };
+    assert_eq!(std::sync::Arc::as_ptr(node), identity);
+    assert!(matches!(
+        *node.state.lock().unwrap(),
+        ConcatState::Deferred { count: 4, .. }
+    ));
+    assert_eq!(
+        old.as_str(),
+        format!("{}{}", "a".repeat(60), "é".repeat(30))
+    );
+    assert_eq!(
+        root.as_str(),
+        format!(
+            "{}{}{}{}",
+            "a".repeat(60),
+            "é".repeat(30),
+            "🦀".repeat(20),
+            "tail".repeat(20)
+        )
+    );
+}
+
+#[test]
+fn nary_layout_and_deferred_graph_storage() {
+    use crate::bex_str::{CONCAT_FANOUT, ConcatNode, ConcatState};
+    use std::{collections::HashSet, mem::size_of, sync::Arc};
+    assert_eq!(
+        size_of::<[Option<Arc<BexStr>>; CONCAT_FANOUT]>(),
+        CONCAT_FANOUT * size_of::<Option<Arc<BexStr>>>()
+    );
+    for (kind, text) in [
+        ("inline", "abcdefghij".to_owned()),
+        ("flat", "abcdefghij".repeat(10)),
+    ] {
+        let part = BexStr::from(text);
+        let mut s = BexStr::empty();
+        for _ in 0..2000 {
+            s = BexStr::concat(s.clone(), part.clone());
+        }
+        let mut pending = vec![(s.clone(), 0)];
+        let mut nodes = HashSet::new();
+        let mut children_seen = HashSet::new();
+        let mut flats = HashSet::new();
+        let mut bytes = 0;
+        let mut depth = 0;
+        while let Some((item, level)) = pending.pop() {
+            depth = depth.max(level);
+            match item {
+                BexStr::Concat(node) if nodes.insert(Arc::as_ptr(&node) as usize) => {
+                    bytes += size_of::<ConcatNode>() + 2 * size_of::<usize>();
+                    let guard = node.state.lock().unwrap();
+                    let ConcatState::Deferred { children, count } = &*guard else {
+                        panic!("graph must remain deferred")
+                    };
+                    for child in children[..*count as usize].iter().flatten() {
+                        if children_seen.insert(Arc::as_ptr(child) as usize) {
+                            bytes += size_of::<BexStr>() + 2 * size_of::<usize>();
+                        }
+                        pending.push((child.as_ref().clone(), level + 1));
+                    }
+                }
+                BexStr::Flat(flat) if flats.insert(Arc::as_ptr(&flat) as usize) => {
+                    assert!(flat.char_index.get().is_none());
+                    bytes +=
+                        size_of::<crate::FlatStr>() + 2 * size_of::<usize>() + flat.data.capacity();
+                }
+                _ => {}
+            }
+        }
+        println!(
+            "{{\"kind\":\"{kind}\",\"fanout\":{CONCAT_FANOUT},\"node_bytes\":{},\"state_bytes\":{},\"child_slots_bytes\":{},\"nodes\":{},\"child_allocations\":{},\"depth\":{depth},\"deferred_graph_bytes\":{bytes}}}",
+            size_of::<ConcatNode>(),
+            size_of::<ConcatState>(),
+            size_of::<[Option<Arc<BexStr>>; CONCAT_FANOUT]>(),
+            nodes.len(),
+            children_seen.len()
+        );
+        assert!(nodes.len() < 300);
+        assert!(depth < 300);
+        assert_eq!(s.as_str().len(), 2000 * part.byte_len());
+    }
+}

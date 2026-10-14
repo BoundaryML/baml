@@ -12,6 +12,9 @@ use std::{
 /// Maximum bytes stored inline without heap allocation.
 /// 56 (target size) - 1 (discriminant) - 1 (len byte) = 54.
 const INLINE_CAPACITY: usize = 54;
+// Eight compact child references occupy 64 bytes on 64-bit cloud CPUs. This
+// bounds the child array's footprint, not the entire node or its alignment.
+pub(crate) const CONCAT_FANOUT: usize = 8;
 // Inline lengths need only six bits. Cache ASCII in a spare bit without
 // reducing capacity or growing the 56-byte handle.
 const INLINE_ASCII_FLAG: u8 = 0x40;
@@ -206,9 +209,17 @@ pub struct ConcatNode {
 }
 
 pub(crate) enum ConcatState {
-    Deferred { left: BexStr, right: BexStr },
+    Deferred {
+        count: u8,
+        children: [Option<Arc<BexStr>>; CONCAT_FANOUT],
+    },
     Flattened,
 }
+
+const _: () = assert!(
+    std::mem::size_of::<[Option<Arc<BexStr>>; CONCAT_FANOUT]>() <= 64,
+    "concat child references exceed a 64-byte cache-line footprint"
+);
 
 // Size assertion — must fit within Object payload budget
 const _: () = assert!(
@@ -889,36 +900,69 @@ impl BexStr {
             return left;
         }
 
-        // Pack short appends into the last inline leaf when this handle owns
-        // the node exclusively. No shared string or borrowed bytes can change.
-        // This cuts allocation/destruction work without changing the rope's
-        // deferred UTF-8 representation or flattening an existing prefix.
+        // Append to a unique root in place. A leaf can be packed only when
+        // both its reference and the root are exclusive.
         if let Self::Concat(node) = &mut left
             && let Some(node) = Arc::get_mut(node)
-            && let Ok(ConcatState::Deferred { right: tail, .. }) = node.state.get_mut()
-            && let (
-                Self::Inline { len, data },
-                Self::Inline {
-                    len: added,
-                    data: bytes,
-                },
-            ) = (tail, &right)
-            && (inline_len(*len) + inline_len(*added)) <= INLINE_CAPACITY
+            && let Ok(ConcatState::Deferred { children, count }) = node.state.get_mut()
         {
-            let start = inline_len(*len);
-            let added_len = inline_len(*added);
-            data[start..start + added_len].copy_from_slice(&bytes[..added_len]);
-            *len = (start + added_len) as u8 | (*len & *added & INLINE_ASCII_FLAG);
-            node.total_len = total_len as u64;
-            node.codepoint_len = codepoint_len;
-            node.ascii_prefix_len = ascii_prefix_len;
-            return left;
+            let used = *count as usize;
+            if let Some(tail) = children[used - 1].as_mut().and_then(Arc::get_mut)
+                && let (
+                    Self::Inline { len, data },
+                    Self::Inline {
+                        len: added,
+                        data: bytes,
+                    },
+                ) = (tail, &right)
+                && inline_len(*len) + inline_len(*added) <= INLINE_CAPACITY
+            {
+                let start = inline_len(*len);
+                let added_len = inline_len(*added);
+                data[start..start + added_len].copy_from_slice(&bytes[..added_len]);
+                *len = (start + added_len) as u8 | (*len & *added & INLINE_ASCII_FLAG);
+                node.total_len = total_len as u64;
+                node.codepoint_len = codepoint_len;
+                node.ascii_prefix_len = ascii_prefix_len;
+                return left;
+            }
+            if used < CONCAT_FANOUT {
+                *count += 1;
+                children[used] = Some(Arc::new(right));
+                node.total_len = total_len as u64;
+                node.codepoint_len = codepoint_len;
+                node.ascii_prefix_len = ascii_prefix_len;
+                return left;
+            }
         }
+        // Copy a shared root's fixed array while reusing its immutable children.
+        let mut right = Some(right);
+        let children = if let Self::Concat(node) = &left {
+            let guard = node.state.lock().unwrap();
+            if let ConcatState::Deferred { children, count } = &*guard
+                && (*count as usize) < CONCAT_FANOUT
+            {
+                let mut children = children.clone();
+                children[*count as usize] = Some(Arc::new(right.take().unwrap()));
+                Some((children, *count + 1))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        // A full root becomes the first child of a fresh root.
+        let (children, count) = children.unwrap_or_else(|| {
+            let mut children = std::array::from_fn(|_| None);
+            children[0] = Some(Arc::new(left));
+            children[1] = Some(Arc::new(right.take().unwrap()));
+            (children, 2)
+        });
         BexStr::Concat(Arc::new(ConcatNode {
             total_len: total_len as u64,
             codepoint_len,
             ascii_prefix_len,
-            state: Mutex::new(ConcatState::Deferred { left, right }),
+            state: Mutex::new(ConcatState::Deferred { children, count }),
             flat: OnceLock::new(),
         }))
     }
@@ -1120,29 +1164,41 @@ impl FlatStr {
 // exactly once. Shared deferred children are never destructively consumed.
 impl ConcatNode {
     fn leaf_char(&self, n: usize) -> Option<Option<char>> {
+        if n >= self.codepoint_len as usize {
+            return Some(None);
+        }
         let guard = self.state.lock().unwrap();
-        if let ConcatState::Deferred { left, right } = &*guard {
-            let split = left.codepoint_len();
-            if n >= split && !matches!(right, BexStr::Concat(_)) {
-                return Some(right.leaf_char_at(n - split));
-            }
-            if n < split && !matches!(left, BexStr::Concat(_)) {
-                return Some(left.leaf_char_at(n));
+        if let ConcatState::Deferred { children, count } = &*guard {
+            // Tail reads examine one child; other reads examine at most eight.
+            let mut end = self.codepoint_len as usize;
+            for child in children[..*count as usize].iter().rev().flatten() {
+                let start = end - child.codepoint_len();
+                if n >= start {
+                    return if matches!(child.as_ref(), BexStr::Concat(_)) {
+                        None
+                    } else {
+                        Some(child.leaf_char_at(n - start))
+                    };
+                }
+                end = start;
             }
         }
         None
     }
     fn leaf_slice(&self, range: Range<usize>) -> Option<BexStr> {
         let guard = self.state.lock().unwrap();
-        if let ConcatState::Deferred { left, right } = &*guard {
-            let split = left.codepoint_len();
-            if range.start >= split && !matches!(right, BexStr::Concat(_)) {
-                return Some(
-                    right.char_slice(range.start - split..range.end.saturating_sub(split)),
-                );
-            }
-            if range.end <= split && !matches!(left, BexStr::Concat(_)) {
-                return Some(left.char_slice(range));
+        if let ConcatState::Deferred { children, count } = &*guard {
+            let mut end = self.codepoint_len as usize;
+            for child in children[..*count as usize].iter().rev().flatten() {
+                let start = end - child.codepoint_len();
+                if range.start >= start {
+                    return if range.end <= end && !matches!(child.as_ref(), BexStr::Concat(_)) {
+                        Some(child.char_slice(range.start - start..range.end.saturating_sub(start)))
+                    } else {
+                        None
+                    };
+                }
+                end = start;
             }
         }
         None
@@ -1161,14 +1217,16 @@ impl ConcatNode {
         self.flat.get_or_init(|| {
             let mut guard = self.state.lock().unwrap();
             let old = std::mem::replace(&mut *guard, ConcatState::Flattened);
-            let ConcatState::Deferred { left, right } = old else {
+            let ConcatState::Deferred { children, .. } = old else {
                 unreachable!()
             };
             let mut buf = Vec::with_capacity(self.total_len as usize);
-            let mut stack = vec![right, left];
+            let mut stack: Vec<_> = children.into_iter().rev().flatten().collect();
             while let Some(node) = stack.pop() {
-                match node {
-                    BexStr::Inline { len, data } => buf.extend_from_slice(&data[..inline_len(len)]),
+                match node.as_ref() {
+                    BexStr::Inline { len, data } => {
+                        buf.extend_from_slice(&data[..inline_len(*len)])
+                    }
                     BexStr::Flat(f) => buf.extend_from_slice(&f.data),
                     BexStr::Slice {
                         parent,
@@ -1176,8 +1234,8 @@ impl ConcatNode {
                         len,
                         ..
                     } => {
-                        let start = offset as usize;
-                        buf.extend_from_slice(&parent.data[start..start + len as usize]);
+                        let start = *offset as usize;
+                        buf.extend_from_slice(&parent.data[start..start + *len as usize]);
                     }
                     BexStr::Concat(c) => {
                         if let Some(flat) = c.flat.get() {
@@ -1185,9 +1243,10 @@ impl ConcatNode {
                         } else {
                             let inner = c.state.lock().unwrap();
                             match &*inner {
-                                ConcatState::Deferred { left, right } => {
-                                    stack.push(right.clone());
-                                    stack.push(left.clone());
+                                ConcatState::Deferred { children, count } => {
+                                    stack.extend(
+                                        children[..*count as usize].iter().rev().flatten().cloned(),
+                                    );
                                 }
                                 ConcatState::Flattened => {
                                     // The builder owns the state lock until its bytes
@@ -1215,21 +1274,20 @@ impl Drop for ConcatNode {
         let Ok(state) = self.state.get_mut() else {
             return;
         };
-        let ConcatState::Deferred { left, right } =
+        let ConcatState::Deferred { children, .. } =
             std::mem::replace(state, ConcatState::Flattened)
         else {
             return;
         };
-        let mut stack = vec![left, right];
-        while let Some(node) = stack.pop() {
-            if let BexStr::Concat(arc) = node
+        let mut stack: Vec<_> = children.into_iter().flatten().collect();
+        while let Some(child) = stack.pop() {
+            if let Ok(BexStr::Concat(arc)) = Arc::try_unwrap(child)
                 && let Ok(mut owned) = Arc::try_unwrap(arc)
                 && let Ok(state) = owned.state.get_mut()
-                && let ConcatState::Deferred { left, right } =
+                && let ConcatState::Deferred { children, .. } =
                     std::mem::replace(state, ConcatState::Flattened)
             {
-                stack.push(left);
-                stack.push(right);
+                stack.extend(children.into_iter().flatten());
             }
         }
     }
