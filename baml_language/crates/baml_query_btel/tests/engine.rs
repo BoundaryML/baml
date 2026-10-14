@@ -699,6 +699,86 @@ async fn streamed_usage_keeps_the_cache_split() {
     assert_eq!(cost(&mut index), (json!(0.00474), json!(0.00474)));
 }
 
+/// A streamed LLM function is a span like a called one: `Summarize@stream`
+/// records its own span, with the request's network span under it, and
+/// captures the function's arguments but not the injected `client`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_streamed_llm_function_is_its_own_span() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r##"
+        class Sse {
+            server: baml.http.Server,
+            events: string[],
+
+            function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
+                let resp = baml.http.Response.new_streaming(200, { "content-type": "text/event-stream" });
+                let events = self.events;
+                spawn {
+                    for (let event in events) {
+                        resp.write((event + "\n\n").to_utf8());
+                    }
+                    resp.end();
+                    null
+                };
+                resp
+            }
+        }
+
+        function sse(name: string, data: string) -> string {
+            "event: " + name + "\ndata: " + data
+        }
+
+        function Summarize(text: string) -> string {
+            client: "anthropic/claude-opus-5-5"
+            prompt: `Summarize ${text}`
+        }
+
+        function main(n: int) -> int {
+            let server = Sse {
+                server: baml.http.Server.bind("127.0.0.1:0"),
+                events: [
+                    sse("message_start", `{"type":"message_start","message":{"id":"m","model":"claude-opus-5-5","usage":{"input_tokens":900}}}`),
+                    sse("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
+                    sse("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"short"}}`),
+                    sse("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":30}}`),
+                    sse("message_stop", `{"type":"message_stop"}`),
+                ],
+            };
+            let task = spawn { server.server.serve(server.handle) };
+            let cl = anthropic.Client.new(
+                model = "claude-opus-5-5",
+                api_key = "test-key",
+                base_url = "http://" + server.server.addr,
+            );
+            let text = Summarize@stream("hi", client = cl).final();
+            task.cancel();
+            text.length()
+        }
+    "##;
+    let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
+    assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(5))]);
+    let mut index = index(project.path());
+    let spans = sql(
+        &mut index,
+        "SELECT s.span_type, parent.span_type, parent.span_name, grandparent.span_name,
+           parent.input_args['text'], parent.input_args['client'] IS NULL
+         FROM spans s JOIN spans parent ON parent.span_id = s.parent_span_id
+         JOIN spans grandparent ON grandparent.span_id = parent.parent_span_id
+         WHERE s.span_type = 'network_span'",
+    );
+    assert_eq!(
+        spans.rows,
+        vec![vec![
+            json!("network_span"),
+            json!("function"),
+            json!("user.Summarize@stream"),
+            json!("user.main"),
+            json!("hi"),
+            json!(0),
+        ]]
+    );
+}
+
 /// `OpenAI` chat (a whole body, and a stream with `include_usage`) and a
 /// responses stream, through the stdlib clients: each request's network
 /// span is priced from the usage its response reported.

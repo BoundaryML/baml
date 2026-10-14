@@ -295,11 +295,22 @@ fn llm_stream(
         type_args,
         span,
     );
-    Some(companion_def(
+    let mut stream = companion_def(
         parent,
         Name::new(format!("{}@stream", parent.name)),
         params,
         Some(return_type),
         body,
-    ))
+    );
+    // `@stream` is the LLM call when a caller streams, so it carries the
+    // parent's client for telemetry. It keeps none of the parent's companion
+    // bodies or prompt geometry: those belong to the declaration.
+    stream.declarative_meta = Some(DeclarativeMeta::Llm(crate::ast::LlmBodyDef {
+        client: llm.client.clone(),
+        companion_bodies: vec![],
+        prompt_spans: None,
+        has_tools: llm.has_tools,
+        span: llm.span,
+    }));
+    Some(stream)
 }
