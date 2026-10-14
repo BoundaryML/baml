@@ -282,9 +282,17 @@ impl RenderDefinitionValidator<'_> {
                 if let Some(conflict) = self.check_name(&definition) {
                     return Some(conflict);
                 }
+                // One spelling per instantiation, as SAP keys it: with each
+                // argument's union flat, `Opt<T?>` at `int?` is `Opt<int?>`
+                // again, so a recursion through unions alone closes.
+                let args: &[bex_vm_types::RealizedTy] = &args
+                    .iter()
+                    .cloned()
+                    .map(bex_vm_types::RealizedTy::flatten_union)
+                    .collect::<Box<[_]>>();
                 let identity = RealizedClassIdentity {
                     head: *head,
-                    args: args.clone(),
+                    args: args.into(),
                 };
                 if let Some(start) = self
                     .class_ancestry
@@ -853,7 +861,14 @@ fn first_open_interface(
             // substitutes class arguments into field templates, so `Box<int>`
             // and `Box<OpenIface>` reach different field types — a declaration
             // key would let whichever arrives first swallow the other's walk.
-            if !visited.insert(ty.clone()) {
+            // Each argument's union is spelled flat, so a recursion through
+            // unions alone (`Opt<T?>`) meets its instantiation again and stops.
+            let args: &[bex_vm_types::RealizedTy] = &args
+                .iter()
+                .cloned()
+                .map(bex_vm_types::RealizedTy::flatten_union)
+                .collect::<Box<[_]>>();
+            if !visited.insert(bex_vm_types::RealizedTy::Class(*head, args.into())) {
                 return None;
             }
             let Object::Class(class) = vm.get_object(head.ptr()) else {

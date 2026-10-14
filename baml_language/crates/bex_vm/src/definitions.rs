@@ -1,14 +1,17 @@
 //! Class and enum definitions ([`sys_types::ClassDefinition`],
-//! [`sys_types::EnumDefinition`]) read out of heap declarations.
+//! [`sys_types::EnumDefinition`]) and class parse schemas ([`ParseClass`])
+//! read out of heap declarations.
 //!
 //! The one reader behind every definition table: the engine's program-wide
 //! tables, its per-call runtime-type and runtime-package overlays, and
-//! schema-aligned parsing. A class keeps every field with its `skip` flag, and
-//! each consumer (output-format rendering, the JSON schema, the parser) leaves
-//! skipped fields out itself. An enum leaves out skipped variants, which no
-//! consumer reads.
+//! schema-aligned parsing. A class definition keeps every field with its
+//! `skip` flag, and each consumer (output-format rendering, the JSON schema)
+//! leaves skipped fields out itself; a parse schema holds only the fields the
+//! parser reads, typed at one instantiation. An enum leaves out skipped
+//! variants, which no consumer reads.
 
-use bex_vm_types::{Class, Enum, RuntimeTy, TyTemplate, TypeHead};
+use bex_sap::sap_model::{ParseClass, ParseField, ParseTy};
+use bex_vm_types::{Class, Enum, RealizedTy, RuntimeTy, TyTemplate, TypeHead};
 use sys_types::{
     ClassDefinition, ClassFieldDefinition, EnumDefinition, EnumVariantDefinition, SapTy,
     SapTyTemplate,
@@ -38,6 +41,35 @@ pub fn class_definition(class: &Class) -> ClassDefinition {
                 must_exist: field.must_exist,
             })
             .collect(),
+    }
+}
+
+/// The parse schema of one instantiation of `class`: the fields the parser
+/// reads (not `@skip` ones), typed by `field_types`, which holds every field's
+/// type realized at the instantiation's type arguments, in declaration order.
+#[must_use]
+pub fn parse_class(class: &Class, field_types: &[RealizedTy]) -> ParseClass {
+    debug_assert_eq!(
+        class.fields.len(),
+        field_types.len(),
+        "an instantiation of `{}` realizes every field",
+        class.name.display_name()
+    );
+    ParseClass {
+        fields: class
+            .fields
+            .iter()
+            .zip(field_types)
+            .filter(|(field, _)| !field.skip)
+            .map(|(field, ty)| ParseField {
+                name: field.name.clone(),
+                ty: lane_realized_ty(ty),
+                alias: field.alias.clone(),
+                stream_done: field.stream_done,
+                must_exist: field.must_exist,
+            })
+            .collect(),
+        stream_done: class.stream_done,
     }
 }
 
@@ -73,6 +105,14 @@ pub fn lane_ty(ty: &RuntimeTy) -> SapTy {
         .unwrap_or_else(|head| {
             unreachable!("a live declaration's field names a declaration: {head}")
         })
+}
+
+/// [`lane_ty`] for a realized type, by the same invariant: schema-aligned
+/// parsing's lane, whose types are realized at a parse target's arguments.
+#[must_use]
+pub fn lane_realized_ty(ty: &RealizedTy) -> ParseTy {
+    ty.try_map_heads(&mut TypeHead::to_tagged_name)
+        .unwrap_or_else(|head| unreachable!("a live type names a declaration: {head}"))
 }
 
 /// [`lane_ty`] for a field's symbolic template, by the same invariant.

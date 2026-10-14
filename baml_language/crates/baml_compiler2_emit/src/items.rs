@@ -133,6 +133,11 @@ pub(crate) fn build_class_object<'db>(
                     .with_frame(class_generic_params.clone())
                     .lower_type_ref(store, field.type_ref),
             );
+            // BUG: a field typed by an associated-type projection on a class
+            // type parameter (`class Proj<T extends HasOut> { v: T.Out }`, or
+            // `(T as HasOut).Out`) lowers to `Error` here and panics
+            // `RuntimeLowering::convert` ("`Error` is not a valid `RuntimeTy`")
+            // instead of producing a diagnostic or a projection template.
             let field_type = cache.convert(&tir_ty);
             let field_template =
                 anchor.anchor_template(&tir2_to_template(&tir_ty, cache, &class_generic_params));

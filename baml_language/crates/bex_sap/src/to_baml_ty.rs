@@ -1,130 +1,126 @@
-//! Conversion from SAP model types back to `SapTy`.
+//! Conversion from SAP model types back to [`ParseTy`].
 //!
 //! A parsed value's metadata carries SAP model types; the VM, which builds the
 //! value on the heap, turns them into the element, key, and value types of the
-//! lists and maps it allocates.
-
-use sys_types::{DefKey, SapTy};
+//! lists and maps it allocates. Those must be exactly the types the target
+//! declares, as a container is never covariant: a `Speaker[]` that parsed
+//! empty is still a `Speaker[]`, never a `never[]` or an `unknown[]`.
 
 use crate::sap_model::{
-    ArrayTy, ClassTy, EnumTy, EnumVariantTy, MapTy, MediaTy, StreamStateTy, Ty, TyResolvedRef,
-    TypeRefDb, UnionTy,
+    ArrayTy, ClassTy, EnumTy, EnumVariantTy, MapTy, MediaTy, NamedTy, ParseTy, StreamStateTy, Ty,
+    TyResolvedRef, UnionTy,
 };
 
 // ============================================================================
-// Type conversion: SAP types → SapTy
+// Type conversion: SAP types → ParseTy
 // ============================================================================
 
-/// Convert a SAP type back to a `SapTy`.
+/// Convert a SAP type back to the `ParseTy` it models.
 ///
-/// # Known simplifications (not round-trip safe)
-///
-/// - `Optional(T)` was converted to `Union([Null, T])` on the way in; it stays as `Union` here.
-/// - Aliases already resolved into the target type have no nominal name to recover; named alias
-///   references inside containers are preserved.
-/// - `EnumVariant` becomes `Enum` (variant specificity lost at the type level).
+/// The result is the same type as the one converted into the model (they hold
+/// the same values), though possibly spelled otherwise: the model holds the
+/// target as [`baml_type::simplify_sap`] rewrote it (a union flat, `5 | int` as
+/// `int`, a non-recursive alias inlined). Every named type, interfaces
+/// included, converts back through its [`NamedTy`], exactly.
 pub trait ToBamlTy {
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy;
+    fn to_baml_ty(&self) -> ParseTy;
 }
 
-impl ToBamlTy for TyResolvedRef<'_, DefKey> {
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
+impl ToBamlTy for TyResolvedRef<'_, NamedTy> {
+    fn to_baml_ty(&self) -> ParseTy {
         match self {
-            TyResolvedRef::Int(_) => SapTy::Int,
-            TyResolvedRef::Bigint(_) => SapTy::Bigint,
-            TyResolvedRef::Float(_) => SapTy::Float,
-            TyResolvedRef::String(_) => SapTy::String,
-            TyResolvedRef::Bool(_) => SapTy::Bool,
-            TyResolvedRef::Null(_) => SapTy::Null,
-            TyResolvedRef::Media(media) => SapTy::Media(media.to_baml_media_kind()),
+            TyResolvedRef::Int(_) => ParseTy::Int,
+            TyResolvedRef::Bigint(_) => ParseTy::Bigint,
+            TyResolvedRef::Float(_) => ParseTy::Float,
+            TyResolvedRef::String(_) => ParseTy::String,
+            TyResolvedRef::Bool(_) => ParseTy::Bool,
+            TyResolvedRef::Null(_) => ParseTy::Null,
+            TyResolvedRef::Media(media) => ParseTy::Media(media.to_baml_media_kind()),
             TyResolvedRef::LiteralInt(v) => {
-                SapTy::Literal(baml_type::Literal::Int(v.0), baml_type::Freshness::Regular)
+                ParseTy::Literal(baml_type::Literal::Int(v.0), baml_type::Freshness::Regular)
             }
-            TyResolvedRef::LiteralBigint(v) => SapTy::Literal(
+            TyResolvedRef::LiteralBigint(v) => ParseTy::Literal(
                 baml_type::Literal::Bigint(v.0.clone()),
                 baml_type::Freshness::Regular,
             ),
-            TyResolvedRef::LiteralString(v) => SapTy::Literal(
+            TyResolvedRef::LiteralString(v) => ParseTy::Literal(
                 baml_type::Literal::String(v.0.to_string()),
                 baml_type::Freshness::Regular,
             ),
             TyResolvedRef::LiteralBool(v) => {
-                SapTy::Literal(baml_type::Literal::Bool(v.0), baml_type::Freshness::Regular)
+                ParseTy::Literal(baml_type::Literal::Bool(v.0), baml_type::Freshness::Regular)
             }
-            TyResolvedRef::Array(a) => a.to_baml_ty(db),
-            TyResolvedRef::Map(m) => m.to_baml_ty(db),
-            TyResolvedRef::Class(c) => c.to_baml_ty(db),
-            TyResolvedRef::Enum(e) => e.to_baml_ty(db),
-            TyResolvedRef::EnumVariant(ev) => ev.to_baml_ty(db),
-            TyResolvedRef::Union(u) => u.to_baml_ty(db),
-            TyResolvedRef::StreamState(s) => s.to_baml_ty(db),
+            TyResolvedRef::Array(a) => a.to_baml_ty(),
+            TyResolvedRef::Map(m) => m.to_baml_ty(),
+            TyResolvedRef::Class(c) => c.to_baml_ty(),
+            TyResolvedRef::Enum(e) => e.to_baml_ty(),
+            TyResolvedRef::EnumVariant(ev) => ev.to_baml_ty(),
+            TyResolvedRef::Union(u) => u.to_baml_ty(),
+            TyResolvedRef::StreamState(s) => s.to_baml_ty(),
         }
     }
 }
 
-impl ToBamlTy for Ty<'_, DefKey> {
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
+impl ToBamlTy for Ty<'_, NamedTy> {
+    fn to_baml_ty(&self) -> ParseTy {
         match self {
-            Ty::Resolved(resolved) => resolved.as_ref().to_baml_ty(db),
-            Ty::ResolvedRef(resolved_ref) => resolved_ref.to_baml_ty(db),
-            Ty::Unresolved(name) => match db.resolve_name(name) {
-                Some(TyResolvedRef::Class(class)) if class.name == *name => class.to_baml_ty(db),
-                Some(TyResolvedRef::Enum(enm)) if enm.name == *name => enm.to_baml_ty(db),
-                // Any other named entry is an alias. Keep it nominal here
-                // instead of recursively expanding aliases such as `json`.
-                Some(_) => SapTy::TypeAlias(name.clone()),
-                None => SapTy::unknown(),
-            },
+            Ty::Resolved(resolved) => resolved.as_ref().to_baml_ty(),
+            Ty::ResolvedRef(resolved_ref) => resolved_ref.to_baml_ty(),
+            // A named type converts back by name, never through its entry: an
+            // alias such as `json` stays nominal, and an interface's entry is
+            // `never`, which is not the interface.
+            Ty::Unresolved(name) => name.to_ty(),
         }
     }
 }
 
-impl ToBamlTy for ArrayTy<'_, DefKey> {
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        let inner = self.ty.to_baml_ty(db);
-        SapTy::List(Box::new(inner))
+impl ToBamlTy for ArrayTy<'_, NamedTy> {
+    fn to_baml_ty(&self) -> ParseTy {
+        ParseTy::List(Box::new(self.ty.to_baml_ty()))
     }
 }
 
-impl ToBamlTy for MapTy<'_, DefKey> {
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        SapTy::Map {
-            key: Box::new(self.key.to_baml_ty(db)),
-            value: Box::new(self.value.to_baml_ty(db)),
+impl ToBamlTy for MapTy<'_, NamedTy> {
+    fn to_baml_ty(&self) -> ParseTy {
+        ParseTy::Map {
+            key: Box::new(self.key.to_baml_ty()),
+            value: Box::new(self.value.to_baml_ty()),
         }
     }
 }
 
-impl ToBamlTy for ClassTy<'_, DefKey> {
-    fn to_baml_ty(&self, _db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        SapTy::Class(self.name.clone(), Box::new([]))
+impl ToBamlTy for ClassTy<'_, NamedTy> {
+    fn to_baml_ty(&self) -> ParseTy {
+        self.name.to_ty()
     }
 }
 
-impl ToBamlTy for EnumTy<'_, DefKey> {
-    fn to_baml_ty(&self, _db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        SapTy::Enum(self.name.clone())
+impl ToBamlTy for EnumTy<'_, NamedTy> {
+    fn to_baml_ty(&self) -> ParseTy {
+        self.name.to_ty()
     }
 }
 
-impl ToBamlTy for EnumVariantTy<'_, DefKey> {
-    /// Loses variant specificity — maps back to the parent enum type.
-    fn to_baml_ty(&self, _db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        SapTy::Enum(self.name.clone())
+impl ToBamlTy for EnumVariantTy<'_, NamedTy> {
+    /// The variant's own type, `Color.Red`: a narrower type than its enum.
+    fn to_baml_ty(&self) -> ParseTy {
+        ParseTy::EnumVariant(
+            self.name.decl().clone(),
+            baml_type::Name::new(self.value.name.as_ref()),
+        )
     }
 }
 
-impl ToBamlTy for UnionTy<'_, DefKey> {
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        let members: Vec<SapTy> = self.variants.iter().map(|v| v.to_baml_ty(db)).collect();
-        SapTy::Union(members.into())
+impl ToBamlTy for UnionTy<'_, NamedTy> {
+    fn to_baml_ty(&self) -> ParseTy {
+        ParseTy::Union(self.variants.iter().map(ToBamlTy::to_baml_ty).collect())
     }
 }
 
-impl ToBamlTy for StreamStateTy<'_, DefKey> {
+impl ToBamlTy for StreamStateTy<'_, NamedTy> {
     /// `StreamState` is a value-level concept; at the type level we return the inner type.
-    fn to_baml_ty(&self, db: &TypeRefDb<'_, DefKey>) -> SapTy {
-        self.value.to_baml_ty(db)
+    fn to_baml_ty(&self) -> ParseTy {
+        self.value.to_baml_ty()
     }
 }
 
