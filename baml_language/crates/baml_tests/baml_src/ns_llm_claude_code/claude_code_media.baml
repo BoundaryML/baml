@@ -1,6 +1,6 @@
-// A prompt with media reaches the Claude Code CLI as one stream-json user
-// message whose content blocks keep the media. The process-level transport
-// (argv and stdin) is covered in tests/claude_code_media.rs.
+// Every prompt reaches the Claude Code CLI as one stream-json user message on
+// stdin: text as text blocks, media as content blocks. The process-level
+// transport (argv and stdin) is covered in tests/claude_code_media.rs.
 
 function CcLook(picture: image) -> string {
     client: "claude-code/haiku"
@@ -30,18 +30,13 @@ function cc_render(spec: ai.FunctionSpec<string>) -> ai.Prompt {
     spec.prompt_template(ai.internal.build_output_format(spec.output_type()))
 }
 
-// The stdin message as one line of JSON, or "-" when the prompt rides argv.
+// The stdin message, parsed.
 function cc_stdin(spec: ai.FunctionSpec<string>, suffix: string) -> json {
-    let cli = claude_code.internal.cli_prompt(cc_render(spec), suffix);
-    if let line: string = cli.stdin {
-        baml.json.parse(line.trim())
-    } else {
-        "-"
-    }
+    baml.json.parse(claude_code.internal.stdin_message(cc_render(spec), suffix).trim())
 }
 
 function cc_error(spec: ai.FunctionSpec<string>) -> string {
-    let _ = claude_code.internal.cli_prompt(cc_render(spec), "") catch_all (e) {
+    let _ = claude_code.internal.stdin_message(cc_render(spec), "") catch_all (e) {
         let r: ai.errors.InvalidRequest => {
             return `InvalidRequest: ${r.detail}`;
         },
@@ -50,6 +45,32 @@ function cc_error(spec: ai.FunctionSpec<string>) -> string {
         },
     };
     "accepted"
+}
+
+function CcGreet(name: string) -> string {
+    client: "claude-code/haiku"
+    prompt: `
+        ${role("system")}
+        Be brief.
+        ${role("user")}
+        Greet ${name}
+    `
+}
+
+// A text-only prompt is one text block that reads exactly as `text()`
+// renders it, suffix included.
+function cc_text_blocks() -> string {
+    let suffix = "\n\nConversation so far: none";
+    let spec = CcGreet@spec("Ada");
+    let line = cc_stdin(spec, suffix);
+    let content = baml.json.path_or<json[]>(line, ".message.content", []);
+    let same = baml.json.path_or<string>(line, ".message.content[0].text", "-")
+        == `${cc_render(spec).text()}${suffix}`;
+    `${content.length()}|${baml.json.path_or<string>(line, ".message.content[0].type", "-")}|${same}`
+}
+
+test "claude_code_text_prompt_is_one_text_block" {
+    assert.equal(cc_text_blocks(), "1|text|true")
 }
 
 // The image lands in place of its placeholder, after the same `[role]` header

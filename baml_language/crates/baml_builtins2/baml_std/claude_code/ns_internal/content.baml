@@ -1,47 +1,17 @@
 // Claude Code CLI internals: how one turn's prompt reaches the process.
 
-/// (internal) One CLI run's prompt transport: the argv entries that carry it,
-/// and the complete stdin when it travels there instead.
-class CliPrompt {
-    args: string[],
-    stdin: string?,
-    /// The readable prompt, as `prompt.text()` renders it, plus the suffix.
-    text: string,
-}
-
-/// (internal) A text-only prompt rides argv as one readable string, as it
-/// always has. A prompt carrying media cannot: `text()` folds each media part
-/// to a placeholder the model never sees, and inline base64 outgrows argv
-/// (macOS caps the whole argv at 1 MiB). It goes instead as one stream-json
-/// user message on stdin, whose content blocks keep the media. `suffix` is
-/// the text the client appends after the prompt: the folded journal and the
-/// tool protocol.
-function cli_prompt(prompt: ai.Prompt, suffix: string) -> CliPrompt {
-    let text = `${prompt.text()}${suffix}`;
-    if (!_has_media(prompt)) {
-        return CliPrompt { args: [text], stdin: null, text: text };
-    }
+/// (internal) One CLI run's whole prompt as the single stream-json user
+/// message the CLI reads on stdin (`--input-format stream-json`), newline
+/// terminated. Every prompt takes this path, text-only or not: argv cannot
+/// carry media (`text()` folds each media part to a placeholder the model
+/// never sees), Linux caps one argument at 128 KiB and macOS the whole argv
+/// at 1 MiB, and an argv prompt that starts with `-` parses as an option.
+/// Exactly one message: the CLI runs one turn, and emits one result, per
+/// stdin message. `suffix` is the text the client appends after the prompt:
+/// the folded journal and the tool protocol.
+function stdin_message(prompt: ai.Prompt, suffix: string) -> string {
     let message: json = { "type": "user", "message": { "role": "user", "content": content_blocks(prompt, suffix) } };
-    CliPrompt {
-        args: ["--input-format", "stream-json"],
-        stdin: `${baml.json.stringify(message)}\n`,
-        text: text,
-    }
-}
-
-/// (internal) Whether any prompt message carries a media part.
-function _has_media(prompt: ai.Prompt) -> bool {
-    for (let m in prompt.messages()) {
-        for (let part in m.parts) {
-            match (part) {
-                let media: ai.MediaPart => {
-                    return true;
-                },
-                _ => null,
-            };
-        }
-    }
-    false
+    `${baml.json.stringify(message)}\n`
 }
 
 /// (internal) The prompt as Messages API content blocks, then `suffix`. The

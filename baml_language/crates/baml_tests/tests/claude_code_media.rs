@@ -1,6 +1,7 @@
 //! The Claude Code client's prompt transport, observed at the process
-//! boundary. BAML cannot see a child's argv or stdin, so a fake `claude`
-//! records both and the assertions run here.
+//! boundary: every prompt, text-only or not, goes to the CLI as one
+//! stream-json message on stdin. BAML cannot see a child's argv or stdin, so a
+//! fake `claude` records both and the assertions run here.
 //!
 //! The fake fills stdout past any pipe buffer before it reads stdin, so a
 //! client that wrote all of stdin before draining stdout would deadlock until
@@ -85,6 +86,31 @@ fn recorded_stdin(dir: &Path) -> String {
     std::fs::read_to_string(dir.join("stdin")).expect("fake claude recorded stdin")
 }
 
+/// Asserts argv selects stream-json input and carries no positional prompt:
+/// the schema value is the last argument.
+fn assert_prompt_left_argv(argv: &[String]) {
+    assert!(
+        argv.windows(2)
+            .any(|pair| pair == ["--input-format", "stream-json"]),
+        "argv selects stream-json input: {argv:?}"
+    );
+    assert_eq!(
+        argv.get(argv.len().wrapping_sub(2)).map(String::as_str),
+        Some("--json-schema"),
+        "no prompt trails argv: {argv:?}"
+    );
+}
+
+/// The one stream-json line the fake recorded on stdin, parsed.
+fn recorded_message(dir: &Path) -> serde_json::Value {
+    let stdin = recorded_stdin(dir);
+    assert_eq!(stdin.matches('\n').count(), 1, "one stream-json line");
+    let message: serde_json::Value = serde_json::from_str(stdin.trim()).expect("stdin is JSON");
+    assert_eq!(message["type"], "user");
+    assert_eq!(message["message"]["role"], "user");
+    message
+}
+
 #[tokio::test]
 async fn image_prompt_goes_to_stdin_as_stream_json() {
     let temp = tempfile::tempdir().expect("tempdir for fake claude");
@@ -113,18 +139,8 @@ async fn image_prompt_goes_to_stdin_as_stream_json() {
         Ok(BexExternalValue::String("\"seen\"".into()))
     );
 
-    let argv = recorded_argv(temp.path());
-    assert_eq!(
-        argv[argv.len() - 2..],
-        ["--input-format", "stream-json"],
-        "the prompt leaves argv: {argv:?}"
-    );
-
-    let stdin = recorded_stdin(temp.path());
-    assert_eq!(stdin.matches('\n').count(), 1, "one stream-json line");
-    let message: serde_json::Value = serde_json::from_str(stdin.trim()).expect("stdin is JSON");
-    assert_eq!(message["type"], "user");
-    assert_eq!(message["message"]["role"], "user");
+    assert_prompt_left_argv(&recorded_argv(temp.path()));
+    let message = recorded_message(temp.path());
     let content = &message["message"]["content"];
     assert_eq!(content[0]["type"], "text");
     assert_eq!(content[1]["type"], "image");
@@ -133,10 +149,14 @@ async fn image_prompt_goes_to_stdin_as_stream_json() {
     assert_eq!(content[1]["source"]["data"], data.as_str());
 }
 
+/// Text-only prompts take the same path: argv would cap them (128 KiB per
+/// argument on Linux, 1 MiB in total on macOS).
 #[tokio::test]
-async fn text_prompt_keeps_riding_argv() {
+async fn text_prompt_goes_to_stdin_as_stream_json() {
     let temp = tempfile::tempdir().expect("tempdir for fake claude");
     let executable = install_fake_claude(temp.path(), FAKE_CLAUDE);
+    // 1.5 MB of text: past both argv limits and every pipe buffer.
+    let name = "Ada".repeat(512 * 1024);
 
     let output = baml_test! {
         baml: &format!(r#"
@@ -150,12 +170,13 @@ async fn text_prompt_keeps_riding_argv() {
                 `
             }}
 
-            function main(executable: string) -> string {{
-                invoke_with(executable, input_of(Greet@spec("Ada")))
+            function main(executable: string, name: string) -> string {{
+                invoke_with(executable, input_of(Greet@spec(name)))
             }}
         "#),
         args: {
             "executable" => BexExternalValue::String(executable.into()),
+            "name" => BexExternalValue::String(name.clone().into()),
         },
     };
     assert_eq!(
@@ -163,13 +184,17 @@ async fn text_prompt_keeps_riding_argv() {
         Ok(BexExternalValue::String("\"seen\"".into()))
     );
 
-    let argv = recorded_argv(temp.path());
-    assert!(
-        !argv.iter().any(|arg| arg == "--input-format"),
-        "argv: {argv:?}"
+    assert_prompt_left_argv(&recorded_argv(temp.path()));
+    let message = recorded_message(temp.path());
+    let content = message["message"]["content"]
+        .as_array()
+        .expect("content is an array");
+    assert_eq!(content.len(), 1, "one text block");
+    assert_eq!(content[0]["type"], "text");
+    assert_eq!(
+        content[0]["text"].as_str(),
+        Some(format!("[user]\nGreet {name}").as_str())
     );
-    assert_eq!(argv.last().map(String::as_str), Some("[user]\nGreet Ada"));
-    assert_eq!(recorded_stdin(temp.path()), "", "stdin closes unused");
 }
 
 /// A CLI that answers without reading its stdin never saw the image, so its

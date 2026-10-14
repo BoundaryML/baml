@@ -258,8 +258,8 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     // the contract travels via --json-schema, so the prompt's schema slot
     // renders empty
     // The CLI accepts one prompt rather than a chat-message array. Keep the
-    // structural prompt until this transport boundary; `cli_prompt` sends its
-    // readable role-headed projection, or content blocks when it has media.
+    // structural prompt until this transport boundary; `stdin_message` sends
+    // its readable role-headed projection as content blocks, media included.
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
     let has_tools = !input.toolbox.is_empty();
     let schema = if (has_tools) {
@@ -272,13 +272,17 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     } else {
         transcript_text(input.journal)
     };
-    let cli = cli_prompt(prompt, suffix);
+    let message = stdin_message(prompt, suffix);
 
     log.info(
-        `claude-code invoke: model=${c.model} prompt_chars=${cli.text.length()} baml_tools=${input.toolbox.list().length()}`,
+        `claude-code invoke: model=${c.model} stdin_chars=${message.length()} baml_tools=${input.toolbox.list().length()}`,
     );
     let args: string[] = [];
     args.push("-p");
+    // stream-json input requires stream-json output, which -p in turn only
+    // emits with --verbose
+    args.push("--input-format");
+    args.push("stream-json");
     args.push("--output-format");
     args.push("stream-json");
     args.push("--verbose");
@@ -293,8 +297,8 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     // --strict-mcp-config keeps the set deterministic: only the client's
     // servers, never inherited user or project MCP configuration. -p mode
     // cannot answer a permission prompt, so attaching a server implies
-    // allowing its tools; the equals form matters, because --allowedTools
-    // is variadic and would otherwise swallow the trailing prompt argument.
+    // allowing its tools; the equals form keeps the variadic --allowedTools
+    // from swallowing whatever argument follows it.
     if let mcp: string = mcp_config_json(c) {
         args.push("--mcp-config");
         args.push(mcp);
@@ -303,9 +307,6 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     }
     args.push("--json-schema");
     args.push(baml.json.stringify(schema));
-    for (let arg in cli.args) {
-        args.push(arg);
-    }
 
     let p = baml.sys.start_process(
         c.executable,
@@ -323,35 +324,26 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     defer {
         p.close()
     }
-    // the CLI reads stdin when the pipe is open; with the prompt on argv,
-    // deliver EOF immediately
-    if (cli.stdin == null) {
-        let _ = p.stdin.close() catch_all (e) {
-            _ => null,
-        };
-    }
     // events stream LIVE: each JSONL line logs as it arrives, and the last
     // relevant line is the result. Stderr inherits the parent process.
     let input_error: string? = null;
     let result = baml.future.with_timeout(baml.time.Duration.from_milliseconds(c.timeout_ms), () -> {
-        if let stdin_text: string = cli.stdin {
-            // Drain stdout concurrently: either pipe can exceed its buffer.
-            let input = spawn {
-                _write_prompt(p, stdin_text) catch_all (e) {
-                    _ => e.to_string()
-                }
+        // The prompt goes on stdin while stdout drains concurrently: either
+        // pipe can exceed its buffer.
+        let input = spawn {
+            _write_prompt(p, message) catch_all (e) {
+                _ => e.to_string()
+            }
+        };
+        let result = _read_result(p);
+        // A result counts only once the whole prompt was written, so wait for
+        // the writer (within this timeout). Its failures are reported after
+        // the CLI's own exit status and result errors.
+        input_error
+            = (await input) catch_all (e) {
+                _ => "the stdin writer task did not complete cleanly"
             };
-            let result = _read_result(p);
-            // A result counts only once the whole prompt was written, so wait
-            // for the writer (within this timeout). Its failures are reported
-            // after the CLI's own exit status and result errors.
-            input_error
-                = (await input) catch_all (e) {
-                    _ => "the stdin writer task did not complete cleanly"
-                };
-            return result;
-        }
-        _read_result(p)
+        result
     }) catch (e) {
         baml.errors.Timeout => {
             throw ai.errors.NetworkFailure {
