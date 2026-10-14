@@ -35,45 +35,11 @@ def fixture(
     variant="iterator",
     batches=64,
     retain=4,
-    fanout=8,
-    delay_ms=10,
     seed=1729,
 ):
     rng = random.Random(seed)
     if case == "09_json_hello":
         return encode({"message": "Hello, world!"})
-    if case == "08_stateful_workflow":
-        if fanout not in (1, 4):
-            raise ValueError(
-                "Stateful workflow uses --fanout 1 or 4 for its four tools"
-            )
-        requests = []
-        for i in range(128):
-            request = {
-                "key": f"key_{(i - 1 if i % 5 == 1 else i):03d}",
-                "mode": "accumulate" if i % 3 else "replace",
-                "items": [
-                    {
-                        "kind": ("credit", "debit", "skip")[j % 3],
-                        "amount": rng.randrange(1001),
-                        "payload": [rng.randrange(100) for _ in range(16)],
-                    }
-                    for j in range(size)
-                ],
-            }
-            if i % 17 == 16:
-                request["mode"] = "invalid"
-            requests.append(encode(request))
-        return encode(
-            {
-                "requests": requests,
-                "batch": batches,
-                "retain": retain,
-                "fanout": fanout,
-                "delay_ms": delay_ms,
-                "capture": variant == "trace",
-            }
-        )
     if case in ("07_function_calls", "11_generate_sort", "14_heap_calls"):
         return encode({"count": size, "seed": seed})
     if case == "12_cyclic_churn":
@@ -86,7 +52,7 @@ def fixture(
         return encode({"nodes": size, "walks": batches})
     if case == "00_startup":
         return encode({"value": 42})
-    if case in ("01_array_traversal", "02_merge_sort", "10_quick_sort", "12_quick_sort_native", "13_sort_kernel_only"):
+    if case in ("01_array_traversal", "02_merge_sort", "10_quick_sort"):
         values = [rng.randrange(0, 1000000) for _ in range(size)]
         if variant == "sorted":
             values.sort()
@@ -95,7 +61,7 @@ def fixture(
         if variant == "duplicates":
             values = [n % 8 for n in values]
         return encode({"values": values, "variant": variant})
-    if case in ("03_json_aggregate", "06_http_service"):
+    if case == "03_json_aggregate":
         return encode(
             [
                 {
@@ -108,8 +74,6 @@ def fixture(
         )
     if case == "04_allocation_retention":
         return encode({"width": size, "batches": batches, "retain": retain})
-    if case == "05_async_fanout":
-        return encode({"payload_size": size, "fanout": fanout, "delay_ms": delay_ms})
     raise ValueError(case)
 
 
@@ -117,7 +81,7 @@ def oracle(case, raw, jobs=1, warmup=0):
     try:
         data = json.loads(raw)
     except ValueError:
-        if case in ("03_json_aggregate", "06_http_service"):
+        if case == "03_json_aggregate":
             return {"error": "invalid"}
         raise
     if case == "09_json_hello":
@@ -128,22 +92,15 @@ def oracle(case, raw, jobs=1, warmup=0):
             data["seed"] * pow(48271, i + 1, 1000000007) % 1000000007
             for i in range(data["count"])
         )
-    if case == "08_stateful_workflow":
-        return workflow_oracle(data, jobs + warmup)
     if case == "07_function_calls":
         return data["seed"] + data["count"]
     if case == "00_startup":
         return data["value"]
     if case == "01_array_traversal":
         return sum(data["values"])
-    if case == "13_sort_kernel_only":
-        values = data["values"]
-        # This diagnostic returns an extrema checksum after 16 restore/sort
-        # rounds. Full ordering is checked by case 12's identical sort kernel.
-        return 16 * (min(values) + max(values)) if len(values) > 1 else 0
-    if case in ("02_merge_sort", "10_quick_sort", "12_quick_sort_native"):
+    if case in ("02_merge_sort", "10_quick_sort"):
         return sorted(data["values"])
-    if case in ("03_json_aggregate", "06_http_service"):
+    if case == "03_json_aggregate":
         # Sort/group, rather than copying the implementations' hash aggregation.
         if not isinstance(data, list) or len(data) > 1000000:
             return {"error": "invalid"}
@@ -183,9 +140,6 @@ def oracle(case, raw, jobs=1, warmup=0):
         return cycles_into_live_oracle(data["live"], data["requests"])
     if case == "16_live_walk":
         return live_walk_oracle(data["nodes"], data["walks"])
-    if case == "05_async_fanout":
-        n = data["payload_size"]
-        return [n * i + n * (n - 1) // 2 for i in range(data["fanout"])]
     raise ValueError(case)
 
 
@@ -198,70 +152,6 @@ def checks(case):
         for size in (0, 1, 17, 1024):
             for seed in (0, 1, 1729, 1000000006):
                 yield f"{size}-{seed}", fixture(case, size=size, seed=seed)
-        return
-    if case == "08_stateful_workflow":
-        for size, batch, retain, fanout, delay in (
-            (0, 0, 0, 1, 0),
-            (0, 8, 0, 1, 0),
-            (3, 25, 0, 1, 0),
-            (3, 25, 1, 1, 0),
-            (7, 33, 4, 1, 0),
-            (7, 33, 64, 1, 0),
-            (7, 33, 4, 4, 0),
-            (7, 8, 4, 1, 1),
-            (7, 8, 4, 4, 1),
-            (5, 257, 4, 4, 0),
-        ):
-            yield (
-                f"{size}-{batch}-{retain}-{fanout}-{delay}",
-                fixture(
-                    case,
-                    size=size,
-                    batches=batch,
-                    retain=retain,
-                    fanout=fanout,
-                    delay_ms=delay,
-                    variant="trace",
-                ),
-            )
-        valid = {
-            "key": "k",
-            "mode": "replace",
-            "items": [{"kind": "credit", "amount": 1, "payload": [1, 2]}],
-        }
-        invalid = [
-            "{",
-            "null",
-            "[]",
-            encode(valid | {"key": "é"}),
-            encode(valid | {"mode": "bad"}),
-        ]
-        for field, value in (
-            ("kind", "bad"),
-            ("amount", -1),
-            ("amount", 1000001),
-            ("payload", [-1]),
-        ):
-            invalid.append(
-                encode(valid | {"items": [valid["items"][0] | {field: value}]})
-            )
-        yield (
-            "invalid-atomicity",
-            encode(
-                {
-                    "requests": [
-                        encode(valid),
-                        *invalid,
-                        encode(valid | {"mode": "accumulate"}),
-                    ],
-                    "batch": len(invalid) + 2,
-                    "retain": 2,
-                    "fanout": 4,
-                    "delay_ms": 0,
-                    "capture": True,
-                }
-            ),
-        )
         return
     if case == "07_function_calls":
         for n in (0, 1, 128, 8192):
@@ -280,8 +170,8 @@ def checks(case):
         for nodes, walks in ((0, 3), (1, 0), (1, 2), (2, 3), (17, 4), (1000, 5)):
             yield f"{nodes}-{walks}", fixture(case, size=nodes, batches=walks)
         return
-    yield "default", fixture(case, size=16, batches=8, retain=2, delay_ms=2)
-    if case in ("01_array_traversal", "02_merge_sort", "10_quick_sort", "12_quick_sort_native", "13_sort_kernel_only"):
+    yield "default", fixture(case, size=16, batches=8, retain=2)
+    if case in ("01_array_traversal", "02_merge_sort", "10_quick_sort"):
         variants = (
             ("iterator", "indexed", "build")
             if case == "01_array_traversal"
@@ -290,7 +180,7 @@ def checks(case):
         for size in (0, 1, 2, 17, 257):
             for variant in variants:
                 yield f"{size}-{variant}", fixture(case, size=size, variant=variant)
-    if case in ("03_json_aggregate", "06_http_service"):
+    if case == "03_json_aggregate":
         examples = [
             [],
             [{"account": "a", "amount_cents": 1.0, "active": True}],
@@ -339,13 +229,6 @@ def checks(case):
         for live, churn in ((0, 4), (1, 5), (2, 3), (17, 40), (1000, 64)):
             for seed in (0, 1729):
                 yield f"{live}-{churn}-{seed}", fixture(case, size=live, batches=churn, seed=seed)
-    if case == "05_async_fanout":
-        for fanout, size in ((0, 4), (1, 0), (1, 7), (32, 8)):
-            yield (
-                f"{fanout}-{size}",
-                fixture(case, fanout=fanout, size=size, delay_ms=2),
-            )
-
 
 MODULUS = 1000000007
 
@@ -410,82 +293,3 @@ def heap_calls_oracle(count, seed):
         acc = back if back[0] <= moved[0] else moved
     return [acc[0], acc[1], ring[0][0], ring[3][1]]
 
-
-def workflow_oracle(config, calls=1):
-    """Sequential reference: ordered dictionary eviction and algebraic payload sums."""
-    cache = {}
-    digest = response_bytes = cursor = 0
-    responses = []
-    for _ in range(calls):
-        responses = []
-        for _ in range(config["batch"]):
-            raw = config["requests"][cursor % len(config["requests"])]
-            response = dict(seq=cursor, ok=False, key="", total=0, check=0, evicted="")
-            try:
-                req = json.loads(raw)
-                assert isinstance(req, dict)
-                assert (
-                    isinstance(req["key"], str) and req["key"] and req["key"].isascii()
-                )
-                assert req["mode"] in ("replace", "accumulate") and isinstance(
-                    req["items"], list
-                )
-                contributions = []
-                for i, item in enumerate(req["items"]):
-                    assert item["kind"] in ("credit", "debit", "skip")
-                    assert (
-                        type(item["amount"]) is int and 0 <= item["amount"] <= 1000000
-                    )
-                    assert isinstance(item["payload"], list)
-                    assert all(
-                        type(v) is int and 0 <= v <= 1000000 for v in item["payload"]
-                    )
-                    amount = (
-                        item["amount"]
-                        * {"credit": 1, "debit": -1, "skip": 0}[item["kind"]]
-                    )
-                    contributions.append(
-                        amount
-                        + sum(item["payload"])
-                        + len(item["payload"]) * (i % 4 + 1)
-                    )
-                previous = cache.get(req["key"], {"total": 0})["total"]
-                total = sum(contributions) + (
-                    previous if req["mode"] == "accumulate" else 0
-                )
-                check = sum((i + 1) * value for i, value in enumerate(contributions))
-                evicted = ""
-                if config["retain"]:
-                    if req["key"] not in cache and len(cache) == config["retain"]:
-                        evicted = next(iter(cache))
-                        del cache[evicted]
-                    cache[req["key"]] = dict(
-                        key=req["key"],
-                        total=total,
-                        check=check,
-                        count=len(contributions),
-                    )
-                response.update(
-                    ok=True, key=req["key"], total=total, check=check, evicted=evicted
-                )
-            except (AssertionError, ValueError, TypeError, KeyError):
-                pass
-            response_bytes += len(encode(response))
-            for value in (
-                cursor,
-                int(response["ok"]),
-                response["total"],
-                response["check"],
-                len(cache),
-            ):
-                digest = (digest * 257 + value) % 1000000007
-            if config["capture"]:
-                responses.append(response)
-            cursor += 1
-    return dict(
-        processed=cursor,
-        digest=digest,
-        response_bytes=response_bytes,
-        cache=[cache[k] for k in sorted(cache)],
-        responses=responses,
-    )

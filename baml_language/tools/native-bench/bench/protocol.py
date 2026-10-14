@@ -19,11 +19,9 @@ class Scenario:
     variant: str = "iterator"
     batches: int = 8
     retain: int = 2
-    fanout: int = 8
-    delay_ms: int = 10
 
     def fixture_args(self, seed):
-        return (self.case, self.size, self.variant, self.batches, self.retain, self.fanout, self.delay_ms, seed)
+        return (self.case, self.size, self.variant, self.batches, self.retain, seed)
 
 
 @dataclass

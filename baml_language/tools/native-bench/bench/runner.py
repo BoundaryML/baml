@@ -279,8 +279,6 @@ def run(layout, protocol, out, rows_filter=None):
                      status="harness_error", error=str(error)[:400], trial_path=str(d.relative_to(out)))
         r["trial"] = t
         all_rows.append(r)
-        (d / "sample.json").parent.mkdir(parents=True, exist_ok=True)
-        (d / "sample.json").write_text(json.dumps(r, indent=1) + "\n")
         k = (scenario.name, row.name)
         counters[k] = counters.get(k, 0) + 1
         if (n + 1) % 100 == 0 or n + 1 == len(sched):

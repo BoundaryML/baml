@@ -14,8 +14,6 @@ import subprocess
 import hashlib
 import time
 
-from . import hostinfo as host
-
 SOURCE = Path(__file__).resolve().with_name("observer.c")
 
 
@@ -34,10 +32,9 @@ def run(command, directory, env, cpus, timeout=None):
     directory.mkdir(parents=True, exist_ok=False)
     usage, pidfile = directory / "usage.json", directory / "pid.txt"
     sampler = selectors.DefaultSelector()
-    samples, events = [], []
+    events = []
     malformed = 0
     executable = observer()
-    host_before = host.snapshot(cpus)
     start = time.monotonic_ns()
     with (
         (directory / "stderr.txt").open("wb") as stderr,
@@ -61,7 +58,6 @@ def run(command, directory, env, cpus, timeout=None):
         sampler.register(child.stdout, selectors.EVENT_READ)
         buffer = b""
         status = "ok"
-        pid = None
         ready = None
         result = None
         drain = None
@@ -72,28 +68,6 @@ def run(command, directory, env, cpus, timeout=None):
                     status = "timeout"
                     os.killpg(child.pid, signal.SIGKILL)
                     break
-                if pid is None and pidfile.exists():
-                    try:
-                        pid = int(pidfile.read_text())
-                    except ValueError:
-                        pass
-                if pid:
-                    try:
-                        fields = (
-                            Path(f"/proc/{pid}/stat")
-                            .read_text()
-                            .rsplit(")", 1)[1]
-                            .split()
-                        )
-                        samples.append(
-                            {
-                                "elapsed_ns": now - start,
-                                "rss_bytes": int(fields[21])
-                                * os.sysconf("SC_PAGE_SIZE"),
-                            }
-                        )
-                    except (FileNotFoundError, ProcessLookupError):
-                        pass
                 for key, _ in sampler.select(0.01):
                     data = os.read(key.fileobj.fileno(), 65536)
                     if not data:
@@ -129,12 +103,6 @@ def run(command, directory, env, cpus, timeout=None):
             child.stdout.close()
             sampler.close()
     observed = json.loads(usage.read_text()) if usage.exists() else {}
-    (directory / "host.json").write_text(
-        json.dumps({"before": host_before, "after": host.snapshot(cpus)}, indent=2)
-        + "\n"
-    )
-    (directory / "rss.json").write_text(json.dumps(samples) + "\n")
-    (directory / "events.json").write_text(json.dumps(events, indent=2) + "\n")
     return {
         "event_order": [event.get("event") for event in events],
         "malformed_lines": malformed + bool(buffer),

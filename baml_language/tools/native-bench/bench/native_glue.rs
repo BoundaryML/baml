@@ -1,5 +1,5 @@
-// Measurement glue for a natively compiled BAML program. baml_native.rs writes
-// this file as src/main.rs of the emitted Cargo project; it is the only place
+// Measurement glue for a natively compiled BAML program. bench/stage.py copies
+// this file to src/main.rs of the emitted Cargo project; it is the only place
 // that names the generated entry points. Standard library only.
 //
 // Required library API (crate `baml_native`, emitted by `baml-cli __emit-rust`):
@@ -7,7 +7,7 @@
 //   pub fn user_run(state: State) -> Result<R, E>     where State: Clone,
 //                                                           R: std::fmt::Display,
 //                                                           E: std::fmt::Debug
-// Protocol: run ARTIFACT INPUT JOBS WARMUP SINK OUTPUT (machinery/protocol.txt).
+// Protocol: run ARTIFACT INPUT JOBS WARMUP SINK OUTPUT (README.md, "What is measured").
 use std::{io::Write, time::Instant};
 
 #[repr(C)]
