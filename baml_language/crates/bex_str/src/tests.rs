@@ -1214,8 +1214,9 @@ fn nary_unique_roots_reuse_slots_without_mutating_shared_leaves() {
 
 #[test]
 fn nary_layout_and_deferred_graph_storage() {
-    use crate::bex_str::{CONCAT_FANOUT, ConcatNode, ConcatState};
     use std::{collections::HashSet, mem::size_of, sync::Arc};
+
+    use crate::bex_str::{CONCAT_FANOUT, ConcatNode, ConcatState};
     assert_eq!(
         size_of::<[Option<Arc<BexStr>>; CONCAT_FANOUT]>(),
         CONCAT_FANOUT * size_of::<Option<Arc<BexStr>>>()

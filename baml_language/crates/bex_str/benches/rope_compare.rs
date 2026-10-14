@@ -54,6 +54,40 @@ fn bench(name: &str, mut f: impl FnMut() -> u64, verify: bool) {
         samples[7], samples[0]
     );
 }
+// Every input has a cold flatten cache. Construction and destruction happen
+// outside the timed interval; cloning one root would accidentally warm it.
+fn bench_first_flatten(name: &str, part: &BexStr, n: usize, shared: bool, verify: bool) {
+    let consume = |s: &BexStr| {
+        let text = s.as_str();
+        (text.len() + usize::from(text.ends_with('j'))) as u64
+    };
+    let expected = consume(&build(part, n, shared));
+    if verify {
+        println!("{{\"bench\":\"{name}\",\"result\":{expected}}}");
+        return;
+    }
+    const BATCH: usize = 32;
+    let sample = || {
+        let inputs: Vec<_> = (0..BATCH).map(|_| build(part, n, shared)).collect();
+        let start = Instant::now();
+        for s in &inputs {
+            black_box(consume(black_box(s)));
+        }
+        let elapsed = start.elapsed().as_nanos() as f64 / BATCH as f64;
+        drop(inputs);
+        elapsed
+    };
+    let warmup = Instant::now();
+    while warmup.elapsed() < Duration::from_millis(200) {
+        black_box(sample());
+    }
+    let mut samples: Vec<_> = (0..15).map(|_| sample()).collect();
+    samples.sort_by(f64::total_cmp);
+    println!(
+        "{{\"bench\":\"{name}\",\"median_ns\":{},\"min_ns\":{},\"result\":{expected}}}",
+        samples[7], samples[0]
+    );
+}
 fn main() {
     let verify = std::env::args().any(|arg| arg == "--verify");
     if cfg!(debug_assertions) && !verify {
@@ -74,12 +108,19 @@ fn main() {
                     verify,
                 );
                 bench(
-                    &format!("flatten_{label}_{kind}_{n}"),
+                    &format!("build_and_flatten_{label}_{kind}_{n}"),
                     || {
                         let s = build(part, n, shared);
                         let len = s.as_str().len();
                         (len + usize::from(s.as_str().ends_with('j'))) as u64
                     },
+                    verify,
+                );
+                bench_first_flatten(
+                    &format!("first_flatten_{label}_{kind}_{n}"),
+                    part,
+                    n,
+                    shared,
                     verify,
                 );
             }
