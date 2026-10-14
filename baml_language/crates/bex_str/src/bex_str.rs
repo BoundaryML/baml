@@ -57,7 +57,38 @@ pub enum BexStr {
         hash: [AtomicU64; 2],
     },
     /// Deferred concatenation. Flattened on first byte-level access.
-    Concat(Arc<ConcatNode>),
+    Concat(ConcatStr),
+}
+
+/// Immutable concat metadata stored in the handle's otherwise unused payload.
+/// The shared node owns canonical UTF-8 children and the flattened result.
+#[derive(Clone)]
+pub struct ConcatStr {
+    pub(crate) total_byte_len: u64,
+    pub(crate) total_char_len: u64,
+    pub(crate) total_ascii_prefix_len: u64,
+    pub(crate) node: Arc<ConcatNode>,
+    /// Last four Unicode scalars in text order, without flattening the rope.
+    /// Every deferred concat exceeds 54 bytes and therefore has at least four.
+    tail: [char; 4],
+}
+
+impl Deref for ConcatStr {
+    type Target = ConcatNode;
+
+    fn deref(&self) -> &Self::Target {
+        &self.node
+    }
+}
+
+impl ConcatStr {
+    fn flatten(&self) -> Arc<FlatStr> {
+        self.node.flatten(
+            self.total_byte_len,
+            self.total_char_len,
+            self.total_ascii_prefix_len,
+        )
+    }
 }
 
 /// Heap-allocated immutable string data with cached hash.
@@ -76,13 +107,6 @@ pub struct FlatStr {
 
 /// Deferred concatenation node.
 pub struct ConcatNode {
-    pub(crate) total_byte_len: u64,
-    /// Number of Unicode codepoints, summed from the children at construction
-    /// (each O(1)), so `char_len()` needs no recursive walk of a deep rope.
-    pub(crate) total_char_len: u64,
-    /// Exact ASCII prefix, derived from the children's at construction (each
-    /// O(1)) for the same reason.
-    pub(crate) total_ascii_prefix_len: u64,
     pub(crate) state: Mutex<ConcatState>,
 }
 
@@ -174,7 +198,7 @@ impl BexStr {
                 .div_ceil(Arc::strong_count(flat)),
             Self::Concat(node) => CONCAT_OVERHEAD
                 .saturating_add(usize::try_from(node.total_byte_len).unwrap_or(usize::MAX))
-                .div_ceil(Arc::strong_count(node)),
+                .div_ceil(Arc::strong_count(&node.node)),
         }
     }
 
@@ -391,6 +415,16 @@ impl BexStr {
         if n >= self.char_len() {
             return self.byte_len();
         }
+        if let BexStr::Concat(c) = self {
+            let first = c.total_char_len as usize - c.tail.len();
+            if n >= first {
+                return self.byte_len()
+                    - c.tail[n - first..]
+                        .iter()
+                        .map(|point| point.len_utf8())
+                        .sum::<usize>();
+            }
+        }
         let (char_idx, byte_idx) = if known.0 > prefix {
             known
         } else {
@@ -426,6 +460,16 @@ impl BexStr {
 
     /// The char at index `n`, or `None` if `n >= char_len()`.
     pub fn char_at(&self, n: usize) -> Option<char> {
+        if let BexStr::Concat(c) = self {
+            let count = c.total_char_len as usize;
+            if n >= count {
+                return None;
+            }
+            let first = count - c.tail.len();
+            if n >= first {
+                return Some(c.tail[n - first]);
+            }
+        }
         // Past the end, `b == byte_len()` and the suffix is empty.
         let b = self.char_to_byte(n);
         self.as_str()[b..].chars().next()
@@ -434,6 +478,23 @@ impl BexStr {
     /// Substring by char range. Clamps both ends to `char_len()` (and `end`
     /// to at least `start`), so it never panics.
     pub fn char_slice(&self, range: Range<usize>) -> BexStr {
+        if let BexStr::Concat(c) = self {
+            let count = c.total_char_len as usize;
+            let start = range.start.min(count);
+            let end = range.end.max(start).min(count);
+            let first = count - c.tail.len();
+            if start >= first {
+                let mut data = [0; INLINE_CAPACITY];
+                let mut byte_len = 0;
+                for point in &c.tail[start - first..end - first] {
+                    byte_len += point.encode_utf8(&mut data[byte_len..]).len();
+                }
+                return BexStr::Inline {
+                    byte_len: byte_len as u8,
+                    data,
+                };
+            }
+        }
         // `char_to_byte` maps every index past the end to `byte_len()`, which is
         // the clamp; `end` is scanned onward from `start`.
         let byte_start = self.char_to_byte(range.start);
@@ -509,12 +570,33 @@ impl BexStr {
         } else {
             left_prefix
         } as u64;
-        BexStr::Concat(Arc::new(ConcatNode {
+        let mut tail = right.last_codepoints();
+        if right_chars < tail.len() {
+            let left_tail = left.last_codepoints();
+            tail[..4 - right_chars].copy_from_slice(&left_tail[right_chars..]);
+        }
+        BexStr::Concat(ConcatStr {
             total_byte_len: total_byte_len as u64,
             total_char_len,
             total_ascii_prefix_len,
-            state: Mutex::new(ConcatState::Deferred { left, right }),
-        }))
+            node: Arc::new(ConcatNode {
+                state: Mutex::new(ConcatState::Deferred { left, right }),
+            }),
+            tail,
+        })
+    }
+
+    /// Right-aligned suffix, padded with NULs for short operands. At most four
+    /// UTF-8 scalars are decoded; an existing concat already has the suffix.
+    fn last_codepoints(&self) -> [char; 4] {
+        if let BexStr::Concat(c) = self {
+            return c.tail;
+        }
+        let mut tail = ['\0'; 4];
+        for (slot, point) in tail.iter_mut().rev().zip(self.as_str().chars().rev()) {
+            *slot = point;
+        }
+        tail
     }
 
     /// Pointer equality check — true if both point to the same Arc.
@@ -535,7 +617,7 @@ impl BexStr {
                     ..
                 },
             ) => Arc::ptr_eq(a, b) && ao == bo && al == bl,
-            (BexStr::Concat(a), BexStr::Concat(b)) => Arc::ptr_eq(a, b),
+            (BexStr::Concat(a), BexStr::Concat(b)) => Arc::ptr_eq(&a.node, &b.node),
             _ => false,
         }
     }
@@ -592,7 +674,12 @@ impl FlatStr {
 impl ConcatNode {
     /// Iterative flatten. Materializes bytes into Arc<FlatStr>.
     /// Stores result back so subsequent calls return O(1).
-    pub(crate) fn flatten(&self) -> Arc<FlatStr> {
+    fn flatten(
+        &self,
+        total_byte_len: u64,
+        total_char_len: u64,
+        total_ascii_prefix_len: u64,
+    ) -> Arc<FlatStr> {
         let mut guard = self.state.lock().unwrap();
         match &*guard {
             ConcatState::Flattened(f) => return f.clone(),
@@ -610,7 +697,7 @@ impl ConcatNode {
         };
 
         // Iterative tree walk — heap-allocated work-stack
-        let mut buf = Vec::with_capacity(self.total_byte_len as usize);
+        let mut buf = Vec::with_capacity(total_byte_len as usize);
         let mut stack: Vec<BexStr> = Vec::new();
         // Push right first so left is processed first (stack is LIFO)
         stack.push(right);
@@ -660,8 +747,8 @@ impl ConcatNode {
 
         let flat = Arc::new(FlatStr::from_parts(
             buf.into_boxed_slice(),
-            self.total_char_len,
-            self.total_ascii_prefix_len,
+            total_char_len,
+            total_ascii_prefix_len,
         ));
         *guard = ConcatState::Flattened(flat.clone());
         flat
@@ -686,7 +773,7 @@ impl Drop for ConcatNode {
 
         while let Some(node) = stack.pop() {
             if let BexStr::Concat(arc) = node
-                && let Ok(mut owned) = Arc::try_unwrap(arc)
+                && let Ok(mut owned) = Arc::try_unwrap(arc.node)
             {
                 let inner = match owned.state.get_mut() {
                     Ok(s) => std::mem::replace(

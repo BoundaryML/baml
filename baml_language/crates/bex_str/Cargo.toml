@@ -23,3 +23,11 @@ harness = false
 [[bench]]
 name = "bun_benches"
 harness = false
+
+[[bench]]
+name = "node_compare"
+harness = false
+
+[[bench]]
+name = "rope_compare"
+harness = false

@@ -20,6 +20,143 @@ fn size_assertion() {
 }
 
 #[test]
+fn concat_handle_layout_uses_existing_payload() {
+    use std::mem::size_of;
+
+    use crate::bex_str::{ConcatNode, ConcatState, ConcatStr};
+
+    assert_eq!(size_of::<BexStr>(), 56);
+    assert_eq!(size_of::<ConcatStr>(), 48);
+    assert_eq!(
+        size_of::<ConcatNode>(),
+        size_of::<std::sync::Mutex<ConcatState>>()
+    );
+    println!(
+        "Concat handle={} node={} state={} Arc allocation={}",
+        size_of::<ConcatStr>(),
+        size_of::<ConcatNode>(),
+        size_of::<ConcatState>(),
+        size_of::<ConcatNode>() + 2 * size_of::<usize>()
+    );
+}
+
+#[test]
+fn concat_handle_suffix_reads_preserve_deferred_operands() {
+    use crate::bex_str::ConcatState;
+
+    let deferred = |s: &BexStr| {
+        let BexStr::Concat(c) = s else {
+            panic!("expected deferred concat")
+        };
+        assert!(matches!(
+            *c.state.lock().unwrap(),
+            ConcatState::Deferred { .. }
+        ));
+    };
+    let right_rope = BexStr::concat(BexStr::from("界".repeat(20)), BexStr::from("\0é🙂x"));
+    let flat = BexStr::from(format!("{}\0é🙂x!", "z".repeat(60)));
+    let slice = flat.byte_slice(1..flat.byte_len() - 1);
+    for right in [
+        BexStr::from("\0"),
+        BexStr::from("🙂"),
+        BexStr::from("é中"),
+        BexStr::from("x🙂\0"),
+        BexStr::from("\0é🙂x"),
+        flat,
+        slice,
+        right_rope.clone(),
+    ] {
+        let left = BexStr::concat(BexStr::from("é中🙂".repeat(20)), BexStr::from("prefix"));
+        // Build the oracle from a separate clone only after checking that
+        // construction and suffix reads do not materialize either operand.
+        let s = BexStr::concat(left.clone(), right.clone());
+        let count = s.char_len();
+        let first = count - 4;
+        let points: Vec<_> = (first..count).map(|n| s.char_at(n).unwrap()).collect();
+        let tail: String = points.iter().collect();
+        for start in first..=count + 1 {
+            for end in [0, first, start, count - 1, count, usize::MAX] {
+                let want: String = points
+                    [start.min(count) - first..end.max(start).min(count) - first]
+                    .iter()
+                    .collect();
+                assert_eq!(s.char_slice(start..end).as_str(), want);
+            }
+        }
+        assert_eq!(s.char_at(count), None);
+        assert_eq!(s.char_at(usize::MAX), None);
+        assert_eq!(
+            s.char_slice(std::ops::Range {
+                start: usize::MAX,
+                end: 0
+            })
+            .as_str(),
+            ""
+        );
+        for n in first..=count {
+            let suffix_bytes: usize = points[n - first..].iter().map(|c| c.len_utf8()).sum();
+            assert_eq!(s.char_to_byte(n), s.byte_len() - suffix_bytes);
+        }
+        deferred(&s);
+        deferred(&left);
+        deferred(&right_rope);
+        let want = format!("{}{}", left.as_str(), right.as_str());
+        assert!(want.ends_with(&tail));
+        assert_eq!(s.as_str(), want);
+    }
+}
+
+#[test]
+fn concat_handle_suffix_cache_preserves_shared_snapshots_and_publication() {
+    use crate::bex_str::ConcatState;
+
+    let mut text = "前é🙂".repeat(20);
+    let mut s = BexStr::from(text.clone());
+    let mut snapshots = Vec::new();
+    for i in 0..128 {
+        let part = ["\0", "🙂é", "中\0x", "🙂界é!"][i % 4];
+        s = BexStr::concat(s.clone(), BexStr::from(part));
+        text.push_str(part);
+        let points: Vec<_> = text.chars().collect();
+        let count = points.len();
+        assert_eq!(s.byte_len(), text.len());
+        assert_eq!(s.char_len(), count);
+        assert_eq!(s.ascii_prefix_len(), 0);
+        for (n, point) in points.iter().enumerate().skip(count - 4) {
+            assert_eq!(s.char_at(n), Some(*point));
+        }
+        let BexStr::Concat(c) = &s else {
+            panic!("expected concat")
+        };
+        assert!(matches!(
+            *c.state.lock().unwrap(),
+            ConcatState::Deferred { .. }
+        ));
+        if i % 17 == 0 {
+            snapshots.push((s.clone(), text.clone()));
+        }
+    }
+    let points: Vec<_> = text.chars().collect();
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            assert_eq!(s.as_str(), text);
+            assert_eq!(s.content_hash(), BexStr::from(text.clone()).content_hash());
+        });
+        for _ in 0..32 {
+            for (n, point) in points.iter().enumerate().skip(points.len() - 4) {
+                assert_eq!(s.char_at(n), Some(*point));
+                assert_eq!(s.char_slice(n..n + 1).as_str(), point.to_string());
+            }
+        }
+    });
+    for (snapshot, want) in snapshots {
+        assert_eq!(snapshot.as_str(), want);
+        assert_eq!(snapshot.char_len(), want.chars().count());
+        assert_eq!(snapshot.content_hash(), BexStr::from(want).content_hash());
+    }
+}
+
+#[test]
 fn retained_heap_counts_complete_slice_parent() {
     assert_eq!(BexStr::from("inline").retained_heap_bytes(), Some(0));
     let parent = BexStr::from("x".repeat(100_000));
