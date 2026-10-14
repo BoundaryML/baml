@@ -8458,6 +8458,16 @@ impl<'db> LoweringContext<'db> {
                     (callee_op, self.lower_call_arg_operands(expr_id, args)?)
                 }
             } else {
+                // A callable field arrives here with its `Field` resolution and
+                // is called as the value it holds. With NO resolution, TIR
+                // never decided what `.member` is, and calling whatever a
+                // fallback read produces drops the receiver (B-1788).
+                if self.tir_resolution(callee).is_none() {
+                    return Err(self.internal_error(
+                        "MIR found a method call TIR recorded no member resolution for",
+                        callee,
+                    ));
+                }
                 let callee_op = self.lower_normalized_callee_operand(callee, callee_expr)?;
                 (callee_op, self.lower_call_arg_operands(expr_id, args)?)
             }
@@ -10391,20 +10401,17 @@ impl<'db> LoweringContext<'db> {
                     expr_id,
                 ));
             }
-            // Dynamic map access — only valid for map types, unknown, etc.
-            let key_local = self.builder.temp(RuntimeTy::String);
-            self.builder.assign(
-                Place::local(key_local),
-                Rvalue::Use(Operand::Constant(Constant::String(field_str))),
-            );
-            self.emit_map_call(
-                "index",
-                vec![
-                    Operand::Copy(Place::local(base_local)),
-                    Operand::Copy(Place::local(key_local)),
-                ],
-                dest,
-            );
+            // TIR rejects `.member` on every other base (maps and `unknown`
+            // included - those index with `[...]`), so reaching here means
+            // TIR left the access unresolved without a diagnostic (B-1788).
+            // A dynamic map read on such a base would compile and misbehave.
+            return Err(self.internal_error(
+                &format!(
+                    "MIR failed to resolve member access .{field_str} on `{unwrapped_ty:?}`: \
+                     TIR recorded no resolution for it"
+                ),
+                expr_id,
+            ));
         }
         Ok(())
     }
@@ -12159,34 +12166,15 @@ impl LoweringContext<'_> {
                             expr_id,
                         ));
                     }
-                    // Dynamic map fallback for non-class base or unknown field
-                    let receiver = Place::local(self.builder.temp(current_ty));
-                    self.builder
-                        .assign(receiver.clone(), Rvalue::Use(Operand::Copy(current_place)));
-                    let key_local = self.builder.temp(RuntimeTy::String);
-                    self.builder.assign(
-                        Place::local(key_local),
-                        Rvalue::Use(Operand::Constant(Constant::String(seg.to_string()))),
-                    );
-                    if seg_idx == segments.len() - 1 {
-                        return Ok(Place::Index {
-                            base: Box::new(receiver),
-                            index: key_local,
-                            kind: IndexKind::Map,
-                        });
-                    }
-                    current_ty = self
-                        .path_segment_ty(expr_id, seg_idx)
-                        .unwrap_or(RuntimeTy::Unknown);
-                    current_place = Place::local(self.builder.temp(current_ty.clone()));
-                    self.emit_map_call(
-                        "index",
-                        vec![
-                            Operand::Copy(receiver),
-                            Operand::Copy(Place::local(key_local)),
-                        ],
-                        current_place.clone(),
-                    );
+                    // TIR rejects `.seg` assignment on every non-class base;
+                    // see `lower_member_access`.
+                    return Err(self.internal_error(
+                        &format!(
+                            "MIR failed to resolve assignment target .{seg} on \
+                             `{current_ty:?}`: TIR recorded no resolution for it"
+                        ),
+                        expr_id,
+                    ));
                 }
                 Ok(current_place)
             }
@@ -12214,17 +12202,15 @@ impl LoweringContext<'_> {
                         base_id,
                     ));
                 }
-                // Dynamic map access — only valid for map types, unknown, etc.
-                let key_local = self.builder.temp(RuntimeTy::String);
-                self.builder.assign(
-                    Place::local(key_local),
-                    Rvalue::Use(Operand::Constant(Constant::String(member_name.to_string()))),
-                );
-                Ok(Place::Index {
-                    base: Box::new(base_place),
-                    index: key_local,
-                    kind: IndexKind::Map,
-                })
+                // TIR rejects `.member` assignment on every other base; see
+                // `lower_member_access`.
+                Err(self.internal_error(
+                    &format!(
+                        "MIR failed to resolve member assignment target .{member_name} on \
+                         `{base_ty:?}`: TIR recorded no resolution for it"
+                    ),
+                    base_id,
+                ))
             }
             AstExpr::Index { base, index } => {
                 let base_id = *base;
@@ -14772,10 +14758,45 @@ fn lower_let_body_impl<'db>(
                 LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map, opt);
             let mir_body = ctx.lower_let_body_inner()?;
             let lambdas = std::mem::take(&mut ctx.pending_lambdas);
+            check_indirect_call_layouts(&mir_body)?;
+            lambdas.iter().try_for_each(check_function_call_layouts)?;
             Ok(Some((mir_body, lambdas)))
         }
         LetBody::Missing => Ok(None),
     }
+}
+
+/// An indirect call pushes slots the runtime callee cannot describe, so its
+/// layout must come from the checked call plan. Only compiler-synthesized
+/// DIRECT calls go without one; an indirect call without a layout means TIR
+/// recorded no plan for the call it checked (B-1788), and emit could only
+/// guess what the call pushed.
+fn check_indirect_call_layouts(body: &MirFunctionBody<'_>) -> Result<(), MirInternalError> {
+    for block in &body.blocks {
+        if let Some(Terminator::Call {
+            callee,
+            argument_layout: None,
+            ..
+        }) = &block.terminator
+            && !matches!(callee, Operand::Constant(Constant::Function(_)))
+        {
+            return Err(MirInternalError {
+                message: "MIR lowered an indirect call TIR recorded no call plan for".to_string(),
+                span: block.terminator_span.or(block.span),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn check_function_call_layouts(function: &MirFunction<'_>) -> Result<(), MirInternalError> {
+    if let MirFunctionKind::Bytecode(body) = &function.kind {
+        check_indirect_call_layouts(body)?;
+    }
+    function
+        .lambdas
+        .iter()
+        .try_for_each(check_function_call_layouts)
 }
 
 /// Lower one function to MIR.
@@ -14813,7 +14834,9 @@ fn lower_function_impl<'db>(
     match body.as_ref() {
         FunctionBody::Expr(expr_body) => {
             let mut ctx = LoweringContext::new(db, func_loc, expr_body.clone(), source_map, opt);
-            ctx.lower_function_body()
+            let mir = ctx.lower_function_body()?;
+            check_function_call_layouts(&mir)?;
+            Ok(mir)
         }
         FunctionBody::Builtin(kind) => {
             use baml_compiler2_ast::BuiltinKind;
@@ -14887,5 +14910,61 @@ fn lower_function_impl<'db>(
             lambdas: vec![],
             signature: None,
         }),
+    }
+}
+
+#[cfg(test)]
+mod indirect_call_layout_tests {
+    use super::*;
+    use crate::LocalDecl;
+
+    /// `_0 = call copy _1()`: a call through a function VALUE, the shape the
+    /// value road builds for a method call TIR left unresolved (B-1788).
+    fn indirect_call_body(
+        argument_layout: Option<baml_type::CallLayout>,
+    ) -> MirFunctionBody<'static> {
+        let mut call = BasicBlock::new(BlockId(0));
+        call.terminator = Some(Terminator::Call {
+            has_trace: false,
+            argument_layout,
+            callee: Operand::copy_local(Local(1)),
+            args: vec![],
+            ntypeargs: 0,
+            destination: Place::Local(Local(0)),
+            target: BlockId(1),
+            unwind: None,
+        });
+        let mut done = BasicBlock::new(BlockId(1));
+        done.terminator = Some(Terminator::Return);
+        MirFunctionBody {
+            blocks: vec![call, done],
+            entry: BlockId(0),
+            locals: (0..2)
+                .map(|_| LocalDecl {
+                    name: None,
+                    ty: crate::RuntimeTy::unknown(),
+                    span: None,
+                    scope_span: None,
+                    is_captured: false,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn indirect_call_without_a_checked_layout_is_an_internal_error() {
+        let error = check_indirect_call_layouts(&indirect_call_body(None))
+            .expect_err("an indirect call with no call plan must not reach emit");
+        assert!(
+            error.message.contains("no call plan"),
+            "unexpected message: {}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn indirect_call_with_a_checked_layout_lowers() {
+        let layout = baml_type::CallLayout::default();
+        assert!(check_indirect_call_layouts(&indirect_call_body(Some(layout))).is_ok());
     }
 }
