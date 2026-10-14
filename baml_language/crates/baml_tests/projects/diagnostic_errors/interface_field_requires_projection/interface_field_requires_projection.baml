@@ -1,0 +1,26 @@
+// A linked interface field is reachable only through the interface view.
+// The access reports E0007 with the `as<...>` hint and nothing else: the
+// failed access must not be restated as a mismatch against `unknown`.
+interface Named {
+    name: string,
+}
+
+class Linked {
+    label: string,
+    implements Named {
+        name as label
+    }
+}
+
+function read_on_concrete(l: Linked) -> string {
+    l.name
+}
+
+function bind_on_concrete(l: Linked) -> string {
+    let s: string = l.name;
+    s
+}
+
+function through_view(l: Linked) -> string {
+    l.as<Named>.name
+}
