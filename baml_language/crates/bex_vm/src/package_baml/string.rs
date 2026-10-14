@@ -11,7 +11,7 @@ fn char_substrings(string: &BexStr) -> Vec<BexStr> {
     string
         .as_str()
         .char_indices()
-        .map(|(start, ch)| string.substring(start, start + ch.len_utf8()))
+        .map(|(start, ch)| string.byte_slice(start..start + ch.len_utf8()))
         .collect()
 }
 
@@ -42,7 +42,7 @@ impl BamlClassString for PackageBamlImpl {
             return string.clone();
         }
         let start = trimmed.as_ptr() as usize - s.as_ptr() as usize;
-        string.substring(start, start + trimmed.len())
+        string.byte_slice(start..start + trimmed.len())
     }
 
     fn trim_start(string: &BexStr) -> BexStr {
@@ -52,7 +52,7 @@ impl BamlClassString for PackageBamlImpl {
             return string.clone();
         }
         let start = trimmed.as_ptr() as usize - s.as_ptr() as usize;
-        string.substring(start, string.len())
+        string.byte_slice(start..string.len())
     }
 
     fn trim_end(string: &BexStr) -> BexStr {
@@ -61,7 +61,7 @@ impl BamlClassString for PackageBamlImpl {
         if trimmed.len() == s.len() {
             return string.clone();
         }
-        string.substring(0, trimmed.len())
+        string.byte_slice(0..trimmed.len())
     }
 
     fn includes(string: &BexStr, search: &BexStr) -> bool {
@@ -87,7 +87,7 @@ impl BamlClassString for PackageBamlImpl {
         s.split(d)
             .map(|part| {
                 let start = part.as_ptr() as usize - base;
-                string.substring(start, start + part.len())
+                string.byte_slice(start..start + part.len())
             })
             .collect()
     }
@@ -102,7 +102,7 @@ impl BamlClassString for PackageBamlImpl {
         s.lines()
             .map(|line| {
                 let start = line.as_ptr() as usize - base;
-                string.substring(start, start + line.len())
+                string.byte_slice(start..start + line.len())
             })
             .collect()
     }
@@ -113,7 +113,7 @@ impl BamlClassString for PackageBamlImpl {
         let start = resolve_slice_bound(start, len);
         // An `end` resolving before `start` yields an empty string.
         let end = resolve_slice_bound(end, len).max(start);
-        string.substring_by_char(start, end)
+        string.char_slice(start..end)
     }
 
     fn _replace_literal(string: &BexStr, search: &BexStr, replacement: &BexStr) -> BexStr {
@@ -126,19 +126,19 @@ impl BamlClassString for PackageBamlImpl {
 
     #[expect(clippy::cast_possible_wrap)]
     fn index_of(string: &BexStr, search: &BexStr) -> Option<i64> {
-        string.char_index_of(search.as_str()).map(|i| i as i64)
+        string.char_find(search.as_str()).map(|i| i as i64)
     }
 
     #[expect(clippy::cast_possible_wrap)]
     fn last_index_of(string: &BexStr, search: &BexStr) -> Option<i64> {
-        string.char_last_index_of(search.as_str()).map(|i| i as i64)
+        string.char_rfind(search.as_str()).map(|i| i as i64)
     }
 
     fn at(string: &BexStr, index: i64) -> Option<BexStr> {
         // Codepoint-indexed, not byte-indexed. A negative index counts from the
         // end; an index still outside the string after that yields `null`, so a
         // non-null result is always exactly one codepoint.
-        resolve_index(index, string.char_count()).and_then(|i| string.char_at_codepoint(i))
+        resolve_index(index, string.char_count()).map(|i| string.char_slice(i..i + 1))
     }
 
     fn code_point_at(string: &BexStr, index: i64) -> Option<i64> {
@@ -148,7 +148,7 @@ impl BamlClassString for PackageBamlImpl {
         // `char` is always in `[0, 0x10FFFF]`, so the widening to `i64` is
         // lossless.
         resolve_index(index, string.char_count())
-            .and_then(|i| string.as_str().chars().nth(i))
+            .and_then(|i| string.char_at(i))
             .map(|c| i64::from(u32::from(c)))
     }
 

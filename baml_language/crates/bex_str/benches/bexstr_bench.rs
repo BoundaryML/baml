@@ -40,7 +40,7 @@ fn bench_substring_chain_100(bencher: Bencher) {
         let mut s = base.clone();
         for _ in 0..100 {
             let new_len = s.len() - 1;
-            s = s.substring(0, new_len);
+            s = s.byte_slice(0..new_len);
         }
         black_box(s.len());
     });
@@ -49,7 +49,7 @@ fn bench_substring_chain_100(bencher: Bencher) {
 // ── Codepoint offset scan strategies ──────────────────────────────────────────
 //
 // These benchmark finding the byte offset of the Nth codepoint in a UTF-8
-// string. This is the hot path for .substring() and .char_at().
+// string. This is the hot path for `char_slice` and `char_at`.
 
 /// Current approach: Rust's char_indices iterator.
 fn nth_codepoint_char_indices(s: &str, n: usize) -> usize {
@@ -196,7 +196,7 @@ fn scan_fixture(kind: &str, n: usize) -> BexStr {
         "slice" => {
             let start = flat.as_str().find('é').unwrap();
             let end = start + flat.as_str()[start..].char_indices().nth(n).unwrap().0;
-            flat.substring(start, end)
+            flat.byte_slice(start..end)
         }
         // Built by appends, as `s = s + unit` in BAML.
         "concat" => {
@@ -210,11 +210,16 @@ fn scan_fixture(kind: &str, n: usize) -> BexStr {
     }
 }
 
+/// BAML `s.at(i)` for an in-range `i`, as `bex_vm`'s `string.rs` implements it.
+fn at(s: &BexStr, i: usize) -> Option<BexStr> {
+    (i < s.char_count()).then(|| s.char_slice(i..i + 1))
+}
+
 fn bench_at_scan(bencher: Bencher, kind: &str, n: usize) {
     let s = scan_fixture(kind, n);
     bencher.bench(|| {
         for i in 0..n {
-            black_box(s.char_at_codepoint(black_box(i)));
+            black_box(at(&s, black_box(i)));
         }
     });
 }
@@ -244,7 +249,7 @@ fn slice_scan_ascii_flat(bencher: Bencher, n: usize) {
     let s = scan_fixture("ascii", n);
     bencher.bench(|| {
         for i in 0..n {
-            black_box(s.substring_by_char(black_box(i), i + 1));
+            black_box(s.char_slice(black_box(i)..i + 1));
         }
     });
 }
@@ -254,7 +259,7 @@ fn slice_scan_non_ascii_flat(bencher: Bencher, n: usize) {
     let s = scan_fixture("non_ascii", n);
     bencher.bench(|| {
         for i in 0..n {
-            black_box(s.substring_by_char(black_box(i), i + 1));
+            black_box(s.char_slice(black_box(i)..i + 1));
         }
     });
 }
@@ -266,7 +271,7 @@ fn index_of_from_scan_non_ascii_flat(bencher: Bencher, n: usize) {
     let s = scan_fixture("non_ascii", n);
     bencher.bench(|| {
         let mut pos = 0;
-        while let Some(i) = s.char_index_of_from("a", pos) {
+        while let Some(i) = s.char_find_from("a", pos) {
             pos = i + 1;
         }
         black_box(pos);
@@ -295,7 +300,7 @@ fn deep_rope_build_count_flatten(bencher: Bencher, n: usize) {
 //
 // End-to-end shapes of BAML string code, built from the same `BexStr` calls the
 // VM makes (`+` → `concat`, `replace_all` → `BexStr::from(str::replace)`, `at` →
-// `char_at_codepoint`). Each doubles `n` (codepoints); compare growth factors
+// `char_slice(i..i + 1)`). Each doubles `n` (codepoints); compare growth factors
 // and compare the `*_read` variants against their write-only twins to see what
 // reading costs on top of writing.
 
@@ -311,7 +316,7 @@ fn replace_all(s: &BexStr, from: &str, to: &str) -> BexStr {
 fn at_scan(s: &BexStr) -> usize {
     let mut hits = 0;
     for i in 0..s.char_count() {
-        if s.char_at_codepoint(i).is_some_and(|c| c.as_str() == "a") {
+        if at(s, i).is_some_and(|c| c.as_str() == "a") {
             hits += 1;
         }
     }
@@ -363,7 +368,7 @@ fn replace_rounds(n: usize, reads_per_round: usize) -> usize {
         let len = s.char_count();
         for r in 0..reads_per_round {
             let i = (r * 7919 + round) % len;
-            if s.char_at_codepoint(i).is_some_and(|c| c.as_str() == "A") {
+            if at(&s, i).is_some_and(|c| c.as_str() == "A") {
                 hits += 1;
             }
         }
@@ -390,10 +395,7 @@ fn append_rounds(n: usize, ascii: bool, read: bool) -> usize {
     let mut hits = 0;
     for _ in 0..n / 10 {
         s = BexStr::concat(s, unit.clone());
-        if read
-            && s.char_at_codepoint(s.char_count() - 1)
-                .is_some_and(|c| c.as_str() == "j")
-        {
+        if read && at(&s, s.char_count() - 1).is_some_and(|c| c.as_str() == "j") {
             hits += 1;
         }
     }
@@ -420,7 +422,7 @@ fn w3_append_only(n: usize) -> usize {
 #[divan::bench(args = SCAN_SIZES, sample_count = 10, sample_size = 1)]
 fn w4_replace_then_one_read_non_ascii(n: usize) -> Option<BexStr> {
     let s = replace_all(&BexStr::from(workload_unit(false).repeat(n / 10)), "a", "A");
-    s.char_at_codepoint(n / 2)
+    at(&s, n / 2)
 }
 
 #[divan::bench(args = SCAN_SIZES, sample_count = 10, sample_size = 1)]

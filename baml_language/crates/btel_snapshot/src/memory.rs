@@ -213,7 +213,7 @@ mod tests {
     fn accounts_full_shared_slice_parents_for_values_and_keys() {
         let pool = SnapshotPool::new(1, Limits::default());
         let source = bex_str::BexStr::from("a".repeat(100_000));
-        let slice = source.substring(0, 100);
+        let slice = source.byte_slice(0..100);
         let mut snapshot = scalar(&pool);
         snapshot.0.strings.reserve(1);
         snapshot.0.entries.reserve(1);

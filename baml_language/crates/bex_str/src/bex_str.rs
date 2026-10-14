@@ -2,7 +2,7 @@ use std::{
     borrow::Borrow,
     fmt,
     hash::{Hash, Hasher},
-    ops::Deref,
+    ops::{Deref, Range},
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
@@ -13,7 +13,27 @@ use std::{
 /// 56 (target size) - 1 (discriminant) - 1 (len byte) = 54.
 const INLINE_CAPACITY: usize = 54;
 
+/// Sentinel for a `Slice` whose ASCII prefix doesn't fit in `u32` (a slice of
+/// 4 GiB or more): `ascii_prefix_len()` recomputes it by scanning.
+pub(crate) const SLICE_ASCII_PREFIX_UNKNOWN: u32 = u32::MAX;
+
 /// V8-inspired immutable string. O(1) clone. 56 bytes.
+///
+/// # Units
+///
+/// Methods without a unit prefix measure positions in **bytes**, as `str` does
+/// (and every `str` method reached through `Deref` does). Methods whose
+/// positions are `char` indices (Unicode scalar values) start with `char_`.
+/// `char_to_byte` / `byte_to_char` convert between the two.
+///
+/// # ASCII prefix
+///
+/// Every variant knows, in O(1), its exact [`ascii_prefix_len`]: the byte
+/// offset of its first non-ASCII byte, or `len()` if it has none. Within that
+/// prefix char `n` starts at byte `n`, so char-indexed operations there skip
+/// the codepoint scan, and scans elsewhere start at the prefix's end.
+///
+/// [`ascii_prefix_len`]: BexStr::ascii_prefix_len
 pub enum BexStr {
     /// Strings ≤54 bytes: zero heap allocation, clone = memcpy.
     Inline {
@@ -29,6 +49,10 @@ pub enum BexStr {
         offset: u64,
         len: u64,
         char_count: u64,
+        /// Exact ASCII prefix of this slice (not its parent), or
+        /// `SLICE_ASCII_PREFIX_UNKNOWN`. Fits in the padding after the enum
+        /// tag, so it doesn't grow `BexStr`.
+        ascii_prefix_len: u32,
         hash: [AtomicU64; 2],
     },
     /// Deferred concatenation. Flattened on first byte-level access.
@@ -42,6 +66,9 @@ pub struct FlatStr {
     pub(crate) hash: [AtomicU64; 2],
     /// Number of Unicode codepoints. Computed once at construction.
     pub(crate) char_count: u64,
+    /// Byte offset of the first non-ASCII byte, or `data.len()` if none.
+    /// Computed once at construction.
+    pub(crate) ascii_prefix_len: u64,
     /// UTF-8 byte data. Tight allocation (no excess capacity).
     pub(crate) data: Box<[u8]>,
 }
@@ -52,6 +79,9 @@ pub struct ConcatNode {
     /// Number of Unicode codepoints, summed from the children at construction
     /// (each O(1)), so `char_count` needs no recursive walk of a deep rope.
     pub(crate) char_count: u64,
+    /// Exact ASCII prefix, derived from the children's at construction (each
+    /// O(1)) for the same reason.
+    pub(crate) ascii_prefix_len: u64,
     pub(crate) state: Mutex<ConcatState>,
 }
 
@@ -121,11 +151,36 @@ impl BexStr {
     /// rope, however deep repeated appends have made it.
     pub fn char_count(&self) -> usize {
         match self {
-            BexStr::Inline { len, data } => bytecount::num_chars(&data[..*len as usize]),
+            BexStr::Inline { len, data } => ascii_prefix_and_char_count(&data[..*len as usize]).1,
             BexStr::Flat(f) => f.char_count as usize,
             BexStr::Slice { char_count, .. } => *char_count as usize,
             BexStr::Concat(c) => c.char_count as usize,
         }
+    }
+
+    /// Length in bytes of the longest all-ASCII prefix: the byte offset of the
+    /// first non-ASCII byte, or `len()` if there is none. Exact, and O(1) for
+    /// all variants (an inline string scans at most 54 bytes; a slice of
+    /// 4 GiB or more rescans). For every `n <= ascii_prefix_len()`, char `n`
+    /// starts at byte `n`.
+    pub fn ascii_prefix_len(&self) -> usize {
+        match self {
+            BexStr::Inline { len, data } => ascii_prefix_len(&data[..*len as usize]),
+            BexStr::Flat(f) => f.ascii_prefix_len as usize,
+            BexStr::Slice {
+                ascii_prefix_len: SLICE_ASCII_PREFIX_UNKNOWN,
+                ..
+            } => ascii_prefix_len(self.as_bytes()),
+            BexStr::Slice {
+                ascii_prefix_len, ..
+            } => *ascii_prefix_len as usize,
+            BexStr::Concat(c) => c.ascii_prefix_len as usize,
+        }
+    }
+
+    /// Whether every byte is ASCII. O(1); shadows the O(n) `str::is_ascii`.
+    pub fn is_ascii(&self) -> bool {
+        self.ascii_prefix_len() == self.len()
     }
 
     /// O(1) for Inline/Flat/Slice. O(n) first-call flatten for Concat.
@@ -183,9 +238,10 @@ impl BexStr {
         }
     }
 
-    /// Zero-copy substring. Enforces depth-1 invariant.
-    /// Callers must ensure start/end are valid UTF-8 char boundaries.
-    pub fn substring(&self, start: usize, end: usize) -> BexStr {
+    /// Zero-copy substring by byte range. Enforces depth-1 invariant.
+    /// Callers must ensure both ends are UTF-8 char boundaries.
+    pub fn byte_slice(&self, range: Range<usize>) -> BexStr {
+        let Range { start, end } = range;
         debug_assert!(start <= end);
         debug_assert!(end <= self.len());
         let slice_len = end - start;
@@ -206,106 +262,149 @@ impl BexStr {
             };
         }
 
-        // Long result → Slice (depth-1 invariant)
-        let slice_char_count = bytecount::num_chars(&self.as_bytes()[start..end]) as u64;
-        match self {
+        // Long result → Slice (depth-1 invariant). The receiver's own ASCII
+        // prefix covers the slice's start when `start` falls inside it; only
+        // otherwise does the slice need a scan, fused with its char count.
+        let bytes = &self.as_bytes()[start..end];
+        let outer_prefix = self.ascii_prefix_len();
+        let (prefix, char_count) = if start < outer_prefix {
+            let prefix = (outer_prefix - start).min(slice_len);
+            (prefix, prefix + bytecount::num_chars(&bytes[prefix..]))
+        } else {
+            ascii_prefix_and_char_count(bytes)
+        };
+        let ascii_prefix_len = u32::try_from(prefix)
+            .ok()
+            .filter(|&p| p != SLICE_ASCII_PREFIX_UNKNOWN)
+            .unwrap_or(SLICE_ASCII_PREFIX_UNKNOWN);
+        let (parent, offset) = match self {
             BexStr::Inline { .. } => {
                 // Can't reach here: INLINE_CAPACITY < slice_len
                 // but slice_len <= self.len() <= INLINE_CAPACITY. Contradiction.
                 unreachable!("Inline string cannot produce a Slice longer than INLINE_CAPACITY");
             }
-            BexStr::Flat(f) => BexStr::Slice {
-                parent: f.clone(),
-                offset: start as u64,
-                len: slice_len as u64,
-                char_count: slice_char_count,
-                hash: [const { AtomicU64::new(0) }; 2],
-            },
-            BexStr::Slice { parent, offset, .. } => {
-                // Re-slice: point at SAME parent, adjust offset. Depth stays 1.
-                BexStr::Slice {
-                    parent: parent.clone(),
-                    offset: *offset + start as u64,
-                    len: slice_len as u64,
-                    char_count: slice_char_count,
-                    hash: [const { AtomicU64::new(0) }; 2],
-                }
-            }
-            BexStr::Concat(c) => {
-                // Flatten first, then slice into the result.
-                let flat = c.flatten();
-                BexStr::Slice {
-                    parent: flat,
-                    offset: start as u64,
-                    len: slice_len as u64,
-                    char_count: slice_char_count,
-                    hash: [const { AtomicU64::new(0) }; 2],
-                }
-            }
+            BexStr::Flat(f) => (f.clone(), start as u64),
+            // Re-slice: point at SAME parent, adjust offset. Depth stays 1.
+            BexStr::Slice { parent, offset, .. } => (parent.clone(), *offset + start as u64),
+            // `as_bytes` above already flattened; this returns the cached result.
+            BexStr::Concat(c) => (c.flatten(), start as u64),
+        };
+        BexStr::Slice {
+            parent,
+            offset,
+            len: slice_len as u64,
+            char_count: char_count as u64,
+            ascii_prefix_len,
+            hash: [const { AtomicU64::new(0) }; 2],
         }
     }
 
-    // ── Codepoint-indexed methods ──────────────────────────────────────
+    // ── Char-indexed methods ───────────────────────────────────────────
+    //
+    // All char ↔ byte conversion goes through `char_to_byte_from` and
+    // `byte_to_char_from`, the only places that scan.
 
-    /// Substring by codepoint indices `[start, end)`. Clamps to bounds.
-    /// Always lands on valid UTF-8 char boundaries. Never panics.
-    pub fn substring_by_char(&self, start: usize, end: usize) -> BexStr {
-        let char_len = self.char_count();
-        let start = start.min(char_len);
-        let end = end.min(char_len).max(start);
-        if start == end {
-            return BexStr::empty();
-        }
-        let bytes = self.as_bytes();
-        let byte_start = byte_offset_of_nth_codepoint(bytes, start);
-        let byte_end = byte_offset_of_nth_codepoint(bytes, end);
-        self.substring(byte_start, byte_end)
+    /// Byte offset where char `n` starts, or `len()` if `n >= char_count()`.
+    /// O(1) when `n <= ascii_prefix_len()`; otherwise scans from the end of
+    /// the ASCII prefix (flattening a `Concat` first).
+    pub fn char_to_byte(&self, n: usize) -> usize {
+        self.char_to_byte_from((0, 0), n)
     }
 
-    /// Returns the codepoint at index `n` as a single-character BexStr.
-    /// Returns `None` if `n >= char_count()`.
-    pub fn char_at_codepoint(&self, n: usize) -> Option<BexStr> {
+    /// Char index of the char starting at byte `b`, which must be a char
+    /// boundary (`char_count()` for `b >= len()`). Inverse of `char_to_byte`.
+    /// O(1) when `b <= ascii_prefix_len()` or `b >= len()`; otherwise counts
+    /// from the end of the ASCII prefix.
+    pub fn byte_to_char(&self, b: usize) -> usize {
+        self.byte_to_char_from((0, 0), b)
+    }
+
+    /// `char_to_byte(n)`, given that char `known.0` starts at byte `known.1`
+    /// (`known.0 <= n`): the scan starts from whichever of that point and the
+    /// end of the ASCII prefix is further along.
+    fn char_to_byte_from(&self, known: (usize, usize), n: usize) -> usize {
+        let prefix = self.ascii_prefix_len();
+        if n <= prefix {
+            return n;
+        }
+        if n >= self.char_count() {
+            return self.len();
+        }
+        let (char_idx, byte_idx) = if known.0 > prefix {
+            known
+        } else {
+            (prefix, prefix)
+        };
+        debug_assert!(char_idx <= n);
+        byte_idx + scan_char_to_byte(&self.as_bytes()[byte_idx..], n - char_idx)
+    }
+
+    /// `byte_to_char(b)`, given that byte `known.0` starts char `known.1`
+    /// (`known.0 <= b`), counting from whichever of that point and the end of
+    /// the ASCII prefix is further along.
+    fn byte_to_char_from(&self, known: (usize, usize), b: usize) -> usize {
+        let prefix = self.ascii_prefix_len();
+        if b <= prefix {
+            return b;
+        }
+        if b >= self.len() {
+            return self.char_count();
+        }
+        let (byte_idx, char_idx) = if known.0 > prefix {
+            known
+        } else {
+            (prefix, prefix)
+        };
+        debug_assert!(byte_idx <= b);
+        char_idx + bytecount::num_chars(&self.as_bytes()[byte_idx..b])
+    }
+
+    /// The char at index `n`, or `None` if `n >= char_count()`.
+    pub fn char_at(&self, n: usize) -> Option<char> {
         if n >= self.char_count() {
             return None;
         }
-        let bytes = self.as_bytes();
-        let byte_start = byte_offset_of_nth_codepoint(bytes, n);
-        // Determine the byte length of this codepoint from the leading byte.
-        let ch_len = utf8_char_len(bytes[byte_start]);
-        Some(self.substring(byte_start, byte_start + ch_len))
+        let b = self.char_to_byte(n);
+        self.as_str()[b..].chars().next()
     }
 
-    /// Finds `needle` and returns its codepoint index, or `None`.
-    pub fn char_index_of(&self, needle: &str) -> Option<usize> {
-        self.char_index_of_from(needle, 0)
-    }
-
-    /// Finds `needle` starting at codepoint `start`, returning an absolute
-    /// codepoint index. A start past the end returns `None`, even for an empty
-    /// needle. Searches the borrowed suffix without allocating a substring or
-    /// recounting the entire suffix's character metadata.
-    pub fn char_index_of_from(&self, needle: &str, start: usize) -> Option<usize> {
-        let text = self.as_str();
+    /// Substring by char range. Clamps both ends to `char_count()` (and `end`
+    /// to at least `start`), so it never panics.
+    pub fn char_slice(&self, range: Range<usize>) -> BexStr {
         let char_len = self.char_count();
-        if start > char_len {
+        let start = range.start.min(char_len);
+        let end = range.end.min(char_len).max(start);
+        if start == end {
+            return BexStr::empty();
+        }
+        let byte_start = self.char_to_byte(start);
+        let byte_end = self.char_to_byte_from((start, byte_start), end);
+        self.byte_slice(byte_start..byte_end)
+    }
+
+    /// Finds `needle` and returns its char index, or `None`.
+    pub fn char_find(&self, needle: &str) -> Option<usize> {
+        self.char_find_from(needle, 0)
+    }
+
+    /// Finds `needle` at or after char `start`, returning an absolute char
+    /// index. A start past the end returns `None`, even for an empty needle.
+    /// Searches the borrowed suffix without allocating, and counts chars only
+    /// between `start` and the match.
+    pub fn char_find_from(&self, needle: &str, start: usize) -> Option<usize> {
+        if start > self.char_count() {
             return None;
         }
-        let byte_start = if char_len == text.len() {
-            // Every character is ASCII, so codepoint and byte offsets coincide.
-            start
-        } else {
-            byte_offset_of_nth_codepoint(text.as_bytes(), start)
-        };
-        let suffix = &text[byte_start..];
-        let relative = suffix.find(needle)?;
-        Some(start + bytecount::num_chars(&suffix.as_bytes()[..relative]))
+        let byte_start = self.char_to_byte(start);
+        let relative = self.as_str()[byte_start..].find(needle)?;
+        Some(self.byte_to_char_from((byte_start, start), byte_start + relative))
     }
 
-    /// Finds the *last* occurrence of `needle` and returns the codepoint index
-    /// of its start, or `None`.
-    pub fn char_last_index_of(&self, needle: &str) -> Option<usize> {
+    /// Finds the *last* occurrence of `needle` and returns the char index of
+    /// its start, or `None`.
+    pub fn char_rfind(&self, needle: &str) -> Option<usize> {
         let byte_idx = self.as_str().rfind(needle)?;
-        Some(bytecount::num_chars(&self.as_bytes()[..byte_idx]))
+        Some(self.byte_to_char(byte_idx))
     }
 
     /// Repeats this string `n` times.
@@ -337,9 +436,16 @@ impl BexStr {
         }
 
         let char_count = (left.char_count() + right.char_count()) as u64;
+        let left_prefix = left.ascii_prefix_len();
+        let ascii_prefix_len = if left_prefix == left.len() {
+            left.len() + right.ascii_prefix_len()
+        } else {
+            left_prefix
+        } as u64;
         BexStr::Concat(Arc::new(ConcatNode {
             total_len: total_len as u64,
             char_count,
+            ascii_prefix_len,
             state: Mutex::new(ConcatState::Deferred { left, right }),
         }))
     }
@@ -385,6 +491,35 @@ impl BexStr {
     }
 }
 
+// ── FlatStr ────────────────────────────────────────────────────────
+
+impl FlatStr {
+    /// Wraps `data`, computing its char count and ASCII prefix in one pass.
+    fn new(data: Box<[u8]>) -> FlatStr {
+        let (prefix, char_count) = ascii_prefix_and_char_count(&data);
+        FlatStr::from_parts(data, char_count as u64, prefix as u64)
+    }
+
+    /// Wraps `data` whose char count and ASCII prefix are already known.
+    fn from_parts(data: Box<[u8]>, char_count: u64, ascii_prefix_len: u64) -> FlatStr {
+        debug_assert_eq!(
+            ascii_prefix_and_char_count(&data),
+            (ascii_prefix_len as usize, char_count as usize)
+        );
+        FlatStr {
+            hash: [const { AtomicU64::new(0) }; 2],
+            char_count,
+            ascii_prefix_len,
+            data,
+        }
+    }
+
+    /// The empty string, left behind in a `ConcatNode` whose children were taken.
+    fn placeholder() -> FlatStr {
+        FlatStr::from_parts(Box::new([]), 0, 0)
+    }
+}
+
 // ── ConcatNode ─────────────────────────────────────────────────────
 
 impl ConcatNode {
@@ -400,11 +535,7 @@ impl ConcatNode {
         // Take ownership of the deferred state
         let old = std::mem::replace(
             &mut *guard,
-            ConcatState::Flattened(Arc::new(FlatStr {
-                hash: [const { AtomicU64::new(0) }; 2],
-                char_count: 0,
-                data: Box::new([]),
-            })),
+            ConcatState::Flattened(Arc::new(FlatStr::placeholder())),
         );
         let (left, right) = match old {
             ConcatState::Deferred { left, right } => (left, right),
@@ -460,11 +591,11 @@ impl ConcatNode {
             }
         }
 
-        let flat = Arc::new(FlatStr {
-            hash: [const { AtomicU64::new(0) }; 2],
-            char_count: self.char_count,
-            data: buf.into_boxed_slice(),
-        });
+        let flat = Arc::new(FlatStr::from_parts(
+            buf.into_boxed_slice(),
+            self.char_count,
+            self.ascii_prefix_len,
+        ));
         *guard = ConcatState::Flattened(flat.clone());
         flat
     }
@@ -474,14 +605,7 @@ impl ConcatNode {
 impl Drop for ConcatNode {
     fn drop(&mut self) {
         let state = match self.state.get_mut() {
-            Ok(s) => std::mem::replace(
-                s,
-                ConcatState::Flattened(Arc::new(FlatStr {
-                    hash: [const { AtomicU64::new(0) }; 2],
-                    char_count: 0,
-                    data: Box::new([]),
-                })),
-            ),
+            Ok(s) => std::mem::replace(s, ConcatState::Flattened(Arc::new(FlatStr::placeholder()))),
             Err(_) => return, // Mutex poisoned — leak rather than risk UB
         };
         let (left, right) = match state {
@@ -500,11 +624,7 @@ impl Drop for ConcatNode {
                 let inner = match owned.state.get_mut() {
                     Ok(s) => std::mem::replace(
                         s,
-                        ConcatState::Flattened(Arc::new(FlatStr {
-                            hash: [const { AtomicU64::new(0) }; 2],
-                            char_count: 0,
-                            data: Box::new([]),
-                        })),
+                        ConcatState::Flattened(Arc::new(FlatStr::placeholder())),
                     ),
                     Err(_) => continue,
                 };
@@ -533,12 +653,14 @@ impl Clone for BexStr {
                 offset,
                 len,
                 char_count,
+                ascii_prefix_len,
                 hash,
             } => BexStr::Slice {
                 parent: parent.clone(),
                 offset: *offset,
                 len: *len,
                 char_count: *char_count,
+                ascii_prefix_len: *ascii_prefix_len,
                 hash: clone_hash(hash),
             },
             BexStr::Concat(c) => BexStr::Concat(c.clone()),
@@ -631,12 +753,7 @@ impl From<String> for BexStr {
                 data,
             }
         } else {
-            let char_count = bytecount::num_chars(s.as_bytes()) as u64;
-            BexStr::Flat(Arc::new(FlatStr {
-                hash: [const { AtomicU64::new(0) }; 2],
-                char_count,
-                data: s.into_bytes().into_boxed_slice(),
-            }))
+            BexStr::Flat(Arc::new(FlatStr::new(s.into_bytes().into_boxed_slice())))
         }
     }
 }
@@ -651,12 +768,7 @@ impl From<&str> for BexStr {
                 data,
             }
         } else {
-            let char_count = bytecount::num_chars(s.as_bytes()) as u64;
-            BexStr::Flat(Arc::new(FlatStr {
-                hash: [const { AtomicU64::new(0) }; 2],
-                char_count,
-                data: s.as_bytes().into(),
-            }))
+            BexStr::Flat(Arc::new(FlatStr::new(s.as_bytes().into())))
         }
     }
 }
@@ -672,7 +784,7 @@ impl From<&str> for BexStr {
 ///
 /// Processes 8 bytes at a time using bit masks and popcount for ~30x speedup
 /// over byte-by-byte `char_indices().nth()`.
-fn byte_offset_of_nth_codepoint(bytes: &[u8], n: usize) -> usize {
+fn scan_char_to_byte(bytes: &[u8], n: usize) -> usize {
     if n == 0 {
         return 0;
     }
@@ -715,17 +827,26 @@ fn byte_offset_of_nth_codepoint(bytes: &[u8], n: usize) -> usize {
     bytes.len()
 }
 
-/// Returns the byte length of a UTF-8 character from its leading byte.
-fn utf8_char_len(leading_byte: u8) -> usize {
-    if leading_byte < 0x80 {
-        1
-    } else if leading_byte < 0xE0 {
-        2
-    } else if leading_byte < 0xF0 {
-        3
-    } else {
-        4
+/// Byte offset of the first non-ASCII byte in `bytes`, or `bytes.len()`.
+fn ascii_prefix_len(bytes: &[u8]) -> usize {
+    // Skip whole ASCII chunks with std's word-at-a-time `is_ascii`, then find
+    // the exact byte within the first chunk that isn't.
+    const CHUNK: usize = 32;
+    let mut i = 0;
+    while i + CHUNK <= bytes.len() && bytes[i..i + CHUNK].is_ascii() {
+        i += CHUNK;
     }
+    bytes[i..]
+        .iter()
+        .position(|b| !b.is_ascii())
+        .map_or(bytes.len(), |p| i + p)
+}
+
+/// `(ascii_prefix_len, char_count)` of `bytes` in one pass: the prefix's
+/// chars are its bytes, so only the rest is counted.
+fn ascii_prefix_and_char_count(bytes: &[u8]) -> (usize, usize) {
+    let prefix = ascii_prefix_len(bytes);
+    (prefix, prefix + bytecount::num_chars(&bytes[prefix..]))
 }
 
 impl fmt::Debug for BexStr {

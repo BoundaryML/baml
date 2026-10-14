@@ -195,7 +195,7 @@ mod tests {
         tlab.alloc_string(text.clone());
         for _ in 0..1000 {
             tlab.alloc_string(text.clone());
-            tlab.alloc_string(text.substring(1, 128));
+            tlab.alloc_string(text.byte_slice(1..128));
         }
         tlab.alloc_uint8array(vec![0; MIN_FULL_BUDGET]);
         // These 2002 objects reserve 2048 slots, regardless of backing size or sharing.

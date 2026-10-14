@@ -50,13 +50,13 @@ mod baml {
 
     /// `s.at(i)`
     pub fn at(s: &BexStr, i: i64) -> Option<BexStr> {
-        resolve_index(i, s.char_count()).and_then(|i| s.char_at_codepoint(i))
+        resolve_index(i, s.char_count()).map(|i| s.char_slice(i..i + 1))
     }
 
     /// `s.code_point_at(i)`
     pub fn code_point_at(s: &BexStr, i: i64) -> Option<i64> {
         resolve_index(i, s.char_count())
-            .and_then(|i| s.as_str().chars().nth(i))
+            .and_then(|i| s.char_at(i))
             .map(|c| i64::from(u32::from(c)))
     }
 
@@ -65,23 +65,23 @@ mod baml {
         let len = s.char_count();
         let start = resolve_slice_bound(start, len);
         let end = resolve_slice_bound(end, len).max(start);
-        s.substring_by_char(start, end)
+        s.char_slice(start..end)
     }
 
     /// `s.index_of(x)`
     pub fn index_of(s: &BexStr, x: &BexStr) -> Option<i64> {
-        s.char_index_of(x.as_str()).map(|i| i as i64)
+        s.char_find(x.as_str()).map(|i| i as i64)
     }
 
     /// `baml.regex._index_of_from(s, x, from)` (behind `index_of` with a start)
     pub fn index_of_from(s: &BexStr, x: &BexStr, from: i64) -> Option<i64> {
         let from = usize::try_from(from).ok()?;
-        s.char_index_of_from(x.as_str(), from).map(|i| i as i64)
+        s.char_find_from(x.as_str(), from).map(|i| i as i64)
     }
 
     /// `s.last_index_of(x)`
     pub fn last_index_of(s: &BexStr, x: &BexStr) -> Option<i64> {
-        s.char_last_index_of(x.as_str()).map(|i| i as i64)
+        s.char_rfind(x.as_str()).map(|i| i as i64)
     }
 
     pub fn includes(s: &BexStr, x: &BexStr) -> bool {
@@ -99,7 +99,7 @@ mod baml {
     fn char_substrings(s: &BexStr) -> Vec<BexStr> {
         s.as_str()
             .char_indices()
-            .map(|(start, ch)| s.substring(start, start + ch.len_utf8()))
+            .map(|(start, ch)| s.byte_slice(start..start + ch.len_utf8()))
             .collect()
     }
 
@@ -119,7 +119,7 @@ mod baml {
         text.split(d)
             .map(|part| {
                 let start = part.as_ptr() as usize - base;
-                s.substring(start, start + part.len())
+                s.byte_slice(start..start + part.len())
             })
             .collect()
     }
