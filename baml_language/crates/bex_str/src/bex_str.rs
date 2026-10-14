@@ -85,16 +85,19 @@ pub struct ConcatStr<const N: usize = 2, Count = ()> {
 /// Binary handles have a constant count without storing another field; wider
 /// handles cache their active count in four bytes of the enum payload budget.
 pub trait ConcatChildCount {
+    /// Number of children visible through this handle's immutable prefix.
     fn get(&self) -> usize;
 }
 
 impl ConcatChildCount for () {
+    /// Binary nodes always expose both children, with no stored count.
     fn get(&self) -> usize {
         2
     }
 }
 
 impl ConcatChildCount for u32 {
+    /// Returns the wider handle's cached prefix count.
     fn get(&self) -> usize {
         *self as usize
     }
@@ -109,6 +112,7 @@ impl<const N: usize, Count> Deref for ConcatStr<N, Count> {
 }
 
 impl<const N: usize, Count: ConcatChildCount> ConcatStr<N, Count> {
+    /// Hashes this prefix, sharing the full buffer's cache or a prefix-specific cache.
     fn content_hash(&self) -> u128 {
         let flat = self.flatten();
         let len = self.total_byte_len as usize;
@@ -122,6 +126,7 @@ impl<const N: usize, Count: ConcatChildCount> ConcatStr<N, Count> {
         cached_hash(&hashes[self.child_count.get() - 1], &flat.data[..len])
     }
 
+    /// Reads this prefix's cached hash without materializing a deferred node.
     fn try_get_hash(&self) -> Option<u128> {
         let guard = self.state.lock().unwrap();
         match &*guard {
@@ -136,6 +141,7 @@ impl<const N: usize, Count: ConcatChildCount> ConcatStr<N, Count> {
         }
     }
 
+    /// Borrows this handle's UTF-8 prefix from the node's frozen allocation.
     fn as_bytes(&self) -> &[u8] {
         let flat = self.flatten();
         debug_assert!(self.total_byte_len as usize <= flat.data.len());
@@ -148,6 +154,7 @@ impl<const N: usize, Count: ConcatChildCount> ConcatStr<N, Count> {
         }
     }
 
+    /// Moves uniquely owned children onto the drop stack; shared nodes keep their storage.
     fn take_children(self, stack: &mut Vec<BexStr>) {
         if let Ok(mut owned) = Arc::try_unwrap(self.node) {
             let inner = match owned.state.get_mut() {
@@ -162,6 +169,7 @@ impl<const N: usize, Count: ConcatChildCount> ConcatStr<N, Count> {
         }
     }
 
+    /// Copies a frozen prefix or schedules its deferred children in byte order.
     fn push_children(&self, stack: &mut Vec<BexStr>, buf: &mut Vec<u8>) {
         let guard = self.state.lock().unwrap();
         match &*guard {
@@ -212,6 +220,7 @@ pub(crate) enum ConcatState<const N: usize = 2> {
 }
 
 impl<const N: usize> ConcatState<N> {
+    /// Builds frozen state with initially empty per-prefix hash caches.
     fn flattened(flat: Arc<FlatStr>) -> Self {
         Self::Flattened(flat, [const { [const { AtomicU64::new(0) }; 2] }; N])
     }
@@ -316,6 +325,7 @@ impl BexStr {
     }
 
     /// Byte length. O(1) for all variants.
+    #[inline(always)]
     pub fn byte_len(&self) -> usize {
         match self {
             BexStr::Inline { byte_len, .. } => *byte_len as usize,
@@ -329,6 +339,7 @@ impl BexStr {
     /// Number of Unicode codepoints. O(1) for all variants: a Concat caches
     /// its count at construction, so this never walks (or recurses into) the
     /// rope, however deep repeated appends have made it.
+    #[inline(always)]
     pub fn char_len(&self) -> usize {
         match self {
             BexStr::Inline { byte_len, data } => bytecount::num_chars(&data[..*byte_len as usize]),
@@ -344,6 +355,7 @@ impl BexStr {
     /// all variants (an inline string scans at most 54 bytes; a slice of
     /// 4 GiB or more rescans). For every `n <= ascii_prefix_len()`, char `n`
     /// starts at byte `n`.
+    #[inline(always)]
     pub fn ascii_prefix_len(&self) -> usize {
         match self {
             BexStr::Inline { byte_len, data } => ascii_prefix_len(&data[..*byte_len as usize]),
@@ -377,6 +389,9 @@ impl BexStr {
     }
 
     /// O(1) for Inline/Flat/Slice. O(n) first-call flatten for Concat.
+    // Keep leaf access inlined: the extra deferred variant must not make
+    // byte/char indexing pay for an out-of-line dispatch on every read.
+    #[inline(always)]
     pub fn as_bytes(&self) -> &[u8] {
         match self {
             BexStr::Inline { byte_len, data } => &data[..*byte_len as usize],
@@ -413,6 +428,7 @@ impl BexStr {
     }
 
     /// UTF-8 view; concatenations are flattened on first access.
+    #[inline(always)]
     pub fn as_str(&self) -> &str {
         // SAFETY: BexStr is always constructed from valid UTF-8.
         #[allow(unsafe_code)]
@@ -423,6 +439,7 @@ impl BexStr {
 
     /// Zero-copy substring by byte range. Enforces depth-1 invariant.
     /// Callers must ensure both ends are UTF-8 char boundaries.
+    #[inline]
     pub fn byte_slice(&self, range: Range<usize>) -> BexStr {
         let Range { start, end } = range;
         debug_assert!(start <= end);
@@ -507,6 +524,7 @@ impl BexStr {
     /// (`known.0 <= n`; past the end, `known.1` may be `byte_len()`): the scan
     /// starts from whichever of that point and the end of the ASCII prefix is
     /// further along.
+    #[inline]
     fn char_to_byte_from(&self, known: (usize, usize), n: usize) -> usize {
         // At most 54 bytes: scanning directly beats finding the prefix first.
         if let BexStr::Inline { byte_len, data } = self {
@@ -554,6 +572,7 @@ impl BexStr {
     }
 
     /// The char at index `n`, or `None` if `n >= char_len()`.
+    #[inline]
     pub fn char_at(&self, n: usize) -> Option<char> {
         // Past the end, `b == byte_len()` and the suffix is empty.
         let b = self.char_to_byte(n);
@@ -562,6 +581,7 @@ impl BexStr {
 
     /// Substring by char range. Clamps both ends to `char_len()` (and `end`
     /// to at least `start`), so it never panics.
+    #[inline]
     pub fn char_slice(&self, range: Range<usize>) -> BexStr {
         // `char_to_byte` maps every index past the end to `byte_len()`, which is
         // the clamp; `end` is scanned onward from `start`.
