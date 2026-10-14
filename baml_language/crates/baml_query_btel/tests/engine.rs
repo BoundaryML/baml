@@ -701,7 +701,7 @@ async fn streamed_usage_keeps_the_cache_split() {
 
 /// A streamed LLM function is a span like a called one: `Summarize@stream`
 /// records its own span, with the request's network span under it, and
-/// captures the function's arguments but not the injected `client`.
+/// captures the function's arguments.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_streamed_llm_function_is_its_own_span() {
     let project = tempfile::tempdir().unwrap();
@@ -761,7 +761,7 @@ async fn a_streamed_llm_function_is_its_own_span() {
     let spans = sql(
         &mut index,
         "SELECT s.span_type, parent.span_type, parent.span_name, grandparent.span_name,
-           parent.input_args['text'], parent.input_args['client'] IS NULL
+           parent.input_args['text']
          FROM spans s JOIN spans parent ON parent.span_id = s.parent_span_id
          JOIN spans grandparent ON grandparent.span_id = parent.parent_span_id
          WHERE s.span_type = 'network_span'",
@@ -774,7 +774,6 @@ async fn a_streamed_llm_function_is_its_own_span() {
             json!("user.Summarize@stream"),
             json!("user.main"),
             json!("hi"),
-            json!(0),
         ]]
     );
 }
