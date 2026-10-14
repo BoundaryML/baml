@@ -77,14 +77,21 @@ function _media_block(media: ai.MediaPart) -> json {
     if let url: string = resolved.url {
         return { "type": block_type, "source": { "type": "url", "url": url } };
     }
-    if (block_type == "image" && !_supported_image_mime(resolved.mime_type)) {
-        throw _reject(
-            `claude-code does not accept ${resolved.mime_type} images: it supports image/jpeg, image/png, image/gif and image/webp`,
-        )
-    }
+    let media_type = if (block_type == "image") {
+        // the check is case-insensitive; send the lowercase form the API documents
+        let lower = resolved.mime_type.to_lower_case();
+        if (!_supported_image_mime(lower)) {
+            throw _reject(
+                `claude-code does not accept ${resolved.mime_type} images: it supports image/jpeg, image/png, image/gif and image/webp`,
+            )
+        }
+        lower
+    } else {
+        resolved.mime_type
+    };
     {
         "type": block_type,
-        "source": { "type": "base64", "media_type": resolved.mime_type, "data": resolved.base64 ?? "" },
+        "source": { "type": "base64", "media_type": media_type, "data": resolved.base64 ?? "" },
     }
 }
 

@@ -119,6 +119,15 @@ test "claude_code_pdf_becomes_a_document_block" {
     assert.equal(cc_pdf_block(), "document|application/pdf")
 }
 
+function cc_image_media_type(mime: string) -> string {
+    let line = cc_stdin(CcLook@spec(baml.media.Image.from_base64("SGVsbG8=", mime)), "");
+    baml.json.path_or<string>(line, ".message.content[1].source.media_type", "-")
+}
+
+test "claude_code_lowercases_image_mime" {
+    assert.equal(cc_image_media_type("IMAGE/PNG"), "image/png")
+}
+
 test "claude_code_rejects_unsupported_image_mime" {
     let got = cc_error(CcLook@spec(baml.media.Image.from_base64("PHN2Zy8+", "image/svg+xml")));
     assert.contains(got, "InvalidRequest: ");
