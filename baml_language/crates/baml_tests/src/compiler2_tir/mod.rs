@@ -1036,7 +1036,8 @@ pub(crate) mod support {
             let fqn = qualified_name(
                 &index.scopes,
                 i,
-                baml_compiler2_hir::package::spelling(db).of(pkg_info.root),
+                &baml_compiler2_hir_ty::render::Viewpoint::canonical(db)
+                    .display_label(pkg_info.root),
             );
 
             // ── Structural scopes (class/enum/type alias) ───────────
@@ -2120,9 +2121,8 @@ pub(crate) mod support {
 
         let mut output = String::new();
         let pkg_info = file_package(db, file);
-        let package = baml_compiler2_hir::package::spelling(db)
-            .of(pkg_info.root)
-            .clone();
+        let package =
+            baml_compiler2_hir_ty::render::Viewpoint::canonical(db).display_label(pkg_info.root);
         let prefix = if pkg_info.namespace_path.is_empty() {
             format!("{package}.")
         } else {

@@ -22,7 +22,7 @@ use baml_compiler2_hir::{
         MethodOwner, class_data, enum_data, function_data, interface_data, let_data, method_owner,
     },
     loc::{ClassLoc, DeclRef, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
-    package::{DependencyTable, edge_spelling, spelling},
+    package::{DependencyTable, edge_spelling},
 };
 use baml_compiler2_hir_ty::{
     callable::ExternalCallTarget,
@@ -493,7 +493,7 @@ impl<'w, 'db> PackageRefs<'w, 'db> {
         }
         unreachable!(
             "`{}` resolved to a declaration no lane declares",
-            spelling(db).wire(head)
+            baml_compiler2_hir_ty::render::Viewpoint::canonical(db).wire_head(head)
         )
     }
 

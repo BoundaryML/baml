@@ -4,28 +4,27 @@
 //! package as the root itself: same-named declarations in two packages are
 //! two types with two runtime identities; a package names only what its
 //! edges reach, under the names the edges give; and a program compiles
-//! whatever it calls its packages — two that share a spelling, or one
-//! reached under two names, are a rendering ambiguity the spelling table
-//! reports, never a reason emit or the link cannot tell two declarations
-//! apart. Every scenario needs more than one package in one database,
+//! whatever it calls its packages — two that share a display label, or one
+//! reached under two names, are a rendering ambiguity, never a reason emit
+//! or the link cannot tell two declarations apart. Every scenario needs more
+//! than one package in one database,
 //! which only the harness can build, so they live here rather than in the
 //! BAML corpus.
 
 use baml_base::{Dependency, Name, SourceRoot, SourceRootKind};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, Severity};
 use baml_compiler2_emit::OptLevel;
-use baml_compiler2_hir::package::{SpellingCollision, spelling, spelling_within};
+use baml_compiler2_hir_ty::render::Viewpoint;
 use baml_db::{ProjectDatabase, SourceRootSpec, collect_compiler2_diagnostics, compile_program};
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::Object;
 
-/// MIR carries a head as its declaration's identity, never as a spelling.
+/// MIR carries a head as its declaration's identity, never as a label.
 ///
-/// An unnamed package spells as the default, so two unnamed projects in one
-/// database spell the same and a lookup keyed on the spelling answers with
-/// whichever root was created first. The crossing MIR lowers through never
-/// makes that lookup: a head that enters as one package's declaration leaves
-/// as that package's declaration, whatever the two are called.
+/// An unnamed package is labelled by the stand-in, so two unnamed projects in
+/// one database are labelled alike. The crossing MIR lowers through never
+/// reads a label: a head that enters as one package's declaration leaves as
+/// that package's declaration, whatever the two are called.
 #[test]
 fn mir_keeps_a_head_as_its_declaration_whatever_the_package_is_called() {
     let (mut db, first) = workspace_db();
@@ -36,16 +35,11 @@ fn mir_keeps_a_head_as_its_declaration_whatever_the_package_is_called() {
         ))
         .expect("a second unnamed workspace root is a valid root");
 
-    let table = spelling(&db);
+    let viewpoint = Viewpoint::canonical(&db);
     assert_eq!(
-        table.of(first),
-        table.of(second),
-        "two unnamed packages spell the same"
-    );
-    assert_eq!(
-        table.root(table.of(second)),
-        Some(first),
-        "the spelling alone cannot tell them apart: it answers with the first"
+        viewpoint.display_package(first),
+        viewpoint.display_package(second),
+        "two unnamed packages are labelled alike"
     );
 
     // The crossing MIR lowers through: the same for every package, because
@@ -53,7 +47,6 @@ fn mir_keeps_a_head_as_its_declaration_whatever_the_package_is_called() {
     let aliases = baml_type::ResolvedAliases::default();
     let crossing = baml_compiler2_mir::RuntimeLowering {
         aliases: &aliases,
-        spelling: table,
         db: &db,
     };
     let point_of = |root| baml_type::DeclName::in_root(root, Vec::new(), Name::new("Point"));
@@ -75,7 +68,7 @@ fn mir_keeps_a_head_as_its_declaration_whatever_the_package_is_called() {
     assert_eq!(
         crossing.wire(&point_of(first)),
         crossing.wire(&point_of(second)),
-        "while the two spell the same: a spelling is display, not identity"
+        "while the two render alike: a label is display, not identity"
     );
 }
 
@@ -171,12 +164,11 @@ fn emit_keeps_same_named_declarations_apart() {
 }
 
 #[test]
-fn unnamed_packages_collide_only_within_one_program() {
+fn unnamed_packages_share_a_label_and_a_program_compiles_without_them() {
     let (mut db, workspace) = workspace_db();
     // Two unnamed packages nobody depends on: the database holds them (a
-    // spelling is not an identity) and its table reports the clash — but a
-    // program is emitted for one root's world, and neither is in the
-    // workspace's, so the workspace's own table is injective and it emits.
+    // label is not an identity) and labels all three alike — but a program
+    // is emitted for one root's world, and neither is in the workspace's.
     let a = db
         .add_source_root(SourceRootSpec::new(
             "<builtin>/a",
@@ -194,23 +186,18 @@ fn unnamed_packages_collide_only_within_one_program() {
     db.file("main.baml", "class Shared { z bool }\n");
     assert_clean(&db);
 
-    let table = spelling(&db);
-    assert_eq!(table.of(a), table.of(b));
-    assert_eq!(table.of(a), table.of(workspace));
-    let [SpellingCollision::SharedName { name, roots }] = table.collisions() else {
-        panic!(
-            "expected one shared-name collision, got {:?}",
-            table.collisions()
-        );
-    };
-    assert_eq!(name.as_str(), "user");
-    assert_eq!(roots.len(), 3);
-    assert!(spelling_within(&db, workspace).collisions().is_empty());
+    let viewpoint = Viewpoint::canonical(&db);
+    assert_eq!(viewpoint.display_package(a), viewpoint.display_package(b));
+    assert_eq!(
+        viewpoint.display_package(a),
+        viewpoint.display_package(workspace)
+    );
+    assert_eq!(viewpoint.display_package(a), "user");
     compile_program(&db, workspace, OptLevel::Two).expect("the workspace's world holds no clash");
 }
 
 #[test]
-fn packages_that_share_a_spelling_stay_distinct_through_emit_and_link() {
+fn packages_that_share_a_label_stay_distinct_through_emit_and_link() {
     let (mut db, workspace) = workspace_db();
     // Two unnamed packages in ONE world spelled by the same edge name: the
     // workspace reaches `x` as `lib`, and `x` reaches `y` as `lib`. Each
@@ -255,20 +242,13 @@ fn packages_that_share_a_spelling_stay_distinct_through_emit_and_link() {
     );
     assert_clean(&db);
 
-    let table = spelling_within(&db, workspace);
-    assert_eq!(table.of(x), table.of(y));
-    let [SpellingCollision::SharedName { name, roots }] = table.collisions() else {
-        panic!(
-            "expected one shared-name collision, got {:?}",
-            table.collisions()
-        );
-    };
-    assert_eq!(name.as_str(), "lib");
-    assert_eq!(roots.len(), 2);
-
-    // The table reports the rendering ambiguity; the program is unaffected.
+    // From the workspace both are labelled by the edge that reaches them
+    // first, `lib`: a rendering ambiguity the program is unaffected by.
+    let viewpoint = Viewpoint::user_facing(&db, workspace);
+    assert_eq!(viewpoint.display_package(x), "lib");
+    assert_eq!(viewpoint.display_package(y), "lib");
     let program = compile_program(&db, workspace, OptLevel::Two)
-        .expect("a shared spelling is no obstacle to emit or link");
+        .expect("a shared label is no obstacle to emit or link");
     let classes: Vec<_> = program
         .objects
         .iter()
@@ -334,17 +314,15 @@ fn an_unnamed_package_reached_under_two_names_is_one_package() {
     // Each dependent resolves the package under its own edge name.
     assert_clean(&db);
 
-    let table = spelling(&db);
-    let [SpellingCollision::ManyNames { root, names }] = table.collisions() else {
-        panic!(
-            "expected one many-names collision, got {:?}",
-            table.collisions()
-        );
-    };
-    assert_eq!(*root, shared);
-    let mut names: Vec<&str> = names.iter().map(Name::as_str).collect();
-    names.sort_unstable();
-    assert_eq!(names, ["first", "second"]);
+    // Each dependent shows the package by its own name for it.
+    assert_eq!(
+        Viewpoint::user_facing(&db, workspace).display_package(shared),
+        "first"
+    );
+    assert_eq!(
+        Viewpoint::user_facing(&db, other).display_package(shared),
+        "second"
+    );
     // Two names for one package is a rendering ambiguity, not two packages:
     // the program holds the one `S`, reached by both dependents.
     let program = compile_program(&db, workspace, OptLevel::Two)
@@ -500,8 +478,30 @@ fn a_transitive_dependency_is_shown_by_its_own_name_or_its_nearest_edge_but_not_
     assert_eq!(viewpoint.path(&t), "twig.T");
     assert_eq!(
         viewpoint.source_path(&t),
-        Err(baml_compiler2_hir_ty::render::Unspellable(t))
+        Err(baml_compiler2_hir_ty::render::Unspellable(t.clone()))
     );
+
+    // A wire head packs the label for display, and locality is the viewer's
+    // identity, never the label: the unnamed workspace is `Local` only from
+    // its own viewpoint. Canonically (no viewer) every package is a
+    // dependency under its label, spelled out rather than elided. An unnamed
+    // package with no edge path to label it by falls back to the stand-in
+    // `user` — the unnamed workspace and `twig` alike, which is ambiguous to
+    // a reader of a dump but no longer read back as `Local`.
+    let own = baml_type::DeclName::in_root(workspace, Vec::new(), Name::new("f"));
+    assert!(viewpoint.wire_head(&own).is_local());
+    assert_eq!(
+        *viewpoint.wire_head(&m).package(),
+        Name::new("mid"),
+        "a dependency is spelled by the viewer's edge name"
+    );
+    let canonical = baml_compiler2_hir_ty::render::Viewpoint::canonical(&db);
+    let own_head = canonical.wire_head(&own);
+    assert!(!own_head.is_local());
+    assert_eq!(own_head.display_name().as_str(), "user.f");
+    let twig_head = canonical.wire_head(&t);
+    assert!(!twig_head.is_local());
+    assert_eq!(twig_head.display_name().as_str(), "user.T");
 }
 
 #[test]
@@ -618,11 +618,10 @@ fn a_cached_throw_seed_locates_its_heads_by_edge_path() {
     );
     assert_clean(&db);
 
-    let table = spelling(&db);
     assert_eq!(
-        table.of(far),
-        table.of(near),
-        "the two packages spell alike"
+        far.self_name(&db),
+        near.self_name(&db),
+        "the two packages declare one name"
     );
 
     let boom_of = |root| {

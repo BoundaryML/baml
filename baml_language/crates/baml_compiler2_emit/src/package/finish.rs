@@ -17,7 +17,7 @@ use baml_compiler2_hir_ty::{
     lower::qualify_def,
     package_interface::export_interface,
 };
-use baml_compiler2_mir::{RuntimeLowering, definition_link_name};
+use baml_compiler2_mir::{RuntimeLowering, definition_display_name};
 use baml_linker_types::{
     CompilationUnit, EmittedPackage, ExportTable, InitTail, LocalRef, PackageRecord,
     ProgramImplRuleFrag, ProgramMethodImplFrag, SessionInitializer,
@@ -347,7 +347,7 @@ fn emit_tail<'db>(
         .iter()
         .map(|&binding| {
             (
-                definition_link_name(db, Definition::Let(binding)),
+                definition_display_name(db, Definition::Let(binding)),
                 binding,
                 binding.file(db),
             )

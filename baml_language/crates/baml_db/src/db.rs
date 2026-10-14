@@ -1647,17 +1647,12 @@ mod tests {
             db.add_source_root(workspace_spec("/ws")),
             Err(SourceRootError::PathTaken(workspace))
         );
-        // Spellings are not an identity: two roots may share one, and the
-        // boundary that needs the spelling table injective reports it.
+        // A name is not an identity: two roots may declare one, and both
+        // are live roots.
         let dep = db.add_source_root(dependency_spec("/dep", "dep")).unwrap();
         let dep2 = db.add_source_root(dependency_spec("/dep2", "dep")).unwrap();
-        assert_eq!(
-            baml_compiler2_hir::package::spelling(&db).collisions(),
-            &[baml_compiler2_hir::package::SpellingCollision::SharedName {
-                name: Name::new("dep"),
-                roots: vec![dep, dep2],
-            }]
-        );
+        assert_ne!(dep, dep2);
+        assert_eq!(dep.self_name(&db), dep2.self_name(&db));
         // Dependency roots sort before the workspace root; Dynamic roots
         // (runtime-loaded) sort after it, whatever the insertion order.
         let dynamic = db

@@ -2023,11 +2023,8 @@ mod tests {
 
     #[test]
     fn seeded_stdlib_interface_short_circuits_derivation() {
-        use baml_db::{
-            Name,
-            baml_compiler2_hir_ty::package_interface::{
-                FunctionThrowSets, PackageInterface, WireInterface, package_interface,
-            },
+        use baml_db::baml_compiler2_hir_ty::package_interface::{
+            FunctionThrowSets, PackageInterface, WireInterface, package_interface,
         };
 
         // A fresh db derives a non-empty `log` interface (it exports log.info,
@@ -2059,8 +2056,8 @@ mod tests {
         );
         db.set_seeded_stdlib_interface(seed);
 
-        let log_id = baml_db::baml_compiler2_hir::package::spelling(&db)
-            .root(&Name::new("log"))
+        let log_id = baml_db::baml_compiler2_hir::package::lang_roots(&db)
+            .get(baml_db::LangPackage::Log)
             .unwrap();
         let iface = package_interface(&db, log_id);
         assert!(

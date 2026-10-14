@@ -25,7 +25,9 @@ use baml_compiler2_hir::{
     type_ref::{TypeRefId, TypeRefStore},
 };
 use baml_compiler2_hir_ty::{extern_loc::InterfaceRef, layout, lower::qualify_def};
-use baml_compiler2_mir::{RuntimeLowering, definition_link_name, lower_let_body, tir2_to_template};
+use baml_compiler2_mir::{
+    RuntimeLowering, definition_display_name, lower_let_body, tir2_to_template,
+};
 use baml_type::{DeclName, ParamTy, Ty, TypeName, typetag::TypeTag};
 use bex_vm_types::{
     Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
@@ -1052,7 +1054,7 @@ pub(crate) fn compile_let_helper<'db>(
         crate::internal_lowering_error(
             db,
             file,
-            &definition_link_name(db, Definition::Let(binding)),
+            &definition_display_name(db, Definition::Let(binding)),
             &error,
         )
     })?;

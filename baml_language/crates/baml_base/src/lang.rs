@@ -35,7 +35,9 @@ use crate::{Name, files::SourceRoot};
 /// stdlib by what it is rather than by a name the program gives it. The
 /// discriminant is the wire form: the order of the variants is a contract —
 /// append, never reorder.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, BorshSerialize, BorshDeserialize,
+)]
 pub enum LangPackage {
     /// The core package: builtin companion classes, `baml.panics`, `baml.ops`.
     Baml,

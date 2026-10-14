@@ -1,10 +1,10 @@
 ---
 source: crates/baml_tests/src/compiler2_mir/mod.rs
 ---
-fn user.f(v: NumberBag | int[][]) -> int {
+fn user.f(v: user.NumberBag | int[][]) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: NumberBag | int[][] // v // param
+    let _1: user.NumberBag | int[][] // v // param
     let _2: bool
     let _3: int[]
     let _4: int[] // field
@@ -28,7 +28,7 @@ fn user.f(v: NumberBag | int[][]) -> int {
     let _22: 0
 
     bb0: {
-        _2 = is_type(copy _1, NumberBag);
+        _2 = is_type(copy _1, user.NumberBag);
         branch copy _2 -> [bb9, bb1];
     }
 

@@ -176,7 +176,7 @@ pub fn walk_rvalue_places<'a>(rvalue: &'a Rvalue<'_>, f: &mut impl FnMut(&'a Pla
         }
         Rvalue::LoadType(_)
         | Rvalue::TraceHookSettings { .. }
-        | Rvalue::CurrentPackage(_)
+        | Rvalue::CurrentPackage
         | Rvalue::MakeGenericFunction { .. } => {
             // No place operands — the templates are compile-time data.
         }
@@ -247,7 +247,7 @@ pub fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
         | Rvalue::IsTypeTag { .. }
         | Rvalue::MakeBoundMethod { .. }
         | Rvalue::TraceHookSettings { .. }
-        | Rvalue::CurrentPackage(_) => {}
+        | Rvalue::CurrentPackage => {}
     }
 }
 
@@ -509,7 +509,7 @@ pub fn rvalue_reads(
         | Rvalue::MakeVirtualBoundMethod { .. }
         | Rvalue::MakeVirtualFunction { .. }
         | Rvalue::LoadType(_)
-        | Rvalue::CurrentPackage(_)
+        | Rvalue::CurrentPackage
         | Rvalue::MakeGenericFunction { .. }
         | Rvalue::MakeGenericFunctionFromValue { .. } => {}
     }
@@ -684,7 +684,7 @@ pub fn rvalue_allocates_identity(rvalue: &Rvalue<'_>) -> bool {
         | Rvalue::MakeGenericFunction { .. }
         | Rvalue::MakeGenericFunctionFromValue { .. }
         | Rvalue::LoadType(_)
-        | Rvalue::CurrentPackage(_) => false,
+        | Rvalue::CurrentPackage => false,
     }
 }
 
@@ -752,7 +752,7 @@ pub fn rvalue_can_trap<'db>(body: &MirFunctionBody<'db>, rvalue: &Rvalue<'db>) -
         | Rvalue::MakeGenericFunctionFromValue { .. }
         | Rvalue::MakeVirtualFunction { .. }
         | Rvalue::LoadType(_)
-        | Rvalue::CurrentPackage(_) => false,
+        | Rvalue::CurrentPackage => false,
     }
 }
 

@@ -13,6 +13,7 @@ use baml_compiler2_hir_ty::{
     },
     layout,
     package_interface::ExportedFunction,
+    render::Viewpoint,
 };
 use baml_type::{
     DeclName, ParamTy, PrimitiveType, ResolvedAliases, RuntimeGenericLayout, TypeName,
@@ -538,24 +539,22 @@ fn lower_tir_template(
 }
 
 /// The checker → MIR crossing for one package: alias expansion, with every
-/// head kept as the declaration's identity. It also renders a head as the
-/// program spells it ([`Self::wire`]) for the places that SHOW one — a
-/// runtime object's display name, operand metadata, a dump — and for nothing
-/// else: no declaration is ever resolved from a spelling.
+/// head kept as the declaration's identity. It also renders a head
+/// canonically ([`Self::wire`]) for the places that SHOW one — operand
+/// metadata, a dump, a message — and for nothing else: no declaration is
+/// ever resolved from a rendering.
 #[derive(Clone, Copy)]
 pub struct RuntimeLowering<'a> {
     pub aliases: &'a ResolvedAliases,
-    pub spelling: &'a Spelling,
     pub db: &'a dyn crate::Db,
 }
 
 impl<'a> RuntimeLowering<'a> {
-    /// The crossing for `root`'s declarations: its alias environment and the
-    /// database's spelling table, both memoized.
+    /// The crossing for `root`'s declarations: its memoized alias
+    /// environment.
     pub fn of(db: &'a dyn crate::Db, root: baml_base::SourceRoot) -> Self {
         Self {
             aliases: &resolved_aliases_for_package(db, root).0,
-            spelling: baml_compiler2_hir::package::spelling(db),
             db,
         }
     }
@@ -566,11 +565,12 @@ impl<'a> RuntimeLowering<'a> {
         self.aliases.convert(ty)
     }
 
-    /// A compile-time head as the program spells it: what a runtime object's
-    /// display name and a dump say. Never an identity — nothing resolves a
+    /// A compile-time head rendered canonically, packed into a wire name for
+    /// printers that take one ([`Viewpoint::wire_head`]): what operand
+    /// metadata and a dump say. Never an identity — nothing resolves a
     /// declaration from it.
     pub fn wire(&self, decl: &DeclName) -> TypeName {
-        self.spelling.wire(decl)
+        Viewpoint::canonical(self.db).wire_head(decl)
     }
 }
 
@@ -1027,11 +1027,11 @@ use baml_compiler2_hir::{contributions::Definition, file_package::file_package};
 /// display owner is the interface's bare name for a default body and the
 /// synthesized `<(target as iface)>` segment for an impl-provided one.
 ///
-/// A NAME, never an identity: MIR carries declarations and refs, and emit
-/// renders this exactly where a name is legitimately a key today — the unit
-/// link symbols, `Function.name`, display metadata, and the incremental
-/// edge grain.
-pub fn definition_link_name<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> String {
+/// A canonical rendering, never an identity: MIR carries declarations and
+/// refs, and emit renders this exactly where a declaration is SHOWN —
+/// operand metadata, dumps, messages. The package segment is the package's
+/// display label ([`Viewpoint::display_package`]).
+pub fn definition_display_name<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> String {
     use baml_compiler2_hir::item_data::{MethodOwner, method_owner};
     let pkg_info = file_package(db, def.file(db));
     // An impl-provided body is no item of a namespace: it is identified by
@@ -1045,19 +1045,19 @@ pub fn definition_link_name<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -
         }
         _ => &pkg_info.namespace_path,
     };
-    link_name(
-        spelling(db).of(pkg_info.root),
+    dotted_name(
+        &Viewpoint::canonical(db).display_label(pkg_info.root),
         namespace,
         &[&definition_short_name(db, def)],
     )
 }
 
-/// The owner-qualified tail of a declaration's link name — everything after
+/// The owner-qualified tail of a declaration's display name — everything after
 /// the package and namespace segments: `f` for a free function, `Class.m`
 /// for a class-inherent method, `Interface.m` for an interface's default
 /// body, `<(target as iface)>.m` for an impl-provided one, and the bare name
 /// for every other item. This is the ONE spelling of a declaration's tail:
-/// [`definition_link_name`] prefixes it, and a nested synthetic function
+/// [`definition_display_name`] prefixes it, and a nested synthetic function
 /// (`<lambda(owner, i)>`) names its owner by it, so the two cannot drift.
 pub(crate) fn definition_short_name<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> String {
     use baml_compiler2_hir::item_data::{
@@ -1118,8 +1118,8 @@ pub(crate) fn definition_short_name<'db>(db: &'db dyn crate::Db, def: Definition
     }
 }
 
-/// `package.ns….tail…` — the one dotted spelling every link name uses.
-fn link_name(package: &Name, namespace: &[Name], tail: &[&str]) -> String {
+/// `package.ns….tail…` — the one dotted spelling every display name uses.
+fn dotted_name(package: &Name, namespace: &[Name], tail: &[&str]) -> String {
     let mut parts: Vec<&str> = Vec::with_capacity(1 + namespace.len() + tail.len());
     parts.push(package.as_str());
     parts.extend(namespace.iter().map(Name::as_str));
@@ -1128,7 +1128,7 @@ fn link_name(package: &Name, namespace: &[Name], tail: &[&str]) -> String {
 }
 
 /// The synthesized `<(target as iface)>` display segment for an anonymous
-/// impl block — see the `MethodOwner::Impl` arm of [`definition_link_name`].
+/// impl block — see the `MethodOwner::Impl` arm of [`definition_display_name`].
 fn impl_display_segment<'db>(
     db: &'db dyn crate::Db,
     impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
@@ -1179,9 +1179,9 @@ struct BodyPackageSpelling<'db> {
 impl baml_type::TyRenderStrategy<baml_type::DeclName> for BodyPackageSpelling<'_> {
     fn qtn(&self, qtn: &baml_type::DeclName) -> String {
         let package = if qtn.root() == self.body_root {
-            baml_compiler2_hir::package::spelling(self.db)
-                .of(self.body_root)
-                .to_string()
+            Viewpoint::canonical(self.db)
+                .display_package(self.body_root)
+                .into_owned()
         } else {
             baml_compiler2_hir::package::edge_spelling(self.db, self.body_root, qtn.root())
                 .to_string()
@@ -1286,7 +1286,7 @@ fn render_with_frame_indices(
 /// tables and sys-op paths, with a written `root.` spelled as the package
 /// ([`baml_base::native_key_spelling`], shared with the extractor). This is a
 /// KEY, not a name — `Function.name` renders the canonical
-/// `<(target as iface)>` display form ([`definition_link_name`]) — so the
+/// `<(target as iface)>` display form ([`definition_display_name`]) — so the
 /// written-form dependence here is confined to the attach boundary the
 /// codegen already owns.
 pub fn native_key_for<'db>(
@@ -1298,13 +1298,24 @@ pub fn native_key_for<'db>(
         method_owner,
     };
     let pkg_info = file_package(db, func_loc.file(db));
-    let package = spelling(db).of(pkg_info.root);
+    // A native body is the standard library's own: its package is a language
+    // package, keyed by its fixed name — the one the codegen extractor keys
+    // the same body under.
+    let package = Name::new(
+        lang_roots(db)
+            .package_of(pkg_info.root)
+            .unwrap_or_else(|| {
+                unreachable!("a native function is declared by the standard library")
+            })
+            .manifest_name(),
+    );
+    let package = &package;
     let name = function_data(db, func_loc).name.clone();
     let item = match method_owner(db, func_loc) {
         // A class-inherent method has no written-form target to key on: its
-        // key is its link name.
+        // key is its display name.
         Some(MethodOwner::Class(_)) => {
-            return definition_link_name(db, Definition::Function(func_loc));
+            return definition_display_name(db, Definition::Function(func_loc));
         }
         Some(MethodOwner::Interface(iface_loc)) => interface_data(db, iface_loc).name.clone(),
         Some(MethodOwner::Impl(impl_loc)) => {
@@ -1323,10 +1334,10 @@ pub fn native_key_for<'db>(
             Name::new(format!("{iface_display}$for${for_display}"))
         }
         None => {
-            return link_name(package, &pkg_info.namespace_path, &[name.as_str()]);
+            return dotted_name(package, &pkg_info.namespace_path, &[name.as_str()]);
         }
     };
-    link_name(
+    dotted_name(
         package,
         &pkg_info.namespace_path,
         &[item.as_str(), name.as_str()],
@@ -1341,10 +1352,8 @@ pub fn native_key_for<'db>(
 /// `implements`
 /// relation that selects it — so it gets no runtime name: emit pools and slots
 /// it like any function, but it enters no package table (so no rendered view
-/// of the executable names it) and carries `Function::is_interface_body`. The [`definition_link_name`] spelling for a body
-/// is display-only plus a link-internal unit-export key — the latter makes
-/// it load-bearing as a KEY: it must be unique (coherence + the canonical
-/// rendering guarantee it; decompose enforces it).
+/// of the executable names it) and carries `Function::is_interface_body`. The
+/// [`definition_display_name`] rendering of a body is display only.
 ///
 /// Required interface methods (signature-only, no body) never reach the
 /// emit paths that ask this; the interface-owner arm still classifies them
@@ -1364,43 +1373,46 @@ pub fn function_is_interface_body<'db>(
 }
 
 /// The name a callable links as, wherever it is declared: a source
-/// declaration by [`definition_link_name`]; a served package's row by its
+/// declaration by [`definition_display_name`]; a served package's row by its
 /// ADDRESS — its dispatch slot — never the heads the row's own `target`
 /// spells (a blob cannot point a consumer's call at another package's
 /// symbol).
-pub fn function_link_name<'db>(db: &'db dyn crate::Db, func: FunctionRef<'db>) -> String {
+pub fn function_display_name<'db>(db: &'db dyn crate::Db, func: FunctionRef<'db>) -> String {
     use baml_compiler2_hir_ty::callable::ExternalCallTarget;
     match func {
-        DeclRef::Source(func_loc) => definition_link_name(db, Definition::Function(func_loc)),
-        DeclRef::External(callee) => match callee.slot(db) {
-            ExternalCallTarget::Free { function } => link_name(
-                spelling(db).of(function.root()),
-                function.namespace(),
-                &[function.name().as_str()],
-            ),
-            ExternalCallTarget::Method { class, name } => link_name(
-                spelling(db).of(class.root()),
-                class.namespace(),
-                &[class.name().as_str(), name.as_str()],
-            ),
-            ExternalCallTarget::Interface { interface, method } => link_name(
-                spelling(db).of(interface.root()),
-                interface.namespace(),
-                &[interface.name().as_str(), method.as_str()],
-            ),
-        },
+        DeclRef::Source(func_loc) => definition_display_name(db, Definition::Function(func_loc)),
+        DeclRef::External(callee) => {
+            let viewpoint = Viewpoint::canonical(db);
+            match callee.slot(db) {
+                ExternalCallTarget::Free { function } => dotted_name(
+                    &viewpoint.display_label(function.root()),
+                    function.namespace(),
+                    &[function.name().as_str()],
+                ),
+                ExternalCallTarget::Method { class, name } => dotted_name(
+                    &viewpoint.display_label(class.root()),
+                    class.namespace(),
+                    &[class.name().as_str(), name.as_str()],
+                ),
+                ExternalCallTarget::Interface { interface, method } => dotted_name(
+                    &viewpoint.display_label(interface.root()),
+                    interface.namespace(),
+                    &[interface.name().as_str(), method.as_str()],
+                ),
+            }
+        }
     }
 }
 
-/// The name a class links as, wherever it is declared: the wire spelling
-/// emit registers its pooled object under and renders into operand metadata.
-pub fn class_link_name<'db>(db: &'db dyn crate::Db, class: ClassRef<'db>) -> String {
+/// The display name of a class, wherever it is declared: what emit renders
+/// into operand metadata.
+pub fn class_display_name<'db>(db: &'db dyn crate::Db, class: ClassRef<'db>) -> String {
     match class {
-        DeclRef::Source(class_loc) => definition_link_name(db, Definition::Class(class_loc)),
+        DeclRef::Source(class_loc) => definition_display_name(db, Definition::Class(class_loc)),
         DeclRef::External(class_loc) => {
             let head = class_loc.head(db);
-            link_name(
-                spelling(db).of(head.root()),
+            dotted_name(
+                &Viewpoint::canonical(db).display_label(head.root()),
                 head.namespace(),
                 &[head.name().as_str()],
             )
@@ -1408,14 +1420,14 @@ pub fn class_link_name<'db>(db: &'db dyn crate::Db, class: ClassRef<'db>) -> Str
     }
 }
 
-/// The name an enum links as, wherever it is declared.
-pub fn enum_link_name<'db>(db: &'db dyn crate::Db, enum_ref: EnumRef<'db>) -> String {
+/// The display name of an enum, wherever it is declared.
+pub fn enum_display_name<'db>(db: &'db dyn crate::Db, enum_ref: EnumRef<'db>) -> String {
     match enum_ref {
-        DeclRef::Source(enum_loc) => definition_link_name(db, Definition::Enum(enum_loc)),
+        DeclRef::Source(enum_loc) => definition_display_name(db, Definition::Enum(enum_loc)),
         DeclRef::External(enum_loc) => {
             let head = enum_loc.head(db);
-            link_name(
-                spelling(db).of(head.root()),
+            dotted_name(
+                &Viewpoint::canonical(db).display_label(head.root()),
                 head.namespace(),
                 &[head.name().as_str()],
             )
@@ -1478,7 +1490,7 @@ use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
     file_semantic_index,
     loc::{FunctionLoc, LetLoc},
-    package::{Spelling, is_precompiled_stdlib, lang_roots, package_items, spelling},
+    package::{is_precompiled_stdlib, lang_roots, package_items},
     resolve::{ResolvedName, resolve_name_at_in_scope},
     scope::{FileScopeId, ScopeKind},
     semantic_index::{
@@ -1769,9 +1781,6 @@ struct LoweringContext<'db> {
     // Borrowed from `package_lowering_data` (shared across every function in
     // the package) rather than cloned per context.
     resolved_aliases: &'db ResolvedAliases,
-    /// How the program spells every root: what a message or a display
-    /// string says. Never read back into a declaration.
-    spelling: &'db Spelling,
 
     /// All method names declared by in-scope interfaces — see
     /// [`PackageLoweringData::interface_method_names`]. Fast pre-filter in
@@ -1850,7 +1859,6 @@ impl<'db> LoweringContext<'db> {
     fn runtime(&self) -> RuntimeLowering<'db> {
         RuntimeLowering {
             aliases: self.resolved_aliases,
-            spelling: self.spelling,
             db: self.db,
         }
     }
@@ -1942,7 +1950,7 @@ impl<'db> LoweringContext<'db> {
         layout::enum_variant_index(self.db, enum_ref, variant).ok_or_else(|| {
             self.internal_error_here(&format!(
                 "TIR admitted the variant `{variant}` of `{}`, which the enum does not declare",
-                enum_link_name(self.db, enum_ref)
+                enum_display_name(self.db, enum_ref)
             ))
         })
     }
@@ -2056,9 +2064,10 @@ impl<'db> LoweringContext<'db> {
         RuntimeTy::Class(self.baml_decl("iter", "Done"), Box::new([]))
     }
 
-    /// A MIR type as the program spells it, for a message.
+    /// A MIR type rendered canonically, for a message.
     fn spelled(&self, ty: &RuntimeTy) -> baml_type::RuntimeTy {
-        ty.map_heads(&mut |decl| self.spelling.wire(decl))
+        let runtime = self.runtime();
+        ty.map_heads(&mut |decl| runtime.wire(decl))
     }
 
     fn associated_binding_ty(bindings: &[(Name, Tir2Ty)], name: &str) -> Option<Tir2Ty> {
@@ -2391,7 +2400,6 @@ impl<'db> LoweringContext<'db> {
             transitive_captures_needed: Vec::new(),
             tagged_body_param_bindings: HashMap::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
-            spelling: spelling(db),
             interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_ordinals: SyntheticOrdinals::default(),
@@ -2453,7 +2461,6 @@ impl<'db> LoweringContext<'db> {
             source_param_scope: None,
             scope_func_name: Some(let_name),
             resolved_aliases: &pkg_data.resolved_aliases,
-            spelling: spelling(db),
             interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_ordinals: SyntheticOrdinals::default(),
@@ -8666,15 +8673,12 @@ impl<'db> LoweringContext<'db> {
             return Ok(());
         }
 
-        // `Package.current()` is lexical, like `reflect.Type.of`: bake the enclosing
-        // package identity at this call site instead of emitting a callable
-        // reference to the compiler-owned declaration.
+        // `Package.current()` is lexical, like `reflect.Type.of`: the
+        // enclosing package is this unit's own, which whoever lays the unit
+        // into an executable identifies there — no callable reference to the
+        // compiler-owned declaration, and no name baked at the call site.
         if self.is_current_package_intrinsic(callee, &callee_operand) {
-            let package = self
-                .spelling
-                .of(file_package(self.db, self.file).root)
-                .to_string();
-            self.builder.assign(dest, Rvalue::CurrentPackage(package));
+            self.builder.assign(dest, Rvalue::CurrentPackage);
             self.builder.goto(target);
             self.builder.set_current_block(target);
             return Ok(());
@@ -10140,7 +10144,7 @@ impl<'db> LoweringContext<'db> {
                 .ok_or_else(|| {
                     this.internal_error_here(&format!(
                         "object literal names field `{field}`, which `{}` does not declare",
-                        class_link_name(this.db, class)
+                        class_display_name(this.db, class)
                     ))
                 })
         };

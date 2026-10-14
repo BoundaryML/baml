@@ -144,11 +144,13 @@ fn mount_order(
 /// target's path (`built` holds the targets' rows; the order the roots are
 /// created in guarantees it). A name exported twice is E0011.
 ///
-/// The surface spells every foreign head through one of the mount's own
-/// edges (or a language package's fixed name), so the blob's dependency
-/// table is exactly those edges: every non-prelude edge a direct entry
-/// carrying its target's digest (`digest_of`), a language package a prelude
-/// entry — the same table an export of a compiled package builds.
+/// Every head of the surface is a [`MountHead`]: the mount's own by path,
+/// another mount's through one of the mount's own edges, a language
+/// package's by identity. The blob's dependency table is exactly those edges
+/// — every one a direct entry carrying its target's digest (`digest_of`),
+/// since a mount edge never reaches a language package — plus a prelude
+/// entry for each language package a head names, under the package's fixed
+/// name: the same table an export of a compiled package builds.
 fn projected_interface(
     surface: &bex_vm_types::RuntimeProjectedSurface,
     edges: &IndexMap<Name, bex_vm_types::RuntimeMountEdge>,
@@ -158,8 +160,110 @@ fn projected_interface(
     use baml_compiler2_hir_ty::package_interface::{
         ExportedFieldAttrs, ExportedImpl, ExportedImplOrigin, ExportedType, ReExport,
     };
+    use bex_vm_types::MountHead;
 
-    let mut interface = PackageInterface::<TypeName> {
+    /// The blob's dependency table under construction: a slot per edge of
+    /// the mount, in edge order, then a prelude slot per language package the
+    /// surface names, in first-use order. An edge is found by its name and a
+    /// prelude slot by its package, each in its own table, so neither lookup
+    /// can answer with the other's entry.
+    struct Slots {
+        edges: Vec<(Name, Locator)>,
+        /// Each language package's slot index, by its position in
+        /// [`LangPackage::ALL`]; `None` until the surface names it.
+        prelude: [Option<usize>; LangPackage::ALL.len()],
+    }
+
+    impl Slots {
+        fn edge(&self, edge: &Name) -> Result<DepSlot, RuntimeCompileDiagnostic> {
+            self.edges
+                .iter()
+                .position(|(slotted, _)| slotted == edge)
+                .map(DepSlot::of_dependency_index)
+                .ok_or_else(|| {
+                    mount_diagnostic(
+                        "E_RUNTIME_MOUNT",
+                        format!(
+                            "the projected surface names a declaration through `{edge}`, which \
+                             is no edge of the mount"
+                        ),
+                    )
+                })
+        }
+
+        /// The slot of the language package `package`, by identity: the
+        /// next index past the edges on first use.
+        fn prelude(&mut self, package: LangPackage) -> DepSlot {
+            let next = self.edges.len() + self.prelude.iter().flatten().count();
+            let index = *self.prelude[package as usize].get_or_insert(next);
+            DepSlot::of_dependency_index(index)
+        }
+
+        /// The table in slot order: the edges, then the prelude slots in
+        /// the order they were handed out.
+        fn locators(self) -> Vec<Locator> {
+            let mut prelude: Vec<(usize, LangPackage)> = LangPackage::ALL
+                .into_iter()
+                .filter_map(|package| Some((self.prelude[package as usize]?, package)))
+                .collect();
+            prelude.sort_unstable_by_key(|(index, _)| *index);
+            self.edges
+                .into_iter()
+                .map(|(_, locator)| locator)
+                .chain(
+                    prelude
+                        .into_iter()
+                        .map(|(_, package)| Locator::Prelude(package)),
+                )
+                .collect()
+        }
+
+        fn wire(&mut self, head: &MountHead) -> Result<WireName, RuntimeCompileDiagnostic> {
+            match head {
+                MountHead::Own(path) => {
+                    Ok(WireName::own(path.namespace.clone(), path.name.clone()))
+                }
+                MountHead::Edge { edge, path } => Ok(WireName::qualified(
+                    self.edge(edge)?,
+                    path.namespace.clone(),
+                    path.name.clone(),
+                )),
+                MountHead::Prelude { package, path } => Ok(WireName::qualified(
+                    self.prelude(*package),
+                    path.namespace.clone(),
+                    path.name.clone(),
+                )),
+            }
+        }
+
+        fn wire_ty(
+            &mut self,
+            ty: &baml_type::Ty<MountHead>,
+        ) -> Result<baml_type::Ty<WireName>, RuntimeCompileDiagnostic> {
+            ty.try_map_heads(&mut |head| self.wire(head))
+        }
+    }
+
+    let mut slots = Slots {
+        prelude: [None; LangPackage::ALL.len()],
+        edges: edges
+            .iter()
+            .map(|(edge, mount_edge)| {
+                // A mount edge never reaches a language package (the prelude
+                // never crosses the seam), so every edge is a digested entry.
+                let locator = match mount_edge.kind {
+                    bex_vm_types::types::EdgeKind::Dependency
+                    | bex_vm_types::types::EdgeKind::ReExported => Locator::Direct {
+                        edge: edge.clone(),
+                        digest: digest_of(mount_edge.target),
+                    },
+                };
+                (edge.clone(), locator)
+            })
+            .collect(),
+    };
+
+    let mut interface = PackageInterface::<WireName> {
         types: IndexMap::new(),
         functions: IndexMap::new(),
         throw_sets: baml_compiler2_hir_ty::package_interface::FunctionThrowSets::default(),
@@ -170,7 +274,7 @@ fn projected_interface(
     let duplicate = |name: &LocalName| {
         mount_diagnostic("E0011", format!("duplicate exported type name `{name}`"))
     };
-    let exported = |interface: &PackageInterface<TypeName>, name: &LocalName| {
+    let exported = |interface: &PackageInterface<WireName>, name: &LocalName| {
         interface.lookup_type(&name.namespace, &name.name).is_some()
             || interface
                 .lookup_function(&name.namespace, &name.name)
@@ -179,9 +283,9 @@ fn projected_interface(
                 .lookup_reexport(&name.namespace, &name.name)
                 .is_some()
     };
-    let add_row = |interface: &mut PackageInterface<TypeName>,
+    let add_row = |interface: &mut PackageInterface<WireName>,
                    name: &LocalName,
-                   row: ExportedType<TypeName>|
+                   row: ExportedType<WireName>|
      -> Result<(), RuntimeCompileDiagnostic> {
         if exported(interface, name) {
             return Err(duplicate(name));
@@ -199,26 +303,27 @@ fn projected_interface(
             namespace: Vec::new(),
             name: class.name.clone(),
         };
+        let fields = class
+            .fields
+            .iter()
+            .map(|(name, ty, attrs)| {
+                Ok((
+                    name.clone(),
+                    slots.wire_ty(ty)?,
+                    ExportedFieldAttrs {
+                        alias: attrs.alias.clone(),
+                        description: attrs.description.clone(),
+                        docstring: attrs.docstring.clone(),
+                    },
+                ))
+            })
+            .collect::<Result<Vec<_>, RuntimeCompileDiagnostic>>()?;
         add_row(
             &mut interface,
             &name,
             ExportedType::Class {
-                qtn: baml_type::QualifiedTypeName::local(class.name.clone()),
-                fields: class
-                    .fields
-                    .iter()
-                    .map(|(name, ty, attrs)| {
-                        (
-                            name.clone(),
-                            ty.clone(),
-                            ExportedFieldAttrs {
-                                alias: attrs.alias.clone(),
-                                description: attrs.description.clone(),
-                                docstring: attrs.docstring.clone(),
-                            },
-                        )
-                    })
-                    .collect(),
+                qtn: WireName::own(Vec::new(), class.name.clone()),
+                fields,
                 methods: Vec::new(),
                 generic_params: Vec::new(),
                 generic_param_bounds: Vec::new(),
@@ -234,28 +339,25 @@ fn projected_interface(
             &mut interface,
             &name,
             ExportedType::Enum {
-                qtn: baml_type::QualifiedTypeName::local(enm.name.clone()),
+                qtn: WireName::own(Vec::new(), enm.name.clone()),
                 variants: enm.variants.iter().map(|(name, _)| name.clone()).collect(),
             },
         )?;
     }
     for alias in &surface.aliases {
+        let resolved = slots.wire_ty(&alias.ty)?;
         add_row(
             &mut interface,
             &alias.name,
             ExportedType::TypeAlias {
-                qtn: baml_type::QualifiedTypeName::qualified(
-                    baml_type::Package::Local,
-                    alias.name.namespace.clone(),
-                    alias.name.name.clone(),
-                ),
-                resolved: alias.ty.clone(),
+                qtn: WireName::own(alias.name.namespace.clone(), alias.name.name.clone()),
+                resolved,
             },
         )?;
     }
-    let add_reexport = |interface: &mut PackageInterface<TypeName>,
+    let add_reexport = |interface: &mut PackageInterface<WireName>,
                         name: &LocalName,
-                        reexport: ReExport<TypeName>|
+                        reexport: ReExport<WireName>|
      -> Result<(), RuntimeCompileDiagnostic> {
         if exported(interface, name) {
             return Err(duplicate(name));
@@ -269,7 +371,7 @@ fn projected_interface(
         Ok(())
     };
     for reexport in &surface.reexports {
-        let of = reexport.of.clone();
+        let of = slots.wire(&reexport.of)?;
         let entry = match reexport.kind {
             bex_vm_types::RuntimeReExportKind::Class
             | bex_vm_types::RuntimeReExportKind::Enum
@@ -291,8 +393,9 @@ fn projected_interface(
                 "a re-exported package is mounted after the package re-exporting it".to_string(),
             )
         })?;
+        let slot = slots.edge(edge)?;
         let spell = |namespace: &[Name], name: &Name| {
-            TypeName::new(edge.clone(), namespace.to_vec(), name.clone())
+            WireName::qualified(slot, namespace.to_vec(), name.clone())
         };
         for (namespace, items) in &target.types {
             for name in items.keys() {
@@ -336,17 +439,29 @@ fn projected_interface(
         }
     }
     for rule in &surface.impls {
+        let generics = rule
+            .interface
+            .generics
+            .iter()
+            .map(|ty| slots.wire_ty(ty))
+            .collect::<Result<Vec<_>, RuntimeCompileDiagnostic>>()?;
+        let associated_types = rule
+            .interface
+            .associated_types
+            .iter()
+            .map(|(name, ty)| Ok((name.clone(), slots.wire_ty(ty)?)))
+            .collect::<Result<Vec<_>, RuntimeCompileDiagnostic>>()?;
         interface.impls.push(ExportedImpl {
             // The bindings are the row's `associated_types`; the header
             // names the interface and its arguments only, exactly as a
             // source impl's does.
-            associated_types: rule.interface.associated_types.to_vec(),
+            associated_types,
             interface: baml_type::Interface::new(
-                rule.interface.name.clone(),
-                rule.interface.generics.clone(),
+                slots.wire(&rule.interface.name)?,
+                generics.into(),
                 Box::new([]),
             ),
-            for_ty_pattern: rule.for_ty.clone(),
+            for_ty_pattern: slots.wire_ty(&rule.for_ty)?,
             generic_params: Vec::new(),
             param_bounds: Vec::new(),
             field_links: rule.field_links.clone(),
@@ -354,54 +469,9 @@ fn projected_interface(
             methods: Vec::new(),
         });
     }
-    // Every edge of the mount is a slot, in edge order; a language package
-    // the surface names by its fixed name — the prelude never crosses the
-    // seam as an edge; the engine spells it by the fixed names the root
-    // reaches it under — joins the table on demand.
-    let mut table: Vec<(Name, Locator)> = edges
-        .iter()
-        .map(|(edge, mount_edge)| {
-            // Every edge of the mount is a digested entry, located by its
-            // target's surface; the prelude joins the table by identity, on
-            // demand (`Slots::prelude`).
-            let locator = match mount_edge.kind {
-                bex_vm_types::types::EdgeKind::Dependency
-                | bex_vm_types::types::EdgeKind::ReExported => Locator::Direct {
-                    edge: edge.clone(),
-                    digest: digest_of(mount_edge.target),
-                },
-            };
-            (edge.clone(), locator)
-        })
-        .collect();
-    let rows = interface.try_map_heads(&mut |name: &TypeName| {
-        if name.is_local() {
-            return Ok(WireName::own(name.namespace().clone(), name.name().clone()));
-        }
-        let edge = name.package();
-        let position = table.iter().position(|(slotted, _)| slotted == edge);
-        let index = match (position, LangPackage::from_manifest_name(edge.as_str())) {
-            (Some(index), _) => index,
-            (None, Some(language)) => {
-                table.push((edge.clone(), Locator::Prelude(language)));
-                table.len() - 1
-            }
-            (None, None) => {
-                return Err(mount_diagnostic(
-                    "E_RUNTIME_MOUNT",
-                    format!("the projected surface names `{name}` through no edge of the mount"),
-                ));
-            }
-        };
-        Ok(WireName::qualified(
-            DepSlot::of_dependency_index(index),
-            name.namespace().clone(),
-            name.name().clone(),
-        ))
-    })?;
     Ok(WireInterface {
-        dependencies: table.into_iter().map(|(_, locator)| locator).collect(),
-        rows,
+        dependencies: slots.locators(),
+        rows: interface,
     })
 }
 
@@ -1113,17 +1183,26 @@ fn session_contract_head(
     workspace: baml_base::SourceRoot,
     name: &TypeName,
 ) -> Option<baml_type::DeclName> {
-    use baml_compiler2_hir::package::{dependency_named, package_dependency_closure, spelling};
+    use baml_compiler2_hir::package::{dependency_named, package_dependency_closure};
 
     let root = if name.is_local() {
         workspace
     } else if let Some(root) = dependency_named(db, workspace, name.package()) {
         root
     } else {
-        let root = spelling(db).root(name.package())?;
-        package_dependency_closure(db, workspace)
-            .contains(&root)
-            .then_some(root)?
+        // The closure package the engine labelled this way: the one declaring
+        // the name, else the one some closure member reaches by it.
+        let closure = package_dependency_closure(db, workspace);
+        closure
+            .iter()
+            .copied()
+            .find(|root| root.self_name(db).as_ref() == Some(name.package()))
+            .or_else(|| {
+                closure.iter().find_map(|member| {
+                    let root = dependency_named(db, *member, name.package())?;
+                    closure.contains(&root).then_some(root)
+                })
+            })?
     };
     Some(baml_type::DeclName::in_root(
         root,

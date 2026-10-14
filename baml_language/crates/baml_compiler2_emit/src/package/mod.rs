@@ -58,9 +58,7 @@ use bodies::RefTables;
 ///
 /// # Errors
 ///
-/// A body that fails to lower, a dependency cycle among its `let`s, or a
-/// spelling table that is not injective over its reach (two packages spelled
-/// alike).
+/// A body that fails to lower, or a dependency cycle among its `let`s.
 pub fn emit_package(
     db: &dyn crate::Db,
     root: SourceRoot,

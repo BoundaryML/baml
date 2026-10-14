@@ -1962,7 +1962,7 @@ pub fn package_interface(
     // boundary.
     if let Some(bytes) = pkg_id.interface(db) {
         let precompiled = is_precompiled_stdlib(db, pkg_id);
-        let spelled = baml_compiler2_hir::package::spelling(db).of(pkg_id).clone();
+        let spelled = crate::render::Viewpoint::canonical(db).display_label(pkg_id);
         let wire = if precompiled {
             borsh::from_slice::<WireInterface>(bytes).unwrap_or_else(|error| {
                 panic!("compiler-built package `{spelled}` has an invalid interface: {error}")

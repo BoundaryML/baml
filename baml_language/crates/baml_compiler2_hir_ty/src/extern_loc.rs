@@ -742,10 +742,11 @@ fn spell_impl(
     package: SourceRoot,
     identity: &ImplIdentity,
 ) -> String {
+    let viewpoint = Viewpoint::canonical(db);
     format!(
         "{} in package `{}`",
-        spell_impl_identity(identity, &Viewpoint::canonical(db)),
-        baml_compiler2_hir::package::spelling(db).of(package),
+        spell_impl_identity(identity, &viewpoint),
+        viewpoint.display_package(package),
     )
 }
 
@@ -776,11 +777,12 @@ fn package_impl_index(
         let row = u32::try_from(row).expect("impl row count fits in u32");
         let identity = exported_impl_identity(exported);
         if let Some(earlier) = index.insert(identity.clone(), row) {
+            let viewpoint = Viewpoint::canonical(db);
             unreachable!(
                 "package `{}` was mounted with two impl rows of one identity ({}; rows {earlier} \
                  and {row}), which `import_interface` refuses",
-                baml_compiler2_hir::package::spelling(db).of(package),
-                spell_impl_identity(&identity, &Viewpoint::canonical(db)),
+                viewpoint.display_package(package),
+                spell_impl_identity(&identity, &viewpoint),
             );
         }
     }

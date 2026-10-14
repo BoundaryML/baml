@@ -30,7 +30,7 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_mir::{
     BuiltinKind, MirFunctionBody, MirFunctionKind, Operand, Place, RuntimeLowering, RuntimeTy,
-    Rvalue, StatementKind, definition_link_name, lower_function,
+    Rvalue, StatementKind, definition_display_name, lower_function,
     memory::{self, CellId},
 };
 use baml_type::ParamTy;
@@ -956,7 +956,7 @@ fn lowered<'db>(
         internal_lowering_error(
             db,
             function.file(db),
-            &definition_link_name(db, Definition::Function(function)),
+            &definition_display_name(db, Definition::Function(function)),
             error,
         )
     })
@@ -1492,7 +1492,6 @@ mod tests {
         };
         let cache = RuntimeLowering {
             aliases: &aliases,
-            spelling: baml_compiler2_hir::package::spelling(&db),
             db: &db,
         };
 
@@ -1524,7 +1523,6 @@ mod tests {
         };
         let cache = RuntimeLowering {
             aliases: &aliases,
-            spelling: baml_compiler2_hir::package::spelling(&db),
             db: &db,
         };
         let root = file_package(&db, file).root;

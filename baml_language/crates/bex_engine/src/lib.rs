@@ -6743,7 +6743,7 @@ impl BexEngine {
         rules: &[bex_vm_types::HeapPtr],
     ) -> Result<bex_vm_types::RuntimeProjectedSurface, EngineError> {
         use bex_vm::reachable::{Reached, declared_in};
-        use bex_vm_types::types::LocalName;
+        use bex_vm_types::{MountHead, types::LocalName};
 
         let internal = |message: String| EngineError::TypeMismatch { message };
         // A declaration's own path where it is defined: the coordinates the
@@ -6768,64 +6768,66 @@ impl BexEngine {
                 None => Err(internal("a table names a non-declaration".to_string())),
             }
         };
-        // The declaration at `declaration`, spelled from this mount's
-        // viewpoint: its own `Local`; the prelude by the fixed name the root
-        // reaches its package under (the prelude never crosses the seam as
-        // an edge — every package reaches it under those names); anything
-        // else through the edge that reaches where it is defined — which
-        // exists, since the edges were computed from exactly these heads.
-        let spell =
-            |declaration: bex_vm_types::HeapPtr| -> Result<baml_type::TypeName, EngineError> {
-                let path = path_of(declaration)?;
-                if is_own(declaration)? {
-                    return Ok(baml_type::TypeName::qualified(
-                        baml_type::Package::Local,
-                        path.namespace,
-                        path.name,
+        // The declaration at `declaration` from this mount's viewpoint
+        // (`MountHead`): its own by path; a language package's by identity —
+        // the prelude never crosses the seam as an edge, every package
+        // reaches it under the fixed names; anything else through the edge
+        // that reaches where it is defined — which exists, since the edges
+        // were computed from exactly these heads.
+        let spell = |declaration: bex_vm_types::HeapPtr| -> Result<MountHead, EngineError> {
+            let path = path_of(declaration)?;
+            if is_own(declaration)? {
+                return Ok(MountHead::Own(path));
+            }
+            let target = match declared_in(vm.get_object(declaration), declaration) {
+                Some(Reached::Package(package)) => {
+                    if let Object::Package(owner) = vm.get_object(package)
+                        && let bex_vm_types::types::PackageKind::Language(language) = owner.kind
+                    {
+                        return Ok(MountHead::Prelude {
+                            package: language,
+                            path,
+                        });
+                    }
+                    package
+                }
+                Some(Reached::Anonymous(anonymous)) => anonymous,
+                None => {
+                    return Err(internal(
+                        "a type head points at a non-declaration".to_string(),
                     ));
                 }
-                let target = match declared_in(vm.get_object(declaration), declaration) {
-                    Some(Reached::Package(package)) => {
-                        if let Some((edge, _)) = vm.prelude().find(|(_, target)| *target == package)
-                        {
-                            return Ok(baml_type::TypeName::new(edge, path.namespace, path.name));
-                        }
-                        package
-                    }
-                    Some(Reached::Anonymous(anonymous)) => anonymous,
-                    None => {
-                        return Err(internal(
-                            "a type head points at a non-declaration".to_string(),
-                        ));
-                    }
-                };
-                let (edge, _) = edges
-                    .iter()
-                    .find(|(_, edge)| edge.target == target)
-                    .ok_or_else(|| {
-                        internal(format!(
-                            "the mount reaches `{}` through no edge of its own",
-                            path.name
-                        ))
-                    })?;
-                Ok(baml_type::TypeName::new(
-                    edge.clone(),
-                    path.namespace,
-                    path.name,
-                ))
             };
-        let wire_ty = |ty: &bex_vm_types::RuntimeTy| -> Result<baml_type::Ty<baml_type::TypeName>, EngineError> {
-            let mapped: baml_type::RuntimeTy = ty.try_map_heads(&mut |head: &bex_vm_types::TypeHead| {
-                if !head.is_resolved() {
-                    return Err(internal("a projected type carries an unresolved head".to_string()));
-                }
-                spell(head.ptr())
-            })?;
-            Ok(baml_type::Ty::from(&mapped))
+            let (edge, _) = edges
+                .iter()
+                .find(|(_, edge)| edge.target == target)
+                .ok_or_else(|| {
+                    internal(format!(
+                        "the mount reaches `{}` through no edge of its own",
+                        path.name
+                    ))
+                })?;
+            Ok(MountHead::Edge {
+                edge: edge.clone(),
+                path,
+            })
         };
+        let wire_ty =
+            |ty: &bex_vm_types::RuntimeTy| -> Result<baml_type::Ty<MountHead>, EngineError> {
+                let mapped: baml_type::RuntimeTy<MountHead> =
+                    ty.try_map_heads(&mut |head: &bex_vm_types::TypeHead| {
+                        if !head.is_resolved() {
+                            return Err(internal(
+                                "a projected type carries an unresolved head".to_string(),
+                            ));
+                        }
+                        spell(head.ptr())
+                    })?;
+                Ok(baml_type::Ty::from(&mapped))
+            };
         let wire_template = |template: &bex_vm_types::TyTemplate,
                              what: &str|
-         -> Result<baml_type::Ty<baml_type::TypeName>, EngineError> {
+         -> Result<baml_type::Ty<MountHead>, EngineError> {
             let ty = bex_vm_types::RealizedTy::try_from(template).map_err(|error| {
                 internal(format!("an impl rule's {what} is not realized: {error}"))
             })?;

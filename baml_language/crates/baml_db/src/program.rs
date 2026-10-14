@@ -9,7 +9,8 @@
 
 use baml_base::{Name, SourceRoot};
 use baml_compiler2_emit::{LoweringError, OptLevel, emit_package, project_source_content_hash};
-use baml_compiler2_hir::package::{edge_table, spelling, world_roots};
+use baml_compiler2_hir::package::{edge_table, world_roots};
+use baml_compiler2_hir_ty::render::Viewpoint;
 use baml_linker::{LinkError, LinkPackage, LinkPackageId, LinkSet, link};
 pub use baml_linker_types::EmittedPackage;
 use bex_vm_types::Program;
@@ -148,7 +149,7 @@ pub fn compile_program_with(
                 None if package != root && package.files(db).is_empty() => {
                     return package.interface(db).is_some().then(|| {
                         Err(CompileProgramError::ServedWithoutOutput {
-                            package: spelling(db).of(package).clone(),
+                            package: Viewpoint::user_facing(db, root).display_label(package),
                         })
                     });
                 }
@@ -225,15 +226,17 @@ struct LinkedPackage {
 }
 
 /// The link set of the program's packages: each in program order
-/// ([`program_order`]) under the program's spelling of it, its edges
-/// resolved to set positions (an edge to a package that emitted no output
-/// is dropped — nothing imports from it).
+/// ([`program_order`]) under its display label from the root's viewpoint —
+/// its declared name, else the name its nearest dependent reaches it by, else
+/// the stand-in ([`Viewpoint::display_package`]) — its edges resolved to set
+/// positions (an edge to a package that emitted no output is dropped —
+/// nothing imports from it).
 fn link_set<'a>(
     db: &dyn baml_compiler2_hir::Db,
     packages: &'a [LinkedPackage],
     root: SourceRoot,
 ) -> LinkSet<'a> {
-    let spelling = spelling(db);
+    let viewpoint = Viewpoint::user_facing(db, root);
     let lang = baml_compiler2_hir::package::lang_roots(db);
     let position = |root: SourceRoot| {
         packages
@@ -245,7 +248,7 @@ fn link_set<'a>(
         packages: packages
             .iter()
             .map(|package| LinkPackage {
-                name: spelling.of(package.root).clone(),
+                name: viewpoint.display_label(package.root),
                 // The language packages are the prelude: reached under fixed
                 // names by every package, declared by none. Which one a root
                 // is, the installation table says; the edges to them are

@@ -1,21 +1,29 @@
 //! Spelling compile-time types from a viewpoint.
 //!
 //! A compile-time head ([`DeclName`]) carries the declaring root, not a name,
-//! so nothing renders it without a viewpoint: which root is looking, and how
-//! every root is spelled ([`Spelling`]). This module is the one place that
+//! so nothing renders it without a viewpoint: which root is looking, and the
+//! names it reaches other roots by. This module is the one place that
 //! decision is made for the type checker's own output — diagnostics and
 //! canonical dumps. Every other renderer of compile-time types (the IDE's
 //! hover, describe) implements [`TyRenderStrategy`] with its own policy.
+//!
+//! A package has no intrinsic name (`TYPE_SYSTEM.md` § Declarations,
+//! Packages, and Names). The one label a package is ever SHOWN by outside
+//! a viewer's edges is [`Viewpoint::display_package`]: its declared name,
+//! else the name its nearest dependent reaches it by, else the stand-in
+//! [`RESERVED_USER_PACKAGE`]. Nothing reads a label back into a package.
 
 use std::borrow::Cow;
 
 use baml_base::{SourceFile, SourceRoot};
-use baml_compiler2_hir::package::{ROOT_SEGMENT, Spelling, edge_table, spelling};
-use baml_type::{DeclName, Interface, LoweringTy, Name, Ty, TyRenderStrategy};
+use baml_compiler2_hir::package::{ROOT_SEGMENT, edge_table};
+use baml_type::{
+    DeclName, Interface, LoweringTy, Name, Package, RESERVED_USER_PACKAGE, Ty, TyRenderStrategy,
+    TypeName,
+};
 
 /// A viewpoint: the root looking (when there is one), the namespace in it
-/// that is looking, the names it reaches its dependencies by, and the
-/// spelling table.
+/// that is looking, and the names it reaches its dependencies by.
 ///
 /// Rendering *user-facing* (a viewer is set) spells a declaration as source
 /// in the viewer's namespace writes it (`TYPE_SYSTEM.md` § Declarations,
@@ -23,13 +31,12 @@ use baml_type::{DeclName, Interface, LoweringTy, Name, Ty, TyRenderStrategy};
 /// declaration of the viewer's package `root.`-qualified, every dependency
 /// by the viewer's edge name for it, a declaration a dependency re-exports
 /// by the path the re-export gives it — and a package the viewer has no
-/// edge to by its provenance spelling ([`Spelling::of`]); synthetic effect
-/// parameters show as `callback`. Rendering *canonically* (no viewer)
-/// spells every package by its provenance spelling and every parameter
+/// edge to by its display label ([`display_package`](Self::display_package));
+/// synthetic effect parameters show as `callback`. Rendering *canonically*
+/// (no viewer) spells every package by its display label and every parameter
 /// verbatim, which is what dumps and identity-bearing text expect.
 #[derive(Clone)]
 pub struct Viewpoint<'a> {
-    spelling: &'a Spelling,
     viewer: Option<SourceRoot>,
     /// The namespace of the viewer's package that is looking: empty for the
     /// package's root namespace, which is also the view when no file is
@@ -80,7 +87,6 @@ impl<'a> Viewpoint<'a> {
         namespace: Cow<'a, [Name]>,
     ) -> Self {
         Self {
-            spelling: spelling(db),
             viewer: Some(viewer),
             namespace,
             edges: edge_table(db, viewer),
@@ -88,10 +94,10 @@ impl<'a> Viewpoint<'a> {
         }
     }
 
-    /// Canonical rendering: every package spelled, nothing elided.
+    /// Canonical rendering: every package spelled by its display label,
+    /// nothing elided.
     pub fn canonical(db: &'a dyn baml_compiler2_hir::Db) -> Self {
         Self {
-            spelling: spelling(db),
             viewer: None,
             namespace: Cow::Borrowed(&[]),
             edges: &[],
@@ -122,19 +128,19 @@ impl<'a> Viewpoint<'a> {
     /// the viewer's own package, the viewer's edge name where it has one —
     /// unless an item of the viewing namespace is spelled like that edge, in
     /// which case the name reads the item and the package is out of reach
-    /// from here (`TYPE_SYSTEM.md` § Declarations, Packages, and Names) — the
-    /// provenance spelling when no viewer is looking (canonical), and
-    /// [`NoEdge`] for a package a viewer reaches no other way — which source
-    /// in the viewer's package cannot write.
-    fn package_segment(&self, root: SourceRoot) -> Result<Option<&str>, NoEdge> {
+    /// from here (`TYPE_SYSTEM.md` § Declarations, Packages, and Names);
+    /// with no viewer at all, the package's display label. [`NoEdge`] for a
+    /// package a viewer reaches no other way — which source in the viewer's
+    /// package cannot write.
+    fn package_segment(&self, root: SourceRoot) -> Result<Option<Cow<'_, str>>, NoEdge> {
         if self.viewer == Some(root) {
             return Ok(None);
         }
         match (self.edge_name(root), self.viewer) {
             (Some(name), Some(_)) if self.edge_is_shadowed(name) => Err(NoEdge),
-            (Some(name), _) => Ok(Some(name.as_str())),
+            (Some(name), _) => Ok(Some(Cow::Borrowed(name.as_str()))),
             (None, Some(_)) => Err(NoEdge),
-            (None, None) => Ok(Some(self.spelling.of(root).as_str())),
+            (None, None) => Ok(Some(self.display_package(root))),
         }
     }
 
@@ -167,7 +173,7 @@ impl<'a> Viewpoint<'a> {
         }
         match self.package_segment(decl.root()) {
             Ok(None) => Ok(self.own_path(decl)),
-            Ok(Some(package)) => Ok(join_path(Some(package), decl)),
+            Ok(Some(package)) => Ok(join_path(Some(&package), decl)),
             Err(NoEdge) => self
                 .reexport_path(decl)
                 .ok_or_else(|| Unspellable(decl.clone())),
@@ -194,21 +200,82 @@ impl<'a> Viewpoint<'a> {
         })
     }
 
-    /// How a package the viewer has no edge to is shown — display only, never
-    /// source ([`source_path`](Self::source_path) refuses it) — following
-    /// Rust, which prints such a crate's own name: the package's declared
-    /// name when it has one; an unnamed package shows the name its nearest
+    /// A package's display label from this viewpoint — how a package the
+    /// viewer has no edge to is shown, display only, never source
+    /// ([`source_path`](Self::source_path) refuses it) — following Rust,
+    /// which prints such a crate's own name: the package's declared name
+    /// when it has one; an unnamed package shows the name its nearest
     /// dependent reaches it by (the last hop of the shortest edge path from
-    /// the viewer), the one spelling some manifest actually wrote. With no
-    /// edge path at all, the provenance spelling.
-    pub fn display_package(&self, root: SourceRoot) -> Cow<'a, str> {
+    /// the viewer), the one spelling some manifest actually wrote. Once
+    /// workspace and external packages are distinguished, a workspace
+    /// package's name is to win over an external one's. With no edge path at
+    /// all — an unnamed package from no viewer, the primary package of a
+    /// project with no manifest — the stand-in [`RESERVED_USER_PACKAGE`].
+    ///
+    /// The ONE label rule: the executable's package labels, canonical dumps,
+    /// and the SDK boundary's symbol names all read it. A label is neither
+    /// unique nor identifying, and nothing reads one back into a package.
+    pub fn display_package(&self, root: SourceRoot) -> Cow<'_, str> {
         if let Some(own) = root.self_name(self.db) {
             return Cow::Owned(own.to_string());
         }
         self.viewer
             .and_then(|viewer| baml_compiler2_hir::package::edge_path(self.db, viewer, root))
             .and_then(|hops| hops.last().map(|(_, edge, _)| Cow::Owned(edge.to_string())))
-            .unwrap_or_else(|| Cow::Borrowed(self.spelling.of(root).as_str()))
+            .unwrap_or(Cow::Borrowed(RESERVED_USER_PACKAGE))
+    }
+
+    /// [`display_package`](Self::display_package) as a [`Name`].
+    pub fn display_label(&self, root: SourceRoot) -> Name {
+        Name::new(self.display_package(root).as_ref())
+    }
+
+    /// A compile-time head packed into a wire name for display: the viewer's
+    /// own package as `Local`, every other package as a dependency under its
+    /// [`display_package`](Self::display_package) label, then its path. A
+    /// display vehicle for printers that take a [`TypeName`] (operand
+    /// metadata, MIR dumps, the SDK symbol pool) — never an identity, and
+    /// nothing resolves a declaration from it. With no viewer every package
+    /// is a dependency: canonical spells every package.
+    pub fn wire_head(&self, decl: &DeclName) -> TypeName {
+        // `Local` is the viewer's own package and nothing else: a package
+        // that merely LABELS as the stand-in `user` is a dependency on the
+        // wire, so the label is never read back as locality.
+        if self.viewer == Some(decl.root()) {
+            TypeName::qualified(
+                Package::Local,
+                decl.namespace().clone(),
+                decl.name().clone(),
+            )
+        } else {
+            self.labelled_head(decl)
+        }
+    }
+
+    /// A compile-time head packed into a wire name with its package ALWAYS
+    /// spelled, by [`display_package`](Self::display_package) — the viewer's
+    /// own included. For output whose text must name every package, as an
+    /// export's ids do. Display only, like [`wire_head`](Self::wire_head).
+    pub fn labelled_head(&self, decl: &DeclName) -> TypeName {
+        TypeName::qualified(
+            Package::Dep(self.display_label(decl.root())),
+            decl.namespace().clone(),
+            decl.name().clone(),
+        )
+    }
+
+    /// `decl`'s path with its package ALWAYS spelled, by
+    /// [`display_package`](Self::display_package) — the viewer's own included:
+    /// [`labelled_head`](Self::labelled_head) as text. The viewer decides only
+    /// what an unnamed package is called.
+    pub fn labelled_path(&self, decl: &DeclName) -> String {
+        join_path(Some(&self.display_package(decl.root())), decl)
+    }
+
+    /// `ty` with every head spelled by [`labelled_path`](Self::labelled_path):
+    /// the text of an export, whose every package is named. Display only.
+    pub fn labelled_text(&self, ty: &Ty) -> String {
+        ty.render_with(&Labelled(self))
     }
 
     /// `ty` as source in the viewer's package writes it, or the first
@@ -240,7 +307,7 @@ impl<'a> Viewpoint<'a> {
     /// directly.
     pub fn package_prefix(&self, root: SourceRoot) -> Option<Cow<'_, str>> {
         match self.package_segment(root) {
-            Ok(package) => package.map(Cow::Borrowed),
+            Ok(package) => package,
             Err(NoEdge) => Some(self.display_package(root)),
         }
     }
@@ -255,7 +322,7 @@ impl<'a> Viewpoint<'a> {
     pub fn path(&self, decl: &DeclName) -> String {
         match self.package_segment(decl.root()) {
             Ok(None) => self.own_path(decl),
-            Ok(Some(package)) => join_path(Some(package), decl),
+            Ok(Some(package)) => join_path(Some(&package), decl),
             Err(NoEdge) => self
                 .reexport_path(decl)
                 .unwrap_or_else(|| join_path(Some(&self.display_package(decl.root())), decl)),
@@ -296,6 +363,20 @@ impl TyRenderStrategy<DeclName> for SourceSpelling<'_, '_> {
 
     fn type_var(&self, name: &Name) -> String {
         self.viewpoint.type_var(name)
+    }
+}
+
+/// The strategy behind [`Viewpoint::labelled_text`]: every head by
+/// [`Viewpoint::labelled_path`].
+struct Labelled<'v, 'a>(&'v Viewpoint<'a>);
+
+impl TyRenderStrategy<DeclName> for Labelled<'_, '_> {
+    fn qtn(&self, qtn: &DeclName) -> String {
+        self.0.labelled_path(qtn)
+    }
+
+    fn type_var(&self, name: &Name) -> String {
+        self.0.type_var(name)
     }
 }
 

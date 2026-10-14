@@ -5,7 +5,6 @@
 
 use std::fmt::Write;
 
-use baml_base::Name;
 use baml_compiler2_hir::item_data::{file_functions, function_data, function_source_map};
 use baml_compiler2_hir_ty::{callable::ExternalLinkability, package_interface::export_interface};
 use baml_compiler2_mir::{
@@ -252,12 +251,7 @@ function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int t
 "#,
     );
     assert_no_diagnostic_errors(&dependency);
-    let mut interface = export_interface(
-        &dependency,
-        baml_compiler2_hir::package::spelling(&dependency)
-            .root(&Name::new("dependency"))
-            .unwrap(),
-    );
+    let mut interface = export_interface(&dependency, dependency.dependency_named("dependency"));
     let exported = interface
         .rows
         .functions
@@ -327,12 +321,7 @@ function forged_type_of<T>() -> reflect.Type {
 "#,
     );
     assert_no_diagnostic_errors(&dependency);
-    let mut interface = export_interface(
-        &dependency,
-        baml_compiler2_hir::package::spelling(&dependency)
-            .root(&Name::new("dependency"))
-            .unwrap(),
-    );
+    let mut interface = export_interface(&dependency, dependency.dependency_named("dependency"));
     // Model a hostile/corrupt mounted blob that widens its own linkability.
     // (A row that also claimed a lang address — `log.info`, `reflect.Type.of`
     // — cannot mount at all: import refuses a target other than the row's
@@ -436,7 +425,9 @@ function f(result: Ok | Warn | Err) -> string {
     );
     assert_no_diagnostic_errors(&db);
     let output = render_mir(&db, file);
-    assert!(output.contains(".value#0 as HasValue"), "{output}");
+    // Canonical rendering spells every package, the unnamed root under its
+    // stand-in label.
+    assert!(output.contains(".value#0 as user.HasValue"), "{output}");
 }
 
 macro_rules! mir_snapshot {
@@ -862,9 +853,7 @@ fn mounted_loc_free_runtime_call_target_is_explicit() {
     baml_db::testing::assert_no_diagnostic_errors(&library);
     let interface = baml_compiler2_hir_ty::package_interface::export_interface(
         &library,
-        baml_compiler2_hir::package::spelling(&library)
-            .root(&Name::new("app"))
-            .unwrap(),
+        library.dependency_named("app"),
     );
     let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
         .expect("serialize mounted interface");

@@ -107,7 +107,7 @@ fn interface_bodies_are_pooled_and_slotted_but_in_no_name_map() {
     );
 }
 
-/// MIR's display spelling of an impl-provided body (`definition_link_name`,
+/// MIR's display spelling of an impl-provided body (`definition_display_name`,
 /// what operand metadata and dumps show) and the loaded function's rendered
 /// name are ONE spelling: the package label, then `<(target as iface)>.m`
 /// with every head located from the body's own package by edge path.
@@ -127,7 +127,8 @@ fn an_impl_body_is_spelled_once_by_mir_and_the_runtime() {
     let mut checked = 0;
     for &block in item_data::file_impls(&db, file) {
         for &method in &item_data::impl_block_data(&db, block).methods {
-            let mir = baml_compiler2_mir::definition_link_name(&db, Definition::Function(method));
+            let mir =
+                baml_compiler2_mir::definition_display_name(&db, Definition::Function(method));
             assert!(
                 runtime_names.contains(&mir),
                 "MIR spells `{mir}`, which no loaded function renders as; loaded: {runtime_names:?}"

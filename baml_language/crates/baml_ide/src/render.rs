@@ -26,7 +26,76 @@ use baml_compiler2_hir::{
     type_ref::{TypeRefId, TypeRefStore},
 };
 use baml_compiler2_hir_ty::render::Viewpoint;
-use baml_type::{DeclName, Ty, TyRenderStrategy, user_facing::humanize_type_string};
+use baml_type::{DeclName, Ty, TyRenderStrategy, TypeName, user_facing::humanize_type_string};
+
+// ── Package labels ────────────────────────────────────────────────────────────
+
+/// A package's display label for listings, exports, and generated SDKs, as
+/// seen from `viewer` — the package the reader is in: the package whose
+/// program a listing or a generated SDK describes, the package being
+/// exported, the file a hover is answered for
+/// ([`Viewpoint::display_package`]: its declared name, else the name
+/// `viewer`'s nearest edge reaches it by, else the stand-in). A database may
+/// hold many packages, so no output is rendered from a package the reader
+/// is not in. Display only: the SDK boundary keys its symbols on it until it
+/// refers to declarations by image identity.
+pub fn package_label(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
+    root: SourceRoot,
+) -> Name {
+    Viewpoint::user_facing(db, viewer).display_label(root)
+}
+
+/// The name `viewer`'s root namespace addresses `root` by, for a listing a
+/// reader pastes back into `baml describe`: the viewer's edge name for it
+/// where it has one — a dependency declared `foo` but depended on as `bar`
+/// resolves only as `bar` — else its display label ([`package_label`]), which
+/// is also the viewer's own.
+pub fn package_address(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
+    root: SourceRoot,
+) -> Name {
+    let viewpoint = Viewpoint::user_facing(db, viewer);
+    match viewpoint.package_prefix(root) {
+        Some(prefix) => Name::new(prefix.as_ref()),
+        None => viewpoint.display_label(root),
+    }
+}
+
+/// A compile-time head packed into a wire name for the symbol pool
+/// ([`Viewpoint::wire_head`]): the viewer's own package `Local`, by identity,
+/// every other package under [`package_label`]. Never an identity.
+pub fn wire_head(db: &dyn baml_compiler2_hir::Db, viewer: SourceRoot, decl: &DeclName) -> TypeName {
+    Viewpoint::user_facing(db, viewer).wire_head(decl)
+}
+
+/// A compile-time head with its package always spelled under
+/// [`package_label`] ([`Viewpoint::labelled_head`]), for the export, whose
+/// ids name every package. Never an identity.
+pub fn labelled_head(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
+    decl: &DeclName,
+) -> TypeName {
+    Viewpoint::user_facing(db, viewer).labelled_head(decl)
+}
+
+/// The wire package of `root` for a symbol pool keyed from `viewer`: `Local`
+/// for the viewer itself, by identity, else a dependency under
+/// [`package_label`] — the rule [`wire_head`] applies to a head.
+pub fn pool_package(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
+    root: SourceRoot,
+) -> baml_type::Package {
+    if root == viewer {
+        baml_type::Package::Local
+    } else {
+        baml_type::Package::Dep(package_label(db, viewer, root))
+    }
+}
 
 // ── Readers ──────────────────────────────────────────────────────────────────
 
