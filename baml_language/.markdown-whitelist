@@ -16,6 +16,10 @@ crates/baml_tests/NATIVE_BAML_TEST_MIGRATION_SURVEY.md
 crates/baml_tests/NATIVE_BAML_TEST_RUST_SURVIVORS.md
 crates/baml_tests/benches/incremental/*/description.md
 
+# Runtime startup benchmark methodology and retained results
+scripts/runtime-startup/compiler-linkage.md
+scripts/runtime-startup/less-work.md
+
 # LSP documentation
 crates/baml_lsp_server/CONTRIBUTING.md
 
