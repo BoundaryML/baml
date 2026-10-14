@@ -6575,7 +6575,9 @@ impl<'db> InferenceContext<'db> {
                                 interface,
                             });
                     }
-                    return (Ty::intern(InferTy::Unknown), false, None);
+                    // Reported above: `Error` taints the expression so the
+                    // missing view is not restated as a type mismatch.
+                    return (Ty::error(), false, None);
                 }
                 crate::method_resolution::InterfaceMemberLookup::SelfRestricted {
                     interface,
@@ -9522,7 +9524,9 @@ impl<'db> InferenceContext<'db> {
                             interface,
                         });
                 }
-                return (Ty::intern(InferTy::Unknown), None);
+                // Reported above: `Error` taints the expression so the
+                // missing view is not restated as a type mismatch.
+                return (Ty::error(), None);
             }
             crate::method_resolution::InterfaceMemberLookup::SelfRestricted {
                 interface,
