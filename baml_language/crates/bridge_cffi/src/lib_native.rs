@@ -84,6 +84,7 @@ pub fn initialize_runtime(
 ) -> Result<Arc<dyn Bex>, BridgeError> {
     let physical_fs = vfs::PhysicalFS::new("/");
     let vfs_root = vfs::VfsPath::new(physical_fs);
+    // VFS rejects trailing slashes even though they name the same project directory.
     let vfs_path = vfs_root
         .join(root_path.trim_end_matches('/'))
         .map_err(|e| bex_project::RuntimeError::Other(e.to_string()))?;
