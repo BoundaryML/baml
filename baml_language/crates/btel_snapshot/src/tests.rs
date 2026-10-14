@@ -328,6 +328,22 @@ fn content_ids_include_value_kinds_omissions_and_leaf_contents() {
     let flat = BexStr::from(format!("{}{}", "a".repeat(60), "b".repeat(60)));
     assert_eq!(string_id(&rope), string_id(&flat));
     assert_ne!(string_id(&flat), string_id(&"different".into()));
+    let prefix = BexStr::concat(
+        BexStr::concat("a".repeat(60).into(), "b".repeat(60).into()),
+        "é🙂".into(),
+    );
+    let extended = BexStr::concat(prefix.clone(), "suffix".into());
+    let prefix_text = format!("{}{}é🙂", "a".repeat(60), "b".repeat(60));
+    // Capturing the older view first materializes the shared node's later slots.
+    assert_eq!(
+        string_id(&prefix),
+        string_id(&BexStr::from(prefix_text.clone()))
+    );
+    assert_eq!(
+        string_id(&extended),
+        string_id(&BexStr::from(format!("{prefix_text}suffix"))),
+    );
+    assert_ne!(string_id(&prefix), string_id(&extended));
     let big_id = |n| {
         let mut b = pool.try_acquire().unwrap();
         let value = b.leaves().bigint(&Arc::new(BigInt::from(n)));
