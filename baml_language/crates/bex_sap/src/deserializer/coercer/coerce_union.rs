@@ -21,6 +21,9 @@ where
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError> {
         let all_variants = &target.variants;
+        if all_variants.is_empty() {
+            return Err(ctx.error_uninhabited());
+        }
 
         // A union is partial when its matching member is; members without a partial parse
         // yield `None` below and drop out.

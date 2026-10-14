@@ -130,32 +130,56 @@ pub enum FunctionParamMode {
 ///
 /// After `widen_fresh()` has run on each union member, multiple members may
 /// have widened to the same primitive (e.g. `[Literal(1,Fresh), Literal(2,Fresh)]`
-/// both become `Int`). This helper deduplicates and collapses:
-/// - Flattens nested unions one level
-/// - Deduplicates by `PartialEq`
-/// - Unwraps singletons
+/// both become `Int`), which [`flat_union`] then spells once.
 fn dedup_and_collapse<N: Clone + PartialEq>(types: Vec<Ty<N>>) -> Ty<N> {
-    let mut members: Vec<Ty<N>> = Vec::new();
-    for ty in types {
-        match ty {
-            Ty::Union(inner) => {
-                for m in inner {
-                    if !members.contains(&m) {
-                        members.push(m);
+    flat_union(
+        types,
+        |ty| match ty {
+            Ty::Union(members) => Ok(members),
+            ty => Err(ty),
+        },
+        Ty::Never,
+        Ty::Union,
+    )
+}
+
+/// The union of `members`, spelled flat and without repeats, in any member of
+/// the type family: a nested union (`as_union`) is spliced in place, a member
+/// structurally equal to an earlier one is dropped, a single member stands for
+/// itself, and no members is `never`.
+///
+/// Only associativity and idempotence are applied, never commutativity, so
+/// each member keeps the position of its first occurrence: SAP reads a union's
+/// declared order. The result is the same type as the union of `members`, and
+/// applying `T?` to an optional spells it the same way again.
+pub fn flat_union<T: PartialEq>(
+    members: impl IntoIterator<Item = T>,
+    as_union: impl Fn(T) -> Result<Box<[T]>, T>,
+    never: T,
+    union: impl FnOnce(Box<[T]>) -> T,
+) -> T {
+    fn splice<T: PartialEq>(
+        members: impl IntoIterator<Item = T>,
+        as_union: &impl Fn(T) -> Result<Box<[T]>, T>,
+        out: &mut Vec<T>,
+    ) {
+        for member in members {
+            match as_union(member) {
+                Ok(nested) => splice(nested, as_union, out),
+                Err(member) => {
+                    if !out.contains(&member) {
+                        out.push(member);
                     }
-                }
-            }
-            _ => {
-                if !members.contains(&ty) {
-                    members.push(ty);
                 }
             }
         }
     }
-    match members.len() {
-        0 => Ty::Never,
-        1 => members.into_iter().next().unwrap(),
-        _ => Ty::Union(members.into()),
+    let mut out = Vec::new();
+    splice(members, &as_union, &mut out);
+    match <[T; 1]>::try_from(out) {
+        Ok([only]) => only,
+        Err(out) if out.is_empty() => never,
+        Err(out) => union(out.into()),
     }
 }
 

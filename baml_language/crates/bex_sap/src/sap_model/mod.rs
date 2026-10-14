@@ -149,7 +149,7 @@ impl<'t, N: TypeIdent> DefaultDeriver<'t, N> {
                     return Err(name);
                 };
                 if let TyResolved::Class(class) = resolved {
-                    // Classes guard themselves by declaration name.
+                    // Classes guard themselves by their name in the model.
                     return derive(self, TyResolvedRef::Class(class));
                 }
                 if self.stack.contains(name) {
