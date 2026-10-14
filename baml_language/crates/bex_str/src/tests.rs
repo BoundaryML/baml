@@ -530,3 +530,105 @@ fn char_count_of_deep_rope_does_not_recurse() {
         .join()
         .unwrap();
 }
+
+// ── Codepoint indexing on long strings (B-1918) ────────────────────────
+//
+// `at` / `slice` / `index_of` on heap strings. The fixtures in
+// `codepoint_ops_match_std_oracle` are short; these span many hundreds of
+// codepoints with 1-, 2-, 3- and 4-byte chars, in every heap representation:
+// Flat, Slice (starting mid-string, on a multibyte char), and Concat. Any
+// indexing acceleration (ASCII fast path, offset index, cursor cache) must keep
+// every lookup here identical to `str::chars()`.
+#[test]
+fn codepoint_ops_on_long_strings_match_std_oracle() {
+    let unit = "ab é 配信 🪙 xyz ";
+    let text = unit.repeat(40);
+    let ascii = "0123456789abcdef".repeat(40);
+
+    let flat = BexStr::from(text.as_str());
+    let ascii_flat = BexStr::from(ascii.as_str());
+    let slice_start = 9; // the start of `信`
+    let slice_text = &text[slice_start..text.len() - 5];
+    let slice = flat.substring(slice_start, text.len() - 5);
+    assert!(matches!(slice, BexStr::Slice { .. }));
+    let ascii_slice_text = &ascii[3..ascii.len() - 3];
+    let ascii_slice = ascii_flat.substring(3, ascii.len() - 3);
+    let mut concat = BexStr::empty();
+    for _ in 0..40 {
+        concat = BexStr::concat(concat, BexStr::from(unit));
+    }
+    assert!(matches!(concat, BexStr::Concat(_)));
+
+    let cases: [(&str, &BexStr); 5] = [
+        (&text, &flat),
+        (&ascii, &ascii_flat),
+        (slice_text, &slice),
+        (ascii_slice_text, &ascii_slice),
+        (&text, &concat),
+    ];
+    for (s, bex) in cases {
+        let chars: Vec<char> = s.chars().collect();
+        let count = chars.len();
+        assert_eq!(bex.char_count(), count);
+        let byte_of = |n: usize| s.char_indices().nth(n).map_or(s.len(), |(b, _)| b);
+
+        for n in 0..=count + 1 {
+            assert_eq!(
+                bex.char_at_codepoint(n).map(|c| c.as_str().to_owned()),
+                chars.get(n).map(char::to_string),
+                "char_at_codepoint({n})"
+            );
+        }
+        let mut bounds = vec![
+            0,
+            1,
+            63,
+            64,
+            65,
+            127,
+            128,
+            129,
+            200,
+            count - 1,
+            count,
+            count + 9,
+        ];
+        bounds.dedup();
+        for &a in &bounds {
+            for &b in &bounds {
+                let (lo, hi) = (a.min(count), b.min(count).max(a.min(count)));
+                let want: String = chars[lo..hi].iter().collect();
+                assert_eq!(
+                    bex.substring_by_char(a, b).as_str(),
+                    want,
+                    "substring_by_char({a}, {b})"
+                );
+            }
+        }
+        for needle in ["🪙", "配信 🪙 x", "é", "cdef0", "zzz"] {
+            let want = s.find(needle).map(|b| s[..b].chars().count());
+            assert_eq!(bex.char_index_of(needle), want, "char_index_of({needle:?})");
+            let want_last = s.rfind(needle).map(|b| s[..b].chars().count());
+            assert_eq!(
+                bex.char_last_index_of(needle),
+                want_last,
+                "char_last_index_of({needle:?})"
+            );
+            for start in [0, 63, 64, 65, 300, count, count + 1] {
+                let want = (start <= count)
+                    .then(|| {
+                        let from = byte_of(start);
+                        s[from..]
+                            .find(needle)
+                            .map(|r| s[..from + r].chars().count())
+                    })
+                    .flatten();
+                assert_eq!(
+                    bex.char_index_of_from(needle, start),
+                    want,
+                    "char_index_of_from({needle:?}, {start})"
+                );
+            }
+        }
+    }
+}
