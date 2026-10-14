@@ -51,12 +51,6 @@ pub fn validate_help_param_names<'a>(
     Ok(())
 }
 
-/// Narrow a `baml.sys.exit(code)` value (BAML `int` = `i64`) to the `i32`
-/// that `std::process::exit` and C's `exit(int)` take.
-pub fn clamp_exit_code(code: i64) -> i32 {
-    i32::try_from(code).unwrap_or(if code < 0 { i32::MIN } else { i32::MAX })
-}
-
 /// Invoke `target_name` with parameters drawn from `cli_values` (and
 /// optionally `json_args`), then write the return value to stdout.
 ///
@@ -331,25 +325,6 @@ mod tests {
     }
     fn ty_int() -> RuntimeTy {
         RuntimeTy::Int
-    }
-
-    // ── clamp_exit_code ─────────────────────────────────────────────────
-
-    #[test]
-    fn clamp_exit_code_in_range_is_lossless() {
-        assert_eq!(clamp_exit_code(0), 0);
-        assert_eq!(clamp_exit_code(1), 1);
-        assert_eq!(clamp_exit_code(7), 7);
-        assert_eq!(clamp_exit_code(255), 255);
-    }
-
-    /// BAML `int` = `i64`; the C `exit(int)` boundary saturates rather
-    /// than wrapping so a user-supplied `2_000_000_000_000` doesn't roll
-    /// over to a tiny non-zero exit code by accident.
-    #[test]
-    fn clamp_exit_code_saturates_on_overflow() {
-        assert_eq!(clamp_exit_code(i64::MAX), i32::MAX);
-        assert_eq!(clamp_exit_code(i64::MIN), i32::MIN);
     }
 
     // ── validate_help_param ─────────────────────────────────────────────

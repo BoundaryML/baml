@@ -1,11 +1,9 @@
+use bex_lang::index::{resolve_index, resolve_slice_bound};
 use bex_str::BexStr;
 use bex_vm_types::types::Value;
 
 use super::{BamlClassString, PackageBamlImpl};
-use crate::{
-    array_index::{resolve_index, resolve_slice_bound},
-    errors::{VmBamlError, VmRustFnError},
-};
+use crate::errors::{VmBamlError, VmRustFnError};
 
 fn char_substrings(string: &BexStr) -> Vec<BexStr> {
     string
