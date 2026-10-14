@@ -1799,7 +1799,8 @@ impl BexEngine {
         // The init order, before the executable is consumed.
         let init_order = bytecode_program.init_order.clone();
 
-        // Convert the pure bytecode to a VM-ready program with native functions attached
+        // Validate and prepare bytecode once, including native functions, float
+        // boxing, compact lowering, call specialization, and trace-hook policy.
         let bytecode = bex_vm::vm::convert_program_with_trace_hooks(
             bytecode_program,
             auto_telemetry_level.is_some(),
@@ -1807,20 +1808,7 @@ impl BexEngine {
         .map_err(EngineError::VmInternalError)?;
 
         // Extract compile-time objects for the heap
-        let mut compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
-
-        // Box every reachable `ConstValue::Float` into a compile-time
-        // `Object::Float` (floats can no longer live inline in `Value`).
-        // `bytecode.globals` are rewritten further down, during the
-        // `ConstValue` → `Value` conversion, using the returned index map.
-        let float_indices = bex_vm_types::types::box_compile_time_floats(
-            &mut compile_time_objects,
-            &bytecode.globals,
-        );
-
-        // Boxing changes constant kinds, so rebuild compact code and select
-        // exact calls together. Plain lowering here would erase specialization.
-        bex_vm::prepare_compact_code(&mut compile_time_objects, &bytecode.globals);
+        let compile_time_objects: Vec<Object> = bytecode.objects.into_iter().collect();
 
         // Pre-compute class and enum indices before moving objects to heap.
         // This is used for allocating instances/variants from sys-op results.
@@ -1914,18 +1902,11 @@ impl BexEngine {
 
         // Convert compile-time globals (ConstValue) to runtime globals (Value).
         // Object references are converted from ObjectIndex to HeapPtr.
-        // Float globals were redirected to compile-time Object::Float entries
-        // by the boxing pre-pass above.
+        // Float globals already reference compile-time Object::Float entries.
         let globals_vec: Vec<Value> = bytecode
             .globals
             .into_iter()
-            .map(|cv| match cv {
-                bex_vm_types::ConstValue::Float(f) => {
-                    let idx = float_indices[&f.to_bits()];
-                    Value::object(heap.compile_time_ptr(idx))
-                }
-                other => other.to_value(|idx| heap.compile_time_ptr(idx.into_raw())),
-            })
+            .map(|cv| cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())))
             .collect();
         // Mutable during `$init` so `StoreGlobal` can populate top-level let
         // bindings; frozen into `Arc<[Value]>` once `$init` finishes (see below).

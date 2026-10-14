@@ -74,7 +74,7 @@ fn spawn_mock(state: Arc<MockState>) -> String {
                 let (status, response) = respond(&state, &base, &path, &body, &req);
                 let _ = stream.write_all(
                     format!(
-                        "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{response}",
+                        "HTTP/1.1 {status}\r\nconnection: close\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{response}",
                         response.len()
                     )
                     .as_bytes(),
