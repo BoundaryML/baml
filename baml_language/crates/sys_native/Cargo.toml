@@ -58,6 +58,7 @@ num-bigint = { workspace = true }
 once_cell = { workspace = true }
 prost = { workspace = true }
 reqwest = { workspace = true, optional = true }
+rusqlite = { workspace = true, features = [ "bundled" ] }
 rustls = { workspace = true, optional = true }
 rustls-pemfile = { workspace = true, optional = true }
 serde_json = { workspace = true }

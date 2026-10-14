@@ -303,6 +303,8 @@ namespace baml.spawn:
   class Plan<T, E> { methods: [new, wrap, with] }
   class Root { methods: [new] }
   function __spawn<T, E>
+namespace baml.sqlite:
+  function query
 namespace baml.sys:
   class Process { methods: [wait, kill, close] }
   class ProcessExit { methods: [ok] }
