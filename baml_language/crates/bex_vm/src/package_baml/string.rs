@@ -138,7 +138,12 @@ impl BamlClassString for PackageBamlImpl {
         // Codepoint-indexed, not byte-indexed. A negative index counts from the
         // end; an index still outside the string after that yields `null`, so a
         // non-null result is always exactly one codepoint.
-        resolve_index(index, string.codepoint_len()).map(|i| string.char_slice(i..i + 1))
+        let i = if index < 0 {
+            resolve_index(index, string.codepoint_len())?
+        } else {
+            usize::try_from(index).ok()?
+        };
+        string.char_get(i)
     }
 
     fn code_point_at(string: &BexStr, index: i64) -> Option<i64> {
@@ -147,9 +152,12 @@ impl BamlClassString for PackageBamlImpl {
         // yields the code point's value rather than a one-character string. A
         // `char` is always in `[0, 0x10FFFF]`, so the widening to `i64` is
         // lossless.
-        resolve_index(index, string.codepoint_len())
-            .and_then(|i| string.char_at(i))
-            .map(|c| i64::from(u32::from(c)))
+        let i = if index < 0 {
+            resolve_index(index, string.codepoint_len())?
+        } else {
+            usize::try_from(index).ok()?
+        };
+        string.char_at(i).map(|c| i64::from(u32::from(c)))
     }
 
     fn repeat(string: &BexStr, count: i64) -> BexStr {
@@ -211,7 +219,7 @@ impl BamlClassString for PackageBamlImpl {
     // ── ASCII-only predicates ─────────────────────────────────────────────────
 
     fn is_ascii(string: &BexStr) -> bool {
-        string.as_str().is_ascii()
+        string.is_ascii()
     }
 
     fn is_ascii_numeric(string: &BexStr) -> bool {

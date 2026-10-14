@@ -6,6 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 bytecount = { workspace = true }
+memchr = { workspace = true }
 xxhash-rust = { workspace = true }
 
 [dev-dependencies]
@@ -22,4 +23,8 @@ harness = false
 
 [[bench]]
 name = "bun_benches"
+harness = false
+
+[[bench]]
+name = "node_compare"
 harness = false

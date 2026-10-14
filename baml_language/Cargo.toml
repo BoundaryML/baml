@@ -239,6 +239,7 @@ base64 = "0.22"
 lz4_flex = { version = "0.13" }
 mime_guess = "2"
 bytecount = "0.6"
+memchr = "2"
 reqwest = { version = "0.13.1", default-features = false, features = [
   "stream",
 ] }

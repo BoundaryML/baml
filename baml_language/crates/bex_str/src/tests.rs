@@ -71,7 +71,7 @@ fn clone_semantics() {
 fn concat_deep_tree_and_flatten() {
     let mut s = BexStr::from("x");
     for _ in 0..1000 {
-        s = BexStr::concat(s, BexStr::from("y"));
+        s = BexStr::concat(s.clone(), BexStr::from("y"));
     }
     let expected = format!("x{}", "y".repeat(1000));
     assert_eq!(s.as_str(), expected);
@@ -81,7 +81,7 @@ fn concat_deep_tree_and_flatten() {
 fn concat_deep_drop_no_stack_overflow() {
     let mut s = BexStr::from("a");
     for _ in 0..50_000 {
-        s = BexStr::concat(s, BexStr::from("b"));
+        s = BexStr::concat(s.clone(), BexStr::from("b"));
     }
     drop(s); // Should not stack overflow
 }
@@ -461,7 +461,7 @@ fn content_hash_is_independent_of_representation_and_reused_by_clones() {
     assert_eq!(rope.content_hash(), expected);
     assert!(matches!(
         *node.state.lock().unwrap(),
-        ConcatState::Flattened(_)
+        ConcatState::Flattened
     ));
     assert_eq!(flat.content_hash(), expected);
     let clone = flat.clone();
@@ -517,7 +517,7 @@ fn char_count_of_deep_rope_does_not_recurse() {
             let n = 200_000;
             let mut s = BexStr::from("x".repeat(60));
             for _ in 0..n {
-                s = BexStr::concat(s, BexStr::from("é"));
+                s = BexStr::concat(s.clone(), BexStr::from("é"));
             }
             assert!(matches!(s, BexStr::Concat(_)));
             assert_eq!(s.codepoint_len(), 60 + n);
@@ -555,7 +555,7 @@ fn codepoint_ops_on_long_strings_match_std_oracle() {
     let ascii_slice = ascii_flat.byte_slice(3..ascii.len() - 3);
     let mut concat = BexStr::empty();
     for _ in 0..40 {
-        concat = BexStr::concat(concat, BexStr::from(unit));
+        concat = BexStr::concat(concat.clone(), BexStr::from(unit));
     }
     assert!(matches!(concat, BexStr::Concat(_)));
 
@@ -758,13 +758,13 @@ fn ascii_prefix_of_deep_rope_does_not_recurse() {
             let n = 200_000;
             let mut s = BexStr::from("x".repeat(60));
             for _ in 0..n {
-                s = BexStr::concat(s, BexStr::from("a"));
+                s = BexStr::concat(s.clone(), BexStr::from("a"));
             }
             assert!(s.is_ascii());
             assert_eq!(s.ascii_prefix_len(), 60 + n);
-            s = BexStr::concat(s, BexStr::from("🪙"));
+            s = BexStr::concat(s.clone(), BexStr::from("🪙"));
             for _ in 0..n {
-                s = BexStr::concat(s, BexStr::from("a"));
+                s = BexStr::concat(s.clone(), BexStr::from("a"));
             }
             assert!(!s.is_ascii());
             assert_eq!(s.ascii_prefix_len(), 60 + n);
@@ -799,7 +799,8 @@ fn slice_ascii_prefix_sentinel_rescans() {
         parent,
         offset: 5,
         len: (text.len() - 10) as u64,
-        codepoint_len: (text.chars().count() - 10) as u64,
+        codepoint_len: (text.chars().count() - 10) as u32,
+        char_offset: u32::MAX,
         ascii_prefix_len: SLICE_ASCII_PREFIX_UNKNOWN,
         hash: [const { AtomicU64::new(0) }; 2],
     };
@@ -847,4 +848,219 @@ fn char_byte_conversions_match_std_oracle() {
             assert_eq!(bex.char_at(n), s.chars().nth(n), "char_at({n}) of {s:?}");
         }
     }
+}
+
+#[test]
+fn lazy_index_is_shared_by_unicode_slices_and_stabilizes_heap_accounting() {
+    let text = format!("{}{}", "a".repeat(137), "é前🙂xyz".repeat(1000));
+    let parent = BexStr::from(text.as_str());
+    let BexStr::Flat(flat) = &parent else {
+        unreachable!()
+    };
+    assert!(flat.char_index.get().is_none());
+    assert_eq!(parent.char_at(138), Some('前'));
+    assert!(
+        flat.char_index.get().is_none(),
+        "one shallow lookup stays allocation-free"
+    );
+    let slice = parent.char_slice(140..4100);
+    let nested = slice.char_slice(7..777);
+    let expected: Vec<char> = text.chars().collect();
+    for i in 0..20 {
+        parent.char_at(expected.len() - 1 - i);
+    }
+    let index = flat
+        .char_index
+        .get()
+        .expect("repeated deep lookups build the index");
+    let index_ptr = index.as_ptr();
+    for i in 0..770 {
+        assert_eq!(nested.char_at(i), Some(expected[147 + i]));
+        assert_eq!(
+            nested.char_get(i).unwrap().as_str(),
+            expected[147 + i].to_string()
+        );
+    }
+    assert_eq!(nested.char_get(770), None);
+    assert_eq!(nested.char_at(770), None);
+    assert_eq!(flat.char_index.get().unwrap().as_ptr(), index_ptr);
+    let retained = parent.retained_heap_bytes();
+    assert_eq!(slice.retained_heap_bytes(), retained);
+    assert_eq!(nested.retained_heap_bytes(), retained);
+    for (i, &ch) in expected.iter().enumerate() {
+        assert_eq!(parent.char_at(i), Some(ch));
+    }
+    assert_eq!(parent.retained_heap_bytes(), retained);
+}
+
+#[test]
+fn owned_appends_extend_indexes_and_invalidate_hashes_without_mutating_snapshots() {
+    let mut s = BexStr::from("é前🙂xyz".repeat(50));
+    let mut expected = s.as_str().to_owned();
+    let original_hash = s.content_hash();
+    s.retained_heap_bytes(); // materialize the index before growth
+    for round in 0..200 {
+        let addition = if round % 2 == 0 { "🦀aé" } else { "bc" };
+        s = BexStr::concat(s, BexStr::from(addition));
+        expected.push_str(addition);
+        let n = expected.chars().count();
+        assert_eq!(s.codepoint_len(), n);
+        assert_eq!(s.char_at(n - 1), expected.chars().last());
+        assert_eq!(
+            s.char_slice(n - 3..n).as_str(),
+            expected.chars().skip(n - 3).collect::<String>()
+        );
+        assert_eq!(
+            s.content_hash(),
+            xxhash_rust::xxh3::xxh3_128(expected.as_bytes())
+        );
+    }
+    assert_ne!(s.content_hash(), original_hash);
+    let snapshot = s.clone();
+    let view = s.char_slice(17..117);
+    let snapshot_hash = snapshot.content_hash();
+    let snapshot_heap = snapshot.retained_heap_bytes();
+    let extended = BexStr::concat(s, BexStr::from("tail🙂"));
+    assert_eq!(snapshot.as_str(), expected);
+    assert_eq!(snapshot.content_hash(), snapshot_hash);
+    assert_eq!(snapshot.retained_heap_bytes(), snapshot_heap);
+    assert_eq!(
+        view.as_str(),
+        expected.chars().skip(17).take(100).collect::<String>()
+    );
+    assert_eq!(extended.as_str(), format!("{expected}tail🙂"));
+}
+
+#[test]
+fn rope_tail_reads_are_bounded_and_preserve_shared_children() {
+    let mut s = BexStr::from("z".repeat(60));
+    for _ in 0..10_000 {
+        s = BexStr::concat(s.clone(), BexStr::from("é🦀x"));
+    }
+    let BexStr::Concat(node) = &s else {
+        unreachable!()
+    };
+    let n = s.codepoint_len();
+    assert_eq!(s.char_at(n - 2), Some('🦀'));
+    assert_eq!(s.char_get(n - 2).unwrap().as_str(), "🦀");
+    assert_eq!(s.char_slice(n - 3..n).as_str(), "é🦀x");
+    assert!(matches!(
+        *node.state.lock().unwrap(),
+        crate::bex_str::ConcatState::Deferred { .. }
+    ));
+    assert_eq!(s.char_at(n), None);
+    assert_eq!(s.char_get(usize::MAX), None);
+    // A reversed range is an input to the clamping API, not an iterator.
+    #[allow(clippy::reversed_empty_ranges)]
+    for bounds in [0..0, usize::MAX..usize::MAX, usize::MAX..0, 0..usize::MAX] {
+        let want = if bounds.start == 0 && bounds.end == usize::MAX {
+            s.as_str()
+        } else {
+            ""
+        };
+        assert_eq!(s.char_slice(bounds).as_str(), want);
+    }
+}
+
+#[test]
+fn unicode_index_and_rope_flatten_are_published_concurrently() {
+    let left_text = "é前🙂xyz".repeat(1000);
+    let right_text = "tail🦀".repeat(300);
+    let s = BexStr::concat(
+        BexStr::from(left_text.as_str()),
+        BexStr::from(right_text.as_str()),
+    );
+    let expected: Vec<_> = format!("{left_text}{right_text}").chars().collect();
+    let barrier = std::sync::Barrier::new(8);
+    std::thread::scope(|scope| {
+        for worker in 0..8 {
+            let (s, expected, barrier) = (&s, &expected, &barrier);
+            scope.spawn(move || {
+                barrier.wait();
+                for step in 0..1000 {
+                    let i = (step * 7919 + worker) % expected.len();
+                    assert_eq!(s.char_at(i), Some(expected[i]));
+                    assert_eq!(s.byte_to_char(s.char_to_byte(i)), i);
+                    assert_eq!(s.content_hash(), xxhash_rust::xxh3::xxh3_128(s.as_bytes()));
+                }
+            });
+        }
+    });
+}
+
+#[test]
+fn oversized_slice_count_sentinel_preserves_codepoint_semantics() {
+    use std::sync::atomic::AtomicU64;
+    let text = "aé🙂前xyz".repeat(100);
+    let BexStr::Flat(parent) = BexStr::from(text.as_str()) else {
+        unreachable!()
+    };
+    let slice = BexStr::Slice {
+        parent,
+        offset: 0,
+        len: text.len() as u64,
+        codepoint_len: u32::MAX,
+        char_offset: u32::MAX,
+        ascii_prefix_len: 1,
+        hash: [const { AtomicU64::new(0) }; 2],
+    };
+    assert_eq!(slice.codepoint_len(), text.chars().count());
+    for (i, ch) in text.chars().enumerate() {
+        assert_eq!(slice.char_at(i), Some(ch));
+    }
+    assert_eq!(slice.char_at(usize::MAX), None);
+    assert_eq!(slice.char_slice(usize::MAX..usize::MAX).as_str(), "");
+}
+
+#[test]
+fn inline_ascii_flags_survive_every_constructor_clone_slice_and_append() {
+    for text in ["", "abc", "abcdefghijk", "éabc", "abc🦀", "a\0b"] {
+        for s in [BexStr::from(text), BexStr::from(text.to_owned())] {
+            for s in [
+                s.clone(),
+                s.byte_slice(0..s.byte_len()),
+                s.char_slice(0..s.codepoint_len()),
+            ] {
+                assert_eq!(s.as_str(), text);
+                assert_eq!(s.byte_len(), text.len());
+                assert_eq!(s.codepoint_len(), text.chars().count());
+                assert_eq!(s.is_ascii(), text.is_ascii());
+                assert_eq!(
+                    s.content_hash(),
+                    xxhash_rust::xxh3::xxh3_128(text.as_bytes())
+                );
+                for (i, ch) in text.chars().enumerate() {
+                    let c = s.char_get(i).unwrap();
+                    assert_eq!(c.as_str(), ch.to_string());
+                    assert_eq!(c.byte_len(), ch.len_utf8());
+                    assert_eq!(c.is_ascii(), ch.is_ascii());
+                }
+            }
+        }
+    }
+    let mut s = BexStr::from("a");
+    for _ in 0..54 {
+        s = BexStr::concat(s, BexStr::from("b"));
+    }
+    assert_eq!(s.byte_len(), 55);
+    assert!(s.is_ascii());
+    s = BexStr::concat(s, BexStr::from("é"));
+    s = BexStr::concat(s, BexStr::from("c"));
+    assert_eq!(s.byte_len(), 58);
+    assert_eq!(s.codepoint_len(), 57);
+    assert_eq!(s.ascii_prefix_len(), 55);
+    assert_eq!(s.char_get(55).unwrap().as_str(), "é");
+    assert_eq!(s.char_get(56).unwrap().as_str(), "c");
+}
+
+#[test]
+#[should_panic(expected = "invalid UTF-8 byte slice")]
+fn byte_slice_rejects_a_split_codepoint() {
+    BexStr::from("aé🙂z").byte_slice(2..4);
+}
+
+#[test]
+#[should_panic(expected = "invalid UTF-8 byte slice")]
+fn byte_slice_rejects_reversed_ranges() {
+    BexStr::from("hello").byte_slice(std::ops::Range { start: 4, end: 1 });
 }

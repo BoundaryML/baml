@@ -1458,6 +1458,7 @@ dependencies = [
  "bytecount",
  "codspeed-divan-compat",
  "indexmap",
+ "memchr",
  "xxhash-rust",
 ]
 
