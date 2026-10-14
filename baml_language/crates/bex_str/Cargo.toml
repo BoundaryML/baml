@@ -17,5 +17,9 @@ name = "bexstr_bench"
 harness = false
 
 [[bench]]
-name = "existing_benches"
+name = "v8_benches"
+harness = false
+
+[[bench]]
+name = "bun_benches"
 harness = false
