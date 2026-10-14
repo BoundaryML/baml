@@ -1,6 +1,27 @@
 # Packed BAML startup experiments
 
-**Latest follow-up:** [doing less startup work](less-work.md) measures lazy validation diagnostics and schema lookup. The matched prototype saves roughly 1.5–2 ms for empty/scalar/wrapper programs on top of the prepared-bytecode experiment below; empty startup executes 16.7% fewer instructions. The compiler remains available. Other checkouts compiled during much of the run; the report retains all samples and a 23-round quieter subset. These are prototype measurements, with the supported runtime sources unchanged.
+**Production validation follow-up:** normal program loading now uses one validator with two implementations of its diagnostic interface. Valid programs run check-only; only failures repeat the same walk to build the first error. The public result and ordinary artifact format remain the same. The production change improves **full packed-program launch to exit by 2–4%** on this machine.
+
+Default local recording; milliseconds, **median / p95**, 100 fresh processes per cell:
+
+| Program / command | Before, median / p95 | After, median / p95 | Median saved |
+| --- | ---: | ---: | ---: |
+| Empty Main | 23.37 / 25.02 ms | 22.70 / 26.28 ms | 0.67 ms (2.9%) |
+| Print ready | 23.48 / 25.12 ms | 22.74 / 24.26 ms | 0.74 ms (3.1%) |
+| JSON / defaults / callbacks / catch | 23.72 / 25.76 ms | 23.03 / 24.39 ms | 0.68 ms (2.9%) |
+| 1,000 extra functions | 27.57 / 28.95 ms | 26.39 / 28.30 ms | 1.18 ms (4.3%) |
+| Typed arguments and default | 23.73 / 25.71 ms | 23.01 / 24.30 ms | 0.72 ms (3.0%) |
+| Generated --help | 22.82 / 24.53 ms | 22.34 / 24.06 ms | 0.48 ms (2.1%) |
+| Wrapper --version, real CLI | 30.09 / 31.66 ms | 29.26 / 30.73 ms | 0.83 ms (2.8%) |
+| Wrapper run --help, real CLI | 27.14 / 29.41 ms | 26.48 / 28.99 ms | 0.66 ms (2.4%) |
+
+The normal Cargo release host includes the compiler. Each CLI packs the identical program sources with its matching host; all seven normal-format payloads differ only in nested build identity and its integrity hash. Wrapper cases include the same **real release baml-cli child** selected through an explicit local path. The native timer covers process creation through reaping, including loading, engine work, target/child execution, recording shutdown, destruction and exit. This is the complete supported program path, with no experimental artifact or phase arithmetic.
+
+There are 3,200 measured launches across 32 variants (eight commands × two releases × telemetry off/default local), 96 warmups and 18 matching output/error checks. Fixed-seed shuffled interleaving; warmed file/executable caches; isolated configuration and no cloud destination. Own release builds finish first, and the harness waits for external build workers before each timing round. All 100 round-start snapshots are clear, though work starting within a round and ordinary desktop activity remain uncontrolled. Empty/local and wrapper-version/off p95 increase in this run; the result is a modest median reduction, not a universal tail improvement. [Full launch data and replay sources](validation-end-to-end-results-20261004.json) retain every scalar sample, all summaries, source/build/artifact hashes, checks and logs.
+
+Supporting diagnostics: empty-program validation allocation requests fall **11,578 → 31**; first validation calls save 0.56–0.74 ms across empty/1,000-function/wrapper fixtures. Those isolated checks explain the change; the full-launch table above is the product measurement. [Diagnostic data](validation-fast-path-results-20261004.json) also retain all 115 exact differential checks and the passing 106 VM type/nine integration tests. Workspace Clippy passes.
+
+**Earlier work-reduction experiment:** [doing less startup work](less-work.md) measures lazy validation diagnostics and schema lookup. The matched prototype saves roughly 1.5–2 ms for empty/scalar/wrapper programs on top of the prepared-bytecode experiment below; empty startup executes 16.7% fewer instructions. The compiler remains available. Other checkouts compiled during much of the run; the report retains all samples and a 23-round quieter subset. These are historical prototype measurements; the normal-format validator now has the separate production implementation described above.
 
 [less-work.patch](less-work.patch) preserves the full prototype and [less-work-results-20261004.json](less-work-results-20261004.json) retains 6,400 final launch samples, 2,400 timelines, pass attribution, allocation counts, correctness checks and replay sources.
 
