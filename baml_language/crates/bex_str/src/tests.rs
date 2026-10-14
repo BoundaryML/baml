@@ -14,6 +14,15 @@ fn hash_of<T: Hash>(t: &T) -> u64 {
     h.finish()
 }
 
+fn is_deferred(s: &BexStr) -> bool {
+    use crate::bex_str::ConcatState;
+    match s {
+        BexStr::Concat(c) => matches!(*c.state.lock().unwrap(), ConcatState::Deferred { .. }),
+        BexStr::LongConcat(c) => matches!(*c.state.lock().unwrap(), ConcatState::Deferred { .. }),
+        _ => false,
+    }
+}
+
 #[test]
 fn size_assertion() {
     assert_eq!(std::mem::size_of::<BexStr>(), 56);
@@ -28,6 +37,11 @@ fn concat_handle_layout_uses_existing_payload() {
     assert_eq!(size_of::<BexStr>(), 56);
     assert_eq!(size_of::<ConcatStr>(), 32);
     assert_eq!(
+        size_of::<ConcatStr<6, u32>>(),
+        (3 * size_of::<u64>() + size_of::<usize>() + size_of::<u32>())
+            .next_multiple_of(std::mem::align_of::<ConcatStr>()),
+    );
+    assert_eq!(
         size_of::<ConcatNode>(),
         size_of::<std::sync::Mutex<ConcatState>>()
     );
@@ -40,19 +54,209 @@ fn concat_handle_layout_uses_existing_payload() {
     );
 }
 
+fn long_concat_fixture() -> (BexStr, String) {
+    let text = format!("{}\0é🙂", "x".repeat(60));
+    let s = BexStr::concat(
+        BexStr::concat(BexStr::from("x".repeat(60)), BexStr::from("\0é")),
+        BexStr::from("🙂"),
+    );
+    assert!(matches!(s, BexStr::LongConcat(_)));
+    (s, text)
+}
+
+#[test]
+fn long_concat_reuses_owned_root_then_rolls_at_capacity() {
+    use crate::bex_str::CONCAT_FANOUT;
+
+    let (mut s, mut text) = long_concat_fixture();
+    let BexStr::LongConcat(c) = &s else {
+        unreachable!()
+    };
+    let root = Arc::as_ptr(&c.node);
+    for count in 3..=CONCAT_FANOUT {
+        let part = ["中\0", "a", "é", "🙂!"][count % 4];
+        text.push_str(part);
+        s = BexStr::concat(s, BexStr::from(part));
+        let BexStr::LongConcat(c) = &s else {
+            panic!("expected wide root")
+        };
+        assert_eq!(Arc::as_ptr(&c.node), root);
+        assert_eq!(c.child_count as usize, count);
+        assert_eq!(s.byte_len(), text.len());
+        assert_eq!(s.char_len(), text.chars().count());
+        assert_eq!(s.ascii_prefix_len(), 61);
+        assert!(is_deferred(&s));
+    }
+    s = BexStr::concat(s, BexStr::from("tail"));
+    text.push_str("tail");
+    let BexStr::LongConcat(c) = &s else {
+        panic!("expected new wide root")
+    };
+    assert_ne!(Arc::as_ptr(&c.node), root);
+    assert_eq!(c.child_count, 2);
+    assert_eq!(s.as_str(), text);
+    assert_eq!(s.content_hash(), BexStr::from(text).content_hash());
+}
+
+#[test]
+fn long_concat_shared_prefixes_and_flattened_roots() {
+    let (s, text) = long_concat_fixture();
+    let snapshot = s.clone();
+    let appended = BexStr::concat(s, BexStr::from("中"));
+    let (BexStr::LongConcat(a), BexStr::LongConcat(b)) = (&snapshot, &appended) else {
+        panic!("expected shared wide node")
+    };
+    assert!(Arc::ptr_eq(&a.node, &b.node));
+    assert_ne!(snapshot, appended);
+    assert!(is_deferred(&snapshot));
+    let bytes = snapshot.as_bytes();
+    assert_eq!(appended.as_str(), format!("{text}中"));
+    assert_eq!(bytes, text.as_bytes());
+    assert_eq!(snapshot.as_bytes().as_ptr(), bytes.as_ptr());
+
+    let (s, text) = long_concat_fixture();
+    assert_eq!(s.as_str(), text);
+    let appended = BexStr::concat(s, BexStr::from("tail"));
+    assert!(matches!(appended, BexStr::Concat(_)));
+    assert_eq!(appended.as_str(), format!("{text}tail"));
+}
+
+#[test]
+fn long_concat_heap_accounting_and_flatten_cache() {
+    use std::mem::size_of;
+
+    use crate::bex_str::{CONCAT_FANOUT, ConcatNode, FlatStr};
+
+    let (s, text) = long_concat_fixture();
+    let overhead = 2 * size_of::<usize>() + size_of::<ConcatNode<CONCAT_FANOUT>>();
+    assert_eq!(s.unshared_heap_bytes(), overhead + text.len());
+    assert!(is_deferred(&s));
+    let snapshot = s.clone();
+    assert_eq!(s.shared_heap_bytes(), s.unshared_heap_bytes().div_ceil(2));
+    let retained = overhead + 2 * size_of::<usize>() + size_of::<FlatStr>() + text.len();
+    assert_eq!(s.retained_heap_bytes(), Some(retained));
+    assert_eq!(snapshot.retained_heap_bytes(), Some(retained));
+    assert_eq!(s.as_bytes().as_ptr(), snapshot.as_bytes().as_ptr());
+    assert_eq!(s.byte_slice(1..s.byte_len()).as_str(), &text[1..]);
+    assert_eq!(hash_of(&s), hash_of(&text));
+}
+
+#[test]
+fn long_concat_shared_dag_and_concurrent_publication() {
+    let (s, text) = long_concat_fixture();
+    let doubled = BexStr::concat(s.clone(), s.clone());
+    let expected = format!("{text}{text}");
+    std::thread::scope(|scope| {
+        for _ in 0..4 {
+            scope.spawn(|| {
+                assert_eq!(doubled.as_str(), expected);
+                assert_eq!(
+                    doubled.content_hash(),
+                    BexStr::from(expected.clone()).content_hash()
+                );
+                assert_eq!(s.as_str(), text);
+            });
+        }
+        let appended = BexStr::concat(s.clone(), BexStr::from("tail"));
+        assert_eq!(appended.as_str(), format!("{text}tail"));
+    });
+    assert_eq!(s.as_str(), text);
+    drop(doubled);
+    let BexStr::LongConcat(c) = &s else {
+        unreachable!()
+    };
+    assert_eq!(
+        Arc::strong_count(&c.node),
+        1,
+        "self-concat must not create an Arc cycle"
+    );
+}
+
+#[test]
+fn long_concat_every_prefix_shares_bytes_but_has_its_own_hash() {
+    use crate::bex_str::CONCAT_FANOUT;
+
+    for first_reader in [0, CONCAT_FANOUT - 2] {
+        let (mut s, mut text) = long_concat_fixture();
+        let mut snapshots = vec![(s.clone(), text.clone())];
+        for count in 3..=CONCAT_FANOUT {
+            let part = ["中\0", "a", "é", "🙂!"][count % 4];
+            s = BexStr::concat(s, BexStr::from(part));
+            text.push_str(part);
+            snapshots.push((s.clone(), text.clone()));
+        }
+        let first = &snapshots[first_reader].0;
+        let ptr = first.as_bytes().as_ptr();
+        let retained = first.retained_heap_bytes();
+        for (snapshot, expected) in &snapshots {
+            assert_eq!(snapshot.as_str(), expected);
+            assert_eq!(snapshot.as_bytes().as_ptr(), ptr);
+            assert_eq!(snapshot.retained_heap_bytes(), retained);
+            assert_eq!(snapshot.char_len(), expected.chars().count());
+            assert_eq!(snapshot.ascii_prefix_len(), 61);
+            assert_eq!(
+                snapshot.content_hash(),
+                BexStr::from(expected.as_str()).content_hash()
+            );
+            assert_eq!(snapshot.clone().content_hash(), snapshot.content_hash());
+            assert_eq!(hash_of(snapshot), hash_of(expected));
+            assert_eq!(
+                snapshot.char_slice(60..usize::MAX).as_str(),
+                &expected[60..]
+            );
+            assert_eq!(
+                snapshot.byte_slice(1..snapshot.byte_len()).as_str(),
+                &expected[1..]
+            );
+            for (n, point) in expected.chars().enumerate() {
+                assert_eq!(snapshot.char_at(n), Some(point));
+            }
+        }
+        let new = BexStr::concat(snapshots[0].0.clone(), BexStr::from("later"));
+        assert_eq!(new.as_str(), format!("{}later", snapshots[0].1));
+    }
+}
+
+#[test]
+fn long_concat_competing_branches_preserve_their_prefixes() {
+    let (s, text) = long_concat_fixture();
+    let a = BexStr::concat(s.clone(), BexStr::from("Aé"));
+    let b = BexStr::concat(s.clone(), BexStr::from("B🙂"));
+    let indirect = BexStr::concat(s.clone(), a.clone());
+    assert_eq!(indirect.as_str(), format!("{text}{text}Aé"));
+    assert_eq!(a.as_str(), format!("{text}Aé"));
+    assert_eq!(b.as_str(), format!("{text}B🙂"));
+    assert_eq!(s.as_str(), text);
+    assert_eq!(s.content_hash(), BexStr::from(text).content_hash());
+}
+
+#[test]
+fn long_concat_racing_append_branches_and_prefix_flatten() {
+    let (s, text) = long_concat_fixture();
+    let barrier = std::sync::Barrier::new(9);
+    std::thread::scope(|scope| {
+        for n in 0..8 {
+            let s = &s;
+            let text = &text;
+            let barrier = &barrier;
+            scope.spawn(move || {
+                barrier.wait();
+                let part = format!("é🙂{n}");
+                let branch = BexStr::concat(s.clone(), BexStr::from(part.as_str()));
+                let expected = format!("{text}{part}");
+                assert_eq!(branch.as_str(), expected);
+                assert_eq!(branch.content_hash(), BexStr::from(expected).content_hash());
+                assert_eq!(s.as_str(), text);
+            });
+        }
+        barrier.wait();
+        assert_eq!(s.as_str(), text);
+    });
+}
+
 #[test]
 fn concat_handle_reads_match_utf8_operands() {
-    use crate::bex_str::ConcatState;
-
-    let deferred = |s: &BexStr| {
-        let BexStr::Concat(c) = s else {
-            panic!("expected deferred concat")
-        };
-        assert!(matches!(
-            *c.state.lock().unwrap(),
-            ConcatState::Deferred { .. }
-        ));
-    };
+    let deferred = |s: &BexStr| assert!(is_deferred(s));
     let right_rope = BexStr::concat(BexStr::from("界".repeat(20)), BexStr::from("\0é🙂x"));
     let flat = BexStr::from(format!("{}\0é🙂x!", "z".repeat(60)));
     let slice = flat.byte_slice(1..flat.byte_len() - 1);
@@ -660,7 +864,7 @@ fn content_hash_is_independent_of_representation_and_reused_by_clones() {
     assert_eq!(rope.content_hash(), expected);
     assert!(matches!(
         *node.state.lock().unwrap(),
-        ConcatState::Flattened(_)
+        ConcatState::Flattened(..)
     ));
     assert_eq!(flat.content_hash(), expected);
     let clone = flat.clone();
@@ -718,7 +922,7 @@ fn char_len_of_deep_rope_does_not_recurse() {
             for _ in 0..n {
                 s = BexStr::concat(s, BexStr::from("é"));
             }
-            assert!(matches!(s, BexStr::Concat(_)));
+            assert!(matches!(s, BexStr::Concat(_) | BexStr::LongConcat(_)));
             assert_eq!(s.char_len(), 60 + n);
             assert_eq!(s.byte_len(), 60 + 2 * n);
             // Flattening keeps the cached count.
@@ -756,7 +960,7 @@ fn codepoint_ops_on_long_strings_match_std_oracle() {
     for _ in 0..40 {
         concat = BexStr::concat(concat, BexStr::from(unit));
     }
-    assert!(matches!(concat, BexStr::Concat(_)));
+    assert!(matches!(concat, BexStr::Concat(_) | BexStr::LongConcat(_)));
 
     let cases: [(&str, &BexStr); 5] = [
         (&text, &flat),
@@ -851,7 +1055,6 @@ fn assert_ascii_prefix_exact(bex: &BexStr, what: &str) {
 
 #[test]
 fn ascii_prefix_matches_oracle_on_every_representation() {
-    use crate::bex_str::ConcatState;
     let ascii = "0123456789abcdef".repeat(8); // 128 B
     let mixed = format!("{ascii}é{ascii}🪙{ascii}"); // non-ASCII at 128 and 258
     let leading = format!("é{ascii}"); // non-ASCII at 0
@@ -917,13 +1120,7 @@ fn ascii_prefix_matches_oracle_on_every_representation() {
         ),
     ];
     for (name, rope) in ropes {
-        let BexStr::Concat(node) = &rope else {
-            panic!("{name}: expected a rope")
-        };
-        assert!(matches!(
-            *node.state.lock().unwrap(),
-            ConcatState::Deferred { .. }
-        ));
+        assert!(is_deferred(&rope), "{name}: expected a deferred rope");
         // Checked before any flatten (cached on the node) ...
         assert_eq!(
             rope.ascii_prefix_len(),
@@ -969,13 +1166,7 @@ fn ascii_prefix_of_deep_rope_does_not_recurse() {
             assert_eq!(s.ascii_prefix_len(), 60 + n);
             // In the prefix, char indices resolve without flattening.
             assert_eq!(s.char_to_byte(60 + n), 60 + n);
-            let BexStr::Concat(node) = &s else {
-                panic!("expected a rope")
-            };
-            assert!(matches!(
-                *node.state.lock().unwrap(),
-                crate::bex_str::ConcatState::Deferred { .. }
-            ));
+            assert!(is_deferred(&s));
             assert_eq!(s.char_to_byte(60 + n + 1), 60 + n + 4);
         })
         .unwrap()

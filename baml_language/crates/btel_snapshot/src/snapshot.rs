@@ -205,7 +205,10 @@ impl Snapshot {
         for text in graph.strings.iter().chain(graph.labels.iter()) {
             match text {
                 BexStr::Inline { .. } => stats.copied_bytes += text.byte_len(),
-                BexStr::Flat(_) | BexStr::Slice { .. } | BexStr::Concat(_) => {
+                BexStr::Flat(_)
+                | BexStr::Slice { .. }
+                | BexStr::Concat(_)
+                | BexStr::LongConcat(_) => {
                     stats.shared_bytes += text.byte_len();
                 }
             }

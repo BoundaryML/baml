@@ -13,6 +13,10 @@ use std::{
 /// 56 (target size) - 1 (discriminant) - 1 (byte_len) = 54.
 const INLINE_CAPACITY: usize = 54;
 
+// Six-way append nodes amortize allocation across five appends, including
+// shared roots: each handle's count identifies its immutable prefix.
+pub(crate) const CONCAT_FANOUT: usize = 6;
+
 /// Sentinel for a `Slice` whose ASCII prefix doesn't fit in `u32` (a slice of
 /// 4 GiB or more): `ascii_prefix_len()` recomputes it by scanning.
 pub(crate) const SLICE_ASCII_PREFIX_UNKNOWN: u32 = u32::MAX;
@@ -58,32 +62,125 @@ pub enum BexStr {
     },
     /// Deferred concatenation. Flattened on first byte-level access.
     Concat(ConcatStr),
+    /// Six-way deferred append nodes. Handles can share different immutable
+    /// prefixes of one node; clones remain O(1). Reading any prefix freezes the
+    /// node and shares one buffer for all populated children.
+    LongConcat(ConcatStr<CONCAT_FANOUT, u32>),
 }
 
 /// Immutable concat metadata stored in the handle's otherwise unused payload.
 /// The shared node owns canonical UTF-8 children and the flattened result.
 #[derive(Clone)]
-pub struct ConcatStr {
+pub struct ConcatStr<const N: usize = 2, Count = ()> {
     pub(crate) total_byte_len: u64,
     pub(crate) total_char_len: u64,
     pub(crate) total_ascii_prefix_len: u64,
-    pub(crate) node: Arc<ConcatNode>,
+    pub(crate) node: Arc<ConcatNode<N>>,
+    /// Number of nonempty children; unused slots contain `BexStr::empty()`.
+    /// A shared node may acquire later children, but this handle's prefix and
+    /// metadata never change. Binary handles use a zero-sized constant count.
+    pub(crate) child_count: Count,
 }
 
-impl Deref for ConcatStr {
-    type Target = ConcatNode;
+/// Binary handles have a constant count without storing another field; wider
+/// handles cache their active count in four bytes of the enum payload budget.
+pub trait ConcatChildCount {
+    fn get(&self) -> usize;
+}
+
+impl ConcatChildCount for () {
+    fn get(&self) -> usize {
+        2
+    }
+}
+
+impl ConcatChildCount for u32 {
+    fn get(&self) -> usize {
+        *self as usize
+    }
+}
+
+impl<const N: usize, Count> Deref for ConcatStr<N, Count> {
+    type Target = ConcatNode<N>;
 
     fn deref(&self) -> &Self::Target {
         &self.node
     }
 }
 
-impl ConcatStr {
+impl<const N: usize, Count: ConcatChildCount> ConcatStr<N, Count> {
+    fn content_hash(&self) -> u128 {
+        let flat = self.flatten();
+        let len = self.total_byte_len as usize;
+        if len == flat.data.len() {
+            return cached_hash(&flat.hash, &flat.data);
+        }
+        let guard = self.state.lock().unwrap();
+        let ConcatState::Flattened(_, hashes) = &*guard else {
+            unreachable!()
+        };
+        cached_hash(&hashes[self.child_count.get() - 1], &flat.data[..len])
+    }
+
+    fn try_get_hash(&self) -> Option<u128> {
+        let guard = self.state.lock().unwrap();
+        match &*guard {
+            ConcatState::Flattened(f, hashes) => {
+                if self.total_byte_len as usize == f.data.len() {
+                    read_hash(&f.hash)
+                } else {
+                    read_hash(&hashes[self.child_count.get() - 1])
+                }
+            }
+            ConcatState::Deferred { .. } => None,
+        }
+    }
+
+    fn as_bytes(&self) -> &[u8] {
+        let flat = self.flatten();
+        debug_assert!(self.total_byte_len as usize <= flat.data.len());
+        // SAFETY: `self.node` keeps the flattened Arc alive, and it is never
+        // replaced. Flattening freezes appends, and this handle's byte prefix
+        // was already fully initialized before the handle became visible.
+        #[allow(unsafe_code)]
+        unsafe {
+            std::slice::from_raw_parts(flat.data.as_ptr(), self.total_byte_len as usize)
+        }
+    }
+
+    fn take_children(self, stack: &mut Vec<BexStr>) {
+        if let Ok(mut owned) = Arc::try_unwrap(self.node) {
+            let inner = match owned.state.get_mut() {
+                Ok(s) => {
+                    std::mem::replace(s, ConcatState::flattened(Arc::new(FlatStr::placeholder())))
+                }
+                Err(_) => return,
+            };
+            if let ConcatState::Deferred { children } = inner {
+                stack.extend(children);
+            }
+        }
+    }
+
+    fn push_children(&self, stack: &mut Vec<BexStr>, buf: &mut Vec<u8>) {
+        let guard = self.state.lock().unwrap();
+        match &*guard {
+            ConcatState::Flattened(f, ..) => {
+                buf.extend_from_slice(&f.data[..self.total_byte_len as usize]);
+            }
+            ConcatState::Deferred { children } => {
+                // Shared nodes retain their children for other roots.
+                stack.extend(children[..self.child_count.get()].iter().rev().cloned());
+            }
+        }
+    }
+
     fn flatten(&self) -> Arc<FlatStr> {
         self.node.flatten(
             self.total_byte_len,
             self.total_char_len,
             self.total_ascii_prefix_len,
+            self.child_count.get(),
         )
     }
 }
@@ -103,13 +200,21 @@ pub struct FlatStr {
 }
 
 /// Deferred concatenation node.
-pub struct ConcatNode {
-    pub(crate) state: Mutex<ConcatState>,
+pub struct ConcatNode<const N: usize = 2> {
+    pub(crate) state: Mutex<ConcatState<N>>,
 }
 
-pub(crate) enum ConcatState {
-    Deferred { left: BexStr, right: BexStr },
-    Flattened(Arc<FlatStr>),
+pub(crate) enum ConcatState<const N: usize = 2> {
+    Deferred { children: [BexStr; N] },
+    // Once flattened, all prefixes share one byte buffer. Hashes for shorter
+    // prefixes occupy space already reserved for the deferred children.
+    Flattened(Arc<FlatStr>, [[AtomicU64; 2]; N]),
+}
+
+impl<const N: usize> ConcatState<N> {
+    fn flattened(flat: Arc<FlatStr>) -> Self {
+        Self::Flattened(flat, [const { [const { AtomicU64::new(0) }; 2] }; N])
+    }
 }
 
 /// Bytes of an `Arc<FlatStr>` allocation beyond the text itself: the two
@@ -118,6 +223,8 @@ const FLAT_OVERHEAD: usize = 2 * std::mem::size_of::<usize>() + std::mem::size_o
 
 /// Bytes of an `Arc<ConcatNode>` allocation: the two reference counts and the node.
 const CONCAT_OVERHEAD: usize = 2 * std::mem::size_of::<usize>() + std::mem::size_of::<ConcatNode>();
+const LONG_CONCAT_OVERHEAD: usize =
+    2 * std::mem::size_of::<usize>() + std::mem::size_of::<ConcatNode<CONCAT_FANOUT>>();
 
 // Size assertion — must fit within Object payload budget
 const _: () = assert!(
@@ -159,13 +266,17 @@ impl BexStr {
             Self::Concat(node) => CONCAT_OVERHEAD
                 .checked_add(FLAT_OVERHEAD)?
                 .checked_add(node.flatten().data.len()),
+            Self::LongConcat(node) => LONG_CONCAT_OVERHEAD
+                .checked_add(FLAT_OVERHEAD)?
+                .checked_add(node.flatten().data.len()),
         }
     }
 
     /// Heap bytes this string would own if it shared nothing: zero when
     /// inline, otherwise an allocation holding its full length. A slice counts
-    /// only the bytes it views, and a concatenation counts the buffer that
-    /// reading it would materialize. Never flattens.
+    /// only the bytes it views, and a concatenation counts its logical text
+    /// plus its node header. A shared concat prefix can retain later appends;
+    /// `retained_heap_bytes` counts that complete backing. Never flattens.
     ///
     /// Every handle to shared storage reports it in full, so summing this over
     /// handles overestimates; see [`Self::shared_heap_bytes`] for the share.
@@ -175,6 +286,8 @@ impl BexStr {
             Self::Flat(flat) => FLAT_OVERHEAD.saturating_add(flat.data.len()),
             Self::Slice { byte_len, .. } => usize::try_from(*byte_len).unwrap_or(usize::MAX),
             Self::Concat(node) => CONCAT_OVERHEAD
+                .saturating_add(usize::try_from(node.total_byte_len).unwrap_or(usize::MAX)),
+            Self::LongConcat(node) => LONG_CONCAT_OVERHEAD
                 .saturating_add(usize::try_from(node.total_byte_len).unwrap_or(usize::MAX)),
         }
     }
@@ -196,6 +309,9 @@ impl BexStr {
             Self::Concat(node) => CONCAT_OVERHEAD
                 .saturating_add(usize::try_from(node.total_byte_len).unwrap_or(usize::MAX))
                 .div_ceil(Arc::strong_count(&node.node)),
+            Self::LongConcat(node) => LONG_CONCAT_OVERHEAD
+                .saturating_add(usize::try_from(node.total_byte_len).unwrap_or(usize::MAX))
+                .div_ceil(Arc::strong_count(&node.node)),
         }
     }
 
@@ -206,6 +322,7 @@ impl BexStr {
             BexStr::Flat(f) => f.data.len(),
             BexStr::Slice { byte_len, .. } => *byte_len as usize,
             BexStr::Concat(c) => c.total_byte_len as usize,
+            BexStr::LongConcat(c) => c.total_byte_len as usize,
         }
     }
 
@@ -218,6 +335,7 @@ impl BexStr {
             BexStr::Flat(f) => f.char_len as usize,
             BexStr::Slice { char_len, .. } => *char_len as usize,
             BexStr::Concat(c) => c.total_char_len as usize,
+            BexStr::LongConcat(c) => c.total_char_len as usize,
         }
     }
 
@@ -238,6 +356,7 @@ impl BexStr {
                 ascii_prefix_len, ..
             } => *ascii_prefix_len as usize,
             BexStr::Concat(c) => c.total_ascii_prefix_len as usize,
+            BexStr::LongConcat(c) => c.total_ascii_prefix_len as usize,
         }
     }
 
@@ -272,18 +391,8 @@ impl BexStr {
                 let l = *byte_len as usize;
                 &parent.data[o..o + l]
             }
-            BexStr::Concat(c) => {
-                let flat = c.flatten();
-                // SAFETY: The Arc<FlatStr> inside the Mutex outlives &self
-                // because self holds Arc<ConcatNode> which holds the Mutex.
-                // The flattened Arc is never replaced once set.
-                #[allow(unsafe_code)]
-                unsafe {
-                    let ptr = flat.data.as_ptr();
-                    let len = flat.data.len();
-                    std::slice::from_raw_parts(ptr, len)
-                }
-            }
+            BexStr::Concat(c) => c.as_bytes(),
+            BexStr::LongConcat(c) => c.as_bytes(),
         }
     }
 
@@ -298,10 +407,8 @@ impl BexStr {
             }
             Self::Flat(flat) => cached_hash(&flat.hash, &flat.data),
             Self::Slice { hash, .. } => cached_hash(hash, self.as_bytes()),
-            Self::Concat(node) => {
-                let flat = node.flatten();
-                cached_hash(&flat.hash, &flat.data)
-            }
+            Self::Concat(node) => node.content_hash(),
+            Self::LongConcat(node) => node.content_hash(),
         }
     }
 
@@ -364,6 +471,7 @@ impl BexStr {
             BexStr::Slice { parent, offset, .. } => (parent.clone(), *offset + start as u64),
             // `as_bytes` above already flattened; this returns the cached result.
             BexStr::Concat(c) => (c.flatten(), start as u64),
+            BexStr::LongConcat(c) => (c.flatten(), start as u64),
         };
         BexStr::Slice {
             parent,
@@ -530,14 +638,62 @@ impl BexStr {
         } else {
             left_prefix
         } as u64;
-        BexStr::Concat(ConcatStr {
-            total_byte_len: total_byte_len as u64,
-            total_char_len,
-            total_ascii_prefix_len,
-            node: Arc::new(ConcatNode {
-                state: Mutex::new(ConcatState::Deferred { left, right }),
-            }),
-        })
+        // A count is an immutable view of the first children. Append only into
+        // a vacant slot, so snapshots and concurrent branches keep their bytes.
+        // Only leaves can be appended in place: a concat on the right could
+        // refer back to this node, creating an Arc cycle (e.g. concat(s, s)).
+        let right_is_leaf = !matches!(right, BexStr::Concat(_) | BexStr::LongConcat(_));
+        let mut left = left;
+        let mut widen = false;
+        match &mut left {
+            BexStr::Concat(c) => {
+                widen = matches!(*c.state.lock().unwrap(), ConcatState::Deferred { .. });
+            }
+            BexStr::LongConcat(c) => {
+                let mut guard = c.state.lock().unwrap();
+                if let ConcatState::Deferred { children } = &mut *guard {
+                    let count = c.child_count as usize;
+                    if right_is_leaf && count < CONCAT_FANOUT && children[count].is_empty() {
+                        children[count] = right;
+                        drop(guard);
+                        c.child_count += 1;
+                        c.total_byte_len = total_byte_len as u64;
+                        c.total_char_len = total_char_len;
+                        c.total_ascii_prefix_len = total_ascii_prefix_len;
+                        return left;
+                    }
+                    // A full root or a competing branch starts another node.
+                    widen = true;
+                }
+            }
+            _ => {}
+        }
+        if widen {
+            let mut children = std::array::from_fn(|_| BexStr::empty());
+            children[0] = left;
+            children[1] = right;
+            BexStr::LongConcat(ConcatStr {
+                total_byte_len: total_byte_len as u64,
+                total_char_len,
+                total_ascii_prefix_len,
+                child_count: 2,
+                node: Arc::new(ConcatNode {
+                    state: Mutex::new(ConcatState::Deferred { children }),
+                }),
+            })
+        } else {
+            BexStr::Concat(ConcatStr {
+                total_byte_len: total_byte_len as u64,
+                total_char_len,
+                total_ascii_prefix_len,
+                child_count: (),
+                node: Arc::new(ConcatNode {
+                    state: Mutex::new(ConcatState::Deferred {
+                        children: [left, right],
+                    }),
+                }),
+            })
+        }
     }
 
     /// Pointer equality check — true if both point to the same Arc.
@@ -559,6 +715,9 @@ impl BexStr {
                 },
             ) => Arc::ptr_eq(a, b) && ao == bo && al == bl,
             (BexStr::Concat(a), BexStr::Concat(b)) => Arc::ptr_eq(&a.node, &b.node),
+            (BexStr::LongConcat(a), BexStr::LongConcat(b)) => {
+                a.child_count == b.child_count && Arc::ptr_eq(&a.node, &b.node)
+            }
             _ => false,
         }
     }
@@ -569,14 +728,8 @@ impl BexStr {
             BexStr::Inline { .. } => None, // No cache for Inline
             BexStr::Flat(f) => read_hash(&f.hash),
             BexStr::Slice { hash, .. } => read_hash(hash),
-            BexStr::Concat(c) => {
-                // If flattened, check the FlatStr's hash
-                let guard = c.state.lock().unwrap();
-                match &*guard {
-                    ConcatState::Flattened(f) => read_hash(&f.hash),
-                    ConcatState::Deferred { .. } => None,
-                }
-            }
+            BexStr::Concat(c) => c.try_get_hash(),
+            BexStr::LongConcat(c) => c.try_get_hash(),
         }
     }
 }
@@ -612,7 +765,7 @@ impl FlatStr {
 
 // ── ConcatNode ─────────────────────────────────────────────────────
 
-impl ConcatNode {
+impl<const N: usize> ConcatNode<N> {
     /// Iterative flatten. Materializes bytes into Arc<FlatStr>.
     /// Stores result back so subsequent calls return O(1).
     fn flatten(
@@ -620,29 +773,51 @@ impl ConcatNode {
         total_byte_len: u64,
         total_char_len: u64,
         total_ascii_prefix_len: u64,
+        child_count: usize,
     ) -> Arc<FlatStr> {
         let mut guard = self.state.lock().unwrap();
         match &*guard {
-            ConcatState::Flattened(f) => return f.clone(),
+            ConcatState::Flattened(f, ..) => return f.clone(),
             ConcatState::Deferred { .. } => {}
         }
+
+        // A shorter snapshot may be the first reader. Materialize all populated
+        // slots once, then each handle borrows only its own byte prefix. This
+        // freezes appends and releases the children without per-prefix buffers.
+        let (total_byte_len, total_char_len, total_ascii_prefix_len) = match &*guard {
+            ConcatState::Deferred { children }
+                if children[child_count..].iter().any(|c| !c.is_empty()) =>
+            {
+                let mut byte_len = 0;
+                let mut char_len = 0;
+                let mut prefix = 0;
+                for child in children {
+                    if prefix == byte_len {
+                        prefix += child.ascii_prefix_len();
+                    }
+                    byte_len += child.byte_len();
+                    char_len += child.char_len();
+                }
+                (byte_len as u64, char_len as u64, prefix as u64)
+            }
+            _ => (total_byte_len, total_char_len, total_ascii_prefix_len),
+        };
 
         // Take ownership of the deferred state
         let old = std::mem::replace(
             &mut *guard,
-            ConcatState::Flattened(Arc::new(FlatStr::placeholder())),
+            ConcatState::flattened(Arc::new(FlatStr::placeholder())),
         );
-        let (left, right) = match old {
-            ConcatState::Deferred { left, right } => (left, right),
-            ConcatState::Flattened(_) => unreachable!(),
+        let children = match old {
+            ConcatState::Deferred { children } => children,
+            ConcatState::Flattened(..) => unreachable!(),
         };
 
         // Iterative tree walk — heap-allocated work-stack
         let mut buf = Vec::with_capacity(total_byte_len as usize);
         let mut stack: Vec<BexStr> = Vec::new();
-        // Push right first so left is processed first (stack is LIFO)
-        stack.push(right);
-        stack.push(left);
+        // Push in reverse so the first child is processed first (stack is LIFO).
+        stack.extend(children.into_iter().rev());
 
         while let Some(node) = stack.pop() {
             match node {
@@ -662,27 +837,8 @@ impl ConcatNode {
                     let l = byte_len as usize;
                     buf.extend_from_slice(&parent.data[o..o + l]);
                 }
-                BexStr::Concat(c) => {
-                    let inner_guard = c.state.lock().unwrap();
-                    match &*inner_guard {
-                        ConcatState::Flattened(f) => {
-                            buf.extend_from_slice(&f.data);
-                        }
-                        ConcatState::Deferred { left, right } => {
-                            // Clone the child handles (O(1): Arc bump or inline
-                            // memcpy) and leave this node's `Deferred` state
-                            // intact. The node may be shared (Arc refcount > 1,
-                            // e.g. `let n = a + b; let p = n + c`); destructively
-                            // emptying it here would corrupt every *other*
-                            // reference to it. (B-262 / B-233)
-                            let left = left.clone();
-                            let right = right.clone();
-                            drop(inner_guard);
-                            stack.push(right);
-                            stack.push(left);
-                        }
-                    }
-                }
+                BexStr::Concat(c) => c.push_children(&mut stack, &mut buf),
+                BexStr::LongConcat(c) => c.push_children(&mut stack, &mut buf),
             }
         }
 
@@ -691,42 +847,31 @@ impl ConcatNode {
             total_char_len,
             total_ascii_prefix_len,
         ));
-        *guard = ConcatState::Flattened(flat.clone());
+        *guard = ConcatState::flattened(flat.clone());
         flat
     }
 }
 
 /// Iterative Drop to avoid stack overflow on deep left-leaning trees.
-impl Drop for ConcatNode {
+impl<const N: usize> Drop for ConcatNode<N> {
     fn drop(&mut self) {
         let state = match self.state.get_mut() {
-            Ok(s) => std::mem::replace(s, ConcatState::Flattened(Arc::new(FlatStr::placeholder()))),
+            Ok(s) => std::mem::replace(s, ConcatState::flattened(Arc::new(FlatStr::placeholder()))),
             Err(_) => return, // Mutex poisoned — leak rather than risk UB
         };
-        let (left, right) = match state {
-            ConcatState::Deferred { left, right } => (left, right),
-            ConcatState::Flattened(_) => return,
+        let children = match state {
+            ConcatState::Deferred { children } => children,
+            ConcatState::Flattened(..) => return,
         };
 
         let mut stack: Vec<BexStr> = Vec::new();
-        stack.push(left);
-        stack.push(right);
+        stack.extend(children);
 
         while let Some(node) = stack.pop() {
-            if let BexStr::Concat(arc) = node
-                && let Ok(mut owned) = Arc::try_unwrap(arc.node)
-            {
-                let inner = match owned.state.get_mut() {
-                    Ok(s) => std::mem::replace(
-                        s,
-                        ConcatState::Flattened(Arc::new(FlatStr::placeholder())),
-                    ),
-                    Err(_) => continue,
-                };
-                if let ConcatState::Deferred { left, right } = inner {
-                    stack.push(left);
-                    stack.push(right);
-                }
+            match node {
+                BexStr::Concat(c) => c.take_children(&mut stack),
+                BexStr::LongConcat(c) => c.take_children(&mut stack),
+                _ => {}
             }
             // Inline/Flat/Slice drop in O(1)
         }
@@ -759,6 +904,7 @@ impl Clone for BexStr {
                 hash: clone_hash(hash),
             },
             BexStr::Concat(c) => BexStr::Concat(c.clone()),
+            BexStr::LongConcat(c) => BexStr::LongConcat(c.clone()),
         }
     }
 }
