@@ -212,8 +212,8 @@ mod tests {
     #[test]
     fn accounts_full_shared_slice_parents_for_values_and_keys() {
         let pool = SnapshotPool::new(1, Limits::default());
-        let source = bex_str::BexStr::from("a".repeat(100_000));
-        let slice = source.byte_slice(0..100);
+        let source = bex_str::BexStr::from(format!("’{}", "a".repeat(100_000)));
+        let slice = source.char_slice(0..100);
         let slice_bytes = slice.retained_heap_bytes().unwrap();
         // A slice retains the whole parent plus its own shared hash cache.
         assert!(slice_bytes >= source.retained_heap_bytes().unwrap());
@@ -227,6 +227,10 @@ mod tests {
             value: SnapshotValue::Null,
         });
         assert_eq!(snapshot.retained_bytes().unwrap() - before, 2 * slice_bytes,);
+        for _ in 0..2 {
+            source.char_at(source.codepoint_len() - 1);
+        }
+        assert_eq!(snapshot.retained_bytes().unwrap() - before, 2 * slice_bytes);
     }
 
     #[test]

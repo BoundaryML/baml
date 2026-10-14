@@ -53,6 +53,25 @@ fn retained_heap_flattens_ropes_to_stable_backing() {
 }
 
 #[test]
+fn retained_heap_bounds_lazy_indexes_without_building_them() {
+    for prefix in ["ascii", "é", "’", "🦀"] {
+        let s = BexStr::from(format!("{prefix}{}", "a".repeat(1_000)));
+        let BexStr::Flat(flat) = &s else {
+            unreachable!()
+        };
+        assert!(flat.char_index.get().is_none());
+        let bytes = s.retained_heap_bytes().unwrap();
+        assert!(flat.char_index.get().is_none());
+        assert!(bytes >= s.byte_len());
+        for _ in 0..2 {
+            assert_eq!(s.char_at(s.codepoint_len() - 1), Some('a'));
+        }
+        assert_eq!(flat.char_index.get().is_some(), prefix != "ascii");
+        assert_eq!(s.retained_heap_bytes(), Some(bytes));
+    }
+}
+
+#[test]
 fn inline_boundary() {
     // 54 bytes → Inline
     let s54 = "a".repeat(54);
@@ -912,7 +931,9 @@ fn owned_appends_extend_indexes_and_invalidate_hashes_without_mutating_snapshots
     let mut s = BexStr::from("é前🙂xyz".repeat(50));
     let mut expected = s.as_str().to_owned();
     let original_hash = s.content_hash();
-    s.retained_heap_bytes(); // materialize the index before growth
+    for _ in 0..2 {
+        s.char_at(s.codepoint_len() - 1); // materialize the index before growth
+    }
     for round in 0..200 {
         let addition = if round % 2 == 0 { "🦀aé" } else { "bc" };
         s = BexStr::concat(s, BexStr::from(addition));
@@ -1058,7 +1079,9 @@ fn byte_slice_rejects_reversed_ranges() {
 #[test]
 fn indexed_scalar_cache_promotes_without_changing_utf8_or_old_views() {
     let mut s = BexStr::from("éabc".repeat(100));
-    s.retained_heap_bytes();
+    for _ in 0..2 {
+        s.char_at(s.codepoint_len() - 1);
+    }
     let expected = format!("{}前🦀", s.as_str());
     s = BexStr::concat(s, BexStr::from("前"));
     assert_eq!(s.char_at(400), Some('前'));
@@ -1084,7 +1107,9 @@ fn indexed_scalar_cache_promotes_without_changing_utf8_or_old_views() {
 #[test]
 fn narrow_unicode_slices_of_wide_parents_preserve_scalar_bounds() {
     let parent = BexStr::from(format!("🦀{}前", "éaÿ\0".repeat(100)));
-    parent.retained_heap_bytes();
+    for _ in 0..2 {
+        parent.char_at(parent.codepoint_len() - 1);
+    }
     let narrow = parent.char_slice(1..401);
     assert_eq!(narrow.codepoint_len(), 400);
     let expected = "éaÿ\0".repeat(100);

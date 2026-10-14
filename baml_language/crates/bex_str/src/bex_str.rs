@@ -237,22 +237,20 @@ impl BexStr {
         self.byte_len() == 0
     }
 
-    /// Heap allocation bytes retained by this string, excluding `Self` and
-    /// allocator metadata. Shared backing is charged in full, including the
-    /// entire parent of a slice, spare append capacity, and the Unicode index.
-    /// Materializes the optional index and flattens concatenations so later
-    /// reads cannot increase retained backing. Consuming concat creates a new
-    /// value whose exclusive buffer may grow.
+    /// Conservative heap allocation bound, excluding `Self` and allocator
+    /// metadata. Shared backing is charged in full, including the entire parent
+    /// of a slice and spare append capacity. Reserves the worst-case Unicode
+    /// index size without building it, and flattens concatenations so later
+    /// reads cannot increase the bound. Consuming concat creates a new value
+    /// whose exclusive buffer may grow.
     ///
     /// Returns `None` on arithmetic overflow.
     pub fn retained_heap_bytes(&self) -> Option<usize> {
         fn flat_bytes(flat: &FlatStr) -> Option<usize> {
-            // Freeze the optional index too, preserving stable heap accounting.
-            flat.index();
             std::mem::size_of::<FlatStr>()
                 .checked_add(2 * std::mem::size_of::<usize>())?
                 .checked_add(flat.data.capacity())?
-                .checked_add(flat.index_heap_bytes())
+                .checked_add(flat.index_heap_bytes().max(flat.index_bound_bytes()?))
         }
         match self {
             Self::Inline { .. } => Some(0),
@@ -1072,6 +1070,22 @@ impl FlatStr {
         self.char_index.get().map_or(0, |index| {
             index.offsets.capacity() * std::mem::size_of::<u32>() + index.points.heap_bytes()
         })
+    }
+
+    /// Bound a tight index's u32 offsets and four-byte scalars without
+    /// allocating it. Owned append capacities are accounted for separately.
+    fn index_bound_bytes(&self) -> Option<usize> {
+        if self.data.len() >= u32::MAX as usize || self.ascii_prefix_len == self.codepoint_len {
+            return Some(0);
+        }
+        let points = (self.codepoint_len - self.ascii_prefix_len) as usize;
+        let offsets = points.checked_add(1)?;
+        if offsets > isize::MAX as usize / std::mem::size_of::<u32>() {
+            return Some(0);
+        }
+        offsets
+            .checked_mul(std::mem::size_of::<u32>())?
+            .checked_add(points.checked_mul(std::mem::size_of::<char>())?)
     }
 
     fn charge_scan(&self, bytes: usize) {
