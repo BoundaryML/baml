@@ -41,8 +41,8 @@ mod field {
 /// own: all of them, except the content of a string sent from where it is.
 pub(crate) fn buffered_len(leaf: Option<&Leaf>, encoded_len: u64) -> u64 {
     match leaf {
-        Some(leaf) if leaf.content().len() >= SHARED_CONTENT_BYTES => {
-            encoded_len.saturating_sub(leaf.content().len() as u64)
+        Some(leaf) if leaf.content().byte_len() >= SHARED_CONTENT_BYTES => {
+            encoded_len.saturating_sub(leaf.content().byte_len() as u64)
         }
         Some(_) | None => encoded_len,
     }
@@ -415,7 +415,7 @@ mod tests {
             assert_eq!(chunks.len(), 5);
             for (chunk, text) in [(&chunks[1], &texts[0]), (&chunks[3], &texts[2])] {
                 assert_eq!(chunk.as_ptr(), text.as_bytes().as_ptr());
-                assert_eq!(chunk.len(), text.len());
+                assert_eq!(chunk.len(), text.byte_len());
             }
             // A second attempt sends the same memory.
             assert_eq!(body.chunks()[3].as_ptr(), texts[2].as_bytes().as_ptr());

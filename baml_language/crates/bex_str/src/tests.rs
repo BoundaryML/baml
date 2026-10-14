@@ -23,9 +23,9 @@ fn size_assertion() {
 fn retained_heap_counts_complete_slice_parent() {
     assert_eq!(BexStr::from("inline").retained_heap_bytes(), Some(0));
     let parent = BexStr::from("x".repeat(100_000));
-    let slice = parent.substring(1, 101);
+    let slice = parent.byte_slice(1..101);
     let bytes = parent.retained_heap_bytes().unwrap();
-    assert!(bytes > parent.len());
+    assert!(bytes > parent.byte_len());
     assert_eq!(slice.retained_heap_bytes(), Some(bytes));
     assert_eq!(slice.clone().retained_heap_bytes(), Some(bytes));
 }
@@ -36,17 +36,17 @@ fn unshared_heap_bytes_counts_each_handle_in_full() {
 
     let flat = BexStr::from("x".repeat(100_000));
     let bytes = flat.unshared_heap_bytes();
-    assert!(bytes > flat.len(), "a flat string owns its header too");
+    assert!(bytes > flat.byte_len(), "a flat string owns its header too");
     assert_eq!(flat.clone().unshared_heap_bytes(), bytes);
 
     // A slice is sized by what it views, not by the parent it pins.
-    assert_eq!(flat.substring(1, 1_001).unshared_heap_bytes(), 1_000);
+    assert_eq!(flat.byte_slice(1..1_001).unshared_heap_bytes(), 1_000);
 
     // A concatenation is sized by the buffer reading it would materialize,
     // and sizing it does not materialize that buffer.
     let rope = BexStr::concat(flat.clone(), BexStr::from("y".repeat(100)));
     assert!(matches!(rope, BexStr::Concat(_)));
-    assert!(rope.unshared_heap_bytes() > rope.len());
+    assert!(rope.unshared_heap_bytes() > rope.byte_len());
     assert!(matches!(
         &rope,
         BexStr::Concat(node) if matches!(
@@ -71,7 +71,7 @@ fn shared_heap_bytes_splits_a_buffer_among_its_handles() {
             if i % 2 == 0 {
                 flat.clone()
             } else {
-                flat.substring(i, i + 500)
+                flat.byte_slice(i..i + 500)
             }
         })
         .collect();
@@ -96,11 +96,11 @@ fn shared_heap_bytes_splits_a_buffer_among_its_handles() {
 #[test]
 fn retained_heap_flattens_ropes_to_stable_backing() {
     let parent = BexStr::from("x".repeat(100_000));
-    let rope = BexStr::concat(parent.substring(0, 100), BexStr::from("y".repeat(100)));
+    let rope = BexStr::concat(parent.byte_slice(0..100), BexStr::from("y".repeat(100)));
     assert!(matches!(rope, BexStr::Concat(_)));
     let bytes = rope.retained_heap_bytes().unwrap();
-    assert!(bytes > rope.len());
-    assert!(bytes < parent.len());
+    assert!(bytes > rope.byte_len());
+    assert!(bytes < parent.byte_len());
     assert_eq!(rope.as_str().len(), 200);
     assert_eq!(rope.retained_heap_bytes(), Some(bytes));
 }
@@ -152,11 +152,11 @@ fn concat_deep_drop_no_stack_overflow() {
 #[test]
 fn slice_depth_one_invariant() {
     let long = BexStr::from("a".repeat(200));
-    let s1 = long.substring(10, 100);
+    let s1 = long.byte_slice(10..100);
     assert!(matches!(s1, BexStr::Slice { .. }));
 
     // Re-slice: still depth-1, same parent
-    let s2 = s1.substring(0, 80);
+    let s2 = s1.byte_slice(0..80);
     if let (BexStr::Slice { parent: p1, .. }, BexStr::Slice { parent: p2, .. }) = (&s1, &s2) {
         assert!(Arc::ptr_eq(p1, p2));
     }
@@ -188,7 +188,7 @@ fn partial_ord_matches_string() {
 #[test]
 fn empty_string() {
     let e = BexStr::empty();
-    assert_eq!(e.len(), 0);
+    assert_eq!(e.byte_len(), 0);
     assert!(e.is_empty());
     assert_eq!(e.as_str(), "");
 }
@@ -196,7 +196,7 @@ fn empty_string() {
 #[test]
 fn from_empty_string() {
     let e = BexStr::from("");
-    assert!(matches!(e, BexStr::Inline { len: 0, .. }));
+    assert!(matches!(e, BexStr::Inline { byte_len: 0, .. }));
     assert_eq!(e.as_str(), "");
 }
 
@@ -246,59 +246,59 @@ fn empty_concat_variants() {
 fn mixed_variant_concat() {
     let inline = BexStr::from("hi"); // Inline (2 bytes)
     let flat = BexStr::from("a".repeat(100)); // Flat
-    let slice = flat.substring(10, 50); // Slice (40 bytes)
+    let slice = flat.byte_slice(10..50); // Slice (40 bytes)
     let c = BexStr::concat(inline, slice);
-    assert_eq!(c.len(), 2 + 40);
+    assert_eq!(c.byte_len(), 2 + 40);
     assert_eq!(&c.as_str()[..2], "hi");
     assert_eq!(&c.as_str()[2..], &"a".repeat(40));
 }
 
 #[test]
-fn char_count_ascii() {
+fn char_len_ascii() {
     let s = BexStr::from("hello");
-    assert_eq!(s.char_count(), 5);
-    assert_eq!(s.len(), 5);
+    assert_eq!(s.char_len(), 5);
+    assert_eq!(s.byte_len(), 5);
 }
 
 #[test]
-fn char_count_multibyte() {
+fn char_len_multibyte() {
     let s = BexStr::from("héllo");
-    assert_eq!(s.char_count(), 5);
-    assert_eq!(s.len(), 6); // é is 2 bytes
+    assert_eq!(s.char_len(), 5);
+    assert_eq!(s.byte_len(), 6); // é is 2 bytes
 }
 
 #[test]
-fn char_count_emoji() {
+fn char_len_emoji() {
     let s = BexStr::from("😀hello");
-    assert_eq!(s.char_count(), 6);
-    assert_eq!(s.len(), 9); // 😀 is 4 bytes + "hello" is 5
+    assert_eq!(s.char_len(), 6);
+    assert_eq!(s.byte_len(), 9); // 😀 is 4 bytes + "hello" is 5
 }
 
 #[test]
-fn char_count_flat() {
+fn char_len_flat() {
     let s = BexStr::from("a".repeat(100) + "😀");
-    assert_eq!(s.char_count(), 101);
-    assert_eq!(s.len(), 104);
+    assert_eq!(s.char_len(), 101);
+    assert_eq!(s.byte_len(), 104);
 }
 
 #[test]
-fn char_count_slice() {
-    // substring takes BYTE offsets at the BexStr level
+fn char_len_slice() {
+    // byte_slice takes BYTE offsets at the BexStr level
     let s = BexStr::from("hello 😀 world");
     // "hello " = 6 bytes, "😀" = 4 bytes, " world" = 6 bytes → 16 bytes total
-    let slice = s.substring(6, 16); // "😀 world"
+    let slice = s.byte_slice(6..16); // "😀 world"
     assert_eq!(slice.as_str(), "😀 world");
-    assert_eq!(slice.char_count(), 7); // 😀 + " world" = 7 codepoints
-    assert_eq!(slice.len(), 10); // 4 + 6 bytes
+    assert_eq!(slice.char_len(), 7); // 😀 + " world" = 7 codepoints
+    assert_eq!(slice.byte_len(), 10); // 4 + 6 bytes
 }
 
 #[test]
-fn char_count_concat() {
+fn char_len_concat() {
     let a = BexStr::from("hello");
     let b = BexStr::from("😀");
     let c = BexStr::concat(a, b);
-    assert_eq!(c.char_count(), 6);
-    assert_eq!(c.len(), 9);
+    assert_eq!(c.char_len(), 6);
+    assert_eq!(c.byte_len(), 9);
 }
 
 // ── Shared-Concat-node flatten regression (B-262 / B-233) ──────────────────
@@ -330,7 +330,7 @@ fn shared_concat_child_survives_parent_flatten() {
 
     // The original child must be intact — both by content and by equality.
     assert_eq!(child.as_str(), expected_child);
-    assert_eq!(child.len(), 55);
+    assert_eq!(child.byte_len(), 55);
     assert_eq!(child, BexStr::from(expected_child.as_str()));
 }
 
@@ -390,16 +390,16 @@ fn shared_concat_grandchild_survives_flatten() {
 
 // ── Codepoint-indexed ops vs the std oracle ────────────────────────────
 //
-// `byte_offset_of_nth_codepoint` walks the bytes 8 at a time (SWAR). The fast
+// `scan_char_to_byte` walks the bytes 8 at a time (SWAR). The fast
 // path is only exercised by strings with a full 8-byte word that *contains* a
 // multibyte char AND a target index past that word — short ASCII fixtures stay
 // in the scalar tail and never hit it. These cases all clear that bar, so they
-// pin `char_at` / `substring` against `str::chars()`, which is correct by
+// pin `char_at` / `char_slice` against `str::chars()`, which is correct by
 // construction for valid UTF-8.
 #[test]
 fn codepoint_ops_match_std_oracle() {
     // The std reference: the byte range of codepoints `[a, b)`, with the same
-    // clamping `substring_by_char` documents.
+    // clamping `char_slice` documents.
     fn expected_substring(s: &str, a: usize, b: usize) -> String {
         let chars: Vec<char> = s.chars().collect();
         let len = chars.len();
@@ -424,7 +424,7 @@ fn codepoint_ops_match_std_oracle() {
     for s in cases {
         let bex = BexStr::from(s);
         let count = s.chars().count();
-        assert_eq!(bex.char_count(), count, "char_count for {s:?}");
+        assert_eq!(bex.char_len(), count, "char_len for {s:?}");
 
         // char_at over every index, including the last (the OOB-panic boundary)
         // and one past the end (must be None).
@@ -434,14 +434,14 @@ fn codepoint_ops_match_std_oracle() {
             assert_eq!(got, want, "char_at({n}) for {s:?}");
         }
 
-        // substring over every codepoint range, plus past-the-end clamps.
+        // char_slice over every codepoint range, plus past-the-end clamps.
         for a in 0..=count + 1 {
             for b in a..=count + 1 {
-                let got = bex.substring_by_char(a, b);
+                let got = bex.char_slice(a..b);
                 assert_eq!(
                     got.as_str(),
                     expected_substring(s, a, b),
-                    "substring_by_char({a}, {b}) for {s:?}"
+                    "char_slice({a}..{b}) for {s:?}"
                 );
             }
         }
@@ -474,7 +474,7 @@ fn occurrence_index_ops_match_std_oracle() {
             let want_first = s.find(needle).map(|b| s[..b].chars().count());
             let want_last = s.rfind(needle).map(|b| s[..b].chars().count());
             assert_eq!(
-                bex.char_index_of(needle),
+                bex.char_find(needle),
                 want_first,
                 "char_index_of({needle:?}) for {s:?}"
             );
@@ -488,18 +488,18 @@ fn occurrence_index_ops_match_std_oracle() {
                         .map(|b| start + suffix[..b].chars().count())
                 };
                 assert_eq!(
-                    bex.char_index_of_from(needle, start),
+                    bex.char_find_from(needle, start),
                     expected,
                     "char_index_of_from({needle:?}, {start}) for {s:?}"
                 );
             }
             assert_eq!(
-                bex.char_index_of_from(needle, usize::MAX),
+                bex.char_find_from(needle, usize::MAX),
                 None,
                 "out-of-bounds search for {s:?}"
             );
             assert_eq!(
-                bex.char_last_index_of(needle),
+                bex.char_rfind(needle),
                 want_last,
                 "char_last_index_of({needle:?}) for {s:?}"
             );
@@ -537,7 +537,7 @@ fn content_hash_is_independent_of_representation_and_reused_by_clones() {
         (expected >> 64) as u64
     );
     let padded = BexStr::from(format!("xx{text}yy"));
-    let slice = padded.substring(2, 2 + text.len());
+    let slice = padded.byte_slice(2..2 + text.len());
     assert_eq!(slice.content_hash(), expected);
     assert_eq!(slice.clone().content_hash(), expected);
     for s in ["", "short", "🦀"] {

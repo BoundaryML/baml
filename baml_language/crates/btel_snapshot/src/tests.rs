@@ -217,7 +217,7 @@ fn a_sliced_string_is_hashed_once_however_often_it_is_captured() {
         other => panic!("expected a slice, got {other:?}"),
     };
     let source = BexStr::from("a long string to take a part of: ".repeat(8));
-    let part = source.substring(4, 204);
+    let part = source.byte_slice(4..204);
     assert!(!hashed(&part));
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
