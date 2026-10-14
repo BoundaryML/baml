@@ -26,7 +26,7 @@ fn concat_handle_layout_uses_existing_payload() {
     use crate::bex_str::{ConcatNode, ConcatState, ConcatStr};
 
     assert_eq!(size_of::<BexStr>(), 56);
-    assert_eq!(size_of::<ConcatStr>(), 48);
+    assert_eq!(size_of::<ConcatStr>(), 32);
     assert_eq!(
         size_of::<ConcatNode>(),
         size_of::<std::sync::Mutex<ConcatState>>()
@@ -41,7 +41,7 @@ fn concat_handle_layout_uses_existing_payload() {
 }
 
 #[test]
-fn concat_handle_suffix_reads_preserve_deferred_operands() {
+fn concat_handle_reads_match_utf8_operands() {
     use crate::bex_str::ConcatState;
 
     let deferred = |s: &BexStr| {
@@ -67,10 +67,12 @@ fn concat_handle_suffix_reads_preserve_deferred_operands() {
         right_rope.clone(),
     ] {
         let left = BexStr::concat(BexStr::from("é中🙂".repeat(20)), BexStr::from("prefix"));
-        // Build the oracle from a separate clone only after checking that
-        // construction and suffix reads do not materialize either operand.
+        // Metadata queries and construction must not materialize the operands.
         let s = BexStr::concat(left.clone(), right.clone());
         let count = s.char_len();
+        deferred(&s);
+        deferred(&left);
+        deferred(&right_rope);
         let first = count - 4;
         let points: Vec<_> = (first..count).map(|n| s.char_at(n).unwrap()).collect();
         let tail: String = points.iter().collect();
@@ -97,9 +99,6 @@ fn concat_handle_suffix_reads_preserve_deferred_operands() {
             let suffix_bytes: usize = points[n - first..].iter().map(|c| c.len_utf8()).sum();
             assert_eq!(s.char_to_byte(n), s.byte_len() - suffix_bytes);
         }
-        deferred(&s);
-        deferred(&left);
-        deferred(&right_rope);
         let want = format!("{}{}", left.as_str(), right.as_str());
         assert!(want.ends_with(&tail));
         assert_eq!(s.as_str(), want);
@@ -107,7 +106,7 @@ fn concat_handle_suffix_reads_preserve_deferred_operands() {
 }
 
 #[test]
-fn concat_handle_suffix_cache_preserves_shared_snapshots_and_publication() {
+fn concat_handle_metadata_preserves_shared_snapshots_and_publication() {
     use crate::bex_str::ConcatState;
 
     let mut text = "前é🙂".repeat(20);
@@ -122,9 +121,6 @@ fn concat_handle_suffix_cache_preserves_shared_snapshots_and_publication() {
         assert_eq!(s.byte_len(), text.len());
         assert_eq!(s.char_len(), count);
         assert_eq!(s.ascii_prefix_len(), 0);
-        for (n, point) in points.iter().enumerate().skip(count - 4) {
-            assert_eq!(s.char_at(n), Some(*point));
-        }
         let BexStr::Concat(c) = &s else {
             panic!("expected concat")
         };
@@ -132,6 +128,9 @@ fn concat_handle_suffix_cache_preserves_shared_snapshots_and_publication() {
             *c.state.lock().unwrap(),
             ConcatState::Deferred { .. }
         ));
+        for (n, point) in points.iter().enumerate().skip(count - 4) {
+            assert_eq!(s.char_at(n), Some(*point));
+        }
         if i % 17 == 0 {
             snapshots.push((s.clone(), text.clone()));
         }

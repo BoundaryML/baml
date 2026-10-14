@@ -68,9 +68,6 @@ pub struct ConcatStr {
     pub(crate) total_char_len: u64,
     pub(crate) total_ascii_prefix_len: u64,
     pub(crate) node: Arc<ConcatNode>,
-    /// Last four Unicode scalars in text order, without flattening the rope.
-    /// Every deferred concat exceeds 54 bytes and therefore has at least four.
-    tail: [char; 4],
 }
 
 impl Deref for ConcatStr {
@@ -415,16 +412,6 @@ impl BexStr {
         if n >= self.char_len() {
             return self.byte_len();
         }
-        if let BexStr::Concat(c) = self {
-            let first = c.total_char_len as usize - c.tail.len();
-            if n >= first {
-                return self.byte_len()
-                    - c.tail[n - first..]
-                        .iter()
-                        .map(|point| point.len_utf8())
-                        .sum::<usize>();
-            }
-        }
         let (char_idx, byte_idx) = if known.0 > prefix {
             known
         } else {
@@ -460,16 +447,6 @@ impl BexStr {
 
     /// The char at index `n`, or `None` if `n >= char_len()`.
     pub fn char_at(&self, n: usize) -> Option<char> {
-        if let BexStr::Concat(c) = self {
-            let count = c.total_char_len as usize;
-            if n >= count {
-                return None;
-            }
-            let first = count - c.tail.len();
-            if n >= first {
-                return Some(c.tail[n - first]);
-            }
-        }
         // Past the end, `b == byte_len()` and the suffix is empty.
         let b = self.char_to_byte(n);
         self.as_str()[b..].chars().next()
@@ -478,23 +455,6 @@ impl BexStr {
     /// Substring by char range. Clamps both ends to `char_len()` (and `end`
     /// to at least `start`), so it never panics.
     pub fn char_slice(&self, range: Range<usize>) -> BexStr {
-        if let BexStr::Concat(c) = self {
-            let count = c.total_char_len as usize;
-            let start = range.start.min(count);
-            let end = range.end.max(start).min(count);
-            let first = count - c.tail.len();
-            if start >= first {
-                let mut data = [0; INLINE_CAPACITY];
-                let mut byte_len = 0;
-                for point in &c.tail[start - first..end - first] {
-                    byte_len += point.encode_utf8(&mut data[byte_len..]).len();
-                }
-                return BexStr::Inline {
-                    byte_len: byte_len as u8,
-                    data,
-                };
-            }
-        }
         // `char_to_byte` maps every index past the end to `byte_len()`, which is
         // the clamp; `end` is scanned onward from `start`.
         let byte_start = self.char_to_byte(range.start);
@@ -570,11 +530,6 @@ impl BexStr {
         } else {
             left_prefix
         } as u64;
-        let mut tail = right.last_codepoints();
-        if right_chars < tail.len() {
-            let left_tail = left.last_codepoints();
-            tail[..4 - right_chars].copy_from_slice(&left_tail[right_chars..]);
-        }
         BexStr::Concat(ConcatStr {
             total_byte_len: total_byte_len as u64,
             total_char_len,
@@ -582,21 +537,7 @@ impl BexStr {
             node: Arc::new(ConcatNode {
                 state: Mutex::new(ConcatState::Deferred { left, right }),
             }),
-            tail,
         })
-    }
-
-    /// Right-aligned suffix, padded with NULs for short operands. At most four
-    /// UTF-8 scalars are decoded; an existing concat already has the suffix.
-    fn last_codepoints(&self) -> [char; 4] {
-        if let BexStr::Concat(c) = self {
-            return c.tail;
-        }
-        let mut tail = ['\0'; 4];
-        for (slot, point) in tail.iter_mut().rev().zip(self.as_str().chars().rev()) {
-            *slot = point;
-        }
-        tail
     }
 
     /// Pointer equality check — true if both point to the same Arc.
