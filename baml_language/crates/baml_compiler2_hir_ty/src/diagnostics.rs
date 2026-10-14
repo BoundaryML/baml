@@ -267,6 +267,10 @@ pub enum TirTypeError {
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
+    /// An assignment target spelled as a path whose root is not a local
+    /// binding - a function, an enum variant, a class - so there is no
+    /// storage to write through (`mk = mk`, `Shape.Circle = Shape.Circle`).
+    InvalidAssignmentTarget { path: Name },
     /// A constant pattern argument to `baml.regex.new` does not compile.
     /// Checked here so a typo in a literal pattern is a source error rather
     /// than a throw the program has to reach to discover.
@@ -1261,6 +1265,11 @@ impl TirTypeError {
                     f,
                     "cannot construct `{name}`: it is an alias of `{}`, not a class",
                     denotes.spell(vp)
+                ),
+                TirTypeError::InvalidAssignmentTarget { path } => write!(
+                    f,
+                    "invalid assignment target; `{path}` is not a variable, so it cannot be \
+                     assigned to"
                 ),
                 TirTypeError::MountedPackageCallUnsupported { path } => {
                     let diagnostic =

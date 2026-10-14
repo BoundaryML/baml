@@ -947,6 +947,10 @@ enum PendingDiag<'db> {
         expr: ExprId,
         path: baml_type::Name,
     },
+    InvalidAssignmentTarget {
+        expr: ExprId,
+        path: baml_type::Name,
+    },
     /// A value typed by a block-scoped `type T = …` binding would be
     /// observable outside its block: the block's value (anchored at the
     /// tail), or a thrown type an inferred clause would publish (anchored
@@ -4012,6 +4016,7 @@ impl<'db> InferenceContext<'db> {
         if let Some(declared) = &declared {
             self.result.type_of_expr.insert(target, declared.clone());
         }
+        self.check_path_assignment_target(body, target);
         if let Some(binding) = binding {
             // The overlay narrows to the assigned value's OWN type
             // (B-618's rule; TS narrows assignments to the literal the
@@ -4032,6 +4037,45 @@ impl<'db> InferenceContext<'db> {
                 self.flow.remove(&binding);
             }
         }
+    }
+
+    /// A path target (`x`, `x.f.g`) writes through the local its root names.
+    /// AST lowering admits any path syntactically; a root that resolves to
+    /// something else - a function, an enum variant - has no storage, and MIR
+    /// would otherwise either fail to find a place or store into a
+    /// temporary that is thrown away. An unresolved root already reported
+    /// `unresolved name` (its type is the error sentinel) and is skipped.
+    fn check_path_assignment_target(&mut self, body: &ExprBody, target: ExprId) {
+        let Expr::Path(segments) = &body.exprs[target] else {
+            return;
+        };
+        let resolves_to_local = self
+            .metadata_key(target)
+            .and_then(|key| self.index.path_resolution(key))
+            .is_some_and(|resolution| {
+                matches!(
+                    resolution,
+                    baml_compiler2_hir::semantic_index::PathResolution::Local(_)
+                )
+            });
+        if resolves_to_local
+            || self
+                .result
+                .type_of_expr
+                .get(&target)
+                .is_none_or(Ty::has_error)
+        {
+            return;
+        }
+        let path = baml_type::Name::new(
+            segments
+                .iter()
+                .map(baml_type::Name::as_str)
+                .collect::<Vec<_>>()
+                .join("."),
+        );
+        self.pending_diags
+            .push(PendingDiag::InvalidAssignmentTarget { expr: target, path });
     }
 
     /// The TYPE a binding's `:`-ascribed sub-pattern denotes, when it is
@@ -11997,6 +12041,9 @@ impl<'db> InferenceContext<'db> {
                     ),
                     PendingDiag::MountedPackageCallUnsupported { expr, path } => {
                         (TirTypeError::MountedPackageCallUnsupported { path }, expr)
+                    }
+                    PendingDiag::InvalidAssignmentTarget { expr, path } => {
+                        (TirTypeError::InvalidAssignmentTarget { path }, expr)
                     }
                     PendingDiag::InvalidRegexPattern {
                         expr,
