@@ -2,7 +2,7 @@ use std::{
     borrow::Borrow,
     fmt,
     hash::{Hash, Hasher},
-    ops::Deref,
+    ops::{Deref, Range},
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
@@ -10,14 +10,14 @@ use std::{
 };
 
 /// Maximum bytes stored inline without heap allocation.
-/// 56 (target size) - 1 (discriminant) - 1 (len byte) = 54.
+/// 56 (target size) - 1 (discriminant) - 1 (byte_len) = 54.
 const INLINE_CAPACITY: usize = 54;
 
 /// V8-inspired immutable string. O(1) clone. 56 bytes.
 pub enum BexStr {
     /// Strings ≤54 bytes: zero heap allocation, clone = memcpy.
     Inline {
-        len: u8,
+        byte_len: u8,
         data: [u8; INLINE_CAPACITY],
     },
     /// Heap-allocated, ref-counted, immutable. Clone = Arc bump.
@@ -27,8 +27,8 @@ pub enum BexStr {
     Slice {
         parent: Arc<FlatStr>,
         offset: u64,
-        len: u64,
-        char_count: u64,
+        byte_len: u64,
+        char_len: u64,
         hash: [AtomicU64; 2],
     },
     /// Deferred concatenation. Flattened on first byte-level access.
@@ -41,14 +41,14 @@ pub struct FlatStr {
     /// A zero high word is uncached (that rare digest is simply recomputed).
     pub(crate) hash: [AtomicU64; 2],
     /// Number of Unicode codepoints. Computed once at construction.
-    pub(crate) char_count: u64,
+    pub(crate) char_len: u64,
     /// UTF-8 byte data. Tight allocation (no excess capacity).
     pub(crate) data: Box<[u8]>,
 }
 
 /// Deferred concatenation node.
 pub struct ConcatNode {
-    pub(crate) total_len: u64,
+    pub(crate) total_byte_len: u64,
     pub(crate) state: Mutex<ConcatState>,
 }
 
@@ -77,16 +77,16 @@ const _: fn() = || {
 };
 
 impl BexStr {
-    /// Empty string constant (Inline with len=0).
+    /// Empty string constant (Inline with byte_len = 0).
     pub fn empty() -> BexStr {
         BexStr::Inline {
-            len: 0,
+            byte_len: 0,
             data: [0; INLINE_CAPACITY],
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.byte_len() == 0
     }
 
     /// Heap allocation bytes retained by this string, excluding `Self` and
@@ -118,9 +118,9 @@ impl BexStr {
         match self {
             Self::Inline { .. } => 0,
             Self::Flat(flat) => FLAT_OVERHEAD.saturating_add(flat.data.len()),
-            Self::Slice { len, .. } => usize::try_from(*len).unwrap_or(usize::MAX),
+            Self::Slice { byte_len, .. } => usize::try_from(*byte_len).unwrap_or(usize::MAX),
             Self::Concat(node) => CONCAT_OVERHEAD
-                .saturating_add(usize::try_from(node.total_len).unwrap_or(usize::MAX)),
+                .saturating_add(usize::try_from(node.total_byte_len).unwrap_or(usize::MAX)),
         }
     }
 
@@ -139,33 +139,33 @@ impl BexStr {
                 .saturating_add(flat.data.len())
                 .div_ceil(Arc::strong_count(flat)),
             Self::Concat(node) => CONCAT_OVERHEAD
-                .saturating_add(usize::try_from(node.total_len).unwrap_or(usize::MAX))
+                .saturating_add(usize::try_from(node.total_byte_len).unwrap_or(usize::MAX))
                 .div_ceil(Arc::strong_count(node)),
         }
     }
 
     /// Byte length. O(1) for all variants.
-    pub fn len(&self) -> usize {
+    pub fn byte_len(&self) -> usize {
         match self {
-            BexStr::Inline { len, .. } => *len as usize,
+            BexStr::Inline { byte_len, .. } => *byte_len as usize,
             BexStr::Flat(f) => f.data.len(),
-            BexStr::Slice { len, .. } => *len as usize,
-            BexStr::Concat(c) => c.total_len as usize,
+            BexStr::Slice { byte_len, .. } => *byte_len as usize,
+            BexStr::Concat(c) => c.total_byte_len as usize,
         }
     }
 
     /// Number of Unicode codepoints. O(1) for all variants except
     /// unflattened Concat (O(depth) tree walk).
-    pub fn char_count(&self) -> usize {
+    pub fn char_len(&self) -> usize {
         match self {
-            BexStr::Inline { len, data } => bytecount::num_chars(&data[..*len as usize]),
-            BexStr::Flat(f) => f.char_count as usize,
-            BexStr::Slice { char_count, .. } => *char_count as usize,
+            BexStr::Inline { byte_len, data } => bytecount::num_chars(&data[..*byte_len as usize]),
+            BexStr::Flat(f) => f.char_len as usize,
+            BexStr::Slice { char_len, .. } => *char_len as usize,
             BexStr::Concat(c) => {
                 let guard = c.state.lock().unwrap();
                 match &*guard {
-                    ConcatState::Flattened(f) => f.char_count as usize,
-                    ConcatState::Deferred { left, right } => left.char_count() + right.char_count(),
+                    ConcatState::Flattened(f) => f.char_len as usize,
+                    ConcatState::Deferred { left, right } => left.char_len() + right.char_len(),
                 }
             }
         }
@@ -174,16 +174,16 @@ impl BexStr {
     /// O(1) for Inline/Flat/Slice. O(n) first-call flatten for Concat.
     pub fn as_bytes(&self) -> &[u8] {
         match self {
-            BexStr::Inline { len, data } => &data[..*len as usize],
+            BexStr::Inline { byte_len, data } => &data[..*byte_len as usize],
             BexStr::Flat(f) => &f.data,
             BexStr::Slice {
                 parent,
                 offset,
-                len,
+                byte_len,
                 ..
             } => {
                 let o = *offset as usize;
-                let l = *len as usize;
+                let l = *byte_len as usize;
                 &parent.data[o..o + l]
             }
             BexStr::Concat(c) => {
@@ -207,7 +207,9 @@ impl BexStr {
     /// This is separate from `Hash`, whose `Borrow<str>` contract must be retained.
     pub fn content_hash(&self) -> u128 {
         match self {
-            Self::Inline { len, data } => xxhash_rust::xxh3::xxh3_128(&data[..*len as usize]),
+            Self::Inline { byte_len, data } => {
+                xxhash_rust::xxh3::xxh3_128(&data[..*byte_len as usize])
+            }
             Self::Flat(flat) => cached_hash(&flat.hash, &flat.data),
             Self::Slice { hash, .. } => cached_hash(hash, self.as_bytes()),
             Self::Concat(node) => {
@@ -228,9 +230,10 @@ impl BexStr {
 
     /// Zero-copy substring. Enforces depth-1 invariant.
     /// Callers must ensure start/end are valid UTF-8 char boundaries.
-    pub fn substring(&self, start: usize, end: usize) -> BexStr {
+    pub fn byte_slice(&self, range: Range<usize>) -> BexStr {
+        let Range { start, end } = range;
         debug_assert!(start <= end);
-        debug_assert!(end <= self.len());
+        debug_assert!(end <= self.byte_len());
         let slice_len = end - start;
 
         // Empty result → Inline
@@ -244,7 +247,7 @@ impl BexStr {
             let mut data = [0u8; INLINE_CAPACITY];
             data[..slice_len].copy_from_slice(bytes);
             return BexStr::Inline {
-                len: slice_len as u8,
+                byte_len: slice_len as u8,
                 data,
             };
         }
@@ -254,14 +257,14 @@ impl BexStr {
         match self {
             BexStr::Inline { .. } => {
                 // Can't reach here: INLINE_CAPACITY < slice_len
-                // but slice_len <= self.len() <= INLINE_CAPACITY. Contradiction.
+                // but slice_len <= self.byte_len() <= INLINE_CAPACITY. Contradiction.
                 unreachable!("Inline string cannot produce a Slice longer than INLINE_CAPACITY");
             }
             BexStr::Flat(f) => BexStr::Slice {
                 parent: f.clone(),
                 offset: start as u64,
-                len: slice_len as u64,
-                char_count: slice_char_count,
+                byte_len: slice_len as u64,
+                char_len: slice_char_count,
                 hash: [const { AtomicU64::new(0) }; 2],
             },
             BexStr::Slice { parent, offset, .. } => {
@@ -269,8 +272,8 @@ impl BexStr {
                 BexStr::Slice {
                     parent: parent.clone(),
                     offset: *offset + start as u64,
-                    len: slice_len as u64,
-                    char_count: slice_char_count,
+                    byte_len: slice_len as u64,
+                    char_len: slice_char_count,
                     hash: [const { AtomicU64::new(0) }; 2],
                 }
             }
@@ -280,8 +283,8 @@ impl BexStr {
                 BexStr::Slice {
                     parent: flat,
                     offset: start as u64,
-                    len: slice_len as u64,
-                    char_count: slice_char_count,
+                    byte_len: slice_len as u64,
+                    char_len: slice_char_count,
                     hash: [const { AtomicU64::new(0) }; 2],
                 }
             }
@@ -292,44 +295,45 @@ impl BexStr {
 
     /// Substring by codepoint indices `[start, end)`. Clamps to bounds.
     /// Always lands on valid UTF-8 char boundaries. Never panics.
-    pub fn substring_by_char(&self, start: usize, end: usize) -> BexStr {
-        let char_len = self.char_count();
+    pub fn char_slice(&self, range: Range<usize>) -> BexStr {
+        let Range { start, end } = range;
+        let char_len = self.char_len();
         let start = start.min(char_len);
         let end = end.min(char_len).max(start);
         if start == end {
             return BexStr::empty();
         }
         let bytes = self.as_bytes();
-        let byte_start = byte_offset_of_nth_codepoint(bytes, start);
-        let byte_end = byte_offset_of_nth_codepoint(bytes, end);
-        self.substring(byte_start, byte_end)
+        let byte_start = scan_char_to_byte(bytes, start);
+        let byte_end = scan_char_to_byte(bytes, end);
+        self.byte_slice(byte_start..byte_end)
     }
 
     /// Returns the codepoint at index `n` as a single-character BexStr.
-    /// Returns `None` if `n >= char_count()`.
+    /// Returns `None` if `n >= char_len()`.
     pub fn char_at_codepoint(&self, n: usize) -> Option<BexStr> {
-        if n >= self.char_count() {
+        if n >= self.char_len() {
             return None;
         }
         let bytes = self.as_bytes();
-        let byte_start = byte_offset_of_nth_codepoint(bytes, n);
+        let byte_start = scan_char_to_byte(bytes, n);
         // Determine the byte length of this codepoint from the leading byte.
-        let ch_len = utf8_char_len(bytes[byte_start]);
-        Some(self.substring(byte_start, byte_start + ch_len))
+        let ch_len = utf8_char_width(bytes[byte_start]);
+        Some(self.byte_slice(byte_start..byte_start + ch_len))
     }
 
     /// Finds `needle` and returns its codepoint index, or `None`.
-    pub fn char_index_of(&self, needle: &str) -> Option<usize> {
-        self.char_index_of_from(needle, 0)
+    pub fn char_find(&self, needle: &str) -> Option<usize> {
+        self.char_find_from(needle, 0)
     }
 
     /// Finds `needle` starting at codepoint `start`, returning an absolute
     /// codepoint index. A start past the end returns `None`, even for an empty
     /// needle. Searches the borrowed suffix without allocating a substring or
     /// recounting the entire suffix's character metadata.
-    pub fn char_index_of_from(&self, needle: &str, start: usize) -> Option<usize> {
+    pub fn char_find_from(&self, needle: &str, start: usize) -> Option<usize> {
         let text = self.as_str();
-        let char_len = self.char_count();
+        let char_len = self.char_len();
         if start > char_len {
             return None;
         }
@@ -337,7 +341,7 @@ impl BexStr {
             // Every character is ASCII, so codepoint and byte offsets coincide.
             start
         } else {
-            byte_offset_of_nth_codepoint(text.as_bytes(), start)
+            scan_char_to_byte(text.as_bytes(), start)
         };
         let suffix = &text[byte_start..];
         let relative = suffix.find(needle)?;
@@ -346,7 +350,7 @@ impl BexStr {
 
     /// Finds the *last* occurrence of `needle` and returns the codepoint index
     /// of its start, or `None`.
-    pub fn char_last_index_of(&self, needle: &str) -> Option<usize> {
+    pub fn char_rfind(&self, needle: &str) -> Option<usize> {
         let byte_idx = self.as_str().rfind(needle)?;
         Some(bytecount::num_chars(&self.as_bytes()[..byte_idx]))
     }
@@ -364,23 +368,23 @@ impl BexStr {
         if right.is_empty() {
             return left;
         }
-        let total_len = left.len() + right.len();
+        let total_byte_len = left.byte_len() + right.byte_len();
 
         // Short result → Inline
-        if total_len <= INLINE_CAPACITY {
+        if total_byte_len <= INLINE_CAPACITY {
             let mut data = [0u8; INLINE_CAPACITY];
             let left_bytes = left.as_bytes();
             let right_bytes = right.as_bytes();
             data[..left_bytes.len()].copy_from_slice(left_bytes);
-            data[left_bytes.len()..total_len].copy_from_slice(right_bytes);
+            data[left_bytes.len()..total_byte_len].copy_from_slice(right_bytes);
             return BexStr::Inline {
-                len: total_len as u8,
+                byte_len: total_byte_len as u8,
                 data,
             };
         }
 
         BexStr::Concat(Arc::new(ConcatNode {
-            total_len: total_len as u64,
+            total_byte_len: total_byte_len as u64,
             state: Mutex::new(ConcatState::Deferred { left, right }),
         }))
     }
@@ -393,13 +397,13 @@ impl BexStr {
                 BexStr::Slice {
                     parent: a,
                     offset: ao,
-                    len: al,
+                    byte_len: al,
                     ..
                 },
                 BexStr::Slice {
                     parent: b,
                     offset: bo,
-                    len: bl,
+                    byte_len: bl,
                     ..
                 },
             ) => Arc::ptr_eq(a, b) && ao == bo && al == bl,
@@ -443,7 +447,7 @@ impl ConcatNode {
             &mut *guard,
             ConcatState::Flattened(Arc::new(FlatStr {
                 hash: [const { AtomicU64::new(0) }; 2],
-                char_count: 0,
+                char_len: 0,
                 data: Box::new([]),
             })),
         );
@@ -453,7 +457,7 @@ impl ConcatNode {
         };
 
         // Iterative tree walk — heap-allocated work-stack
-        let mut buf = Vec::with_capacity(self.total_len as usize);
+        let mut buf = Vec::with_capacity(self.total_byte_len as usize);
         let mut stack: Vec<BexStr> = Vec::new();
         // Push right first so left is processed first (stack is LIFO)
         stack.push(right);
@@ -461,8 +465,8 @@ impl ConcatNode {
 
         while let Some(node) = stack.pop() {
             match node {
-                BexStr::Inline { len, data } => {
-                    buf.extend_from_slice(&data[..len as usize]);
+                BexStr::Inline { byte_len, data } => {
+                    buf.extend_from_slice(&data[..byte_len as usize]);
                 }
                 BexStr::Flat(f) => {
                     buf.extend_from_slice(&f.data);
@@ -470,11 +474,11 @@ impl ConcatNode {
                 BexStr::Slice {
                     parent,
                     offset,
-                    len,
+                    byte_len,
                     ..
                 } => {
                     let o = offset as usize;
-                    let l = len as usize;
+                    let l = byte_len as usize;
                     buf.extend_from_slice(&parent.data[o..o + l]);
                 }
                 BexStr::Concat(c) => {
@@ -501,10 +505,10 @@ impl ConcatNode {
             }
         }
 
-        let char_count = bytecount::num_chars(&buf) as u64;
+        let char_len = bytecount::num_chars(&buf) as u64;
         let flat = Arc::new(FlatStr {
             hash: [const { AtomicU64::new(0) }; 2],
-            char_count,
+            char_len,
             data: buf.into_boxed_slice(),
         });
         *guard = ConcatState::Flattened(flat.clone());
@@ -520,7 +524,7 @@ impl Drop for ConcatNode {
                 s,
                 ConcatState::Flattened(Arc::new(FlatStr {
                     hash: [const { AtomicU64::new(0) }; 2],
-                    char_count: 0,
+                    char_len: 0,
                     data: Box::new([]),
                 })),
             ),
@@ -544,7 +548,7 @@ impl Drop for ConcatNode {
                         s,
                         ConcatState::Flattened(Arc::new(FlatStr {
                             hash: [const { AtomicU64::new(0) }; 2],
-                            char_count: 0,
+                            char_len: 0,
                             data: Box::new([]),
                         })),
                     ),
@@ -565,22 +569,22 @@ impl Drop for ConcatNode {
 impl Clone for BexStr {
     fn clone(&self) -> Self {
         match self {
-            BexStr::Inline { len, data } => BexStr::Inline {
-                len: *len,
+            BexStr::Inline { byte_len, data } => BexStr::Inline {
+                byte_len: *byte_len,
                 data: *data,
             },
             BexStr::Flat(f) => BexStr::Flat(f.clone()),
             BexStr::Slice {
                 parent,
                 offset,
-                len,
-                char_count,
+                byte_len,
+                char_len,
                 hash,
             } => BexStr::Slice {
                 parent: parent.clone(),
                 offset: *offset,
-                len: *len,
-                char_count: *char_count,
+                byte_len: *byte_len,
+                char_len: *char_len,
                 hash: clone_hash(hash),
             },
             BexStr::Concat(c) => BexStr::Concat(c.clone()),
@@ -604,7 +608,7 @@ impl Hash for BexStr {
 
 impl PartialEq for BexStr {
     fn eq(&self, other: &Self) -> bool {
-        if self.len() != other.len() {
+        if self.byte_len() != other.byte_len() {
             return false;
         }
         if self.ptr_eq(other) {
@@ -669,14 +673,14 @@ impl From<String> for BexStr {
             let mut data = [0u8; INLINE_CAPACITY];
             data[..s.len()].copy_from_slice(s.as_bytes());
             BexStr::Inline {
-                len: s.len() as u8,
+                byte_len: s.len() as u8,
                 data,
             }
         } else {
-            let char_count = bytecount::num_chars(s.as_bytes()) as u64;
+            let char_len = bytecount::num_chars(s.as_bytes()) as u64;
             BexStr::Flat(Arc::new(FlatStr {
                 hash: [const { AtomicU64::new(0) }; 2],
-                char_count,
+                char_len,
                 data: s.into_bytes().into_boxed_slice(),
             }))
         }
@@ -689,14 +693,14 @@ impl From<&str> for BexStr {
             let mut data = [0u8; INLINE_CAPACITY];
             data[..s.len()].copy_from_slice(s.as_bytes());
             BexStr::Inline {
-                len: s.len() as u8,
+                byte_len: s.len() as u8,
                 data,
             }
         } else {
-            let char_count = bytecount::num_chars(s.as_bytes()) as u64;
+            let char_len = bytecount::num_chars(s.as_bytes()) as u64;
             BexStr::Flat(Arc::new(FlatStr {
                 hash: [const { AtomicU64::new(0) }; 2],
-                char_count,
+                char_len,
                 data: s.as_bytes().into(),
             }))
         }
@@ -714,7 +718,7 @@ impl From<&str> for BexStr {
 ///
 /// Processes 8 bytes at a time using bit masks and popcount for ~30x speedup
 /// over byte-by-byte `char_indices().nth()`.
-fn byte_offset_of_nth_codepoint(bytes: &[u8], n: usize) -> usize {
+fn scan_char_to_byte(bytes: &[u8], n: usize) -> usize {
     if n == 0 {
         return 0;
     }
@@ -758,7 +762,7 @@ fn byte_offset_of_nth_codepoint(bytes: &[u8], n: usize) -> usize {
 }
 
 /// Returns the byte length of a UTF-8 character from its leading byte.
-fn utf8_char_len(leading_byte: u8) -> usize {
+fn utf8_char_width(leading_byte: u8) -> usize {
     if leading_byte < 0x80 {
         1
     } else if leading_byte < 0xE0 {

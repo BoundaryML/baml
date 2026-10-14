@@ -503,10 +503,10 @@ pub fn capture_callback_inputs(value: &crate::BexExternalValue) -> btel_snapshot
             V::Int(v) => H::Int(*v),
             V::Float(v) => H::Float(*v),
             V::String(v) => {
-                if v.len() > *bytes {
+                if v.byte_len() > *bytes {
                     H::Truncated(Limit::Bytes)
                 } else {
-                    *bytes -= v.len();
+                    *bytes -= v.byte_len();
                     H::String(v.as_str().to_owned())
                 }
             }

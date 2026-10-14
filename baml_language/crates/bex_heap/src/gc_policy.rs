@@ -250,7 +250,7 @@ mod tests {
         let whole = text.unshared_heap_bytes() as isize;
         for _ in 0..8 {
             tlab.alloc_string(text.clone());
-            tlab.alloc_string(text.substring(1, 128));
+            tlab.alloc_string(text.byte_slice(1..128));
         }
         tlab.flush_alloc_debt();
         let spent = heap.gc_budget().bytes_since_full_gc;

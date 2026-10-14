@@ -63,7 +63,7 @@ fn offset_value(chars: usize) -> Value {
 
 /// Build a capture with a shared substring and precomputed codepoint offsets.
 fn group_value(vm: &mut BexVm, hay: &BexStr, span: (usize, usize), chars: (usize, usize)) -> Value {
-    let text = Value::object(vm.alloc_string(hay.substring(span.0, span.1)));
+    let text = Value::object(vm.alloc_string(hay.byte_slice(span.0..span.1)));
     copy::regex::Group {
         text,
         start: offset_int(chars.0),
@@ -136,7 +136,7 @@ fn match_value(
     // Group 0 is the whole match and always participates, so its text and
     // offsets are the match's own.
     let (start_byte, end_byte) = raw.span();
-    let text = Value::object(vm.alloc_string(hay.substring(start_byte, end_byte)));
+    let text = Value::object(vm.alloc_string(hay.byte_slice(start_byte..end_byte)));
     let (start, end) = if raw.groups.first().is_some_and(Option::is_some) {
         (chars[0], chars[1])
     } else {
@@ -316,7 +316,7 @@ impl BamlClassRegexRegex for PackageBamlImpl {
         // substring of the haystack, so each is a zero-copy slice.
         Ok(pieces
             .into_iter()
-            .map(|(start, end)| haystack.substring(start, end))
+            .map(|(start, end)| haystack.byte_slice(start..end))
             .collect())
     }
 
@@ -368,7 +368,7 @@ impl BamlNamespaceRegex for PackageBamlImpl {
     fn _index_of_from(haystack: &BexStr, search: &BexStr, start: i64) -> Option<i64> {
         let start = usize::try_from(start).ok()?;
         haystack
-            .char_index_of_from(search.as_str(), start)
+            .char_find_from(search.as_str(), start)
             .map(|i| i as i64)
     }
 

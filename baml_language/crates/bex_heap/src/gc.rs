@@ -3506,7 +3506,7 @@ mod tests {
         let text = bex_str::BexStr::from("x".repeat(100_000));
         let clone_a = tlab.alloc_string(text.clone());
         let clone_b = tlab.alloc_string(text.clone());
-        let slice = tlab.alloc_string(text.substring(10, 5_000));
+        let slice = tlab.alloc_string(text.byte_slice(10..5_000));
         let rope = tlab.alloc_string(bex_str::BexStr::concat(
             text,
             bex_str::BexStr::from("y".repeat(1_000)),

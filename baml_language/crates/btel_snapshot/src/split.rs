@@ -33,7 +33,7 @@ impl Leaf {
     }
     /// Exact length of what [`Self::write`] writes.
     pub fn encoded_len(&self) -> u64 {
-        (STRING_BLOB_HEADER_BYTES + self.content.len()) as u64
+        (STRING_BLOB_HEADER_BYTES + self.content.byte_len()) as u64
     }
     /// The blob's bytes before its string.
     pub fn header(&self) -> &[u8] {
@@ -165,7 +165,7 @@ impl Snapshot {
                 continue;
             };
             let content = std::mem::replace(&mut graph.strings[id.0 as usize], BexStr::empty());
-            let len = u32::try_from(content.len())
+            let len = u32::try_from(content.byte_len())
                 .unwrap_or_else(|_| unreachable!("a captured string is within the leaf limit"));
             let leaf = Leaf {
                 id: entry.id,
