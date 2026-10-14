@@ -54,6 +54,25 @@ test "inherent method on operator over generic method result" {
     assert.equal(from_generic_method([1, 2]), 3)
 }
 
+class Spread {
+    share: float,
+}
+
+function share_of_reduced_total(counts: int[]) -> Spread {
+    let total = counts.reduce(
+        (sum, n) -> {
+            sum + n
+        },
+        0,
+    );
+    let share = (1.0 / total).round();
+    Spread { share: share }
+}
+
+test "inherent method on operator over generic method result as divisor" {
+    assert.equal(share_of_reduced_total([1, 1]).share, 1.0)
+}
+
 test "resolving a receiver leaves unrelated inference deferred" {
     let later = [];
     assert.equal(id(id(-id(3))).abs(), 3);
