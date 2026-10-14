@@ -1245,6 +1245,7 @@ dependencies = [
  "baml_linker_types",
  "baml_test_support",
  "baml_type",
+ "bex_aot",
  "bex_engine",
  "bex_events",
  "bex_external_types",
