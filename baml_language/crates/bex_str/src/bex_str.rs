@@ -21,7 +21,8 @@ pub(crate) const SLICE_ASCII_PREFIX_UNKNOWN: u32 = u32::MAX;
 ///
 /// # Units
 ///
-/// Methods without a unit prefix measure positions in **bytes**, as `str` does
+/// The two lengths are `byte_len()` and `codepoint_len()`. Methods without a
+/// unit prefix measure positions in **bytes**, as `str` does
 /// (and every `str` method reached through `Deref` does). Methods whose
 /// positions are `char` indices (Unicode scalar values) start with `char_`.
 /// `char_to_byte` / `byte_to_char` convert between the two.
@@ -29,7 +30,7 @@ pub(crate) const SLICE_ASCII_PREFIX_UNKNOWN: u32 = u32::MAX;
 /// # ASCII prefix
 ///
 /// Every variant knows, in O(1), its exact [`ascii_prefix_len`]: the byte
-/// offset of its first non-ASCII byte, or `len()` if it has none. Within that
+/// offset of its first non-ASCII byte, or `byte_len()` if it has none. Within that
 /// prefix char `n` starts at byte `n`, so char-indexed operations there skip
 /// the codepoint scan, and scans elsewhere start at the prefix's end.
 ///
@@ -48,7 +49,7 @@ pub enum BexStr {
         parent: Arc<FlatStr>,
         offset: u64,
         len: u64,
-        char_count: u64,
+        codepoint_len: u64,
         /// Exact ASCII prefix of this slice (not its parent), or
         /// `SLICE_ASCII_PREFIX_UNKNOWN`. Fits in the padding after the enum
         /// tag, so it doesn't grow `BexStr`.
@@ -65,7 +66,7 @@ pub struct FlatStr {
     /// A zero high word is uncached (that rare digest is simply recomputed).
     pub(crate) hash: [AtomicU64; 2],
     /// Number of Unicode codepoints. Computed once at construction.
-    pub(crate) char_count: u64,
+    pub(crate) codepoint_len: u64,
     /// Byte offset of the first non-ASCII byte, or `data.len()` if none.
     /// Computed once at construction.
     pub(crate) ascii_prefix_len: u64,
@@ -77,8 +78,8 @@ pub struct FlatStr {
 pub struct ConcatNode {
     pub(crate) total_len: u64,
     /// Number of Unicode codepoints, summed from the children at construction
-    /// (each O(1)), so `char_count` needs no recursive walk of a deep rope.
-    pub(crate) char_count: u64,
+    /// (each O(1)), so `codepoint_len` needs no recursive walk of a deep rope.
+    pub(crate) codepoint_len: u64,
     /// Exact ASCII prefix, derived from the children's at construction (each
     /// O(1)) for the same reason.
     pub(crate) ascii_prefix_len: u64,
@@ -112,7 +113,7 @@ impl BexStr {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len() == 0
+        self.byte_len() == 0
     }
 
     /// Heap allocation bytes retained by this string, excluding `Self` and
@@ -137,7 +138,7 @@ impl BexStr {
     }
 
     /// Byte length. O(1) for all variants.
-    pub fn len(&self) -> usize {
+    pub fn byte_len(&self) -> usize {
         match self {
             BexStr::Inline { len, .. } => *len as usize,
             BexStr::Flat(f) => f.data.len(),
@@ -149,17 +150,17 @@ impl BexStr {
     /// Number of Unicode codepoints. O(1) for all variants: a Concat caches
     /// its count at construction, so this never walks (or recurses into) the
     /// rope, however deep repeated appends have made it.
-    pub fn char_count(&self) -> usize {
+    pub fn codepoint_len(&self) -> usize {
         match self {
             BexStr::Inline { len, data } => bytecount::num_chars(&data[..*len as usize]),
-            BexStr::Flat(f) => f.char_count as usize,
-            BexStr::Slice { char_count, .. } => *char_count as usize,
-            BexStr::Concat(c) => c.char_count as usize,
+            BexStr::Flat(f) => f.codepoint_len as usize,
+            BexStr::Slice { codepoint_len, .. } => *codepoint_len as usize,
+            BexStr::Concat(c) => c.codepoint_len as usize,
         }
     }
 
     /// Length in bytes of the longest all-ASCII prefix: the byte offset of the
-    /// first non-ASCII byte, or `len()` if there is none. Exact, and O(1) for
+    /// first non-ASCII byte, or `byte_len()` if there is none. Exact, and O(1) for
     /// all variants (an inline string scans at most 54 bytes; a slice of
     /// 4 GiB or more rescans). For every `n <= ascii_prefix_len()`, char `n`
     /// starts at byte `n`.
@@ -178,18 +179,18 @@ impl BexStr {
         }
     }
 
-    /// `(ascii_prefix_len(), char_count())`, with a single scan for an
+    /// `(ascii_prefix_len(), codepoint_len())`, with a single scan for an
     /// inline string.
-    fn ascii_prefix_and_char_count(&self) -> (usize, usize) {
+    fn ascii_prefix_and_codepoint_len(&self) -> (usize, usize) {
         match self {
-            BexStr::Inline { len, data } => ascii_prefix_and_char_count(&data[..*len as usize]),
-            _ => (self.ascii_prefix_len(), self.char_count()),
+            BexStr::Inline { len, data } => ascii_prefix_and_codepoint_len(&data[..*len as usize]),
+            _ => (self.ascii_prefix_len(), self.codepoint_len()),
         }
     }
 
     /// Whether every byte is ASCII. O(1); shadows the O(n) `str::is_ascii`.
     pub fn is_ascii(&self) -> bool {
-        self.ascii_prefix_len() == self.len()
+        self.ascii_prefix_len() == self.byte_len()
     }
 
     /// O(1) for Inline/Flat/Slice. O(n) first-call flatten for Concat.
@@ -252,7 +253,7 @@ impl BexStr {
     pub fn byte_slice(&self, range: Range<usize>) -> BexStr {
         let Range { start, end } = range;
         debug_assert!(start <= end);
-        debug_assert!(end <= self.len());
+        debug_assert!(end <= self.byte_len());
         let slice_len = end - start;
 
         // Empty result → Inline
@@ -273,14 +274,14 @@ impl BexStr {
 
         // Long result → Slice (depth-1 invariant). The receiver's own ASCII
         // prefix covers the slice's start when `start` falls inside it; only
-        // otherwise does the slice need a scan, fused with its char count.
+        // otherwise does the slice need a scan, fused with its codepoint count.
         let bytes = &self.as_bytes()[start..end];
         let outer_prefix = self.ascii_prefix_len();
-        let (prefix, char_count) = if start < outer_prefix {
+        let (prefix, codepoint_len) = if start < outer_prefix {
             let prefix = (outer_prefix - start).min(slice_len);
             (prefix, prefix + bytecount::num_chars(&bytes[prefix..]))
         } else {
-            ascii_prefix_and_char_count(bytes)
+            ascii_prefix_and_codepoint_len(bytes)
         };
         let ascii_prefix_len = u32::try_from(prefix)
             .ok()
@@ -289,7 +290,7 @@ impl BexStr {
         let (parent, offset) = match self {
             BexStr::Inline { .. } => {
                 // Can't reach here: INLINE_CAPACITY < slice_len
-                // but slice_len <= self.len() <= INLINE_CAPACITY. Contradiction.
+                // but slice_len <= self.byte_len() <= INLINE_CAPACITY. Contradiction.
                 unreachable!("Inline string cannot produce a Slice longer than INLINE_CAPACITY");
             }
             BexStr::Flat(f) => (f.clone(), start as u64),
@@ -302,7 +303,7 @@ impl BexStr {
             parent,
             offset,
             len: slice_len as u64,
-            char_count: char_count as u64,
+            codepoint_len: codepoint_len as u64,
             ascii_prefix_len,
             hash: [const { AtomicU64::new(0) }; 2],
         }
@@ -313,7 +314,7 @@ impl BexStr {
     // All char ↔ byte conversion goes through `char_to_byte_from` and
     // `byte_to_char_from`, the only places that scan.
 
-    /// Byte offset where char `n` starts, or `len()` if `n >= char_count()`.
+    /// Byte offset where char `n` starts, or `byte_len()` if `n >= codepoint_len()`.
     /// O(1) when `n <= ascii_prefix_len()`; otherwise scans from the end of
     /// the ASCII prefix (flattening a `Concat` first).
     pub fn char_to_byte(&self, n: usize) -> usize {
@@ -321,7 +322,7 @@ impl BexStr {
     }
 
     /// Char index of the char starting at byte `b`, which must be a char
-    /// boundary (`char_count()` for `b >= len()`). Inverse of `char_to_byte`.
+    /// boundary (`codepoint_len()` for `b >= len()`). Inverse of `char_to_byte`.
     /// O(1) when `b <= ascii_prefix_len()` or `b >= len()`; otherwise counts
     /// from the end of the ASCII prefix.
     pub fn byte_to_char(&self, b: usize) -> usize {
@@ -329,7 +330,7 @@ impl BexStr {
     }
 
     /// `char_to_byte(n)`, given that char `known.0` starts at byte `known.1`
-    /// (`known.0 <= n`; past the end, `known.1` may be `len()`): the scan
+    /// (`known.0 <= n`; past the end, `known.1` may be `byte_len()`): the scan
     /// starts from whichever of that point and the end of the ASCII prefix is
     /// further along.
     fn char_to_byte_from(&self, known: (usize, usize), n: usize) -> usize {
@@ -342,8 +343,8 @@ impl BexStr {
         if n <= prefix {
             return n;
         }
-        if n >= self.char_count() {
-            return self.len();
+        if n >= self.codepoint_len() {
+            return self.byte_len();
         }
         let (char_idx, byte_idx) = if known.0 > prefix {
             known
@@ -366,8 +367,8 @@ impl BexStr {
         if b <= prefix {
             return b;
         }
-        if b >= self.len() {
-            return self.char_count();
+        if b >= self.byte_len() {
+            return self.codepoint_len();
         }
         let (byte_idx, char_idx) = if known.0 > prefix {
             known
@@ -378,21 +379,21 @@ impl BexStr {
         char_idx + bytecount::num_chars(&self.as_bytes()[byte_idx..b])
     }
 
-    /// The char at index `n`, or `None` if `n >= char_count()`.
+    /// The char at index `n`, or `None` if `n >= codepoint_len()`.
     pub fn char_at(&self, n: usize) -> Option<char> {
         // Past the end, `b == len()` and the suffix is empty.
         let b = self.char_to_byte(n);
         self.as_str()[b..].chars().next()
     }
 
-    /// Substring by char range. Clamps both ends to `char_count()` (and `end`
+    /// Substring by char range. Clamps both ends to `codepoint_len()` (and `end`
     /// to at least `start`), so it never panics.
     pub fn char_slice(&self, range: Range<usize>) -> BexStr {
-        // `char_to_byte` maps every index past the end to `len()`, which is
+        // `char_to_byte` maps every index past the end to `byte_len()`, which is
         // the clamp; `end` is scanned onward from `start`.
         let byte_start = self.char_to_byte(range.start);
         let end = range.end.max(range.start);
-        let byte_end = if end == range.start + 1 && byte_start < self.len() {
+        let byte_end = if end == range.start + 1 && byte_start < self.byte_len() {
             // One char (`at`): its lead byte gives its width.
             byte_start + utf8_char_width(self.as_bytes()[byte_start])
         } else {
@@ -411,7 +412,7 @@ impl BexStr {
     /// Searches the borrowed suffix without allocating, and counts chars only
     /// between `start` and the match.
     pub fn char_find_from(&self, needle: &str, start: usize) -> Option<usize> {
-        if start > self.char_count() {
+        if start > self.codepoint_len() {
             return None;
         }
         let byte_start = self.char_to_byte(start);
@@ -439,7 +440,7 @@ impl BexStr {
         if right.is_empty() {
             return left;
         }
-        let total_len = left.len() + right.len();
+        let total_len = left.byte_len() + right.byte_len();
 
         // Short result → Inline
         if total_len <= INLINE_CAPACITY {
@@ -454,17 +455,17 @@ impl BexStr {
             };
         }
 
-        let (left_prefix, left_chars) = left.ascii_prefix_and_char_count();
-        let (right_prefix, right_chars) = right.ascii_prefix_and_char_count();
-        let char_count = (left_chars + right_chars) as u64;
-        let ascii_prefix_len = if left_prefix == left.len() {
-            left.len() + right_prefix
+        let (left_prefix, left_chars) = left.ascii_prefix_and_codepoint_len();
+        let (right_prefix, right_chars) = right.ascii_prefix_and_codepoint_len();
+        let codepoint_len = (left_chars + right_chars) as u64;
+        let ascii_prefix_len = if left_prefix == left.byte_len() {
+            left.byte_len() + right_prefix
         } else {
             left_prefix
         } as u64;
         BexStr::Concat(Arc::new(ConcatNode {
             total_len: total_len as u64,
-            char_count,
+            codepoint_len,
             ascii_prefix_len,
             state: Mutex::new(ConcatState::Deferred { left, right }),
         }))
@@ -514,21 +515,21 @@ impl BexStr {
 // ── FlatStr ────────────────────────────────────────────────────────
 
 impl FlatStr {
-    /// Wraps `data`, computing its char count and ASCII prefix in one pass.
+    /// Wraps `data`, computing its codepoint count and ASCII prefix in one pass.
     fn new(data: Box<[u8]>) -> FlatStr {
-        let (prefix, char_count) = ascii_prefix_and_char_count(&data);
-        FlatStr::from_parts(data, char_count as u64, prefix as u64)
+        let (prefix, codepoint_len) = ascii_prefix_and_codepoint_len(&data);
+        FlatStr::from_parts(data, codepoint_len as u64, prefix as u64)
     }
 
-    /// Wraps `data` whose char count and ASCII prefix are already known.
-    fn from_parts(data: Box<[u8]>, char_count: u64, ascii_prefix_len: u64) -> FlatStr {
+    /// Wraps `data` whose codepoint count and ASCII prefix are already known.
+    fn from_parts(data: Box<[u8]>, codepoint_len: u64, ascii_prefix_len: u64) -> FlatStr {
         debug_assert_eq!(
-            ascii_prefix_and_char_count(&data),
-            (ascii_prefix_len as usize, char_count as usize)
+            ascii_prefix_and_codepoint_len(&data),
+            (ascii_prefix_len as usize, codepoint_len as usize)
         );
         FlatStr {
             hash: [const { AtomicU64::new(0) }; 2],
-            char_count,
+            codepoint_len,
             ascii_prefix_len,
             data,
         }
@@ -613,7 +614,7 @@ impl ConcatNode {
 
         let flat = Arc::new(FlatStr::from_parts(
             buf.into_boxed_slice(),
-            self.char_count,
+            self.codepoint_len,
             self.ascii_prefix_len,
         ));
         *guard = ConcatState::Flattened(flat.clone());
@@ -672,14 +673,14 @@ impl Clone for BexStr {
                 parent,
                 offset,
                 len,
-                char_count,
+                codepoint_len,
                 ascii_prefix_len,
                 hash,
             } => BexStr::Slice {
                 parent: parent.clone(),
                 offset: *offset,
                 len: *len,
-                char_count: *char_count,
+                codepoint_len: *codepoint_len,
                 ascii_prefix_len: *ascii_prefix_len,
                 hash: clone_hash(hash),
             },
@@ -704,7 +705,7 @@ impl Hash for BexStr {
 
 impl PartialEq for BexStr {
     fn eq(&self, other: &Self) -> bool {
-        if self.len() != other.len() {
+        if self.byte_len() != other.byte_len() {
             return false;
         }
         if self.ptr_eq(other) {
@@ -875,15 +876,15 @@ fn ascii_prefix_len(bytes: &[u8]) -> usize {
         .map_or(bytes.len(), |p| i + p)
 }
 
-/// `(ascii_prefix_len, char_count)` of `bytes`. Counts first: when every byte
+/// `(ascii_prefix_len, codepoint_len)` of `bytes`. Counts first: when every byte
 /// starts a char, the whole string is ASCII and needs no second scan, so
 /// ASCII strings cost exactly one (vectorized) count.
-fn ascii_prefix_and_char_count(bytes: &[u8]) -> (usize, usize) {
-    let char_count = bytecount::num_chars(bytes);
-    if char_count == bytes.len() {
-        (char_count, char_count)
+fn ascii_prefix_and_codepoint_len(bytes: &[u8]) -> (usize, usize) {
+    let codepoint_len = bytecount::num_chars(bytes);
+    if codepoint_len == bytes.len() {
+        (codepoint_len, codepoint_len)
     } else {
-        (ascii_prefix_len(bytes), char_count)
+        (ascii_prefix_len(bytes), codepoint_len)
     }
 }
 

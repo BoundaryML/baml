@@ -25,7 +25,7 @@ fn retained_heap_counts_complete_slice_parent() {
     let parent = BexStr::from("x".repeat(100_000));
     let slice = parent.byte_slice(1..101);
     let bytes = parent.retained_heap_bytes().unwrap();
-    assert!(bytes > parent.len());
+    assert!(bytes > parent.byte_len());
     assert_eq!(slice.retained_heap_bytes(), Some(bytes));
     assert_eq!(slice.clone().retained_heap_bytes(), Some(bytes));
 }
@@ -36,8 +36,8 @@ fn retained_heap_flattens_ropes_to_stable_backing() {
     let rope = BexStr::concat(parent.byte_slice(0..100), BexStr::from("y".repeat(100)));
     assert!(matches!(rope, BexStr::Concat(_)));
     let bytes = rope.retained_heap_bytes().unwrap();
-    assert!(bytes > rope.len());
-    assert!(bytes < parent.len());
+    assert!(bytes > rope.byte_len());
+    assert!(bytes < parent.byte_len());
     assert_eq!(rope.as_str().len(), 200);
     assert_eq!(rope.retained_heap_bytes(), Some(bytes));
 }
@@ -125,7 +125,7 @@ fn partial_ord_matches_string() {
 #[test]
 fn empty_string() {
     let e = BexStr::empty();
-    assert_eq!(e.len(), 0);
+    assert_eq!(e.byte_len(), 0);
     assert!(e.is_empty());
     assert_eq!(e.as_str(), "");
 }
@@ -185,7 +185,7 @@ fn mixed_variant_concat() {
     let flat = BexStr::from("a".repeat(100)); // Flat
     let slice = flat.byte_slice(10..50); // Slice (40 bytes)
     let c = BexStr::concat(inline, slice);
-    assert_eq!(c.len(), 2 + 40);
+    assert_eq!(c.byte_len(), 2 + 40);
     assert_eq!(&c.as_str()[..2], "hi");
     assert_eq!(&c.as_str()[2..], &"a".repeat(40));
 }
@@ -193,29 +193,29 @@ fn mixed_variant_concat() {
 #[test]
 fn char_count_ascii() {
     let s = BexStr::from("hello");
-    assert_eq!(s.char_count(), 5);
-    assert_eq!(s.len(), 5);
+    assert_eq!(s.codepoint_len(), 5);
+    assert_eq!(s.byte_len(), 5);
 }
 
 #[test]
 fn char_count_multibyte() {
     let s = BexStr::from("héllo");
-    assert_eq!(s.char_count(), 5);
-    assert_eq!(s.len(), 6); // é is 2 bytes
+    assert_eq!(s.codepoint_len(), 5);
+    assert_eq!(s.byte_len(), 6); // é is 2 bytes
 }
 
 #[test]
 fn char_count_emoji() {
     let s = BexStr::from("😀hello");
-    assert_eq!(s.char_count(), 6);
-    assert_eq!(s.len(), 9); // 😀 is 4 bytes + "hello" is 5
+    assert_eq!(s.codepoint_len(), 6);
+    assert_eq!(s.byte_len(), 9); // 😀 is 4 bytes + "hello" is 5
 }
 
 #[test]
 fn char_count_flat() {
     let s = BexStr::from("a".repeat(100) + "😀");
-    assert_eq!(s.char_count(), 101);
-    assert_eq!(s.len(), 104);
+    assert_eq!(s.codepoint_len(), 101);
+    assert_eq!(s.byte_len(), 104);
 }
 
 #[test]
@@ -225,8 +225,8 @@ fn char_count_slice() {
     // "hello " = 6 bytes, "😀" = 4 bytes, " world" = 6 bytes → 16 bytes total
     let slice = s.byte_slice(6..16); // "😀 world"
     assert_eq!(slice.as_str(), "😀 world");
-    assert_eq!(slice.char_count(), 7); // 😀 + " world" = 7 codepoints
-    assert_eq!(slice.len(), 10); // 4 + 6 bytes
+    assert_eq!(slice.codepoint_len(), 7); // 😀 + " world" = 7 codepoints
+    assert_eq!(slice.byte_len(), 10); // 4 + 6 bytes
 }
 
 #[test]
@@ -234,8 +234,8 @@ fn char_count_concat() {
     let a = BexStr::from("hello");
     let b = BexStr::from("😀");
     let c = BexStr::concat(a, b);
-    assert_eq!(c.char_count(), 6);
-    assert_eq!(c.len(), 9);
+    assert_eq!(c.codepoint_len(), 6);
+    assert_eq!(c.byte_len(), 9);
 }
 
 // ── Shared-Concat-node flatten regression (B-262 / B-233) ──────────────────
@@ -267,7 +267,7 @@ fn shared_concat_child_survives_parent_flatten() {
 
     // The original child must be intact — both by content and by equality.
     assert_eq!(child.as_str(), expected_child);
-    assert_eq!(child.len(), 55);
+    assert_eq!(child.byte_len(), 55);
     assert_eq!(child, BexStr::from(expected_child.as_str()));
 }
 
@@ -361,7 +361,7 @@ fn codepoint_ops_match_std_oracle() {
     for s in cases {
         let bex = BexStr::from(s);
         let count = s.chars().count();
-        assert_eq!(bex.char_count(), count, "char_count for {s:?}");
+        assert_eq!(bex.codepoint_len(), count, "char_count for {s:?}");
 
         // char_at over every index, including the last (the OOB-panic boundary)
         // and one past the end (must be None).
@@ -520,11 +520,11 @@ fn char_count_of_deep_rope_does_not_recurse() {
                 s = BexStr::concat(s, BexStr::from("é"));
             }
             assert!(matches!(s, BexStr::Concat(_)));
-            assert_eq!(s.char_count(), 60 + n);
-            assert_eq!(s.len(), 60 + 2 * n);
+            assert_eq!(s.codepoint_len(), 60 + n);
+            assert_eq!(s.byte_len(), 60 + 2 * n);
             // Flattening keeps the cached count.
             assert_eq!(s.as_str().chars().count(), 60 + n);
-            assert_eq!(s.char_count(), 60 + n);
+            assert_eq!(s.codepoint_len(), 60 + n);
         })
         .unwrap()
         .join()
@@ -569,7 +569,7 @@ fn codepoint_ops_on_long_strings_match_std_oracle() {
     for (s, bex) in cases {
         let chars: Vec<char> = s.chars().collect();
         let count = chars.len();
-        assert_eq!(bex.char_count(), count);
+        assert_eq!(bex.codepoint_len(), count);
         let byte_of = |n: usize| s.char_indices().nth(n).map_or(s.len(), |(b, _)| b);
 
         for n in 0..=count + 1 {
@@ -640,10 +640,14 @@ fn assert_ascii_prefix_exact(bex: &BexStr, what: &str) {
         "is_ascii of {what}"
     );
     assert!(
-        p <= bex.char_count() && bex.char_count() <= bex.len(),
+        p <= bex.codepoint_len() && bex.codepoint_len() <= bex.byte_len(),
         "{what}"
     );
-    assert_eq!(p == bex.len(), bex.char_count() == bex.len(), "{what}");
+    assert_eq!(
+        p == bex.byte_len(),
+        bex.codepoint_len() == bex.byte_len(),
+        "{what}"
+    );
 }
 
 #[test]
@@ -738,7 +742,7 @@ fn ascii_prefix_matches_oracle_on_every_representation() {
         cases.push((name.into(), rope.clone()));
         cases.push((
             format!("{name}, sliced"),
-            rope.byte_slice(60..rope.len() - 60),
+            rope.byte_slice(60..rope.byte_len() - 60),
         ));
     }
     for (what, bex) in &cases {
@@ -795,7 +799,7 @@ fn slice_ascii_prefix_sentinel_rescans() {
         parent,
         offset: 5,
         len: (text.len() - 10) as u64,
-        char_count: (text.chars().count() - 10) as u64,
+        codepoint_len: (text.chars().count() - 10) as u64,
         ascii_prefix_len: SLICE_ASCII_PREFIX_UNKNOWN,
         hash: [const { AtomicU64::new(0) }; 2],
     };

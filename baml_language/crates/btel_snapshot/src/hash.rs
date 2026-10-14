@@ -57,7 +57,7 @@ impl Hasher {
         self.0.update(bytes);
     }
     pub(super) fn string(&mut self, s: &BexStr) {
-        self.size(s.len());
+        self.size(s.byte_len());
         self.raw(&s.content_hash().to_le_bytes());
     }
     pub(super) fn borsh(&mut self, value: &impl BorshSerialize) {

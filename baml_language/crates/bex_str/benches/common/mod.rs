@@ -23,24 +23,24 @@ pub mod baml {
 
     /// `s.length()`
     pub fn length(s: &BexStr) -> i64 {
-        s.char_count() as i64
+        s.codepoint_len() as i64
     }
 
     /// `s.at(i)`
     pub fn at(s: &BexStr, i: i64) -> Option<BexStr> {
-        resolve_index(i, s.char_count()).map(|i| s.char_slice(i..i + 1))
+        resolve_index(i, s.codepoint_len()).map(|i| s.char_slice(i..i + 1))
     }
 
     /// `s.code_point_at(i)`
     pub fn code_point_at(s: &BexStr, i: i64) -> Option<i64> {
-        resolve_index(i, s.char_count())
+        resolve_index(i, s.codepoint_len())
             .and_then(|i| s.char_at(i))
             .map(|c| i64::from(u32::from(c)))
     }
 
     /// `s.slice(start, end)`
     pub fn slice(s: &BexStr, start: i64, end: i64) -> BexStr {
-        let len = s.char_count();
+        let len = s.codepoint_len();
         let start = resolve_slice_bound(start, len);
         let end = resolve_slice_bound(end, len).max(start);
         s.char_slice(start..end)

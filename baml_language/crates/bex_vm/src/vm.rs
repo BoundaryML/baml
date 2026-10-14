@@ -9368,7 +9368,7 @@ impl BexVm {
                             Object::Array(arr) => arr.len() as i64,
                             Object::Uint8Array(bytes) => bytes.len() as i64,
                             Object::Map(map) => map.len() as i64,
-                            Object::String(s) => s.len() as i64,
+                            Object::String(s) => s.byte_len() as i64,
                             other => {
                                 return Err(VmInternalError::TypeError {
                                     expected: ObjectType::Array.into(),

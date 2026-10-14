@@ -31,7 +31,7 @@ fn original_len(w: &mut impl Write, n: usize) -> io::Result<()> {
         .serialize(w)
 }
 fn string(w: &mut impl Write, value: &bex_str::BexStr) -> io::Result<()> {
-    size(w, value.len())?;
+    size(w, value.byte_len())?;
     w.write_all(value.as_bytes())
 }
 impl Snapshot {

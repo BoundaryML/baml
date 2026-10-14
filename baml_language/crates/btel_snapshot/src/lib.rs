@@ -691,7 +691,7 @@ impl Builder {
         true
     }
     pub fn string(&mut self, value: &BexStr) -> Option<StringId> {
-        if !self.content(value.len(), !matches!(value, BexStr::Inline { .. })) {
+        if !self.content(value.byte_len(), !matches!(value, BexStr::Inline { .. })) {
             return None;
         }
         let s = self.storage();

@@ -18,12 +18,12 @@ fn char_substrings(string: &BexStr) -> Vec<BexStr> {
 impl BamlClassString for PackageBamlImpl {
     #[expect(clippy::cast_possible_wrap)]
     fn char_count(string: &BexStr) -> i64 {
-        string.char_count() as i64
+        string.codepoint_len() as i64
     }
 
     #[expect(clippy::cast_possible_wrap)]
     fn byte_length(string: &BexStr) -> i64 {
-        string.len() as i64
+        string.byte_len() as i64
     }
 
     fn to_lower_case(string: &BexStr) -> BexStr {
@@ -52,7 +52,7 @@ impl BamlClassString for PackageBamlImpl {
             return string.clone();
         }
         let start = trimmed.as_ptr() as usize - s.as_ptr() as usize;
-        string.byte_slice(start..string.len())
+        string.byte_slice(start..string.byte_len())
     }
 
     fn trim_end(string: &BexStr) -> BexStr {
@@ -109,7 +109,7 @@ impl BamlClassString for PackageBamlImpl {
 
     fn slice(string: &BexStr, start: i64, end: i64) -> BexStr {
         // Codepoint-indexed, not byte-indexed; a negative index counts from the end.
-        let len = string.char_count();
+        let len = string.codepoint_len();
         let start = resolve_slice_bound(start, len);
         // An `end` resolving before `start` yields an empty string.
         let end = resolve_slice_bound(end, len).max(start);
@@ -138,7 +138,7 @@ impl BamlClassString for PackageBamlImpl {
         // Codepoint-indexed, not byte-indexed. A negative index counts from the
         // end; an index still outside the string after that yields `null`, so a
         // non-null result is always exactly one codepoint.
-        resolve_index(index, string.char_count()).map(|i| string.char_slice(i..i + 1))
+        resolve_index(index, string.codepoint_len()).map(|i| string.char_slice(i..i + 1))
     }
 
     fn code_point_at(string: &BexStr, index: i64) -> Option<i64> {
@@ -147,7 +147,7 @@ impl BamlClassString for PackageBamlImpl {
         // yields the code point's value rather than a one-character string. A
         // `char` is always in `[0, 0x10FFFF]`, so the widening to `i64` is
         // lossless.
-        resolve_index(index, string.char_count())
+        resolve_index(index, string.codepoint_len())
             .and_then(|i| string.char_at(i))
             .map(|c| i64::from(u32::from(c)))
     }

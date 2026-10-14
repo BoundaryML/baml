@@ -154,7 +154,10 @@ impl Scratch {
                     let count = data.len().min(b.remaining_entries());
                     b.reserve_entries(count);
                     for (key, value) in data.iter().take(count) {
-                        if !b.content(key.len(), !matches!(key, bex_str::BexStr::Inline { .. })) {
+                        if !b.content(
+                            key.byte_len(),
+                            !matches!(key, bex_str::BexStr::Inline { .. }),
+                        ) {
                             break;
                         }
                         let value = self.add(&mut b, *value, depth + 1);

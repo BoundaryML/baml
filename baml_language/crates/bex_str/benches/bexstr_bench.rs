@@ -39,10 +39,10 @@ fn bench_substring_chain_100(bencher: Bencher) {
     bencher.bench(|| {
         let mut s = base.clone();
         for _ in 0..100 {
-            let new_len = s.len() - 1;
+            let new_len = s.byte_len() - 1;
             s = s.byte_slice(0..new_len);
         }
-        black_box(s.len());
+        black_box(s.byte_len());
     });
 }
 
@@ -212,7 +212,7 @@ fn scan_fixture(kind: &str, n: usize) -> BexStr {
 
 /// BAML `s.at(i)` for an in-range `i`, as `bex_vm`'s `string.rs` implements it.
 fn at(s: &BexStr, i: usize) -> Option<BexStr> {
-    (i < s.char_count()).then(|| s.char_slice(i..i + 1))
+    (i < s.codepoint_len()).then(|| s.char_slice(i..i + 1))
 }
 
 fn bench_at_scan(bencher: Bencher, kind: &str, n: usize) {
@@ -291,7 +291,7 @@ fn deep_rope_build_count_flatten(bencher: Bencher, n: usize) {
         for _ in 0..n {
             s = BexStr::concat(s, BexStr::from("é"));
         }
-        black_box(s.char_count());
+        black_box(s.codepoint_len());
         black_box(s.as_str().len());
     });
 }
@@ -315,7 +315,7 @@ fn replace_all(s: &BexStr, from: &str, to: &str) -> BexStr {
 
 fn at_scan(s: &BexStr) -> usize {
     let mut hits = 0;
-    for i in 0..s.char_count() {
+    for i in 0..s.codepoint_len() {
         if at(s, i).is_some_and(|c| c.as_str() == "a") {
             hits += 1;
         }
@@ -365,7 +365,7 @@ fn replace_rounds(n: usize, reads_per_round: usize) -> usize {
             ("A", "a")
         };
         s = replace_all(&s, from, to);
-        let len = s.char_count();
+        let len = s.codepoint_len();
         for r in 0..reads_per_round {
             let i = (r * 7919 + round) % len;
             if at(&s, i).is_some_and(|c| c.as_str() == "A") {
@@ -395,11 +395,11 @@ fn append_rounds(n: usize, ascii: bool, read: bool) -> usize {
     let mut hits = 0;
     for _ in 0..n / 10 {
         s = BexStr::concat(s, unit.clone());
-        if read && at(&s, s.char_count() - 1).is_some_and(|c| c.as_str() == "j") {
+        if read && at(&s, s.codepoint_len() - 1).is_some_and(|c| c.as_str() == "j") {
             hits += 1;
         }
     }
-    hits + s.char_count()
+    hits + s.codepoint_len()
 }
 
 #[divan::bench(args = SCAN_SIZES, sample_count = 10, sample_size = 1)]
