@@ -53,6 +53,52 @@ impl Owner {
     }
 }
 
+impl Owner {
+    /// How the declaration this owns is named, given its path — see
+    /// [`declaration_name`].
+    #[must_use]
+    pub fn name_of(&self, path: &super::LocalName) -> crate::DeclarationName {
+        declaration_name(self.package(), path)
+    }
+}
+
+/// How the declaration at `path` is named, given the package that owns it.
+///
+/// A declaration carries only its own coordinates — its path inside its
+/// package. The package half of its name is not the declaration's to state:
+/// it is its package's display label
+/// ([`Package::name`](super::Package::name)), read here off the package at
+/// the moment a name is wanted. So no declaration stores a qualified name.
+///
+/// The result is for display, and no more identifying than the label is:
+/// two declarations in two packages labelled alike render alike. A
+/// declaration's identity is its tag, and its object.
+///
+/// With no package (`None`: a declaration minted through `reflect`, or a
+/// compiled one the loader has not yet placed), the name is the path alone.
+#[must_use]
+pub fn declaration_name(
+    package: Option<HeapPtr>,
+    path: &super::LocalName,
+) -> crate::DeclarationName {
+    let Some(package) = package else {
+        return crate::DeclarationName::Anonymous(baml_base::Name::new(path.to_string()));
+    };
+    // SAFETY: a declaration's package is a GC edge of the declaration —
+    // traced and forwarded with it — so it is live wherever the declaration
+    // is, which the caller's heap permit (or the compile-time region) holds.
+    // Read-only: a package's display name does not change after it is
+    // allocated.
+    #[expect(
+        unsafe_code,
+        reason = "a declaration's name reads its package's display name"
+    )]
+    let crate::Object::Package(package) = (unsafe { package.get() }) else {
+        unreachable!("a declaration's owner edge points at a package")
+    };
+    crate::DeclarationName::Declared(path.under(&package.name))
+}
+
 impl Default for Owner {
     fn default() -> Self {
         Self::anonymous()

@@ -109,13 +109,13 @@ fn assert_identity_tables(label: &str, program: &Program) {
             let Object::Function(function) = &program.objects[method.function] else {
                 panic!(
                     "{label}: class `{}` method `{name}` is not a function",
-                    class.name
+                    class.path
                 )
             };
             assert!(
                 function.name.ends_with(&format!(".{name}")),
                 "{label}: class `{}` method `{name}` points at `{}`",
-                class.name,
+                class.path,
                 function.name
             );
         }

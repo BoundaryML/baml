@@ -160,7 +160,7 @@ fn class_name(vm: &BexVm, value: Value) -> Option<String> {
     let Object::Class(class) = vm.get_object(instance.class) else {
         return None;
     };
-    Some(class.name.to_string())
+    Some(class.name().to_string())
 }
 
 fn builder_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, BuilderHandle), String> {
@@ -878,9 +878,10 @@ fn build_group(
         // item name is display data only.
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(
-                node.name.as_str(),
-            )),
+            path: bex_vm_types::types::LocalName::new(
+                Vec::new(),
+                baml_type::Name::new(node.name.as_str()),
+            ),
             fields: Vec::new(),
             description: None,
             alias: None,

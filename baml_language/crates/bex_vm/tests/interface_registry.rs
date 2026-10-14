@@ -22,10 +22,8 @@ fn for_ty_head_name<'a>(program: &'a Program, pat: &TyTemplate) -> Option<&'a st
         return None;
     };
     program.objects.iter().find_map(|object| match object {
-        Object::Class(class) if class.type_tag == head.tag() => {
-            Some(class.name.item_name().as_str())
-        }
-        Object::Enum(enm) if enm.type_tag == head.tag() => Some(enm.name.item_name().as_str()),
+        Object::Class(class) if class.type_tag == head.tag() => Some(class.path.name.as_str()),
+        Object::Enum(enm) if enm.type_tag == head.tag() => Some(enm.path.name.as_str()),
         _ => None,
     })
 }
@@ -44,7 +42,7 @@ fn impl_methods(program: &Program, iface: &str, for_type: &str) -> Vec<(String, 
         .filter(|rule| {
             program.objects[rule.interface_head]
                 .as_interface()
-                .is_some_and(|def| def.name.name().as_str() == iface)
+                .is_some_and(|def| def.path.name.as_str() == iface)
         })
         .find(|rule| for_ty_head_name(program, &rule.for_ty_pattern) == Some(for_type))
         .unwrap_or_else(|| panic!("no `{for_type} implements {iface}` rule baked"));
@@ -95,7 +93,7 @@ fn impl_rule_methods_are_provided_only() {
         .objects
         .iter()
         .find_map(|object| match object {
-            Object::Interface(def) if def.name.name().as_str() == "Greeter" => Some(def),
+            Object::Interface(def) if def.path.name.as_str() == "Greeter" => Some(def),
             _ => None,
         })
         .expect("Greeter pooled");

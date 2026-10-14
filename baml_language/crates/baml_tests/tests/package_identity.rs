@@ -162,16 +162,7 @@ fn emit_keeps_same_named_declarations_apart() {
 
     let program =
         compile_program(&db, workspace, OptLevel::Two).expect("two same-named classes emit");
-    let tags: Vec<_> = program
-        .objects
-        .iter()
-        .filter_map(|object| match object {
-            Object::Class(class) if class.name.item_name().as_str() == "Point" => {
-                Some((class.name.display_name(), class.type_tag))
-            }
-            _ => None,
-        })
-        .collect();
+    let tags = baml_tests::engine::classes_named(&program, "Point");
     let [(first_name, first_tag), (second_name, second_tag)] = tags.as_slice() else {
         panic!("expected exactly two `Point` classes, got {tags:?}");
     };
@@ -282,8 +273,8 @@ fn packages_that_share_a_spelling_stay_distinct_through_emit_and_link() {
         .objects
         .iter()
         .filter_map(|object| match object {
-            Object::Class(class) if matches!(class.name.item_name().as_str(), "X" | "Y") => {
-                Some((class.name.item_name().to_string(), class.type_tag))
+            Object::Class(class) if matches!(class.path.name.as_str(), "X" | "Y") => {
+                Some((class.path.name.to_string(), class.type_tag))
             }
             _ => None,
         })
@@ -361,9 +352,7 @@ fn an_unnamed_package_reached_under_two_names_is_one_package() {
     let shared_classes = program
         .objects
         .iter()
-        .filter(|object| {
-            matches!(object, Object::Class(class) if class.name.item_name().as_str() == "S")
-        })
+        .filter(|object| matches!(object, Object::Class(class) if class.path.name.as_str() == "S"))
         .count();
     assert_eq!(shared_classes, 1, "one declaration, however it is reached");
     let targets = |edge_name: &str| {

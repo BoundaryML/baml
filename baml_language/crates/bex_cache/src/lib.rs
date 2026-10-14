@@ -187,9 +187,11 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 20: `Function::source_file` and the name of a file's `$init_test_…`
 /// function are root-relative for every non-stdlib root — a unit no longer
-/// carries the absolute path of the checkout it was compiled from.
-/// `Class::has_cleanup` became `Class::cleanup`, the finalizer's position in
-/// the class's method table.
+/// carries the absolute path of the checkout it was compiled from — and a
+/// pooled `Class`, `Enum`, `Interface` and `TypeAlias` carries its path
+/// inside its package (`path`) where it used to carry a package-qualified
+/// name. `Class::has_cleanup` became `Class::cleanup`, the finalizer's
+/// position in the class's method table.
 pub const FORMAT_VERSION: u32 = 20;
 
 const MAGIC: [u8; 4] = *b"BEXC";

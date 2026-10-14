@@ -41,12 +41,12 @@ pub struct ClassField {
 /// Runtime class representation.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Class {
-    /// How this declaration is named: package-qualified for a compiled class,
-    /// a bare item name for a runtime-created one. Display and boundary
-    /// spelling only — identity is `type_tag` and the declaration object
-    /// itself. Use `name.display_name()` for the display string (e.g.
-    /// "ai.PromptMessage" or "Person").
-    pub name: crate::DeclarationName,
+    /// Where this class is declared inside its package: its namespace path
+    /// and item name (a class minted through `reflect` has only the item
+    /// name). Its own coordinates, and all of its name it carries — see
+    /// [`Self::name`]. Never an identity: that is `type_tag` and the
+    /// declaration object itself.
+    pub path: super::LocalName,
 
     /// Class fields with type and schema metadata.
     pub fields: Vec<ClassField>,
@@ -120,6 +120,15 @@ pub struct ClassMethodDef {
 }
 
 impl Class {
+    /// How this class is named: its path under its package's display name
+    /// for a class a package declares (`ai.PromptMessage`), the bare path for
+    /// one no package owns (`Person`). Display and boundary spelling only —
+    /// see [`declaration_name`](super::declaration_name).
+    #[must_use]
+    pub fn name(&self) -> crate::DeclarationName {
+        self.owner.name_of(&self.path)
+    }
+
     /// This class's finalizer, if it declares one: the method at the recorded
     /// position of its method table. The class is the identity here — nothing
     /// renders a name to find the function.
@@ -132,7 +141,7 @@ impl Class {
 
 impl std::fmt::Display for Class {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<class {}>", self.name)
+        write!(f, "<class {}>", self.name())
     }
 }
 

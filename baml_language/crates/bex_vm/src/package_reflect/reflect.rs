@@ -1179,10 +1179,10 @@ impl BamlClassPackage for PackageReflectImpl {
             additions.add(vm, &chain, local, addition, Stated::ByKey)?;
             for declaration in crate::reachable::runtime_definitions(vm, &ty) {
                 let item = match vm.get_object(declaration) {
-                    Object::Class(class) => class.name.item_name().clone(),
-                    Object::Enum(enm) => enm.name.item_name().clone(),
-                    Object::Interface(interface) => interface.name.name().clone(),
-                    Object::TypeAlias(alias) => alias.name.name().clone(),
+                    Object::Class(class) => class.path.name.clone(),
+                    Object::Enum(enm) => enm.path.name.clone(),
+                    Object::Interface(interface) => interface.path.name.clone(),
+                    Object::TypeAlias(alias) => alias.path.name.clone(),
                     _ => continue,
                 };
                 additions.add(
@@ -1230,7 +1230,7 @@ impl BamlClassPackage for PackageReflectImpl {
         let view_ptr = vm.alloc(Object::Package(Box::new(view)));
         for (local, definition) in additions.aliases {
             let alias = vm.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
-                name: baml_type::TypeName::local(local.name.clone()),
+                path: LocalName::new(Vec::new(), local.name.clone()),
                 type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
                 definition,
                 owner: view_ptr,

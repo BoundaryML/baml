@@ -85,7 +85,13 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 ///
 /// Version 18: a pooled `Class` carries its finalizer as a position in its
 /// method table (`cleanup: Option<usize>`) where it carried a `has_cleanup`
-/// flag, so the collector reads the method off the class and resolves no name.
+/// flag, so the collector reads the method off the class and resolves no
+/// name; and a pooled `Class`, `Enum`, `Interface` and `TypeAlias` carries
+/// its path inside its package (`path`) where it used to carry a
+/// package-qualified name (`name`): a declaration's name is put together from
+/// its package's display name when one is wanted, so no serialized
+/// declaration states which package it belongs to or what that package is
+/// called.
 pub const FORMAT_VERSION: u32 = 18;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's

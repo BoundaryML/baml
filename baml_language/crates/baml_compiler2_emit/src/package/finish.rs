@@ -163,7 +163,7 @@ fn fill_interface_defaults<'db>(
                     .iter_mut()
                     .find(|method| method.name == *name)
                     .unwrap_or_else(|| {
-                        unreachable!("interface `{}` declares no method `{name}`", def.name)
+                        unreachable!("interface `{}` declares no method `{name}`", def.path)
                     });
                 method.default = Some(object);
             }

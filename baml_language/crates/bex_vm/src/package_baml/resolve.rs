@@ -149,7 +149,7 @@ impl<'vm> ImplResolver<'vm> {
         } else {
             Err(format!(
                 "overlapping implementations of `{}` for `{concrete}`",
-                declaration.name.display_name()
+                declaration.name().display_name()
             ))
         }
     }
@@ -468,7 +468,7 @@ impl<'vm> ImplResolver<'vm> {
                         .expect("selected structural default");
                     if default.function_ptr.is_null() {
                         return Err(VmInternalError::UnboundInterfaceDefault {
-                            interface: declaration.name.render_dotted(false),
+                            interface: declaration.name().display_name().to_string(),
                             method: method.to_string(),
                         });
                     }
@@ -623,7 +623,7 @@ impl<'vm> ImplResolver<'vm> {
                 method: method.to_string(),
             });
         };
-        let interface = || iface.name.render_dotted(false);
+        let interface = || iface.name().to_string();
         let Some(method_def) = iface.methods.iter().find(|m| m.name.as_str() == method) else {
             return Err(VmInternalError::UndeclaredInterfaceMethod {
                 interface: interface(),
@@ -1172,7 +1172,7 @@ mod tests {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let interface = vm.alloc(Object::Interface(Box::new(InterfaceDef {
-            name: baml_type::QualifiedTypeName::local(Name::new("Defaulted")),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Defaulted")),
             structural_default: Some(bex_vm_types::types::StructuralDefault {
                 kind: baml_type::StructuralInterface::ToString,
                 function: bex_vm_types::ObjectIndex::from_raw(0),

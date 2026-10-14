@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use baml_type::{Name, QualifiedTypeName};
+use baml_type::Name;
 use bex_external_types::WeakHeapRef;
 use bex_heap::{BexHeap, CollectionLevel, Generation, Tlab};
 use bex_vm_types::{
@@ -129,10 +129,10 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
             session: None,
         };
         let package_ptr = tlab.alloc(Object::Package(Box::new(package)));
-        let class_name = QualifiedTypeName::local(Name::new("RuntimeClass"));
+        let class_name = bex_vm_types::types::LocalName::new(Vec::new(), Name::new("RuntimeClass"));
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: bex_vm_types::DeclarationName::Declared(class_name.clone()),
+            path: class_name.clone(),
             fields: Vec::new(),
             description: None,
             alias: None,
@@ -1060,9 +1060,9 @@ fn empty_package() -> Package {
 fn package_type_aliases_are_traced_and_forwarded() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
-    let alias_name = QualifiedTypeName::local(Name::new("SessionAlias"));
+    let alias_name = bex_vm_types::types::LocalName::new(Vec::new(), Name::new("SessionAlias"));
     let alias_ptr = tlab.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
-        name: alias_name.clone(),
+        path: alias_name.clone(),
         type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         definition: RealizedTy::int(),
         owner: bex_vm_types::HeapPtr::null(),
@@ -1102,7 +1102,7 @@ fn package_type_aliases_are_traced_and_forwarded() {
     let Object::TypeAlias(alias) = (unsafe { forwarded.get() }) else {
         panic!("type_aliases entry does not point at a TypeAlias")
     };
-    assert_eq!(alias.name, alias_name);
+    assert_eq!(alias.path, alias_name);
 }
 
 /// A package's edge table points at the packages it reaches; for a runtime
@@ -1217,7 +1217,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
     let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
     let enum_tag = baml_type::typetag::TypeTag::fresh_dynamic();
     let enum_ptr = tlab.alloc(Object::Enum(Box::new(bex_vm_types::Enum {
-        name: bex_vm_types::DeclarationName::Anonymous(Name::new("FieldEnum")),
+        path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("FieldEnum")),
         variants: Vec::new(),
         description: None,
         alias: None,
@@ -1228,9 +1228,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
     })));
     let field_ty = RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, enum_tag));
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-        name: bex_vm_types::DeclarationName::Declared(QualifiedTypeName::local(Name::new(
-            "FieldOwner",
-        ))),
+        path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("FieldOwner")),
         fields: vec![ClassField {
             name: "value".to_string(),
             field_type: bex_vm_types::RuntimeTy::from(field_ty.clone()),
@@ -1311,9 +1309,9 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
 fn impl_rule_edges_are_traced_and_forwarded() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
-    let iface_name = QualifiedTypeName::local(Name::new("Runtime"));
+    let iface_name = bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Runtime"));
     let iface_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
-        name: iface_name.clone(),
+        path: iface_name.clone(),
         structural_default: None,
         type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         args: Vec::new(),
@@ -1363,7 +1361,7 @@ fn impl_rule_edges_are_traced_and_forwarded() {
     let Object::Interface(iface) = (unsafe { rule.interface_head.get() }) else {
         panic!("interface_head does not point at an interface")
     };
-    assert_eq!(iface.name, iface_name);
+    assert_eq!(iface.path, iface_name);
     let fqn = rule.methods["run"].fqn;
     assert_ne!(fqn, method_ptr, "method body moved; fqn must be repointed");
     assert!(matches!(unsafe { fqn.get() }, Object::String(_)));
@@ -1387,7 +1385,7 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
     let body_ptr = tlab.alloc_string("default body".to_string());
     let structural_ptr = tlab.alloc_string("structural body".to_string());
     let iface_ptr = tlab.alloc(Object::Interface(Box::new(InterfaceDef {
-        name: QualifiedTypeName::local(Name::new("SessionIface")),
+        path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("SessionIface")),
         structural_default: Some(bex_vm_types::types::StructuralDefault {
             kind: baml_type::StructuralInterface::ToString,
             function: bex_vm_types::ObjectIndex::from_raw(0),
@@ -1465,7 +1463,7 @@ fn class_method_bodies_are_traced_and_forwarded() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
     let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
     let body_ptr = tlab.alloc_string("method body".to_string());
-    let class_name = QualifiedTypeName::local(Name::new("SessionClass"));
+    let class_name = bex_vm_types::types::LocalName::new(Vec::new(), Name::new("SessionClass"));
     let mut methods = IndexMap::new();
     methods.insert(
         Name::new("greet"),
@@ -1475,7 +1473,7 @@ fn class_method_bodies_are_traced_and_forwarded() {
         },
     );
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-        name: bex_vm_types::DeclarationName::Declared(class_name.clone()),
+        path: class_name.clone(),
         fields: Vec::new(),
         description: None,
         alias: None,
@@ -1530,7 +1528,7 @@ fn type_alias_owner_is_traced_and_forwarded() {
     let mut tlab = Tlab::new(Arc::clone(&heap));
     let package_ptr = tlab.alloc(Object::Package(Box::new(empty_package())));
     let alias_ptr = tlab.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
-        name: QualifiedTypeName::local(Name::new("OwnedAlias")),
+        path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("OwnedAlias")),
         type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         definition: RealizedTy::int(),
         owner: package_ptr,
@@ -1568,10 +1566,10 @@ fn future_output_type_heads_are_traced_and_forwarded() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
-    let class_name = QualifiedTypeName::local(Name::new("SpawnOut"));
+    let class_name = bex_vm_types::types::LocalName::new(Vec::new(), Name::new("SpawnOut"));
     let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-        name: bex_vm_types::DeclarationName::Declared(class_name),
+        path: class_name,
         fields: Vec::new(),
         description: None,
         alias: None,
@@ -1757,7 +1755,7 @@ fn class_with_cleanup(name: &str, cleanup: bex_vm_types::HeapPtr) -> Class {
         },
     );
     Class {
-        name: bex_vm_types::DeclarationName::Declared(QualifiedTypeName::local(Name::new(name))),
+        path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new(name)),
         fields: Vec::new(),
         description: None,
         alias: None,

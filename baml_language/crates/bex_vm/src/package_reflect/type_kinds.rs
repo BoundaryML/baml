@@ -60,7 +60,7 @@ impl BexVm {
             let ptr = self.tlab.alloc(Object::Class(Box::new(Class {
                 // The wire qtn is the request's internal linking spelling; the
                 // declaration it authors is anonymous — item name only.
-                name: bex_vm_types::DeclarationName::Anonymous(class.name.name().clone()),
+                path: bex_vm_types::types::LocalName::new(Vec::new(), class.name.name().clone()),
                 fields: Vec::new(),
                 description: class.metadata.description.clone(),
                 alias: class.metadata.alias.clone(),
@@ -82,7 +82,7 @@ impl BexVm {
         for enm in &definition.enums {
             let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
             let ptr = self.tlab.alloc(Object::Enum(Box::new(Enum {
-                name: bex_vm_types::DeclarationName::Anonymous(enm.name.name().clone()),
+                path: bex_vm_types::types::LocalName::new(Vec::new(), enm.name.name().clone()),
                 variants: enm
                     .variants
                     .iter()
@@ -266,7 +266,7 @@ pub(super) fn validate_class_witnesses(
                     DiagnosticId::MissingRequiredInterface,
                     format!(
                         "interface witness for `{}` requires a witness for `{}`",
-                        interface.name.display_name(),
+                        interface.name().display_name(),
                         baml_type::HeadDisplay::head_display_name(&required.name)
                     ),
                 ));
@@ -279,7 +279,7 @@ pub(super) fn validate_class_witnesses(
                     DiagnosticId::TypeMismatch,
                     format!(
                         "interface witness for `{}` is missing required field `{}`",
-                        interface.name.display_name(),
+                        interface.name().display_name(),
                         required.name
                     ),
                 ));
@@ -294,7 +294,7 @@ pub(super) fn validate_class_witnesses(
                     DiagnosticId::TypeMismatch,
                     format!(
                         "interface field `{}.{}` links to missing class field `{}`",
-                        interface.name.display_name(),
+                        interface.name().display_name(),
                         required.name,
                         class_field_name
                     ),
@@ -309,7 +309,7 @@ pub(super) fn validate_class_witnesses(
                             DiagnosticId::TypeMismatch,
                             format!(
                                 "interface field `{}.{}` {message}",
-                                interface.name.display_name(),
+                                interface.name().display_name(),
                                 required.name
                             ),
                         ));
@@ -321,7 +321,7 @@ pub(super) fn validate_class_witnesses(
                     DiagnosticId::TypeMismatch,
                     format!(
                         "interface field `{}.{}` requires `{required_ty}`, but class field `{}` has `{}`",
-                        interface.name.display_name(),
+                        interface.name().display_name(),
                         required.name,
                         class_field_name,
                         class_field.ty
@@ -523,7 +523,7 @@ impl BamlNamespaceClass for PackageReflectImpl {
 
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(class_name)),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(class_name)),
             fields: class_fields,
             description: None,
             alias: None,
@@ -595,13 +595,13 @@ impl BamlNamespaceClass for PackageReflectImpl {
                     vm,
                     format!(
                         "class `{}` has no field `{name}`",
-                        class.name.display_name()
+                        class.name().display_name()
                     ),
                 ));
             };
             (
                 instance.load_field(index),
-                class.name.display_name().to_string(),
+                class.name().display_name().to_string(),
             )
         };
         // The caller's `T`. Erasing a missing one to `unknown` would make the
@@ -726,7 +726,7 @@ impl BamlNamespaceEnum for PackageReflectImpl {
 
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let enum_ptr = vm.tlab.alloc(Object::Enum(Box::new(Enum {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(enum_name)),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(enum_name)),
             variants,
             description: None,
             alias: None,
@@ -787,7 +787,7 @@ impl BamlClassInterfaceImplementation for PackageReflectImpl {
             .iter()
             .any(|field| field.name == field_name)
         {
-            let interface_name = interface.name.display_name().to_string();
+            let interface_name = interface.name().display_name().to_string();
             return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(
                     vm,
@@ -799,7 +799,7 @@ impl BamlClassInterfaceImplementation for PackageReflectImpl {
             ));
         }
         if witness.field_links.contains_key(&field_name) {
-            let interface_name = interface.name.display_name().to_string();
+            let interface_name = interface.name().display_name().to_string();
             return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(
                     vm,
@@ -853,7 +853,7 @@ impl BamlNamespaceInterface for PackageReflectImpl {
             .iter()
             .find(|method| method.default.is_none())
         {
-            let interface_name = interface.name.display_name().to_string();
+            let interface_name = interface.name().display_name().to_string();
             let required_name = required.name.to_string();
             return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(
@@ -2009,8 +2009,7 @@ class Fresh {}
         };
         let mut class = (**class).clone();
         class.type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
-        class.name = bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new("Fresh"));
-        // A minted class belongs to no package.
+        // A minted class belongs to no package, so its name is its path alone.
         class.owner = bex_vm_types::types::Owner::anonymous();
         let tag = class.type_tag;
         TypeHead::new(vm.tlab.alloc(Object::Class(Box::new(class))), tag)

@@ -317,7 +317,7 @@ fn type_pass(
         .enumerate()
         .map(|(k, &enum_loc)| {
             let tag = unit_tag(tables.enum_object(bucket_index(k)));
-            Object::Enum(Box::new(build_enum_object(db, enum_loc, &lowering, tag)))
+            Object::Enum(Box::new(build_enum_object(db, enum_loc, tag)))
         })
         .collect();
     let interfaces = interface_locs

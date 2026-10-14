@@ -1845,9 +1845,7 @@ mod tests {
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
         let compile_time = vec![Object::Enum(Box::new(bex_vm_types::Enum {
-            name: baml_type::DeclarationName::Declared(baml_type::TypeName::local(
-                baml_type::Name::new("E"),
-            )),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("E")),
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
             variants: vec![bex_vm_types::EnumVariant {
                 name: "A".to_string(),
@@ -1890,9 +1888,7 @@ mod tests {
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
         let compile_time = vec![Object::Class(Box::new(bex_vm_types::Class {
-            name: baml_type::DeclarationName::Declared(baml_type::TypeName::local(
-                baml_type::Name::new("C"),
-            )),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("C")),
             fields: vec![bex_vm_types::ClassField {
                 name: "x".to_string(),
                 field_type: baml_type::RuntimeTy::Int,
@@ -2549,7 +2545,7 @@ mod tests {
 
     #[test]
     fn test_gc_traces_instance_class_and_fields() {
-        use baml_type::{Name, TypeName};
+        use baml_type::Name;
         use bex_vm_types::Class;
 
         let heap = BexHeap::new(vec![]);
@@ -2557,7 +2553,7 @@ mod tests {
 
         // Allocate a class (leaf), a string (leaf), then an instance referencing both
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("TestClass"))),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("TestClass")),
             fields: vec![],
             description: None,
             alias: None,
@@ -2592,12 +2588,12 @@ mod tests {
         let Object::Class(c) = (unsafe { inst.class.get() }) else {
             panic!("not class")
         };
-        assert_eq!(c.name.item_name().as_str(), "TestClass");
+        assert_eq!(c.path.name.as_str(), "TestClass");
     }
 
     #[test]
     fn test_gc_traces_variant_enum() {
-        use baml_type::{Name, TypeName};
+        use baml_type::Name;
         use bex_vm_types::Enum;
 
         let heap = BexHeap::new(vec![]);
@@ -2605,7 +2601,7 @@ mod tests {
 
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("Color"))),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Color")),
             variants: vec![],
             description: None,
             alias: None,
@@ -2627,7 +2623,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { v.enm.get() }) else {
             panic!("not enum")
         };
-        assert_eq!(e.name.item_name().as_str(), "Color");
+        assert_eq!(e.path.name.as_str(), "Color");
     }
 
     #[test]
@@ -2800,13 +2796,13 @@ mod tests {
 
     #[test]
     fn test_gc_leaf_class_preserved() {
-        use baml_type::{Name, TypeName};
+        use baml_type::Name;
         use bex_vm_types::Class;
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("MyClass"))),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("MyClass")),
             fields: vec![],
             description: None,
             alias: None,
@@ -2824,20 +2820,20 @@ mod tests {
         let Object::Class(c) = (unsafe { new_roots[0].get() }) else {
             panic!("not class")
         };
-        assert_eq!(c.name.item_name().as_str(), "MyClass");
+        assert_eq!(c.path.name.as_str(), "MyClass");
         assert_eq!(c.type_tag, baml_type::typetag::TypeTag::from_i64(42));
     }
 
     #[test]
     fn test_gc_leaf_enum_preserved() {
-        use baml_type::{Name, TypeName};
+        use baml_type::Name;
         use bex_vm_types::Enum;
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("Status"))),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Status")),
             variants: vec![],
             description: None,
             alias: None,
@@ -2850,7 +2846,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { new_roots[0].get() }) else {
             panic!("not enum")
         };
-        assert_eq!(e.name.item_name().as_str(), "Status");
+        assert_eq!(e.path.name.as_str(), "Status");
     }
 
     #[test]
@@ -2877,10 +2873,10 @@ mod tests {
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let type_name = bex_vm_types::DeclarationName::Anonymous(Name::new("Category"));
+        let type_name = bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Category"));
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
-            name: type_name.clone(),
+            path: type_name.clone(),
             variants: vec![EnumVariant {
                 name: "RED".to_string(),
                 description: Some("warm".to_string()),
@@ -2921,7 +2917,7 @@ mod tests {
         let Object::Enum(enm) = (unsafe { head.ptr().get() }) else {
             panic!("the head did not land on an enum")
         };
-        assert_eq!(enm.name.item_name(), type_name.item_name());
+        assert_eq!(enm.path, type_name);
         assert_eq!(enm.variants[0].name, "RED");
         assert_eq!(enm.variants[0].alias.as_deref(), Some("k7"));
     }
@@ -2934,10 +2930,10 @@ mod tests {
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let type_name = bex_vm_types::DeclarationName::Anonymous(Name::new("VisitNote"));
+        let type_name = bex_vm_types::types::LocalName::new(Vec::new(), Name::new("VisitNote"));
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: type_name.clone(),
+            path: type_name.clone(),
             fields: vec![ClassField {
                 name: "height_cm".to_string(),
                 field_type: bex_vm_types::RuntimeTy::Int,
@@ -2990,7 +2986,7 @@ mod tests {
         let Object::Class(class) = (unsafe { head.ptr().get() }) else {
             panic!("the head did not land on a class")
         };
-        assert_eq!(class.name.item_name(), type_name.item_name());
+        assert_eq!(class.path, type_name);
         assert_eq!(class.fields[0].name, "height_cm");
         assert_eq!(
             class.fields[0].description.as_deref(),
@@ -3331,7 +3327,7 @@ mod tests {
 
     #[test]
     fn test_tracing_and_fixup_consistency_all_variants() {
-        use baml_type::{Name, TypeName};
+        use baml_type::Name;
         use bex_vm_types::{
             Class, Enum,
             types::{Cell, Closure, Instance, Variant},
@@ -3378,7 +3374,7 @@ mod tests {
         // --- Container: Object::Instance ---
         // Instance requires a class pointer.
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("T"))),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("T")),
             fields: vec![],
             description: None,
             alias: None,
@@ -3400,7 +3396,7 @@ mod tests {
         // --- Container: Object::Variant ---
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("E"))),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("E")),
             variants: vec![],
             description: None,
             alias: None,
@@ -3507,7 +3503,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { var.enm.get() }) else {
             panic!("variant.enm not Enum")
         };
-        assert_eq!(e.name.item_name().as_str(), "E");
+        assert_eq!(e.path.name.as_str(), "E");
     }
 
     /// A major collection reports exactly what an independent census of its

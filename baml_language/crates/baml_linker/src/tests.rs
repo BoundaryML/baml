@@ -68,13 +68,11 @@ fn func_with_constants(name: &str, refs: &[usize]) -> Object {
     object
 }
 
-/// A class named `name` in the local package (displays as `user.<name>`),
+/// A class at the path `name` of whichever package pools it,
 /// at class-bucket offset 0 (its own tag field is its operand).
 fn class(name: &str) -> Object {
     Object::Class(Box::new(Class {
-        name: bex_vm_types::DeclarationName::Declared(baml_type::QualifiedTypeName::local(
-            Name::new(name),
-        )),
+        path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new(name)),
         fields: Vec::new(),
         description: None,
         alias: None,
@@ -171,7 +169,7 @@ fn function_names(program: &Program) -> Vec<String> {
         .iter()
         .map(|object| match object {
             Object::Function(function) => function.name.clone(),
-            Object::Class(class) => format!("class {}", class.name),
+            Object::Class(class) => format!("class {}", class.path),
             Object::GenericFunction(generic) => format!("generic@{}", generic.function.raw()),
             other => format!("{other:?}"),
         })
@@ -596,7 +594,7 @@ fn layout_is_package_major_in_set_order() {
     let program = linked(&set);
     assert_eq!(
         function_names(&program),
-        vec!["class user.U", "user.f", "class user.S", "baml.x"]
+        vec!["class U", "user.f", "class S", "baml.x"]
     );
     let callables = program.rendered_callables();
     assert_eq!(callables["user.f"].object, ObjectIndex::from_raw(1));
@@ -621,11 +619,11 @@ fn layout_is_package_major_in_set_order() {
         vec!["user", "baml"]
     );
     // The linker owns the tags: each declaration's is its image index.
-    for (abs, expected) in [(0, "user.U"), (2, "user.S")] {
+    for (abs, expected) in [(0, "U"), (2, "S")] {
         let Object::Class(class) = &program.objects[ObjectIndex::from_raw(abs)] else {
             panic!("object {abs} is not a class")
         };
-        assert_eq!(class.name.to_string(), expected);
+        assert_eq!(class.path.to_string(), expected);
         assert_eq!(class.type_tag, TypeTag::of_static_index(abs));
     }
 }
@@ -1053,7 +1051,7 @@ fn a_tail_reaches_its_own_packages_declarations_as_imports() {
         packages: vec![user],
     })
     .unwrap();
-    assert_eq!(function_names(&program), vec!["class user.Widget", "$init"]);
+    assert_eq!(function_names(&program), vec!["class Widget", "$init"]);
     assert_eq!(
         function(&program, 1).bytecode.instructions[0],
         Instruction::AllocInstance {
@@ -1076,7 +1074,7 @@ fn a_rule_body_aimed_at_a_named_function_is_an_invalid_unit() {
     unit.interfaces
         .push(Object::Interface(Box::new(InterfaceDef {
             structural_default: None,
-            name: baml_type::TypeName::local(Name::new("Greeter")),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Greeter")),
             type_tag: TypeHead::unresolved_operand(ObjectIndex::from_raw(0)).tag(),
             args: Vec::new(),
             requires: Vec::new(),

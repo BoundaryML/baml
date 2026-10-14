@@ -543,10 +543,10 @@ impl BexHeap {
                     return;
                 }
                 let context = match object {
-                    Object::Class(class) => format!("class {}", class.name),
-                    Object::Enum(enm) => format!("enum {}", enm.name),
-                    Object::Interface(interface) => format!("interface {}", interface.name),
-                    Object::TypeAlias(alias) => format!("type alias {}", alias.name),
+                    Object::Class(class) => format!("class {}", class.name()),
+                    Object::Enum(enm) => format!("enum {}", enm.name()),
+                    Object::Interface(interface) => format!("interface {}", interface.name()),
+                    Object::TypeAlias(alias) => format!("type alias {}", alias.name()),
                     Object::Function(function) => format!("function {}", function.name),
                     Object::ImplRule(rule) => format!("impl rule at {:?}", rule.interface_head),
                     other => format!("{:?} object", bex_vm_types::ObjectType::of(other)),

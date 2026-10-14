@@ -811,10 +811,10 @@ fn slot_binding(
 fn anonymous_export(vm: &BexVm, declaration: HeapPtr, path: &DeclPath) -> Option<HeapPtr> {
     let exported = match (vm.get_object(declaration), path) {
         (Object::Class(class), DeclPath::Class(item)) => {
-            item.namespace.is_empty() && item.name == *class.name.item_name()
+            item.namespace.is_empty() && item.name == *class.path.name
         }
         (Object::Enum(enm), DeclPath::Enum(item)) => {
-            item.namespace.is_empty() && item.name == *enm.name.item_name()
+            item.namespace.is_empty() && item.name == *enm.path.name
         }
         _ => false,
     };

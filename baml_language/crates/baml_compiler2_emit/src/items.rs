@@ -94,7 +94,7 @@ pub(crate) fn build_class_object<'db>(
 ) -> Class {
     let class = class_data(db, class_loc);
     let store = &class.type_refs;
-    let wire = cache.wire(&qualify_def(db, Definition::Class(class_loc), &class.name));
+    let head = qualify_def(db, Definition::Class(class_loc), &class.name);
     // Class-level generic params, the binding context that resolves
     // `T`-references in field type expressions to `TyTemplate::TypeArgRef(N)`
     // (and to `TypeVar` rather than `Error` on the erased side). When empty,
@@ -112,7 +112,8 @@ pub(crate) fn build_class_object<'db>(
             .eq(layout::class_fields(db, DeclRef::Source(class_loc))
                 .iter()
                 .map(|(name, _)| name.as_str())),
-        "emit's pooled field order for `{wire}` differs from the declaration's layout"
+        "emit's pooled field order for `{}` differs from the declaration's layout",
+        cache.wire(&head)
     );
     let fields = runtime_fields
         .iter()
@@ -148,7 +149,7 @@ pub(crate) fn build_class_object<'db>(
         })
         .collect();
     Class {
-        name: bex_vm_types::DeclarationName::Declared(wire),
+        path: crate::refs::item_path(&head),
         fields,
         description: class.attrs.schema.description.clone(),
         alias: class.attrs.schema.alias.clone(),
@@ -168,7 +169,6 @@ pub(crate) fn build_class_object<'db>(
 pub(crate) fn build_enum_object<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     enum_loc: EnumLoc<'db>,
-    cache: &RuntimeLowering<'_>,
     type_tag: TypeTag,
 ) -> Enum {
     let enm = enum_data(db, enum_loc);
@@ -185,11 +185,7 @@ pub(crate) fn build_enum_object<'db>(
         })
         .collect();
     Enum {
-        name: bex_vm_types::DeclarationName::Declared(cache.wire(&qualify_def(
-            db,
-            Definition::Enum(enum_loc),
-            &enm.name,
-        ))),
+        path: crate::refs::item_path(&qualify_def(db, Definition::Enum(enum_loc), &enm.name)),
         type_tag,
         variants,
         description: enm.attrs.schema.description.clone(),
@@ -224,18 +220,17 @@ pub(crate) fn build_alias_object<'db>(
         cache.aliases.recursive.contains(&head),
         "only recursive aliases are pooled"
     );
-    let wire = cache.wire(&head);
     let value = cache.convert(&cache.aliases.aliases[&head]);
     let definition = baml_compiler2_mir::RealizedTy::try_from(&value).map_err(|e| {
         LoweringError::Internal(format!(
             "type alias `{}` lowered to a non-realized type (`{}`); aliases cannot be \
              generic, so this is a compiler bug",
-            wire.render_dotted(false),
+            cache.wire(&head).render_dotted(false),
             e.variant,
         ))
     })?;
     Ok(TypeAliasDef {
-        name: wire,
+        path: crate::refs::item_path(&head),
         type_tag,
         definition: anchor.anchor_realized(&definition),
         owner: bex_vm_types::HeapPtr::null(),
@@ -281,7 +276,6 @@ pub(crate) fn build_interface_def(
         errors: RuntimeTy,
     }
 
-    let iface_wire = resolved.wire(iface_tn);
     let interface = interface_data(db, iface_loc);
 
     // Narrow a checked type to a runtime type. `lower_to_runtime` rejects
@@ -291,7 +285,10 @@ pub(crate) fn build_interface_def(
     // positional arguments).
     let to_runtime = |ty: &baml_type::Ty| -> RuntimeTy {
         baml_type::lower_to_runtime(ty, resolved.aliases).unwrap_or_else(|e| {
-            unreachable!("interface `{iface_wire}` declares a non-runtime type: {e:?}")
+            unreachable!(
+                "interface `{}` declares a non-runtime type: {e:?}",
+                resolved.wire(iface_tn)
+            )
         })
     };
     let to_runtime_interface = |constraint: &baml_type::Interface| {
@@ -409,7 +406,7 @@ pub(crate) fn build_interface_def(
     // the caller's lane.
     InterfaceDef {
         type_tag,
-        name: iface_wire,
+        path: crate::refs::item_path(iface_tn),
         structural_default: None,
         args: args
             .into_iter()

@@ -410,7 +410,7 @@ impl TraceSnapshotBuilder {
                     }
                     // A trace is read by a person: the display name, never an
                     // internal identity.
-                    let type_name = Self::copy_str(&class.name.to_string())?;
+                    let type_name = Self::copy_str(&class.name().to_string())?;
                     self.alloc(TraceValue::Instance {
                         type_name,
                         type_args,
@@ -437,7 +437,7 @@ impl TraceSnapshotBuilder {
                         "variant index was outside the enum definition",
                     );
                 };
-                let type_name = Self::copy_str(&enum_.name.to_string())?;
+                let type_name = Self::copy_str(&enum_.name().to_string())?;
                 let variant = Self::copy_str(&variant_def.name)?;
                 self.alloc(TraceValue::Enum { type_name, variant })
             }

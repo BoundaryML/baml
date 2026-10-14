@@ -1162,7 +1162,7 @@ pub(crate) mod tests {
 
         let tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new("Metadata")),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Metadata")),
             fields: Vec::new(),
             description: None,
             alias: None,
@@ -1227,7 +1227,7 @@ pub(crate) mod tests {
 
         let tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new("LiveArg")),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("LiveArg")),
             fields: Vec::new(),
             description: None,
             alias: None,
@@ -1282,9 +1282,10 @@ pub(crate) mod tests {
 
         let tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(
-                "PendingNativeArg",
-            )),
+            path: bex_vm_types::types::LocalName::new(
+                Vec::new(),
+                baml_type::Name::new("PendingNativeArg"),
+            ),
             fields: Vec::new(),
             description: None,
             alias: None,

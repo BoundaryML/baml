@@ -377,6 +377,7 @@ impl UserFunctionCatalog {
     /// Returns an error when a signature names no matching declared type in
     /// the program, rather than erasing that signature to `unknown`.
     pub fn from_program(program: &bex_vm_types::Program) -> Result<Self, EngineError> {
+        let names = program.host_declaration_names();
         Ok(Self {
             functions: program
                 .rendered_callables()
@@ -389,7 +390,7 @@ impl UserFunctionCatalog {
                         {
                             Some(UserFunctionInfo::from_function(&name, func, &mut |ty| {
                                 crate::conversion::to_wire_ty_with(ty, &mut |head| {
-                                    program.type_head_name(head)
+                                    names.type_head_name(head)
                                 })
                             })?)
                         }
@@ -1818,31 +1819,28 @@ impl BexEngine {
         // exact calls together. Plain lowering here would erase specialization.
         bex_vm::prepare_compact_code(&mut compile_time_objects, &bytecode.globals);
 
-        // Pre-compute class and enum indices before moving objects to heap.
-        // This is used for allocating instances/variants from sys-op results.
-        let class_indices: Vec<(String, usize)> = compile_time_objects
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, obj)| {
-                if let Object::Class(class) = obj {
-                    Some((class.name.to_string(), idx))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        let enum_indices: Vec<(String, usize)> = compile_time_objects
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, obj)| {
-                if let Object::Enum(enm) = obj {
-                    Some((enm.name.to_string(), idx))
-                } else {
-                    None
-                }
-            })
-            .collect();
+        // The class and enum indices sys-op results are allocated through, by
+        // name: each package's own tables under the package's display name.
+        // A pooled declaration carries only its path, so the package tables
+        // are what say whose it is.
+        let named =
+            |table: fn(
+                &bex_vm_types::types::ProgramPackage,
+            )
+                -> &IndexMap<bex_vm_types::types::LocalName, bex_vm_types::ObjectIndex>|
+             -> Vec<(String, usize)> {
+                bytecode
+                    .packages
+                    .iter()
+                    .flat_map(|package| {
+                        table(package).iter().map(|(path, object)| {
+                            (path.under(&package.name).to_string(), object.raw())
+                        })
+                    })
+                    .collect()
+            };
+        let class_indices = named(|package| &package.classes);
+        let enum_indices = named(|package| &package.enums);
 
         // Create the unified heap with compile-time objects, additionally
         // allocating the per-package `Object::Package` / `Object::ImplRule`
@@ -2323,7 +2321,7 @@ impl BexEngine {
             let obj = unsafe { ptr.get() };
             if let Object::Class(cls) = obj {
                 defs.insert(
-                    ::sys_types::DefKey::new(cls.type_tag, cls.name.clone()),
+                    ::sys_types::DefKey::new(cls.type_tag, cls.name()),
                     bex_vm::definitions::class_definition(cls),
                 );
             }
@@ -2344,14 +2342,14 @@ impl BexEngine {
                 // Captures retain the VM's complete variant ordering, including
                 // variants omitted from the LLM output-format definition.
                 capture_variants.insert(
-                    ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
+                    ::sys_types::DefKey::new(enm.type_tag, enm.name()),
                     enm.variants
                         .iter()
                         .map(|variant| variant.name.clone())
                         .collect(),
                 );
                 defs.insert(
-                    ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
+                    ::sys_types::DefKey::new(enm.type_tag, enm.name()),
                     bex_vm::definitions::enum_definition(enm),
                 );
             }
@@ -2380,7 +2378,7 @@ impl BexEngine {
                 let Object::Class(class) = vm.get_object(class_ptr) else {
                     continue;
                 };
-                let head = ::sys_types::DefKey::new(class.type_tag, class.name.clone());
+                let head = ::sys_types::DefKey::new(class.type_tag, class.name());
                 overlay
                     .class_definitions
                     .entry(head.clone())
@@ -2394,7 +2392,7 @@ impl BexEngine {
                 let Object::Enum(enm) = vm.get_object(enum_ptr) else {
                     continue;
                 };
-                let head = ::sys_types::DefKey::new(enm.type_tag, enm.name.clone());
+                let head = ::sys_types::DefKey::new(enm.type_tag, enm.name());
                 overlay
                     .enum_definitions
                     .entry(head.clone())
@@ -2457,20 +2455,20 @@ impl BexEngine {
                     continue;
                 };
                 classes.insert(
-                    ::sys_types::DefKey::new(class.type_tag, class.name.clone()),
+                    ::sys_types::DefKey::new(class.type_tag, class.name()),
                     bex_vm::definitions::class_definition(class),
                 );
-                named_owners.insert(class.name.to_string(), handle.clone());
+                named_owners.insert(class.name().to_string(), handle.clone());
             }
             for ptr in package.enums.values().copied() {
                 let Object::Enum(enm) = vm.get_object(ptr) else {
                     continue;
                 };
                 enums.insert(
-                    ::sys_types::DefKey::new(enm.type_tag, enm.name.clone()),
+                    ::sys_types::DefKey::new(enm.type_tag, enm.name()),
                     bex_vm::definitions::enum_definition(enm),
                 );
-                named_owners.insert(enm.name.to_string(), handle.clone());
+                named_owners.insert(enm.name().to_string(), handle.clone());
             }
         }
 
@@ -6672,11 +6670,8 @@ impl BexEngine {
         use bex_vm::reachable::Reached;
         let object = vm.get_object(declaration);
         let (item, witnesses): (baml_type::Name, Vec<bex_vm_types::HeapPtr>) = match object {
-            Object::Class(class) => (
-                class.name.item_name().clone(),
-                class.owner.witnesses().to_vec(),
-            ),
-            Object::Enum(enm) => (enm.name.item_name().clone(), enm.owner.witnesses().to_vec()),
+            Object::Class(class) => (class.path.name.clone(), class.owner.witnesses().to_vec()),
+            Object::Enum(enm) => (enm.path.name.clone(), enm.owner.witnesses().to_vec()),
             _ => unreachable!("a declaration mount is a class or an enum"),
         };
         let mut heads = Vec::new();
@@ -6745,21 +6740,15 @@ impl BexEngine {
         // A declaration's own path where it is defined: the coordinates the
         // compile world reads its row at.
         let path_of = |declaration: bex_vm_types::HeapPtr| -> Result<LocalName, EngineError> {
-            let name = match vm.get_object(declaration) {
-                Object::Class(class) => class.name.overlay_name(),
-                Object::Enum(enm) => enm.name.overlay_name(),
-                Object::Interface(interface) => interface.name.clone(),
-                Object::TypeAlias(alias) => alias.name.clone(),
-                _ => {
-                    return Err(internal(
-                        "a type head points at a non-declaration".to_string(),
-                    ));
-                }
-            };
-            Ok(LocalName {
-                namespace: name.namespace().clone(),
-                name: name.name().clone(),
-            })
+            match vm.get_object(declaration) {
+                Object::Class(class) => Ok(class.path.clone()),
+                Object::Enum(enm) => Ok(enm.path.clone()),
+                Object::Interface(interface) => Ok(interface.path.clone()),
+                Object::TypeAlias(alias) => Ok(alias.path.clone()),
+                _ => Err(internal(
+                    "a type head points at a non-declaration".to_string(),
+                )),
+            }
         };
         // Whether `declaration` is defined by this mount itself: a view's
         // own alias, or the anonymous declaration a mount stands for.

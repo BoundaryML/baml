@@ -373,7 +373,7 @@ function main() -> int { 0 }
     let iface = (*program.objects)
         .iter()
         .find_map(|obj| match obj {
-            bex_vm_types::Object::Interface(i) if i.name.name().as_str() == "Shelf" => Some(i),
+            bex_vm_types::Object::Interface(i) if i.path.name.as_str() == "Shelf" => Some(i),
             _ => None,
         })
         .expect("Shelf interface object should be emitted");
@@ -439,7 +439,7 @@ function main() -> int { 0 }
     let class = (*program.objects)
         .iter()
         .find_map(|obj| match obj {
-            bex_vm_types::Object::Class(c) if c.name.item_name().as_str() == "Book" => Some(c),
+            bex_vm_types::Object::Class(c) if c.path.name.as_str() == "Book" => Some(c),
             _ => None,
         })
         .expect("Book class object should be emitted");

@@ -137,26 +137,35 @@ impl Program {
         Self::default()
     }
 
-    /// Name a compiled type head without binding it to a heap.
-    ///
-    /// Like the loader, resolve the tag's static index only when the pooled
-    /// declaration carries that exact tag. Never dereference a head's pointer.
-    ///
-    /// # Errors
-    ///
-    /// [`crate::UnnameableHead`] if the tag does not identify a named declaration
-    /// in this program.
-    pub fn type_head_name(
-        &self,
-        head: &crate::TypeHead,
-    ) -> Result<baml_type::TypeName, crate::UnnameableHead> {
-        let tag = head.tag();
-        tag.static_index()
-            .and_then(|index| self.objects.get(index))
-            .filter(|object| object.declaration_tag() == Some(tag))
-            .and_then(Object::declaration_name)
-            .cloned()
-            .ok_or(crate::UnnameableHead(tag))
+    /// The names a host can call the program's declarations by, built once
+    /// from the package tables: every pooled declaration a package the root
+    /// reaches lists, spelled as the ROOT reaches that package — the same
+    /// view [`Self::rendered_callables`] gives a function, and the only one a
+    /// host has. A pooled declaration carries its path alone; which package
+    /// declares it, and what the root calls that package, is read here.
+    pub fn host_declaration_names(&self) -> HostDeclarationNames<'_> {
+        let mut by_object = HashMap::new();
+        for (spelling, package) in self.root_viewpoint() {
+            for (path, object) in [
+                &package.classes,
+                &package.enums,
+                &package.interfaces,
+                &package.type_aliases,
+            ]
+            .into_iter()
+            .flat_map(IndexMap::iter)
+            {
+                // The root first, then its edges: the first spelling is the
+                // nearest one, as in `rendered_callables`.
+                by_object
+                    .entry(object.raw())
+                    .or_insert_with(|| path.under(spelling));
+            }
+        }
+        HostDeclarationNames {
+            program: self,
+            by_object,
+        }
     }
 
     /// Check the executable against the format's laws — every index within
@@ -498,22 +507,16 @@ impl Program {
     pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TaggedTypeName, crate::RealizedTy> {
         let mut out = IndexMap::new();
         for package in &self.packages {
-            let pkg_name = &package.name;
             for (local, idx) in &package.type_aliases {
                 let Some(Object::TypeAlias(alias)) = self.objects.get(idx.raw()) else {
                     // An index that does not resolve to an alias means the pool
                     // and the package map disagree — skip rather than guess.
                     continue;
                 };
-                let qtn = baml_type::TypeName::new(
-                    pkg_name.clone(),
-                    local.namespace.clone(),
-                    local.name.clone(),
-                );
                 out.insert(
                     baml_type::TaggedTypeName::new(
                         alias.type_tag,
-                        baml_type::DeclarationName::Declared(qtn),
+                        baml_type::DeclarationName::Declared(local.under(&package.name)),
                     ),
                     alias.definition.clone(),
                 );
@@ -590,6 +593,48 @@ impl Program {
             }
         }
         out
+    }
+}
+
+/// The host-facing names of a program's declarations, by pool index. See
+/// [`Program::host_declaration_names`].
+pub struct HostDeclarationNames<'a> {
+    program: &'a Program,
+    by_object: HashMap<usize, baml_type::TypeName>,
+}
+
+impl HostDeclarationNames<'_> {
+    /// Name a compiled type head without binding it to a heap: the pooled
+    /// declaration the tag's static index names, as the root spells it.
+    ///
+    /// Like the loader, the static index is trusted only when the pooled
+    /// declaration carries that exact tag. Never dereferences a head's
+    /// pointer.
+    ///
+    /// # Errors
+    ///
+    /// [`crate::UnnameableHead`] if the tag does not identify a declaration of
+    /// this program's pool, or if no package the root reaches declares it (a
+    /// package reached only transitively has no host-facing name).
+    pub fn type_head_name(
+        &self,
+        head: &crate::TypeHead,
+    ) -> Result<baml_type::TypeName, crate::UnnameableHead> {
+        let tag = head.tag();
+        let index = tag
+            .static_index()
+            .filter(|index| {
+                self.program
+                    .objects
+                    .get(*index)
+                    .and_then(Object::declaration_tag)
+                    == Some(tag)
+            })
+            .ok_or(crate::UnnameableHead(tag))?;
+        self.by_object
+            .get(&index)
+            .cloned()
+            .ok_or(crate::UnnameableHead(tag))
     }
 }
 
@@ -860,23 +905,41 @@ mod tests {
 
     #[test]
     fn compiled_head_names_require_a_matching_named_declaration() {
+        use baml_base::Name;
         use baml_type::{TypeName, typetag::TypeTag};
 
-        use crate::{DeclarationName, Enum, Object, TypeHead, types::Owner};
+        use crate::{
+            Enum, Object, TypeHead,
+            types::{LocalName, Owner, ProgramPackage},
+        };
 
         let mut program = Program::default();
+        program.packages.push(ProgramPackage {
+            name: Name::new("user"),
+            ..ProgramPackage::default()
+        });
         let tag = TypeTag::of_static_index(0);
         let head = TypeHead::unresolved(tag);
-        assert!(program.type_head_name(&head).is_err());
+        assert!(
+            program
+                .host_declaration_names()
+                .type_head_name(&head)
+                .is_err()
+        );
 
         program
             .objects
             .push(Object::String("not a declaration".into()));
-        assert!(program.type_head_name(&head).is_err());
+        assert!(
+            program
+                .host_declaration_names()
+                .type_head_name(&head)
+                .is_err()
+        );
 
-        let name = TypeName::from_dotted_path("user.Status");
+        let path = LocalName::new(Vec::new(), Name::new("Status"));
         program.objects[crate::ObjectIndex::from_raw(0)] = Object::Enum(Box::new(Enum {
-            name: DeclarationName::Declared(name.clone()),
+            path: path.clone(),
             type_tag: TypeTag::of_static_index(1),
             variants: vec![],
             description: None,
@@ -885,20 +948,38 @@ mod tests {
             other: indexmap::IndexMap::new(),
             owner: Owner::anonymous(),
         }));
-        assert!(program.type_head_name(&head).is_err());
+        assert!(
+            program
+                .host_declaration_names()
+                .type_head_name(&head)
+                .is_err()
+        );
 
+        // The pool knows the declaration; only a package the root reaches
+        // can say what it is called.
         program.objects[crate::ObjectIndex::from_raw(0)].assign_declaration_tag(tag);
-        assert_eq!(program.type_head_name(&head), Ok(name));
+        assert!(
+            program
+                .host_declaration_names()
+                .type_head_name(&head)
+                .is_err()
+        );
+        program.packages[0]
+            .enums
+            .insert(path, crate::ObjectIndex::from_raw(0));
+        assert_eq!(
+            program.host_declaration_names().type_head_name(&head),
+            Ok(TypeName::from_dotted_path("user.Status"))
+        );
         assert!(!head.is_resolved());
         assert!(head.to_name().is_err());
 
-        let Object::Enum(enm) = &mut program.objects[crate::ObjectIndex::from_raw(0)] else {
-            unreachable!()
-        };
-        enm.name = DeclarationName::Anonymous(baml_base::Name::new("Status"));
-        assert!(program.type_head_name(&head).is_err());
+        // A declaration no package table lists has no host-facing name.
+        program.packages[0].enums.clear();
+        let names = program.host_declaration_names();
+        assert!(names.type_head_name(&head).is_err());
         assert!(
-            program
+            names
                 .type_head_name(&TypeHead::unresolved(TypeTag::fresh_dynamic()))
                 .is_err()
         );

@@ -621,9 +621,9 @@ pub(super) fn render_to_sink(
             let (class_name, paired) = match vm.get_object(inst.class) {
                 Object::Class(class) => {
                     let name = if state.qualified_class_names {
-                        class.name.to_string()
+                        class.name().to_string()
                     } else {
-                        class.name.item_name().to_string()
+                        class.path.name.to_string()
                     };
                     let fields = inst
                         .fields

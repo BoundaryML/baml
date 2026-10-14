@@ -13,7 +13,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_type::{DeclarationName, Literal, typetag::TypeTag};
+use baml_type::{Literal, typetag::TypeTag};
 use bex_heap::TlabHolder;
 use bex_sap::{
     CompiledSapModel,
@@ -417,7 +417,7 @@ fn reached_class(vm: &BexVm, head: TypeHead) -> &Class {
 /// failure about one of its fields names it, on every path.
 fn model_name(class: &Class, args: &[RealizedTy]) -> NamedTy {
     NamedTy::class(
-        DefKey::new(class.type_tag, class.name.clone()),
+        DefKey::new(class.type_tag, class.name()),
         args.iter().map(definitions::lane_realized_ty),
     )
 }
@@ -457,7 +457,7 @@ fn build_model(
             unreachable!("an enum type's head is an enum: {head:?}")
         };
         enums.insert(
-            DefKey::new(enm.type_tag, enm.name.clone()),
+            DefKey::new(enm.type_tag, enm.name()),
             definitions::enum_definition(enm),
         );
     }
@@ -466,10 +466,7 @@ fn build_model(
             unreachable!("a type alias's head is a type alias: {head:?}")
         };
         aliases.insert(
-            DefKey::new(
-                alias.type_tag,
-                DeclarationName::Declared(alias.name.clone()),
-            ),
+            DefKey::new(alias.type_tag, alias.name()),
             definitions::lane_realized_ty(&alias.definition),
         );
     }

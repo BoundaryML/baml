@@ -5,8 +5,9 @@ use crate::{HeapPtr, ObjectIndex};
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct InterfaceDef {
-    // Signature
-    pub name: baml_type::TypeName,
+    /// Where this interface is declared inside its package: its namespace
+    /// path and item name. All of its name it carries — see [`Self::name`].
+    pub path: super::LocalName,
     /// The implicit implementation shared by all types without an explicit impl.
     pub structural_default: Option<StructuralDefault>,
 
@@ -38,6 +39,18 @@ pub struct InterfaceDef {
     /// GC edge, never serialized.
     #[borsh(skip)]
     pub owner: HeapPtr,
+}
+
+impl InterfaceDef {
+    /// How this interface is named: its path under its package's display
+    /// name. Display and boundary spelling only — see
+    /// [`declaration_name`](super::declaration_name). An interface
+    /// always belongs to a package, so the name is declared once it is
+    /// loaded; before the loader places it, it is the path alone.
+    #[must_use]
+    pub fn name(&self) -> crate::DeclarationName {
+        super::declaration_name((!self.owner.is_null()).then_some(self.owner), &self.path)
+    }
 }
 
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]

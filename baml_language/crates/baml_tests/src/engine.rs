@@ -178,16 +178,40 @@ pub fn bound_pool(program: &Program) -> bex_heap::BexHeap {
 /// in the program that names the declaration carries exactly this tag, so a
 /// type position is checked by identity rather than by rendered name.
 pub fn declared_type_tag(program: &Program, fq_name: &str) -> Option<baml_type::typetag::TypeTag> {
-    program.objects.iter().find_map(|object| {
-        let (name, tag) = match object {
-            Object::Class(class) => (class.name.declared()?.render_dotted(false), class.type_tag),
-            Object::Enum(enm) => (enm.name.declared()?.render_dotted(false), enm.type_tag),
-            Object::Interface(iface) => (iface.name.render_dotted(false), iface.type_tag),
-            Object::TypeAlias(alias) => (alias.name.render_dotted(false), alias.type_tag),
-            _ => return None,
-        };
-        (name == fq_name).then_some(tag)
+    // A pooled declaration carries only its path; the package tables say
+    // which package declares it, and so what it is called.
+    program.packages.iter().find_map(|package| {
+        [
+            &package.classes,
+            &package.enums,
+            &package.interfaces,
+            &package.type_aliases,
+        ]
+        .into_iter()
+        .flatten()
+        .find(|(path, _)| path.under(&package.name).render_dotted(false) == fq_name)
+        .and_then(|(_, object)| program.objects[*object].declaration_tag())
     })
+}
+
+/// Every class `program` declares at the root namespace under the item name
+/// `name`, as `(display name, tag)` in package order. Read from the package
+/// tables: a pooled class carries only its path, and its package's label is
+/// what it renders under — `Point` in a package labelled `user`, `lib.Point`
+/// in one labelled `lib`. Display names, so two entries may read alike.
+pub fn classes_named(program: &Program, name: &str) -> Vec<(String, baml_type::typetag::TypeTag)> {
+    let path = bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name));
+    program
+        .packages
+        .iter()
+        .filter_map(|package| {
+            let object = package.classes.get(&path)?;
+            Some((
+                path.under(&package.name).display_name().to_string(),
+                program.objects[*object].declaration_tag()?,
+            ))
+        })
+        .collect()
 }
 
 /// Read the function at pool index `idx` out of a heap built by

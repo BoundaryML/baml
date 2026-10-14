@@ -43,20 +43,6 @@ fn two_workspaces(first: &str, second: &str) -> (ProjectDatabase, SourceRoot, So
     (db, a, b)
 }
 
-/// The class objects named `name` in `program`, as `(display name, type tag)`.
-fn classes_named(program: &Program, name: &str) -> Vec<(String, bex_vm_types::type_tags::TypeTag)> {
-    program
-        .objects
-        .iter()
-        .filter_map(|object| match object {
-            Object::Class(class) if class.name.item_name().as_str() == name => {
-                Some((class.name.display_name().to_string(), class.type_tag))
-            }
-            _ => None,
-        })
-        .collect()
-}
-
 /// Every object of `program`, serialized — objects carry no equality of
 /// their own, so byte identity is the comparison.
 fn object_bytes(program: &Program) -> Vec<Vec<u8>> {
@@ -129,8 +115,8 @@ fn same_named_declarations_in_two_roots_emit_as_two_programs() {
     let program_a = compile_program(&db, a, OptLevel::Two).expect("root a emits alone");
     let program_b = compile_program(&db, b, OptLevel::Two).expect("root b emits alone");
     // Exactly one `Point` per program, the workspace's own.
-    let points_a = classes_named(&program_a, "Point");
-    let points_b = classes_named(&program_b, "Point");
+    let points_a = baml_tests::engine::classes_named(&program_a, "Point");
+    let points_b = baml_tests::engine::classes_named(&program_b, "Point");
     let [(name_a, tag_a)] = points_a.as_slice() else {
         panic!("program a holds one Point: {points_a:?}");
     };

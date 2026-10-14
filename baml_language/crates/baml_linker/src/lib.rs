@@ -102,11 +102,11 @@ impl LinkPackageId {
 /// the other packages of the set.
 #[derive(Clone, Debug)]
 pub struct LinkPackage<'a> {
-    /// The package's display spelling: `ProgramPackage::name`. Display data —
-    /// a package's link identity is its [`LinkPackageId`], and its executable
-    /// identity its position in
-    /// [`Program::packages`](bex_vm_types::Program::packages). Names live on
-    /// edges, so two packages may share a spelling.
+    /// The package's display label: `ProgramPackage::name`. Lossy display
+    /// only, neither unique nor identifying — a package's link identity is
+    /// its [`LinkPackageId`], and its executable identity its position in
+    /// [`Program::packages`](bex_vm_types::Program::packages). Names that
+    /// reach a package live on edges, so two packages may carry this one.
     pub name: Name,
     /// The package's edge table: every direct dependency and prelude package
     /// by the name this package reaches it under. Each name reaches one

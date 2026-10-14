@@ -19,6 +19,15 @@ impl LocalName {
     pub fn new(namespace: Vec<Name>, name: Name) -> Self {
         Self { namespace, name }
     }
+
+    /// This path under a package labelled `package`: the rendering
+    /// `package.ns.Item`. The one place a path and a package's display label
+    /// are put together. What comes out is for display, as the label is
+    /// ([`Package::name`]): two declarations may render alike.
+    #[must_use]
+    pub fn under(&self, package: &Name) -> baml_type::TypeName {
+        baml_type::TypeName::new(package.clone(), self.namespace.clone(), self.name.clone())
+    }
 }
 
 /// Dotted, package-relative: `ns.sub.Item`.
@@ -41,11 +50,32 @@ impl std::fmt::Display for LocalName {
 /// of a static package, and the loader allocates this from it.
 #[derive(Debug, Clone)]
 pub struct Package {
-    /// The package's display spelling: what traces and the reflection surface
-    /// print it under, and the name it spells itself by from its own
-    /// viewpoint ([`Self::accessible`]) — the reserved `user` for an unnamed
-    /// root, which is how a host addresses it. Display data: a package's
-    /// identity is its pointer.
+    /// A display label for the package: the name its manifest (`baml.toml`)
+    /// declares, or a stand-in when it declares none.
+    ///
+    /// For lossy display only: a trace, a diagnostic, a declaration's
+    /// rendered name. It is neither unique nor identifying. A heap holds
+    /// many packages, any number of which carry the same label — every
+    /// runtime-compiled package is labelled `user`, as an unnamed one is. A
+    /// package's identity is its pointer. Do not key or compare by this.
+    ///
+    /// It promises nothing about how the package is addressed. A package
+    /// refers to itself as `root`, and another package reaches it under the
+    /// name on its own edge ([`Self::edges`]). Whether the label also
+    /// reaches the package — from inside it, or from a host — is not
+    /// decided either way, so new code must not rely on it and must not
+    /// rely on its absence.
+    //
+    // NOTE: that question is live because the label does reach the package
+    // today. `accessible` answers it with the package itself, which is how
+    // a host's name for one of the root's own declarations (`user.Foo`)
+    // resolves, and `Program::rendered_callables` lists the root's callables
+    // under it.
+    //
+    // BUG: a declaration's rendered name (`declaration_name`) still crosses
+    // the host boundary as a wire name, and the engine's class and enum
+    // tables are keyed by it — so two packages carrying one label collide
+    // there.
     pub name: Name,
     /// The package's edge table: every package it reaches, by the name it
     /// reaches it under — its declared dependencies, then the language
@@ -198,6 +228,32 @@ impl Slots {
 }
 
 impl Package {
+    /// A package labelled `name` that declares, reaches and runs nothing,
+    /// with tables of its own.
+    #[must_use]
+    pub fn empty(name: Name) -> Self {
+        Self {
+            name,
+            edges: IndexMap::new(),
+            classes: IndexMap::new(),
+            enums: IndexMap::new(),
+            interfaces: IndexMap::new(),
+            impl_rules: IndexMap::new(),
+            type_aliases: IndexMap::new(),
+            globals: IndexMap::new(),
+            slots: Slots::Own {
+                cells: Box::new([]),
+                initialized: true,
+            },
+            objects: Objects::Own(Box::new([])),
+            surface: ExportSurface::Projected,
+            init: None,
+            test_init: None,
+            diagnostics: Vec::new(),
+            session: None,
+        }
+    }
+
     /// The package `own` — this package, by its own pointer — spells as
     /// `name`: itself by its own name, else the package its edge `name`
     /// reaches. Anything else is invisible from here; the runtime mirror of
@@ -266,11 +322,11 @@ pub struct SessionState {
 /// functions are carried as pooled objects referenced by index.
 #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 pub struct ProgramPackage {
-    /// The package's display spelling, and the name it spells itself by from
-    /// its own viewpoint. Display data: the package's identity in the
-    /// executable is its position in
-    /// [`Program::packages`](crate::Program::packages), and nothing resolves
-    /// a spelling program-wide — two packages may share one.
+    /// The package's display label — [`Package::name`], and under the same
+    /// contract: lossy display only, neither unique nor identifying. The
+    /// package's identity in the executable is its position in
+    /// [`Program::packages`](crate::Program::packages), and two packages may
+    /// carry the same label.
     pub name: Name,
     /// The package's edge table: every package it reaches, by the name it
     /// reaches it under, as ordinals into

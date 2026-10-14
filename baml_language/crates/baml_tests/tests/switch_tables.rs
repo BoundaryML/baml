@@ -112,7 +112,7 @@ fn a_match_wider_than_the_hash_search_dispatches_through_sorted_keys() {
             .objects
             .iter()
             .find_map(|object| match object {
-                Object::Class(class) if class.name.item_name().as_str() == declared => {
+                Object::Class(class) if class.path.name.as_str() == declared => {
                     Some(class.type_tag)
                 }
                 _ => None,
