@@ -1354,11 +1354,9 @@ test "4 reject pdf output" {
     assert.is_true(type_rejected(reflect.Type.of<pdf>()))
 }
 
-test "4 reject image input" {
+test "4 reject non-PNG/JPEG image input" {
     assert.is_true(
-        rejected_before_http(
-            DescribeScreenshot@spec(baml.media.Image.from_url("https://example.invalid/shot.png", null)),
-        ),
+        rejected_before_http(DescribeScreenshot@spec(baml.media.Image.from_base64("UklGRg==", "image/webp"))),
     )
 }
 
@@ -1410,4 +1408,23 @@ function case_5_skipped_variant() -> bool {
 
 test "5 skipped variant is excluded from criteria" {
     assert.is_true(case_5_skipped_variant())
+}
+
+// ─── 6 image input becomes a referenced asset ────────────────────────────────
+
+function case_6_image_request() -> bool {
+    let req = DescribeScreenshot@build_request(baml.media.Image.from_base64("iVBORw0KGgo=", "image/png"));
+    assert.equal(req.headers.get("typesafe-danger-zone-images"), "true");
+    let expected: map<string, baml.json.json> = {
+        "model": "jev-latest",
+        "state": "Which team should handle this? <baml-image-0>",
+        "questions": { "result": choice("Which team should handle this ticket?", team_criteria()) },
+        "assets": { "<baml-image-0>": { "type": "image", "format": "png", "data_base64": "iVBORw0KGgo=" } },
+    };
+    assert.equal(baml.json.parse(req.body), expected);
+    true
+}
+
+test "6 image input becomes a referenced asset" {
+    assert.is_true(case_6_image_request())
 }
