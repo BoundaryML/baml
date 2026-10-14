@@ -818,11 +818,15 @@ fn char_byte_conversions_match_std_oracle() {
     let slice_text = &text[40..text.len() - 3];
     let mixed_slice = flat.byte_slice(ascii.len() + 3..text.len());
     let mixed_slice_text = &text[ascii.len() + 3..];
-    let cases: [(&str, &BexStr); 4] = [
+    let short = "ab é 配信 🪙 xyz";
+    let inline = BexStr::from(short);
+    assert!(matches!(inline, BexStr::Inline { .. }));
+    let cases: [(&str, &BexStr); 5] = [
         (&text, &flat),
         (&text, &concat),
         (slice_text, &slice),
         (mixed_slice_text, &mixed_slice),
+        (short, &inline),
     ];
     for (s, bex) in cases {
         let count = s.chars().count();

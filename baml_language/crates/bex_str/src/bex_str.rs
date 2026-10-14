@@ -151,7 +151,7 @@ impl BexStr {
     /// rope, however deep repeated appends have made it.
     pub fn char_count(&self) -> usize {
         match self {
-            BexStr::Inline { len, data } => ascii_prefix_and_char_count(&data[..*len as usize]).1,
+            BexStr::Inline { len, data } => bytecount::num_chars(&data[..*len as usize]),
             BexStr::Flat(f) => f.char_count as usize,
             BexStr::Slice { char_count, .. } => *char_count as usize,
             BexStr::Concat(c) => c.char_count as usize,
@@ -175,6 +175,15 @@ impl BexStr {
                 ascii_prefix_len, ..
             } => *ascii_prefix_len as usize,
             BexStr::Concat(c) => c.ascii_prefix_len as usize,
+        }
+    }
+
+    /// `(ascii_prefix_len(), char_count())`, with a single scan for an
+    /// inline string.
+    fn ascii_prefix_and_char_count(&self) -> (usize, usize) {
+        match self {
+            BexStr::Inline { len, data } => ascii_prefix_and_char_count(&data[..*len as usize]),
+            _ => (self.ascii_prefix_len(), self.char_count()),
         }
     }
 
@@ -320,9 +329,15 @@ impl BexStr {
     }
 
     /// `char_to_byte(n)`, given that char `known.0` starts at byte `known.1`
-    /// (`known.0 <= n`): the scan starts from whichever of that point and the
-    /// end of the ASCII prefix is further along.
+    /// (`known.0 <= n`; past the end, `known.1` may be `len()`): the scan
+    /// starts from whichever of that point and the end of the ASCII prefix is
+    /// further along.
     fn char_to_byte_from(&self, known: (usize, usize), n: usize) -> usize {
+        // At most 54 bytes: scanning directly beats finding the prefix first.
+        if let BexStr::Inline { len, data } = self {
+            let bytes = &data[..*len as usize];
+            return known.1 + scan_char_to_byte(&bytes[known.1..], n - known.0);
+        }
         let prefix = self.ascii_prefix_len();
         if n <= prefix {
             return n;
@@ -343,6 +358,10 @@ impl BexStr {
     /// (`known.0 <= b`), counting from whichever of that point and the end of
     /// the ASCII prefix is further along.
     fn byte_to_char_from(&self, known: (usize, usize), b: usize) -> usize {
+        if let BexStr::Inline { len, data } = self {
+            let bytes = &data[..*len as usize];
+            return known.1 + bytecount::num_chars(&bytes[known.0..b.min(bytes.len())]);
+        }
         let prefix = self.ascii_prefix_len();
         if b <= prefix {
             return b;
@@ -361,9 +380,7 @@ impl BexStr {
 
     /// The char at index `n`, or `None` if `n >= char_count()`.
     pub fn char_at(&self, n: usize) -> Option<char> {
-        if n >= self.char_count() {
-            return None;
-        }
+        // Past the end, `b == len()` and the suffix is empty.
         let b = self.char_to_byte(n);
         self.as_str()[b..].chars().next()
     }
@@ -371,14 +388,16 @@ impl BexStr {
     /// Substring by char range. Clamps both ends to `char_count()` (and `end`
     /// to at least `start`), so it never panics.
     pub fn char_slice(&self, range: Range<usize>) -> BexStr {
-        let char_len = self.char_count();
-        let start = range.start.min(char_len);
-        let end = range.end.min(char_len).max(start);
-        if start == end {
-            return BexStr::empty();
-        }
-        let byte_start = self.char_to_byte(start);
-        let byte_end = self.char_to_byte_from((start, byte_start), end);
+        // `char_to_byte` maps every index past the end to `len()`, which is
+        // the clamp; `end` is scanned onward from `start`.
+        let byte_start = self.char_to_byte(range.start);
+        let end = range.end.max(range.start);
+        let byte_end = if end == range.start + 1 && byte_start < self.len() {
+            // One char (`at`): its lead byte gives its width.
+            byte_start + utf8_char_width(self.as_bytes()[byte_start])
+        } else {
+            self.char_to_byte_from((range.start, byte_start), end)
+        };
         self.byte_slice(byte_start..byte_end)
     }
 
@@ -435,10 +454,11 @@ impl BexStr {
             };
         }
 
-        let char_count = (left.char_count() + right.char_count()) as u64;
-        let left_prefix = left.ascii_prefix_len();
+        let (left_prefix, left_chars) = left.ascii_prefix_and_char_count();
+        let (right_prefix, right_chars) = right.ascii_prefix_and_char_count();
+        let char_count = (left_chars + right_chars) as u64;
         let ascii_prefix_len = if left_prefix == left.len() {
-            left.len() + right.ascii_prefix_len()
+            left.len() + right_prefix
         } else {
             left_prefix
         } as u64;
@@ -829,12 +849,25 @@ fn scan_char_to_byte(bytes: &[u8], n: usize) -> usize {
 
 /// Byte offset of the first non-ASCII byte in `bytes`, or `bytes.len()`.
 fn ascii_prefix_len(bytes: &[u8]) -> usize {
-    // Skip whole ASCII chunks with std's word-at-a-time `is_ascii`, then find
-    // the exact byte within the first chunk that isn't.
-    const CHUNK: usize = 32;
+    // OR whole 64-byte blocks, which LLVM vectorizes, until one has a high
+    // bit set; then find the exact byte a word at a time.
+    const BLOCK: usize = 64;
     let mut i = 0;
-    while i + CHUNK <= bytes.len() && bytes[i..i + CHUNK].is_ascii() {
-        i += CHUNK;
+    for block in bytes.as_chunks::<BLOCK>().0 {
+        if block.iter().fold(0, |acc, &b| acc | b) >= 0x80 {
+            break;
+        }
+        i += BLOCK;
+    }
+    const HIGH_BITS: u64 = 0x8080_8080_8080_8080;
+    while i + 8 <= bytes.len() {
+        let high = u64::from_le_bytes(bytes[i..i + 8].try_into().unwrap()) & HIGH_BITS;
+        if high != 0 {
+            // The lowest set high bit of a little-endian word is its first
+            // non-ASCII byte.
+            return i + (high.trailing_zeros() / 8) as usize;
+        }
+        i += 8;
     }
     bytes[i..]
         .iter()
@@ -842,11 +875,29 @@ fn ascii_prefix_len(bytes: &[u8]) -> usize {
         .map_or(bytes.len(), |p| i + p)
 }
 
-/// `(ascii_prefix_len, char_count)` of `bytes` in one pass: the prefix's
-/// chars are its bytes, so only the rest is counted.
+/// `(ascii_prefix_len, char_count)` of `bytes`. Counts first: when every byte
+/// starts a char, the whole string is ASCII and needs no second scan, so
+/// ASCII strings cost exactly one (vectorized) count.
 fn ascii_prefix_and_char_count(bytes: &[u8]) -> (usize, usize) {
-    let prefix = ascii_prefix_len(bytes);
-    (prefix, prefix + bytecount::num_chars(&bytes[prefix..]))
+    let char_count = bytecount::num_chars(bytes);
+    if char_count == bytes.len() {
+        (char_count, char_count)
+    } else {
+        (ascii_prefix_len(bytes), char_count)
+    }
+}
+
+/// Byte width of the UTF-8 char whose lead byte is `lead`.
+fn utf8_char_width(lead: u8) -> usize {
+    if lead < 0x80 {
+        1
+    } else if lead < 0xE0 {
+        2
+    } else if lead < 0xF0 {
+        3
+    } else {
+        4
+    }
 }
 
 impl fmt::Debug for BexStr {
