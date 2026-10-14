@@ -353,12 +353,12 @@ fn prepare_runtime_from_files(
     // unavailable on wasm32-unknown-unknown. WASM therefore uses an equivalent
     // timestamp-free root marker; source contents are supplied separately.
     let vfs_root = source_vfs_root();
-    let project_root =
-        vfs_root
-            .join(root_path)
-            .map_err(|error| bex_project::RuntimeError::InvalidArgument {
-                name: format!("root_path: {error}"),
-            })?;
+    // VFS rejects trailing slashes even though they name the same project directory.
+    let project_root = vfs_root
+        .join(root_path.trim_end_matches('/'))
+        .map_err(|error| bex_project::RuntimeError::InvalidArgument {
+            name: format!("root_path: {error}"),
+        })?;
 
     let mut files = HashMap::with_capacity(src_files.len());
     for (name, contents) in src_files {
