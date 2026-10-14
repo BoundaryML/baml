@@ -13,9 +13,18 @@ class Leaf {
     options: ChoiceOption[],
 }
 
+// One image sent in the request's `assets` map. JEV substitutes the image
+// wherever `ref` appears in the state or instructions text.
+class Asset {
+    ref: string,
+    format: string,
+    data_base64: string,
+}
+
 class Plan {
     state: string,
     leaves: Leaf[],
+    assets: Asset[],
 }
 
 function reject(detail: string) -> ai.errors.InvalidRequest {
@@ -199,24 +208,100 @@ function collect(
     ];
 }
 
-function text_blocks(blocks: ai.content.Block[]) -> string {
-    for (let block in blocks) {
-        if let media: ai.content.Media = block {
-            throw reject(`JEV does not support ${media.kind()} input`)
-        }
-    }
-    ai.content.text(blocks)
+// JEV matches asset references as plain text anywhere in the request. The
+// closing `>` keeps `<baml-image-1>` from being a prefix of `<baml-image-10>`.
+function image_ref(index: int) -> string {
+    `<baml-image-${index}>`
 }
 
-function plan(input: ai.ModelTurnInput) -> Plan {
+function prompt_text(text: string) -> string {
+    if (text.includes("<baml-image-")) {
+        throw reject("JEV prompt text cannot contain `<baml-image-`, which marks image references")
+    }
+    text
+}
+
+function image_format(mime: string) -> string {
+    match (mime) {
+        "image/png" => "png",
+        "image/jpeg" | "image/jpg" => "jpg",
+        _ => throw reject(`JEV accepts PNG or JPEG images, not "${mime}"`),
+    }
+}
+
+// Returns the reference that stands for `media` in text. An image that
+// appears more than once is uploaded once and referenced at each place.
+function attach(media: ai.content.Media, assets: Asset[], preview: bool) -> string {
+    let resolved = match (media.media) {
+        let image: baml.media.Image => {
+            if (preview) {
+                ai.wire.resolve_media_preview(image)
+            } else {
+                ai.wire.resolve_media(image, true)
+            }
+        },
+        _ => throw reject(`JEV does not support ${media.kind()} input`),
+    };
+    let data: string = resolved.base64 else {
+        if (preview) {
+            throw ai.errors.PreviewUnsupported {
+                provider: "typesafeai",
+                detail: `JEV request preview cannot download image URL ${resolved.url ?? ""}`,
+            }
+        }
+        throw reject(`JEV cannot fetch image URL ${resolved.url ?? ""}`)
+    };
+    for (let asset in assets) {
+        if (asset.data_base64 == data) {
+            return asset.ref;
+        }
+    }
+    let ref = image_ref(assets.length());
+    assets.push(Asset { ref: ref, format: image_format(resolved.mime_type), data_base64: data });
+    ref
+}
+
+// Prompt rendering trims the text around a media part, so a space separates
+// each reference from the text next to it.
+function lower(blocks: ai.content.Block[], assets: Asset[], preview: bool) -> string {
+    let out = "";
+    let after_media = false;
+    for (let block in blocks) {
+        match (block) {
+            let text: ai.content.Text => {
+                let piece = prompt_text(text.text);
+                if (after_media && piece.length() > 0) {
+                    out = `${out} `;
+                }
+                out = `${out}${piece}`;
+                after_media = false;
+                null
+            },
+            let media: ai.content.Media => {
+                if (out.length() > 0) {
+                    out = `${out} `;
+                }
+                out = `${out}${attach(media, assets, preview)}`;
+                after_media = true;
+                null
+            },
+        };
+    }
+    out
+}
+
+function plan(input: ai.ModelTurnInput, preview: bool) -> Plan {
     if (!input.toolbox.is_empty()) {
         throw reject("JEV does not support tools")
     }
     let rendered = input.prompt(ai.internal.build_output_format(input.output_type));
     let prefix: ai.content.Block[] = [];
     let state: string[] = [];
+    let assets: Asset[] = [];
     for (let message in rendered.messages()) {
-        let text = text_blocks(ai.wire.prompt_blocks(message));
+        let text = lower(ai.wire.prompt_blocks(message), assets, preview);
+        // An image here is repeated in every question's instructions, and
+        // JEV bills each copy.
         if (message.role == "instructions") {
             prefix.push(ai.content.Text { text: text });
             prefix.push(ai.content.Text { text: "\n\n" });
@@ -226,23 +311,23 @@ function plan(input: ai.ModelTurnInput) -> Plan {
             }
         }
     }
-    // JEV accepts text state. Preserve prompt and journal order, including
-    // prior assistant responses; reject media instead of hiding placeholders.
+    // Preserve prompt and journal order, including prior assistant responses.
     for (let entry in input.journal.entries()) {
         match (entry) {
             let user: ai.events.UserMessage => {
-                state.push(text_blocks(user.content));
+                state.push(lower(user.content, assets, preview));
                 null
             },
             let assistant: ai.events.AssistantMessage => {
                 for (let block in assistant.content) {
                     match (block) {
                         let text: ai.content.Text => {
-                            state.push(text.text);
+                            state.push(prompt_text(text.text));
                             null
                         },
                         let media: ai.content.Media => {
-                            throw reject("JEV does not support media in history")
+                            state.push(attach(media, assets, preview));
+                            null
                         },
                         let tool: ai.content.ToolUse => {
                             throw reject("JEV does not support tool history")
@@ -258,6 +343,7 @@ function plan(input: ai.ModelTurnInput) -> Plan {
     Plan {
         state: state.join("\n\n"),
         leaves: collect(input.output_type, [], [], null, false, prefix, []),
+        assets: assets,
     }
 }
 
@@ -293,12 +379,25 @@ function request(
         };
         let _ = headers.set("authorization", `Bearer ${key}`);
     }
+    let body: map<string, baml.json.json> = { "model": c.model, "state": p.state, "questions": questions };
+    if (p.assets.length() > 0) {
+        let assets: map<string, baml.json.json> = {};
+        for (let asset in p.assets) {
+            let _ = assets.set(
+                asset.ref,
+                { "type": "image", "format": asset.format, "data_base64": asset.data_base64 },
+            );
+        }
+        let _ = body.set("assets", assets);
+        // TypeSafe keeps image input experimental and rejects it without this.
+        let _ = headers.set("typesafe-danger-zone-images", "true");
+    }
     let base = ai.wire.resolve_credential(c.base_url, null) ?? "https://api.typesafe.ai/v1";
     baml.http.Request {
         method: "POST",
         url: `${base}/systemone`,
         headers: headers,
-        body: baml.json.stringify({ "model": c.model, "state": p.state, "questions": questions }),
+        body: baml.json.stringify(body),
     }
 }
 
@@ -374,7 +473,7 @@ function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>
 }
 
 function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let p = plan(input);
+    let p = plan(input, false);
     // No streaming here: only the two transport deadlines apply.
     let sent = ai.wire.send_as_with_wire<Response>(
         ai.LlmTimeoutOptions._resolve(c.timeout)._apply(request(c, input, p, false)),

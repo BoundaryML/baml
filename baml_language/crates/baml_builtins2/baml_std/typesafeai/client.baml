@@ -1,7 +1,9 @@
 /// TypeSafe's JEV classifier (POST {base_url}/systemone).
 /// Bool and float outputs use Noul; enums and finite unions use Choice.
 /// Classes are flattened into one question per leaf. Unsupported output
-/// types, empty instructions, tools, and media are rejected before HTTP.
+/// types, empty instructions, tools, and media other than PNG or JPEG images
+/// are rejected before HTTP. Images in an instructions message are sent with
+/// every question, and JEV bills each copy.
 /// JEV does not stream. Use invoke or an ordinary LLM function call.
 class Client {
     model: string,
@@ -39,7 +41,7 @@ class Client {
 
         /// Preview the request without resolving credentials or performing IO.
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            root.internal.request(self, input, root.internal.plan(input), true) catch_all (e) {
+            root.internal.request(self, input, root.internal.plan(input, true), true) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }
