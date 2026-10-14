@@ -62,7 +62,9 @@ function append(read,kind) {
     // is equivalent and needs no index construction.
     if(read) hits += s.at(-1)==='j';
   }
-  return hits+N;
+  // Consume the constructed string's length. Each astral fixture unit has
+  // one extra UTF-16 code unit, so this is its equivalent codepoint count.
+  return hits+s.length-(kind==='astral' ? N/10 : 0);
 }
 function replaceReads(kind) {
   let s=unit(kind).repeat(N/10), hits=0;
