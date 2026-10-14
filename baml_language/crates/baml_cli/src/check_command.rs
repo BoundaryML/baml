@@ -108,24 +108,41 @@ impl CheckArgs {
         // manifest: a project whose rows were served is the one the manifest
         // already describes, so there is nothing to store, and skipping keeps
         // the no-op check emit-free. Seeding is an optimization: a failed
-        // emit on a diagnostics-clean project is never surfaced as a check
-        // failure.
+        // emit on a diagnostics-clean project is not a check failure, except
+        // an internal lowering error, which is a compiler bug.
         if let Some(ctx) = cache {
             if served.is_none() {
-                // A failed emit leaves the cache cold and is not an error.
-                if let Ok(program) =
-                    crate::bytecode_cache::compile_program(db, package, cache.as_ref())
-                {
-                    let fresh = fresh_diagnostics
-                        .as_ref()
-                        .expect("a cache is present, so fresh diagnostics were computed");
-                    ctx.verify_and_store(
-                        &session,
-                        &program,
-                        fresh,
-                        served.as_ref(),
-                        stdlib_interface_hit,
-                    )?;
+                match crate::bytecode_cache::compile_program(db, package, cache.as_ref()) {
+                    Ok(program) => {
+                        let fresh = fresh_diagnostics
+                            .as_ref()
+                            .expect("a cache is present, so fresh diagnostics were computed");
+                        ctx.verify_and_store(
+                            &session,
+                            &program,
+                            fresh,
+                            served.as_ref(),
+                            stdlib_interface_hit,
+                        )?;
+                    }
+                    // An internal lowering error is a compiler bug the checked
+                    // program would hit on every `run`/`test`, not a cold
+                    // cache: report it rather than pass the check.
+                    Err(baml_db::CompileProgramError::Emit(
+                        baml_db::baml_compiler2_emit::LoweringError::Internal(message),
+                    )) => {
+                        reporter.suspend(|| {
+                            #[allow(clippy::print_stderr)]
+                            {
+                                eprintln!("error: internal compiler error: {message}");
+                            }
+                        });
+                        reporter.abandon();
+                        return Ok(crate::ExitCode::Other);
+                    }
+                    // Any other failed emit leaves the cache cold and is not
+                    // an error.
+                    Err(_) => {}
                 }
             }
         }
