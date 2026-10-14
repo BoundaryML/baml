@@ -16,9 +16,10 @@ fn unit(kind: &str) -> &'static str {
         _ => unreachable!(),
     }
 }
-fn fixture(kind: &str, repr: &str) -> BexStr {
+fn fixture(kind: &str, repr: &str) -> (BexStr, Vec<BexStr>) {
     let text = unit(kind).repeat(N / 10);
-    match repr {
+    let mut snapshots = Vec::new();
+    let value = match repr {
         "flat" => BexStr::from(text),
         "slice" => {
             BexStr::from(format!("{}{}tail", "前é🙂xyz".repeat(17), text)).char_slice(102..102 + N)
@@ -27,16 +28,16 @@ fn fixture(kind: &str, repr: &str) -> BexStr {
             let part = BexStr::from(unit(kind));
             let mut s = BexStr::empty();
             for _ in 0..N / 10 {
-                s = if repr == "rope_shared" {
-                    BexStr::concat(s.clone(), part.clone())
-                } else {
-                    BexStr::concat(s, part.clone())
-                };
+                if repr == "rope_shared" {
+                    snapshots.push(s.clone());
+                }
+                s = BexStr::concat(s, part.clone());
             }
             s
         }
         _ => unreachable!(),
-    }
+    };
+    (value, snapshots)
 }
 fn run(s: &BexStr, op: &str) -> u64 {
     match op {
@@ -138,7 +139,7 @@ fn main() {
     if std::env::args().any(|arg| arg == "--memory") {
         for kind in ["ascii", "bmp", "astral"] {
             for repr in ["flat", "slice", "rope", "rope_shared"] {
-                let s = fixture(kind, repr);
+                let (s, snapshots) = fixture(kind, repr);
                 println!(
                     "{{\"kind\":\"{kind}\",\"repr\":\"{repr}\",\"bytes\":{},\"codepoints\":{},\"retained_heap_bytes\":{},\"handle_bytes\":{},\"flat_header_bytes\":{}}}",
                     s.byte_len(),
@@ -147,6 +148,7 @@ fn main() {
                     std::mem::size_of::<BexStr>(),
                     std::mem::size_of::<bex_str::FlatStr>()
                 );
+                black_box(&snapshots);
             }
         }
         return;
@@ -160,7 +162,7 @@ fn main() {
         .unwrap_or_default();
     for kind in ["ascii", "bmp", "astral"] {
         for repr in ["flat", "slice", "rope", "rope_shared"] {
-            let s = fixture(kind, repr);
+            let (s, snapshots) = fixture(kind, repr);
             // Match the warmed Node fixture and exclude one-time index/flatten.
             s.as_str();
             s.char_at(N - 1);
@@ -171,10 +173,11 @@ fn main() {
                     bench(&name, || run(black_box(&s), op), verify);
                 }
             }
+            black_box(&snapshots);
         }
         for (name, read, shared) in [
             ("append_tail", true, false),
-            ("append_tail_shared", true, true),
+            ("append_tail_cloned_left", true, true),
             ("append_only", false, false),
         ] {
             let name = format!("{name}_{kind}");
@@ -184,11 +187,20 @@ fn main() {
         }
         let name = format!("build_then_read_{kind}");
         if name.contains(&filter) {
-            bench(&name, || run(&fixture(kind, "rope"), "at"), verify);
+            bench(&name, || run(&fixture(kind, "rope").0, "at"), verify);
         }
         let name = format!("build_then_read_shared_{kind}");
         if name.contains(&filter) {
-            bench(&name, || run(&fixture(kind, "rope_shared"), "at"), verify);
+            bench(
+                &name,
+                || {
+                    let (s, snapshots) = fixture(kind, "rope_shared");
+                    let result = run(&s, "at");
+                    black_box(&snapshots);
+                    result
+                },
+                verify,
+            );
         }
         let name = format!("replace_and_read_{kind}");
         if name.contains(&filter) {

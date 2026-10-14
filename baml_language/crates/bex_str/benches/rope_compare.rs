@@ -1,21 +1,36 @@
 //! Result-consuming binary/n-ary comparisons for deferred append trees.
 use std::{
     hint::black_box,
+    ops::Deref,
     time::{Duration, Instant},
 };
 
 use bex_str::BexStr;
 
-fn build(part: &BexStr, n: usize, shared: bool) -> BexStr {
-    let mut s = BexStr::empty();
-    for _ in 0..n {
-        s = if shared {
-            BexStr::concat(s.clone(), part.clone())
-        } else {
-            BexStr::concat(s, part.clone())
-        };
+struct BuiltRope {
+    value: BexStr,
+    // Keep prior roots alive through reads and first flatten, not just append.
+    _snapshots: Vec<BexStr>,
+}
+impl Deref for BuiltRope {
+    type Target = BexStr;
+    fn deref(&self) -> &Self::Target {
+        &self.value
     }
-    s
+}
+fn build(part: &BexStr, n: usize, shared: bool) -> BuiltRope {
+    let mut s = BexStr::empty();
+    let mut snapshots = Vec::new();
+    for _ in 0..n {
+        if shared {
+            snapshots.push(s.clone());
+        }
+        s = BexStr::concat(s, part.clone());
+    }
+    BuiltRope {
+        value: s,
+        _snapshots: snapshots,
+    }
 }
 fn bench(name: &str, mut f: impl FnMut() -> u64, verify: bool) {
     let expected = f();
@@ -125,7 +140,7 @@ fn main() {
                 );
             }
             bench(
-                &format!("tail_shared_{kind}_{n}"),
+                &format!("tail_cloned_left_{kind}_{n}"),
                 || {
                     let mut s = BexStr::empty();
                     let mut hits = 0;
@@ -140,7 +155,7 @@ fn main() {
             for slice in [false, true] {
                 bench(
                     &format!(
-                        "tail_four_{}_shared_{kind}_{n}",
+                        "tail_four_{}_cloned_left_{kind}_{n}",
                         if slice { "slice" } else { "char" }
                     ),
                     || {

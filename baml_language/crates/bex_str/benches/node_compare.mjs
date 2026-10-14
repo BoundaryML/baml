@@ -8,12 +8,29 @@ let sink = 0;
 const unit = kind => ({ascii:'abcd fghij',bmp:'abcd éghij',astral:'abcd 😀ghij'})[kind];
 function fixture(kind,repr) {
   const text = unit(kind).repeat(N/10);
-  if (repr === 'flat') return text;
-  if (repr === 'slice') return ('前é🙂xyz'.repeat(17)+text+'tail').slice(119,119+text.length);
+  const snapshots=[];
+  if (repr === 'flat') return {s:text,snapshots};
+  if (repr === 'slice') return {s:('前é🙂xyz'.repeat(17)+text+'tail').slice(119,119+text.length),snapshots};
   let s = '';
   const part=unit(kind);
-  for (let i=0;i<N/10;i++) s += part;
-  return s;
+  for (let i=0;i<N/10;i++) {
+    if(repr==='rope_shared') snapshots.push(s);
+    s += part;
+  }
+  return {s,snapshots};
+}
+function preparedFixture(kind,repr) {
+  const {s,snapshots}=fixture(kind,repr);
+  const f=prepare(s,kind);
+  f.snapshots=snapshots;
+  // Explicit escape keeps prefix snapshots live across V8's timed reads.
+  globalThis.fixtureKeepalive=f;
+  return f;
+}
+function buildThenRead(kind,repr) {
+  const result=run(preparedFixture(kind,repr),'at');
+  globalThis.fixtureKeepalive=null;
+  return result;
 }
 function offsets(s) {
   const out = new Uint32Array(s.length+1);
@@ -90,14 +107,15 @@ function bench(name,fn) {
 }
 for(const kind of ['ascii','bmp','astral']) {
   for(const repr of ['flat','slice','rope','rope_shared']) {
-    const f=prepare(fixture(kind,repr),kind);
+    const f=preparedFixture(kind,repr);
     for(const op of ['at','slice','codepoint','random','find_from']) bench(`${op}_${kind}_${repr}`,()=>run(f,op));
+    globalThis.fixtureKeepalive=null;
   }
   bench(`append_tail_${kind}`,()=>append(true,kind));
-  bench(`append_tail_shared_${kind}`,()=>append(true,kind));
+  bench(`append_tail_cloned_left_${kind}`,()=>append(true,kind));
   bench(`append_only_${kind}`,()=>append(false,kind));
-  bench(`build_then_read_${kind}`,()=>run(prepare(fixture(kind,'rope'),kind),'at'));
-  bench(`build_then_read_shared_${kind}`,()=>run(prepare(fixture(kind,'rope_shared'),kind),'at'));
+  bench(`build_then_read_${kind}`,()=>buildThenRead(kind,'rope'));
+  bench(`build_then_read_shared_${kind}`,()=>buildThenRead(kind,'rope_shared'));
   bench(`replace_and_read_${kind}`,()=>replaceReads(kind));
   bench(`cold_random_${kind}`,()=>{const f=prepare(unit(kind).repeat(N/10),kind);let out=0;for(let i=0;i<100;i++) out+=codepoint(f,(i*7919)%N);return out;});
 }
