@@ -1080,3 +1080,22 @@ fn indexed_scalar_cache_promotes_without_changing_utf8_or_old_views() {
         assert_eq!(clone.byte_to_char(clone.char_to_byte(i)), i);
     }
 }
+
+#[test]
+fn narrow_unicode_slices_of_wide_parents_preserve_scalar_bounds() {
+    let parent = BexStr::from(format!("🦀{}前", "éaÿ\0".repeat(100)));
+    parent.retained_heap_bytes();
+    let narrow = parent.char_slice(1..401);
+    assert_eq!(narrow.codepoint_len(), 400);
+    let expected = "éaÿ\0".repeat(100);
+    for (i, point) in expected.chars().enumerate() {
+        assert_eq!(narrow.char_at(i), Some(point));
+        assert_eq!(narrow.char_get(i).unwrap().as_str(), point.to_string());
+        assert_eq!(narrow.byte_to_char(narrow.char_to_byte(i)), i);
+    }
+    let wider = parent.char_slice(1..402);
+    assert_eq!(wider.char_at(400), Some('前'));
+    assert_eq!(narrow.char_at(400), None);
+    assert_eq!(narrow.char_get(usize::MAX), None);
+    assert_eq!(narrow.as_str(), expected);
+}

@@ -15,6 +15,10 @@ const INLINE_CAPACITY: usize = 54;
 // Inline lengths need only six bits. Cache ASCII in a spare bit without
 // reducing capacity or growing the 56-byte handle.
 const INLINE_ASCII_FLAG: u8 = 0x40;
+// A buffer cannot exceed isize::MAX bytes, so a slice count's high bit is
+// available to record a Latin-1 scalar bound without enlarging the handle.
+const SLICE_LATIN1_FLAG: u64 = 1 << 63;
+const SLICE_COUNT_MASK: u64 = !SLICE_LATIN1_FLAG;
 #[inline]
 fn inline_len(len: u8) -> usize {
     (len & 0x3f) as usize
@@ -66,6 +70,7 @@ pub enum BexStr {
         parent: Arc<FlatStr>,
         offset: u64,
         len: u64,
+        /// Low 63 bits count scalars; the high bit bounds them to Latin-1.
         codepoint_len: u64,
         /// Codepoint offset in the parent; u32::MAX uses the oversized fallback.
         /// Computed once when creating the view, so indexed reads need no atomics.
@@ -125,8 +130,18 @@ enum ScalarCache {
     Full(Vec<char>),
 }
 impl ScalarCache {
-    fn new(capacity: usize) -> Self {
-        Self::Latin1(Vec::with_capacity(capacity))
+    fn from_points(points: Vec<char>, max: u32) -> Self {
+        if max <= 0xff {
+            let mut narrow = Vec::with_capacity(points.len());
+            narrow.extend(points.iter().map(|&point| point as u8));
+            Self::Latin1(narrow)
+        } else if max <= 0xffff {
+            let mut narrow = Vec::with_capacity(points.len());
+            narrow.extend(points.iter().map(|&point| point as u16));
+            Self::Bmp(narrow)
+        } else {
+            Self::Full(points)
+        }
     }
     #[inline(always)]
     fn get(&self, n: usize) -> Option<char> {
@@ -275,7 +290,7 @@ impl BexStr {
                 }
             }
             BexStr::Flat(f) => f.codepoint_len as usize,
-            BexStr::Slice { codepoint_len, .. } => *codepoint_len as usize,
+            BexStr::Slice { codepoint_len, .. } => (*codepoint_len & SLICE_COUNT_MASK) as usize,
             BexStr::Concat(c) => c.codepoint_len as usize,
         }
     }
@@ -433,7 +448,12 @@ impl BexStr {
             parent,
             offset,
             len: slice_len as u64,
-            codepoint_len: codepoint_len as u64,
+            codepoint_len: codepoint_len as u64
+                | if bytes.iter().all(|&byte| byte <= 0xc3) {
+                    SLICE_LATIN1_FLAG
+                } else {
+                    0
+                },
             char_offset,
             ascii_prefix_len,
             hash: Arc::new(SliceHash::new()),
@@ -466,7 +486,7 @@ impl BexStr {
                 if n <= *ascii_prefix_len as usize {
                     return n;
                 }
-                if n >= *codepoint_len as usize {
+                if n >= (*codepoint_len & SLICE_COUNT_MASK) as usize {
                     return *len as usize;
                 }
                 if let Some(index) = parent.char_index.get() {
@@ -626,7 +646,7 @@ impl BexStr {
                 char_offset,
                 ..
             } => {
-                let count = *codepoint_len as usize;
+                let count = (*codepoint_len & SLICE_COUNT_MASK) as usize;
                 if n >= count {
                     return (&[], 0);
                 }
@@ -656,7 +676,7 @@ impl BexStr {
                 ascii_prefix_len,
                 ..
             } => {
-                if n >= *codepoint_len as usize {
+                if n >= (*codepoint_len & SLICE_COUNT_MASK) as usize {
                     return None;
                 }
                 if *ascii_prefix_len != u32::MAX && n < *ascii_prefix_len as usize {
@@ -667,9 +687,16 @@ impl BexStr {
                 }
                 if let Some(index) = parent.char_index.get() {
                     let base = slice_char_offset(parent, *offset, *char_offset);
-                    return index
+                    let point = index
                         .points
                         .get(base + n - parent.ascii_prefix_len as usize);
+                    // A narrow view can retain a parent with astral text outside
+                    // the view. Preserve its scalar bound in optimized callers.
+                    return if *codepoint_len & SLICE_LATIN1_FLAG != 0 {
+                        point.map(|point| point as u8 as char)
+                    } else {
+                        point
+                    };
                 }
                 let (bytes, b) = self.char_location(n);
                 char_at_byte(bytes, b)
@@ -700,6 +727,31 @@ impl BexStr {
     /// shares the indexing work rather than counting an inline string first.
     #[inline(always)]
     pub fn char_get(&self, n: usize) -> Option<BexStr> {
+        // The cached prefix proves this is ASCII; no decode/width test or
+        // separate slice-codepoint bound is needed in that prefix.
+        let ascii = match self {
+            Self::Inline { len, data } if *len & INLINE_ASCII_FLAG != 0 => {
+                data.get(n).filter(|_| n < inline_len(*len)).copied()
+            }
+            Self::Flat(flat) if n < flat.ascii_prefix_len as usize => flat.data.get(n).copied(),
+            Self::Slice {
+                parent,
+                offset,
+                ascii_prefix_len,
+                ..
+            } if *ascii_prefix_len != u32::MAX && n < *ascii_prefix_len as usize => {
+                parent.data.get((*offset as usize).checked_add(n)?).copied()
+            }
+            _ => None,
+        };
+        if let Some(byte) = ascii {
+            let mut data = [0; INLINE_CAPACITY];
+            data[0] = byte;
+            return Some(Self::Inline {
+                len: 1 | INLINE_ASCII_FLAG,
+                data,
+            });
+        }
         let point = self.char_at(n)?;
         let mut data = [0; INLINE_CAPACITY];
         if point.is_ascii() {
@@ -998,16 +1050,21 @@ impl FlatStr {
         Some(self.char_index.get_or_init(|| {
             let prefix = self.ascii_prefix_len as usize;
             let mut offsets = Vec::with_capacity(count);
-            let mut points = ScalarCache::new(count - 1);
+            let mut points = Vec::with_capacity(count - 1);
+            let mut max = 0;
             // SAFETY: constructors and concat maintain valid canonical UTF-8.
             #[allow(unsafe_code)]
             let text = unsafe { std::str::from_utf8_unchecked(&self.data[prefix..]) };
             for (i, point) in text.char_indices() {
                 offsets.push((prefix + i) as u32);
                 points.push(point);
+                max = max.max(point as u32);
             }
             offsets.push(self.data.len() as u32);
-            CharIndex { offsets, points }
+            CharIndex {
+                offsets,
+                points: ScalarCache::from_points(points, max),
+            }
         }))
     }
 
