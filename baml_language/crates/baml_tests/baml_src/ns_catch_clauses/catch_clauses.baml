@@ -142,3 +142,21 @@ test "a bare name or literal can be the protected expression" {
     assert.equal(cc_bare_name_base(), 1);
     assert.equal(cc_bare_literal_operand(), 2)
 }
+
+// A `catch_all_panics` wildcard receives panics even after every error is
+// handled, so its binding is typed as a panic, not `never`.
+function cc_wildcard_binding_is_a_panic() -> string {
+    cc_lookup(5).to_string() catch_all_panics (e) {
+        _ => "unused",
+    };
+    cc_index_panic().to_string() catch_all_panics (e) {
+        let p => match (p) {
+            let oob: baml.panics.IndexOutOfBounds => "index " + oob.index.to_string(),
+            _ => "other panic",
+        },
+    }
+}
+
+test "a catch_all_panics wildcard binding receives the panic" {
+    assert.equal(cc_wildcard_binding_is_a_panic(), "index 5")
+}
