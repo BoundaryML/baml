@@ -9,18 +9,41 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use baml_type::{Interface, Name, Ty, TypeName};
+use baml_base::LangPackage;
+use baml_type::{Interface, Name, Ty};
 use indexmap::IndexMap;
+
+use crate::types::LocalName;
+
+/// How a projected surface names a declaration: from the mount's own
+/// viewpoint, by what reaches it — never by a label. A mount's own
+/// declaration by its path; a declaration of another mount through the edge
+/// of [`RuntimePackageMount::edges`] that reaches its owner; a standard
+/// library declaration by its language package, by identity — the prelude
+/// never crosses the seam as a mount edge, and the consumer's blob binds it
+/// by a prelude entry of its own dependency table.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum MountHead {
+    Own(LocalName),
+    Edge {
+        edge: Name,
+        path: LocalName,
+    },
+    Prelude {
+        package: LangPackage,
+        path: LocalName,
+    },
+}
 
 /// Compiler-neutral structural projection of one runtime class declaration
 /// of a package that had no compile: its row, keyed by the bare item name it
 /// is exported under. Field types are spelled from the package's viewpoint
-/// (see [`RuntimeProjectedSurface`]).
+/// ([`MountHead`]).
 #[derive(Clone, Debug)]
 pub struct RuntimeMountedClass {
     pub name: Name,
     pub docstring: Option<String>,
-    pub fields: Vec<(Name, Ty<TypeName>, RuntimeMountedFieldAttrs)>,
+    pub fields: Vec<(Name, Ty<MountHead>, RuntimeMountedFieldAttrs)>,
 }
 
 #[derive(Clone, Debug)]
@@ -46,17 +69,17 @@ pub struct RuntimeMountedVariantAttrs {
 /// given a type that is not a bare nominal.
 #[derive(Clone, Debug)]
 pub struct RuntimeMountedAlias {
-    pub name: crate::types::LocalName,
-    pub ty: Ty<TypeName>,
+    pub name: LocalName,
+    pub ty: Ty<MountHead>,
 }
 
 /// A declaration of another package that a package exports under a name of
-/// its own — Rust's `pub use other::Decl as Name`. `of` spells the defining
-/// declaration through the package's edges.
+/// its own — Rust's `pub use other::Decl as Name`. `of` names the defining
+/// declaration through the package's edges ([`MountHead`]).
 #[derive(Clone, Debug)]
 pub struct RuntimeReExport {
-    pub name: crate::types::LocalName,
-    pub of: TypeName,
+    pub name: LocalName,
+    pub of: MountHead,
     pub kind: RuntimeReExportKind,
 }
 
@@ -75,16 +98,15 @@ pub enum RuntimeReExportKind {
 /// `(field, class field)` links the implementation is read through.
 #[derive(Clone, Debug)]
 pub struct RuntimeMountedImpl {
-    pub interface: Interface<TypeName>,
-    pub for_ty: Ty<TypeName>,
+    pub interface: Interface<MountHead>,
+    pub for_ty: Ty<MountHead>,
     pub field_links: Vec<(Name, Name)>,
 }
 
 /// The exports of a mount that had no compile — a `with_types` view, or an
 /// anonymous declaration a view exports, a root of one row — projected from
-/// what it holds.
-/// Every type is spelled from the package's own viewpoint: its own
-/// declarations `Local`, the prelude under its fixed names, and any other
+/// what it holds. Every head is a [`MountHead`]: the package's own
+/// declarations by path, the prelude by language package, and any other
 /// package's declaration through the edge of [`RuntimePackageMount::edges`]
 /// that reaches its owner. Every export of a
 /// [`ReExported`](crate::types::EdgeKind::ReExported) edge's target is an

@@ -439,7 +439,7 @@ pub fn describe(
     }
 
     // No outline match — try locals (parameters and let bindings).
-    describe_locals(db, files, name)
+    describe_locals(db, viewer, files, name)
 }
 
 /// Describe a symbol given a known `Definition` (from `PackageItems` lookup).
@@ -503,7 +503,7 @@ pub fn describe_item_member(
     // the interface's own item data — the outline walk below never descends
     // into interfaces, so this arm is their only road.
     if let Definition::Interface(iface_loc) = parent_def
-        && let Some(desc) = describe_interface_member(db, files, iface_loc, member_name)
+        && let Some(desc) = describe_interface_member(db, viewer, files, iface_loc, member_name)
     {
         return vec![desc];
     }
@@ -534,7 +534,9 @@ pub fn describe_item_member(
                         name_span: child.name_span,
                         container_name: Some(parent_name),
                     };
-                    return describe_member(db, files, &sym).into_iter().collect();
+                    return describe_member(db, viewer, files, &sym)
+                        .into_iter()
+                        .collect();
                 }
             }
         }
@@ -551,7 +553,7 @@ fn describe_symbol(
     sym: &SymbolInfo,
 ) -> Option<SymbolDescription> {
     if sym.kind.is_member() {
-        describe_member(db, files, sym)
+        describe_member(db, viewer, files, sym)
     } else {
         describe_top_level(db, viewer, files, sym)
     }
@@ -610,7 +612,7 @@ fn describe_top_level(
         KindClass::Interface => {
             let (members, implementations) = match definition {
                 Some(Definition::Interface(iface_loc)) => (
-                    collect_interface_members(db, iface_loc),
+                    collect_interface_members(db, viewer, iface_loc),
                     collect_interface_impls(db, viewer, iface_loc),
                 ),
                 _ => (Vec::new(), Vec::new()),
@@ -667,23 +669,43 @@ fn describe_top_level(
     // - interface: the signature-only member surface (an interface is its
     //   contract; default bodies are implementation detail behind drill-in),
     //   prefixed with the full `///` docstring;
+    // - another package's function: its docstring and its signature as the
+    //   viewer writes it, never its body (which spells that package's own
+    //   `root.` and is its business);
     // - builtin function: the signature only, never the native body block;
     // - everything else: the real source body.
-    let full_body = if matches!(
-        kind,
-        SymbolKind::ConcreteType {
-            kind: ConcreteTypeKind::Class,
-            ..
-        } | SymbolKind::Interface { .. }
-    ) {
-        let mut body = docstring_lines(docstring.as_deref());
-        body.push_str(&shape);
-        body
-    } else {
-        let body_range =
-            builtin_signature_range(db, file, sym, item_range, definition).unwrap_or(item_range);
-        clean_body_source(db, file, body_range)
-    };
+    let full_body =
+        if matches!(
+            kind,
+            SymbolKind::ConcreteType {
+                kind: ConcreteTypeKind::Class,
+                ..
+            } | SymbolKind::Interface { .. }
+        ) {
+            let mut body = docstring_lines(docstring.as_deref());
+            body.push_str(&shape);
+            body
+        } else if let Some(Definition::Function(func_loc)) = definition
+            && file.source_root(db) != viewer
+        {
+            // The resolved slots come from the package's exported row, so the
+            // types are the checker's, spelled for the viewer — not the text the
+            // declaring file wrote.
+            let package = baml_compiler2_hir::file_package::file_package(db, file);
+            let exported =
+                baml_compiler2_hir_ty::package_interface::package_interface(db, package.root)
+                    .lookup_function(&package.namespace_path, &baml_base::Name::new(&sym.name));
+            let mut body = docstring_lines(docstring.as_deref());
+            body.push_str(
+                &crate::info::resolved_function_sig_parts(db, func_loc, exported)
+                    .render_for_viewer(db, viewer, crate::info::method_sig_style()),
+            );
+            body
+        } else {
+            let body_range = builtin_signature_range(db, file, sym, item_range, definition)
+                .unwrap_or(item_range);
+            clean_body_source(db, file, body_range)
+        };
 
     Some(SymbolDescription {
         name: sym.name.clone(),
@@ -707,6 +729,7 @@ fn describe_top_level(
 /// and references to the member.
 fn describe_member(
     db: &dyn baml_compiler2_hir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
     sym: &SymbolInfo,
 ) -> Option<SymbolDescription> {
@@ -750,7 +773,7 @@ fn describe_member(
 
     // Resolved type for members — look up via the parent class/enum rather than
     // `resolve_name_at`, which only handles top-level `Definition` items.
-    let resolved_type = resolve_member_type(db, file, sym);
+    let resolved_type = resolve_member_type(db, viewer, file, sym);
 
     // References to this field/variant.
     let references = find_references(db, files, file, sym.name_span, member_range);
@@ -791,6 +814,7 @@ fn describe_member(
 /// function as a dependency.
 fn describe_locals(
     db: &dyn baml_compiler2_hir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
     name: &str,
 ) -> Vec<SymbolDescription> {
@@ -917,7 +941,7 @@ fn describe_locals(
                         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
                             pattern_from_owner_body(db, func_loc, stmt_id)
                                 .and_then(|pattern| inference?.type_of_pat.get(&pattern).cloned())
-                                .map(|ty| render::display_ty(db, &ty))
+                                .map(|ty| render::display_ty_for_viewer(db, viewer, &ty))
                                 .unwrap_or_else(|| "unknown".to_string())
                         }
                         baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(
@@ -927,7 +951,7 @@ fn describe_locals(
                             pat_id,
                         ) => inference
                             .and_then(|inference| inference.type_of_pat.get(&pat_id).cloned())
-                            .map(|ty| render::display_ty(db, &ty))
+                            .map(|ty| render::display_ty_for_viewer(db, viewer, &ty))
                             .unwrap_or_else(|| "unknown".to_string()),
                         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(_) => {
                             unreachable!("Parameters are skipped above")
@@ -1142,8 +1166,11 @@ fn build_shape<'db>(
     let Some(def) = def else {
         return format!("{} {}", sym.kind.as_str(), sym.name);
     };
-    let type_info =
-        type_info_for_definition(db, viewer, baml_compiler2_hir::loc::DeclRef::Source(def));
+    let type_info = type_info_for_definition(
+        db,
+        &crate::render::Reader::of_package(db, viewer),
+        baml_compiler2_hir::loc::DeclRef::Source(def),
+    );
     // The canonical block (fields-only for classes), without fences/docstring/hint.
     type_info.to_describe_block()
 }
@@ -1161,7 +1188,11 @@ fn collect_type_rows(
     viewer: baml_base::SourceRoot,
     definition: Definition<'_>,
 ) -> ((Vec<MethodRef>, Vec<MethodRef>), Vec<ImplRow>) {
-    let surface = crate::info::collect_type_surface(db, viewer, definition);
+    let surface = crate::info::collect_type_surface(
+        db,
+        &crate::render::Reader::of_package(db, viewer),
+        definition,
+    );
     let is_visible = |m: &crate::info::CollectedMethod| {
         let declared_in = m
             .location
@@ -1218,6 +1249,7 @@ fn collect_type_rows(
 /// this adds over the flat block.
 fn collect_interface_members(
     db: &dyn baml_compiler2_hir::Db,
+    viewer: baml_base::SourceRoot,
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
 ) -> Vec<InterfaceMember> {
     let file = iface_loc.file(db);
@@ -1275,11 +1307,8 @@ fn collect_interface_members(
         if m.metadata.is_language_internal {
             continue;
         }
-        let signature = crate::info::resolved_function_sig_parts(db, method_loc, None).render(
-            db,
-            file,
-            crate::info::method_sig_style(),
-        );
+        let signature = crate::info::resolved_function_sig_parts(db, method_loc, None)
+            .render_for_viewer(db, viewer, crate::info::method_sig_style());
         let span = baml_compiler2_hir::item_data::function_source_map(db, method_loc).span;
         let name = m.name.as_str().to_string();
         if baml_compiler2_hir::item_data::function_has_body(db, method_loc) {
@@ -1326,8 +1355,7 @@ fn collect_interface_impls(
             let facts = baml_compiler2_hir_ty::impls::impl_facts(db, block).resolved()?;
             Some(ImplRow {
                 display: crate::info::render_impl_row(
-                    db,
-                    viewer,
+                    &crate::render::Reader::of_package(db, viewer),
                     &facts.generic_params,
                     &facts.interface,
                     &facts.for_ty_pattern,
@@ -1399,6 +1427,7 @@ fn impl_block_location(
 /// Returns `None` if the interface declares no such member.
 fn describe_interface_member(
     db: &dyn baml_compiler2_hir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
     iface_loc: baml_compiler2_hir::loc::InterfaceLoc<'_>,
     member_name: &str,
@@ -1426,11 +1455,8 @@ fn describe_interface_member(
         let m = baml_compiler2_hir::item_data::function_data(db, method_loc);
         let method_map = baml_compiler2_hir::item_data::function_source_map(db, method_loc);
         let method_span = method_map.span;
-        let signature = crate::info::resolved_function_sig_parts(db, method_loc, None).render(
-            db,
-            file,
-            crate::info::method_sig_style(),
-        );
+        let signature = crate::info::resolved_function_sig_parts(db, method_loc, None)
+            .render_for_viewer(db, viewer, crate::info::method_sig_style());
         let full_body = if baml_compiler2_hir::item_data::function_has_body(db, method_loc) {
             docstring_prefixed_body(
                 m.docstring.as_deref(),
@@ -1485,7 +1511,7 @@ fn describe_interface_member(
             name_span,
             container_name: Some(iface.name.as_str().to_string()),
         };
-        return describe_member(db, files, &sym);
+        return describe_member(db, viewer, files, &sym);
     }
 
     // Associated types.
@@ -1572,7 +1598,11 @@ fn describe_type_method(
     // Only a SOURCE method can be drilled into (it has a body and a site); a
     // mounted/precompiled impl's method shows in the listing with its
     // signature and nothing more.
-    for imp in crate::info::type_impls(db, viewer, definition) {
+    for imp in crate::info::type_impls(
+        db,
+        &crate::render::Reader::of_package(db, viewer),
+        definition,
+    ) {
         for func in imp.methods {
             if let baml_compiler2_hir::loc::DeclRef::Source(method) = func
                 && baml_compiler2_hir::item_data::function_data(db, method)
@@ -1592,7 +1622,7 @@ fn describe_type_method(
     candidates
         .into_iter()
         .map(|(method_loc, ef, implements)| {
-            describe_type_method_at(db, files, definition, method_loc, ef, implements)
+            describe_type_method_at(db, viewer, files, definition, method_loc, ef, implements)
         })
         .collect()
 }
@@ -1636,6 +1666,7 @@ fn concrete_type_container(
 /// another file than the type it is for.
 fn describe_type_method_at(
     db: &dyn baml_compiler2_hir::Db,
+    viewer: baml_base::SourceRoot,
     files: &[SourceFile],
     definition: Definition<'_>,
     method_loc: baml_compiler2_hir::loc::FunctionLoc<'_>,
@@ -1645,9 +1676,9 @@ fn describe_type_method_at(
     let file = method_loc.file(db);
     let m = baml_compiler2_hir::item_data::function_data(db, method_loc);
     let method_span = baml_compiler2_hir::item_data::function_source_map(db, method_loc).span;
-    let signature = crate::info::resolved_function_sig_parts(db, method_loc, ef).render(
+    let signature = crate::info::resolved_function_sig_parts(db, method_loc, ef).render_for_viewer(
         db,
-        file,
+        viewer,
         crate::info::method_sig_style(),
     );
 
@@ -1790,6 +1821,7 @@ fn canonical_fqn(
 /// (which only handles top-level `Definition` items, not members).
 fn resolve_member_type(
     db: &dyn baml_compiler2_hir::Db,
+    viewer: baml_base::SourceRoot,
     file: SourceFile,
     sym: &SymbolInfo,
 ) -> Option<String> {
@@ -1817,7 +1849,7 @@ fn resolve_member_type(
             resolved_fields
                 .iter()
                 .find(|(field_name, _, _)| field_name.as_str() == sym.name)
-                .map(|(_, ty, _)| render::display_ty_for_file(db, file, ty))
+                .map(|(_, ty, _)| render::display_ty_for_viewer(db, viewer, ty))
         }
         (DefinitionKind::Variant, baml_compiler2_hir::contributions::Definition::Enum(_)) => {
             // Enum variants don't have a meaningful type beyond the enum itself.
@@ -1841,8 +1873,11 @@ fn resolve_type_for_item(
 ) -> Option<String> {
     use crate::info::TypeInfo;
 
-    let type_info =
-        type_info_for_definition(db, viewer, baml_compiler2_hir::loc::DeclRef::Source(def?));
+    let type_info = type_info_for_definition(
+        db,
+        &crate::render::Reader::of_package(db, viewer),
+        baml_compiler2_hir::loc::DeclRef::Source(def?),
+    );
     match type_info {
         TypeInfo::Function {
             params,
@@ -1997,11 +2032,9 @@ fn collect_type_expr_deps(
     use baml_compiler2_ast::TypeExprKind;
     match &te.kind {
         TypeExprKind::Path {
-            segments,
-            generic_args,
-            ..
+            path, generic_args, ..
         } => {
-            if let Some(last) = segments.last() {
+            if let Some(last) = path.last() {
                 let name_str = last.as_str().to_string();
                 if seen.insert(name_str.clone()) {
                     // Try to resolve this name to find its definition.
@@ -2061,11 +2094,9 @@ fn collect_type_ref_deps(
     use baml_compiler2_hir::type_ref::TypeRefKind;
     match &store[id].kind {
         TypeRefKind::Path {
-            segments,
-            generic_args,
-            ..
+            path, generic_args, ..
         } => {
-            if let Some(last) = segments.last() {
+            if let Some(last) = path.last() {
                 let name_str = last.as_str().to_string();
                 if seen.insert(name_str.clone()) {
                     // Try to resolve this name to find its definition.

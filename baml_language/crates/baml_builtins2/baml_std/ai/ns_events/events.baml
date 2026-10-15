@@ -20,7 +20,7 @@ class UserMessage {
     }
 
     /// A turn from ordinary values: text, the `image` / `audio` / `video` /
-    /// `pdf` primitives, or blocks already built (see `root.content.blocks`).
+    /// `pdf` primitives, or blocks already built (see `ai.content.blocks`).
     function of(
         items: (string | image | audio | video | pdf | root.content.Text | root.content.Media)[],
         metadata: map<string, baml.json.json> = {},
@@ -58,7 +58,7 @@ class ToolCompleted {
     }
 
     /// A result from ordinary values: text, the `image` / `audio` / `video` /
-    /// `pdf` primitives, or blocks already built (see `root.content.blocks`).
+    /// `pdf` primitives, or blocks already built (see `ai.content.blocks`).
     function of(
         id: string,
         items: (string | image | audio | video | pdf | root.content.Text | root.content.Media)[],

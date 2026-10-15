@@ -17,6 +17,29 @@ pub struct PackageInfo {
     pub namespace_path: Vec<Name>,
 }
 
+/// `file`'s path relative to its root: the spelling its namespace path, its
+/// test initializer's name, and its unit's `source_file` are derived from, so
+/// none of them carries the checkout's location — the same package compiles
+/// to the same bytes wherever it lives. A file is under its root (the database
+/// picks a path's root by prefix); the one other shape is a path that is
+/// already relative, which the test harness adds to a root spelled `.`.
+pub fn root_relative_path(db: &dyn crate::Db, file: SourceFile) -> std::path::PathBuf {
+    let path = file.path(db);
+    let root_path = file.source_root(db).path(db);
+    match path.strip_prefix(root_path.as_path()) {
+        Ok(relative) => relative.to_path_buf(),
+        Err(_) => {
+            debug_assert!(
+                path.is_relative(),
+                "`{}` is not under its root `{}`",
+                path.display(),
+                root_path.display()
+            );
+            path
+        }
+    }
+}
+
 /// Extract a namespace name from a path component if it has the `ns_` prefix
 /// and a valid BAML identifier suffix (starts with letter or `_`, rest is
 /// alphanumeric or `_`). Returns `None` for non-`ns_*` components or invalid suffixes.
@@ -45,10 +68,7 @@ fn extract_ns_name(component: &str) -> Option<Name> {
 #[salsa::tracked(returns(clone))]
 pub fn file_package(db: &dyn crate::Db, file: SourceFile) -> PackageInfo {
     let root = file.source_root(db);
-    let root_path = root.path(db);
-
-    let path = file.path(db);
-    let relative = path.strip_prefix(root_path.as_path()).unwrap_or(&path);
+    let relative = root_relative_path(db, file);
 
     let namespace_path: Vec<Name> = relative
         .parent()

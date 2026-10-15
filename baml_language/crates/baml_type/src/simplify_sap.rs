@@ -1,7 +1,9 @@
 //! Type simplification for SAP.
 //!
-//! Rewrites a [`RuntimeTy`] into the flat form the SAP model converter
-//! requires, without changing the set of values it denotes:
+//! Rewrites a [`RealizedTy`] into the flat form the SAP model converter
+//! requires, without changing the set of values it denotes. A parse target is
+//! realized (it names no type parameter or associated-type projection), and
+//! every rewrite here keeps it so:
 //!
 //! - Non-recursive type aliases are inlined; a recursive alias stays named,
 //!   as the indirection that ties its knot (`json[]` keeps its `json`).
@@ -9,27 +11,27 @@
 //!   target this includes a recursive union alias used directly as a member:
 //!   `json | null` splices `json`'s own members in, while below a list or map
 //!   the alias stays named.
-//! - A member covered by another is dropped: the same type, a literal under
-//!   its primitive (`5 | int` is `int`), or `int` under `bigint` — the one
-//!   lossless widening. `int → float` is not a subsumption here: SAP scores
-//!   those as distinct candidates.
+//! - A member covered by another is dropped: the same type, or a literal
+//!   under its own primitive (`5 | int` is `int`). Distinct concrete types
+//!   never cover each other (`int | bigint` stays two members), since a
+//!   parsed container's type must be exactly the type written.
 //! - `null` moves to the last position, and a singleton union unwraps.
 //!
 //! No attribute takes part: attributes belong to declarations (BEP-075), not
 //! to the types being simplified, so nothing here can drop or merge one.
 use std::collections::{HashMap, HashSet};
 
-use crate::{Literal, RuntimeTy};
+use crate::{Literal, RealizedTy};
 
 /// Simplify a type for SAP processing.
 ///
 /// - `aliases`: map from alias name to its definition.
-/// - `recursive_aliases`: aliases that are recursive (left as `RuntimeTy::TypeAlias`).
+/// - `recursive_aliases`: aliases that are recursive (left as `RealizedTy::TypeAlias`).
 pub fn simplify<N: crate::Head>(
-    ty: RuntimeTy<N>,
-    aliases: &HashMap<N, RuntimeTy<N>>,
+    ty: RealizedTy<N>,
+    aliases: &HashMap<N, RealizedTy<N>>,
     recursive_aliases: &HashSet<N>,
-) -> RuntimeTy<N> {
+) -> RealizedTy<N> {
     simplify_impl(ty, aliases, recursive_aliases, false)
 }
 
@@ -39,21 +41,21 @@ pub fn simplify<N: crate::Head>(
 /// appears directly as another union's member. This turns `json | null` into a
 /// flat union while retaining recursive `json` references below lists/maps.
 pub fn simplify_parse_target<N: crate::Head>(
-    ty: RuntimeTy<N>,
-    aliases: &HashMap<N, RuntimeTy<N>>,
+    ty: RealizedTy<N>,
+    aliases: &HashMap<N, RealizedTy<N>>,
     recursive_aliases: &HashSet<N>,
-) -> RuntimeTy<N> {
+) -> RealizedTy<N> {
     simplify_impl(ty, aliases, recursive_aliases, true)
 }
 
 fn simplify_impl<N: crate::Head>(
-    ty: RuntimeTy<N>,
-    aliases: &HashMap<N, RuntimeTy<N>>,
+    ty: RealizedTy<N>,
+    aliases: &HashMap<N, RealizedTy<N>>,
     recursive: &HashSet<N>,
     expand_recursive_alias_unions: bool,
-) -> RuntimeTy<N> {
+) -> RealizedTy<N> {
     match ty {
-        RuntimeTy::TypeAlias(ref name) => {
+        RealizedTy::TypeAlias(ref name) => {
             if recursive.contains(name) {
                 // Recursive alias: keep as TypeAlias, don't inline.
                 ty
@@ -71,18 +73,18 @@ fn simplify_impl<N: crate::Head>(
             }
         }
 
-        RuntimeTy::Union(variants) => {
+        RealizedTy::Union(variants) => {
             simplify_union(variants, aliases, recursive, expand_recursive_alias_unions)
         }
 
         // Recurse into compound types.
-        RuntimeTy::List(inner) => RuntimeTy::List(Box::new(simplify_impl(
+        RealizedTy::List(inner) => RealizedTy::List(Box::new(simplify_impl(
             *inner,
             aliases,
             recursive,
             expand_recursive_alias_unions,
         ))),
-        RuntimeTy::Map { key, value } => RuntimeTy::Map {
+        RealizedTy::Map { key, value } => RealizedTy::Map {
             key: Box::new(simplify_impl(
                 *key,
                 aliases,
@@ -107,13 +109,13 @@ fn simplify_impl<N: crate::Head>(
 // ---------------------------------------------------------------------------
 
 fn simplify_union<N: crate::Head>(
-    variants: Box<[RuntimeTy<N>]>,
-    aliases: &HashMap<N, RuntimeTy<N>>,
+    variants: Box<[RealizedTy<N>]>,
+    aliases: &HashMap<N, RealizedTy<N>>,
     recursive: &HashSet<N>,
     expand_recursive_alias_unions: bool,
-) -> RuntimeTy<N> {
+) -> RealizedTy<N> {
     // 1. Simplify each variant recursively.
-    let variants: Vec<RuntimeTy<N>> = variants
+    let variants: Vec<RealizedTy<N>> = variants
         .into_iter()
         .map(|v| simplify_impl(v, aliases, recursive, expand_recursive_alias_unions))
         .collect();
@@ -144,15 +146,15 @@ fn simplify_union<N: crate::Head>(
             .next()
             .unwrap_or_else(|| unreachable!("a length-1 vec has an element"))
     } else {
-        RuntimeTy::Union(variants.into())
+        RealizedTy::Union(variants.into())
     }
 }
 
 fn expand_recursive_union_aliases<N: crate::Head>(
-    variants: Vec<RuntimeTy<N>>,
-    aliases: &HashMap<N, RuntimeTy<N>>,
+    variants: Vec<RealizedTy<N>>,
+    aliases: &HashMap<N, RealizedTy<N>>,
     recursive: &HashSet<N>,
-) -> Vec<RuntimeTy<N>> {
+) -> Vec<RealizedTy<N>> {
     let mut out = Vec::new();
     let mut expanding = HashSet::new();
     for variant in variants {
@@ -162,23 +164,23 @@ fn expand_recursive_union_aliases<N: crate::Head>(
 }
 
 fn expand_recursive_union_alias_variant<N: crate::Head>(
-    variant: RuntimeTy<N>,
-    aliases: &HashMap<N, RuntimeTy<N>>,
+    variant: RealizedTy<N>,
+    aliases: &HashMap<N, RealizedTy<N>>,
     recursive: &HashSet<N>,
     expanding: &mut HashSet<N>,
-    out: &mut Vec<RuntimeTy<N>>,
+    out: &mut Vec<RealizedTy<N>>,
 ) {
-    let RuntimeTy::TypeAlias(name) = variant else {
+    let RealizedTy::TypeAlias(name) = variant else {
         out.push(variant);
         return;
     };
 
-    let Some(RuntimeTy::Union(alias_variants)) = aliases.get(&name) else {
-        out.push(RuntimeTy::TypeAlias(name));
+    let Some(RealizedTy::Union(alias_variants)) = aliases.get(&name) else {
+        out.push(RealizedTy::TypeAlias(name));
         return;
     };
     if !recursive.contains(&name) || !expanding.insert(name.clone()) {
-        out.push(RuntimeTy::TypeAlias(name));
+        out.push(RealizedTy::TypeAlias(name));
         return;
     }
 
@@ -190,11 +192,11 @@ fn expand_recursive_union_alias_variant<N: crate::Head>(
 }
 
 /// Flatten nested unions into a single level.
-fn flatten_union<N: crate::Head>(variants: Vec<RuntimeTy<N>>) -> Vec<RuntimeTy<N>> {
+fn flatten_union<N: crate::Head>(variants: Vec<RealizedTy<N>>) -> Vec<RealizedTy<N>> {
     let mut out = Vec::new();
     for v in variants {
         match v {
-            RuntimeTy::Union(inner_variants) => out.extend(inner_variants),
+            RealizedTy::Union(inner_variants) => out.extend(inner_variants),
             other => out.push(other),
         }
     }
@@ -204,8 +206,8 @@ fn flatten_union<N: crate::Head>(variants: Vec<RuntimeTy<N>>) -> Vec<RuntimeTy<N
 /// Remove variants that are subtypes of other variants.
 ///
 /// If variant A is a subtype of variant B, A is dropped and B is kept.
-fn dedup_variants<N: crate::Head>(variants: Vec<RuntimeTy<N>>) -> Vec<RuntimeTy<N>> {
-    let mut result: Vec<RuntimeTy<N>> = Vec::new();
+fn dedup_variants<N: crate::Head>(variants: Vec<RealizedTy<N>>) -> Vec<RealizedTy<N>> {
+    let mut result: Vec<RealizedTy<N>> = Vec::new();
     for candidate in variants {
         if result
             .iter()
@@ -222,11 +224,11 @@ fn dedup_variants<N: crate::Head>(variants: Vec<RuntimeTy<N>>) -> Vec<RuntimeTy<
 }
 
 /// Push `null` variants to the end.
-fn null_to_end<N: crate::Head>(variants: Vec<RuntimeTy<N>>) -> Vec<RuntimeTy<N>> {
+fn null_to_end<N: crate::Head>(variants: Vec<RealizedTy<N>>) -> Vec<RealizedTy<N>> {
     let mut non_null = Vec::new();
     let mut nulls = Vec::new();
     for v in variants {
-        if matches!(v, RuntimeTy::Null) {
+        if matches!(v, RealizedTy::Null) {
             nulls.push(v);
         } else {
             non_null.push(v);
@@ -240,26 +242,29 @@ fn null_to_end<N: crate::Head>(variants: Vec<RuntimeTy<N>>) -> Vec<RuntimeTy<N>>
 // Subtyping (for deduplication)
 // ---------------------------------------------------------------------------
 
-/// Restricted structural subtyping for SAP dedup.
+/// Restricted structural subtyping for SAP dedup: whether dropping `sub` from a
+/// union that holds `sup` leaves the same type.
 ///
 /// Returns `true` when `sub` and `sup` are the same type, or when `sub` is a
-/// literal whose base primitive matches `sup`.
-fn is_sap_structural_subtype<N: crate::Head>(sub: &RuntimeTy<N>, sup: &RuntimeTy<N>) -> bool {
+/// literal of the primitive `sup`. Concrete types are atomic, so an `int`
+/// (literal or not) is never under `bigint`.
+fn is_sap_structural_subtype<N: crate::Head>(sub: &RealizedTy<N>, sup: &RealizedTy<N>) -> bool {
     if sub == sup {
         return true;
     }
 
     matches!(
         (sub, sup),
-        (RuntimeTy::Literal(Literal::Int(_), _), RuntimeTy::Int)
-            | (RuntimeTy::Literal(Literal::Int(_), _), RuntimeTy::Bigint)
-            | (RuntimeTy::Literal(Literal::Bigint(_), _), RuntimeTy::Bigint)
-            | (RuntimeTy::Literal(Literal::Float(_), _), RuntimeTy::Float)
-            | (RuntimeTy::Literal(Literal::String(_), _), RuntimeTy::String)
-            | (RuntimeTy::Literal(Literal::Bool(_), _), RuntimeTy::Bool)
-            // The one cross-type widening allowed by SAP: `int → bigint`
-            // is lossless, unlike `int → float` which loses precision past
-            // 2^53.
-            | (RuntimeTy::Int, RuntimeTy::Bigint)
+        (RealizedTy::Literal(Literal::Int(_), _), RealizedTy::Int)
+            | (
+                RealizedTy::Literal(Literal::Bigint(_), _),
+                RealizedTy::Bigint
+            )
+            | (RealizedTy::Literal(Literal::Float(_), _), RealizedTy::Float)
+            | (
+                RealizedTy::Literal(Literal::String(_), _),
+                RealizedTy::String
+            )
+            | (RealizedTy::Literal(Literal::Bool(_), _), RealizedTy::Bool)
     )
 }

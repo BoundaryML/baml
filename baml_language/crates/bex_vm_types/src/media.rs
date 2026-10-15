@@ -278,7 +278,7 @@ impl std::fmt::Display for MediaContent {
             }
             MediaContent::Base64 { base64_data, .. } => {
                 // Show first 5, last 5, and total length for context
-                let len = base64_data.len();
+                let len = base64_data.byte_len();
                 if len <= 10 {
                     write!(f, "base64({base64_data}, len={len})")
                 } else {

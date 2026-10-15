@@ -34,8 +34,8 @@ use super::{
 };
 use crate::{BexVm, errors::VmRustFnError};
 
-const BUILDER_FQN: &str = "reflect.class.Builder";
-const PENDING_FQN: &str = "reflect.class.PendingType";
+const BUILDER: baml_base::LangItem = crate::lang_items::REFLECT_CLASS_BUILDER;
+const PENDING: baml_base::LangItem = crate::lang_items::REFLECT_CLASS_PENDING_TYPE;
 
 static NEXT_BUILDER_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -155,16 +155,15 @@ fn lock_state<'a>(handle: &'a BuilderHandle, vm: &BexVm) -> MeteredGuard<'a, Bui
     handle.state.lock(vm.tlab.alloc_debt())
 }
 
-fn class_name(vm: &BexVm, value: Value) -> Option<String> {
-    let instance = vm.as_instance(&value).ok()?;
-    let Object::Class(class) = vm.get_object(instance.class) else {
-        return None;
-    };
-    Some(class.name.to_string())
+/// Whether `value` is an instance of the stdlib class `class` — by identity:
+/// a class that merely renders under the same name is not it.
+fn is_instance_of(vm: &BexVm, value: Value, class: baml_base::LangItem) -> bool {
+    vm.as_instance(&value)
+        .is_ok_and(|instance| vm.lang_declaration(class) == Some(instance.class))
 }
 
 fn builder_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, BuilderHandle), String> {
-    if class_name(vm, value).as_deref() != Some(BUILDER_FQN) {
+    if !is_instance_of(vm, value, BUILDER) {
         return Err("expected a reflect.class.Builder value".into());
     }
     let ptr = value
@@ -181,7 +180,7 @@ fn builder_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, BuilderHandle), S
 }
 
 fn pending_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, PendingHandle), String> {
-    if class_name(vm, value).as_deref() != Some(PENDING_FQN) {
+    if !is_instance_of(vm, value, PENDING) {
         return Err("expected a reflect.class.PendingType value".into());
     }
     let ptr = value
@@ -201,7 +200,7 @@ fn pending_parts(vm: &BexVm, value: Value) -> Result<(HeapPtr, PendingHandle), S
 /// a `type` value or a `reflect.WithMeta<reflect.Type>` row, which the ordinary
 /// resolved-field path reads.
 fn pending_field_root(vm: &BexVm, root: Value) -> Option<Result<PendingFieldRoot, String>> {
-    if class_name(vm, root).as_deref() == Some(PENDING_FQN) {
+    if is_instance_of(vm, root, PENDING) {
         return Some(Ok(PendingFieldRoot {
             pending: root,
             meta: None,
@@ -211,7 +210,7 @@ fn pending_field_root(vm: &BexVm, root: Value) -> Option<Result<PendingFieldRoot
         Ok(row) => row,
         Err(message) => return Some(Err(message)),
     };
-    if class_name(vm, row.payload).as_deref() != Some(PENDING_FQN) {
+    if !is_instance_of(vm, row.payload, PENDING) {
         return None;
     }
     Some(Ok(PendingFieldRoot {
@@ -291,7 +290,7 @@ fn append_unique_neighbor(vm: &mut BexVm, builder: Value, neighbor: Value) -> Re
 }
 
 fn alloc_pending(vm: &mut BexVm, op: PendingOp, roots: Vec<Value>) -> Value {
-    let class = vm.resolve_class(PENDING_FQN);
+    let class = vm.lang_object(PENDING);
     let handle = Value::object(vm.alloc_rust_data(Arc::new(PendingHandle { op })));
     let roots = Value::object(
         vm.tlab
@@ -301,7 +300,7 @@ fn alloc_pending(vm: &mut BexVm, op: PendingOp, roots: Vec<Value>) -> Value {
 }
 
 pub(crate) fn alloc_builder(vm: &mut BexVm, name: &str) -> Value {
-    let class = vm.resolve_class(BUILDER_FQN);
+    let class = vm.lang_object(BUILDER);
     let handle = BuilderHandle {
         state: Arc::new(MeteredMutex::new(BuilderState {
             id: NEXT_BUILDER_ID.fetch_add(1, Ordering::Relaxed),
@@ -520,7 +519,7 @@ fn direct_builders(vm: &BexVm, pending: Value) -> Result<Vec<Value>, String> {
                     }
                 }
                 PendingOp::Array | PendingOp::Optional | PendingOp::Union => {
-                    if class_name(vm, root).as_deref() == Some(PENDING_FQN) {
+                    if is_instance_of(vm, root, PENDING) {
                         walk(vm, root, seen_pending, seen_builders, builders)?;
                     }
                 }
@@ -713,7 +712,7 @@ fn validate_pending(
                 }
             }
             PendingOp::Array | PendingOp::Optional => {
-                if roots.len() != 1 || class_name(vm, roots[0]).as_deref() != Some(PENDING_FQN) {
+                if roots.len() != 1 || !is_instance_of(vm, roots[0], PENDING) {
                     return Err("a pending type composite has invalid native state".into());
                 }
                 walk(vm, roots[0], group, seen)?;
@@ -723,7 +722,7 @@ fn validate_pending(
                     return Err("a pending union must contain at least one member".into());
                 }
                 for root in roots {
-                    if class_name(vm, root).as_deref() == Some(PENDING_FQN) {
+                    if is_instance_of(vm, root, PENDING) {
                         walk(vm, root, group, seen)?;
                     } else {
                         reflected_type_row(vm, root)?;
@@ -771,7 +770,7 @@ fn planned_pending_type(
                 .ok_or_else(|| "class builder resolved to a non-type value".to_string())
         }
         PendingOp::Array => {
-            if roots.len() != 1 || class_name(vm, roots[0]).as_deref() != Some(PENDING_FQN) {
+            if roots.len() != 1 || !is_instance_of(vm, roots[0], PENDING) {
                 return Err("a pending type composite has invalid native state".into());
             }
             Ok(bex_vm_types::RealizedTy::List(Box::new(
@@ -779,7 +778,7 @@ fn planned_pending_type(
             )))
         }
         PendingOp::Optional => {
-            if roots.len() != 1 || class_name(vm, roots[0]).as_deref() != Some(PENDING_FQN) {
+            if roots.len() != 1 || !is_instance_of(vm, roots[0], PENDING) {
                 return Err("a pending type composite has invalid native state".into());
             }
             let base = planned_pending_type(vm, roots[0], plans)?;
@@ -799,7 +798,7 @@ fn planned_pending_type(
             let members = roots
                 .into_iter()
                 .map(|root| {
-                    if class_name(vm, root).as_deref() == Some(PENDING_FQN) {
+                    if is_instance_of(vm, root, PENDING) {
                         planned_pending_type(vm, root, plans)
                     } else {
                         reflected_type_row(vm, root).map(|row| row.type_value.ty)
@@ -878,9 +877,10 @@ fn build_group(
         // item name is display data only.
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(
-                node.name.as_str(),
-            )),
+            path: bex_vm_types::types::LocalName::new(
+                Vec::new(),
+                baml_type::Name::new(node.name.as_str()),
+            ),
             fields: Vec::new(),
             description: None,
             alias: None,
@@ -890,7 +890,7 @@ fn build_group(
             // the builder's metadata surface has no slot for it.
             stream_done: false,
             type_tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -999,12 +999,12 @@ fn resolve_pending_if_ready(vm: &mut BexVm, pending: Value) -> Result<Option<Val
 
     let mut resolved_roots = Vec::with_capacity(roots.len());
     for root in roots {
-        if class_name(vm, root).as_deref() == Some(PENDING_FQN) {
+        if is_instance_of(vm, root, PENDING) {
             let Some(value) = resolve_pending_if_ready(vm, root)? else {
                 return Ok(None);
             };
             resolved_roots.push(value);
-        } else if class_name(vm, root).as_deref() == Some(BUILDER_FQN) {
+        } else if is_instance_of(vm, root, BUILDER) {
             let value = instance_field(vm, root, 3)?;
             if value.is_null() {
                 return Ok(None);
@@ -1078,7 +1078,7 @@ pub(crate) fn coerce_pending_type_arg(
     vm: &mut BexVm,
     value: Value,
 ) -> Option<Result<TypeValue, Value>> {
-    if class_name(vm, value).as_deref() != Some(PENDING_FQN) {
+    if !is_instance_of(vm, value, PENDING) {
         return None;
     }
     match resolve_pending_if_ready(vm, value) {

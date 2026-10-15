@@ -20,7 +20,7 @@ class Context {
         }
     }
 
-    implements baml.ToString {
+    implements root.ToString {
         function to_string(self) -> string throws never {
             self._to_string_impl()
         }

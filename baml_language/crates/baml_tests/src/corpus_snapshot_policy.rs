@@ -129,11 +129,11 @@ pub(super) const BYTECODE: &[Example] = &[
         functions: &[
             "user.lambda_owners.Retry.scaled",
             "user.lambda_owners.Runner.twice",
-            "user.lambda_owners.<(user.lambda_owners.Retry as user.lambda_owners.Runner)>.run",
-            "user.lambda_owners.<(user.lambda_owners.Other as user.lambda_owners.Runner)>.run",
-            "user.lambda_owners.<(user.lambda_owners.Boxed<#0> as user.lambda_owners.Runner)>.run",
+            "user.<(user.lambda_owners.Retry as user.lambda_owners.Runner)>.run",
+            "user.<(user.lambda_owners.Other as user.lambda_owners.Runner)>.run",
+            "user.<(user.lambda_owners.Boxed<#0> as user.lambda_owners.Runner)>.run",
         ],
-        reason: "A lambda's owner segment is the owner's link-name tail for every method kind: inherent, interface default, in-body impl, out-of-body impl, generic impl. Impl- and interface-owned owners once lost their qualification, colliding across impl blocks.",
+        reason: "A lambda's owner segment is the owner's identity tail for every method kind: inherent, interface default, in-body impl, out-of-body impl, generic impl. A provided body spells its target and interface from its own package — by the owner's label, the one the name is prefixed with — so impl- and interface-owned owners stay qualified across impl blocks.",
     },
     Example {
         path: "ns_fixtures/ns_patterns_new/patterns_new.baml",

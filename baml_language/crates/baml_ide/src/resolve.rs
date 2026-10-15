@@ -166,6 +166,11 @@ pub fn symbol_at(
         return Some(target);
     }
 
+    // BUG: a token inside a qualified path (`Dog` in `root.Dog`,
+    // `Response` in `baml.http.Response`) is read here as the bare name
+    // first, so it lands on a same-named item of the reader's namespace
+    // when there is one; `qualified_item_at` should decide whenever the
+    // token has a path around it. `find_item_usages` shares the defect.
     match resolve_name_at(db, file, offset, &name) {
         ResolvedName::Item(def) | ResolvedName::Builtin(def) => {
             Some(SymbolTarget::Item(DeclRef::Source(def)))
@@ -201,19 +206,25 @@ fn qualified_item_at<'db>(
     }
 }
 
-/// A dotted name whose first segment is a package `file`'s package reaches,
-/// naming a declaration a SERVED package exports (`app.Widget`,
-/// `app.util.make`): the row's defining identity. `None` for anything the
-/// served lane does not export — a source package's items resolve through
+/// A dotted name whose first segment is a package `file`'s package reaches
+/// ([`baml_compiler2_hir::package::path_head`]), naming a declaration a
+/// SERVED package exports (`app.Widget`, `app.util.make`): the row's
+/// defining identity. `None` for anything the served lane does not export —
+/// a source package's items resolve through
 /// [`baml_compiler2_hir::resolve::resolve_path_at`].
 fn served_item_at<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     file: SourceFile,
     chain: &[Name],
 ) -> Option<SymbolTarget<'db>> {
-    let (package, path) = chain.split_first()?;
-    let (name, namespace) = path.split_last()?;
-    let root = baml_compiler2_hir::package::accessible_package(db, file.source_root(db), package)?;
+    let namespace = &baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
+    let (baml_compiler2_hir::package::PathHead::Package(root)
+    | baml_compiler2_hir::package::PathHead::Lang(root)) =
+        baml_compiler2_hir::package::path_head(db, file.source_root(db), namespace, chain)
+    else {
+        return None;
+    };
+    let (name, namespace) = chain[1..].split_last()?;
     let definition = extern_definition_named(db, root, namespace, name)?;
     Some(SymbolTarget::Item(DeclRef::External(definition)))
 }

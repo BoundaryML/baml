@@ -15,3 +15,11 @@ indexmap = { workspace = true }
 [[bench]]
 name = "bexstr_bench"
 harness = false
+
+[[bench]]
+name = "v8_benches"
+harness = false
+
+[[bench]]
+name = "bun_benches"
+harness = false

@@ -54,9 +54,11 @@ pub enum Hir2Diagnostic {
     },
     /// Builtin-only syntax used outside builtin stdlib files.
     BuiltinOnlySyntax { feature: String, span: TextRange },
-    /// A value binding or body type binding named a package root the
-    /// compiler emits in a desugar.
-    ReservedBindingName { name: Name, span: TextRange },
+    /// A binding, item, or type parameter named `root`, the path to the
+    /// package itself.
+    RootIsReserved { span: TextRange },
+    /// A file under a directory `ns_root/`: a namespace named `root`.
+    RootNamespace { span: TextRange },
     /// Generic single-span diagnostic for builtin contract validation.
     DiagnosticMessage {
         diagnostic_id: DiagnosticId,
@@ -410,20 +412,32 @@ impl Hir2Diagnostic {
                 .with_primary(Span { file_id, range: *span }, "not valid here")
                 .with_phase(DiagnosticPhase::Hir)
             }
-            Hir2Diagnostic::ReservedBindingName { name, span } => Diagnostic::error(
-                DiagnosticId::ReservedBindingName,
-                format!(
-                    "`{name}` cannot be used as a binding name: syntax such as `spawn` and \
-                     `env.X` refers to the `{name}` package, which this binding would hide. A \
-                     class or function may still be named `{name}`."
-                ),
+            Hir2Diagnostic::RootIsReserved { span } => Diagnostic::error(
+                DiagnosticId::RootIsReserved,
+                "`root` is the path to this package and cannot name a binding, an item, or a \
+                 type parameter"
+                    .to_string(),
             )
             .with_primary(
                 Span {
                     file_id,
                     range: *span,
                 },
-                "reserved binding name",
+                "`root` is this package",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::RootNamespace { span } => Diagnostic::error(
+                DiagnosticId::RootIsReserved,
+                "`root` is the path to this package and cannot name a namespace: rename the \
+                 directory `ns_root/`"
+                    .to_string(),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "this file is in `ns_root/`",
             )
             .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::BuiltinOnlySyntax { feature, span } => Diagnostic::error(

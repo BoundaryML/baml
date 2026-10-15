@@ -414,7 +414,7 @@ impl GenerateArgs {
             .prepare(&mut telemetry, default_environment, "bridge")?;
 
         // Build the codegen SymbolPool from the compiler database.
-        let pool = baml_ide::build_symbol_pool(&db);
+        let pool = baml_ide::build_symbol_pool(&db, package);
 
         reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
         let program = db

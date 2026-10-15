@@ -3,7 +3,6 @@
 //! privileged builtin interface artifact that public reflection APIs cannot
 //! produce and verifies that an ordinary mount cannot claim builtin trust.
 
-use baml_base::Name;
 use baml_compiler2_hir_ty::package_interface::export_interface;
 use baml_db::{ProjectDatabase, collect_diagnostics, testing::assert_no_diagnostic_errors};
 use baml_tests::engine::TestDbExt;
@@ -29,12 +28,7 @@ function intrinsic_type<T>() -> reflect.Type throws never {
 "#,
     );
     assert_no_diagnostic_errors(&lib_db);
-    let iface = export_interface(
-        &lib_db,
-        baml_compiler2_hir::package::spelling(&lib_db)
-            .root(&Name::new("app"))
-            .unwrap(),
-    );
+    let iface = export_interface(&lib_db, lib_db.dependency_named("app"));
     let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &iface)
         .expect("serialize builtin app interface");
 

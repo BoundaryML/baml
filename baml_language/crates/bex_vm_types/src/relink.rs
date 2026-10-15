@@ -358,10 +358,11 @@ mod tests {
             ..Bytecode::default()
         };
         Function {
-            name: "test".to_string(),
+            identity: crate::types::FunctionIdentity::Declared(crate::types::FnPath::Free(
+                crate::types::LocalName::new(Vec::new(), baml_base::Name::new("test")),
+            )),
             source_file: String::new(),
             docstring: None,
-            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode,
@@ -383,10 +384,9 @@ mod tests {
             display_return_type: String::new(),
             throws_type: crate::TyTemplate::Never,
             origin: FunctionOrigin::Internal,
-            is_interface_body: false,
             native_key: None,
             body_meta: None,
-            runtime_package: HeapPtr::null(),
+            owner: HeapPtr::null(),
         }
     }
 

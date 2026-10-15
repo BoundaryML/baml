@@ -6,7 +6,7 @@
 //! `NativeBuiltin` record. The CST is also retained per file for
 //! `//baml:mut_self`, `//baml:vm`, and `//baml:mut_vm` directive scanning.
 
-use baml_base::FileId;
+use baml_base::{FileId, native_key_spelling};
 use baml_compiler_diagnostics::ToDiagnostic;
 use baml_compiler_syntax::{NodeOrToken, SyntaxKind, SyntaxNode};
 use baml_compiler2_ast::ast::{
@@ -270,14 +270,15 @@ fn extract_from_class(
     // implementors put their `$rust_function` / `$rust_io_function` methods in
     // an `implements Rng { ... }` block. A method inside `implements I` is an
     // impl-block method like any other and is keyed `{ns}.{I}$for${Class}.{method}`
-    // (matching MIR's `native_key_for` — the KEY partner; `definition_link_name`
+    // (matching MIR's `native_key_for` — the KEY partner; `definition_display_name`
     // renders the separate `<(target as iface)>` DISPLAY spelling); a direct
     // method is just `{ns}.{Class}.{method}`.
     let direct = class_def.methods.iter().map(|m| (m, None));
     let in_impl = class_def.implements.iter().flat_map(|b| {
-        // The interface `TypeExpr`'s `Display` is the exact form MIR uses to
-        // build the method's fully-qualified name, so reuse it verbatim.
-        let iface = b.target.to_string();
+        // The interface `TypeExpr`'s `Display` is the exact form MIR keys
+        // on, with a written `root.` spelled as the package — through the
+        // same function MIR uses, so the two cannot drift.
+        let iface = native_key_spelling(package_of(namespace_prefix), &b.target.to_string());
         b.methods.iter().map(move |m| (m, Some(iface.clone())))
     });
     for (method, iface_qualifier) in direct.chain(in_impl) {
@@ -612,8 +613,14 @@ fn extract_from_implements_for(
             )
         });
 
-    // The synthetic class segment must match MIR's `{iface}$for${for}` exactly.
-    let synthetic_class = format!("{}$for${}", impl_def.interface_target, impl_def.for_target);
+    // The synthetic class segment must match MIR's `{iface}$for${for}`
+    // exactly: both spell a written `root.` as the package.
+    let package = package_of(namespace_prefix);
+    let synthetic_class = format!(
+        "{}$for${}",
+        native_key_spelling(package, &impl_def.interface_target.to_string()),
+        native_key_spelling(package, &impl_def.for_target.to_string()),
+    );
 
     let impl_generics: Vec<String> = impl_def
         .generic_params
@@ -772,8 +779,8 @@ impl<'a> ImplReceiver<'a> {
             TypeExprKind::Uint8Array => Self::Builtin("Uint8Array"),
             TypeExprKind::List { .. } => Self::Builtin("Array"),
             TypeExprKind::Map { .. } => Self::Builtin("Map"),
-            TypeExprKind::Path { segments, .. } => {
-                let [name] = segments.as_slice() else {
+            TypeExprKind::Path { path, .. } => {
+                let [name] = path.segments() else {
                     return None;
                 };
                 return items.iter().find_map(|item| match item {
@@ -820,9 +827,7 @@ fn type_expr_to_baml_type_with_self(
 ) -> BamlType {
     let recurse = |inner: &TypeExpr| type_expr_to_baml_type_with_self(inner, generics, self_baml);
     match &ty.kind {
-        TypeExprKind::Path { segments, .. }
-            if segments.len() == 1 && segments[0].as_str() == "Self" =>
-        {
+        TypeExprKind::Path { path, .. } if path.len() == 1 && path[0].as_str() == "Self" => {
             self_baml.clone()
         }
         TypeExprKind::Optional { inner, .. } => BamlType::Optional(Box::new(recurse(inner))),
@@ -873,13 +878,15 @@ fn extract_throws(func: &FunctionDef) -> Option<Vec<String>> {
 #[allow(clippy::redundant_closure_for_method_calls)]
 fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
     match &ty.kind {
-        TypeExprKind::Path { segments, .. } => {
-            let path: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
+        TypeExprKind::Path {
+            path: type_path, ..
+        } => {
+            let path: Vec<&str> = type_path.iter().map(|s| s.as_str()).collect();
             if path.len() >= 3 && (path[0] == "baml" || path[0] == "root") && path[1] == "errors" {
                 vec![path[2..].join(".")]
             } else {
                 vec![
-                    segments
+                    type_path
                         .iter()
                         .map(|s| s.as_str())
                         .collect::<Vec<_>>()
@@ -892,6 +899,14 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
         }
         _ => vec![],
     }
+}
+
+/// The package of a `{package}` or `{package}.{ns…}` prefix: the stdlib
+/// package's fixed name, which a native key spells a written `root.` as.
+fn package_of(namespace_prefix: &str) -> &str {
+    namespace_prefix
+        .split_once('.')
+        .map_or(namespace_prefix, |(package, _)| package)
 }
 
 /// The namespace-only part of a `{package}` or `{package}.{ns…}` prefix.
@@ -990,10 +1005,10 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             Box::new(type_expr_to_baml_type(value, generics)),
         ),
 
-        TypeExprKind::Path { segments, .. } => {
+        TypeExprKind::Path { path, .. } => {
             // Single-segment path may be a generic type param or a named type.
-            if segments.len() == 1 {
-                let name = segments[0].as_str();
+            if path.len() == 1 {
+                let name = path[0].as_str();
                 if generics.iter().any(|g| g == name) {
                     BamlType::Generic(name.to_string())
                 } else {
@@ -1001,7 +1016,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
                 }
             } else {
                 // Multi-segment path (e.g. `baml.errors.Io`) — treat as Named.
-                let name = segments
+                let name = path
                     .iter()
                     .map(|s| s.as_str())
                     .collect::<Vec<_>>()
@@ -1608,8 +1623,8 @@ implements<T, E> Modifier<T, E> for Root {
             "baml_random_rng_for_systemrandom_random"
         );
         assert_eq!(
-            super::path_to_fn_name("baml.fs.root.io.Read$for$File.read"),
-            "baml_fs_root_io_read_for_file_read"
+            super::path_to_fn_name("baml.fs.baml.io.Read$for$File.read"),
+            "baml_fs_baml_io_read_for_file_read"
         );
     }
 

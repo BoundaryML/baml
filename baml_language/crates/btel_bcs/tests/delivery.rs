@@ -1724,7 +1724,7 @@ async fn a_short_part_of_a_long_string_goes_with_its_recording() {
     // document's own memory: each holds all of it.
     let mut sent = Vec::new();
     for (file, end) in files(2).into_iter().zip([1000, 3000]) {
-        let part = document.substring(0, end);
+        let part = document.byte_slice(0..end);
         let mut b = pool.try_acquire().unwrap();
         let value = b.leaves().string_value(&part);
         let snapshot = b.finish(value, &mut btel_snapshot::Shaper::default());

@@ -43,7 +43,7 @@ fn strip_provided_greet(program: &mut Program) {
         .find(|rule| {
             objects[rule.interface_head]
                 .as_interface()
-                .is_some_and(|def| def.name.name().as_str() == "Greeter")
+                .is_some_and(|def| def.path.name.as_str() == "Greeter")
         })
         .expect("the Greeter rule is baked");
     let before = rule.methods.len();

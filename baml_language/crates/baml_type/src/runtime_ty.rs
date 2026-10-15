@@ -216,6 +216,28 @@ impl<N: Clone> RuntimeTy<N> {
 
     // --- Transforms ---
 
+    /// This type with its union, if it is one, spelled flat and without
+    /// repeated members, first occurrences in place ([`crate::flat_union`]):
+    /// `(int | null) | null` is `int | null`.
+    #[must_use]
+    pub fn flatten_union(self) -> Self
+    where
+        N: PartialEq,
+    {
+        match self {
+            RuntimeTy::Union(members) => crate::flat_union(
+                members,
+                |ty| match ty {
+                    RuntimeTy::Union(members) => Ok(members),
+                    ty => Err(ty),
+                },
+                RuntimeTy::Never,
+                RuntimeTy::Union,
+            ),
+            ty => ty,
+        }
+    }
+
     /// Remove `null` from a nullable union, collapsing the result. The inverse
     /// of [`RuntimeTy::optional`]; mirrors [`Ty::strip_null`].
     pub fn strip_null(&self) -> RuntimeTy<N> {

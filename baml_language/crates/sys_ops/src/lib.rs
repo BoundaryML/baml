@@ -2584,10 +2584,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_fs_write_bytes(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_root_io_read_for_file_read = {
+        self.inner.baml_fs_baml_io_read_for_file_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_root_io_read_for_file_read(heap, permit, args, ctx, call_id)
+                t.__glue_baml_fs_baml_io_read_for_file_read(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_close = {
@@ -2602,16 +2602,16 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_fs_file_seek_from(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_root_io_write_for_file_write_some = {
+        self.inner.baml_fs_baml_io_write_for_file_write_some = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_root_io_write_for_file_write_some(heap, permit, args, ctx, call_id)
+                t.__glue_baml_fs_baml_io_write_for_file_write_some(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_root_io_write_for_file_flush = {
+        self.inner.baml_fs_baml_io_write_for_file_flush = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_root_io_write_for_file_flush(heap, permit, args, ctx, call_id)
+                t.__glue_baml_fs_baml_io_write_for_file_flush(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_read_dir = {
@@ -2831,16 +2831,16 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_net_tcpstream__connect(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_root_io_read_for_tcpstream_read = {
+        self.inner.baml_net_baml_io_read_for_tcpstream_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_root_io_read_for_tcpstream_read(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_baml_io_read_for_tcpstream_read(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_root_io_write_for_tcpstream_write_some = {
+        self.inner.baml_net_baml_io_write_for_tcpstream_write_some = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_root_io_write_for_tcpstream_write_some(
+                t.__glue_baml_net_baml_io_write_for_tcpstream_write_some(
                     heap, permit, args, ctx, call_id,
                 )
             })
@@ -2933,10 +2933,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_sys_readpipe_close(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys_root_io_read_for_readpipe_read = {
+        self.inner.baml_sys_baml_io_read_for_readpipe_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_root_io_read_for_readpipe_read(heap, permit, args, ctx, call_id)
+                t.__glue_baml_sys_baml_io_read_for_readpipe_read(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_sys_writepipe_close = {
@@ -2945,18 +2945,18 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_sys_writepipe_close(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys_root_io_write_for_writepipe_write_some = {
+        self.inner.baml_sys_baml_io_write_for_writepipe_write_some = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_root_io_write_for_writepipe_write_some(
+                t.__glue_baml_sys_baml_io_write_for_writepipe_write_some(
                     heap, permit, args, ctx, call_id,
                 )
             })
         };
-        self.inner.baml_sys_root_io_write_for_writepipe_flush = {
+        self.inner.baml_sys_baml_io_write_for_writepipe_flush = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_root_io_write_for_writepipe_flush(
+                t.__glue_baml_sys_baml_io_write_for_writepipe_flush(
                     heap, permit, args, ctx, call_id,
                 )
             })

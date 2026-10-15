@@ -1,7 +1,7 @@
 /// One variant of an enum: its name and its schema metadata.
 class Value {
     name: string,
-    meta: reflect.Meta,
+    meta: root.Meta,
 }
 
 /// Construct one enum row with optional schema metadata.
@@ -20,10 +20,7 @@ function value(
 /// identity even when its name and rows are byte-identical.
 //baml:mut_vm
 //baml:fallible
-function new(
-    name: string,
-    values: (string | Value)[],
-) -> Type throws reflect.errors.CompilationError {
+function new(name: string, values: (string | Value)[]) -> Type throws root.errors.CompilationError {
     $rust_function
 }
 
@@ -43,12 +40,12 @@ class Type {
     /// The wrapped `type` value. Private by invariant: reflection natives are
     /// its only readers, and each kind method panics if the held type no longer
     /// classifies as this view's kind.
-    _ty: reflect.Type,
+    _ty: root.Type,
 
-    implements reflect.TypeView {
+    implements root.TypeView {
         //baml:vm
         //baml:fallible
-        function as_type(self) -> reflect.Type throws never {
+        function as_type(self) -> root.Type throws never {
             $rust_function
         }
     }
@@ -61,7 +58,7 @@ class Type {
     //baml:mut_vm
     //baml:fallible
     /// The enum declaration's own schema metadata.
-    function meta(self) -> reflect.Meta throws never {
+    function meta(self) -> root.Meta throws never {
         $rust_function
     }
 }

@@ -55,12 +55,21 @@ pub enum WellKnownHead {
 }
 
 impl WellKnownHead {
-    /// The declaration's short name at the root namespace of `reflect`.
-    pub const fn name(self) -> &'static str {
+    /// Every head, in declaration order.
+    pub const ALL: [Self; 2] = [Self::AnyFunction, Self::AnyClass];
+
+    /// The declaration by identity: an item at the root namespace of
+    /// `reflect`. The one spelling; everything else derives from it.
+    pub const fn item(self) -> baml_base::LangItem {
         match self {
-            Self::AnyFunction => "AnyFunction",
-            Self::AnyClass => "AnyClass",
+            Self::AnyFunction => baml_base::lang_item!(Reflect: AnyFunction),
+            Self::AnyClass => baml_base::lang_item!(Reflect: AnyClass),
         }
+    }
+
+    /// The declaration's short name at the root namespace of `reflect`.
+    pub fn name(self) -> &'static str {
+        self.item().name().as_str()
     }
 }
 
@@ -74,7 +83,7 @@ pub trait SpelledHead: Head {
 
 impl SpelledHead for TypeName {
     fn well_known(head: WellKnownHead) -> Self {
-        TypeName::new(Name::new("reflect"), Vec::new(), Name::new(head.name()))
+        TypeName::of_lang_item(head.item())
     }
 }
 
@@ -138,8 +147,7 @@ impl TypeContext<DeclName> for LangFacts {
 /// installed. Every compiler-side [`TypeContext`] answers
 /// [`well_known`](TypeContext::well_known) through here.
 pub fn well_known_decl(lang: baml_base::LangRoots, head: WellKnownHead) -> Option<DeclName> {
-    lang.get(baml_base::LangPackage::Reflect)
-        .map(|reflect| DeclName::in_root(reflect, Vec::new(), Name::new(head.name())))
+    DeclName::of_lang_item(lang, head.item())
 }
 
 /// Whether `head` is the [`WellKnownHead::AnyFunction`] declaration, decided

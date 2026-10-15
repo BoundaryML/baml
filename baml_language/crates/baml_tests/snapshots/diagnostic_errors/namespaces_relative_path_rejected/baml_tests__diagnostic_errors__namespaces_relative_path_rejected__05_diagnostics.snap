@@ -1,0 +1,67 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0002
+
+  × unresolved type: llm.Response. Did you mean `root.llm.Response`?
+    ╭─[main.baml:10:31]
+ 10 │ function annotation(response: llm.Response) -> int {
+    ·                               ────────────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: llm.Response. Did you mean `root.llm.Response`?
+    ╭─[main.baml:15:5]
+ 15 │     llm.Response { text: "x" }.text.length()
+    ·     ──────────────────────────
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `llm.make`. Did you mean `root.llm.make`?
+    ╭─[main.baml:19:5]
+ 19 │     llm.make()
+    ·     ────────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: llm.Response. Did you mean `root.llm.Response`?
+    ╭─[main.baml:24:9]
+ 24 │         llm.Response => 1,
+    ·         ────────────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: llm.Response. Did you mean `root.llm.Response`?
+    ╭─[main.baml:30:5]
+ 30 │     let llm.Response { text } = response;
+    ·     ─────────────────────────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: llm.vendor.Box. Did you mean `root.llm.vendor.Box`?
+    ╭─[main.baml:35:5]
+ 35 │     llm.vendor.Box<int> { value: 1 }.value
+    ·     ────────────────────────────────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: vendor.Box. Did you mean `root.llm.vendor.Box`?
+    ╭─[ns_llm/models.baml:12:5]
+ 12 │     vendor.Box<int> { value: 2 }.value + vendor.unbox()
+    ·     ────────────────────────────
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `vendor.unbox`. Did you mean `root.llm.vendor.unbox`?
+    ╭─[ns_llm/models.baml:12:42]
+ 12 │     vendor.Box<int> { value: 2 }.value + vendor.unbox()
+    ·                                          ────────────
+    ╰────

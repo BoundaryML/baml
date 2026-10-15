@@ -184,7 +184,23 @@ use sha2::{Digest, Sha256};
 /// declared after it in the manifest's per-file diagnostics rows. The type
 /// family lost `Void` (Borsh discriminant 22, now reserved) with it: a
 /// cached unit carrying the retired discriminant no longer decodes.
-pub const FORMAT_VERSION: u32 = 19;
+///
+/// Version 20: `Function::source_file` and the name of a file's `$init_test_…`
+/// function are root-relative for every non-stdlib root — a unit no longer
+/// carries the absolute path of the checkout it was compiled from — and a
+/// pooled `Class`, `Enum`, `Interface` and `TypeAlias` carries its path
+/// inside its package (`path`) where it used to carry a package-qualified
+/// name. `Class::has_cleanup` became `Class::cleanup`, the finalizer's
+/// position in the class's method table. A `ProgramPackage` carries its
+/// `PackageKind` (`Language(LangPackage)` or `Ordinary`) and each edge its
+/// `EdgeKind` (`Dependency` or `ReExported`); a dependency table's prelude
+/// entry is `Locator::Prelude(LangPackage)`, bound by identity through no
+/// edge. A pooled `Function` carries a structural `FunctionIdentity` (its
+/// path, body key, closure parent or initializer role) where it carried a
+/// rendered name (`name`, `declared_name`, `is_interface_body` are gone), and
+/// a `ProgramPackage` carries `objects`, the pool range the linker placed it
+/// as, which owns every function in it.
+pub const FORMAT_VERSION: u32 = 20;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

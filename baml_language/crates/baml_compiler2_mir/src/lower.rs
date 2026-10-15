@@ -13,6 +13,7 @@ use baml_compiler2_hir_ty::{
     },
     layout,
     package_interface::ExportedFunction,
+    render::Viewpoint,
 };
 use baml_type::{
     DeclName, ParamTy, PrimitiveType, ResolvedAliases, RuntimeGenericLayout, TypeName,
@@ -538,24 +539,22 @@ fn lower_tir_template(
 }
 
 /// The checker → MIR crossing for one package: alias expansion, with every
-/// head kept as the declaration's identity. It also renders a head as the
-/// program spells it ([`Self::wire`]) for the places that SHOW one — a
-/// runtime object's display name, operand metadata, a dump — and for nothing
-/// else: no declaration is ever resolved from a spelling.
+/// head kept as the declaration's identity. It also renders a head
+/// canonically ([`Self::wire`]) for the places that SHOW one — operand
+/// metadata, a dump, a message — and for nothing else: no declaration is
+/// ever resolved from a rendering.
 #[derive(Clone, Copy)]
 pub struct RuntimeLowering<'a> {
     pub aliases: &'a ResolvedAliases,
-    pub spelling: &'a Spelling,
     pub db: &'a dyn crate::Db,
 }
 
 impl<'a> RuntimeLowering<'a> {
-    /// The crossing for `root`'s declarations: its alias environment and the
-    /// database's spelling table, both memoized.
+    /// The crossing for `root`'s declarations: its memoized alias
+    /// environment.
     pub fn of(db: &'a dyn crate::Db, root: baml_base::SourceRoot) -> Self {
         Self {
             aliases: &resolved_aliases_for_package(db, root).0,
-            spelling: baml_compiler2_hir::package::spelling(db),
             db,
         }
     }
@@ -566,11 +565,12 @@ impl<'a> RuntimeLowering<'a> {
         self.aliases.convert(ty)
     }
 
-    /// A compile-time head as the program spells it: what a runtime object's
-    /// display name and a dump say. Never an identity — nothing resolves a
+    /// A compile-time head rendered canonically, packed into a wire name for
+    /// printers that take one ([`Viewpoint::wire_head`]): what operand
+    /// metadata and a dump say. Never an identity — nothing resolves a
     /// declaration from it.
     pub fn wire(&self, decl: &DeclName) -> TypeName {
-        self.spelling.wire(decl)
+        Viewpoint::canonical(self.db).wire_head(decl)
     }
 }
 
@@ -1027,25 +1027,37 @@ use baml_compiler2_hir::{contributions::Definition, file_package::file_package};
 /// display owner is the interface's bare name for a default body and the
 /// synthesized `<(target as iface)>` segment for an impl-provided one.
 ///
-/// A NAME, never an identity: MIR carries declarations and refs, and emit
-/// renders this exactly where a name is legitimately a key today — the unit
-/// link symbols, `Function.name`, display metadata, and the incremental
-/// edge grain.
-pub fn definition_link_name<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> String {
+/// A canonical rendering, never an identity: MIR carries declarations and
+/// refs, and emit renders this exactly where a declaration is SHOWN —
+/// operand metadata, dumps, messages. The package segment is the package's
+/// display label ([`Viewpoint::display_package`]).
+pub fn definition_display_name<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> String {
+    use baml_compiler2_hir::item_data::{MethodOwner, method_owner};
     let pkg_info = file_package(db, def.file(db));
-    link_name(
-        spelling(db).of(pkg_info.root),
-        &pkg_info.namespace_path,
+    // An impl-provided body is no item of a namespace: it is identified by
+    // the implements relation, so its spelling is the package label and the
+    // `<(target as iface)>.m` tail alone — the runtime's `Function::name`.
+    let namespace: &[Name] = match def {
+        Definition::Function(func)
+            if matches!(method_owner(db, func), Some(MethodOwner::Impl(_))) =>
+        {
+            &[]
+        }
+        _ => &pkg_info.namespace_path,
+    };
+    dotted_name(
+        &Viewpoint::canonical(db).display_label(pkg_info.root),
+        namespace,
         &[&definition_short_name(db, def)],
     )
 }
 
-/// The owner-qualified tail of a declaration's link name — everything after
+/// The owner-qualified tail of a declaration's display name — everything after
 /// the package and namespace segments: `f` for a free function, `Class.m`
 /// for a class-inherent method, `Interface.m` for an interface's default
 /// body, `<(target as iface)>.m` for an impl-provided one, and the bare name
 /// for every other item. This is the ONE spelling of a declaration's tail:
-/// [`definition_link_name`] prefixes it, and a nested synthetic function
+/// [`definition_display_name`] prefixes it, and a nested synthetic function
 /// (`<lambda(owner, i)>`) names its owner by it, so the two cannot drift.
 pub(crate) fn definition_short_name<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> String {
     use baml_compiler2_hir::item_data::{
@@ -1093,19 +1105,21 @@ pub(crate) fn definition_short_name<'db>(db: &'db dyn crate::Db, def: Definition
             // The identity is the DECLARATION (an opaque session id);
             // only the DISPLAY segment is synthesized (the lambda
             // convention), spelled with the language's own qualification
-            // syntax: `<(target as iface)>` — both halves canonically
-            // resolved and fully qualified; generic and interface
-            // arguments appear in the spelling, associated-type pins do
-            // NOT (members of the impl, outputs of the match); the
-            // impl's own type variables render as frame indices (`#0`).
+            // syntax: `<(target as iface)>` — both halves resolved and
+            // spelled from the body's own package by edge path (`root.X`,
+            // `edge.ns.X`), exactly as the runtime renders the body's
+            // key; generic and interface arguments appear in the
+            // spelling, associated-type pins do NOT (members of the impl,
+            // outputs of the match); the impl's own type variables render
+            // as frame indices (`#0`).
             format!("{}.{}", impl_display_segment(db, impl_loc), name.as_str())
         }
         None => name.as_str().to_string(),
     }
 }
 
-/// `package.ns….tail…` — the one dotted spelling every link name uses.
-fn link_name(package: &Name, namespace: &[Name], tail: &[&str]) -> String {
+/// `package.ns….tail…` — the one dotted spelling every display name uses.
+fn dotted_name(package: &Name, namespace: &[Name], tail: &[&str]) -> String {
     let mut parts: Vec<&str> = Vec::with_capacity(1 + namespace.len() + tail.len());
     parts.push(package.as_str());
     parts.extend(namespace.iter().map(Name::as_str));
@@ -1114,7 +1128,7 @@ fn link_name(package: &Name, namespace: &[Name], tail: &[&str]) -> String {
 }
 
 /// The synthesized `<(target as iface)>` display segment for an anonymous
-/// impl block — see the `MethodOwner::Impl` arm of [`definition_link_name`].
+/// impl block — see the `MethodOwner::Impl` arm of [`definition_display_name`].
 fn impl_display_segment<'db>(
     db: &'db dyn crate::Db,
     impl_loc: baml_compiler2_hir::loc::ImplLoc<'db>,
@@ -1140,15 +1154,54 @@ fn impl_display_segment<'db>(
         _ => iface_ty,
     };
     let target_ty = baml_compiler2_hir_ty::lower::impl_self_ty(db, impl_loc);
+    let spelling = BodyPackageSpelling {
+        db,
+        body_root: file_package(db, impl_loc.file(db)).root,
+    };
     format!(
         "<({} as {})>",
-        render_with_frame_indices(db, &target_ty, &impl_params),
-        render_with_frame_indices(db, &iface_ty, &impl_params),
+        render_with_frame_indices(&target_ty, &impl_params, &spelling),
+        render_with_frame_indices(&iface_ty, &impl_params, &spelling),
     )
 }
 
-/// The link-key `where` suffix for an impl-provided interface body: the
-/// impl's canonical constraint set, rendered with frame indices.
+/// Heads spelled from an impl body's own package: its own declarations by
+/// the package's display label (`user.ns.X`, the label the loaded function's
+/// name is prefixed with), a dependency's by the edges that reach it
+/// (`edge.ns.X`) — which is how the runtime renders the body's key
+/// (`PathName`), so MIR's display of the body and the loaded function's name
+/// are one spelling.
+struct BodyPackageSpelling<'db> {
+    db: &'db dyn crate::Db,
+    body_root: baml_base::SourceRoot,
+}
+
+impl baml_type::TyRenderStrategy<baml_type::DeclName> for BodyPackageSpelling<'_> {
+    fn qtn(&self, qtn: &baml_type::DeclName) -> String {
+        let package = if qtn.root() == self.body_root {
+            Viewpoint::canonical(self.db)
+                .display_package(self.body_root)
+                .into_owned()
+        } else {
+            baml_compiler2_hir::package::edge_spelling(self.db, self.body_root, qtn.root())
+                .to_string()
+        };
+        std::iter::once(package)
+            .chain(qtn.namespace().iter().map(ToString::to_string))
+            .chain(std::iter::once(qtn.name().to_string()))
+            .collect::<Vec<_>>()
+            .join(".")
+    }
+
+    fn type_var(&self, name: &Name) -> String {
+        name.to_string()
+    }
+}
+
+/// The `where` suffix of an impl-provided interface body's DISPLAY: the
+/// impl's constraint set, rendered with frame indices. Display only — the
+/// body's identity is its structural `ImplBodyKey`, whose coherence part
+/// carries the same constraints.
 ///
 /// The impl identity key must include every input coherence's admissibility
 /// check discriminates on (see `interfaces::coherence` in `hir_ty`). Under the
@@ -1177,6 +1230,10 @@ pub fn interface_body_link_bounds_suffix<'db>(
     };
     let impl_params = baml_compiler2_hir_ty::lower::impl_frame(db, impl_loc);
     let impl_bounds = baml_compiler2_hir_ty::lower::impl_generic_bounds(db, impl_loc);
+    let spelling = BodyPackageSpelling {
+        db,
+        body_root: file_package(db, impl_loc.file(db)).root,
+    };
     let mut parts: Vec<String> = Vec::new();
     for (index, param) in impl_params.iter().enumerate() {
         let Some(bounds) = impl_bounds.get(param) else {
@@ -1187,7 +1244,7 @@ pub fn interface_body_link_bounds_suffix<'db>(
         }
         let mut rendered: Vec<String> = bounds
             .iter()
-            .map(|bound| render_with_frame_indices(db, &bound.to_ty(), &impl_params))
+            .map(|bound| render_with_frame_indices(&bound.to_ty(), &impl_params, &spelling))
             .collect();
         rendered.sort_unstable();
         parts.push(format!("#{index}: {}", rendered.join(" + ")));
@@ -1202,9 +1259,9 @@ pub fn interface_body_link_bounds_suffix<'db>(
 /// their frame indices (`#0`) instead of their declared names — the declared
 /// names are the block's private spelling, not part of its identity.
 fn render_with_frame_indices(
-    db: &dyn crate::Db,
     ty: &baml_type::Ty,
     frame: &[baml_type::ParamTy],
+    spelling: &impl baml_type::TyRenderStrategy<baml_type::DeclName>,
 ) -> String {
     use baml_type::interned::ClosedTy;
     fn rewrite(ty: &ClosedTy, frame: &[baml_type::ParamTy]) -> ClosedTy {
@@ -1220,16 +1277,18 @@ fn render_with_frame_indices(
     }
     rewrite(&ClosedTy::from_plain(ty), frame)
         .to_plain()
-        .render_with(&baml_compiler2_hir_ty::render::Viewpoint::canonical(db))
+        .render_with(spelling)
 }
 
 /// The codegen-lockstep NATIVE KEY for a builtin body: the dot-free
 /// `{iface as written}$for${target as written}` scheme that
 /// `baml_builtins2_codegen::extract` produces byte-for-byte for its dispatch
-/// tables and sys-op paths. This is a KEY, not a name — `Function.name`
-/// renders the canonical `<(target as iface)>` display form
-/// ([`definition_link_name`]) — so the written-form dependence here is confined
-/// to the attach boundary the codegen already owns.
+/// tables and sys-op paths, with a written `root.` spelled as the package
+/// ([`baml_base::native_key_spelling`], shared with the extractor). This is a
+/// KEY, not a name — `Function.name` renders the canonical
+/// `<(target as iface)>` display form ([`definition_display_name`]) — so the
+/// written-form dependence here is confined to the attach boundary the
+/// codegen already owns.
 pub fn native_key_for<'db>(
     db: &'db dyn crate::Db,
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
@@ -1239,37 +1298,47 @@ pub fn native_key_for<'db>(
         method_owner,
     };
     let pkg_info = file_package(db, func_loc.file(db));
+    // A native body is the standard library's own: its package is a language
+    // package, keyed by its fixed name — the one the codegen extractor keys
+    // the same body under.
+    let package = Name::new(
+        lang_roots(db)
+            .package_of(pkg_info.root)
+            .unwrap_or_else(|| {
+                unreachable!("a native function is declared by the standard library")
+            })
+            .manifest_name(),
+    );
+    let package = &package;
     let name = function_data(db, func_loc).name.clone();
     let item = match method_owner(db, func_loc) {
         // A class-inherent method has no written-form target to key on: its
-        // key is its link name.
+        // key is its display name.
         Some(MethodOwner::Class(_)) => {
-            return definition_link_name(db, Definition::Function(func_loc));
+            return definition_display_name(db, Definition::Function(func_loc));
         }
         Some(MethodOwner::Interface(iface_loc)) => interface_data(db, iface_loc).name.clone(),
         Some(MethodOwner::Impl(impl_loc)) => {
             let block = impl_block_data(db, impl_loc);
             let for_display = match &block.subject {
-                ImplSubjectData::Free { for_target, .. } => {
-                    block.type_refs.display(*for_target).to_string()
-                }
+                ImplSubjectData::Free { for_target, .. } => baml_base::native_key_spelling(
+                    package.as_str(),
+                    &block.type_refs.display(*for_target).to_string(),
+                ),
                 ImplSubjectData::InClass { class, .. } => class_data(db, *class).name.to_string(),
             };
-            Name::new(format!(
-                "{}$for${for_display}",
-                block.type_refs.display(block.interface_target),
-            ))
+            let iface_display = baml_base::native_key_spelling(
+                package.as_str(),
+                &block.type_refs.display(block.interface_target).to_string(),
+            );
+            Name::new(format!("{iface_display}$for${for_display}"))
         }
         None => {
-            return link_name(
-                spelling(db).of(pkg_info.root),
-                &pkg_info.namespace_path,
-                &[name.as_str()],
-            );
+            return dotted_name(package, &pkg_info.namespace_path, &[name.as_str()]);
         }
     };
-    link_name(
-        spelling(db).of(pkg_info.root),
+    dotted_name(
+        package,
         &pkg_info.namespace_path,
         &[item.as_str(), name.as_str()],
     )
@@ -1283,10 +1352,8 @@ pub fn native_key_for<'db>(
 /// `implements`
 /// relation that selects it — so it gets no runtime name: emit pools and slots
 /// it like any function, but it enters no package table (so no rendered view
-/// of the executable names it) and carries `Function::is_interface_body`. The [`definition_link_name`] spelling for a body
-/// is display-only plus a link-internal unit-export key — the latter makes
-/// it load-bearing as a KEY: it must be unique (coherence + the canonical
-/// rendering guarantee it; decompose enforces it).
+/// of the executable names it) and carries `Function::is_interface_body`. The
+/// [`definition_display_name`] rendering of a body is display only.
 ///
 /// Required interface methods (signature-only, no body) never reach the
 /// emit paths that ask this; the interface-owner arm still classifies them
@@ -1306,43 +1373,46 @@ pub fn function_is_interface_body<'db>(
 }
 
 /// The name a callable links as, wherever it is declared: a source
-/// declaration by [`definition_link_name`]; a served package's row by its
+/// declaration by [`definition_display_name`]; a served package's row by its
 /// ADDRESS — its dispatch slot — never the heads the row's own `target`
 /// spells (a blob cannot point a consumer's call at another package's
 /// symbol).
-pub fn function_link_name<'db>(db: &'db dyn crate::Db, func: FunctionRef<'db>) -> String {
+pub fn function_display_name<'db>(db: &'db dyn crate::Db, func: FunctionRef<'db>) -> String {
     use baml_compiler2_hir_ty::callable::ExternalCallTarget;
     match func {
-        DeclRef::Source(func_loc) => definition_link_name(db, Definition::Function(func_loc)),
-        DeclRef::External(callee) => match callee.slot(db) {
-            ExternalCallTarget::Free { function } => link_name(
-                spelling(db).of(function.root()),
-                function.namespace(),
-                &[function.name().as_str()],
-            ),
-            ExternalCallTarget::Method { class, name } => link_name(
-                spelling(db).of(class.root()),
-                class.namespace(),
-                &[class.name().as_str(), name.as_str()],
-            ),
-            ExternalCallTarget::Interface { interface, method } => link_name(
-                spelling(db).of(interface.root()),
-                interface.namespace(),
-                &[interface.name().as_str(), method.as_str()],
-            ),
-        },
+        DeclRef::Source(func_loc) => definition_display_name(db, Definition::Function(func_loc)),
+        DeclRef::External(callee) => {
+            let viewpoint = Viewpoint::canonical(db);
+            match callee.slot(db) {
+                ExternalCallTarget::Free { function } => dotted_name(
+                    &viewpoint.display_label(function.root()),
+                    function.namespace(),
+                    &[function.name().as_str()],
+                ),
+                ExternalCallTarget::Method { class, name } => dotted_name(
+                    &viewpoint.display_label(class.root()),
+                    class.namespace(),
+                    &[class.name().as_str(), name.as_str()],
+                ),
+                ExternalCallTarget::Interface { interface, method } => dotted_name(
+                    &viewpoint.display_label(interface.root()),
+                    interface.namespace(),
+                    &[interface.name().as_str(), method.as_str()],
+                ),
+            }
+        }
     }
 }
 
-/// The name a class links as, wherever it is declared: the wire spelling
-/// emit registers its pooled object under and renders into operand metadata.
-pub fn class_link_name<'db>(db: &'db dyn crate::Db, class: ClassRef<'db>) -> String {
+/// The display name of a class, wherever it is declared: what emit renders
+/// into operand metadata.
+pub fn class_display_name<'db>(db: &'db dyn crate::Db, class: ClassRef<'db>) -> String {
     match class {
-        DeclRef::Source(class_loc) => definition_link_name(db, Definition::Class(class_loc)),
+        DeclRef::Source(class_loc) => definition_display_name(db, Definition::Class(class_loc)),
         DeclRef::External(class_loc) => {
             let head = class_loc.head(db);
-            link_name(
-                spelling(db).of(head.root()),
+            dotted_name(
+                &Viewpoint::canonical(db).display_label(head.root()),
                 head.namespace(),
                 &[head.name().as_str()],
             )
@@ -1350,14 +1420,14 @@ pub fn class_link_name<'db>(db: &'db dyn crate::Db, class: ClassRef<'db>) -> Str
     }
 }
 
-/// The name an enum links as, wherever it is declared.
-pub fn enum_link_name<'db>(db: &'db dyn crate::Db, enum_ref: EnumRef<'db>) -> String {
+/// The display name of an enum, wherever it is declared.
+pub fn enum_display_name<'db>(db: &'db dyn crate::Db, enum_ref: EnumRef<'db>) -> String {
     match enum_ref {
-        DeclRef::Source(enum_loc) => definition_link_name(db, Definition::Enum(enum_loc)),
+        DeclRef::Source(enum_loc) => definition_display_name(db, Definition::Enum(enum_loc)),
         DeclRef::External(enum_loc) => {
             let head = enum_loc.head(db);
-            link_name(
-                spelling(db).of(head.root()),
+            dotted_name(
+                &Viewpoint::canonical(db).display_label(head.root()),
                 head.namespace(),
                 &[head.name().as_str()],
             )
@@ -1420,7 +1490,7 @@ use baml_compiler2_hir::{
     body::{FunctionBody, LetBody, let_body, let_body_source_map},
     file_semantic_index,
     loc::{FunctionLoc, LetLoc},
-    package::{Spelling, is_precompiled_stdlib, lang_roots, package_items, spelling},
+    package::{is_precompiled_stdlib, lang_roots, package_items},
     resolve::{ResolvedName, resolve_name_at_in_scope},
     scope::{FileScopeId, ScopeKind},
     semantic_index::{
@@ -1711,9 +1781,6 @@ struct LoweringContext<'db> {
     // Borrowed from `package_lowering_data` (shared across every function in
     // the package) rather than cloned per context.
     resolved_aliases: &'db ResolvedAliases,
-    /// How the program spells every root: what a message or a display
-    /// string says. Never read back into a declaration.
-    spelling: &'db Spelling,
 
     /// All method names declared by in-scope interfaces — see
     /// [`PackageLoweringData::interface_method_names`]. Fast pre-filter in
@@ -1792,7 +1859,6 @@ impl<'db> LoweringContext<'db> {
     fn runtime(&self) -> RuntimeLowering<'db> {
         RuntimeLowering {
             aliases: self.resolved_aliases,
-            spelling: self.spelling,
             db: self.db,
         }
     }
@@ -1884,7 +1950,7 @@ impl<'db> LoweringContext<'db> {
         layout::enum_variant_index(self.db, enum_ref, variant).ok_or_else(|| {
             self.internal_error_here(&format!(
                 "TIR admitted the variant `{variant}` of `{}`, which the enum does not declare",
-                enum_link_name(self.db, enum_ref)
+                enum_display_name(self.db, enum_ref)
             ))
         })
     }
@@ -1956,12 +2022,14 @@ impl<'db> LoweringContext<'db> {
         ))
     }
 
-    /// The viewpoint this function's diagnostics and display strings spell
-    /// types from: its own file's package.
-    fn viewpoint(&self) -> baml_compiler2_hir_ty::render::Viewpoint<'db> {
+    /// The viewpoint a function's DISPLAY fields (`display_param_types`,
+    /// `display_return_type`) spell types from: the package's root namespace,
+    /// facing a host that reads the package as a whole — the same one emit
+    /// uses for a declared function's, so a lambda's agree with its owner's.
+    fn display_viewpoint(&self) -> baml_compiler2_hir_ty::render::Viewpoint<'db> {
         baml_compiler2_hir_ty::render::Viewpoint::user_facing(
             self.db,
-            file_package(self.db, self.file).root,
+            self.file.source_root(self.db),
         )
     }
 
@@ -1996,9 +2064,10 @@ impl<'db> LoweringContext<'db> {
         RuntimeTy::Class(self.baml_decl("iter", "Done"), Box::new([]))
     }
 
-    /// A MIR type as the program spells it, for a message.
+    /// A MIR type rendered canonically, for a message.
     fn spelled(&self, ty: &RuntimeTy) -> baml_type::RuntimeTy {
-        ty.map_heads(&mut |decl| self.spelling.wire(decl))
+        let runtime = self.runtime();
+        ty.map_heads(&mut |decl| runtime.wire(decl))
     }
 
     fn associated_binding_ty(bindings: &[(Name, Tir2Ty)], name: &str) -> Option<Tir2Ty> {
@@ -2331,7 +2400,6 @@ impl<'db> LoweringContext<'db> {
             transitive_captures_needed: Vec::new(),
             tagged_body_param_bindings: HashMap::new(),
             resolved_aliases: &pkg_data.resolved_aliases,
-            spelling: spelling(db),
             interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_ordinals: SyntheticOrdinals::default(),
@@ -2393,7 +2461,6 @@ impl<'db> LoweringContext<'db> {
             source_param_scope: None,
             scope_func_name: Some(let_name),
             resolved_aliases: &pkg_data.resolved_aliases,
-            spelling: spelling(db),
             interface_method_names: &pkg_data.interface_method_names,
             defer_stack: Vec::new(),
             synthetic_ordinals: SyntheticOrdinals::default(),
@@ -2621,7 +2688,7 @@ impl<'db> LoweringContext<'db> {
     fn hir_binding_id_for_path(&self, expr_id: AstExprId) -> Option<BindingId> {
         match self.path_resolution(expr_id)? {
             PathResolution::Local(binding_id) => Some(binding_id),
-            PathResolution::Unknown => None,
+            PathResolution::Item(_) => None,
         }
     }
 
@@ -5021,7 +5088,7 @@ impl<'db> LoweringContext<'db> {
             ));
         }
         let sig_return_type = sig_template(self, &return_type);
-        let sig_display_return_type = return_type.render_with(&self.viewpoint());
+        let sig_display_return_type = return_type.render_with(&self.display_viewpoint());
         let ret_local_ty = self.convert_tir_ty_for_runtime(&return_type);
 
         // Declare return place _0, then parameter locals _1..=_n.
@@ -5037,7 +5104,7 @@ impl<'db> LoweringContext<'db> {
                 .insert(param.name.clone(), tir_ty.clone());
             let param_ty = self.convert_tir_ty_for_runtime(tir_ty);
             sig_param_types.push(sig_template(self, tir_ty));
-            sig_display_param_types.push(tir_ty.render_with(&self.viewpoint()));
+            sig_display_param_types.push(tir_ty.render_with(&self.display_viewpoint()));
             self.declare_parameter(param_idx, &param.name, param_ty);
         }
         let sig_throws_type = sig_template(self, &throws_type);
@@ -5076,9 +5143,6 @@ impl<'db> LoweringContext<'db> {
         // Attach nested lambdas as direct children.
         lambda_mir.lambdas = nested_lambdas;
         lambda_mir.signature = Some(crate::ir::RuntimeSignature {
-            // A lambda has no source-level name; its `Function::name` is a
-            // synthetic debug identity.
-            name: None,
             // A lambda carries neither a docstring nor generic parameters.
             docstring: None,
             display_type_params: Vec::new(),
@@ -8458,6 +8522,16 @@ impl<'db> LoweringContext<'db> {
                     (callee_op, self.lower_call_arg_operands(expr_id, args)?)
                 }
             } else {
+                // A callable field arrives here with its `Field` resolution and
+                // is called as the value it holds. With NO resolution, TIR
+                // never decided what `.member` is, and calling whatever a
+                // fallback read produces drops the receiver (B-1788).
+                if self.tir_resolution(callee).is_none() {
+                    return Err(self.internal_error(
+                        "MIR found a method call TIR recorded no member resolution for",
+                        callee,
+                    ));
+                }
                 let callee_op = self.lower_normalized_callee_operand(callee, callee_expr)?;
                 (callee_op, self.lower_call_arg_operands(expr_id, args)?)
             }
@@ -8599,15 +8673,12 @@ impl<'db> LoweringContext<'db> {
             return Ok(());
         }
 
-        // `Package.current()` is lexical, like `reflect.Type.of`: bake the enclosing
-        // package identity at this call site instead of emitting a callable
-        // reference to the compiler-owned declaration.
+        // `Package.current()` is lexical, like `reflect.Type.of`: the
+        // enclosing package is this unit's own, which whoever lays the unit
+        // into an executable identifies there — no callable reference to the
+        // compiler-owned declaration, and no name baked at the call site.
         if self.is_current_package_intrinsic(callee, &callee_operand) {
-            let package = self
-                .spelling
-                .of(file_package(self.db, self.file).root)
-                .to_string();
-            self.builder.assign(dest, Rvalue::CurrentPackage(package));
+            self.builder.assign(dest, Rvalue::CurrentPackage);
             self.builder.goto(target);
             self.builder.set_current_block(target);
             return Ok(());
@@ -9849,7 +9920,7 @@ impl<'db> LoweringContext<'db> {
     /// `caught_error_context`).
     fn lower_throw_operand(&mut self, expr_id: AstExprId) -> Lowered<Operand<'db>> {
         if let AstExpr::Path(segments) = &self.body.exprs[expr_id]
-            && let [name] = segments.as_slice()
+            && let [name] = segments.segments()
             && let Some(local) = self.local_for_path(expr_id, name)
         {
             return Ok(Operand::Copy(self.value_place(local)));
@@ -10073,7 +10144,7 @@ impl<'db> LoweringContext<'db> {
                 .ok_or_else(|| {
                     this.internal_error_here(&format!(
                         "object literal names field `{field}`, which `{}` does not declare",
-                        class_link_name(this.db, class)
+                        class_display_name(this.db, class)
                     ))
                 })
         };
@@ -10391,20 +10462,17 @@ impl<'db> LoweringContext<'db> {
                     expr_id,
                 ));
             }
-            // Dynamic map access — only valid for map types, unknown, etc.
-            let key_local = self.builder.temp(RuntimeTy::String);
-            self.builder.assign(
-                Place::local(key_local),
-                Rvalue::Use(Operand::Constant(Constant::String(field_str))),
-            );
-            self.emit_map_call(
-                "index",
-                vec![
-                    Operand::Copy(Place::local(base_local)),
-                    Operand::Copy(Place::local(key_local)),
-                ],
-                dest,
-            );
+            // TIR rejects `.member` on every other base (maps and `unknown`
+            // included - those index with `[...]`), so reaching here means
+            // TIR left the access unresolved without a diagnostic (B-1788).
+            // A dynamic map read on such a base would compile and misbehave.
+            return Err(self.internal_error(
+                &format!(
+                    "MIR failed to resolve member access .{field_str} on `{unwrapped_ty:?}`: \
+                     TIR recorded no resolution for it"
+                ),
+                expr_id,
+            ));
         }
         Ok(())
     }
@@ -12159,34 +12227,15 @@ impl LoweringContext<'_> {
                             expr_id,
                         ));
                     }
-                    // Dynamic map fallback for non-class base or unknown field
-                    let receiver = Place::local(self.builder.temp(current_ty));
-                    self.builder
-                        .assign(receiver.clone(), Rvalue::Use(Operand::Copy(current_place)));
-                    let key_local = self.builder.temp(RuntimeTy::String);
-                    self.builder.assign(
-                        Place::local(key_local),
-                        Rvalue::Use(Operand::Constant(Constant::String(seg.to_string()))),
-                    );
-                    if seg_idx == segments.len() - 1 {
-                        return Ok(Place::Index {
-                            base: Box::new(receiver),
-                            index: key_local,
-                            kind: IndexKind::Map,
-                        });
-                    }
-                    current_ty = self
-                        .path_segment_ty(expr_id, seg_idx)
-                        .unwrap_or(RuntimeTy::Unknown);
-                    current_place = Place::local(self.builder.temp(current_ty.clone()));
-                    self.emit_map_call(
-                        "index",
-                        vec![
-                            Operand::Copy(receiver),
-                            Operand::Copy(Place::local(key_local)),
-                        ],
-                        current_place.clone(),
-                    );
+                    // TIR rejects `.seg` assignment on every non-class base;
+                    // see `lower_member_access`.
+                    return Err(self.internal_error(
+                        &format!(
+                            "MIR failed to resolve assignment target .{seg} on \
+                             `{current_ty:?}`: TIR recorded no resolution for it"
+                        ),
+                        expr_id,
+                    ));
                 }
                 Ok(current_place)
             }
@@ -12214,17 +12263,15 @@ impl LoweringContext<'_> {
                         base_id,
                     ));
                 }
-                // Dynamic map access — only valid for map types, unknown, etc.
-                let key_local = self.builder.temp(RuntimeTy::String);
-                self.builder.assign(
-                    Place::local(key_local),
-                    Rvalue::Use(Operand::Constant(Constant::String(member_name.to_string()))),
-                );
-                Ok(Place::Index {
-                    base: Box::new(base_place),
-                    index: key_local,
-                    kind: IndexKind::Map,
-                })
+                // TIR rejects `.member` assignment on every other base; see
+                // `lower_member_access`.
+                Err(self.internal_error(
+                    &format!(
+                        "MIR failed to resolve member assignment target .{member_name} on \
+                         `{base_ty:?}`: TIR recorded no resolution for it"
+                    ),
+                    base_id,
+                ))
             }
             AstExpr::Index { base, index } => {
                 let base_id = *base;
@@ -14772,10 +14819,45 @@ fn lower_let_body_impl<'db>(
                 LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map, opt);
             let mir_body = ctx.lower_let_body_inner()?;
             let lambdas = std::mem::take(&mut ctx.pending_lambdas);
+            check_indirect_call_layouts(&mir_body)?;
+            lambdas.iter().try_for_each(check_function_call_layouts)?;
             Ok(Some((mir_body, lambdas)))
         }
         LetBody::Missing => Ok(None),
     }
+}
+
+/// An indirect call pushes slots the runtime callee cannot describe, so its
+/// layout must come from the checked call plan. Only compiler-synthesized
+/// DIRECT calls go without one; an indirect call without a layout means TIR
+/// recorded no plan for the call it checked (B-1788), and emit could only
+/// guess what the call pushed.
+fn check_indirect_call_layouts(body: &MirFunctionBody<'_>) -> Result<(), MirInternalError> {
+    for block in &body.blocks {
+        if let Some(Terminator::Call {
+            callee,
+            argument_layout: None,
+            ..
+        }) = &block.terminator
+            && !matches!(callee, Operand::Constant(Constant::Function(_)))
+        {
+            return Err(MirInternalError {
+                message: "MIR lowered an indirect call TIR recorded no call plan for".to_string(),
+                span: block.terminator_span.or(block.span),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn check_function_call_layouts(function: &MirFunction<'_>) -> Result<(), MirInternalError> {
+    if let MirFunctionKind::Bytecode(body) = &function.kind {
+        check_indirect_call_layouts(body)?;
+    }
+    function
+        .lambdas
+        .iter()
+        .try_for_each(check_function_call_layouts)
 }
 
 /// Lower one function to MIR.
@@ -14813,7 +14895,9 @@ fn lower_function_impl<'db>(
     match body.as_ref() {
         FunctionBody::Expr(expr_body) => {
             let mut ctx = LoweringContext::new(db, func_loc, expr_body.clone(), source_map, opt);
-            ctx.lower_function_body()
+            let mir = ctx.lower_function_body()?;
+            check_function_call_layouts(&mir)?;
+            Ok(mir)
         }
         FunctionBody::Builtin(kind) => {
             use baml_compiler2_ast::BuiltinKind;
@@ -14887,5 +14971,61 @@ fn lower_function_impl<'db>(
             lambdas: vec![],
             signature: None,
         }),
+    }
+}
+
+#[cfg(test)]
+mod indirect_call_layout_tests {
+    use super::*;
+    use crate::LocalDecl;
+
+    /// `_0 = call copy _1()`: a call through a function VALUE, the shape the
+    /// value road builds for a method call TIR left unresolved (B-1788).
+    fn indirect_call_body(
+        argument_layout: Option<baml_type::CallLayout>,
+    ) -> MirFunctionBody<'static> {
+        let mut call = BasicBlock::new(BlockId(0));
+        call.terminator = Some(Terminator::Call {
+            has_trace: false,
+            argument_layout,
+            callee: Operand::copy_local(Local(1)),
+            args: vec![],
+            ntypeargs: 0,
+            destination: Place::Local(Local(0)),
+            target: BlockId(1),
+            unwind: None,
+        });
+        let mut done = BasicBlock::new(BlockId(1));
+        done.terminator = Some(Terminator::Return);
+        MirFunctionBody {
+            blocks: vec![call, done],
+            entry: BlockId(0),
+            locals: (0..2)
+                .map(|_| LocalDecl {
+                    name: None,
+                    ty: crate::RuntimeTy::unknown(),
+                    span: None,
+                    scope_span: None,
+                    is_captured: false,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn indirect_call_without_a_checked_layout_is_an_internal_error() {
+        let error = check_indirect_call_layouts(&indirect_call_body(None))
+            .expect_err("an indirect call with no call plan must not reach emit");
+        assert!(
+            error.message.contains("no call plan"),
+            "unexpected message: {}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn indirect_call_with_a_checked_layout_lowers() {
+        let layout = baml_type::CallLayout::default();
+        assert!(check_indirect_call_layouts(&indirect_call_body(Some(layout))).is_ok());
     }
 }

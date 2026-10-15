@@ -150,7 +150,7 @@ class ImageClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            openai.internal.images_render(self, input, preview = true) catch_all (e) {
+            root.internal.images_render(self, input, preview = true) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

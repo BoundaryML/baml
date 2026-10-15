@@ -1096,6 +1096,11 @@ impl RunArgs {
         // An explicit standalone file is always part of the expression's
         // compilation context. Without one, preserve the isolation-first path
         // that keeps unrelated project errors from blocking independent probes.
+        // BUG: isolation first means a path reads differently from the project
+        // it runs beside: `log.info("x")` is the stdlib here but the project's
+        // own `log` item in a function of the project (an item of the root
+        // namespace shadows the package). Compile in the project when it is
+        // found and compiles, and fall back to isolation only on its errors.
         let standalone = self
             .file
             .as_deref()

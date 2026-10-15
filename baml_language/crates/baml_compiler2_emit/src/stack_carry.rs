@@ -1561,7 +1561,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn load_current_package(&mut self, _package: &str) -> Result<(), Self::Error> {
+    fn load_current_package(&mut self) -> Result<(), Self::Error> {
         self.sim.push();
         Ok(())
     }

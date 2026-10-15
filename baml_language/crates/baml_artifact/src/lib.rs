@@ -82,7 +82,21 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// Version 17: BEP-079's unit type. The type family lost `Void` (Borsh
 /// discriminant 22, now reserved): `void` is a spelling of `null`, and an
 /// artifact carrying the retired discriminant no longer decodes.
-pub const FORMAT_VERSION: u32 = 17;
+///
+/// Version 18: a pooled `Class` carries its finalizer as a position in its
+/// method table (`cleanup: Option<usize>`) where it carried a `has_cleanup`
+/// flag, so the collector reads the method off the class and resolves no
+/// name; and a pooled `Class`, `Enum`, `Interface` and `TypeAlias` carries
+/// its path inside its package (`path`) where it used to carry a
+/// package-qualified name (`name`): a declaration's name is put together from
+/// its package's display name when one is wanted, so no serialized
+/// declaration states which package it belongs to or what that package is
+/// called. An interface's dependency table names a language package by
+/// identity (`Locator::Prelude(LangPackage)`) rather than by an edge name;
+/// a `ProgramPackage` carries its `PackageKind` (`Language(LangPackage)` or
+/// `Ordinary`) and each of its edges an `EdgeKind` (`Dependency` or
+/// `ReExported`).
+pub const FORMAT_VERSION: u32 = 18;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

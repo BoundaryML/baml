@@ -143,11 +143,11 @@ class ResponsesClient {
         /// before it: `{"mode": "explicit"}`. Null for GPT-5.5 and earlier,
         /// which reject the field; a `${cache()}` sends nothing there.
         function default_cache_args(self) -> baml.json.json {
-            openai.internal.default_cache_breakpoint(self.model)
+            root.internal.default_cache_breakpoint(self.model)
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            openai.internal.preview(self, input) catch_all (e) {
+            root.internal.preview(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

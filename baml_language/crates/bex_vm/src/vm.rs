@@ -495,10 +495,14 @@ pub(crate) mod tests {
     fn native_function_object() -> Object {
         let native: NativeFunction = native_done;
         Object::Function(Box::new(Function {
-            name: "test_native".to_string(),
+            identity: bex_vm_types::types::FunctionIdentity::Declared(
+                bex_vm_types::types::FnPath::Free(bex_vm_types::types::LocalName::new(
+                    Vec::new(),
+                    baml_type::Name::new("test_native"),
+                )),
+            ),
             source_file: String::new(),
             docstring: None,
-            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode: Bytecode::default(),
@@ -520,11 +524,9 @@ pub(crate) mod tests {
             display_return_type: "int".to_string(),
             throws_type: bex_vm_types::TyTemplate::Never,
             origin: FunctionOrigin::Internal,
-            is_interface_body: false,
             native_key: None,
             body_meta: None,
-
-            runtime_package: HeapPtr::null(),
+            owner: HeapPtr::null(),
         }))
     }
 
@@ -1102,7 +1104,7 @@ pub(crate) mod tests {
 
         let moved_trampoline = trampoline_ptr(&vm);
         assert!(
-            matches!(vm.get_object(moved_trampoline), Object::Function(f) if f.name == "$entry::test_native" && f.telemetry_function_id.is_none()),
+            matches!(vm.get_object(moved_trampoline), Object::Function(f) if f.name() == "$entry::test_native" && f.telemetry_function_id.is_none()),
             "frame should point at the moved trampoline function after forwarding"
         );
 
@@ -1162,7 +1164,7 @@ pub(crate) mod tests {
 
         let tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new("Metadata")),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Metadata")),
             fields: Vec::new(),
             description: None,
             alias: None,
@@ -1170,7 +1172,7 @@ pub(crate) mod tests {
             other: indexmap::IndexMap::new(),
             stream_done: false,
             type_tag: tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -1227,7 +1229,7 @@ pub(crate) mod tests {
 
         let tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new("LiveArg")),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("LiveArg")),
             fields: Vec::new(),
             description: None,
             alias: None,
@@ -1235,7 +1237,7 @@ pub(crate) mod tests {
             other: indexmap::IndexMap::new(),
             stream_done: false,
             type_tag: tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -1282,9 +1284,10 @@ pub(crate) mod tests {
 
         let tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(
-                "PendingNativeArg",
-            )),
+            path: bex_vm_types::types::LocalName::new(
+                Vec::new(),
+                baml_type::Name::new("PendingNativeArg"),
+            ),
             fields: Vec::new(),
             description: None,
             alias: None,
@@ -1292,7 +1295,7 @@ pub(crate) mod tests {
             other: indexmap::IndexMap::new(),
             stream_done: false,
             type_tag: tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -1993,16 +1996,98 @@ pub fn prepare_compact_code(objects: &mut [Object], globals: &[bex_vm_types::Con
 ///
 /// One extra entry follows the error classes, at `DURATION_CLASS_PTR_INDEX`:
 /// `baml.time.Duration`, which `baml.errors.Timeout.duration` is an instance of.
-pub fn resolve_error_class_ptrs(packages: &crate::package_load::PackageIndex) -> Arc<[HeapPtr]> {
+///
+/// # Errors
+///
+/// An executable that loads no `baml` package, or one whose `baml` package
+/// declares no such class: the runtime cannot run without the language's
+/// own error and panic classes, so the program is refused at load.
+pub fn resolve_error_class_ptrs(
+    packages: &crate::package_load::PackageIndex,
+) -> Result<Arc<[HeapPtr]>, VmInternalError> {
     ErrorClass::ALL
         .iter()
-        .map(ErrorClass::fqn)
-        .chain(std::iter::once("baml.time.Duration"))
-        .map(|fqn| {
-            crate::package_load::lookup_type_by_fqn(packages, fqn)
-                .unwrap_or_else(|| panic!("error class {fqn:?} not in packages"))
-        })
+        .map(ErrorClass::item)
+        .chain(std::iter::once(crate::lang_items::BAML_TIME_DURATION))
+        .map(|item| lang_declaration_required(packages, item))
         .collect()
+}
+
+/// The declaration `item` names, or the error that refuses an executable
+/// without it ([`resolve_error_class_ptrs`]).
+fn lang_declaration_required(
+    packages: &crate::package_load::PackageIndex,
+    item: baml_base::LangItem,
+) -> Result<HeapPtr, VmInternalError> {
+    packages.lang_declaration(item).ok_or_else(|| {
+        VmInternalError::InvalidProgram(bex_vm_types::types::InvalidProgram(format!(
+            "the executable does not load `{item}`: the `{}` language package is required",
+            item.package().manifest_name()
+        )))
+    })
+}
+
+/// Every declaration the runtime's own code names by identity
+/// ([`crate::lang_items::runtime_items`]) is declared by its language package
+/// when the executable loads that package — what makes [`BexVm::lang_object`]
+/// infallible afterwards. A package the executable does not load is not an
+/// error here (a program without the standard library); the `baml` package
+/// itself is required by [`resolve_error_class_ptrs`].
+///
+/// # Errors
+///
+/// A loaded language package that does not declare an item the runtime
+/// names: the stdlib sources and the runtime out of step, refused at load.
+pub fn require_lang_items(
+    packages: &crate::package_load::PackageIndex,
+) -> Result<(), VmInternalError> {
+    crate::lang_items::runtime_items()
+        .filter(|item| packages.lang_package(item.package()).is_some())
+        .try_for_each(|item| {
+            if packages.lang_declaration(item).is_some() {
+                Ok(())
+            } else {
+                Err(VmInternalError::InvalidProgram(
+                    bex_vm_types::types::InvalidProgram(format!(
+                        "the executable's `{}` language package does not declare `{item}`, which the runtime names",
+                        item.package().manifest_name()
+                    )),
+                ))
+            }
+        })
+}
+
+/// The standard-library tables a VM is constructed over, resolved once per
+/// executable from its package index and shared by every VM over it (the
+/// `Arc`s): the one road on which the runtime's requirements of the standard
+/// library are checked, so no load path can skip one.
+pub struct StdlibTables {
+    /// [`resolve_error_class_ptrs`].
+    pub error_class_ptrs: Arc<[HeapPtr]>,
+    /// [`resolve_panic_class_ptrs`].
+    pub panic_class_ptrs: Arc<[HeapPtr]>,
+    /// [`StdlibHeads::resolve`](crate::package_load::StdlibHeads::resolve).
+    pub heads: Arc<crate::package_load::StdlibHeads>,
+}
+
+impl StdlibTables {
+    /// Resolve every table and check every requirement
+    /// ([`require_lang_items`]).
+    ///
+    /// # Errors
+    ///
+    /// The executable loads no `baml` package, or a language package it loads
+    /// does not declare an item the runtime names.
+    pub fn resolve(packages: &crate::package_load::PackageIndex) -> Result<Self, VmInternalError> {
+        let error_class_ptrs = resolve_error_class_ptrs(packages)?;
+        let panic_class_ptrs = resolve_panic_class_ptrs(packages)?;
+        require_lang_items(packages)?;
+        Ok(Self {
+            error_class_ptrs,
+            panic_class_ptrs,
+            heads: Arc::new(crate::package_load::StdlibHeads::resolve(packages)),
+        })
+    }
 }
 
 /// Where `baml.time.Duration` sits in the error class table: right after the
@@ -2012,13 +2097,13 @@ const DURATION_CLASS_PTR_INDEX: usize = ErrorClass::ALL.len();
 /// Resolve the heap pointers for the builtin `baml.panics.*` classes, indexed by
 /// [`PanicClass`] discriminant. Shared across spawns like
 /// [`resolve_error_class_ptrs`].
-pub fn resolve_panic_class_ptrs(packages: &crate::package_load::PackageIndex) -> Arc<[HeapPtr]> {
+pub fn resolve_panic_class_ptrs(
+    packages: &crate::package_load::PackageIndex,
+) -> Result<Arc<[HeapPtr]>, VmInternalError> {
     PanicClass::ALL
         .iter()
-        .map(|pc| {
-            crate::package_load::lookup_type_by_fqn(packages, pc.fqn())
-                .unwrap_or_else(|| panic!("panic class {:?} not in packages", pc.fqn()))
-        })
+        .map(PanicClass::item)
+        .map(|item| lang_declaration_required(packages, item))
         .collect()
 }
 
@@ -2146,7 +2231,7 @@ fn function_callable_signature<C: baml_type::normalize::TypeContext<bex_vm_types
         unreachable!("function_object_ty always builds a Function type")
     };
     Ok(CallableSignature {
-        name: f.declared_name.clone(),
+        name: f.declared_name().map(ToString::to_string),
         params,
         ret: *ret,
         throws: *throws,
@@ -2288,9 +2373,8 @@ impl BexVm {
         let tlab = Tlab::new_empty(Arc::clone(&heap));
 
         // `error_class_ptrs` / `panic_class_ptrs` / `stdlib_heads` are resolved
-        // once from `packages` by the caller (`resolve_error_class_ptrs` /
-        // `resolve_panic_class_ptrs` / `StdlibHeads::resolve`) and shared
-        // across spawned VMs.
+        // once from `packages` by the caller (`StdlibTables::resolve`) and
+        // shared across spawned VMs.
 
         let early_yield = EarlyYieldCheck::new(
             #[cfg(not(target_arch = "wasm32"))]
@@ -3093,14 +3177,41 @@ impl BexVm {
         &self.stdlib_heads
     }
 
+    /// Whether `value` is a panic: an instance of one of the `baml.panics`
+    /// classes, decided by the class it points at — the stdlib's own
+    /// declaration, never one that merely renders under the same name.
+    pub fn is_panic(&self, value: Value) -> bool {
+        value.as_object_ptr().is_some_and(|ptr| {
+            matches!(
+                self.get_object(ptr),
+                Object::Instance(instance) if self.panic_class_ptrs.contains(&instance.class)
+            )
+        })
+    }
+
+    /// Whether `value` is the cancellation panic, `baml.panics.Cancelled`,
+    /// by its class's identity.
+    pub fn is_cancelled_panic(&self, value: Value) -> bool {
+        value.as_object_ptr().is_some_and(|ptr| {
+            matches!(
+                self.get_object(ptr),
+                Object::Instance(instance)
+                    if self.panic_class_ptrs.get(PanicClass::Cancelled as usize)
+                        == Some(&instance.class)
+            )
+        })
+    }
+
     /// The head for the declaration `qtn` names — its tag and its pointer, both
     /// read off the declaration itself.
     ///
-    /// The one name→head channel inside the VM, for the boundaries that
-    /// genuinely start from a name (the algebra's `reflect.AnyFunction` case, host
-    /// conversion, codegen FQN constants). Everything interior already holds a
-    /// head and must deref it instead: content-addressing a name into a tag
-    /// would fabricate an identity rather than resolve one, and cannot see a
+    /// The one name→head channel inside the VM, for the boundary that
+    /// genuinely starts from a name: host conversion, where a wire name
+    /// arrives (the SDK boundary, until it carries identity). Everything
+    /// interior already holds a head and must deref it instead — the
+    /// runtime's own stdlib references go by identity
+    /// ([`Self::lang_head`]): content-addressing a name into a tag would
+    /// fabricate an identity rather than resolve one, and cannot see a
     /// runtime-created declaration at all.
     pub fn declaration_head(&self, qtn: &baml_type::TypeName) -> Option<bex_vm_types::TypeHead> {
         let ptr = self
@@ -3143,13 +3254,39 @@ impl BexVm {
             .copied()
     }
 
-    /// Look up a class, enum, or interface object by its fully-qualified dotted
-    /// name — the package as the root reaches it, then the item path — from
-    /// the root's viewpoint. For builtin (prelude) types referenced by
-    /// constant FQN; not valid for `user`-package types, whose rendered name
-    /// elides the package — use [`Self::lookup_type`] there.
-    pub fn lookup_type_by_fqn(&self, fqn: &str) -> Option<HeapPtr> {
-        crate::package_load::lookup_type_by_fqn(&self.packages, fqn)
+    /// The class, enum, interface, or recursive type alias `item` names in its
+    /// language package, by identity
+    /// ([`PackageIndex::lang_declaration`](crate::package_load::PackageIndex::lang_declaration)):
+    /// the package by what it is, never by a name the program gives it. `None`
+    /// when the executable does not load that package (a program without the
+    /// standard library); native code that is itself part of the package
+    /// reads through [`Self::lang_object`].
+    pub fn lang_declaration(&self, item: baml_base::LangItem) -> Option<HeapPtr> {
+        self.packages.lang_declaration(item)
+    }
+
+    /// The head of the declaration `item` names, if its package is loaded.
+    pub fn lang_head(&self, item: baml_base::LangItem) -> Option<bex_vm_types::TypeHead> {
+        self.packages.lang_head(item)
+    }
+
+    /// [`Self::lang_declaration`] for a declaration the standard library is
+    /// known to make: the native code asking is that package's own, so the
+    /// package is loaded whenever the code runs, and load resolved every item
+    /// of [`crate::lang_items::runtime_items`] against it
+    /// ([`require_lang_items`]). Used by the generated `copy::` struct
+    /// `to_value()` methods — whose items the builtins codegen derives from
+    /// the stdlib sources the package was compiled from — and by native code
+    /// that reaches a stdlib declaration.
+    ///
+    /// # Panics
+    ///
+    /// When `item`'s package is not loaded: native code of a package the
+    /// executable does not hold is running.
+    pub fn lang_object(&self, item: baml_base::LangItem) -> HeapPtr {
+        self.lang_declaration(item).unwrap_or_else(|| {
+            panic!("the standard library declares `{item}`, which is not loaded")
+        })
     }
 
     /// The `Object::TypeAlias` pointer for `qtn`, if its package declares one.
@@ -3295,14 +3432,14 @@ impl BexVm {
             .rev()
             .find_map(|frame| match frame {
                 Frame::Bytecode(frame) => Some(match self.get_object(frame.function) {
-                    Object::Function(function) => function.runtime_package,
+                    Object::Function(function) => self.runtime_package_of(function),
                     Object::GenericFunction(function) => function.runtime_package,
                     Object::Closure(closure) => match unsafe { closure.function.get() } {
-                        Object::Function(function) => function.runtime_package,
+                        Object::Function(function) => self.runtime_package_of(function),
                         _ => HeapPtr::null(),
                     },
                     Object::BoundMethod(method) => match unsafe { method.function.get() } {
-                        Object::Function(function) => function.runtime_package,
+                        Object::Function(function) => self.runtime_package_of(function),
                         _ => HeapPtr::null(),
                     },
                     _ => HeapPtr::null(),
@@ -3796,9 +3933,8 @@ impl BexVm {
 
     fn callable_display_name(function: &Function) -> String {
         function
-            .declared_name
-            .clone()
-            .unwrap_or_else(|| function.name.clone())
+            .declared_name()
+            .map_or_else(|| function.name(), ToString::to_string)
     }
 
     /// Name an otherwise callable value whose generic frame is incomplete.
@@ -4167,6 +4303,16 @@ impl BexVm {
         (!owner.is_null() && !self.heap.is_compile_time_ptr(owner)).then_some(owner)
     }
 
+    /// The runtime package a function addresses its operands through
+    /// ([`Function::owner`]), or null for a static function — whose owner is
+    /// a compile-time package and whose operands live in the program's pools
+    /// — and for the VM's own entry trampolines, which have no owner.
+    #[inline]
+    pub(crate) fn runtime_package_of(&self, function: &Function) -> HeapPtr {
+        self.runtime_owner(function.owner)
+            .unwrap_or_else(HeapPtr::null)
+    }
+
     /// Runtime package that owns a value's nominal/callable definition.
     /// Static values return null.
     pub(crate) fn value_runtime_package(&self, value: Value) -> HeapPtr {
@@ -4201,14 +4347,14 @@ impl BexVm {
                 }
                 _ => None,
             },
-            Object::Function(function) => Some(function.runtime_package),
+            Object::Function(function) => Some(self.runtime_package_of(function)),
             Object::GenericFunction(function) => Some(function.runtime_package),
             Object::Closure(closure) => match unsafe { closure.function.get() } {
-                Object::Function(function) => Some(function.runtime_package),
+                Object::Function(function) => Some(self.runtime_package_of(function)),
                 _ => None,
             },
             Object::BoundMethod(method) => match unsafe { method.function.get() } {
-                Object::Function(function) => Some(function.runtime_package),
+                Object::Function(function) => Some(self.runtime_package_of(function)),
                 _ => None,
             },
             Object::Cell(cell) => return self.value_runtime_package(cell.load()),
@@ -4369,9 +4515,11 @@ impl BexVm {
             .collect();
         let globals = VmGlobals::Owned(bex_vm_types::GlobalPool::from_vec(globals_vec));
 
-        let error_class_ptrs = resolve_error_class_ptrs(&package_index);
-        let panic_class_ptrs = resolve_panic_class_ptrs(&package_index);
-        let stdlib_heads = Arc::new(crate::package_load::StdlibHeads::resolve(&package_index));
+        let StdlibTables {
+            error_class_ptrs,
+            panic_class_ptrs,
+            heads: stdlib_heads,
+        } = StdlibTables::resolve(&package_index)?;
         Ok(Self::new(
             heap,
             globals,
@@ -4764,7 +4912,7 @@ impl BexVm {
         let ntypeargs = u16::try_from(type_args.len()).expect("entry type args fit in u16");
 
         let (callee_name, return_type, throws_type) = match self.get_object(function) {
-            Object::Function(f) => (f.name.clone(), f.return_type.clone(), f.throws_type.clone()),
+            Object::Function(f) => (f.name(), f.return_type.clone(), f.throws_type.clone()),
             other => unreachable!("expect function as entry point, got {other:?}"),
         };
 
@@ -4809,10 +4957,9 @@ impl BexVm {
 
         let display_return_type = return_type.to_string();
         let entry_function = Function {
-            name: format!("$entry::{callee_name}"),
+            identity: bex_vm_types::types::FunctionIdentity::Entry(callee_name.into_boxed_str()),
             source_file: String::new(),
             docstring: None,
-            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode,
@@ -4834,11 +4981,9 @@ impl BexVm {
             display_return_type,
             throws_type,
             origin: FunctionOrigin::Internal,
-            is_interface_body: false,
             native_key: None,
             body_meta: None,
-
-            runtime_package: HeapPtr::null(),
+            owner: HeapPtr::null(),
         };
         let explicit_trace = self.entry_trace.is_some();
         let entry_ptr = if explicit_trace {
@@ -4918,10 +5063,9 @@ impl BexVm {
 
         let display_return_type = return_type.to_string();
         let entry_function = Function {
-            name: "$entry::<host-callable>".to_string(),
+            identity: bex_vm_types::types::FunctionIdentity::Entry("<host-callable>".into()),
             source_file: String::new(),
             docstring: None,
-            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode,
@@ -4943,11 +5087,9 @@ impl BexVm {
             display_return_type,
             throws_type,
             origin: FunctionOrigin::Internal,
-            is_interface_body: false,
             native_key: None,
             body_meta: None,
-
-            runtime_package: HeapPtr::null(),
+            owner: HeapPtr::null(),
         };
         let explicit_trace = self.entry_trace.is_some();
         let entry_ptr = if explicit_trace {
@@ -5407,40 +5549,6 @@ impl BexVm {
                 got: self.type_of(value),
             }),
         }
-    }
-
-    /// Look up a class by fully-qualified name and return its `HeapPtr`.
-    ///
-    /// Used by generated `copy::` struct `to_value()` methods.
-    /// Panics if the class is not found (programming error — all builtin classes must exist).
-    pub fn resolve_class(&self, name: &str) -> HeapPtr {
-        self.lookup_type_by_fqn(name)
-            .unwrap_or_else(|| panic!("resolve_class: class {name:?} not found"))
-    }
-
-    /// Look up a function by its fully-qualified name by scanning `vm.globals`.
-    ///
-    /// Returns `Some(ptr)` for the first `Object::Function` whose `name` matches,
-    /// or `None` if no such function exists in the global pool.
-    ///
-    /// This is O(globals) and intended for use in native methods that need to
-    /// dispatch to a dynamically resolved FREE stdlib function (e.g.
-    /// `baml.json.to`). Not suitable for hot paths; callers that need repeated
-    /// lookups should cache the result. Interface-machinery bodies are
-    /// excluded: a body's `name` is display-only (its identity is the
-    /// implements relation), so this scan must never become a name→body
-    /// channel.
-    pub fn find_function_by_name(&self, name: &str) -> Option<HeapPtr> {
-        for v in self.globals.as_slice(self.proof()) {
-            if let Some(ptr) = v.as_object_ptr() {
-                if let Object::Function(f) = self.get_object(ptr) {
-                    if f.name == name && !f.is_interface_body {
-                        return Some(ptr);
-                    }
-                }
-            }
-        }
-        None
     }
 
     fn allocate_real_locals_for_frame(
@@ -5944,7 +6052,7 @@ impl BexVm {
     pub fn current_function_name(&self) -> Option<String> {
         let frame = self.frames.last()?;
         let func = self.get_object(frame.function()).as_callable().ok()?;
-        Some(func.name.clone())
+        Some(func.name())
     }
 
     fn capture_stack_trace(&self) -> Vec<StackFrame> {
@@ -5979,13 +6087,13 @@ impl BexVm {
                             func.bytecode.source_line_for_pc(pc)
                         };
                         Some(StackFrame {
-                            function_name: func.name.clone(),
+                            function_name: func.name(),
                             file_path: func.source_file.clone(),
                             error_line,
                         })
                     }
                     Frame::Native(_) => Some(StackFrame {
-                        function_name: func.name.clone(),
+                        function_name: func.name(),
                         file_path: func.source_file.clone(),
                         error_line: 0,
                     }),
@@ -7166,7 +7274,7 @@ impl BexVm {
             FunctionKind::NativeUnresolved => {
                 // This should never happen - native functions should be resolved
                 // by attach_builtins() before the VM runs.
-                let callee_name = callee.name.clone();
+                let callee_name = callee.name();
                 panic!(
                     "Unresolved native function '{callee_name}' - did you forget to call attach_builtins()?"
                 );
@@ -8694,7 +8802,8 @@ impl BexVm {
                     OpCode::LoadGlobal => {
                         let raw = { read_u32_unchecked(code, pc) };
                         let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                        let value = self.load_global_in(function.runtime_package, global_idx);
+                        let value =
+                            self.load_global_in(self.runtime_package_of(function), global_idx);
                         self.stack.push(value);
                     }
 
@@ -8704,7 +8813,7 @@ impl BexVm {
                         let value = self.stack.ensure_pop();
                         // Only valid during `$init`; post-init globals are frozen in `Arc<[Value]>`
                         // and a write here is a VM internal error.
-                        self.store_global_in(function.runtime_package, global_idx, value)?;
+                        self.store_global_in(self.runtime_package_of(function), global_idx, value)?;
                     }
 
                     // ── LoadField / StoreField / InitField ────────────────────────
@@ -9015,7 +9124,8 @@ impl BexVm {
                         let raw = { read_u32_unchecked(code, pc) };
 
                         let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                        let callee_value = self.load_global_in(function.runtime_package, callee);
+                        let callee_value =
+                            self.load_global_in(self.runtime_package_of(function), callee);
                         // `as_object_ptr` only unwraps the value to a heap pointer
                         // (the `FunctionType` argument is error-message metadata, not
                         // an assertion). `dispatch_sysop_yield`'s own kind check is
@@ -9144,7 +9254,7 @@ impl BexVm {
 
                         let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                         let callee_value =
-                            self.load_global_in(function.runtime_package, callee_global);
+                            self.load_global_in(self.runtime_package_of(function), callee_global);
 
                         if op == OpCode::CallExactArgs
                             && self.pending_call_trace.is_none()
@@ -9348,7 +9458,7 @@ impl BexVm {
                         // lane. The rule borrows `self`; scope it so the borrow ends
                         // before the `&mut self` call below.
                         let receiver = self.stack[StackIndex::from_raw(args_offset + self_arg)];
-                        let cache_key = if function.runtime_package.is_null() {
+                        let cache_key = if self.runtime_package_of(function).is_null() {
                             let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
                             let Object::Type(type_value) = self.get_object(iface_ptr) else {
                                 unreachable!("as_object_ptr(Type) guarantees a Type object")
@@ -9999,16 +10109,7 @@ impl BexVm {
                     OpCode::ThrowIfPanic => {
                         let context = self.stack.ensure_pop();
                         let value = self.stack.ensure_pop();
-                        let is_panic = match value.as_object_ptr() {
-                            Some(ptr) => match self.get_object(ptr) {
-                                Object::Instance(instance) => {
-                                    self.panic_class_ptrs.contains(&instance.class)
-                                }
-                                _ => false,
-                            },
-                            None => false,
-                        };
-                        if is_panic {
+                        if self.is_panic(value) {
                             // Save pc before unwinding (handler lookup needs it).
                             if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
                                 bf.instruction_ptr = *pc;
@@ -10077,7 +10178,7 @@ impl BexVm {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let static_cache_key = match &function.bytecode.constants[idx] {
                             ConstValue::Type(template)
-                                if function.runtime_package.is_null()
+                                if self.runtime_package_of(function).is_null()
                                     && <&bex_vm_types::RealizedTy>::try_from(template).is_ok()
                                     && matches!(&self.frames[*frame_idx],
                                     Frame::Bytecode(frame)
@@ -10086,7 +10187,9 @@ impl BexVm {
                             {
                                 Some((std::ptr::from_ref(*function) as usize, idx))
                             }
-                            ConstValue::Type(template) if !function.runtime_package.is_null() => {
+                            ConstValue::Type(template)
+                                if !self.runtime_package_of(function).is_null() =>
+                            {
                                 self.runtime_load_type_cache_key(*frame_idx, template, idx)
                             }
                             _ => None,
@@ -10190,7 +10293,7 @@ impl BexVm {
                         let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                         let receiver = self.stack.ensure_pop();
                         let callee_value =
-                            self.load_global_in(function.runtime_package, global_idx);
+                            self.load_global_in(self.runtime_package_of(function), global_idx);
                         let function_ptr =
                             self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
                         // Curry the receiver's class type args (→ `Self`) into the
@@ -10303,7 +10406,7 @@ impl BexVm {
                         let gf = Object::GenericFunction(bex_vm_types::GenericFunction {
                             function: function_global,
                             type_args: type_args.tys.into_boxed_slice(),
-                            runtime_package: function.runtime_package,
+                            runtime_package: self.runtime_package_of(function),
                         });
                         let ptr = self.tlab.alloc(gf);
                         self.stack.push(Value::object(ptr));
@@ -10518,7 +10621,7 @@ impl BexVm {
                             Object::Array(arr) => arr.len() as i64,
                             Object::Uint8Array(bytes) => bytes.len() as i64,
                             Object::Map(map) => map.len() as i64,
-                            Object::String(s) => s.len() as i64,
+                            Object::String(s) => s.byte_len() as i64,
                             other => {
                                 return Err(VmInternalError::TypeError {
                                     expected: ObjectType::Array.into(),

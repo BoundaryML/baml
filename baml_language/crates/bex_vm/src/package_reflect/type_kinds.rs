@@ -31,7 +31,7 @@ use super::{
     BamlNamespacePrimitiveReflect, BamlNamespaceUnion, BamlNamespaceUnionReflect,
     PackageReflectImpl, copy,
 };
-use crate::BexVm;
+use crate::{BexVm, package_load::StdlibClass};
 
 impl BexVm {
     /// Create the declarations a host asked for, and return the type naming them.
@@ -60,7 +60,7 @@ impl BexVm {
             let ptr = self.tlab.alloc(Object::Class(Box::new(Class {
                 // The wire qtn is the request's internal linking spelling; the
                 // declaration it authors is anonymous — item name only.
-                name: bex_vm_types::DeclarationName::Anonymous(class.name.name().clone()),
+                path: bex_vm_types::types::LocalName::new(Vec::new(), class.name.name().clone()),
                 fields: Vec::new(),
                 description: class.metadata.description.clone(),
                 alias: class.metadata.alias.clone(),
@@ -69,7 +69,7 @@ impl BexVm {
                 // Host type definitions carry no streaming behaviour.
                 stream_done: false,
                 type_tag,
-                has_cleanup: false,
+                cleanup: None,
                 methods: IndexMap::new(),
                 generic_param_count: class.generic_param_count,
                 owner: bex_vm_types::types::Owner::anonymous(),
@@ -82,7 +82,7 @@ impl BexVm {
         for enm in &definition.enums {
             let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
             let ptr = self.tlab.alloc(Object::Enum(Box::new(Enum {
-                name: bex_vm_types::DeclarationName::Anonymous(enm.name.name().clone()),
+                path: bex_vm_types::types::LocalName::new(Vec::new(), enm.name.name().clone()),
                 variants: enm
                     .variants
                     .iter()
@@ -200,7 +200,10 @@ fn witness_state(vm: &BexVm, value: Value) -> Result<InterfaceWitness, String> {
     let Object::Class(class) = vm.get_object(instance.class) else {
         unreachable!("Instance.class must point to Object::Class")
     };
-    if class.name.to_string() != "reflect.interface.Implementation" {
+    if !vm
+        .stdlib_heads()
+        .is_class(StdlibClass::InterfaceImplementation, class.type_tag)
+    {
         return Err("implementations must contain reflect.interface.Implementation values".into());
     }
     vm.as_rust_data::<InterfaceWitness>(&instance.load_field(0))
@@ -263,7 +266,7 @@ pub(super) fn validate_class_witnesses(
                     DiagnosticId::MissingRequiredInterface,
                     format!(
                         "interface witness for `{}` requires a witness for `{}`",
-                        interface.name.display_name(),
+                        interface.name().display_name(),
                         baml_type::HeadDisplay::head_display_name(&required.name)
                     ),
                 ));
@@ -276,7 +279,7 @@ pub(super) fn validate_class_witnesses(
                     DiagnosticId::TypeMismatch,
                     format!(
                         "interface witness for `{}` is missing required field `{}`",
-                        interface.name.display_name(),
+                        interface.name().display_name(),
                         required.name
                     ),
                 ));
@@ -291,7 +294,7 @@ pub(super) fn validate_class_witnesses(
                     DiagnosticId::TypeMismatch,
                     format!(
                         "interface field `{}.{}` links to missing class field `{}`",
-                        interface.name.display_name(),
+                        interface.name().display_name(),
                         required.name,
                         class_field_name
                     ),
@@ -306,7 +309,7 @@ pub(super) fn validate_class_witnesses(
                             DiagnosticId::TypeMismatch,
                             format!(
                                 "interface field `{}.{}` {message}",
-                                interface.name.display_name(),
+                                interface.name().display_name(),
                                 required.name
                             ),
                         ));
@@ -318,7 +321,7 @@ pub(super) fn validate_class_witnesses(
                     DiagnosticId::TypeMismatch,
                     format!(
                         "interface field `{}.{}` requires `{required_ty}`, but class field `{}` has `{}`",
-                        interface.name.display_name(),
+                        interface.name().display_name(),
                         required.name,
                         class_field_name,
                         class_field.ty
@@ -520,7 +523,7 @@ impl BamlNamespaceClass for PackageReflectImpl {
 
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(class_name)),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(class_name)),
             fields: class_fields,
             description: None,
             alias: None,
@@ -528,7 +531,7 @@ impl BamlNamespaceClass for PackageReflectImpl {
             other: IndexMap::new(),
             stream_done: false,
             type_tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -592,13 +595,13 @@ impl BamlNamespaceClass for PackageReflectImpl {
                     vm,
                     format!(
                         "class `{}` has no field `{name}`",
-                        class.name.display_name()
+                        class.name().display_name()
                     ),
                 ));
             };
             (
                 instance.load_field(index),
-                class.name.display_name().to_string(),
+                class.name().display_name().to_string(),
             )
         };
         // The caller's `T`. Erasing a missing one to `unknown` would make the
@@ -723,7 +726,7 @@ impl BamlNamespaceEnum for PackageReflectImpl {
 
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let enum_ptr = vm.tlab.alloc(Object::Enum(Box::new(Enum {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(enum_name)),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(enum_name)),
             variants,
             description: None,
             alias: None,
@@ -784,7 +787,7 @@ impl BamlClassInterfaceImplementation for PackageReflectImpl {
             .iter()
             .any(|field| field.name == field_name)
         {
-            let interface_name = interface.name.display_name().to_string();
+            let interface_name = interface.name().display_name().to_string();
             return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(
                     vm,
@@ -796,7 +799,7 @@ impl BamlClassInterfaceImplementation for PackageReflectImpl {
             ));
         }
         if witness.field_links.contains_key(&field_name) {
-            let interface_name = interface.name.display_name().to_string();
+            let interface_name = interface.name().display_name().to_string();
             return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(
                     vm,
@@ -850,7 +853,7 @@ impl BamlNamespaceInterface for PackageReflectImpl {
             .iter()
             .find(|method| method.default.is_none())
         {
-            let interface_name = interface.name.display_name().to_string();
+            let interface_name = interface.name().display_name().to_string();
             let required_name = required.name.to_string();
             return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(
@@ -1148,7 +1151,10 @@ pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaR
     let Object::Class(class) = vm.get_object(instance.class) else {
         unreachable!("Instance.class must point to Object::Class")
     };
-    if class.name.to_string() != "reflect.WithMeta" {
+    if !vm
+        .stdlib_heads()
+        .is_class(StdlibClass::WithMeta, class.type_tag)
+    {
         return None;
     }
     let optional_string = |index| {
@@ -1223,9 +1229,11 @@ pub(crate) fn alloc_kind_view(
         type_value.as_object_ptr().map(|ptr| vm.get_object(ptr)),
         Some(Object::Type(_))
     ));
-    let name = kind.class_name();
-    let class = vm.declaration_head(&name).unwrap_or_else(|| {
-        unreachable!("reflection kind class `{name}` is declared by the stdlib")
+    let class = vm.lang_head(kind.class()).unwrap_or_else(|| {
+        unreachable!(
+            "reflection kind class `{}` is declared by the stdlib",
+            kind.class()
+        )
     });
     Value::object(vm.alloc_instance(class.ptr(), vec![type_value]))
 }
@@ -1268,10 +1276,9 @@ pub(crate) fn as_view_type_value(vm: &BexVm, value: Value) -> Option<Value> {
     let Object::Instance(instance) = vm.get_object(ptr) else {
         return None;
     };
-    let is_view = baml_type::type_kind::TypeKind::ALL.iter().any(|kind| {
-        vm.declaration_head(&kind.class_name())
-            .is_some_and(|head| head.ptr() == instance.class)
-    });
+    let is_view = baml_type::type_kind::TypeKind::ALL
+        .iter()
+        .any(|kind| vm.lang_declaration(kind.class()) == Some(instance.class));
     is_view.then(|| instance.fields[0].load())
 }
 
@@ -1536,15 +1543,14 @@ fn alloc_compilation_error_with_span(
             super::reflect::diagnostic_value(vm, &runtime)
         })
         .collect();
-    let diagnostic_qtn = baml_type::QualifiedTypeName::from_dotted_path("reflect.Diagnostic");
     let diagnostic_ty = bex_vm_types::RealizedTy::Class(
-        vm.declaration_head(&diagnostic_qtn)
+        vm.lang_head(crate::lang_items::REFLECT_DIAGNOSTIC)
             .unwrap_or_else(|| unreachable!("`reflect.Diagnostic` is declared by the stdlib")),
         Box::new([]),
     );
     let diagnostics = Value::object(vm.alloc_array(diagnostic_ty, values));
     let message = Value::object(vm.alloc_string(message));
-    let class = vm.resolve_class("reflect.errors.CompilationError");
+    let class = vm.lang_object(crate::lang_items::REFLECT_ERRORS_COMPILATION_ERROR);
     Value::object(vm.alloc_instance(class, vec![message, diagnostics]))
 }
 
@@ -1565,7 +1571,10 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
             let Object::Class(class) = vm.get_object(instance.class) else {
                 unreachable!("Instance.class must point to Object::Class")
             };
-            if class.name.to_string() != "reflect.enum.Value" {
+            if !vm
+                .stdlib_heads()
+                .is_class(StdlibClass::EnumValue, class.type_tag)
+            {
                 return Err(
                     "reflect.enum.new values must be strings or reflect.enum.Value rows".into(),
                 );
@@ -1584,7 +1593,10 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
             let Object::Class(meta_class) = vm.get_object(meta.class) else {
                 unreachable!("Instance.class must point to Object::Class")
             };
-            if meta_class.name.to_string() != "reflect.Meta" {
+            if !vm
+                .stdlib_heads()
+                .is_class(StdlibClass::Meta, meta_class.type_tag)
+            {
                 return Err("reflect.enum.Value.meta must be reflect.Meta".into());
             }
             let optional_string = |index| {
@@ -1866,9 +1878,11 @@ impl BamlClassInterfaceType for PackageReflectImpl {
     }
 }
 
-// The `implements reflect.TypeView` blocks' `as_type` bodies — impl-block
+// The `implements root.TypeView` blocks' `as_type` bodies — impl-block
 // methods, so codegen emits one `…ReflectTypeView_for_Type` trait per view
-// class (plus the aggregating `BamlNamespace…Reflect` supertraits).
+// class (plus the aggregating `BamlNamespace…Reflect` supertraits): the
+// native key spells the written `root.` as the package's fixed name
+// (`baml_base::native_key_spelling`).
 
 impl BamlClassArrayReflectTypeView_for_Type for PackageReflectImpl {
     impl_as_type!(Array, array);
@@ -1997,8 +2011,7 @@ class Fresh {}
         };
         let mut class = (**class).clone();
         class.type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
-        class.name = bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new("Fresh"));
-        // A minted class belongs to no package.
+        // A minted class belongs to no package, so its name is its path alone.
         class.owner = bex_vm_types::types::Owner::anonymous();
         let tag = class.type_tag;
         TypeHead::new(vm.tlab.alloc(Object::Class(Box::new(class))), tag)

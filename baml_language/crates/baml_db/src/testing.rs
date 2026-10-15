@@ -327,6 +327,18 @@ pub trait TestDbExt {
             .unwrap_or_else(|err| panic!("cannot mount `{alias}`: {err}"))
     }
 
+    /// The package the workspace root reaches by the edge `name` — a
+    /// dependency added by [`Self::dependency`], a mount by [`Self::mount`],
+    /// or a language package under its fixed name (`"baml"`, `"reflect"`),
+    /// which every workspace root carries as edges. Names live on edges:
+    /// this reads the workspace's.
+    ///
+    /// # Panics
+    ///
+    /// Panics without a workspace root, or when no edge of it is called
+    /// `name`.
+    fn dependency_named(&self, name: &str) -> SourceRoot;
+
     /// Add or update the file at `path`, owned by the live root whose path is
     /// the longest prefix of `path`; a path under no root (e.g. the bare
     /// `test.baml` most fixtures use) goes to the `Workspace` root.
@@ -371,6 +383,14 @@ impl TestDbExt for ProjectDatabase {
         )
         .unwrap_or_else(|err| panic!("cannot depend on `{package}`: {err}"));
         root
+    }
+
+    fn dependency_named(&self, name: &str) -> SourceRoot {
+        let workspace = self.workspace_root().unwrap_or_else(|| {
+            panic!("`TestDbExt::dependency_named(\"{name}\")` needs a workspace root whose edge to read")
+        });
+        baml_compiler2_hir::package::dependency_named(self, workspace, &Name::new(name))
+            .unwrap_or_else(|| panic!("the workspace reaches no package as `{name}`"))
     }
 
     fn try_mount(

@@ -21,6 +21,14 @@ case "$(uname -s)" in
   *) native_library="$target_dir/debug/libbridge_cffi.so" ;;
 esac
 
+# Exercise the release ABI probe in source CI, before publishing any packages.
+abi_probe="$workspace_root/sdks/csharp/bridge_csharp/tests/Baml.Bridge.AbiLifetimeProbe/Baml.Bridge.AbiLifetimeProbe.csproj"
+abi_bytecode="$target_dir/csharp-abi-probe.bytecode"
+(cd "$workspace_root" && cargo run --quiet -p sdk_test_codegen -- \
+  emit-bytecode --fixture function_calls --out "$abi_bytecode")
+dotnet build "$abi_probe" --configuration Debug --nologo \
+  -p:BamlNativeProbeMode=Direct -p:NuGetAudit=false
+
 # Build every fixture consumer (and the union-generator tool) in ONE
 # MSBuild invocation: the projects compile in parallel across cores and the
 # shared Baml.Bridge project builds exactly once. The tests then run with
@@ -40,5 +48,6 @@ dotnet build \
 
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
   echo "SDK_TEST_CSHARP_SETUP=1" >> "$NEXTEST_ENV"
+  echo "BAML_CSHARP_ABI_PROBE_BYTECODE=$abi_bytecode" >> "$NEXTEST_ENV"
   echo "BAML_BRIDGE_PATH=$native_library" >> "$NEXTEST_ENV"
 fi

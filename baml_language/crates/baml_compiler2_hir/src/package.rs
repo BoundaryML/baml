@@ -9,10 +9,10 @@
 
 use std::collections::{HashMap, VecDeque};
 
-use baml_base::{LangRoots, Name, SourceFile, SourceRoot, SourceRootKind, Span};
+use baml_base::{LangRoots, Name, PathOrigin, SourceFile, SourceRoot, SourceRootKind, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
 use baml_type::{
-    DeclName, PathName, RESERVED_USER_PACKAGE, TypeName,
+    DeclName, PathName,
     wire::{DepSlot, Digest, EdgePath, Locator},
 };
 use indexmap::IndexMap;
@@ -34,7 +34,7 @@ pub struct NamespaceShadow<'db> {
 }
 
 impl<'db> NamespaceShadow<'db> {
-    /// Convert to a `Diagnostic` warning with the shadowed definition's span.
+    /// The error, at the item's name.
     pub fn to_diagnostic(&self, db: &'db dyn crate::Db) -> Diagnostic {
         let def = self.shadowed_def;
         let file = def.file(db);
@@ -49,23 +49,21 @@ impl<'db> NamespaceShadow<'db> {
             .find(|(_, c)| c.definition == def)
             .map(|(_, c)| c.name_span);
 
+        let kind = def.source_kind_name(db);
         let message = format!(
-            "namespace `{}` (from `ns_{}/`) shadows root-level {} `{}`",
-            self.ns_name,
-            self.ns_name,
-            def.source_kind_name(db),
-            self.ns_name
+            "`{}` is both a root-level {kind} and the namespace `ns_{}/`",
+            self.ns_name, self.ns_name
         );
 
-        let mut diag = Diagnostic::warning(DiagnosticId::NamespaceShadow, message);
+        let mut diag = Diagnostic::error(DiagnosticId::NamespaceNameCollision, message);
 
         if let Some(range) = name_span {
             diag = diag.with_primary(
                 Span { file_id, range },
                 format!(
-                    "this {} is shadowed by namespace `{}`",
-                    def.source_kind_name(db),
-                    self.ns_name
+                    "rename this {kind} or the namespace: `{}.X` reads a member of the {kind}, \
+                     `root.{}.X` an item of the namespace",
+                    self.ns_name, self.ns_name
                 ),
             );
         }
@@ -127,8 +125,8 @@ pub fn world_files(db: &dyn crate::Db, root: SourceRoot) -> Vec<SourceFile> {
 
 /// The dependency edge of `root` named `name`, if it has one.
 ///
-/// The ONE place a source-level package spelling becomes a package: `baml`
-/// in `baml.Array` resolves through the spelling package's own edge list and
+/// The ONE place an edge name becomes the package it reaches: `baml` in
+/// `baml.Array` resolves through the spelling package's own edge list and
 /// nowhere else. A package that lists no edge under a name cannot reach it,
 /// whatever else the database holds.
 pub fn dependency_named(db: &dyn crate::Db, root: SourceRoot, name: &Name) -> Option<SourceRoot> {
@@ -145,6 +143,10 @@ pub fn dependency_named(db: &dyn crate::Db, root: SourceRoot, name: &Name) -> Op
 /// methods in `reflect` while `reflect` depends on `baml`, which no manifest
 /// edge could express without a cycle. A non-stdlib root already carries the
 /// prelude as explicit edges, so for it the fixed names add nothing.
+///
+/// Tracked: a viewpoint, a binder and an edge walk each read it, and it
+/// changes only with a manifest or the installed language packages.
+#[salsa::tracked(returns(ref))]
 pub fn edge_table(db: &dyn crate::Db, root: SourceRoot) -> Vec<(Name, SourceRoot)> {
     let mut edges: Vec<(Name, SourceRoot)> = root
         .dependencies(db)
@@ -164,15 +166,125 @@ pub fn edge_table(db: &dyn crate::Db, root: SourceRoot) -> Vec<(Name, SourceRoot
     edges
 }
 
-/// The package `root` spells as `name`: itself, when `name` is its own
-/// declared name (a named package may qualify its own items by it), else the
-/// dependency reached by the edge named `name`. Anything else is invisible.
-/// An unnamed package has no name to spell itself by besides `root`.
-pub fn accessible_package(db: &dyn crate::Db, root: SourceRoot, name: &Name) -> Option<SourceRoot> {
-    if root.self_name(db).is_some_and(|own| own == *name) {
-        return Some(root);
+/// The spelling of the edge from a package to itself — Rust's `crate`.
+pub const ROOT_SEGMENT: &str = "root";
+
+/// How the first segment of a path is read. Decided ONCE, here in HIR, and
+/// handed to every consumer: nothing downstream maps a head name to a
+/// package. The reading of the segments after the head follows from it.
+///
+/// Precedence for a WRITTEN path, outermost claim last: a binding in scope
+/// (the caller's, before [`path_head`] is asked), an item of the writer's
+/// own namespace, then `root` or an edge of the writer's package. An item
+/// spelled like a package shadows the package entirely (`#4543`): with a
+/// class `reflect` in the namespace, `reflect.signature` is a member of that
+/// class, and the package `reflect` is unreachable by that name from there.
+/// A compiler-written path is read by identity instead ([`PathHead::Lang`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PathHead {
+    /// `root`, or a dependency edge of the reading package: the package it
+    /// reaches. The rest of the path is `<namespaces>.<item>` inside that
+    /// package, then members of the item. A lexical name shadows it, as a
+    /// binding does in a body.
+    Package(SourceRoot),
+    /// A language package the COMPILER named, by identity
+    /// ([`PathOrigin::Compiler`]): read exactly like `Package`, except that
+    /// no name in any scope shadows it — rustc's `$crate`. What lowered
+    /// syntax reaches the standard library through.
+    Lang(SourceRoot),
+    /// A plain name of the surrounding scope: an item of the file's own
+    /// namespace, or a name only a lexical scope declares (a generic
+    /// parameter). The rest of the path are members of what it names. Also
+    /// the head of an item the COMPILER named (`Owner.Method@spec`), which
+    /// is the namespace's item and nothing a binding can shadow.
+    Plain,
+}
+
+/// The package `first` names when it heads a qualified path written in
+/// `own`: `root` is `own` itself, any other name is `own`'s edge of that
+/// name ([`dependency_named`]). `None` when `first` names no package the
+/// writer can see — the path is then read in the surrounding scope.
+///
+/// A package's own declared name is NOT among its edges: a package spells
+/// itself as `root` and nothing else (Rust's `crate`), so the standard
+/// library writes `root.json.json` inside `baml`, and a project named `app`
+/// that writes `app.Foo` names an item `app` of its scope. The name on the
+/// manifest is display metadata and the default a dependent spells the
+/// package by, never a way to reach it.
+///
+/// The ONE place a written first segment becomes a package; whether the
+/// segment is read as one at all is [`path_head`]'s call.
+pub fn path_package(db: &dyn crate::Db, own: SourceRoot, first: &Name) -> Option<SourceRoot> {
+    if first.as_str() == ROOT_SEGMENT {
+        return Some(own);
     }
-    dependency_named(db, root, name)
+    dependency_named(db, own, first)
+}
+
+/// The [`PathHead`] of `segments`, written in the namespace `namespace` of
+/// `own`, once no binding has claimed the first segment. An item of that
+/// namespace claims it next ([`crate::namespace::namespace_declares`]); only
+/// then is the segment read as `root` or an edge. A package segment is a
+/// QUALIFIER — it has a path after it — so a lone name is never a package:
+/// `log` alone is the item `log`, `log.info` starts at the package. Nothing
+/// else about the path's length decides anything: `Cart.empty` is `Plain`
+/// and reads as the item `Cart` followed by its member.
+pub fn path_head(
+    db: &dyn crate::Db,
+    own: SourceRoot,
+    namespace: &[Name],
+    segments: &[Name],
+) -> PathHead {
+    match segments {
+        // `root` first: nothing may be named `root` (E0176), so a refused
+        // item of that name cannot take every `root.X` of its namespace
+        // down with it.
+        [first, _, ..] if first.as_str() == ROOT_SEGMENT => PathHead::Package(own),
+        [first, _, ..] => {
+            if crate::namespace::namespace_declares(db, own, namespace, first) {
+                return PathHead::Plain;
+            }
+            path_package(db, own, first).map_or(PathHead::Plain, PathHead::Package)
+        }
+        [] | [_] => PathHead::Plain,
+    }
+}
+
+/// The [`PathHead`] of a path the COMPILER wrote ([`PathOrigin::Compiler`]),
+/// never looked up in any scope: a language package's fixed name is read by
+/// identity from where the stdlib is installed (with the package not
+/// installed the path names nothing, and reads as a plain name that resolves
+/// to nothing); any other first segment is an item of the writer's own
+/// namespace ([`baml_base::Path::compiler_item`]), read as a plain name —
+/// the semantic index records no binding for it, so none shadows it.
+pub fn compiler_path_head(db: &dyn crate::Db, segments: &[Name]) -> PathHead {
+    let [first, _, ..] = segments else {
+        unreachable!("a compiler-written path names a package or item and a member: {segments:?}")
+    };
+    match baml_base::LangPackage::from_manifest_name(first.as_str()) {
+        Some(package) => lang_roots(db)
+            .get(package)
+            .map_or(PathHead::Plain, PathHead::Lang),
+        None => PathHead::Plain,
+    }
+}
+
+/// The [`PathHead`] of `segments` as `origin` says it was written: a written
+/// path's head is a name of `own`'s scope, read from the namespace
+/// `namespace` it was written in ([`path_head`]); a compiler-written path's
+/// is a language package by identity or an item of the writer's namespace,
+/// in no scope ([`compiler_path_head`]).
+pub fn path_head_for(
+    db: &dyn crate::Db,
+    own: SourceRoot,
+    namespace: &[Name],
+    origin: PathOrigin,
+    segments: &[Name],
+) -> PathHead {
+    match origin {
+        PathOrigin::Written => path_head(db, own, namespace, segments),
+        PathOrigin::Compiler => compiler_path_head(db, segments),
+    }
 }
 
 /// Where the language packages are installed in this database.
@@ -225,237 +337,6 @@ pub fn is_served_from_interface(db: &dyn crate::Db, root: SourceRoot) -> bool {
 /// from this exact compiler and can be re-hydrated like source-backed facts.
 pub fn is_precompiled_stdlib(db: &dyn crate::Db, root: SourceRoot) -> bool {
     root.kind(db) == SourceRootKind::Stdlib && root.interface(db).is_some()
-}
-
-// ── Spelling ─────────────────────────────────────────────────────────────────
-
-/// How every root in the database is spelled on the wire: its own name if it
-/// declares one, else the one name every dependency edge reaching it uses,
-/// else — for a nameless root nothing depends on, the primary package of a
-/// project with no manifest — the default [`RESERVED_USER_PACKAGE`].
-///
-/// This is the rendering boundary's table. Compile-time heads carry the root
-/// itself ([`DeclName`]) and never a spelling, through MIR and into emit; the
-/// spelling is consulted exactly where a head is SHOWN as a program-wide name
-/// — a runtime declaration's display name, operand metadata and MIR dumps,
-/// describe/export output, canonical dumps. It is write-only: nothing reads a
-/// spelling back into a declaration. No artifact uses it for identity: a
-/// package interface blob's heads are slots of its own dependency table
-/// ([`DependencyTable`]), a unit's are declaration operands, and a cached
-/// seed's are located by edge path ([`located_head`]), so each means the same
-/// declarations whatever the program calls its packages.
-///
-/// A spelling two roots share, or a root reached under two names, is a
-/// [`collision`](Self::collisions): what is rendered is then ambiguous to a
-/// reader, and nothing more. The compiler needs no injective table — such a
-/// program compiles and links — so the report is for a surface that wants to
-/// warn about it (the package provider, the CLI).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Spelling {
-    by_root: IndexMap<SourceRoot, Name>,
-    by_name: IndexMap<Name, SourceRoot>,
-    collisions: Vec<SpellingCollision>,
-}
-
-/// Why a [`Spelling`] is not injective.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SpellingCollision {
-    /// Two or more roots spell the same; the table holds the first.
-    SharedName { name: Name, roots: Vec<SourceRoot> },
-    /// A nameless root is reached under several edge names; the table holds
-    /// the first.
-    ManyNames { root: SourceRoot, names: Vec<Name> },
-}
-
-impl std::fmt::Display for SpellingCollision {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::SharedName { name, roots } => write!(
-                f,
-                "{} packages are spelled `{name}`; name them in their manifests",
-                roots.len()
-            ),
-            Self::ManyNames { names, .. } => write!(
-                f,
-                "an unnamed package is depended on under {} different names ({}); name it in \
-                 its manifest",
-                names.len(),
-                names
-                    .iter()
-                    .map(|name| format!("`{name}`"))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-        }
-    }
-}
-
-impl Spelling {
-    /// A table from explicit `(root, spelling)` pairs, shared-name collisions
-    /// included — for callers that hold the roots and their names outside a
-    /// database (tests, tooling over an explicit graph).
-    pub fn from_pairs(pairs: impl IntoIterator<Item = (SourceRoot, Name)>) -> Self {
-        let mut by_root: IndexMap<SourceRoot, Name> = IndexMap::new();
-        let mut by_name: IndexMap<Name, SourceRoot> = IndexMap::new();
-        let mut collisions = Vec::new();
-        for (root, name) in pairs {
-            by_root.insert(root, name.clone());
-            match by_name.entry(name) {
-                indexmap::map::Entry::Vacant(slot) => {
-                    slot.insert(root);
-                }
-                indexmap::map::Entry::Occupied(slot) => {
-                    // One entry per name, holding every root that claims it,
-                    // the way `spelling` builds them. Pushing a fresh pair per
-                    // clash would report three colliding roots as two separate
-                    // pairs, and the same table would describe itself
-                    // differently depending on which constructor built it.
-                    let name = slot.key().clone();
-                    let first = *slot.get();
-                    match collisions.iter_mut().find_map(|collision| match collision {
-                        SpellingCollision::SharedName { name: seen, roots } if *seen == name => {
-                            Some(roots)
-                        }
-                        SpellingCollision::SharedName { .. }
-                        | SpellingCollision::ManyNames { .. } => None,
-                    }) {
-                        Some(roots) => roots.push(root),
-                        None => collisions.push(SpellingCollision::SharedName {
-                            name,
-                            roots: vec![first, root],
-                        }),
-                    }
-                }
-            }
-        }
-        Self {
-            by_root,
-            by_name,
-            collisions,
-        }
-    }
-
-    /// The spelling of a live root.
-    pub fn of(&self, root: SourceRoot) -> &Name {
-        self.by_root
-            .get(&root)
-            .unwrap_or_else(|| unreachable!("every live root is in the spelling table: {root:?}"))
-    }
-
-    /// The root spelled `name`, if the table holds one.
-    pub fn root(&self, name: &Name) -> Option<SourceRoot> {
-        self.by_name.get(name).copied()
-    }
-
-    /// Every root with its spelling, in table order.
-    pub fn roots(&self) -> impl Iterator<Item = (SourceRoot, &Name)> + '_ {
-        self.by_root.iter().map(|(root, name)| (*root, name))
-    }
-
-    /// The wire name of a compile-time head.
-    pub fn wire(&self, decl: &DeclName) -> TypeName {
-        TypeName::new(
-            self.of(decl.root()).clone(),
-            decl.namespace().clone(),
-            decl.name().clone(),
-        )
-    }
-
-    /// Why the table is not injective, if it is not.
-    pub fn collisions(&self) -> &[SpellingCollision] {
-        &self.collisions
-    }
-
-    /// This table restricted to `roots`: every root keeps the spelling it has
-    /// here (a root's spelling depends on its own name and the edges reaching
-    /// it, never on which other roots share a program with it), and the
-    /// collisions are judged among `roots` alone — two workspace roots that
-    /// both take the default spelling collide only if one program holds both.
-    /// A root reached under several edge names stays a collision wherever it
-    /// appears.
-    #[must_use]
-    pub fn within(&self, roots: &[SourceRoot]) -> Spelling {
-        let mut restricted =
-            Self::from_pairs(roots.iter().map(|&root| (root, self.of(root).clone())));
-        restricted.collisions.extend(
-            self.collisions
-                .iter()
-                .filter(|collision| match collision {
-                    SpellingCollision::ManyNames { root, .. } => roots.contains(root),
-                    SpellingCollision::SharedName { .. } => false,
-                })
-                .cloned(),
-        );
-        restricted
-    }
-}
-
-/// The [`Spelling`] of the program built for `root`: [`spelling`] restricted
-/// to [`world_roots`], so a shared default spelling between two workspace
-/// roots that never meet in one program is no collision for either program.
-/// The table a surface reads to report that ONE program renders ambiguously;
-/// rendering itself keeps the database-wide one.
-#[salsa::tracked(returns(ref))]
-pub fn spelling_within(db: &dyn crate::Db, root: SourceRoot) -> Spelling {
-    spelling(db).within(world_roots(db, root))
-}
-
-/// The [`Spelling`] of every live root.
-#[salsa::tracked(returns(ref))]
-pub fn spelling(db: &dyn crate::Db) -> Spelling {
-    let roots = db.source_roots().roots(db);
-    // Every name a root is reached by, in table order of the depending root.
-    let mut edge_names: IndexMap<SourceRoot, Vec<Name>> = IndexMap::new();
-    for &from in roots {
-        for dependency in from.dependencies(db) {
-            let names = edge_names.entry(dependency.root).or_default();
-            if !names.contains(&dependency.name) {
-                names.push(dependency.name.clone());
-            }
-        }
-    }
-    let mut by_root: IndexMap<SourceRoot, Name> = IndexMap::new();
-    let mut by_name: IndexMap<Name, SourceRoot> = IndexMap::new();
-    let mut collisions = Vec::new();
-    for &root in roots {
-        let name = match root.self_name(db) {
-            Some(own) => own,
-            None => match edge_names.get(&root).map(Vec::as_slice) {
-                Some([only]) => only.clone(),
-                Some(names @ [first, ..]) => {
-                    collisions.push(SpellingCollision::ManyNames {
-                        root,
-                        names: names.to_vec(),
-                    });
-                    first.clone()
-                }
-                Some([]) | None => Name::new(RESERVED_USER_PACKAGE),
-            },
-        };
-        by_root.insert(root, name.clone());
-        match by_name.entry(name) {
-            indexmap::map::Entry::Vacant(slot) => {
-                slot.insert(root);
-            }
-            indexmap::map::Entry::Occupied(slot) => {
-                let name = slot.key().clone();
-                match collisions.iter_mut().find(|collision| {
-                    matches!(collision, SpellingCollision::SharedName { name: n, .. } if *n == name)
-                }) {
-                    Some(SpellingCollision::SharedName { roots, .. }) => roots.push(root),
-                    _ => collisions.push(SpellingCollision::SharedName {
-                        name,
-                        roots: vec![*slot.get(), root],
-                    }),
-                }
-            }
-        }
-    }
-    Spelling {
-        by_root,
-        by_name,
-        collisions,
-    }
 }
 
 // ── Package items ────────────────────────────────────────────────────────────
@@ -603,7 +484,7 @@ mod tests {
     use baml_base::{Dependency, Name, SourceRoot, SourceRootKind, SourceRootTable};
     use salsa::Setter;
 
-    use super::{dependency_named, package_dependency_closure};
+    use super::{PathHead, dependency_named, package_dependency_closure, path_head};
     use crate::Db;
 
     #[salsa::db]
@@ -701,6 +582,57 @@ mod tests {
         assert_eq!(package_dependency_closure(&db, app), &[mid, leaf]);
         assert_eq!(package_dependency_closure(&db, leaf), &[]);
     }
+
+    #[test]
+    fn a_path_head_is_root_an_edge_or_a_plain_name() {
+        let mut db = TestDb::default();
+        let lib = db.add_root("/lib", Some("lib"), SourceRootKind::Dependency, Vec::new());
+        let app = db.add_root(
+            "/app",
+            None,
+            SourceRootKind::Workspace,
+            vec![Dependency {
+                name: Name::new("util"),
+                root: lib,
+            }],
+        );
+        let path = |segments: &[&str]| segments.iter().copied().map(Name::new).collect::<Vec<_>>();
+
+        // `root` is the package itself; an edge name is the package it reaches.
+        assert_eq!(
+            path_head(&db, app, &[], &path(&["root", "Foo"])),
+            PathHead::Package(app)
+        );
+        assert_eq!(
+            path_head(&db, app, &[], &path(&["util", "Foo"])),
+            PathHead::Package(lib)
+        );
+        // A name no edge carries - the dependency's OWN name included - is a
+        // plain name of the scope: `Cart.empty` starts at the item `Cart`.
+        // A package's own declared name is not an edge either: `lib` spells
+        // itself as `root` only, and `lib.Foo` written inside it is the item
+        // `lib` of its scope followed by a member.
+        assert_eq!(
+            path_head(&db, lib, &[], &path(&["lib", "Foo"])),
+            PathHead::Plain
+        );
+        assert_eq!(
+            path_head(&db, lib, &[], &path(&["root", "Foo"])),
+            PathHead::Package(lib)
+        );
+        assert_eq!(
+            path_head(&db, app, &[], &path(&["lib", "Foo"])),
+            PathHead::Plain
+        );
+        assert_eq!(
+            path_head(&db, app, &[], &path(&["Cart", "empty"])),
+            PathHead::Plain
+        );
+        // A package segment qualifies what follows it; alone, a name is the
+        // item of that name, whatever packages are called.
+        assert_eq!(path_head(&db, app, &[], &path(&["util"])), PathHead::Plain);
+        assert_eq!(path_head(&db, app, &[], &path(&["root"])), PathHead::Plain);
+    }
 }
 
 // ── Dependency tables ────────────────────────────────────────────────────────
@@ -721,10 +653,11 @@ pub fn edge_path(
             break;
         }
         for (edge, root) in edge_table(db, current) {
+            let root = *root;
             if root == owner || parents.contains_key(&root) {
                 continue;
             }
-            parents.insert(root, (current, edge));
+            parents.insert(root, (current, edge.clone()));
             queue.push_back(root);
         }
     }
@@ -772,8 +705,8 @@ pub fn edge_spelling(db: &dyn crate::Db, owner: SourceRoot, target: SourceRoot) 
 pub fn edge_target(db: &dyn crate::Db, owner: SourceRoot, path: &EdgePath) -> Option<SourceRoot> {
     path.0.iter().try_fold(owner, |current, edge| {
         edge_table(db, current)
-            .into_iter()
-            .find_map(|(name, root)| (name == *edge).then_some(root))
+            .iter()
+            .find_map(|(name, root)| (name == edge).then_some(*root))
     })
 }
 
@@ -888,13 +821,14 @@ impl DependencyTable {
     /// The table as an artifact carries it: a direct entry is
     /// [`Locator::Direct`] with `digest(root)` — the interface payload the
     /// owner compiled against — or [`Locator::Prelude`] for a language
-    /// package (a `Stdlib` root; no payload by design); a transitive entry is
+    /// package (by identity; no payload by design); a transitive entry is
     /// [`Locator::Transitive`], covered by its parent's digest.
     pub fn locators(
         &self,
         db: &dyn crate::Db,
         mut digest: impl FnMut(SourceRoot) -> Digest,
     ) -> Vec<Locator> {
+        let lang = lang_roots(db);
         self.entries
             .iter()
             .map(|(root, via, edge)| {
@@ -903,8 +837,8 @@ impl DependencyTable {
                         via: *via,
                         edge: edge.clone(),
                     }
-                } else if root.kind(db) == SourceRootKind::Stdlib {
-                    Locator::Prelude { edge: edge.clone() }
+                } else if let Some(language) = lang.package_of(*root) {
+                    Locator::Prelude(language)
                 } else {
                     Locator::Direct {
                         edge: edge.clone(),

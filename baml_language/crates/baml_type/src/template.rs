@@ -191,6 +191,14 @@ fn compose_template<N: Clone>(
     composed
 }
 
+/// Pre-order traversal of `template`, mutable. `visitor` sees each node with
+/// whether it sits below a type constructor (list, map, class, function, ...);
+/// returning `false` skips the node's children.
+///
+/// A union member is not below a constructor on the union's account: a union
+/// builds no new value shape, and `T | T` is `T`. So a type argument that only
+/// ever lands in unions (`Opt<T?>`) reaches finitely many types, while one
+/// below a list (`Nest<T[]>`) grows without end.
 fn walk_template<N: Clone>(
     template: &mut TyTemplate<N>,
     nested: bool,
@@ -199,14 +207,20 @@ fn walk_template<N: Clone>(
     if !visitor(template, nested) {
         return;
     }
-    let mut child = |template: &mut TyTemplate<N>| walk_template(template, true, visitor);
+    let mut visit = |template: &mut TyTemplate<N>, nested| walk_template(template, nested, visitor);
+    let mut child = |template: &mut TyTemplate<N>| visit(template, true);
     match template {
         TyTemplate::List(inner) => child(inner),
         TyTemplate::Map { key, value, .. } => {
             child(key);
             child(value);
         }
-        TyTemplate::Union(members) | TyTemplate::Class(_, members) => {
+        TyTemplate::Union(members) => {
+            for member in members.iter_mut() {
+                visit(member, nested);
+            }
+        }
+        TyTemplate::Class(_, members) => {
             members.iter_mut().for_each(&mut child);
         }
         TyTemplate::Interface(_, args, associated_bindings) => {
@@ -868,7 +882,7 @@ impl<N: Clone> TyTemplate<N> {
     /// A lossy [`Ty`] view for rendering only: frame refs become
     /// `TypeVar("#n")`. Every other node maps structurally, so
     /// [`fmt::Display`] can delegate to `Ty`'s renderer.
-    fn to_display_ty(&self) -> crate::Ty<N> {
+    pub fn to_display_ty(&self) -> crate::Ty<N> {
         use crate::Ty;
         match self {
             Self::TypeArgRef(n) => Ty::TypeVar(crate::ParamTy::new(*n, Name::new(format!("#{n}")))),
@@ -1035,6 +1049,40 @@ mod tests {
         let interface_origins =
             TyTemplateOrigins::root().through_field(&chain, 1, &interface_field);
         assert!(interface_origins.class_transform_expands(0, &chain, 1));
+    }
+
+    /// A union builds no new value shape: a type argument that lands only in
+    /// unions (`Opt<T?>`, `U<(T | int) | string>`) reaches finitely many
+    /// instantiations once each union is spelled flat, so it does not expand;
+    /// one below a constructor inside the union (`X<T | T[]>`) still grows.
+    #[test]
+    fn generic_render_origins_let_union_only_recursion_close() {
+        let null = || TyTemplate::from(RealizedTy::<TypeName>::null());
+        let int = || TyTemplate::from(RealizedTy::<TypeName>::int());
+        let class = TypeName::local(crate::Name::new("Opt"));
+        let expands = |arg: TyTemplate<TypeName>| {
+            let field = TyTemplate::class(class.clone(), Box::new([arg]));
+            TyTemplateOrigins::root()
+                .through_field(&class, 1, &field)
+                .class_transform_expands(0, &class, 1)
+        };
+
+        assert!(!expands(TyTemplate::union([
+            TyTemplate::TypeArgRef(0),
+            null()
+        ])));
+        assert!(!expands(TyTemplate::union([
+            TyTemplate::union([TyTemplate::TypeArgRef(0), int()]),
+            TyTemplate::from(RealizedTy::<TypeName>::string()),
+        ])));
+        assert!(expands(TyTemplate::union([
+            TyTemplate::TypeArgRef(0),
+            TyTemplate::list(TyTemplate::TypeArgRef(0)),
+        ])));
+        assert!(expands(TyTemplate::list(TyTemplate::union([
+            TyTemplate::TypeArgRef(0),
+            null(),
+        ]))));
     }
 
     /// [`visit_template`] and [`walk_template`] are separate traversals - one

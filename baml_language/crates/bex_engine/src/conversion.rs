@@ -313,7 +313,7 @@ fn portable_type_def(
                 // links and the sys-op definition maps agree. Hosts never
                 // resolved runtime declarations by name, so nothing host-
                 // side keys off this.
-                name: overlay_type_name(&class.name),
+                name: overlay_type_name(&class.name()),
                 fields: class
                     .fields
                     .iter()
@@ -346,7 +346,7 @@ fn portable_type_def(
                 return None;
             };
             Some(PortableEnumDef {
-                name: overlay_type_name(&enm.name),
+                name: overlay_type_name(&enm.name()),
                 variants: enm
                     .variants
                     .iter()
@@ -643,11 +643,7 @@ impl BexEngine {
                 // its freshly minted dynamic tag cannot impersonate either.
                 if class.type_tag.is_dynamic() {
                     let ty = RuntimeTy::Class(
-                        class
-                            .name
-                            .declared()
-                            .cloned()
-                            .unwrap_or_else(|| overlay_type_name(&class.name)),
+                        overlay_type_name(&class.name()),
                         instance
                             .class_type_args
                             .iter()
@@ -669,7 +665,7 @@ impl BexEngine {
                 if let Some(kind) = capability_kind {
                     let handle = self.heap.create_handle(ptr);
                     let ty = RuntimeTy::Class(
-                        class.name.declared().cloned().unwrap_or_else(|| {
+                        class.name().declared().cloned().unwrap_or_else(|| {
                             unreachable!("stdlib capability is a compiled declaration")
                         }),
                         instance
@@ -689,7 +685,7 @@ impl BexEngine {
                     class.fields.len(),
                     instance.fields.len(),
                     "Class '{}' has {} fields but instance has {} fields",
-                    class.name,
+                    class.name(),
                     class.fields.len(),
                     instance.fields.len(),
                 );
@@ -727,7 +723,10 @@ impl BexEngine {
                 // on the wire. Hosts reconstruct fresh wrapper objects from
                 // these portable payloads; neither media nor a rendered prompt
                 // is a live engine capability.
-                if class.name.to_string() == "ai.Prompt" {
+                if self
+                    .stdlib_heads
+                    .is_class(bex_vm::package_load::StdlibClass::Prompt, class.type_tag)
+                {
                     if let Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(arc))) =
                         fields.shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
                     {
@@ -735,10 +734,11 @@ impl BexEngine {
                     }
                 }
 
-                if matches!(
-                    class.name.to_string().as_str(),
-                    "baml.media.Image" | "baml.media.Audio" | "baml.media.Video" | "baml.media.Pdf"
-                ) {
+                if self
+                    .stdlib_heads
+                    .media_kind(bex_vm_types::TypeHead::new(instance.class, class.type_tag))
+                    .is_some()
+                {
                     if let Some(BexExternalValue::Adt(BexExternalAdt::Media(arc))) =
                         fields.shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
                     {
@@ -747,7 +747,7 @@ impl BexEngine {
                 }
 
                 Ok(BexExternalValue::Instance {
-                    class_name: class.name.to_string(),
+                    class_name: class.name().to_string(),
                     type_args: instance
                         .class_type_args
                         .iter()
@@ -767,12 +767,7 @@ impl BexEngine {
                 // enum has a codegen entry, and any other spelling can collide
                 // with one that does.
                 if enm.type_tag.is_dynamic() {
-                    let ty = RuntimeTy::Enum(
-                        enm.name
-                            .declared()
-                            .cloned()
-                            .unwrap_or_else(|| overlay_type_name(&enm.name)),
-                    );
+                    let ty = RuntimeTy::Enum(overlay_type_name(&enm.name()));
                     return Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
                         kind: bex_external_types::TaggedHeapHandleKind::RuntimeValue,
                         ty,
@@ -786,12 +781,12 @@ impl BexEngine {
                     .ok_or_else(|| EngineError::TypeMismatch {
                         message: format!(
                             "enum '{}' has {} variants but variant index is {}",
-                            enm.name,
+                            enm.name(),
                             enm.variants.len(),
                             variant.index,
                         ),
                     })?;
-                let enum_name = enm.name.to_string();
+                let enum_name = enm.name().to_string();
 
                 Ok(BexExternalValue::Variant {
                     enum_name,
@@ -1008,7 +1003,7 @@ impl BexEngine {
             .or_else(|| resolve_named_object(&self.resolved_class_names, class_name))?;
         // SAFETY: registered class names point to compile-time Class objects.
         match unsafe { ptr.get() } {
-            Object::Class(class) => class.name.declared().cloned(),
+            Object::Class(class) => class.name().declared().cloned(),
             _ => None,
         }
     }
@@ -1022,7 +1017,7 @@ impl BexEngine {
             .or_else(|| resolve_named_object(&self.resolved_enum_names, enum_name))?;
         // SAFETY: registered enum names point to compile-time Enum objects.
         match unsafe { ptr.get() } {
-            Object::Enum(enum_obj) => enum_obj.name.declared().cloned(),
+            Object::Enum(enum_obj) => enum_obj.name().declared().cloned(),
             _ => None,
         }
     }
@@ -1925,9 +1920,6 @@ fn synth_collection_element<'a>(
     acc
 }
 
-/// The standard library's class for a rendered prompt.
-pub(crate) const PROMPT_CLASS: &str = "ai.Prompt";
-
 /// Find which union member matches a value.
 ///
 /// `Unknown` arms match any value (see `value_matches_type`) and are
@@ -2428,11 +2420,12 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                         // for `Foo<int> | Foo`.  When type args are present
                         // on the union member they must equal the instance's
                         // class_type_args exactly.
+                        let name = class.name();
+                        let overlay = name.overlay_name();
                         members.iter().find(|m| {
                             matches!(m, RuntimeTy::Class(tn, expected_args)
-                                if (class.name.declared() == Some(tn)
-                                    || (class.type_tag.is_dynamic()
-                                        && class.name.overlay_name() == *tn))
+                                if (name.declared() == Some(tn)
+                                    || (class.type_tag.is_dynamic() && overlay == *tn))
                                 && (expected_args.is_empty()
                                     || (expected_args.len() == inst.class_type_args.len()
                                         && expected_args
@@ -2451,19 +2444,20 @@ fn find_matching_union_member(value: Value, members: &[RuntimeTy]) -> Option<&Ru
                     let enum_obj = unsafe { variant.enm.get() };
                     if let Object::Enum(enm) = enum_obj {
                         let actual_variant = enm.variants.get(variant.index).map(|v| v.name.as_str());
+                        let name = enm.name();
                         members
                             .iter()
                             .find(|m| {
                                 matches!(
                                     (m, actual_variant),
                                     (RuntimeTy::EnumVariant(tn, expected), Some(actual))
-                                        if enm.name.declared() == Some(tn)
+                                        if name.declared() == Some(tn)
                                             && expected.as_str() == actual
                                 )
                             })
                             .or_else(|| {
                                 members.iter().find(
-                                    |m| matches!(m, RuntimeTy::Enum(tn) if enm.name.declared() == Some(tn))
+                                    |m| matches!(m, RuntimeTy::Enum(tn) if name.declared() == Some(tn))
                                 )
                             })
                     } else {
@@ -2558,7 +2552,7 @@ mod outbound_selection_tests {
     use baml_type::{Freshness, MediaKind, Name, TypeName};
     use bex_heap::{BexHeap, Tlab};
     use bex_vm_types::{
-        DeclarationName, EnumVariant, MediaContent, MediaValue, Object, Value,
+        EnumVariant, MediaContent, MediaValue, Object, Value,
         types::{Class, Enum},
     };
 
@@ -2609,9 +2603,17 @@ mod outbound_selection_tests {
     fn vm_enum_variant_selection_prefers_exact_variant_then_broad_enum() {
         let mood = TypeName::from_dotted_path("user.callbacks.Mood");
         let mut tlab = Tlab::new(BexHeap::new(Vec::new()));
+        // The enum renders as `user.callbacks.Mood` because the package that
+        // owns it is labelled `user`.
+        let user = tlab.alloc(Object::Package(Box::new(
+            bex_vm_types::types::Package::empty(Name::new("user")),
+        )));
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: bex_vm_types::DeclarationName::Declared(mood.clone()),
+            path: bex_vm_types::types::LocalName::new(
+                vec![Name::new("callbacks")],
+                Name::new("Mood"),
+            ),
             variants: vec![
                 EnumVariant {
                     name: "HAPPY".to_string(),
@@ -2634,7 +2636,7 @@ mod outbound_selection_tests {
             alias: None,
             docstring: None,
             other: indexmap::IndexMap::new(),
-            owner: bex_vm_types::types::Owner::anonymous(),
+            owner: bex_vm_types::types::Owner::Package(user),
         })));
         let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"));
         let broad = RuntimeTy::Enum(mood);
@@ -2657,11 +2659,12 @@ mod outbound_selection_tests {
     fn vm_dynamic_class_selects_nested_partial_union_while_done_stays_direct() {
         fn alloc_class(
             tlab: &mut Tlab,
-            name: DeclarationName,
+            path: bex_vm_types::types::LocalName,
+            owner: bex_vm_types::types::Owner,
             type_tag: baml_type::typetag::TypeTag,
         ) -> bex_vm_types::HeapPtr {
             tlab.alloc(Object::Class(Box::new(Class {
-                name,
+                path,
                 fields: Vec::new(),
                 description: None,
                 alias: None,
@@ -2669,26 +2672,34 @@ mod outbound_selection_tests {
                 other: indexmap::IndexMap::new(),
                 stream_done: false,
                 type_tag,
-                has_cleanup: false,
+                cleanup: None,
                 methods: indexmap::IndexMap::new(),
                 generic_param_count: 0,
-                owner: bex_vm_types::types::Owner::anonymous(),
+                owner,
             })))
         }
 
         let mut tlab = Tlab::new(BexHeap::new(Vec::new()));
+        // A minted class: no package, so its name is its item name alone.
         let dynamic_name = Name::new("Hs7Collision");
         let dynamic_class = alloc_class(
             &mut tlab,
-            DeclarationName::Anonymous(dynamic_name.clone()),
+            bex_vm_types::types::LocalName::new(Vec::new(), dynamic_name.clone()),
+            bex_vm_types::types::Owner::anonymous(),
             baml_type::typetag::TypeTag::fresh_dynamic(),
         );
         let dynamic_value = Value::object(tlab.alloc_instance(dynamic_class, Vec::new()));
 
+        // A declared class: it renders as `ai.stream.Done` because its package
+        // is labelled `ai`.
         let done_name = TypeName::from_dotted_path("ai.stream.Done");
+        let ai = tlab.alloc(Object::Package(Box::new(
+            bex_vm_types::types::Package::empty(Name::new("ai")),
+        )));
         let done_class = alloc_class(
             &mut tlab,
-            DeclarationName::Declared(done_name.clone()),
+            bex_vm_types::types::LocalName::new(vec![Name::new("stream")], Name::new("Done")),
+            bex_vm_types::types::Owner::Package(ai),
             baml_type::typetag::TypeTag::of_static_index(0),
         );
         let done_value = Value::object(tlab.alloc_instance(done_class, Vec::new()));

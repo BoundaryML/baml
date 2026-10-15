@@ -45,7 +45,7 @@ where
         };
 
         let ctx = {
-            let visited = VisitedType::Class(name.to_string());
+            let visited = VisitedType::Class(name);
 
             // If this combination has been visited bail out.
             if ctx.is_visiting(&visited, value, false) {
@@ -112,7 +112,7 @@ where
         // when dealing with recursive classes.
         // TODO: is this necessary? we should be recusing over the finite input data, not the potentially infinite type structure
 
-        let visited = VisitedType::Class(class_ty.name.to_string());
+        let visited = VisitedType::Class(&class_ty.name);
 
         // If this combination has been visited bail out.
         if ctx.is_visiting(&visited, value, true) {

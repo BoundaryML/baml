@@ -13,6 +13,7 @@ prost = { workspace = true }
 
 
 [dev-dependencies]
+baml_version = { workspace = true }
 sdk_test_harness_runner = { path = "../../harness_runner" }
 
 [package.metadata.ci]

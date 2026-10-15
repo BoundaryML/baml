@@ -47,7 +47,7 @@ async fn catch_stale_field_slot_invalid_field_access() {
         .position(|object| {
             matches!(
                 object,
-                Object::Class(class) if class.name.display_name().as_str() == "Short"
+                Object::Class(class) if class.path.name.as_str() == "Short"
             )
         })
         .expect("Short class should exist");

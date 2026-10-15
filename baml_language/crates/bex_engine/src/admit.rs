@@ -1696,8 +1696,9 @@ impl Program<TypeHead> for Heap<'_> {
     }
 
     fn is_prompt_class(&self, head: &TypeHead) -> bool {
-        head.overlay_name()
-            .is_some_and(|name| name.render_dotted(false) == conversion::PROMPT_CLASS)
+        self.vm
+            .stdlib_heads()
+            .is_class(bex_vm::package_load::StdlibClass::Prompt, head.tag())
     }
 
     fn live_value_fits(
@@ -2116,10 +2117,11 @@ impl BexEngine {
                 let class = holder
                     .holder()
                     .vm
-                    .lookup_type_by_fqn(conversion::PROMPT_CLASS)
+                    .lang_head(bex_vm::lang_items::AI_PROMPT)
                     .ok_or_else(|| EngineError::TypeMismatch {
-                        message: format!("the program declares no `{}`", conversion::PROMPT_CLASS),
-                    })?;
+                        message: "the program declares no `ai.Prompt`".to_string(),
+                    })?
+                    .ptr();
                 Self::wrapper_instance(holder, class, prompt.clone())?
             }
             EngineValue::Type(reflected) => {
@@ -2199,7 +2201,7 @@ impl BexEngine {
             return Err(EngineError::TypeMismatch {
                 message: format!(
                     "wrapper class `{}` does not hold one `{}` field",
-                    declared.name,
+                    declared.name(),
                     bex_external_types::MEDIA_WRAPPER_DATA_FIELD
                 ),
             });
@@ -2311,7 +2313,7 @@ mod tests {
         }
 
         fn is_prompt_class(&self, head: &TypeName) -> bool {
-            head.render_dotted(false) == conversion::PROMPT_CLASS
+            head.render_dotted(false) == "ai.Prompt"
         }
 
         fn live_value_fits(
