@@ -72,6 +72,9 @@ pub struct InterfaceFieldDef {
     /// both — and is resolved dynamically against the receiver's impl, never
     /// pre-collapsed to a frame slot (an interface *declaration* has no frame).
     pub ty: crate::RuntimeTy,
+    /// The field's `///` doc comment, which `reflect.Class.extends` copies onto
+    /// the class field it mints. Interface fields carry no other metadata.
+    pub docstring: Option<String>,
 }
 
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
