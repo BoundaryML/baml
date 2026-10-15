@@ -1,0 +1,51 @@
+{
+ "candidate_sha": "c40399ff6c3538f9f9d7bab774933ce84b6d9061",
+ "candidate_dirty_files": 0,
+ "candidate_branch": "HEAD",
+ "candidate_subject": "fix(bench): stamp the native host with the archived commit",
+ "emitter": "/home/runner/_work/baml/baml/baml_language/target/release/baml-cli",
+ "emitter_version": "baml-cli 0.22.2",
+ "protocol": "tier-a",
+ "protocol_sha256": "fe0814e3c831ceded20457b7ee0dc3cb00b47bff7e7022c725e85dab18c2032b",
+ "machine": "bench-x86-v1",
+ "machine_sha256": "963f1a6062538a8e399ab93589046cc24dca5c9ffedaeee627ff41df62f4a330",
+ "emitted": {
+  "00_startup": {
+   "status": "emitted",
+   "report": "1 native, 1 bytecode"
+  },
+  "01_array_traversal": {
+   "status": "emitted",
+   "report": "1 native, 1 bytecode"
+  },
+  "02_merge_sort": {
+   "status": "emitted",
+   "report": "0 native, 2 bytecode"
+  },
+  "03_json_aggregate": {
+   "status": "emitted",
+   "report": "1 native, 2 bytecode"
+  },
+  "04_allocation_retention": {
+   "status": "emitted",
+   "report": "0 native, 2 bytecode"
+  },
+  "07_function_calls": {
+   "status": "emitted",
+   "report": "2 native, 1 bytecode"
+  },
+  "09_json_hello": {
+   "status": "emitted",
+   "report": "0 native, 2 bytecode"
+  },
+  "10_quick_sort": {
+   "status": "emitted",
+   "report": "0 native, 2 bytecode"
+  },
+  "11_generate_sort": {
+   "status": "emitted",
+   "report": "0 native, 2 bytecode"
+  }
+ },
+ "staged_at": "2026-10-15T18:27:06Z"
+}
