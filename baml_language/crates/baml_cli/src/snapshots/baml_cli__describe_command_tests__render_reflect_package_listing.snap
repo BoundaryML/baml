@@ -9,8 +9,8 @@ class            reflect.Literal                  <builtin>/reflect/kinds.baml:1
 class            reflect.Array                    <builtin>/reflect/kinds.baml:192
 class            reflect.Map                      <builtin>/reflect/kinds.baml:214
 class            reflect.Interface                <builtin>/reflect/kinds.baml:248
-class            reflect.Primitive                <builtin>/reflect/kinds.baml:279
-class            reflect.Function                 <builtin>/reflect/kinds.baml:296
+class            reflect.Primitive                <builtin>/reflect/kinds.baml:280
+class            reflect.Function                 <builtin>/reflect/kinds.baml:297
 class            reflect.Arg                      <builtin>/reflect/reflect.baml:2
 class            reflect.Meta                     <builtin>/reflect/reflect.baml:14
 class            reflect.WithMeta                 <builtin>/reflect/reflect.baml:27
