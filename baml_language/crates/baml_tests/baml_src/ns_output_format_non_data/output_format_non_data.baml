@@ -147,7 +147,7 @@ test "generic_class_output_fails_before_provider_io" {
 
 test "never_nested_in_a_runtime_class_field_is_rejected_not_panicked" {
     let outer = reflect.class.new("RuntimeOuter", { "items": reflect.Type.of<never>().array().as_type() }) catch (e) {
-        _ => throw "class.new threw",
+        _ => throw "reflect.Class.new threw",
     };
     type RuntimeOuterType = unreflect(outer.as_type())
     let result = GenericValue@render_prompt<RuntimeOuterType>("runtime") catch (e) {

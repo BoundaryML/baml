@@ -34,7 +34,8 @@ impl TypeKind {
         Self::Function,
     ];
 
-    pub const fn namespace(self) -> &'static str {
+    /// The kind's lowercase name, as messages spell it (`class-kind`).
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Class => "class",
             Self::Enum => "enum",
@@ -49,19 +50,19 @@ impl TypeKind {
     }
 
     /// The builtin class that is the sealed view for this kind, by identity:
-    /// `reflect.<kind>.Type`. [`Self::class_name`] and [`Self::class_decl`]
-    /// derive from it.
+    /// `reflect.<Kind>` at the root of the package. [`Self::class_name`] and
+    /// [`Self::class_decl`] derive from it.
     pub const fn class(self) -> LangItem {
         match self {
-            Self::Class => lang_item!(Reflect: class.Type),
-            Self::Enum => lang_item!(Reflect: enum.Type),
-            Self::Union => lang_item!(Reflect: union.Type),
-            Self::Literal => lang_item!(Reflect: literal.Type),
-            Self::Array => lang_item!(Reflect: array.Type),
-            Self::Map => lang_item!(Reflect: map.Type),
-            Self::Interface => lang_item!(Reflect: interface.Type),
-            Self::Primitive => lang_item!(Reflect: primitive.Type),
-            Self::Function => lang_item!(Reflect: function.Type),
+            Self::Class => lang_item!(Reflect: Class),
+            Self::Enum => lang_item!(Reflect: Enum),
+            Self::Union => lang_item!(Reflect: Union),
+            Self::Literal => lang_item!(Reflect: Literal),
+            Self::Array => lang_item!(Reflect: Array),
+            Self::Map => lang_item!(Reflect: Map),
+            Self::Interface => lang_item!(Reflect: Interface),
+            Self::Primitive => lang_item!(Reflect: Primitive),
+            Self::Function => lang_item!(Reflect: Function),
         }
     }
 
@@ -107,13 +108,9 @@ pub fn is_type_kind_class_decl(lang: LangRoots, name: &DeclName) -> bool {
         && is_type_kind_class_path(name.namespace(), name.name())
 }
 
-/// The `<kind>.Type` shape inside the `reflect` package.
+/// A root-level `<Kind>` class inside the `reflect` package.
 fn is_type_kind_class_path(namespace: &[Name], name: &Name) -> bool {
-    namespace.len() == 1
-        && TypeKind::ALL
-            .iter()
-            .any(|kind| namespace[0].as_str() == kind.namespace())
-        && name.as_str() == "Type"
+    namespace.is_empty() && TypeKind::ALL.iter().any(|kind| kind.class().name() == name)
 }
 
 /// A builtin type and where its values actually come from, for the
@@ -207,15 +204,15 @@ mod tests {
     fn kind_names_are_closed_and_recognized() {
         for kind in TypeKind::ALL {
             assert!(is_type_kind_class(&kind.class_name()));
-            // The wire namespace segment and the identity spell one view.
-            let class = kind.class();
-            assert_eq!(class.namespace().len(), 1);
-            assert_eq!(class.namespace()[0].as_str(), kind.namespace());
-            assert_eq!(class.name().as_str(), "Type");
+            // Every view is a root-level class of `reflect`.
+            assert!(kind.class().namespace().is_empty());
         }
-        assert!(!is_type_kind_class(&QualifiedTypeName::from_dotted_path(
-            "reflect.Type"
-        )));
+        for path in ["reflect.Type", "reflect.class.Field", "reflect.enum.Value"] {
+            assert!(
+                !is_type_kind_class(&QualifiedTypeName::from_dotted_path(path)),
+                "{path} is not a kind view"
+            );
+        }
     }
 
     #[test]

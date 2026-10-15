@@ -3,14 +3,14 @@
 ///
 /// A descriptor from `reflect.AnyClass.list_fields` or `get_field` is bound
 /// to the instance it came from, so `value` can read it; one from
-/// `Type.fields()` describes the type only and is ownerless.
+/// `reflect.Class.fields()` describes the type only and is ownerless.
 class Field {
     name: string,
     type: root.Type?,
     meta: root.Meta,
     /// Present only for handles returned from `reflect.AnyClass.list_fields` or
-    /// `get_field`. Type-side descriptors returned by `Type.fields()` are
-    /// intentionally ownerless.
+    /// `get_field`. Type-side descriptors returned by `reflect.Class.fields()`
+    /// are intentionally ownerless.
     _owner: unknown?,
 
     /// This field's schema metadata. Same value as the `meta` field.
@@ -24,42 +24,12 @@ class Field {
         let owner: root.AnyClass = self._owner else {
             return null;
         };
-        root.class.get_field<T>(owner, self.name) catch (e) {
+        root.Class.get_field<T>(owner, self.name) catch (e) {
             root.errors.CompilationError { message } => {
                 throw root.errors.TypeMismatch { message: message }
             }
         }
     }
-}
-
-/// Construct a closed runtime class. Map iteration order is definition order.
-function new(
-    name: string,
-    fields: map<string, root.Type | root.WithMeta<root.Type>>,
-    implementations: root.interface.Implementation[] = [],
-) -> Type throws root.errors.CompilationError {
-    // Native functions receive the omitted-argument sentinel instead of
-    // evaluating BAML default expressions. Keep the public API as the BEP
-    // specifies and resolve the default in this BAML wrapper before crossing
-    // the native boundary.
-    _new(name, fields, implementations)
-}
-
-/// (internal) Internal native backing `new`; all arguments have been materialized.
-//baml:mut_vm
-function _new(
-    name: string,
-    fields: map<string, root.Type | root.WithMeta<root.Type>>,
-    implementations: root.interface.Implementation[],
-) -> Type throws root.errors.CompilationError {
-    $rust_function
-}
-
-/// Start an incrementally-defined runtime class. Builders are required when
-/// one or more fields recursively refer to the class being defined.
-//baml:mut_vm
-function builder(name: string) -> Builder throws never {
-    $rust_function
 }
 
 /// A mutable runtime-class definition. Calling `build` freezes every builder
@@ -94,7 +64,7 @@ class Builder {
     function build(
         self,
         implementations: root.interface.Implementation[] = [],
-    ) -> Type throws root.errors.CompilationError {
+    ) -> root.Class throws root.errors.CompilationError {
         self._build(implementations)
     }
 
@@ -103,7 +73,7 @@ class Builder {
     function _build(
         self,
         implementations: root.interface.Implementation[],
-    ) -> Type throws root.errors.CompilationError {
+    ) -> root.Class throws root.errors.CompilationError {
         $rust_function
     }
 }
@@ -149,41 +119,6 @@ class PendingType {
         docstring: string? = null,
         other: map<string, string>? = null,
     ) -> root.WithMeta<PendingType> throws never {
-        $rust_function
-    }
-}
-
-/// Assert-read a named field from a runtime-shaped class instance.
-//baml:mut_vm
-function get_field<T>(value: unknown, name: string) -> T throws root.errors.CompilationError {
-    $rust_function
-}
-
-/// A class-kind view of a `type` value. Users never construct this class.
-class Type {
-    /// The wrapped `type` value. Private by invariant: reflection natives are
-    /// its only readers, and each kind method panics if the held type no longer
-    /// classifies as this view's kind.
-    _ty: root.Type,
-
-    implements root.TypeView {
-        //baml:vm
-        //baml:fallible
-        function as_type(self) -> root.Type throws never {
-            $rust_function
-        }
-    }
-    /// The class's fields, in declaration order. Ownerless: these describe
-    /// the type, so `Field.value` on them returns `null`.
-    //baml:mut_vm
-    //baml:fallible
-    function fields(self) -> Field[] throws never {
-        $rust_function
-    }
-    /// The class declaration's own schema metadata.
-    //baml:mut_vm
-    //baml:fallible
-    function meta(self) -> root.Meta throws never {
         $rust_function
     }
 }

@@ -1,30 +1,5 @@
-/// An interface-kind view of a `type` value. Users never construct this class.
-class Type {
-    /// The wrapped `type` value. Private by invariant: reflection natives are
-    /// its only readers, and each kind method panics if the held type no longer
-    /// classifies as this view's kind.
-    _ty: root.Type,
-
-    implements root.TypeView {
-        //baml:vm
-        //baml:fallible
-        function as_type(self) -> root.Type throws never {
-            $rust_function
-        }
-    }
-    //baml:vm
-    //baml:fallible
-    /// Whether `other` nominally implements this interface.
-    ///
-    /// The mirror of `reflect.Type.implements`, asked from the interface's
-    /// side. `false` when `other` is not a class.
-    function implemented_by(self, other: root.Type) -> bool throws never {
-        $rust_function
-    }
-}
-
 /// An immutable structural-conformance witness.  Values are created only by
-/// `implementation<I>()`; each `field` call returns a new witness.
+/// `reflect.Interface.implementation<I>()`; each `field` call returns a new witness.
 /// A structural witness that a runtime-built class implements an interface.
 ///
 /// Start one with `reflect.interface.implementation<I>()` and link each
@@ -47,10 +22,4 @@ class Implementation {
     ) -> Implementation throws root.errors.CompilationError {
         $rust_function
     }
-}
-
-/// Start a structural witness for a static interface.
-//baml:mut_vm
-function implementation<I>() -> Implementation throws root.errors.CompilationError {
-    $rust_function
 }

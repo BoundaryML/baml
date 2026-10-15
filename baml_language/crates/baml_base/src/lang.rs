@@ -363,10 +363,10 @@ mod tests {
         assert_eq!(arg.to_string(), "reflect.Arg");
 
         // A keyword is a namespace like any other.
-        let view = lang_item!(Reflect: enum.Type);
-        assert_eq!(view.to_string(), "reflect.enum.Type");
-        assert_eq!(view, lang_item!(Reflect: enum.Type));
-        assert_ne!(view, lang_item!(Reflect: class.Type));
+        let value = lang_item!(Reflect: enum.Value);
+        assert_eq!(value.to_string(), "reflect.enum.Value");
+        assert_eq!(value, lang_item!(Reflect: enum.Value));
+        assert_ne!(value, lang_item!(Reflect: class.Field));
     }
 
     #[test]
