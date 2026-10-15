@@ -40,13 +40,42 @@ Windows keeps an empty `login/cache/<endpoint-hash>.lock` beside each credential
 | `BAML_BUILD_CACHE` | `false` turns off the build cache. |
 | `BAML_BUILD_CACHE_REMOTE`, `BAML_BUILD_CACHE_REMOTE_TOKEN` | Shared build cache for CI. URL must be https (or localhost). |
 | `BAML_LOG` | Level for `log.*` output and bridge loader messages: `off`, `error`, `warn`, `info` (default), `debug`, `trace`. |
-| `BAML_TELEMETRY` | Runtime tracing level: `off`, `low`, `medium` (default), `high`. |
+| `BAML_TELEMETRY` | Runtime tracing level: `off`, `low`, `medium` (default), `high`. Set before runtime initialization; generated artifacts may use publisher-controlled settings (see below). |
 | `BOUNDARY_API_URL` | Boundary API gateway for login, cloud queries and telemetry. Overrides `[boundary].api_url`; default `https://api.prod.bcs.boundaryml.com`. |
 | `BOUNDARY_API_KEY` | Non-interactive Boundary credential for cloud queries and telemetry. Takes precedence over saved user login. |
 | `BOUNDARY_PROJECT` | Cloud target as `org_handle/project_name`. Overrides `[boundary].project`; query's `--project` flag takes precedence. |
 | `BAML_CLI_ALLOW_DIRECT` | Hides the "don't run baml-cli directly" warning. The wrapper sets it. |
 | `BAML_FEEDBACK_HOST` | Where `baml feedback` sends reports. Staging and tests. |
 | `BAML_AWS_CREDENTIAL_PROCESS` | Allow running an AWS profile's `credential_process`. Off by default because it runs a program. |
+
+## Disabling runtime tracing and local recordings
+
+For a runtime initialized from source, set `BAML_TELEMETRY=off` before `initializeRuntime(...)` (Node) or the corresponding runtime constructor in another SDK:
+
+```sh
+BAML_TELEMETRY=off node app.mjs
+```
+
+The setting is read once per engine. `off` disables all runtime telemetry, including explicit function capture policies: no telemetry clock, processing or delivery workers, local recording directories, profiling lockfiles, captured arguments or prompts, or cloud telemetry publishing. Request building and response parsing still work. Changing the variable after initialization does not reconfigure the existing engine, and disabling tracing does not delete existing recordings. Set it before importing a generated SDK that initializes its runtime on import; in Node, setting `process.env` before a static `import` in the same module is insufficient because imports run first.
+
+In 0.22.2 and current canary, source-initialized SDK runtimes default to `medium` tracing in memory. Without a Boundary API key or saved Boundary login, they do not write local recordings or publish to the cloud. `BOUNDARY_API_KEY=local` selects local recordings under `BAML_HOME/btel/{recordings,cas}` (default `~/.baml/btel/{recordings,cas}`); a Boundary API key or saved login selects cloud delivery. `BAML_TELEMETRY=off` suppresses either delivery path. `low` is a tracing level, not a global opt-out.
+
+Generated bridges and packed binaries can carry a publisher-owned telemetry policy. When present, it replaces the ambient runtime settings: omission or `false` under `[bridge.env_var_names]` / `[pack.env_var_names]` keeps the baked recording level (default `medium`), even if `BAML_TELEMETRY=off` is set. To allow the standard opt-out, the publisher must generate with:
+
+```toml
+[bridge.env_var_names]
+BAML_TELEMETRY = "BAML_TELEMETRY"
+```
+
+Use `[pack.env_var_names]` for packed binaries. A custom binding such as `BAML_TELEMETRY = "ACME_TELEMETRY"` instead reads `ACME_TELEMETRY=off`. Regenerate/repack after changing these settings. These artifacts default to local recordings under the BAML home when no cloud credential is selected; embedded build credentials can select cloud delivery. An honored `off` disables both local recording and cloud delivery, including delivery using an embedded build credential. Bytecode loaded without an artifact telemetry policy uses the ordinary runtime environment settings.
+
+### Older releases: 0.20.1
+
+`@boundaryml/baml-bridge@0.20.1` uses the previous profiler, which defaults to writing `<process.cwd()>/.baml/profiles-v1` even for initialization and build-request/parse-only usage. `BAML_TELEMETRY=off` does **not** disable that profiler. Use `BAML_PROFILE=0` before the first runtime initialization in the process, or upgrade to the current runtime. The old switch and profile session are process-global, so changing them after initialization is too late.
+
+In that version, `BAML_PROFILE_DIR` changes the profile store path; values such as `off`, `none` and `0` are directory names. An empty value prevents the old store from opening, but is not the profiling opt-out contract; use `BAML_PROFILE=0`. `BAML_PROFILE_PUBLISH_INTERVAL_MS` controls batching of writes into the **local** store (default 1000 ms), and `publish.lock` coordinates local store publication across processes. These names do not mean profiles are uploaded. Current SDK runtime tracing no longer uses these `BAML_PROFILE*` settings or the `profiles-v1` store.
+
+CLI usage analytics are separate: use `DO_NOT_TRACK=1` (or `baml telemetry disable`). It does not disable SDK runtime tracing or recordings, and current `BAML_TELEMETRY=off` does not opt out of CLI usage analytics. Set both when disabling both systems.
 
 ## Bridges
 
