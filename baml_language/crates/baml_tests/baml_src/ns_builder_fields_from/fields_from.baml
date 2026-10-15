@@ -22,7 +22,7 @@ class Person {
 
 /// Every field of `copy` matches the same field of `source`: name, type and
 /// each metadata attribute.
-function same_fields(copy: reflect.class.Type, source: reflect.class.Type) -> bool {
+function same_fields(copy: reflect.Class, source: reflect.Class) -> bool {
     let copied = copy.fields();
     let original = source.fields();
     if (copied.length() != original.length()) {
@@ -50,8 +50,8 @@ function same_fields(copy: reflect.class.Type, source: reflect.class.Type) -> bo
 }
 
 test "fields_from_copies_every_field_and_its_metadata" {
-    let action = reflect.Type.of<Action>().as_class() ?? throw "missing Action";
-    let copy = reflect.class.builder("Action").fields_from(action).build();
+    let action = Action.type().as_class() ?? throw "missing Action";
+    let copy = reflect.Class.builder("Action").fields_from(action).build();
 
     assert.is_true(same_fields(copy, action));
     let fields = copy.fields();
@@ -60,15 +60,15 @@ test "fields_from_copies_every_field_and_its_metadata" {
     assert.equal(fields[0].meta.docstring, "Which tool runs.");
     assert.is_true(fields[2].meta.skip);
     // Only the fields: the class's own metadata stays behind.
-    assert.equal(copy.meta().description, null);
-    assert.equal(copy.meta().docstring, null)
+    assert.equal(copy.metadata().description, null);
+    assert.equal(copy.metadata().docstring, null)
 }
 
 test "fields_from_copy_renders_like_the_source_fields" {
-    let source = reflect.class.new(
+    let source = reflect.Class.new(
         "Tagged",
         {
-            "tag": reflect.Type.of<string>().meta(
+            "tag": string.type().meta(
                 alias = "wire_tag",
                 description = "dispatch key",
                 docstring = "source docs",
@@ -77,17 +77,17 @@ test "fields_from_copy_renders_like_the_source_fields" {
             "count": reflect.Type.of<int?>(),
         },
     );
-    let copy = reflect.class.builder("Tagged").fields_from(source).build();
+    let copy = reflect.Class.builder("Tagged").fields_from(source).build();
 
-    assert.equal(copy.as_type().to_baml(), source.as_type().to_baml());
+    assert.equal(copy.to_baml(), source.to_baml());
     assert.is_true(same_fields(copy, source));
     assert.equal(copy.fields()[0].meta.other.get("owner"), "slice3")
 }
 
 test "fields_from_chains_with_field_and_build" {
-    let action_class = reflect.class.builder("ActionWithReason")
-        .fields_from(reflect.Type.of<Action>().as_class() ?? throw "missing")
-        .field("reason", reflect.Type.of<string>())
+    let action_class = reflect.Class.builder("ActionWithReason")
+        .fields_from(Action.type().as_class() ?? throw "missing")
+        .field("reason", string.type())
         .build();
 
     let names: string[] = [];
@@ -95,15 +95,15 @@ test "fields_from_chains_with_field_and_build" {
         names.push(field.name);
     }
     assert.equal(names.join("|"), "tool|args|trace_id|reason");
-    assert.equal(action_class.fields()[3].type, reflect.Type.of<string>());
+    assert.equal(action_class.fields()[3].type, string.type());
     assert.equal(action_class.fields()[0].meta.description, "The tool to call.")
 }
 
 test "fields_from_then_a_duplicate_field_throws" {
-    let action = reflect.Type.of<Action>().as_class() ?? throw "missing";
-    let builder = reflect.class.builder("Duplicate").fields_from(action);
+    let action = Action.type().as_class() ?? throw "missing";
+    let builder = reflect.Class.builder("Duplicate").fields_from(action);
     let code = {
-        builder.field("tool", reflect.Type.of<int>());
+        builder.field("tool", int.type());
         "duplicate did not throw"
     } catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code,
@@ -112,8 +112,8 @@ test "fields_from_then_a_duplicate_field_throws" {
 }
 
 test "fields_from_a_colliding_class_throws_and_appends_nothing" {
-    let action = reflect.Type.of<Action>().as_class() ?? throw "missing";
-    let builder = reflect.class.builder("Collides").field("args", reflect.Type.of<int>());
+    let action = Action.type().as_class() ?? throw "missing";
+    let builder = reflect.Class.builder("Collides").field("args", int.type());
     let message = {
         builder.fields_from(action);
         "collision did not throw"
@@ -124,12 +124,12 @@ test "fields_from_a_colliding_class_throws_and_appends_nothing" {
 
     assert.equal(message, "duplicate field `Collides.args`");
     assert.equal(built.fields().length(), 1);
-    assert.equal(built.fields()[0].type, reflect.Type.of<int>())
+    assert.equal(built.fields()[0].type, int.type())
 }
 
 test "fields_from_on_a_frozen_builder_throws" {
-    let action = reflect.Type.of<Action>().as_class() ?? throw "missing";
-    let builder = reflect.class.builder("Frozen");
+    let action = Action.type().as_class() ?? throw "missing";
+    let builder = reflect.Class.builder("Frozen");
     builder.build();
     let message = {
         builder.fields_from(action);
@@ -141,9 +141,9 @@ test "fields_from_on_a_frozen_builder_throws" {
 }
 
 test "fields_from_inside_a_recursive_builder_group" {
-    let action = reflect.Type.of<Action>().as_class() ?? throw "missing";
-    let step = reflect.class.builder("Step");
-    let plan = reflect.class.builder("Plan");
+    let action = Action.type().as_class() ?? throw "missing";
+    let step = reflect.Class.builder("Step");
+    let plan = reflect.Class.builder("Plan");
     step.fields_from(action)
         .field("next", step.type().optional().meta(description = "The step after this one."))
         .field("plan", plan.type());
@@ -156,25 +156,25 @@ test "fields_from_inside_a_recursive_builder_group" {
     assert.equal(fields.length(), 5);
     assert.equal(fields[0].meta.description, "The tool to call.");
     assert.is_true(fields[2].meta.skip);
-    assert.equal(fields[3].type, step_t.as_type().optional().as_type());
+    assert.equal(fields[3].type, step_t.optional().as_type());
     assert.equal(fields[3].meta.description, "The step after this one.");
     assert.equal(fields[4].type, plan_t.as_type());
-    assert.equal(plan_t.fields()[0].type, step_t.as_type().array().as_type())
+    assert.equal(plan_t.fields()[0].type, step_t.array().as_type())
 }
 
 test "fields_from_builds_with_an_explicit_implementation" {
-    let person = reflect.Type.of<Person>().as_class() ?? throw "missing";
+    let person = Person.type().as_class() ?? throw "missing";
     let named = reflect.Type.of<Named>();
 
     // The interfaces are not copied: `Person` implements `Named`, the copy
     // does not until `build` is given the implementation.
-    let plain = reflect.class.builder("PlainPerson").fields_from(person).build();
-    let employee = reflect.class.builder("Employee")
+    let plain = reflect.Class.builder("PlainPerson").fields_from(person).build();
+    let employee = reflect.Class.builder("Employee")
         .fields_from(person)
-        .field("team", reflect.Type.of<string>())
-        .build(implementations = [reflect.interface.implementation<Named>().field("name")]);
+        .field("team", string.type())
+        .build(implementations = [reflect.Interface.implementation<Named>().field("name")]);
 
-    assert.is_true(person.as_type().implements(named));
-    assert.equal(plain.as_type().implements(named), false);
-    assert.is_true(employee.as_type().implements(named))
+    assert.is_true(person.implements(named));
+    assert.equal(plain.implements(named), false);
+    assert.is_true(employee.implements(named))
 }
