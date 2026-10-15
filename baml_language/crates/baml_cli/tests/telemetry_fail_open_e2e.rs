@@ -183,6 +183,12 @@ function Hello() -> string {{
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
         .env("DO_NOT_TRACK", "1")
         .env("NO_COLOR", "1");
+    // Winsock providers require the Windows system directory even in an isolated environment.
+    #[cfg(windows)]
+    command.env(
+        "SystemRoot",
+        std::env::var_os("SystemRoot").expect("Windows system root"),
+    );
     if !initially_rejected {
         command
             .env("BOUNDARY_API_KEY", "bml_dummy_test")
