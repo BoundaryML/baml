@@ -725,6 +725,21 @@ impl BexVm {
         self.frames.len()
     }
 
+    /// Record `line` as the source position of the compiled function whose
+    /// frame count is `depth` (see [`Self::frame_depth`]). Compiled code calls
+    /// this only when an error leaves the function or lands in its `catch`,
+    /// so stack traces name the statement that raised, at no cost otherwise.
+    #[cold]
+    pub fn note_line(&mut self, depth: usize, line: u32) {
+        if let Some(crate::vm::Frame::Bytecode(frame)) = depth
+            .checked_sub(1)
+            .and_then(|top| self.frames.get_mut(top))
+            && let crate::vm::FrameBody::Compiled { line: at } = &mut frame.body
+        {
+            *at = line;
+        }
+    }
+
     /// Land a thrown error in a compiled `catch`; see
     /// [`BexVm::land_compiled_catch`]. Returns the caught value and its
     /// `baml.errors.Context`; an internal error keeps propagating.

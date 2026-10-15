@@ -958,18 +958,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         }
     }
 
-    /// Normalize a span start offset to avoid leading-newline attribution.
-    ///
-    /// Some statement spans start at the newline byte preceding the real token.
-    /// If `start + 1` is a known line start, prefer that offset.
-    fn normalize_span_start_offset(&self, start: u32) -> u32 {
-        if self.line_starts.binary_search(&(start + 1)).is_ok() {
-            start + 1
-        } else {
-            start
-        }
-    }
-
     /// Convert a source span to a display line number.
     ///
     /// Sequence points (statement/terminator boundaries) use normalized start
@@ -977,9 +965,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     /// when a span crosses lines, which avoids collapsing multiline operand
     /// spans to the previous line.
     fn span_to_line(&self, span: Span, sequence_point: bool) -> usize {
-        let start: u32 = span.range.start().into();
-        let start = self.normalize_span_start_offset(start);
-        let start_line = self.offset_to_line(start);
+        let start_line = crate::statement_line(self.line_starts, span.range.start().into());
 
         if sequence_point {
             return start_line;

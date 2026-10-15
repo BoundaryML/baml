@@ -69,15 +69,36 @@ and small functions vanished from default telemetry by a size heuristic
 nobody chose. Measure first: if the frame push matters, keep it and make
 telemetry the only optional part.
 
-While a body runs, cur_pc and every compiled frame's faulting_pc hold
-NATIVE_BODY_PC, a value no exception-table range covers, so the unwinder never
-starts a bytecode handler inside a compiled frame. Consequence: traces show
-the line of the function's last line-table entry, raise evidence classifies
-compiled raises as unknown, and calls out of compiled code record that
-sentinel as caller_pc (call-path ids differ from an all-bytecode run). Open:
-on the error path, set cur_pc to the bytecode pc of the same MIR statement
-(outside every try range when the block has no unwind), or give compiled code
-its own source-site coordinate.
+A frame says what runs it: BytecodeFrame.body is FrameBody::Bytecode or
+FrameBody::Compiled { line }. Everything about the call itself (identity,
+locals region, type arguments, telemetry, context) is shared; only position
+differs, and every reader of a position checks the body first:
+
+  unwinder         a compiled frame has no bytecode handlers; the error leaves
+                   it (its own catches land errors before the unwinder runs).
+  stack traces     a compiled frame reports `line`: compiled code keeps the
+                   current statement's line in a local and writes it to its
+                   frame only when an error leaves the function or lands in
+                   its catch. Lines follow the bytecode rule
+                   (baml_compiler2_emit::statement_line), so traces match.
+  cause walk       compiled frames hold no bytecode handler bodies.
+  raise evidence   no pc for a compiled frame; its raise kind comes from the
+                   throw (rethrow, panic instance, or throw).
+  call paths       a call made by compiled code records COMPILED_CALLER_PC:
+                   telemetry source maps are keyed by bytecode offset, so call
+                   sites inside one compiled caller share one coordinate.
+
+The bytecode position (instruction_ptr, faulting_pc) stays on the frame
+rather than inside FrameBody::Bytecode: the interpreter reads and writes it on
+every call and return, and that path stays free of a discriminant check. An
+earlier version had no body at all and parked cur_pc and faulting_pc on a
+sentinel no exception range covers; two dozen readers then interpreted a
+position that did not exist (traces named the wrong line, raise evidence
+read no opcode).
+
+Open: a compiled site coordinate in telemetry source maps, so call paths from
+compiled callers are as precise as bytecode's; resume state in
+FrameBody::Compiled for bodies that suspend (section 10).
 
 The call fast path (call_specialize) skips callees with a native body; a
 bytecode loop calling a compiled leaf pays the general funnel. Open.

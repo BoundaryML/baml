@@ -170,6 +170,8 @@ fn generated_module_is_well_formed_rust() {
     }
     // Every compiled call gets a frame (depth limit, traces, telemetry).
     assert!(compact.contains("vm.call_compiled("));
+    // An error leaving a compiled function records the line it was raised on.
+    assert!(compact.contains("vm.note_line(depth,line)"));
     // A string literal is the program's own string object, not a new one.
     assert!(!compact.contains("vm.string_value("));
     // A defaulted parameter stays a `Value` until MIR's `OmittedArg` test.

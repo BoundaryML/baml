@@ -741,7 +741,7 @@ fn relative_source_path(db: &dyn baml_compiler2_mir::Db, file: baml_base::Source
 ///
 /// Returns `[0, offset_of_line_2, offset_of_line_3, ...]`.
 #[allow(clippy::cast_possible_truncation)]
-fn build_line_starts(text: &str) -> Vec<u32> {
+pub fn build_line_starts(text: &str) -> Vec<u32> {
     let mut starts = vec![0u32];
     for (i, byte) in text.bytes().enumerate() {
         if byte == b'\n' {
@@ -749,6 +749,23 @@ fn build_line_starts(text: &str) -> Vec<u32> {
         }
     }
     starts
+}
+
+/// The 1-based source line a statement or terminator whose span starts at
+/// byte `start` is attributed to: the line of its first token. Some spans start
+/// on the newline before that token, which counts from the next line. Bytecode
+/// line tables and natively compiled frames both report lines by this rule.
+#[must_use]
+pub fn statement_line(line_starts: &[u32], start: u32) -> usize {
+    let start = if line_starts.binary_search(&(start + 1)).is_ok() {
+        start + 1
+    } else {
+        start
+    };
+    match line_starts.binary_search(&start) {
+        Ok(idx) => idx + 1,
+        Err(idx) => idx,
+    }
 }
 
 // ─── Let-binding helpers ─────────────────────────────────────────────────────

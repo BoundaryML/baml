@@ -43,6 +43,7 @@ pub use errors::{StackFrame, VmPanic, format_traceback};
 pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
 pub use vm::{
-    BexVm, BytecodeFrame, BytecodeProgram, Frame, NativeBodyTable, VmEventSourceLocation,
-    VmExecState, convert_program, convert_program_with_natives, prepare_compact_code,
+    BexVm, BytecodeFrame, BytecodeProgram, Frame, FrameBody, NativeBodyTable,
+    VmEventSourceLocation, VmExecState, convert_program, convert_program_with_natives,
+    prepare_compact_code,
 };

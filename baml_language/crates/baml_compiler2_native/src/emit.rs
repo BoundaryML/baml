@@ -89,6 +89,8 @@ pub fn compile_program<'db>(
     let mut rejected: Vec<(String, Rejection)> = Vec::new();
 
     for &file in root.files(db) {
+        let lines: std::sync::Arc<[u32]> =
+            baml_compiler2_emit::build_line_starts(file.text(db)).into();
         for &function in file_functions(db, file) {
             if is_required_interface_method(db, function) {
                 continue;
@@ -123,7 +125,14 @@ pub fn compile_program<'db>(
             }
             match Analysis::new(db, &index, mir, body) {
                 Ok(analysis) => {
-                    units.insert(name, Unit { mir, analysis });
+                    units.insert(
+                        name,
+                        Unit {
+                            mir,
+                            analysis,
+                            lines: lines.clone(),
+                        },
+                    );
                 }
                 Err(rejection) => rejected.push((name, rejection)),
             }
@@ -177,6 +186,9 @@ pub fn compile_program<'db>(
                 natives: &mut natives,
                 body: body_of(unit.mir),
                 analysis: &unit.analysis,
+                lines: &unit.lines,
+                declared_at: unit.mir.span,
+                current_line: None,
                 out: String::new(),
                 pending: Vec::new(),
                 temps: 0,
@@ -234,6 +246,8 @@ fn symbol_for(name: &str, ordinal: usize) -> String {
 struct Unit<'db> {
     mir: &'db MirFunction<'db>,
     analysis: Analysis,
+    /// Line starts of the function's source file, for reported lines.
+    lines: std::sync::Arc<[u32]>,
 }
 
 // ─── The program's objects by name ──────────────────────────────────────────
@@ -381,8 +395,6 @@ struct Analysis {
     /// iterator local → array local. Compiled as an index walk with the
     /// semantics `baml.iter.ArrayIterator` documents.
     array_iters: HashMap<usize, usize>,
-    /// Whether any block has an unwind edge (a `catch` in this function).
-    catches: bool,
 }
 
 impl Analysis {
@@ -470,7 +482,6 @@ impl Analysis {
                 user_callees.insert(name);
             }
         }
-        let catches = unwinds.iter().any(Option::is_some);
         let cfg = Cfg {
             entry: body.entry.0,
             flows,
@@ -485,7 +496,6 @@ impl Analysis {
             user_callees,
             static_types,
             array_iters,
-            catches,
         })
     }
 }
@@ -661,6 +671,11 @@ struct Generator<'a, 'db> {
     natives: &'a mut BTreeMap<String, usize>,
     body: &'a MirFunctionBody<'db>,
     analysis: &'a Analysis,
+    /// Line starts of the source file, and the function's declaration span.
+    lines: &'a [u32],
+    declared_at: Option<baml_base::Span>,
+    /// The line the code emitted so far in the current leaf has set.
+    current_line: Option<usize>,
     out: String,
     /// `let` bindings to emit before the statement being generated: every
     /// operand that is not an atom is bound first, so no call's argument list
@@ -683,15 +698,18 @@ impl<'db> Generator<'_, 'db> {
     fn function(&mut self, symbol: &str) -> Gen<String> {
         let arity = self.body.locals.len().min(self.arity());
         let mut out = String::new();
+        // The body runs in a closure so every way out, `?` included, passes
+        // the wrapper: an error leaving the function records the line it was
+        // raised on in this function's frame. `depth` is the frame count with
+        // that frame on top; a catch also pops whatever compiled callees left
+        // above it.
+        let declared = self.declared_at.map_or(0, |span| self.line_of(span));
         let _ = writeln!(
             out,
-            "#[inline]\npub fn {symbol}(vm: &mut BexVm, args: &[Value]) -> R<Value> {{"
+            "#[inline]\npub fn {symbol}(vm: &mut BexVm, args: &[Value]) -> R<Value> {{\n    \
+             let depth = vm.frame_depth();\n    let mut line: u32 = {declared};\n    \
+             let result = (|| -> R<Value> {{"
         );
-        if self.analysis.catches {
-            // The frame count with this function's frame on top; a catch pops
-            // whatever compiled callees left above it.
-            out.push_str("    let depth = vm.frame_depth();\n");
-        }
         for (i, repr) in self.analysis.reprs.iter().enumerate() {
             if self.analysis.static_types.contains_key(&i) {
                 continue;
@@ -728,8 +746,27 @@ impl<'db> Generator<'_, 'db> {
         out.push_str(&self.out);
         // Every path ends in an `Exit`; this is unreachable, and keeps the
         // function well-typed if a leaf falls through after structuring.
-        out.push_str("    #[allow(unreachable_code)]\n    Ok(Value::NULL)\n}\n");
+        out.push_str(
+            "    #[allow(unreachable_code)]\n    Ok(Value::NULL)\n    })();\n    \
+             if result.is_err() {\n        vm.note_line(depth, line);\n    }\n    result\n}\n",
+        );
         Ok(out)
+    }
+
+    /// The line bytecode attributes to a statement starting where `span` does.
+    fn line_of(&self, span: baml_base::Span) -> usize {
+        baml_compiler2_emit::statement_line(self.lines, span.range.start().into())
+    }
+
+    /// Emit `line = N;` when `span` starts on a line other than the one the
+    /// current leaf last set.
+    fn set_line(&mut self, span: Option<baml_base::Span>, depth: usize) {
+        let Some(span) = span else { return };
+        let line = self.line_of(span);
+        if self.current_line != Some(line) {
+            self.current_line = Some(line);
+            self.line(depth, &format!("line = {line};"));
+        }
     }
 
     fn arity(&self) -> usize {
@@ -863,7 +900,11 @@ impl<'db> Generator<'_, 'db> {
     /// control transfers.
     fn leaf(&mut self, id: BlockId, depth: usize) -> Gen<()> {
         let block = &self.body.blocks[id.0];
+        // A leaf can be entered from several places; nothing about `line` is
+        // known on entry.
+        self.current_line = None;
         for statement in &block.statements {
+            self.set_line(statement.span, depth);
             match &statement.kind {
                 StatementKind::Assign { destination, value } => {
                     // A static type local is consumed as a call's type
@@ -887,6 +928,7 @@ impl<'db> Generator<'_, 'db> {
                 }
             }
         }
+        self.set_line(block.terminator_span, depth);
         match block.terminator.as_ref().expect("checked in Analysis") {
             Terminator::Branch { condition, .. } => {
                 let condition = self.operand(id, condition)?;
@@ -1062,6 +1104,7 @@ impl<'db> Generator<'_, 'db> {
             &Expr::new("context", Repr::Value),
         )?;
         let saved = std::mem::take(&mut self.out);
+        self.line(depth, "vm.note_line(depth, line);");
         self.line(
             depth,
             &format!("let (thrown, context) = vm.catch({error}, depth)?;"),

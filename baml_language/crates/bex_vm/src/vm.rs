@@ -169,11 +169,10 @@ impl Drop for ObjectMut<'_> {
 /// Max call stack size.
 pub const MAX_FRAMES: usize = 256;
 
-/// `cur_pc` while a natively compiled body runs in place of a frame's
-/// bytecode. The unwinder resolves the innermost frame's handlers by `cur_pc`;
-/// no exception-table or cause-table range reaches this offset, so a throw
-/// escaping a compiled body is never caught inside its own frame.
-pub(crate) const NATIVE_BODY_PC: usize = usize::MAX;
+/// The `caller_pc` a call path records for a call made by compiled code,
+/// which has no bytecode offset. Telemetry source maps are keyed by compact
+/// byte offset, so such call sites share this one coordinate per caller.
+const COMPILED_CALLER_PC: u32 = u32::MAX;
 
 #[derive(Clone, Copy)]
 struct CallOptions<'a> {
@@ -240,12 +239,18 @@ struct StaticVirtualCallTarget {
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
 }
 
-/// Bytecode call frame — pushed when entering a bytecode function.
+/// The frame of a BAML call: pushed for every call of a bytecode function,
+/// whether its bytecode runs or a natively compiled body runs in its place
+/// (see [`FrameBody`]). Everything that is about the call itself — identity,
+/// locals region, type arguments, telemetry, context — is the same for both.
 #[derive(Clone, Debug)]
 pub struct BytecodeFrame {
     /// Pointer to the running function (or closure) object.
     pub function: HeapPtr,
-    /// Instruction pointer (IP). Points to the next instruction.
+    /// What executes the call, and so how its position is read.
+    pub(crate) body: FrameBody,
+    /// Instruction pointer (IP). Points to the next instruction. Meaningful
+    /// only for a [`FrameBody::Bytecode`] frame.
     pub instruction_ptr: usize,
     /// Local variables offset in the eval stack.
     pub(crate) locals_offset: StackIndex,
@@ -268,29 +273,55 @@ pub struct BytecodeFrame {
     /// In the legacy path this mirrors `instruction_ptr - 1` and is kept
     /// up-to-date before each `step()` call.
     /// Used by `capture_stack_trace`, `try_unwind_exception`, and event
-    /// source location capture.
+    /// source location capture. Meaningful only for a [`FrameBody::Bytecode`]
+    /// frame.
     pub(crate) faulting_pc: usize,
     /// Producer-only invocation state. `None` means the invocation is hidden.
     pub(crate) telemetry: Option<FrameTelemetry>,
     context: Context,
 }
 
+/// What executes a [`BytecodeFrame`].
+///
+/// The bytecode position (`instruction_ptr`, `faulting_pc`, and the VM's
+/// `cur_pc` while the frame is innermost) stays on the frame itself rather
+/// than in the `Bytecode` variant: the interpreter reads and writes it on
+/// every call and return, and that path is kept free of a discriminant check.
+/// Every reader of a *position* — the unwinder, stack traces, the cause walk,
+/// raise evidence, telemetry call sites — checks the body first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameBody {
+    /// The function's bytecode, interpreted by the run loop.
+    Bytecode,
+    /// A natively compiled body (`Function::native_body`). It has no bytecode
+    /// position and no bytecode handlers; `line` is the source line it
+    /// reported when it last raised (0 before any raise).
+    Compiled { line: u32 },
+}
+
 impl BytecodeFrame {
     /// The frame of a compiled-to-compiled call made with telemetry off: no
-    /// telemetry, no type arguments, no locals region (compiled code keeps its
-    /// locals in Rust), and a faulting PC no exception table covers, so the
-    /// unwinder never starts one of the function's bytecode handlers.
+    /// telemetry, no type arguments, and no locals region (compiled code keeps
+    /// its locals in Rust).
     pub(crate) fn compiled(function: HeapPtr, locals_offset: StackIndex, context: Context) -> Self {
         Self {
             function,
+            body: FrameBody::Compiled { line: 0 },
             instruction_ptr: 0,
             locals_offset,
             type_args: Vec::new(),
             type_metadata: None,
-            faulting_pc: NATIVE_BODY_PC,
+            faulting_pc: 0,
             telemetry: None,
             context,
         }
+    }
+
+    /// Whether a natively compiled body runs this frame.
+    #[inline]
+    #[must_use]
+    pub fn is_compiled(&self) -> bool {
+        matches!(self.body, FrameBody::Compiled { .. })
     }
 }
 
@@ -1140,6 +1171,44 @@ pub(crate) mod tests {
                 telemetry,
             );
             assert_eq!(out, "-1|-1|-1", "telemetry: {telemetry}");
+        }
+    }
+
+    /// The unwinder never consults a compiled frame's bytecode handlers: the
+    /// body runs in place of that bytecode, so an error its body does not
+    /// catch leaves the frame even where the bytecode has a `catch`.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn errors_leave_compiled_frames_past_their_bytecode_handlers() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static WORK: AtomicU32 = AtomicU32::new(0);
+        fn work(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let n = BexVm::int_of(args[0]);
+            Ok(Value::int(vm.div_i64(n, 0)?))
+        }
+        // Safe's bytecode catches; its compiled body (as if built without
+        // that catch) lets the error through.
+        fn safe(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let work_ptr =
+                vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
+            vm.call_compiled(work_ptr, work, &[args[0]])
+        }
+        const SOURCE: &str = r#"
+            function Work(n: int) -> int { n / 0 }
+            function Safe(n: int) -> int { Work(n) catch (e) { baml.panics.DivisionByZero => -1 } }
+            function Main() -> string {
+                let r = Safe(1) catch (e) { baml.panics.DivisionByZero => -9 };
+                `${r}`
+            }
+        "#;
+        for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[("user.Work", work), ("user.Safe", safe)],
+                &[("user.Work", &WORK)],
+                telemetry,
+            );
+            assert_eq!(out, "-9", "telemetry: {telemetry}");
         }
     }
 
@@ -3353,6 +3422,10 @@ impl BexVm {
             let Frame::Bytecode(bf) = &self.frames[depth] else {
                 continue;
             };
+            if bf.is_compiled() {
+                innermost_bc = false;
+                continue;
+            }
             let pc = if innermost_bc {
                 self.cur_pc
             } else {
@@ -5128,6 +5201,7 @@ impl BexVm {
                 self.stack.extend(args.iter().copied());
                 self.frames.push(Frame::Bytecode(BytecodeFrame {
                     function: dispatch_ptr,
+                    body: FrameBody::Bytecode,
                     instruction_ptr: 0,
                     locals_offset: StackIndex::from_raw(0),
                     type_args: effective_type_args,
@@ -5321,6 +5395,7 @@ impl BexVm {
         // its own pair through the normal Call/SysOp instruction paths.
         self.frames.push(Frame::Bytecode(BytecodeFrame {
             function: entry_ptr,
+            body: FrameBody::Bytecode,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
             type_args: Vec::new(),
@@ -5428,6 +5503,7 @@ impl BexVm {
         });
         self.frames.push(Frame::Bytecode(BytecodeFrame {
             function: entry_ptr,
+            body: FrameBody::Bytecode,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
             type_args: Vec::new(),
@@ -6413,7 +6489,7 @@ impl BexVm {
         let top_bc = self
             .frames
             .iter()
-            .rposition(|f| matches!(f, Frame::Bytecode(_)));
+            .rposition(|f| matches!(f, Frame::Bytecode(frame) if !frame.is_compiled()));
         self.frames
             .iter()
             .enumerate()
@@ -6427,6 +6503,14 @@ impl BexVm {
                 }
                 let func = self.get_object(frame.function()).as_callable().ok()?;
                 match frame {
+                    Frame::Bytecode(BytecodeFrame {
+                        body: FrameBody::Compiled { line },
+                        ..
+                    }) => Some(StackFrame {
+                        function_name: func.name.clone(),
+                        file_path: func.source_file.clone(),
+                        error_line: *line as usize,
+                    }),
                     Frame::Bytecode(frame) => {
                         let pc = if Some(idx) == top_bc {
                             self.cur_pc
@@ -6632,6 +6716,11 @@ impl BexVm {
             let Frame::Bytecode(frame) = frame else {
                 unreachable!("non-Native frames already handled above");
             };
+            // A compiled body has no bytecode handlers (its own catches land
+            // errors before they reach the unwinder) and no bytecode position:
+            // the error leaves it, and `cur_pc` belongs to the bytecode frame
+            // below.
+            let compiled = frame.is_compiled();
             let (frame_faulting_pc, frame_locals_offset) = (frame.faulting_pc, frame.locals_offset);
 
             // Innermost bytecode frame uses the live `cur_pc`; outer frames use
@@ -6708,7 +6797,9 @@ impl BexVm {
             // affect the hot per-instruction loop.
             // Use compact exception table when available (byte-offset PCs),
             // otherwise fall back to the legacy instruction-index table.
-            let handler_entry = if let Some(compact) = &frame_function.bytecode.compact {
+            let handler_entry = if compiled {
+                None
+            } else if let Some(compact) = &frame_function.bytecode.compact {
                 compact
                     .exception_handlers_for_pc(faulting_pc)
                     .max_by(|a, b| {
@@ -6836,6 +6927,13 @@ impl BexVm {
             let Frame::Bytecode(bf) = &self.frames[depth] else {
                 continue; // native frames hold no handler bodies
             };
+            // Compiled bodies hold no bytecode handler bodies either (their
+            // handlers are not tracked as "handling"); the frame below records
+            // its call site in `faulting_pc`.
+            if bf.is_compiled() {
+                innermost_bc = false;
+                continue;
+            }
             let pc = if innermost_bc {
                 self.cur_pc
             } else {
@@ -7266,7 +7364,11 @@ impl BexVm {
         // and stack traces. `cur_pc` holds this call instruction's start.
         let call_site = self.cur_pc;
 
-        if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
+        // A compiled caller has no bytecode position: `cur_pc` still belongs
+        // to the bytecode frame below it.
+        if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx)
+            && !bf.is_compiled()
+        {
             bf.faulting_pc = call_site;
         }
 
@@ -7506,14 +7608,7 @@ impl BexVm {
                     .as_ref()
                     .is_some_and(|code| code.trace_hook_finish_pc.is_some());
                 let caller_frame_idx = self.bytecode_caller_index(*frame_idx);
-                let caller_pc = if caller_frame_idx == *frame_idx {
-                    call_site
-                } else {
-                    let Frame::Bytecode(caller) = &self.frames[caller_frame_idx] else {
-                        unreachable!()
-                    };
-                    caller.faulting_pc
-                };
+                let caller_pc = self.caller_pc(caller_frame_idx, *frame_idx, call_site);
                 let inherited = self.current_context();
                 let context = (!hooked)
                     .then_some(trace.as_ref())
@@ -7559,15 +7654,7 @@ impl BexVm {
                             ..
                         }))
                     );
-                    let caller_pc = if caller_frame_idx == *frame_idx {
-                        call_site
-                    } else {
-                        let Frame::Bytecode(caller) = &self.frames[caller_frame_idx] else {
-                            unreachable!("native continuation retains its bytecode caller");
-                        };
-                        caller.faulting_pc
-                    };
-                    let caller_pc = u32::try_from(caller_pc).unwrap_or(u32::MAX);
+                    let caller_pc = self.caller_pc(caller_frame_idx, *frame_idx, call_site);
                     let args = &self.stack.0
                         [locals_offset.raw()..locals_offset.raw().saturating_add(arg_count)];
                     let type_args = CallTypeArgs {
@@ -7601,7 +7688,7 @@ impl BexVm {
                     self.pending_trace_hooks.push(PendingTraceHook {
                         frame: self.frames.len(),
                         caller: self.visible_bytecode_caller_index(*frame_idx),
-                        caller_pc: u32::try_from(caller_pc).unwrap_or(u32::MAX),
+                        caller_pc,
                         trace,
                         evaluating: false,
                     });
@@ -7611,6 +7698,7 @@ impl BexVm {
                 self.frames.extend(std::iter::once_with(|| {
                     Frame::Bytecode(BytecodeFrame {
                         function: callee_ptr,
+                        body: FrameBody::Bytecode,
                         instruction_ptr: 0,
                         locals_offset,
                         type_args: initial_type_args.to_vec(),
@@ -7647,23 +7735,13 @@ impl BexVm {
                                 .get_at(StackIndex::from_raw(locals_offset.raw() + i))
                         })
                         .collect();
-                    // `cur_pc` still holds the caller's call-site offset. The
-                    // unwinder looks the innermost frame's PC up in *that
-                    // frame's* exception tables, so park it on a value no
-                    // range can cover while the body runs.
-                    let saved_pc = self.cur_pc;
-                    self.cur_pc = NATIVE_BODY_PC;
-                    // Once the body calls a compiled callee, this frame is no
-                    // longer innermost and the unwinder reads its recorded
-                    // PC instead; park that on the sentinel too.
                     if let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] {
-                        frame.faulting_pc = NATIVE_BODY_PC;
+                        frame.body = FrameBody::Compiled { line: 0 };
                     }
                     let outcome = body(self, &args);
                     self.settle();
                     match outcome {
                         Ok(value) => {
-                            self.cur_pc = saved_pc;
                             if let Some(state) =
                                 self.finish_bytecode_frame(frame_idx, function, value)?
                             {
@@ -7730,6 +7808,25 @@ impl BexVm {
             return Ok(Some(VmExecState::EarlyYield));
         }
         Ok(None)
+    }
+
+    /// The call-site offset a call path records for a call made from the
+    /// frame at `caller_frame_idx`: the live `call_site` when that frame is
+    /// the one calling, its recorded `faulting_pc` when a native continuation
+    /// sits between, and [`COMPILED_CALLER_PC`] for a compiled caller.
+    fn caller_pc(&self, caller_frame_idx: usize, frame_idx: usize, call_site: usize) -> u32 {
+        let Frame::Bytecode(caller) = &self.frames[caller_frame_idx] else {
+            unreachable!("a native continuation retains its bytecode caller");
+        };
+        if caller.is_compiled() {
+            return COMPILED_CALLER_PC;
+        }
+        let pc = if caller_frame_idx == frame_idx {
+            call_site
+        } else {
+            caller.faulting_pc
+        };
+        u32::try_from(pc).unwrap_or(u32::MAX)
     }
 
     /// Complete the bytecode frame at `frame_idx` with `result`: the shared
@@ -9858,6 +9955,7 @@ impl BexVm {
                                 self.frames.extend(std::iter::once_with(|| {
                                     Frame::Bytecode(BytecodeFrame {
                                         function: callee_ptr,
+                                        body: FrameBody::Bytecode,
                                         instruction_ptr: 0,
                                         locals_offset,
                                         type_args: Vec::new(),
