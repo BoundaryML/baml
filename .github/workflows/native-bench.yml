@@ -102,11 +102,15 @@ jobs:
           direnv export gha >> "$GITHUB_ENV"
 
       # The emitter. Only this is built here; the measured executables are
-      # built on the VM from a clean target so their build time is a result.
+      # built on the VMs from a clean target so their build time is a result.
+      # The emitter only writes source, so it skips the release profile's fat
+      # LTO: that link took 7.5 of 10.5 minutes and sccache cannot cache it.
       - name: "Build baml-cli"
         env:
           BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
           BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+          CARGO_PROFILE_RELEASE_LTO: "false"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
         run: cargo build --release -p baml_cli
         working-directory: baml_language
 
