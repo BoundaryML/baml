@@ -9536,8 +9536,16 @@ impl<'db> LoweringContext<'db> {
             return FxHashMap::default();
         };
         // hir_ty's one declaration-bounds road: class prefix, interface
-        // Self env, free-impl generics, own params.
-        baml_compiler2_hir_ty::lower::function_generic_bounds(self.db, fl)
+        // Self env, free-impl generics, own params; plus the bounds of the
+        // `let type` bindings lowered so far.
+        let mut bounds = baml_compiler2_hir_ty::lower::function_generic_bounds(self.db, fl);
+        bounds.extend(
+            self.generic_param_bounds
+                .iter()
+                .filter(|(param, _)| param.is_scoped())
+                .map(|(param, conjunction)| (param.clone(), conjunction.clone())),
+        );
+        bounds
     }
 
     /// Emit `LoadType` temps for a list of type args seeding a callee frame,
@@ -11820,6 +11828,14 @@ impl LoweringContext<'_> {
                 // statement.
                 self.scoped_type_binding_params
                     .push(binding.parameter.clone());
+                // A bounded binding's members dispatch through its bounds as a
+                // declared generic parameter's do. The parameter is unique to
+                // this statement, so its entry outlives the block harmlessly
+                // (a lambda written in the block is lowered after it closes).
+                if !binding.bounds.is_empty() {
+                    self.generic_param_bounds
+                        .insert(binding.parameter.clone(), binding.bounds.clone());
+                }
                 self.emit_scoped_type_binding(&binding, else_branch)?;
             }
 
