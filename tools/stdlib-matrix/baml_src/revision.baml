@@ -338,14 +338,14 @@ function judgement_carries(
 /// Cycle-safe: `seen` gates every push, and a standard library is full of
 /// mutually referential types.
 function is_fresh_transitively(
-    root: string,
+    start: string,
     now: map<string, string>,
     before: Revision,
     references: map<string, string[]>,
 ) -> bool {
     let no_references: string[] = [];
     let seen: map<string, bool> = {};
-    let pending: string[] = [root];
+    let pending: string[] = [start];
     while (pending.length() > 0) {
         let id = match (pending.pop()) {
             null => {

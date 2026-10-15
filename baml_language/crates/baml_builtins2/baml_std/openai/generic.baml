@@ -138,7 +138,7 @@ class GenericClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            openai.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
+            root.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

@@ -1662,8 +1662,8 @@ fn hover_renders_the_resolved_signature() {
     // rust-analyzer's shape: the owning path fenced above the declaration,
     // docs below a separator (not `///` inside the fence).
     assert!(
-        markdown.starts_with("```baml\nuser\n```\n\n---\n\n"),
-        "the compiler's package name leads, separated from the item, got:\n{markdown}"
+        markdown.starts_with("```baml\nroot\n```\n\n---\n\n"),
+        "the reader's own package leads as `root`, separated from the item, got:\n{markdown}"
     );
     assert!(
         markdown.contains("---\n\nGreets someone."),

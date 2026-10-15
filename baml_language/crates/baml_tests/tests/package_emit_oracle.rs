@@ -83,7 +83,10 @@ fn assert_identity_tables(label: &str, program: &Program) {
         );
         if let Some(init) = package.init {
             assert!(
-                matches!(&program.objects[init], Object::Function(f) if f.name == "$init"),
+                matches!(
+                    &program.objects[init],
+                    Object::Function(f) if f.identity == bex_vm_types::types::FunctionIdentity::Init
+                ),
                 "{label}: package `{}` init is not its `$init`",
                 package.name
             );
@@ -109,14 +112,16 @@ fn assert_identity_tables(label: &str, program: &Program) {
             let Object::Function(function) = &program.objects[method.function] else {
                 panic!(
                     "{label}: class `{}` method `{name}` is not a function",
-                    class.name
+                    class.path
                 )
             };
             assert!(
-                function.name.ends_with(&format!(".{name}")),
+                function
+                    .declared_name()
+                    .is_some_and(|declared| declared == name),
                 "{label}: class `{}` method `{name}` points at `{}`",
-                class.name,
-                function.name
+                class.path,
+                function.name()
             );
         }
         classes_with_methods += usize::from(!class.methods.is_empty());
@@ -196,7 +201,7 @@ fn baml_src_links() {
     assert_program_links("baml_src", || baml_src_db(&sources));
 }
 
-/// One package's emitted bytes, under the program's spelling of it.
+/// One package's emitted bytes, under its display label.
 #[derive(PartialEq)]
 struct EmittedBytes {
     name: String,
@@ -218,14 +223,14 @@ impl EmittedBytes {
 
 /// Every package of the program, emitted on its own.
 fn emitted_bytes(db: &ProjectDatabase, opt: OptLevel) -> Vec<EmittedBytes> {
-    let spelling = baml_compiler2_hir::package::spelling(db);
+    let viewpoint = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
     baml_compiler2_hir::package::world_roots(db, package(db))
         .iter()
         .copied()
         .filter(|root| !root.files(db).is_empty())
         .map(|root| {
             let emitted = emit_package(db, root, opt).expect("emit_package");
-            EmittedBytes::new(spelling.of(root).to_string(), &emitted)
+            EmittedBytes::new(viewpoint.display_package(root).to_string(), &emitted)
         })
         .collect()
 }
@@ -255,8 +260,8 @@ impl PackageCache for RecordingCache {
     ) {
         // Match emitted_bytes: empty roots have no cacheable source unit.
         if !root.files(db).is_empty() {
-            let name = baml_compiler2_hir::package::spelling(db)
-                .of(root)
+            let name = baml_compiler2_hir_ty::render::Viewpoint::canonical(db)
+                .display_package(root)
                 .to_string();
             self.0.borrow_mut().push(EmittedBytes::new(name, emitted));
         }
@@ -272,12 +277,12 @@ fn corpus_emission(db: &ProjectDatabase) -> (Vec<EmittedBytes>, Vec<u8>) {
         compile_program_with(db, package(db), OptLevel::Two, &cache).expect("compile_program");
     let program = borsh::to_vec(&program).expect("serialize program");
     let packages = cache.0.into_inner();
-    let spelling = baml_compiler2_hir::package::spelling(db);
+    let viewpoint = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
     let expected_packages: Vec<_> = baml_compiler2_hir::package::world_roots(db, package(db))
         .iter()
         .copied()
         .filter(|root| !root.files(db).is_empty())
-        .map(|root| spelling.of(root).to_string())
+        .map(|root| viewpoint.display_package(root).to_string())
         .collect();
     assert_eq!(
         packages
@@ -514,7 +519,7 @@ fn app_fingerprint(consumer: &baml_linker_types::EmittedPackage) -> [u8; 32] {
                 Some(*digest)
             }
             baml_linker_types::Locator::Direct { .. }
-            | baml_linker_types::Locator::Prelude { .. }
+            | baml_linker_types::Locator::Prelude(_)
             | baml_linker_types::Locator::Transitive { .. } => None,
         })
         .expect("the consumer reaches `app` directly, fingerprinted")

@@ -572,8 +572,6 @@ impl ProjectDatabase {
     ///
     /// Invariants enforced (each is a [`SourceRootError`]):
     /// - at most one live root per canonical path;
-    /// - one live root per wire name (`self_name`, else the unnamed default)
-    ///   — the interim consequence of name-spelled type heads;
     /// - every declared dependency names a live root, under a name that is
     ///   neither reserved nor declared twice;
     /// - a served-from-interface root's bytes decode as a `PackageInterface`.
@@ -1553,10 +1551,43 @@ mod tests {
             .iter()
             .map(|edge| edge.name.as_str())
             .collect();
-        for (prefix, package, _) in baml_compiler2_ast::SHORTHAND_PROVIDERS {
+        for (prefix, constructor) in baml_compiler2_ast::SHORTHAND_PROVIDERS {
+            let package = constructor[0].as_str();
             assert!(
-                prelude.contains(package),
+                prelude.contains(&package),
                 "shorthand `{prefix}/…` constructs a client from `{package}`, which is not a prelude package"
+            );
+        }
+    }
+
+    /// The compiler's package table and the stdlib's own inventory are one
+    /// set: every stdlib package can be named by identity (a desugar may write
+    /// a path into any of them), and nothing is named that the stdlib does not
+    /// ship.
+    #[test]
+    fn the_language_package_table_is_the_stdlib_inventory() {
+        let mut known: Vec<&str> = baml_base::LangPackage::ALL
+            .into_iter()
+            .map(baml_base::LangPackage::manifest_name)
+            .collect();
+        let mut shipped = baml_builtins2::stdlib_package_names().to_vec();
+        known.sort_unstable();
+        shipped.sort_unstable();
+        assert_eq!(known, shipped);
+    }
+
+    /// Every language package is installed by [`ProjectDatabase::ensure_stdlib_sources`],
+    /// so a compiler-written path into any of them resolves.
+    #[test]
+    fn every_language_package_is_installed_with_the_stdlib() {
+        let mut db = ProjectDatabase::new();
+        db.ensure_stdlib_sources();
+        let lang = baml_compiler2_hir::package::lang_roots(&db);
+        for package in baml_base::LangPackage::ALL {
+            assert!(
+                lang.get(package).is_some(),
+                "`{}` is not installed",
+                package.manifest_name()
             );
         }
     }
@@ -1616,17 +1647,12 @@ mod tests {
             db.add_source_root(workspace_spec("/ws")),
             Err(SourceRootError::PathTaken(workspace))
         );
-        // Spellings are not an identity: two roots may share one, and the
-        // boundary that needs the spelling table injective reports it.
+        // A name is not an identity: two roots may declare one, and both
+        // are live roots.
         let dep = db.add_source_root(dependency_spec("/dep", "dep")).unwrap();
         let dep2 = db.add_source_root(dependency_spec("/dep2", "dep")).unwrap();
-        assert_eq!(
-            baml_compiler2_hir::package::spelling(&db).collisions(),
-            &[baml_compiler2_hir::package::SpellingCollision::SharedName {
-                name: Name::new("dep"),
-                roots: vec![dep, dep2],
-            }]
-        );
+        assert_ne!(dep, dep2);
+        assert_eq!(dep.self_name(&db), dep2.self_name(&db));
         // Dependency roots sort before the workspace root; Dynamic roots
         // (runtime-loaded) sort after it, whatever the insertion order.
         let dynamic = db

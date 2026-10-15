@@ -2,9 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ===
-function user.namespace_relative_generic_class_type_pattern_requires_type_args(boxed: llm.openai.Box<int>) -> int  [expr] {
-  {  } match (boxed) { llm.openai.Box => 1 }
-}
 function user.namespaced_class_destructure_unknown_field(response: root.llm.openai.Response) -> int  [expr] {
   {  } match (response) { root.llm.openai.Response { missing: missing } => 1, _ => 0 }
 }

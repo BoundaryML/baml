@@ -183,7 +183,7 @@ class ZonedDateTime {
         $rust_function
     }
 
-    implements baml.ToString {
+    implements root.ToString {
         /// Serializes the way Temporal does: RFC 9557 with the bracketed
         /// annotation when the timezone is an IANA identifier
         /// (`2026-03-18T13:04:27-07:00[America/Los_Angeles]`); plain RFC 3339
@@ -350,7 +350,7 @@ class ZonedDateTime {
         self.to_plain().millisecond()
     }
 
-    implements baml.FromJson {
+    implements root.FromJson {
         /// Decodes a `ZonedDateTime` from a JSON string, accepting exactly what
         /// `ZonedDateTime.parse` accepts.
         ///
@@ -359,22 +359,22 @@ class ZonedDateTime {
         /// - `baml.json.DecodeError` if the value is not a string, or is a
         ///   string `ZonedDateTime.parse` rejects — including a zoneless
         ///   timestamp, which belongs to `PlainDateTime`.
-        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
+        function from_json(j: root.json.json) -> Self throws root.json.DecodeError {
             match (j) {
                 string => {
                     ZonedDateTime.parse(j) catch (_) {
                         root.errors.ParseError { message } => {
-                            throw baml.json.DecodeError { message: message, path: "" }
+                            throw root.json.DecodeError { message: message, path: "" }
                         },
                     }
                 },
                 _ => {
-                    throw baml.json.DecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string", path: "" }
+                    throw root.json.DecodeError { message: "Expected RFC 3339 / RFC 9557 timestamp string", path: "" }
                 },
             }
         }
     }
-    implements baml.ToJson {
+    implements root.ToJson {
         /// Encodes `self` as the same RFC 3339 / RFC 9557 string `to_string`
         /// produces.
         ///
@@ -389,17 +389,17 @@ class ZonedDateTime {
         ///
         /// - `baml.panics.HostUnavailable` if the timezone is an IANA
         ///   identifier and the host has no timezone database.
-        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
+        function to_json(self) -> root.json.json throws root.json.SerializationError {
             _format_zoned(self._nanoseconds, self.timezone_offset()._nanoseconds, self._iana) catch (_) {
                 root.errors.InvalidArgument { message } => {
-                    throw baml.json.SerializationError {
+                    throw root.json.SerializationError {
                         message: message,
                         path: "",
                         reason: "unserializable",
                     }
                 },
                 UnknownTimezoneError { timezone } => {
-                    throw baml.json.SerializationError {
+                    throw root.json.SerializationError {
                         message: "unknown timezone: " + timezone,
                         path: "",
                         reason: "unserializable",

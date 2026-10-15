@@ -1459,6 +1459,7 @@ dependencies = [
 name = "bex_heap"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_base",
  "baml_env",
  "baml_type",
  "bex_external_types",
@@ -1569,6 +1570,7 @@ version = "0.0.0-beta"
 dependencies = [
  "aes-gcm-siv",
  "baml_artifact",
+ "baml_base",
  "baml_builtins2",
  "baml_builtins2_codegen",
  "baml_compiler_diagnostics",

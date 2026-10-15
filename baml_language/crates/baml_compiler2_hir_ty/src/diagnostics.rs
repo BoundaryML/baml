@@ -258,8 +258,15 @@ pub enum TirTypeError {
     /// declare it independently (via distinct interfaces), but those are different
     /// members — the union has no single agreed-upon one.
     UnionMemberNoCommonInterface { union: Ty, member: Name },
+    /// A path that resolved to nothing started at an item of this namespace
+    /// spelled like a package: the package is out of reach by that name.
+    ItemShadowsPackage { name: Name },
     /// Name could not be resolved at all.
-    UnresolvedName { name: Name },
+    UnresolvedName {
+        name: Name,
+        /// "Did you mean" candidates, each a fully qualified `root.…` path.
+        suggestions: Box<[Name]>,
+    },
     /// A value name was written bare in a generic slot. A runtime type is
     /// lifted into a type position only by a `type T = unreflect(value)`
     /// binding; the slot then names `T`.
@@ -324,6 +331,9 @@ pub enum TirTypeError {
     /// A constructor head that is an alias of a type no object literal can
     /// construct (anything but a class).
     CannotConstructAlias { name: Name, denotes: baml_type::Ty },
+    /// A constructor head that is a type parameter or a scoped `type`
+    /// binding: it shadows every item and names no class.
+    ConstructedTypeParameter { name: Name },
     /// A builtin that is lowered where it is called (`log.info`,
     /// `baml.spawn.__spawn`, ...) was referenced as a value.
     CallSiteBuiltinValue { reference: String },
@@ -1160,8 +1170,25 @@ impl TirTypeError {
                         union.spell(vp)
                     )
                 }
-                TirTypeError::UnresolvedName { name } => {
-                    write!(f, "unresolved name: {name}")
+                TirTypeError::ItemShadowsPackage { name } => write!(
+                    f,
+                    "`{name}` is an item of this namespace, which shadows the package `{name}`: \
+                     the package cannot be reached by that name from here"
+                ),
+                TirTypeError::UnresolvedName { name, suggestions } => {
+                    write!(f, "unresolved name: {name}")?;
+                    match &**suggestions {
+                        [] => Ok(()),
+                        [only] => write!(f, ". Did you mean `{only}`?"),
+                        many => {
+                            let joined = many
+                                .iter()
+                                .map(Name::as_str)
+                                .collect::<Vec<_>>()
+                                .join("`, `");
+                            write!(f, ". Did you mean one of these: `{joined}`?")
+                        }
+                    }
                 }
                 TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
                     let diagnostic =
@@ -1265,6 +1292,10 @@ impl TirTypeError {
                     f,
                     "cannot construct `{name}`: it is an alias of `{}`, not a class",
                     denotes.spell(vp)
+                ),
+                TirTypeError::ConstructedTypeParameter { name } => write!(
+                    f,
+                    "cannot construct `{name}`: it is a type parameter here, not a class"
                 ),
                 TirTypeError::MountedPackageCallUnsupported { path } => {
                     let diagnostic =
@@ -2708,10 +2739,7 @@ impl<'db> TirDiagnostic<'db> {
 
         RenderedTirDiagnostic {
             error: self.error.clone(),
-            message: self.error.render(&Viewpoint::user_facing(
-                db,
-                baml_compiler2_hir::file_package::file_package(db, scope_file).root,
-            )),
+            message: self.error.render(&Viewpoint::for_file(db, scope_file)),
             range: primary_range,
             severity: self.severity,
             related,

@@ -598,9 +598,18 @@ async fn escaped_session_type_retains_provenance_only_while_handle_is_live() {
         session_history = owner.session().map_or(0, |state| state.history.len());
         retained_globals = owner.slots.own().map_or(0, <[_]>::len);
         retained_objects = owner.objects.own().map_or(0, <[_]>::len);
-        retained_dependencies = owner.declared().count();
-        retained_dependency_objects = owner
-            .declared()
+        // The ordinary packages the session reaches: its mounts, not the
+        // prelude.
+        let declared: Vec<_> = owner
+            .dependencies()
+            .filter(|dependency| {
+                matches!(unsafe { dependency.get() }, Object::Package(package)
+                    if package.kind == bex_vm_types::types::PackageKind::Ordinary)
+            })
+            .collect();
+        retained_dependencies = declared.len();
+        retained_dependency_objects = declared
+            .iter()
             .map(|dependency| match unsafe { dependency.get() } {
                 Object::Package(package) => package.objects.own().map_or(0, <[_]>::len),
                 _ => 0,

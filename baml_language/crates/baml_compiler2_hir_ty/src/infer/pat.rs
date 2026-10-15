@@ -350,7 +350,11 @@ impl<'db> InferenceContext<'db> {
                     .iter()
                     .map(|s| baml_type::Name::new(s.as_str()))
                     .collect();
-                let def = self.lower.resolve_type_definition(&segments)?;
+                let head = self.lower.path_head(&segments);
+                if self.scoped_type_param_heads(head, &segments) {
+                    return None;
+                }
+                let def = self.lower.resolve_type_definition(head, &segments)?;
                 let baml_compiler2_hir::contributions::Definition::Class(class_loc) = def else {
                     return None;
                 };
@@ -1182,7 +1186,12 @@ impl<'db> InferenceContext<'db> {
                 consumes_matched: false,
             };
         }
-        let definition = self.lower.resolve_type_definition(class_path);
+        // A type parameter or scoped `type` binding at the head shadows
+        // every item (as for a type pattern): no class is named.
+        let head = self.lower.path_head(class_path);
+        let definition = (!self.scoped_type_param_heads(head, class_path))
+            .then(|| self.lower.resolve_type_definition(head, class_path))
+            .flatten();
         // Destructure spelled with an INTERFACE name: the existential's
         // declared FIELDS destructure like a class's.
         if let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =
@@ -1193,7 +1202,8 @@ impl<'db> InferenceContext<'db> {
         }
         let Some(baml_compiler2_hir::contributions::Definition::Class(class)) = definition else {
             // The destructured name resolves nowhere (or to a non-class):
-            // E0003 at the pattern, fields lower against the sentinel.
+            // E0002 at the pattern, as for a type pattern; fields lower
+            // against the sentinel.
             if definition.is_none() {
                 self.pending_diags
                     .push(super::PendingDiag::UnresolvedPatternName {
@@ -1205,6 +1215,7 @@ impl<'db> InferenceContext<'db> {
                                 .collect::<Vec<_>>()
                                 .join("."),
                         ),
+                        suggestions: self.lower.type_suggestions(class_path),
                     });
             }
             for &(_, field_pat) in field_pats {

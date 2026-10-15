@@ -6,10 +6,10 @@
 /// `providers` maps a prefix and model to the constructed client, or `null`
 /// for an unknown prefix, and `prefixes` lists every prefix it knows (for
 /// error messages). This package cannot build either: every provider package
-/// implements `root.Client`, so `ai` sits below them in the package graph. The
+/// implements `ai.Client`, so `ai` sits below them in the package graph. The
 /// compiler synthesizes both from its own provider table (the same one a
 /// literal `client "provider/model"` lowers through) at each
-/// `root.clients.resolve` call.
+/// `ai.clients.resolve` call.
 function _from_shorthand(
     shorthand: string,
     providers: (string, string) -> root.Client?,

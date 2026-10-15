@@ -53,11 +53,11 @@ use super::{
 };
 use crate::{
     BexVm,
-    errors::{VmBamlError, VmInternalError, VmRustFnError},
+    errors::{VmBamlError, VmRustFnError},
 };
 
 /// Fully-qualified name of the class thrown when a ciphertext is rejected.
-const DECRYPTION_FAILURE_FQN: &str = "baml.crypto.DecryptionFailure";
+const DECRYPTION_FAILURE: baml_base::LangItem = crate::lang_items::BAML_CRYPTO_DECRYPTION_FAILURE;
 
 /// The per-algorithm facts the shared seal and open paths report on.
 ///
@@ -245,11 +245,7 @@ fn open_error(vm: &mut BexVm, algorithm: &str, err: OpenError) -> VmRustFnError 
         OpenError::Invalid(e) => return e,
         OpenError::Rejected(reason) => reason,
     };
-    let Some(class_ptr) = vm.lookup_type_by_fqn(DECRYPTION_FAILURE_FQN) else {
-        return VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
-            name: DECRYPTION_FAILURE_FQN.to_string(),
-        });
-    };
+    let class_ptr = vm.lang_object(DECRYPTION_FAILURE);
     let algorithm = Value::object(vm.alloc_string(algorithm.to_string()));
     let reason = Value::object(vm.alloc_string(reason));
     VmRustFnError::thrown_fresh(Value::object(

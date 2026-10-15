@@ -23,7 +23,7 @@ interface Sortable {
     function sort(self) -> Self throws never;
 }
 
-implements<T extends baml.ops.Compare> Sortable for T[] {
+implements<T extends root.ops.Compare> Sortable for T[] {
   /// Sorts this array in place by the elements' natural order
   /// (`baml.ops.Compare.cmp`), then returns `self`. The sort is stable.
   ///
@@ -43,7 +43,7 @@ implements<T extends baml.ops.Compare> Sortable for T[] {
     if (root._is_primitive_array(self)) {
       root._rust_sort(self)
     } else {
-      self.sort_by((a: T, b: T) -> baml.ops.Ordering throws never { a.cmp(b) })
+      self.sort_by((a: T, b: T) -> root.ops.Ordering throws never { a.cmp(b) })
     }
   }
 }
@@ -58,7 +58,7 @@ implements<T extends baml.ops.Compare> Sortable for T[] {
 /// `is`-test on a `T`-typed value constant-folds to false, and frame type args
 /// are not reliable across every call path into a blanket impl.
 //baml:vm
-function _is_primitive_array<T extends baml.ops.Compare>(arr: T[]) -> bool throws never {
+function _is_primitive_array<T extends root.ops.Compare>(arr: T[]) -> bool throws never {
     $rust_function
 }
 

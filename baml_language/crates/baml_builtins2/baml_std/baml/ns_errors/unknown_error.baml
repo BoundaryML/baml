@@ -57,7 +57,7 @@ class UnknownError {
         $rust_function
     }
 
-    implements baml.ToString {
+    implements root.ToString {
         function to_string(self) -> string throws never {
             let detail = self.data.to_string();
             if (self.message.length() == 0) {

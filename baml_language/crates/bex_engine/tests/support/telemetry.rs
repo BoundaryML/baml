@@ -14,7 +14,7 @@ pub(crate) fn recording_engine(
         if let bex_vm_types::Object::Function(function) = object {
             if captured_functions
                 .iter()
-                .any(|name| function.name.rsplit('.').next() == Some(name))
+                .any(|name| function.name().rsplit('.').next() == Some(name))
             {
                 function.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
                     client: "test".into(),

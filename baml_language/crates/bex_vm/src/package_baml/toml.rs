@@ -72,7 +72,7 @@ fn convert_toml_value(vm: &mut BexVm, value: ::toml::Value) -> Result<Value, VmR
                 super::json::json_alias_ty(vm),
                 map,
             ));
-            let class = vm.resolve_class("baml.toml.Table");
+            let class = vm.lang_object(crate::lang_items::BAML_TOML_TABLE);
             Ok(Value::object(vm.alloc_instance(class, vec![map])))
         }
     }
@@ -160,6 +160,6 @@ fn convert_toml_datetime(
 
 fn make_toml_parse_error(vm: &mut BexVm, message: String) -> Value {
     let err_msg = Value::object(vm.alloc_string(message));
-    let class = vm.resolve_class("baml.toml.ParseError");
+    let class = vm.lang_object(crate::lang_items::BAML_TOML_PARSE_ERROR);
     Value::object(vm.alloc_instance(class, vec![err_msg]))
 }

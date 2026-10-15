@@ -22,7 +22,7 @@ use baml_compiler2_hir::{
         MethodOwner, class_data, enum_data, function_data, interface_data, let_data, method_owner,
     },
     loc::{ClassLoc, DeclRef, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc},
-    package::{DependencyTable, edge_spelling, spelling},
+    package::{DependencyTable, edge_spelling},
 };
 use baml_compiler2_hir_ty::{
     callable::ExternalCallTarget,
@@ -82,7 +82,7 @@ pub(crate) fn enum_head<'db>(db: &'db dyn crate::Db, enum_ref: EnumRef<'db>) -> 
 
 /// The head of an interface, wherever it is declared.
 pub(crate) fn interface_head<'db>(
-    db: &'db dyn crate::Db,
+    db: &'db dyn baml_compiler2_mir::Db,
     interface: InterfaceRef<'db>,
 ) -> DeclName {
     match interface {
@@ -99,7 +99,10 @@ pub(crate) fn interface_head<'db>(
 /// inherent method, an interface's default body, or an `implements` block's
 /// provided body. The caller has already established that the function owns
 /// a slot ([`owns_no_slot`] is false).
-pub(crate) fn function_path<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> DeclPath {
+pub(crate) fn function_path<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    function: FunctionLoc<'db>,
+) -> DeclPath {
     let name = function_data(db, function).name.clone();
     let owner_path =
         |definition: Definition<'db>, owner: &Name| item_path(&qualify_def(db, definition, owner));
@@ -139,6 +142,61 @@ pub(crate) fn function_path<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'
                 coherence: target.coherence_key(db, body_root),
                 method: name,
             })))
+        }
+    }
+}
+
+/// The runtime identity of a MIR function ([`bex_vm_types::types::FunctionIdentity`]):
+/// a declared function's path in its package or its body key, a synthetic's
+/// parent and ordinal. What a pooled `Function` carries instead of a name.
+pub(crate) fn function_identity<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    identity: &baml_compiler2_mir::MirFunctionId<'db>,
+) -> bex_vm_types::types::FunctionIdentity {
+    use baml_compiler2_hir::item_data::let_data;
+    use baml_compiler2_mir::{FunctionOwner, MirFunctionId, SyntheticKind};
+    use bex_vm_types::types::{FunctionIdentity, SyntheticParent};
+
+    match identity {
+        MirFunctionId::Declared(function) => match function_path(db, *function) {
+            DeclPath::Function(path) => FunctionIdentity::Declared(path),
+            DeclPath::InterfaceBody(body) => FunctionIdentity::InterfaceBody(body),
+            other @ (DeclPath::Class(_)
+            | DeclPath::Enum(_)
+            | DeclPath::Interface(_)
+            | DeclPath::TypeAlias(_)
+            | DeclPath::Let(_)) => {
+                unreachable!("a function's path is a function or a body, not {other:?}")
+            }
+        },
+        MirFunctionId::Synthetic {
+            parent,
+            kind,
+            ordinal,
+        } => {
+            let parent = match parent.as_ref() {
+                FunctionOwner::Function(function) => SyntheticParent::Function(function_identity(
+                    db,
+                    &MirFunctionId::Declared(*function),
+                )),
+                FunctionOwner::Let(binding) => SyntheticParent::Let(item_path(&qualify_def(
+                    db,
+                    Definition::Let(*binding),
+                    &let_data(db, *binding).name,
+                ))),
+                FunctionOwner::Synthetic(owner) => {
+                    SyntheticParent::Function(function_identity(db, owner))
+                }
+            };
+            let kind = match kind {
+                SyntheticKind::Lambda => bex_vm_types::types::SyntheticKind::Lambda,
+                SyntheticKind::Tagged => bex_vm_types::types::SyntheticKind::Tagged,
+            };
+            FunctionIdentity::synthetic(
+                parent,
+                kind,
+                u32::try_from(*ordinal).expect("synthetic ordinals fit u32"),
+            )
         }
     }
 }
@@ -435,7 +493,7 @@ impl<'w, 'db> PackageRefs<'w, 'db> {
         }
         unreachable!(
             "`{}` resolved to a declaration no lane declares",
-            spelling(db).wire(head)
+            baml_compiler2_hir_ty::render::Viewpoint::canonical(db).wire_head(head)
         )
     }
 

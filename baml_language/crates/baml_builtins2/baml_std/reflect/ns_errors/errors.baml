@@ -1,7 +1,7 @@
 /// A reflection construction failed compiler-equivalent validation.
 class CompilationError {
     message: string,
-    diagnostics: reflect.Diagnostic[],
+    diagnostics: root.Diagnostic[],
 }
 
 /// Runtime evaluation failed after successful construction/compilation.

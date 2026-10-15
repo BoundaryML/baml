@@ -1036,7 +1036,8 @@ pub(crate) mod support {
             let fqn = qualified_name(
                 &index.scopes,
                 i,
-                baml_compiler2_hir::package::spelling(db).of(pkg_info.root),
+                &baml_compiler2_hir_ty::render::Viewpoint::canonical(db)
+                    .display_label(pkg_info.root),
             );
 
             // ── Structural scopes (class/enum/type alias) ───────────
@@ -1329,7 +1330,7 @@ pub(crate) mod support {
         use baml_compiler2_hir::{file_package::file_package, file_semantic_index};
 
         fn qualify_type_name(
-            path: &baml_base::TypePath,
+            path: &baml_base::Path,
             pkg_prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
@@ -1352,21 +1353,21 @@ pub(crate) mod support {
         ) -> String {
             match &ty.kind {
                 baml_compiler2_ast::TypeExprKind::Path {
-                    segments,
+                    path,
                     generic_args,
                     associated_type_bindings,
                     ..
                 } => {
-                    let path = segments
+                    let dotted = path
                         .iter()
                         .map(|n| n.as_str())
                         .collect::<Vec<_>>()
                         .join(".");
-                    let first = segments.first().map(|n| n.as_str()).unwrap_or("");
+                    let first = path.first().map(|n| n.as_str()).unwrap_or("");
                     let mut rendered = if local_type_names.contains(first) {
-                        format!("{pkg_prefix}{path}")
+                        format!("{pkg_prefix}{dotted}")
                     } else {
-                        path
+                        dotted
                     };
                     if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
                         let mut args = generic_args
@@ -1499,20 +1500,20 @@ pub(crate) mod support {
             use baml_compiler2_hir::type_ref::TypeRefKind as K;
             match &store[id].kind {
                 K::Path {
-                    segments,
+                    path,
                     generic_args,
                     associated_type_bindings,
                 } => {
-                    let path = segments
+                    let dotted = path
                         .iter()
                         .map(|n| n.as_str())
                         .collect::<Vec<_>>()
                         .join(".");
-                    let first = segments.first().map(|n| n.as_str()).unwrap_or("");
+                    let first = path.first().map(|n| n.as_str()).unwrap_or("");
                     let mut rendered = if local_type_names.contains(first) {
-                        format!("{pkg_prefix}{path}")
+                        format!("{pkg_prefix}{dotted}")
                     } else {
-                        path
+                        dotted
                     };
                     if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
                         let mut args = generic_args
@@ -2120,9 +2121,8 @@ pub(crate) mod support {
 
         let mut output = String::new();
         let pkg_info = file_package(db, file);
-        let package = baml_compiler2_hir::package::spelling(db)
-            .of(pkg_info.root)
-            .clone();
+        let package =
+            baml_compiler2_hir_ty::render::Viewpoint::canonical(db).display_label(pkg_info.root);
         let prefix = if pkg_info.namespace_path.is_empty() {
             format!("{package}.")
         } else {

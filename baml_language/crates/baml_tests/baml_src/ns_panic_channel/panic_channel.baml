@@ -2,8 +2,8 @@
 // unwind path but is excluded from three places — the `throws` contract, what a
 // `_` catch arm traps, and `catch_all` exhaustiveness.
 //
-// Classification is purely the namespace (`baml.panics`, checked by
-// `is_panic_namespace`), so `throw baml.panics.X` raises exactly as
+// Classification is purely the namespace (`panics`, of the installed `baml`
+// package — `DeclName::is_panic_type`), so `throw baml.panics.X` raises exactly as
 // `baml.sys.panic` does and contributes nothing to the channel.
 
 // A `throw` of a panic class leaves the clause `never` — it raised, it did not

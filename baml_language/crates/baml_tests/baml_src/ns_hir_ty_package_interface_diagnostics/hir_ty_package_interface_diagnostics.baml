@@ -51,7 +51,7 @@ test "bare_type_is_not_a_value_type_annotation" {
     }
 }
 
-test "mounted_type_validation_and_package_shadowing_are_fail_closed" {
+test "mounted_type_validation_is_fail_closed_and_a_namespace_does_not_shadow_a_package" {
     let app = AppPackage();
     root.compiler.AssertCompiles(
         {
@@ -63,20 +63,18 @@ test "mounted_type_validation_and_package_shadowing_are_fail_closed" {
                     status: app.Status,
                     score: app.Score,
                 ) -> int throws never { 0 }
-
-                function json_shorthand() -> string throws never {
-                    json.stringify(null)
-                }
             `,
         },
         packages = { "app": app },
     );
-    root.compiler.AssertHasMessage(
+    // A namespace of the package's own named like a package it reaches does
+    // not shadow that package: the namespace is `root.reflect`, so `reflect`
+    // is still the reflection package.
+    root.compiler.AssertCompiles(
         {
             "ns_reflect/local.baml": `class Type<T> { value T }`,
-            "main.baml": `function shadowed() -> unknown throws never { reflect.Type.of<int>() }`,
+            "main.baml": `function unshadowed(f: reflect.AnyFunction) -> int throws never { 0 }`,
         },
-        "unresolved name: `of`",
         packages = { "app": app },
     );
 

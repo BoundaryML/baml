@@ -34,9 +34,9 @@ source: crates/baml_tests/src/generated_tests.rs
     ·     ─
     ╰────
 
-  [type] E0003
+  [type] E0002
 
-  × unresolved name: `Frobnitz`
+  × unresolved type: Frobnitz
     ╭─[main.baml:30:10]
  30 │     v is Frobnitz { x }
     ·          ──────────────

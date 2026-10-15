@@ -6,9 +6,9 @@ use std::collections::HashMap;
 use baml_base::{Name, SourceFile};
 use baml_compiler2_hir::{
     contributions::{Definition, DefinitionKind},
-    package::{PackageItems, lang_roots, package_items, spelling},
+    package::{PackageItems, lang_roots, package_items},
 };
-use baml_type::{BuiltinTypeName, Package};
+use baml_type::BuiltinTypeName;
 use text_size::TextSize;
 
 use crate::{
@@ -182,9 +182,13 @@ fn is_valid_namespace(pkg: &PackageItems<'_>, ns_path: &[Name]) -> bool {
 /// A single entry in a flat symbol listing.
 #[derive(Clone)]
 pub struct ListingEntry {
-    /// Package name that owns this symbol — the workspace package's reserved
-    /// name, or a dependency/builtin package name such as `baml`.
+    /// The label of the package that owns this symbol as the viewer sees it
+    /// (`baml` for the stdlib, the viewer's edge name for a dependency).
+    /// Display only; never read back ([`Self::is_own`] carries locality).
     pub package_name: Name,
+    /// Whether the symbol belongs to the viewer's own package, which
+    /// [`Self::fqn`] addresses without a package prefix.
+    pub is_own: bool,
     /// Symbol kind (class, function, enum, etc.).
     pub kind: DefinitionKind,
     /// Namespace path components (e.g. `["llm"]` or `["foo", "bar"]`; empty = root namespace).
@@ -204,8 +208,8 @@ impl ListingEntry {
     ///
     /// # Returns
     ///
-    /// - Workspace-package entries as package-local paths (for example
-    ///   `"llm.Config"`).
+    /// - The viewer's own package's entries as package-local paths (for
+    ///   example `"llm.Config"`).
     /// - Other packages' entries as package-qualified paths (for example
     ///   `"baml.iter.Range"`), so the emitted text can be passed back into
     ///   `baml describe` verbatim.
@@ -217,7 +221,7 @@ impl ListingEntry {
             format!("{}.{}", parts.join("."), self.item_name.as_str())
         };
 
-        if is_local_package_name(&self.package_name) {
+        if self.is_own {
             local_path
         } else {
             format!("{}.{}", self.package_name.as_str(), local_path)
@@ -232,12 +236,13 @@ impl ListingEntry {
 /// as `ns_path.join(".") + "." + item_name` (or bare `item_name` for root namespace).
 pub fn list_package_items(
     db: &dyn baml_compiler2_hir::Db,
+    viewer: baml_base::SourceRoot,
     package_id: baml_base::SourceRoot,
     internals: Internals,
 ) -> Vec<ListingEntry> {
     let pkg = package_items(db, package_id);
-    let package_name = spelling(db).of(package_id).clone();
-    collect_entries_from_package(db, pkg, &package_name, internals)
+    let package_name = crate::render::package_address(db, viewer, package_id);
+    collect_entries_from_package(db, pkg, &package_name, package_id == viewer, internals)
 }
 
 /// Collect listing entries from a `PackageItems`, including all namespaces.
@@ -245,6 +250,7 @@ fn collect_entries_from_package(
     db: &dyn baml_compiler2_hir::Db,
     pkg: &PackageItems<'_>,
     package_name: &Name,
+    is_own: bool,
     internals: Internals,
 ) -> Vec<ListingEntry> {
     let mut entries = Vec::new();
@@ -257,7 +263,10 @@ fn collect_entries_from_package(
             if let Some(entry) = make_entry(
                 db,
                 &mut line_indexes,
-                package_name.clone(),
+                &ListedPackage {
+                    name: package_name,
+                    is_own,
+                },
                 ns_path.clone(),
                 name.clone(),
                 *def,
@@ -289,12 +298,14 @@ fn collect_entries_from_package(
 /// includes `baml.env.GetEnv`).
 pub fn list_namespace_items(
     db: &dyn baml_compiler2_hir::Db,
+    viewer: baml_base::SourceRoot,
     package_id: baml_base::SourceRoot,
     namespace_path: &[Name],
     internals: Internals,
 ) -> Option<Vec<ListingEntry>> {
     let pkg = package_items(db, package_id);
-    let package_name = spelling(db).of(package_id).clone();
+    let package_name = &crate::render::package_address(db, viewer, package_id);
+    let is_own = package_id == viewer;
 
     // Check that the requested namespace path exists or has children.
     let has_exact = pkg.namespaces.contains_key(namespace_path);
@@ -323,7 +334,10 @@ pub fn list_namespace_items(
             if let Some(entry) = make_entry(
                 db,
                 &mut line_indexes,
-                package_name.clone(),
+                &ListedPackage {
+                    name: package_name,
+                    is_own,
+                },
                 ns_path.clone(),
                 name.clone(),
                 *def,
@@ -336,16 +350,6 @@ pub fn list_namespace_items(
 
     entries.sort_by(|a, b| a.file_path.cmp(&b.file_path).then(a.line.cmp(&b.line)));
     Some(entries)
-}
-
-/// Return whether `package_name` identifies the implicit local (workspace)
-/// package.
-///
-/// This funnels package-locality checks through the typed `Package`
-/// classifier instead of comparing raw package-name string literals at call
-/// sites.
-fn is_local_package_name(package_name: &Name) -> bool {
-    matches!(Package::from_name(package_name.clone()), Package::Local)
 }
 
 /// What `baml describe`'s listings show, stated once for every call site.
@@ -379,10 +383,17 @@ fn is_listed(
 }
 
 /// Build a single `ListingEntry` from a definition.
+/// The listed package as an entry records it: its label and whether it is
+/// the viewer's own.
+struct ListedPackage<'n> {
+    name: &'n Name,
+    is_own: bool,
+}
+
 fn make_entry<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     line_indexes: &mut HashMap<SourceFile, LineIndex<'db>>,
-    package_name: Name,
+    package: &ListedPackage<'_>,
     ns_path: Vec<Name>,
     item_name: Name,
     def: Definition<'db>,
@@ -396,7 +407,8 @@ fn make_entry<'db>(
     let line = entry_line(db, line_indexes, file, name_span.start());
 
     Some(ListingEntry {
-        package_name,
+        package_name: package.name.clone(),
+        is_own: package.is_own,
         kind: def.kind(),
         ns_path,
         item_name,
@@ -435,7 +447,7 @@ mod tests {
     /// Run `list_package_items()` for the fixture's workspace package.
     fn list_package_items_user(project: &ProjectTest) -> Vec<ListingEntry> {
         let package_id = project.package;
-        list_package_items(&project.db, package_id, Internals::Hide)
+        list_package_items(&project.db, project.package, package_id, Internals::Hide)
     }
 
     /// Run `list_namespace_items()` for a workspace-package namespace.
@@ -445,7 +457,13 @@ mod tests {
     ) -> Option<Vec<ListingEntry>> {
         let package_id = project.package;
         let ns_path: Vec<Name> = ns_segments.iter().map(Name::new).collect();
-        list_namespace_items(&project.db, package_id, &ns_path, Internals::Hide)
+        list_namespace_items(
+            &project.db,
+            project.package,
+            package_id,
+            &ns_path,
+            Internals::Hide,
+        )
     }
 
     /// Format a `ListingEntry` for snapshot comparison.
@@ -569,13 +587,61 @@ class Baz {
         assert!(entries.iter().any(|e| e.fqn() == "lorem.Resume"));
     }
 
+    /// A NAMED workspace root lists its own items without a package prefix:
+    /// locality is the viewer's identity, never the label the root carries.
+    #[test]
+    fn a_named_root_lists_its_own_items_bare() {
+        use baml_db::{ProjectDatabase, SourceRootKind, SourceRootSpec, testing::TestDbExt};
+        let mut db = ProjectDatabase::new();
+        let root = db
+            .add_source_root(
+                SourceRootSpec::new("/named", SourceRootKind::Workspace).named(Name::new("app")),
+            )
+            .expect("a named root");
+        db.file("/named/main.baml", "class Point { x int }\n");
+        let entries = list_package_items(&db, root, root, Internals::Hide);
+        let fqns: Vec<String> = entries.iter().map(ListingEntry::fqn).collect();
+        assert!(fqns.iter().any(|fqn| fqn == "Point"), "{fqns:?}");
+        assert!(!fqns.iter().any(|fqn| fqn.starts_with("app.")), "{fqns:?}");
+    }
+
+    /// A dependency is listed under the name the viewer reaches it by, not
+    /// the name it declares for itself: `bar.Point` is the path that resolves
+    /// from the viewer, and `foo.Point` is not.
+    #[test]
+    fn list_package_items_addresses_a_dependency_by_the_viewers_edge_name() {
+        use baml_db::{ProjectDatabase, SourceRootKind, SourceRootSpec, testing::TestDbExt};
+        let mut db = ProjectDatabase::new();
+        let workspace = db.workspace(std::path::Path::new("/edge-name"));
+        let dependency = db
+            .add_source_root(
+                SourceRootSpec::new("/foo", SourceRootKind::Dependency).named(Name::new("foo")),
+            )
+            .expect("a named dependency root");
+        db.add_dependency(
+            workspace,
+            baml_base::Dependency {
+                name: Name::new("bar"),
+                root: dependency,
+            },
+        )
+        .expect("the workspace depends on `foo` as `bar`");
+        db.file("/foo/main.baml", "class Point { x int }\n");
+        let entries = list_package_items(&db, workspace, dependency, Internals::Hide);
+        let fqns: Vec<String> = entries.iter().map(ListingEntry::fqn).collect();
+        assert!(fqns.iter().any(|fqn| fqn == "bar.Point"), "{fqns:?}");
+        assert!(!fqns.iter().any(|fqn| fqn.starts_with("foo.")), "{fqns:?}");
+    }
+
     /// Builtin package listings include the package segment so names can round-trip
     /// through `baml describe` without callers needing to guess the package.
     #[test]
     fn list_package_items_builtin_fqns_include_package_name() {
         let project = make_multi_ns_project();
-        let pkg_id = spelling(&project.db).root(&Name::new("baml")).unwrap();
-        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
+        let pkg_id = lang_roots(&project.db)
+            .get(baml_base::LangPackage::Baml)
+            .unwrap();
+        let entries = list_package_items(&project.db, project.package, pkg_id, Internals::Hide);
 
         assert!(
             entries.iter().any(|e| e.fqn() == "baml.iter.Range"),
@@ -614,7 +680,7 @@ test "identity" {
 
         assert!(internal_def.is_language_internal(&project.db));
         assert!(
-            list_package_items(&project.db, pkg_id, Internals::Hide)
+            list_package_items(&project.db, project.package, pkg_id, Internals::Hide)
                 .iter()
                 .all(|entry| entry.item_name.as_str() != internal_name.as_str())
         );
@@ -645,7 +711,7 @@ function summarize_structured(input: string) -> Summary {
         );
         let project = builder.build();
         let pkg_id = project.package;
-        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
+        let entries = list_package_items(&project.db, project.package, pkg_id, Internals::Hide);
 
         for name in [
             "summarize@spec",
@@ -715,7 +781,7 @@ function summarize_structured(input: string) -> Summary {
     fn round_trip_listing_to_resolve() {
         let project = make_multi_ns_project();
         let pkg_id = project.package;
-        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
+        let entries = list_package_items(&project.db, project.package, pkg_id, Internals::Hide);
 
         for entry in &entries {
             let fqn = entry.fqn();
@@ -739,8 +805,10 @@ function summarize_structured(input: string) -> Summary {
     #[test]
     fn round_trip_listing_to_resolve_internals() {
         let project = make_multi_ns_project();
-        let stdlib = spelling(&project.db).root(&Name::new("baml")).unwrap();
-        let entries = list_package_items(&project.db, stdlib, Internals::Show);
+        let stdlib = lang_roots(&project.db)
+            .get(baml_base::LangPackage::Baml)
+            .unwrap();
+        let entries = list_package_items(&project.db, project.package, stdlib, Internals::Show);
 
         let internals: Vec<String> = entries
             .iter()
@@ -773,7 +841,7 @@ function summarize_structured(input: string) -> Summary {
     fn round_trip_listing_to_resolve_deep_ns() {
         let project = make_deep_ns_project();
         let pkg_id = project.package;
-        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
+        let entries = list_package_items(&project.db, project.package, pkg_id, Internals::Hide);
 
         assert!(
             !entries.is_empty(),
@@ -852,7 +920,7 @@ function summarize_structured(input: string) -> Summary {
     fn round_trip_member() {
         let project = make_multi_ns_project();
         let pkg_id = project.package;
-        let entries = list_package_items(&project.db, pkg_id, Internals::Hide);
+        let entries = list_package_items(&project.db, project.package, pkg_id, Internals::Hide);
 
         let mut checked = 0;
 

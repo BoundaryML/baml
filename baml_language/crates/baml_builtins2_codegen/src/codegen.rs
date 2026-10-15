@@ -153,8 +153,9 @@ fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin], package: &str) -> Nam
 
         // The class is the first uppercase-initial segment before the final
         // method segment (if any). An implements-block method's segment is
-        // `{Iface}$for${Class}` — for a DOTTED written interface
-        // (`root.io.Read$for$File`) the interface's path components parse
+        // `{Iface}$for${Class}` — for a DOTTED interface target (a written
+        // `root.io.Read` spelled `baml.io.Read$for$File` in the key) the
+        // interface's path components parse
         // as namespace segments here, which lands correctly only because
         // namespace segments are lowercase and the `$for$` segment starts
         // with the interface's uppercase name. Contingent, not designed —
@@ -568,15 +569,15 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     }
     writeln!(out, "{indent}}}\n").unwrap();
 
-    // Impl with to_value()
-    let fqn = format!("{}.{}", def.namespace_prefix, def.name);
+    // Impl with to_value(): the class by identity, never by a spelled name.
+    let item = crate::lang_item::lang_item_expr(&def.namespace_prefix, &def.name);
     writeln!(out, "{indent}impl {class_ident} {{").unwrap();
     writeln!(
         out,
         "{inner}pub fn to_value(self, vm: &mut BexVm) -> bex_vm_types::Value {{"
     )
     .unwrap();
-    writeln!(out, "{inner2}let class_ptr = vm.resolve_class({fqn:?});").unwrap();
+    writeln!(out, "{inner2}let class_ptr = vm.lang_object({item});").unwrap();
 
     // Convert each field to a Value
     for field in &def.fields {

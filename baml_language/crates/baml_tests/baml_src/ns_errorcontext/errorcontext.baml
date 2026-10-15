@@ -499,8 +499,8 @@ class EcBudgetLink {
 }
 
 function ec_render_deep_error() -> string {
-    let root = EcBudgetLink { next: null };
-    let current = root;
+    let first_link = EcBudgetLink { next: null };
+    let current = first_link;
     let i = 0;
     while (i < 40) {
         let next = EcBudgetLink { next: null };
@@ -508,7 +508,7 @@ function ec_render_deep_error() -> string {
         current = next;
         i += 1;
     }
-    (throw root) catch (e, ctx) {
+    (throw first_link) catch (e, ctx) {
         _ => ctx.to_string(),
     }
 }

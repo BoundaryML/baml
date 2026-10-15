@@ -256,7 +256,9 @@ mod tests {
     #[test]
     fn expression_type_arguments_preserve_order_and_identity() {
         let mut body = ExprBody::default();
-        let callee = body.exprs.alloc(Expr::Path(vec![Name::new("f")]));
+        let callee = body
+            .exprs
+            .alloc(Expr::Path(baml_base::Path::bare(Name::new("f"))));
         let int_span = TextRange::new(TextSize::from(10), TextSize::from(13));
         let string_span = TextRange::new(TextSize::from(15), TextSize::from(21));
         let call = body.exprs.alloc(Expr::Call {
@@ -286,7 +288,7 @@ mod tests {
         let mut body = ExprBody::default();
         let operand = body
             .exprs
-            .alloc(Expr::Path(vec![Name::new("runtime_type")]));
+            .alloc(Expr::Path(baml_base::Path::bare(Name::new("runtime_type"))));
         let runtime = body.stmts.alloc(Stmt::TypeBinding {
             name: Name::new("R"),
             value: TypeBindingValue::Runtime(operand),

@@ -10,6 +10,6 @@ function info  (log.info)  <builtin>/log/log.baml:7-9
 /// Pass a map for structured fields, or pass a string, number, bool,
 /// list, class instance, enum variant, or null to inspect that value directly.
 /// `event_name` labels the event; null or omitted still emits an unnamed log.
-function info(data: unknown, event_name: string? = null) -> void
+function info(data: unknown, event_name?: string | null) -> null throws never
 
 references (0):

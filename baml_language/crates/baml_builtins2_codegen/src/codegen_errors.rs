@@ -40,6 +40,10 @@ fn generate_error_class_enum(errors: &[&NativeClassDef]) -> TokenStream {
         .map(|e| format!("{ERRORS_NAMESPACE}.{}", e.name))
         .collect();
     let names: Vec<&str> = errors.iter().map(|e| e.name.as_str()).collect();
+    let items: Vec<TokenStream> = errors
+        .iter()
+        .map(|e| crate::lang_item::lang_item_tokens(ERRORS_NAMESPACE, &e.name))
+        .collect();
 
     quote! {
         /// Error class tag — one variant per `baml.errors.*` class.
@@ -62,6 +66,14 @@ fn generate_error_class_enum(errors: &[&NativeClassDef]) -> TokenStream {
             pub const fn name(&self) -> &'static str {
                 match self {
                     #(ErrorClass::#variant_idents => #names,)*
+                }
+            }
+
+            /// The class by identity: its item in the `baml` language package,
+            /// which is how the runtime reaches it.
+            pub const fn item(&self) -> ::baml_base::LangItem {
+                match self {
+                    #(ErrorClass::#variant_idents => #items,)*
                 }
             }
 
