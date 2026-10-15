@@ -1,0 +1,65 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0062
+
+  × non-exhaustive catch_all on type int | string | Greeting; missing: string
+    ╭─[catch_all_coverage.baml:23:5]
+ 23 │ ╭─▶     greet(1) catch_all (e) {
+ 24 │ │           int => "int",
+ 25 │ │           Greeting => "greeting",
+ 26 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all on type int | string | Greeting; missing: string
+    ╭─[catch_all_coverage.baml:32:5]
+ 32 │ ╭─▶     greet(1) catch_all (e) {
+ 33 │ │           int => "int",
+ 34 │ │           Greeting => "greeting",
+ 35 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all on type string | Greeting; missing: string
+    ╭─[catch_all_coverage.baml:45:5]
+ 45 │ ╭─▶     greet(1) catch (e) {
+ 46 │ │           int => "int",
+ 47 │ │       } catch_all (e2) {
+ 48 │ │           Greeting => "greeting",
+ 49 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all on type string | NotFound; missing: string
+    ╭─[catch_all_coverage.baml:61:5]
+ 61 │ ╭─▶     declared(0) catch_all (e) {
+ 62 │ │           NotFound => 1,
+ 63 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all_panics on type int | string | Greeting; missing: Greeting
+    ╭─[catch_all_coverage.baml:68:5]
+ 68 │ ╭─▶     greet(1) catch_all_panics (e) {
+ 69 │ │           int => "int",
+ 70 │ │           string => "string",
+ 71 │ │           baml.panics.Panic => "panic",
+ 72 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all_panics on type int | string | Greeting; missing: baml.panics.Panic
+    ╭─[catch_all_coverage.baml:77:5]
+ 77 │ ╭─▶     greet(1) catch_all_panics (e) {
+ 78 │ │           int => "int",
+ 79 │ │           string => "string",
+ 80 │ │           Greeting => "greeting",
+ 81 │ ╰─▶     }
+    ╰────

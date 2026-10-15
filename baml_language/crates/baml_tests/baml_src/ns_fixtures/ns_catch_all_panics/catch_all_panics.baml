@@ -18,11 +18,14 @@ function CatchAllPanicsWildcard(x: int) -> string {
     }
 }
 
-// catch_all_panics with all types explicitly handled.
+// catch_all_panics with all types explicitly handled: every error type, and
+// every panic through the `baml.panics.Panic` alias (typed error arms alone
+// would leave the panics unhandled, E0062).
 function CatchAllPanicsTyped(x: int) -> string {
     MayFailIntOrString(x) catch_all_panics (e) {
         string => "caught string",
-        int => "caught int"
+        int => "caught int",
+        baml.panics.Panic => "caught panic"
     }
 }
 

@@ -17,8 +17,9 @@ use crate::{
 /// A catchable BAML panic — maps 1:1 to a `baml.panics.*` class.
 ///
 /// These are user-visible runtime errors (division by zero, index out of
-/// bounds, etc.) that can be caught by `catch` handlers. The handler's
-/// `ThrowIfPanic` instruction filters which panics are caught vs rethrown.
+/// bounds, etc.) that can be caught by `catch` handlers. A panic is caught by
+/// an arm naming its type or by a `catch_all_panics` wildcard arm; other
+/// wildcard arms test for it and let it pass.
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmPanic {
     #[error("division by zero: {left:?} / {right:?}")]

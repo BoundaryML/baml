@@ -1,0 +1,105 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// `catch_all` and `catch_all_panics` must cover everything that reaches them
+// (E0062); `catch_all_panics` must also cover every panic. B-1787.
+
+class Greeting {
+    text: string,
+}
+
+class NotFound {
+    key: string,
+}
+
+function greet(n: int) -> string {
+    match (n) {
+        0 => throw 1,
+        1 => throw "bad",
+        2 => throw Greeting { text: "hi" },
+        _ => "ok",
+    }
+}
+
+// B-1787: the `string` arm is missing.
+function MissingStringArm() -> string {
+    greet(1) catch_all (e) {
+        int => "int",
+        Greeting => "greeting",
+    }
+}
+
+// Same, under a `throws never` contract: the catch_all reports the missing
+// arm itself, and the contract is not also violated.
+function MissingStringArmThrowsNever() -> string throws never {
+    greet(1) catch_all (e) {
+        int => "int",
+        Greeting => "greeting",
+    }
+}
+
+// A caller of a `catch_all` sees no residual throws.
+function CallerOfCatchAll() -> string throws never {
+    MissingStringArm()
+}
+
+// A `catch_all` after a partial `catch` must cover the residual.
+function ChainResidualMissing() -> string {
+    greet(1) catch (e) {
+        int => "int",
+    } catch_all (e2) {
+        Greeting => "greeting",
+    }
+}
+
+// Declared contracts are covered by their widened facts.
+function declared(n: int) -> int throws NotFound | string {
+    if (n == 0) {
+        throw NotFound { key: "k" };
+    }
+    throw "bad"
+}
+
+function MissingDeclared() -> int {
+    declared(0) catch_all (e) {
+        NotFound => 1,
+    }
+}
+
+// `catch_all_panics` must cover errors...
+function PanicsMissingError() -> string {
+    greet(1) catch_all_panics (e) {
+        int => "int",
+        string => "string",
+        baml.panics.Panic => "panic",
+    }
+}
+
+// ...and every panic: typed error arms alone leave the panics unhandled.
+function PanicsMissingPanics() -> string {
+    greet(1) catch_all_panics (e) {
+        int => "int",
+        string => "string",
+        Greeting => "greeting",
+    }
+}
+
+// Exhaustive forms compile.
+function Exhaustive() -> string throws never {
+    let a = greet(1) catch_all (e) {
+        int => "int",
+        string => "string",
+        Greeting => "greeting",
+    };
+    let b = greet(1) catch_all (e) {
+        _ => "any",
+    };
+    let c = greet(1) catch_all_panics (e) {
+        _ => "any",
+    };
+    let d = greet(1) catch_all_panics (e) {
+        int => "int",
+        let rest => "rest",
+    };
+    a + b + c + d
+}

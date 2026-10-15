@@ -1186,11 +1186,7 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
         ast::Expr::Catch { base, clauses } => {
             let mut out = render_expr_compact_ast(body, *base);
             for clause in clauses {
-                let kind = match clause.kind {
-                    ast::CatchClauseKind::Catch => "catch",
-                    ast::CatchClauseKind::CatchAll => "catch_all",
-                    ast::CatchClauseKind::CatchAllPanics => "catch_all_panics",
-                };
+                let kind = clause.kind.keyword();
                 write!(out, " {kind}(...)").unwrap();
             }
             out
