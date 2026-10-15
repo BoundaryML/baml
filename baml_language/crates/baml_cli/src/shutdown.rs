@@ -64,6 +64,7 @@ pub(crate) async fn shutdown_engine_future(
         )
         .await;
     if engine.initial_cloud_authorization_error().is_none()
+        && !engine.initial_telemetry_failure_handled()
         && let Some(Err(error)) = engine.telemetry_result()
     {
         reporter.warning(format_args!("telemetry recording failed: {error}"));
