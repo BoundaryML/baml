@@ -7,7 +7,7 @@
 /// ownerless.
 class Field {
     name: string,
-    type: root.Type?,
+    type: root.Type,
     meta: root.Meta,
     /// Present only for handles returned from `reflect.AnyClass.list_fields`,
     /// `get_field` or `find_field`. Type-side descriptors returned by
