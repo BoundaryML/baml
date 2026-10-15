@@ -143,6 +143,27 @@ test "a bounded binding fills a bounded generic parameter" {
     assert.equal(ltb_name_of(value), "Ada")
 }
 
+// An obligation on `T` can be settled after its block has been checked to
+// the closing brace: the element type of `items` is still open when
+// `ltb_count_named(items)` is checked, and becomes `T` only through the later
+// `push`. The bound still holds there. It is a fact about this parameter
+// wherever it appears, since every pass through the statement re-checks it.
+function ltb_count_named<N extends LtbNamed>(items: N[]) -> int throws never {
+    items.length()
+}
+
+function ltb_count_after_late_inference(t: reflect.Type) -> int {
+    let type T extends LtbNamed = t;
+    let items = [];
+    let before = ltb_count_named(items);
+    items.push(baml.json.to<T>({ "name": "Ada" }));
+    before + items.length()
+}
+
+test "a bound obligation settled after the block closes still holds" {
+    assert.equal(ltb_count_after_late_inference(reflect.Type.of<LtbNamedOnly>()), 1)
+}
+
 interface LtbHolder<T> {
     held: T,
 }
