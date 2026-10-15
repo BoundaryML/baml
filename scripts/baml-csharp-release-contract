@@ -357,11 +357,26 @@ def stage_native(args: argparse.Namespace) -> None:
         sidecars = [
             path for path in files if path.name == f"{entry['producer_asset']}.sha256"
         ]
-        if len(files) != 2 or len(sources) != 1 or len(sidecars) != 1:
+        license_files = {
+            "LICENSE": ROOT / "LICENSE",
+            "LICENSE.quanta": ROOT / "baml_language/vendor/quanta/LICENSE",
+        }
+        if (ROOT / "NOTICE").is_file():
+            license_files["NOTICE"] = ROOT / "NOTICE"
+        expected_files = {
+            entry["producer_asset"],
+            f"{entry['producer_asset']}.sha256",
+            *(f"{entry['producer_asset']}.{name}" for name in license_files),
+        }
+        actual_files = {path.relative_to(root).as_posix() for path in files}
+        if actual_files != expected_files or len(sources) != 1 or len(sidecars) != 1:
             fail(
-                f"{artifact_name} must contain exactly the native library and "
-                f"checksum sidecar; found {[path.name for path in files]}"
+                f"{artifact_name} must contain exactly the native library, checksum "
+                f"and license sidecars; found {sorted(actual_files)}"
             )
+        for name, authoritative in license_files.items():
+            if (root / f"{entry['producer_asset']}.{name}").read_bytes() != authoritative.read_bytes():
+                fail(f"{artifact_name}: {name} differs from its authoritative source")
         source = sources[0]
         sidecar = sidecars[0]
         if source.parent != sidecar.parent:

@@ -1,5 +1,7 @@
 """Regression tests of produced containers, including failure cases."""
 
+import argparse
+import hashlib
 import importlib.machinery
 import importlib.util
 import io
@@ -131,6 +133,50 @@ class DistributionLicenses(unittest.TestCase):
         self.assertEqual(
             (self.root / "LICENSE").read_bytes(), b"legitimate different terms"
         )
+
+    def csharp_staging_fixture(self):
+        loader = importlib.machinery.SourceFileLoader(
+            "csharp_contract", str(SCRIPT.parent / "baml-csharp-release-contract")
+        )
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        contract = importlib.util.module_from_spec(spec)
+        loader.exec_module(contract)
+        downloads = self.root / "downloads"
+        for target in contract.csharp_targets(contract.DEFAULT_PLATFORMS):
+            directory = downloads / f"bridge-cffi-{target['target']}"
+            directory.mkdir(parents=True)
+            asset = target["producer_asset"]
+            payload = target["target"].encode()
+            (directory / asset).write_bytes(payload)
+            (directory / (asset + ".sha256")).write_text(
+                hashlib.sha256(payload).hexdigest() + "  " + asset + "\n"
+            )
+            for name, source in LICENSES.license_sources(engine=True).items():
+                (directory / (asset + "." + name)).write_bytes(source.read_bytes())
+        args = argparse.Namespace(
+            downloads=downloads,
+            staging=self.root / "staged",
+            platforms=contract.DEFAULT_PLATFORMS,
+            source_sha="a" * 40,
+            release_version="0.22.2",
+            workflow_run_id="123",
+            provenance=self.root / "provenance.json",
+            manifest=self.root / "native.sha256",
+        )
+        return contract, args
+
+    def test_csharp_staging_accepts_all_eight_producers_with_license_sidecars(self):
+        contract, args = self.csharp_staging_fixture()
+        contract.stage_native(args)
+        self.assertEqual(len(list(args.staging.glob("runtimes/*/native/*"))), 8)
+        self.assertEqual(len(json.loads(args.provenance.read_text())["artifacts"]), 8)
+
+    def test_csharp_staging_rejects_wrong_license_sidecar(self):
+        contract, args = self.csharp_staging_fixture()
+        sidecar = next(args.downloads.rglob("*.LICENSE"))
+        sidecar.write_bytes(b"wrong terms")
+        with self.assertRaisesRegex(contract.ContractError, "authoritative source"):
+            contract.stage_native(args)
 
     def test_native_release_requires_exact_license_sidecars(self):
         native = self.root / "libbaml_cffi-aarch64-apple-darwin.dylib"

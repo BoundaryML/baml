@@ -231,3 +231,5 @@ All commands below ran without publishing or executing downloaded package lifecy
 | Aggregate gate / syntax | `scripts/baml-sdk-licenses verify-artifacts /tmp/packs`; `git diff --check`; targeted `prek run --files ...`; `bash -n` on changed shell scripts | Produced local containers and packaging/release syntax; hosted CI/review results belong in the PR |
 
 The public pkg.boundaryml.com manifest HTTP 403 observation and npm website access limitation remain baseline access gaps. Local checks cannot retroactively alter or correct already-published artifacts. No release was published, no registry artifact changed, and the issue was not closed or commented on.
+
+The C# producer-artifact contract also validates the expanded exact file set (native binary, checksum, authoritative LICENSE and quanta sidecars, plus root NOTICE if present) before staging the eight RID binaries. Integration regression cases exercise that full staging path and reject altered sidecar terms.
