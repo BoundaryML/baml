@@ -17,15 +17,16 @@ import zipfile
 from pathlib import Path
 
 
-def download(url):
+def download(url, *, include_raw=False):
     request = urllib.request.Request(
         url, headers={"User-Agent": "BoundaryML-license-audit/1.0"}
     )
     with urllib.request.urlopen(request, timeout=120) as response:
-        data = response.read()
+        raw = response.read()
+        data = raw
         if response.headers.get("Content-Encoding") == "gzip":
             data = gzip.decompress(data)
-        return data
+        return (raw, data) if include_raw else data
 
 
 def main():
@@ -43,8 +44,8 @@ def main():
             print(download(record["metadata_url"]).decode("utf-8"))
         except Exception as error:
             print("Registry metadata unavailable:", error)
-    data = download(record["url"])
-    digest = hashlib.sha256(data).hexdigest()
+    raw, data = download(record["url"], include_raw=True)
+    digest = hashlib.sha256(raw).hexdigest()
     print("ARTIFACT", record["url"], "SHA256", digest)
     if digest != record["sha256"]:
         raise SystemExit("Artifact differs from the audited bytes")
