@@ -212,7 +212,7 @@ fn scan_fixture(kind: &str, n: usize) -> BexStr {
 
 /// BAML `s.at(i)` for an in-range `i`, as `bex_vm`'s `string.rs` implements it.
 fn at(s: &BexStr, i: usize) -> Option<BexStr> {
-    s.char_at_codepoint(i)
+    (i < s.char_len()).then(|| s.char_slice(i..i + 1))
 }
 
 /// Each sample gets a fresh fixture, built outside the timed region, so a
@@ -248,11 +248,29 @@ fn at_scan_non_ascii_concat(bencher: Bencher, n: usize) {
     bench_at_scan(bencher, "concat", n);
 }
 
+// ── Deep ropes (B-1820) ────────────────────────────────────────────────────────
+//
+// `s = s + "x"` builds a left-leaning rope as deep as the append count. Every
+// operation on it must stay iterative (no native recursion proportional to
+// depth) and `char_len` must not walk it.
+
+#[divan::bench(args = [100_000, 1_000_000], sample_count = 5, sample_size = 1)]
+fn deep_rope_build_count_flatten(bencher: Bencher, n: usize) {
+    bencher.bench(|| {
+        let mut s = BexStr::from("x".repeat(60));
+        for _ in 0..n {
+            s = BexStr::concat(s, BexStr::from("é"));
+        }
+        black_box(s.char_len());
+        black_box(s.as_str().len());
+    });
+}
+
 // ── Workloads (00-design.md §2) ─────────────────────────────────────────────────
 //
 // End-to-end shapes of BAML string code, built from the same `BexStr` calls the
 // VM makes (`+` → `concat`, `replace_all` → `BexStr::from(str::replace)`, `at` →
-// `char_at_codepoint`). Each doubles `n` (codepoints); compare growth factors,
+// `char_slice(i..i + 1)`). Each doubles `n` (codepoints); compare growth factors,
 // and compare `w3_append_and_read_*` against `w3_append_only` to see what
 // reading costs on top of writing.
 
