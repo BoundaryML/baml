@@ -68,13 +68,23 @@ func Test_compiled_package_returns_class_graph(t *testing.T) {
 		t.Fatal(err)
 	}
 	compiled, err := pkg.GetClass("CompiledRow")
-	if err != nil || compiled == nil {
-		t.Fatalf("get compiled class = %#v, %v", compiled, err)
+	if err != nil {
+		t.Fatalf("get compiled class: %v", err)
 	}
-	got, err := baml_sdk.HostParse[any](ctx, `{"amount":7}`, baml_go.WithTypeArg("T", *compiled))
+	got, err := baml_sdk.HostParse[any](ctx, `{"amount":7}`, baml_go.WithTypeArg("T", compiled))
 	want := map[string]any{"amount": int64(7), "note": nil}
 	if err != nil || !stdreflect.DeepEqual(got, want) {
 		t.Fatalf("compiled class parse = %#v, %v; want %#v", got, err, want)
+	}
+	var notFound *bamlreflect.NotFound
+	if _, err := pkg.GetClass("Missing"); !errors.As(err, &notFound) {
+		t.Fatalf("get missing class error = %T %v; want *reflect.NotFound", err, err)
+	}
+	if found, err := pkg.FindClass("CompiledRow"); err != nil || found == nil {
+		t.Fatalf("find compiled class = %#v, %v", found, err)
+	}
+	if missing, err := pkg.FindClass("Missing"); err != nil || missing != nil {
+		t.Fatalf("find missing class = %#v, %v; want nil, nil", missing, err)
 	}
 }
 

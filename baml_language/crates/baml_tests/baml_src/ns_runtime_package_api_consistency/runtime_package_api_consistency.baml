@@ -26,7 +26,7 @@ test "p8_requires_all_precise_type_finders_and_enumerators" {
     assert.is_true(rpac_all_finders_and_enumerators_are_available(pkg))
 }
 
-test "e6_requires_kind_specific_nullable_finders" {
+test "kind_specific_finders_return_null_on_a_miss" {
     let pkg = reflect.Package.compile({ "empty.baml": "" });
     assert.is_true(rpac_kind_specific_finders_are_available(pkg))
 }

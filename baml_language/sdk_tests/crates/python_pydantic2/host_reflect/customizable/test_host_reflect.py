@@ -48,6 +48,11 @@ def test_compiled_package_returns_class_graph():
         "amount": 7,
         "note": None,
     }
+    with pytest.raises(BamlError) as exc_info:
+        package.get_class("Missing")
+    assert exc_info.value.class_name == "reflect.errors.NotFound"
+    assert isinstance(package.find_class("CompiledRow"), BamlType)
+    assert package.find_class("Missing") is None
 
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go

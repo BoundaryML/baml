@@ -14,6 +14,9 @@ function mismatch_is_catchable(value: reflect.AnyClass) -> bool throws never {
         reflect.errors.TypeMismatch { message } => {
             return message.includes("field `VetrecLike.first`");
         }
+        reflect.errors.NotFound => {
+            return false;
+        }
     };
     false
 }
@@ -51,7 +54,7 @@ function main() -> bool {
         && record.get<string?>("third") == null
         && record.get<string?>("fourth") == "four"
         && record.get<string?>("fifth") == "five"
-        && record.get<string?>("missing") == null
+        && record.find<string?>("missing") == null
         && fields.length() == 5
         && first_field.name == "first"
         && first_field.type == optional_string

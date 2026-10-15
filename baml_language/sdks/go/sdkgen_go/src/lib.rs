@@ -450,6 +450,7 @@ type Diagnostic = baml_go.Diagnostic
 type CompilationError = baml_go.CompilationError
 type EvaluationError = baml_go.EvaluationError
 type SessionBusy = baml_go.SessionBusy
+type NotFound = baml_go.NotFound
 
 func WithAlias(value string) MetadataOption { return baml_go.WithAlias(value) }
 func WithDescription(value string) MetadataOption { return baml_go.WithDescription(value) }
@@ -577,9 +578,22 @@ func (pkg *Package) input() baml_go.Input {
 	})
 }
 
-func (pkg *Package) GetClass(name string) (*Type, error) {
-	if pkg == nil { return nil, nil }
+// GetClass returns the exported class called name. A miss is a *NotFound
+// error; FindClass reports a miss as nil instead.
+func (pkg *Package) GetClass(name string) (Type, error) {
 	result, err := baml_go.Call(pkg.ctx, "reflect.Package.get_class", map[string]baml_go.Input{
+		"self": pkg.input(),
+		"name": baml_go.String(name),
+	})
+	if err != nil { return Type{}, err }
+	return result.Type()
+}
+
+// FindClass returns the exported class called name, or nil if the package
+// exports none.
+func (pkg *Package) FindClass(name string) (*Type, error) {
+	if pkg == nil { return nil, nil }
+	result, err := baml_go.Call(pkg.ctx, "reflect.Package.find_class", map[string]baml_go.Input{
 		"self": pkg.input(),
 		"name": baml_go.String(name),
 	})

@@ -143,7 +143,9 @@ test "concrete_members_keep_precedence_until_explicitly_narrowed" {
 
             class ExistingMethods {
                 function get(self, name: string) -> string { "get:" + name }
+                function find(self, name: string) -> string { "find:" + name }
                 function get_field(self, name: string) -> string { "get_field:" + name }
+                function find_field(self, name: string) -> string { "find_field:" + name }
                 function has_field(self, name: string) -> string { "has_field:" + name }
                 function list_fields(self) -> string { "list_fields" }
                 function name(self) -> string { "name" }
@@ -186,7 +188,9 @@ test "concrete_members_keep_precedence_until_explicitly_narrowed" {
                     && fields.type == 7
                     && fields.attributes == "field-attributes"
                     && methods.get("x") == "get:x"
+                    && methods.find("x") == "find:x"
                     && methods.get_field("x") == "get_field:x"
+                    && methods.find_field("x") == "find_field:x"
                     && methods.has_field("x") == "has_field:x"
                     && methods.list_fields() == "list_fields"
                     && methods.name() == "name"

@@ -48,9 +48,20 @@ describe("BEP-066 TypeScript host boundary", () => {
     expect(compiled).toBeInstanceOf(BamlType);
     expect(
       HostParse<Record<string, unknown>>('{"amount":7}', {
-        $types: { T: compiled! },
+        $types: { T: compiled },
       }),
     ).toEqual({ amount: 7, note: null });
+
+    let thrown: unknown;
+    try {
+      pkg.get_class("Missing");
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(BamlError);
+    expect((thrown as BamlError).className).toBe("reflect.errors.NotFound");
+    expect(pkg.find_class("CompiledRow")).toBeInstanceOf(BamlType);
+    expect(pkg.find_class("Missing")).toBeNull();
   }, 30_000);
 
   it("wire_occurrences_are_fresh_and_handles_reject_serialization", () => {

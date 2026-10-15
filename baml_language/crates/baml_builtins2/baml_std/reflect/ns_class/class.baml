@@ -1,16 +1,17 @@
 /// One field of a class: its name, its declared type, and its schema
 /// metadata.
 ///
-/// A descriptor from `reflect.AnyClass.list_fields` or `get_field` is bound
-/// to the instance it came from, so `value` can read it; one from
-/// `reflect.Class.fields()` describes the type only and is ownerless.
+/// A descriptor from `reflect.AnyClass.list_fields`, `get_field` or
+/// `find_field` is bound to the instance it came from, so `value` can read
+/// it; one from `reflect.Class.fields()` describes the type only and is
+/// ownerless.
 class Field {
     name: string,
     type: root.Type?,
     meta: root.Meta,
-    /// Present only for handles returned from `reflect.AnyClass.list_fields` or
-    /// `get_field`. Type-side descriptors returned by `reflect.Class.fields()`
-    /// are intentionally ownerless.
+    /// Present only for handles returned from `reflect.AnyClass.list_fields`,
+    /// `get_field` or `find_field`. Type-side descriptors returned by
+    /// `reflect.Class.fields()` are intentionally ownerless.
     _owner: unknown?,
 
     /// This field's schema metadata. Same value as the `meta` field.

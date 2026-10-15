@@ -412,7 +412,7 @@ function rpc_simple_function_package() -> reflect.Package {
     reflect.Package.compile({ "main.baml": `function Present(value: string) -> string { value }` })
 }
 
-test "get_function absence is null" {
+test "find_function absence is null" {
     assert.is_true(
         rpc_simple_function_package().get_function<(string) -> string>("root.Missing") == null,
     )

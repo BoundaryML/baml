@@ -6743,7 +6743,7 @@ impl<'db> InferenceContext<'db> {
         let method_name = callable_display_name(self.db, method).clone();
         let class_count = class_args.len();
         let mut instantiation = class_args;
-        let position = if self.is_reflect_package_get_function(method) {
+        let position = if self.is_reflect_package_function_lookup(method) {
             crate::lower::TypePosition::ExtractionContract
         } else {
             crate::lower::TypePosition::Existential
@@ -7871,7 +7871,7 @@ impl<'db> InferenceContext<'db> {
         let callable = DeclRef::External(method);
         let row = extern_function_row(self.db, method);
         let frame = callable_generic_frame(self.db, callable).params;
-        let position = if self.is_reflect_package_get_function(callable) {
+        let position = if self.is_reflect_package_function_lookup(callable) {
             crate::lower::TypePosition::ExtractionContract
         } else {
             crate::lower::TypePosition::Existential
@@ -8083,7 +8083,7 @@ impl<'db> InferenceContext<'db> {
             })?;
         let signature = function_signature(self.db, method);
         let frame = crate::lower::class_generic_frame(self.db, class);
-        let position = if self.is_reflect_package_get_function(DeclRef::Source(method)) {
+        let position = if self.is_reflect_package_function_lookup(DeclRef::Source(method)) {
             crate::lower::TypePosition::ExtractionContract
         } else {
             crate::lower::TypePosition::Existential
@@ -8781,14 +8781,17 @@ impl<'db> InferenceContext<'db> {
         instantiation
     }
 
-    fn is_reflect_package_get_function(&self, function: FunctionRef<'db>) -> bool {
+    fn is_reflect_package_function_lookup(&self, function: FunctionRef<'db>) -> bool {
         let Some(qtn) = callable_owner_type(self.db, function) else {
             return false;
         };
         self.lang().is(baml_base::LangPackage::Reflect, qtn.root())
             && qtn.namespace().is_empty()
             && qtn.name().as_str() == "Package"
-            && callable_display_name(self.db, function).as_str() == "get_function"
+            && matches!(
+                callable_display_name(self.db, function).as_str(),
+                "get_function" | "find_function"
+            )
     }
 
     fn computed_generic_argument_name(
