@@ -12,6 +12,7 @@
 
 pub mod bytecode;
 pub mod cancellation;
+pub mod edge_walk;
 pub mod errors;
 pub mod float_order;
 pub mod head_walk;
