@@ -280,6 +280,11 @@ pub enum VmInternalError {
     #[error("bridge failure: {message}")]
     BridgeFailure { message: String },
 
+    /// A natively compiled function body (`Function::native_body`) violated
+    /// the contract the call path relies on, e.g. by yielding.
+    #[error("compiled native body: {message}")]
+    CompiledBody { message: String },
+
     /// A `VirtualCall` found no `implements` rule for the receiver's runtime
     /// concrete type and the call's interface. The type checker only emits a
     /// virtual call once it has proved the receiver implements the interface,

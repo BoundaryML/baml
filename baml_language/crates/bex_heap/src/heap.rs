@@ -1349,6 +1349,7 @@ mod tests {
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
+            native_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),

@@ -879,6 +879,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
+            native_body: None,
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),

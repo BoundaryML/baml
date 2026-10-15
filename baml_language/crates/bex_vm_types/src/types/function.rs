@@ -60,6 +60,30 @@ unsafe impl Send for FunctionKind {}
 #[allow(unsafe_code)]
 unsafe impl Sync for FunctionKind {}
 
+/// A natively compiled body for a [`FunctionKind::Bytecode`] function.
+///
+/// The BAML-to-Rust compiler emits one Rust function per admitted BAML
+/// function; the loader attaches it here, and the VM's call path runs it in
+/// place of the bytecode while leaving everything else about the function —
+/// its kind, its telemetry identity, its frame, its exception handling — as it
+/// is for bytecode. Type-erased for the same reason as
+/// [`FunctionKind::Native`]: this crate cannot name the VM's `NativeFunction`
+/// type. Runtime-only; never serialized.
+///
+/// # Safety
+///
+/// The pointer must be cast from a valid `bex_vm::NativeFunction` and only
+/// cast back to that same type when calling.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NativeBody(pub *const ());
+
+// SAFETY: a `NativeBody` points at immutable code (a function pointer), so
+// sharing it between threads is safe, exactly as for `FunctionKind::Native`.
+#[allow(unsafe_code)]
+unsafe impl Send for NativeBody {}
+#[allow(unsafe_code)]
+unsafe impl Sync for NativeBody {}
+
 // Borsh proxy mirroring the previous serde-side shape — `Native(*const ())`
 // is runtime-only and must collapse to `NativeUnresolved` on the wire.
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -172,6 +196,14 @@ pub struct Function {
 
     /// Type of function.
     pub kind: FunctionKind,
+
+    /// Natively compiled body, attached at load time to a
+    /// [`FunctionKind::Bytecode`] function the BAML-to-Rust compiler admitted.
+    /// When set, the call path runs it instead of [`Self::bytecode`]; the
+    /// bytecode stays authoritative for everything else (and for execution
+    /// when this is `None`). Runtime-only; `None` on the wire.
+    #[borsh(skip)]
+    pub native_body: Option<NativeBody>,
 
     /// Current immutable/resolved telemetry policy. This runtime-only atomic
     /// is not serialized; loaded programs begin at policy zero and the engine

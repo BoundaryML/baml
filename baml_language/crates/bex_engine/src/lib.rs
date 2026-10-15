@@ -892,6 +892,11 @@ pub struct EngineConfig {
     pub artifact_telemetry: Option<btel_settings::artifact::ArtifactTelemetry>,
     #[cfg(not(target_arch = "wasm32"))]
     pub recording: Option<TelemetryRecording>,
+    /// Natively compiled bodies for this program's functions, keyed by
+    /// function name, as emitted by the BAML-to-Rust compiler alongside the
+    /// program they were compiled from. Attached at load; absent for ordinary
+    /// bytecode execution.
+    pub native_bodies: Option<&'static bex_vm::NativeBodyTable>,
 }
 
 impl Default for EngineConfig {
@@ -903,6 +908,7 @@ impl Default for EngineConfig {
             artifact_telemetry: None,
             #[cfg(not(target_arch = "wasm32"))]
             recording: None,
+            native_bodies: None,
         }
     }
 }
@@ -1768,6 +1774,7 @@ impl BexEngine {
             artifact_telemetry,
             #[cfg(not(target_arch = "wasm32"))]
             recording,
+            native_bodies,
         } = config;
         let auto_telemetry_level = match &artifact_telemetry {
             Some(policy) => policy
@@ -1800,9 +1807,10 @@ impl BexEngine {
         let init_order = bytecode_program.init_order.clone();
 
         // Convert the pure bytecode to a VM-ready program with native functions attached
-        let bytecode = bex_vm::vm::convert_program_with_trace_hooks(
+        let bytecode = bex_vm::vm::convert_program_with_natives(
             bytecode_program,
             auto_telemetry_level.is_some(),
+            native_bodies,
         )
         .map_err(EngineError::VmInternalError)?;
 
