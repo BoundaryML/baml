@@ -217,11 +217,15 @@ function noun_thresholds() -> bool {
         assert.equal(sent.path(), "/systemone");
         assert.equal(sent.header("authorization"), "Bearer test-key");
         assert.equal(baml.json.path<string>(sent.json(), ".model"), "jev-latest");
-        assert.equal(baml.json.path<string>(sent.json(), ".state"), "Production is down.");
+        // The prompt names `message`, so the argument is the state.
+        assert.equal(
+            baml.json.path<map<string, string>>(sent.json(), ".state"),
+            { "message": "Production is down." },
+        );
         assert.equal(baml.json.path<string>(sent.json(), ".questions.result.type"), "noul");
         assert.equal(
             baml.json.path<string>(sent.json(), ".questions.result.instructions"),
-            "Does this ticket require immediate attention?",
+            "Does this ticket require immediate attention?\n\n`message`",
         );
         let p = ai.Agent.new(client = cl).run(Probability@spec("Production is down."));
         assert.equal(p.value, 0.5);
@@ -264,7 +268,7 @@ function enum_and_collisions() -> bool {
         let body = mock.last_request().json();
         assert.equal(
             baml.json.path<string>(body, ".questions.result.instructions"),
-            "Which team should handle this ticket?",
+            "`message`\n\nWhich team should handle this ticket?",
         );
         let criteria = baml.json.path<map<string, baml.json.json>>(body, ".questions.result.criteria");
         assert.equal(criteria.get("tech"), "Bugs and outages");
@@ -292,7 +296,7 @@ function optional_null() -> bool {
         assert.equal(value, null);
         assert.equal(
             baml.json.path<string>(mock.last_request().json(), ".questions.result.instructions"),
-            "Pick a team, if any.",
+            "Pick a team, if any.\n\n`message`",
         );
         true
     })
@@ -433,12 +437,6 @@ function rejects_media(media: image | audio | video | pdf) -> bool {
     })
 }
 
-test "reject image input" {
-    assert.is_true(
-        rejects_media(baml.media.Image.from_url("https://example.invalid/image.png", null)),
-    )
-}
-
 test "reject audio input" {
     assert.is_true(rejects_media(baml.media.Audio.from_base64("QUJD", "audio/mpeg")))
 }
@@ -449,6 +447,312 @@ test "reject video input" {
 
 test "reject pdf input" {
     assert.is_true(rejects_media(baml.media.Pdf.from_base64("QUJD", "application/pdf")))
+}
+
+function png() -> image {
+    baml.media.Image.from_base64("iVBORw0KGgo=", "image/png")
+}
+
+function jpeg() -> image {
+    baml.media.Image.from_base64("/9j/4AA=", "image/jpeg")
+}
+
+function ImageInput(note: string, first: image, second: image, again: image) -> bool {
+    client: "typesafeai/jev-latest"
+    prompt: `
+        ${role("instructions")}
+
+        Is it urgent?
+
+        ${role("user")}
+
+        ${note} ${first}
+
+        ${second} then ${again}
+    `
+}
+
+function InstructionImage(reference: image, photo: image) -> bool {
+    client: "typesafeai/jev-latest"
+    prompt: `
+        ${role("instructions")}
+
+        Reference photo: ${reference}
+
+        ${role("user")}
+
+        ${photo}
+    `
+}
+
+function image_request() -> bool {
+    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(noul_body(0.9))], (
+        mock: root.llm_mock.MockJsonServer,
+    ) -> {
+        let cl = typesafeai.Client.new(api_key = "k", base_url = mock.base_url());
+        let result = ai.Agent.new(client = cl).run(ImageInput@spec("Photo:", png(), jpeg(), png()));
+        assert.is_true(result.value);
+        let sent = mock.last_request();
+        assert.equal(sent.header("typesafe-danger-zone-images"), "true");
+        assert.equal(
+            baml.json.path<map<string, string>>(sent.json(), ".state"),
+            {
+                "note": "Photo:",
+                "first": "<baml-image-0>",
+                "second": "<baml-image-1>",
+                "again": "<baml-image-0>",
+            },
+        );
+        assert.equal(
+            baml.json.path<string>(sent.json(), ".questions.result.instructions"),
+            "Is it urgent?\n\n`note` `first` `second` then `again`",
+        );
+        assert.equal(
+            baml.json.path<map<string, string>>(sent.json(), ".assets['<baml-image-0>']"),
+            { "type": "image", "format": "png", "data_base64": "iVBORw0KGgo=" },
+        );
+        assert.equal(
+            baml.json.path<map<string, string>>(sent.json(), ".assets['<baml-image-1>']"),
+            { "type": "image", "format": "jpg", "data_base64": "/9j/4AA=" },
+        );
+        assert.equal(baml.json.path<map<string, unknown>>(sent.json(), ".assets").length(), 2);
+        true
+    })
+}
+
+test "image input becomes referenced assets" {
+    assert.is_true(image_request())
+}
+
+function text_request() -> bool {
+    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(noul_body(0.9))], (
+        mock: root.llm_mock.MockJsonServer,
+    ) -> {
+        let cl = typesafeai.Client.new(api_key = "k", base_url = mock.base_url());
+        let _ = ai.Agent.new(client = cl).run(Urgent@spec("Production is down."));
+        let sent = mock.last_request();
+        assert.equal(sent.header("typesafe-danger-zone-images"), null);
+        assert.equal(baml.json.path_or<unknown>(sent.json(), ".assets", "absent"), "absent");
+        true
+    })
+}
+
+test "text-only request has no assets or image header" {
+    assert.is_true(text_request())
+}
+
+test "image in instructions is part of each question" {
+    let cl = typesafeai.Client.new();
+    let req = cl.render(
+        ai.ModelTurnInput {
+            prompt: InstructionImage@spec(png(), jpeg()).prompt_template,
+            output_type: reflect.Type.of<Sentiment>(),
+            journal: ai.Journal { log: [] },
+            toolbox: ai.tools.Toolbox.new([]),
+        },
+    );
+    let body = baml.json.parse(req.body);
+    assert.equal(req.headers.get("typesafe-danger-zone-images"), "true");
+    assert.equal(baml.json.path<string>(body, ".state"), "<baml-image-1>");
+    assert.equal(
+        baml.json.path<string>(body, ".questions.angry.instructions"),
+        "Reference photo: <baml-image-0>\n\nIs the customer angry?",
+    );
+    assert.equal(
+        baml.json.path<string>(body, ".questions.churn.instructions"),
+        "Reference photo: <baml-image-0>\n\nHow likely is cancellation?",
+    )
+}
+
+test "image in history is referenced in state order" {
+    let req = typesafeai.Client.new().render(
+        ai.ModelTurnInput {
+            prompt: Urgent@spec("Production is down.").prompt_template,
+            output_type: reflect.Type.of<bool>(),
+            journal: ai.Journal {
+                log: [
+                    ai.events.UserMessage.of(["Before:", png()]),
+                    ai.events.AssistantMessage {
+                        content: [ai.content.Text { text: "Noted." }, ai.content.Media.new(jpeg())],
+                        client_id: "typesafeai/jev-latest",
+                    },
+                ],
+            },
+            toolbox: ai.tools.Toolbox.new([]),
+        },
+    );
+    let body = baml.json.parse(req.body);
+    assert.equal(
+        baml.json.path<string>(body, ".state"),
+        "Production is down.\n\nBefore: <baml-image-0>\n\nNoted.\n\n<baml-image-1>",
+    );
+    assert.equal(baml.json.path<string>(body, ".assets['<baml-image-1>'].format"), "jpg")
+}
+
+function rejects_preview(media: image) -> bool {
+    let req = typesafeai.Client.new().render(
+        ai.ModelTurnInput {
+            prompt: MediaInput@spec(media).prompt_template,
+            output_type: reflect.Type.of<bool>(),
+            journal: ai.Journal { log: [] },
+            toolbox: ai.tools.Toolbox.new([]),
+        },
+    ) catch_all (e) {
+        let unsupported: ai.errors.PreviewUnsupported => {
+            return true;
+        },
+        _ => {
+            return false;
+        },
+    };
+    false
+}
+
+test "image URL preview is unsupported" {
+    assert.is_true(
+        rejects_preview(baml.media.Image.from_url("https://example.invalid/image.png", null)),
+    )
+}
+
+function ReservedText(message: string) -> bool {
+    client: "typesafeai/jev-latest"
+    prompt: `
+        ${role("instructions")}
+
+        Is it urgent?
+
+        ${role("user")}
+
+        ${message}
+    `
+}
+
+function rejects_reserved_text() -> bool {
+    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(noul_body(0.9))], (
+        mock: root.llm_mock.MockJsonServer,
+    ) -> {
+        let cl = typesafeai.Client.new(api_key = "k", base_url = mock.base_url());
+        let result = ai.Agent.new(client = cl).run(ReservedText@spec("see <baml-image-0>")).value catch_all (e) {
+            let invalid: ai.errors.InvalidRequest => {
+                assert.equal(mock.request_count(), 0);
+                return true;
+            },
+            _ => {
+                return false;
+            },
+        };
+        false
+    })
+}
+
+test "reject text that looks like an image reference" {
+    assert.is_true(rejects_reserved_text())
+}
+
+class Visit {
+    note: string,
+    snapshot: image,
+}
+
+function NamedVisit(visit: Visit, unused: string, nothing: string?) -> bool {
+    client: "typesafeai/jev-latest"
+    prompt: `Is someone at the door in ${visit.snapshot}? Note: ${nothing}`
+}
+
+function bound_request() -> baml.json.json {
+    let spec = NamedVisit@spec(Visit { note: "evening", snapshot: png() }, "not sent", null);
+    baml.json.parse(spec.build_request(client = typesafeai.Client.new()).body)
+}
+
+test "named parameters become the state and backtick references" {
+    let body = bound_request();
+    assert.equal(
+        baml.json.path<baml.json.json>(body, ".state"),
+        { "visit": { "note": "evening", "snapshot": "<baml-image-0>" }, "nothing": null },
+    );
+    assert.equal(
+        baml.json.path<string>(body, ".questions.result.instructions"),
+        "Is someone at the door in `visit.snapshot`? Note: `nothing`",
+    );
+    assert.equal(
+        baml.json.path<string>(body, ".assets['<baml-image-0>'].data_base64"),
+        "iVBORw0KGgo=",
+    )
+}
+
+function bound_history<T>(spec: ai.FunctionSpec<T>) -> baml.http.Request {
+    typesafeai.Client.new().render(
+        ai.ModelTurnInput {
+            prompt: spec.prompt_template,
+            output_type: reflect.Type.of<bool>(),
+            journal: ai.Journal {
+                log: [
+                    ai.events.RunStarted { spec_name: spec.name(), arguments: spec.arguments() },
+                    ai.events.UserMessage.of(["Before:", png()]),
+                ],
+            },
+            toolbox: ai.tools.Toolbox.new([]),
+        },
+    )
+}
+
+function HistoryParam(message: string) -> bool {
+    client: "typesafeai/jev-latest"
+    prompt: `Is ${message} urgent?`
+}
+
+function NamesHistory(history: string) -> bool {
+    client: "typesafeai/jev-latest"
+    prompt: `Is ${history} urgent?`
+}
+
+test "prior turns go under history in the state" {
+    let body = baml.json.parse(bound_history(HistoryParam@spec("now")).body);
+    assert.equal(
+        baml.json.path<baml.json.json>(body, ".state"),
+        { "message": "now", "history": ["Before: <baml-image-0>"] },
+    )
+}
+
+function rejects_history_name() -> bool {
+    let _ = bound_history(NamesHistory@spec("earlier")) catch_all (e) {
+        let invalid: ai.errors.InvalidRequest => {
+            return true;
+        },
+        _ => {
+            return false;
+        },
+    };
+    false
+}
+
+test "a parameter named history is rejected when there are prior turns" {
+    assert.is_true(rejects_history_name())
+}
+
+function NamedAudio(clip: audio) -> bool {
+    client: "typesafeai/jev-latest"
+    prompt: `Is ${clip} loud?`
+}
+
+function rejects_named_audio() -> bool {
+    let _ = NamedAudio@build_request(baml.media.Audio.from_base64("QUJD", "audio/mpeg")) catch_all (e) {
+        let invalid: ai.errors.InvalidRequest => {
+            return true;
+        },
+        _ => {
+            return false;
+        },
+    };
+    false
+}
+
+test "reject a named audio argument" {
+    assert.is_true(rejects_named_audio())
+}
+
+test "reject webp image input" {
+    assert.is_true(rejects_media(baml.media.Image.from_base64("UklGRg==", "image/webp")))
 }
 
 function wire_capture() -> bool {
@@ -837,6 +1141,41 @@ test "reject nonnullable skipped fields before HTTP" {
     assert.is_true(rejects(reflect.Type.of<InvalidSkipped>()))
 }
 
+enum Shape {
+    Circle,
+    Square,
+    Triangle,
+    @@description("Which shape is in the image?")
+}
+
+function SeeShape(picture: image) -> Shape {
+    client: "typesafeai/jev-latest"
+    prompt: `
+        ${picture}
+    `
+}
+
+// A 288x288 PNG of one red circle on white. JEV rejects images under 280x280.
+function circle_png() -> image {
+    baml.media.Image.from_base64(
+        "iVBORw0KGgoAAAANSUhEUgAAASAAAAEgAQMAAAAuTTzDAAAABlBMVEX////cAADRUR8qAAAB8ElEQVR42u1YS27CMBAlTiSyYMGSHelJGm7CUXq0HKFHyBG8jFCU6QJoMmM/x3YFtNW8DQ7zGL/5AfZmo1AoFAqFQqFQPANEH6ucd6JpjVMSEfXrjlZdFURERF2QtL2SLH/X8MfD9WUXJJ1v8iMkhUVt7yQb2O5wX+wCpPN3TnmG2dMspeiQp2Jetuu6hXLmqfYuBWk/LytIOoOASn9wPDzjD46HZ9DWDTBUIAhGqkE6GGn5YebWABlQbAvqKNsXDCPIJcumAblkmxu4c5OoyYCEs6wZkHD2aEDCmeNUTQ20pHoSo1bk105+3czFS9RUSFObG51Db3I9VdK0z/VUS1OdXbsY0l6aqoduF0VqEir2LE3OT07xek0/JZVwNhfT+WejU9Ivbzp3pk7/KAXOSNHrNTknmun1mqw0jQ/dbpCmIdfTKE0215NzhuxzPZE0dfl/tVswm8ll6dAcJHvqUfcme7Ko55akAXXKkjSiJkjWNKEmWJII1ZefOVt/6dJHqgOlY6QeVIWRLEg4Iw0g4Yw0goQz0gRyyUiEzuklOkKeUNKO883DCL+fLAjCgLAHSLrMy09IIlDHEpyfTrgnjt7gcm6NLl7dzp3VTdRbqFGP65Iib9cuPkmbnBu/uLvDqFvIuPtMhUKhUCgUCoUijC+3xLdAox4YzgAAAABJRU5ErkJggg==",
+        "image/png",
+    )
+}
+
+function SameShape(door: image, badge: image) -> bool {
+    client: "typesafeai/jev-latest"
+    prompt: `Is the shape in ${door} the same shape as in ${badge}?`
+}
+
+// A 288x288 PNG of one blue square on white.
+function square_png() -> image {
+    baml.media.Image.from_base64(
+        "iVBORw0KGgoAAAANSUhEUgAAASAAAAEgAQMAAAAuTTzDAAAABlBMVEX///8AANzap02BAAAAP0lEQVR42u3LIQ4AIAwEwaYv5+dUoTCtIEHM2NuLAACAl/ZlnSk7f5FIJBKJRCKRSCQSiUQikUgk+iACAIChAqIoE48Ld+fOAAAAAElFTkSuQmCC",
+        "image/png",
+    )
+}
+
 testset "live" with testing.Sequential() {
     test "preconditions" {
         assert.is_true(true)
@@ -857,6 +1196,13 @@ testset "live" with testing.Sequential() {
                 Route("The API is returning 500 errors and our production integration is down."),
                 Team.Technical,
             )
+        }
+        test "image" {
+            assert.equal(SeeShape(circle_png()), Shape.Circle)
+        }
+        test "named images" {
+            assert.equal(SameShape(circle_png(), circle_png()), true);
+            assert.equal(SameShape(circle_png(), square_png()), false)
         }
     } else {
         log.warn("live typesafeai tests not registered: TYPESAFE_API_KEY is unset")

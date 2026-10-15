@@ -95,6 +95,20 @@ class SpecCtx {
     }
 }
 
+/// An interpolated function parameter, tagged with its path. The `${param}`
+/// desugar in an LLM prompt body wraps a plain parameter path in this, and
+/// prompt assembly renders `value` exactly as it would unwrapped, recording
+/// the run as an `ai.Bound`.
+class BoundValue {
+    path: string,
+    value: unknown,
+}
+
+/// Construct a bound parameter for structural prompt assembly.
+function make_bound(path: string, value: unknown) -> BoundValue throws never {
+    BoundValue { path: path, value: value }
+}
+
 /// Assemble a structural `ai.Prompt` from a tagged template's flattened
 /// `parts` and `values`. `ai.Role` values start new messages; media
 /// remains structural until a provider lowers the prompt.

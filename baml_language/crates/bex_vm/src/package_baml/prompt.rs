@@ -17,12 +17,39 @@ use crate::{
     },
 };
 
+/// One rendered piece of a message. `bound` indexes the sink's `bound_paths`
+/// when the piece came from a `${param}` interpolation. Trimming reads only
+/// `node`, so a tag never changes the rendered bytes.
+struct ContentPart {
+    node: Arc<PromptAstSimple>,
+    bound: Option<usize>,
+}
+
 #[derive(Default)]
 struct PromptContentSink {
-    parts: Vec<Arc<PromptAstSimple>>,
+    parts: Vec<ContentPart>,
+    bound_paths: Vec<String>,
+    current_bound: Option<usize>,
 }
 
 impl PromptContentSink {
+    fn push(&mut self, node: PromptAstSimple) {
+        self.parts.push(ContentPart {
+            node: Arc::new(node),
+            bound: self.current_bound,
+        });
+    }
+
+    /// Tag everything pushed until [`Self::end_bound`] with `path`.
+    fn begin_bound(&mut self, path: String) {
+        self.bound_paths.push(path);
+        self.current_bound = Some(self.bound_paths.len() - 1);
+    }
+
+    fn end_bound(&mut self) {
+        self.current_bound = None;
+    }
+
     fn into_content(mut self) -> Arc<PromptAstSimple> {
         // Legacy renderer parity: when media splits a message into parts,
         // every text chunk was trimmed and whitespace-only chunks between
@@ -34,12 +61,12 @@ impl PromptContentSink {
         if self
             .parts
             .iter()
-            .any(|part| matches!(part.as_ref(), PromptAstSimple::Media(_)))
+            .any(|part| matches!(part.node.as_ref(), PromptAstSimple::Media(_)))
         {
             let mut trimmed = Vec::with_capacity(self.parts.len());
             let mut run = Vec::new();
             for part in self.parts {
-                if matches!(part.as_ref(), PromptAstSimple::Media(_)) {
+                if matches!(part.node.as_ref(), PromptAstSimple::Media(_)) {
                     trim_leading_text(&mut run);
                     trim_trailing_text(&mut run);
                     trimmed.append(&mut run);
@@ -53,12 +80,54 @@ impl PromptContentSink {
             trimmed.append(&mut run);
             self.parts = trimmed;
         }
-        match self.parts.len() {
+        let mut nodes = group_bound_runs(self.parts, &self.bound_paths);
+        match nodes.len() {
             0 => Arc::new(PromptAstSimple::String(String::new())),
-            1 => self.parts.pop().unwrap(),
-            _ => Arc::new(PromptAstSimple::Multiple(self.parts)),
+            1 => nodes.pop().unwrap(),
+            _ => Arc::new(PromptAstSimple::Multiple(nodes)),
         }
     }
+}
+
+/// Fold each run of parts that share a bound tag into one `Bound` node.
+fn group_bound_runs(parts: Vec<ContentPart>, paths: &[String]) -> Vec<Arc<PromptAstSimple>> {
+    let mut nodes = Vec::with_capacity(parts.len());
+    let mut run: Vec<Arc<PromptAstSimple>> = Vec::new();
+    let mut run_tag = None;
+    for part in parts {
+        if part.bound != run_tag {
+            flush_bound_run(&mut run, run_tag, paths, &mut nodes);
+            run_tag = part.bound;
+        }
+        if run_tag.is_some() {
+            run.push(part.node);
+        } else {
+            nodes.push(part.node);
+        }
+    }
+    flush_bound_run(&mut run, run_tag, paths, &mut nodes);
+    nodes
+}
+
+fn flush_bound_run(
+    run: &mut Vec<Arc<PromptAstSimple>>,
+    tag: Option<usize>,
+    paths: &[String],
+    nodes: &mut Vec<Arc<PromptAstSimple>>,
+) {
+    let Some(index) = tag else { return };
+    if run.is_empty() {
+        return;
+    }
+    let content = if run.len() == 1 {
+        run.pop().unwrap()
+    } else {
+        Arc::new(PromptAstSimple::Multiple(std::mem::take(run)))
+    };
+    nodes.push(Arc::new(PromptAstSimple::Bound {
+        path: paths[index].clone(),
+        content,
+    }));
 }
 
 impl StructuralRenderSink for PromptContentSink {
@@ -68,23 +137,22 @@ impl StructuralRenderSink for PromptContentSink {
         }
 
         if let Some(last) = self.parts.last_mut()
-            && let Some(PromptAstSimple::String(current)) = Arc::get_mut(last)
+            && last.bound == self.current_bound
+            && let Some(PromptAstSimple::String(current)) = Arc::get_mut(&mut last.node)
         {
             current.push_str(text);
             return;
         }
-        self.parts
-            .push(Arc::new(PromptAstSimple::String(text.to_string())));
+        self.push(PromptAstSimple::String(text.to_string()));
     }
 
     fn try_push_special(&mut self, vm: &BexVm, value: Value) -> bool {
         if let Some(media) = super::json::read_media_value(vm, value) {
-            self.parts.push(Arc::new(PromptAstSimple::Media(media)));
+            self.push(PromptAstSimple::Media(media));
             return true;
         }
         if let Some(args) = read_cache_delimiter(vm, value) {
-            self.parts
-                .push(Arc::new(PromptAstSimple::CacheDelimiter(args)));
+            self.push(PromptAstSimple::CacheDelimiter(args));
             return true;
         }
         false
@@ -119,36 +187,71 @@ fn read_cache_delimiter(vm: &BexVm, value: Value) -> Option<serde_json::Value> {
     Some(super::json::json_value_to_serde(vm, args))
 }
 
+/// The path and value of an `ai.internal.BoundValue`, which is what a
+/// `${param}` interpolation in an LLM prompt body evaluates to. `None` for any
+/// other value.
+fn read_bound_value(vm: &BexVm, value: Value) -> Option<(String, Value)> {
+    let ptr = value.as_object_ptr()?;
+    let (class_ptr, fields) = match vm.get_object(ptr) {
+        Object::Instance(instance) => (
+            instance.class,
+            instance.field_values().collect::<Vec<Value>>(),
+        ),
+        _ => return None,
+    };
+    let (path_index, value_index) = match vm.get_object(class_ptr) {
+        Object::Class(class)
+            if class
+                .name
+                .declared()
+                .is_some_and(|qtn| qtn.render_dotted(false) == "ai.internal.BoundValue") =>
+        {
+            (
+                class.fields.iter().position(|field| field.name == "path")?,
+                class
+                    .fields
+                    .iter()
+                    .position(|field| field.name == "value")?,
+            )
+        }
+        _ => return None,
+    };
+    let path = vm.as_string(fields.get(path_index)?).ok()?;
+    Some((path.as_str().to_string(), *fields.get(value_index)?))
+}
+
 /// Trim leading whitespace off a run of content parts: whitespace-only text
 /// parts are removed and the first part with text is start-trimmed. A cache
 /// delimiter holds no text, so the trim looks past it; media stops it.
-fn trim_leading_text(parts: &mut Vec<Arc<PromptAstSimple>>) {
+fn trim_leading_text(parts: &mut Vec<ContentPart>) {
     let mut index = 0;
     while let Some(part) = parts.get(index) {
-        match part.as_ref() {
+        match part.node.as_ref() {
             PromptAstSimple::String(text) => {
                 let trimmed = text.trim_start();
                 if trimmed.is_empty() {
                     parts.remove(index);
                 } else {
                     if trimmed.len() != text.len() {
-                        parts[index] = Arc::new(PromptAstSimple::String(trimmed.to_string()));
+                        parts[index].node = Arc::new(PromptAstSimple::String(trimmed.to_string()));
                     }
                     break;
                 }
             }
             PromptAstSimple::CacheDelimiter(_) => index += 1,
-            PromptAstSimple::Media(_) | PromptAstSimple::Multiple(_) => break,
+            PromptAstSimple::Media(_)
+            | PromptAstSimple::Multiple(_)
+            | PromptAstSimple::Bound { .. } => break,
         }
     }
 }
 
 /// The trailing counterpart of [`trim_leading_text`].
-fn trim_trailing_text(parts: &mut Vec<Arc<PromptAstSimple>>) {
+fn trim_trailing_text(parts: &mut Vec<ContentPart>) {
     let mut end = parts.len();
     while end > 0 {
         let index = end - 1;
-        match parts[index].as_ref() {
+        match parts[index].node.as_ref() {
             PromptAstSimple::String(text) => {
                 let trimmed = text.trim_end();
                 if trimmed.is_empty() {
@@ -156,13 +259,15 @@ fn trim_trailing_text(parts: &mut Vec<Arc<PromptAstSimple>>) {
                     end = index;
                 } else {
                     if trimmed.len() != text.len() {
-                        parts[index] = Arc::new(PromptAstSimple::String(trimmed.to_string()));
+                        parts[index].node = Arc::new(PromptAstSimple::String(trimmed.to_string()));
                     }
                     break;
                 }
             }
             PromptAstSimple::CacheDelimiter(_) => end = index,
-            PromptAstSimple::Media(_) | PromptAstSimple::Multiple(_) => break,
+            PromptAstSimple::Media(_)
+            | PromptAstSimple::Multiple(_)
+            | PromptAstSimple::Bound { .. } => break,
         }
     }
 }
@@ -252,6 +357,10 @@ impl PromptAssembly {
                 if let Some(previous_role) = current_role.replace(role) {
                     pending_messages.push((previous_role, std::mem::take(&mut content)));
                 }
+            } else if let Some((path, inner)) = read_bound_value(vm, value) {
+                content.begin_bound(path);
+                render_to_sink(vm, inner, false, 0, &mut render_state, &mut content);
+                content.end_bound();
             } else {
                 render_to_sink(vm, value, false, 0, &mut render_state, &mut content);
             }
@@ -380,13 +489,17 @@ impl BamlClassPrompt for PackageAiImpl {
             .map(|(role, content, metadata)| {
                 let role = Value::object(vm.alloc_string(role));
                 let readable = Value::object(vm.alloc_string(content.to_text()));
-                let parts = prompt_content_values(vm, content.as_ref());
+                let parts = prompt_content_values(vm, content.unbound().as_ref());
                 let parts =
                     Value::object(vm.alloc_array(bex_vm_types::RealizedTy::unknown(), parts));
+                let bound_parts = prompt_content_values(vm, content.as_ref());
+                let bound_parts =
+                    Value::object(vm.alloc_array(bex_vm_types::RealizedTy::unknown(), bound_parts));
                 let metadata = prompt_metadata_value(vm, metadata);
-                Value::object(
-                    vm.alloc_instance(message_class, vec![role, readable, parts, metadata]),
-                )
+                Value::object(vm.alloc_instance(
+                    message_class,
+                    vec![role, readable, parts, bound_parts, metadata],
+                ))
             })
             .collect()
     }
@@ -430,6 +543,13 @@ fn prompt_content_values(vm: &mut BexVm, content: &PromptAstSimple) -> Vec<Value
             .iter()
             .flat_map(|part| prompt_content_values(vm, part.as_ref()))
             .collect(),
+        PromptAstSimple::Bound { path, content } => {
+            let class = vm.resolve_class("ai.Bound");
+            let path = Value::object(vm.alloc_string(path.clone()));
+            let parts = prompt_content_values(vm, content.as_ref());
+            let parts = Value::object(vm.alloc_array(bex_vm_types::RealizedTy::unknown(), parts));
+            vec![Value::object(vm.alloc_instance(class, vec![path, parts]))]
+        }
     }
 }
 
@@ -437,9 +557,12 @@ impl BamlNamespaceInternal for PackageAiImpl {
     fn assemble_prompt(vm: &mut BexVm, parts: &[Value], values: &[Value]) -> NativeCallResult {
         let mut pending = Vec::new();
         for value in values.iter().copied() {
-            if prompt_role(vm, value).is_none()
-                && let Err(e) = collect_to_string_overrides(vm, value, &mut pending)
-            {
+            if prompt_role(vm, value).is_some() {
+                continue;
+            }
+            // Render order unwraps a bound value, so collection must too.
+            let value = read_bound_value(vm, value).map_or(value, |(_, inner)| inner);
+            if let Err(e) = collect_to_string_overrides(vm, value, &mut pending) {
                 return NativeCallResult::Error(e.into());
             }
         }

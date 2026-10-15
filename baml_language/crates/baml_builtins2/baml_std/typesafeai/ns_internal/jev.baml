@@ -13,9 +13,20 @@ class Leaf {
     options: ChoiceOption[],
 }
 
+// One image sent in the request's `assets` map. JEV substitutes the image
+// wherever `ref` appears in the state or instructions text.
+class Asset {
+    ref: string,
+    format: string,
+    data_base64: string,
+}
+
 class Plan {
-    state: string,
+    // A string, or an object of the function's arguments when the prompt
+    // names them (see `plan_bound`).
+    state: baml.json.json,
     leaves: Leaf[],
+    assets: Asset[],
 }
 
 function reject(detail: string) -> ai.errors.InvalidRequest {
@@ -117,6 +128,9 @@ function collect(
     description: string?,
     aliased: bool,
     prefix: ai.content.Block[],
+    // The prefix's own wording, without parameter references: a question
+    // made only of references asks nothing.
+    question_text: string,
     ancestors: reflect.Type[],
 ) -> Leaf[] {
     for (let ancestor in ancestors) {
@@ -143,6 +157,7 @@ function collect(
                         field.meta.description,
                         field.meta.alias != null,
                         prefix,
+                        question_text,
                         ancestors.concat([ty]),
                     )
                 ) {
@@ -182,7 +197,7 @@ function collect(
     };
     let parts = prefix.concat([ai.content.Text { text: contextual }]);
     let instructions = ai.content.text(parts).trim();
-    if (instructions.length() == 0) {
+    if (`${question_text}${contextual}`.trim().length() == 0) {
         throw reject(`JEV question ${ids.join(".")} needs instructions: use role("instructions") or @description`)
     }
     return [
@@ -199,50 +214,119 @@ function collect(
     ];
 }
 
-function text_blocks(blocks: ai.content.Block[]) -> string {
-    for (let block in blocks) {
-        if let media: ai.content.Media = block {
-            throw reject(`JEV does not support ${media.kind()} input`)
-        }
-    }
-    ai.content.text(blocks)
+// JEV matches asset references as plain text anywhere in the request. The
+// closing `>` keeps `<baml-image-1>` from being a prefix of `<baml-image-10>`.
+function image_ref(index: int) -> string {
+    `<baml-image-${index}>`
 }
 
-function plan(input: ai.ModelTurnInput) -> Plan {
-    if (!input.toolbox.is_empty()) {
-        throw reject("JEV does not support tools")
+function prompt_text(text: string) -> string {
+    if (text.includes("<baml-image-")) {
+        throw reject("JEV prompt text cannot contain `<baml-image-`, which marks image references")
     }
-    let rendered = input.prompt(ai.internal.build_output_format(input.output_type));
-    let prefix: ai.content.Block[] = [];
-    let state: string[] = [];
-    for (let message in rendered.messages()) {
-        let text = text_blocks(ai.wire.prompt_blocks(message));
-        if (message.role == "instructions") {
-            prefix.push(ai.content.Text { text: text });
-            prefix.push(ai.content.Text { text: "\n\n" });
-        } else {
-            if (text.trim().length() > 0) {
-                state.push(text);
+    text
+}
+
+function image_format(mime: string) -> string {
+    match (mime) {
+        "image/png" => "png",
+        "image/jpeg" | "image/jpg" => "jpg",
+        _ => throw reject(`JEV accepts PNG or JPEG images, not "${mime}"`),
+    }
+}
+
+// Returns the reference that stands for `media` in text. An image that
+// appears more than once is uploaded once and referenced at each place.
+function attach(media: ai.content.Media, assets: Asset[], preview: bool) -> string {
+    let resolved = match (media.media) {
+        let image: baml.media.Image => {
+            if (preview) {
+                ai.wire.resolve_media_preview(image)
+            } else {
+                ai.wire.resolve_media(image, true)
+            }
+        },
+        _ => throw reject(`JEV does not support ${media.kind()} input`),
+    };
+    let data: string = resolved.base64 else {
+        if (preview) {
+            throw ai.errors.PreviewUnsupported {
+                provider: "typesafeai",
+                detail: `JEV request preview cannot download image URL ${resolved.url ?? ""}`,
             }
         }
+        throw reject(`JEV cannot fetch image URL ${resolved.url ?? ""}`)
+    };
+    for (let asset in assets) {
+        if (asset.data_base64 == data) {
+            return asset.ref;
+        }
     }
-    // JEV accepts text state. Preserve prompt and journal order, including
-    // prior assistant responses; reject media instead of hiding placeholders.
+    let ref = image_ref(assets.length());
+    assets.push(Asset { ref: ref, format: image_format(resolved.mime_type), data_base64: data });
+    ref
+}
+
+// Prompt rendering trims the whitespace around a media part, so text that
+// stands in for one is spaced from its neighbours here, except before
+// punctuation and where whitespace remains.
+function join_media(left: string, right: string) -> string {
+    if (left.length() == 0 || right.length() == 0) {
+        return `${left}${right}`;
+    }
+    let last = left.slice(left.length() - 1, left.length());
+    let first = right.slice(0, 1);
+    if (last.trim().length() == 0 || first.trim().length() == 0 || ".,;:!?)]}".includes(first)) {
+        return `${left}${right}`;
+    }
+    `${left} ${right}`
+}
+
+function lower(blocks: ai.content.Block[], assets: Asset[], preview: bool) -> string {
+    let out = "";
+    let after_media = false;
+    for (let block in blocks) {
+        match (block) {
+            let text: ai.content.Text => {
+                let piece = prompt_text(text.text);
+                out
+                    = if (after_media) {
+                        join_media(out, piece)
+                    } else {
+                        `${out}${piece}`
+                    };
+                after_media = false;
+                null
+            },
+            let media: ai.content.Media => {
+                out = join_media(out, attach(media, assets, preview));
+                after_media = true;
+                null
+            },
+        };
+    }
+    out
+}
+
+// Prior turns, oldest first, including assistant responses.
+function history(input: ai.ModelTurnInput, assets: Asset[], preview: bool) -> string[] {
+    let out: string[] = [];
     for (let entry in input.journal.entries()) {
         match (entry) {
             let user: ai.events.UserMessage => {
-                state.push(text_blocks(user.content));
+                out.push(lower(user.content, assets, preview));
                 null
             },
             let assistant: ai.events.AssistantMessage => {
                 for (let block in assistant.content) {
                     match (block) {
                         let text: ai.content.Text => {
-                            state.push(text.text);
+                            out.push(prompt_text(text.text));
                             null
                         },
                         let media: ai.content.Media => {
-                            throw reject("JEV does not support media in history")
+                            out.push(attach(media, assets, preview));
+                            null
                         },
                         let tool: ai.content.ToolUse => {
                             throw reject("JEV does not support tool history")
@@ -255,10 +339,239 @@ function plan(input: ai.ModelTurnInput) -> Plan {
             _ => null,
         };
     }
+    out
+}
+
+function plan(input: ai.ModelTurnInput, preview: bool) -> Plan {
+    if (!input.toolbox.is_empty()) {
+        throw reject("JEV does not support tools")
+    }
+    let messages = input.prompt(ai.internal.build_output_format(input.output_type)).messages();
+    if let arguments: map<string, unknown> = run_arguments(input) {
+        if (names_a_parameter(messages)) {
+            return plan_bound(input, messages, arguments, preview);
+        }
+    }
+    let prefix: ai.content.Block[] = [];
+    let state: string[] = [];
+    let assets: Asset[] = [];
+    for (let message in messages) {
+        let text = lower(ai.wire.prompt_blocks(message), assets, preview);
+        // An image here is repeated in every question's instructions, and
+        // JEV bills each copy.
+        if (message.role == "instructions") {
+            prefix.push(ai.content.Text { text: text });
+            prefix.push(ai.content.Text { text: "\n\n" });
+        } else {
+            if (text.trim().length() > 0) {
+                state.push(text);
+            }
+        }
+    }
+    for (let turn in history(input, assets, preview)) {
+        state.push(turn);
+    }
     Plan {
         state: state.join("\n\n"),
-        leaves: collect(input.output_type, [], [], null, false, prefix, []),
+        leaves: collect(input.output_type, [], [], null, false, prefix, ai.content.text(prefix), []),
+        assets: assets,
     }
+}
+
+// The call's arguments, which the runner records when the run starts.
+function run_arguments(input: ai.ModelTurnInput) -> map<string, unknown>? {
+    for (let entry in input.journal.entries()) {
+        if let started: ai.events.RunStarted = entry {
+            return started.arguments;
+        }
+    }
+    null
+}
+
+function names_a_parameter(messages: ai.PromptMessage[]) -> bool {
+    for (let message in messages) {
+        for (let part in message.bound_parts) {
+            if let bound: ai.Bound = part {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+// The prompt names the function's parameters (`${message}`), so the
+// arguments become the state and the whole prompt becomes the instructions,
+// each parameter written as a `name` reference into the state. Only
+// parameters the prompt names are sent.
+function plan_bound(
+    input: ai.ModelTurnInput,
+    messages: ai.PromptMessage[],
+    arguments: map<string, unknown>,
+    preview: bool,
+) -> Plan {
+    let assets: Asset[] = [];
+    let state: map<string, baml.json.json> = {};
+    let texts: string[] = [];
+    let wording: string[] = [];
+    for (let message in messages) {
+        let text = "";
+        let words = "";
+        let after_media = false;
+        for (let part in message.bound_parts) {
+            match (part) {
+                let bound: ai.Bound => {
+                    let root = bound.path.split(".").at(0) ?? bound.path;
+                    let shows_media = carries_media(bound.parts);
+                    let piece = if (arguments.has(root)) {
+                        if (!state.has(root)) {
+                            let encoded = encode_argument(root, arguments.get(root), assets, preview);
+                            let _ = state.set(root, encoded);
+                        }
+                        `\`${bound.path}\``
+                    } else {
+                        bound_inline(bound.parts, assets, preview)
+                    };
+                    text
+                        = if (shows_media) {
+                            join_media(text, piece)
+                        } else {
+                            `${text}${piece}`
+                        };
+                    after_media = shows_media;
+                    null
+                },
+                let words_part: string => {
+                    let piece = prompt_text(words_part);
+                    text
+                        = if (after_media) {
+                            join_media(text, piece)
+                        } else {
+                            `${text}${piece}`
+                        };
+                    words = `${words}${piece}`;
+                    after_media = false;
+                    null
+                },
+                let media: ai.MediaPart => {
+                    text = join_media(text, attach(ai.content.Media.new(media), assets, preview));
+                    after_media = true;
+                    null
+                },
+                _ => null,
+            };
+        }
+        if (text.trim().length() > 0) {
+            texts.push(text.trim());
+        }
+        wording.push(words);
+    }
+    let turns = history(input, assets, preview);
+    if (turns.length() > 0) {
+        if (state.has("history")) {
+            throw reject("JEV puts prior turns under `history`, which a parameter already names")
+        }
+        let earlier: baml.json.json[] = [];
+        for (let turn in turns) {
+            earlier.push(turn);
+        }
+        let _ = state.set("history", earlier);
+    }
+    let prefix: ai.content.Block[] = [];
+    if (texts.length() > 0) {
+        prefix.push(ai.content.Text { text: texts.join("\n\n") });
+        prefix.push(ai.content.Text { text: "\n\n" });
+    }
+    Plan {
+        state: state,
+        leaves: collect(input.output_type, [], [], null, false, prefix, wording.join(""), []),
+        assets: assets,
+    }
+}
+
+function carries_media(parts: (string | ai.MediaPart)[]) -> bool {
+    for (let part in parts) {
+        if let media: ai.MediaPart = part {
+            return true;
+        }
+    }
+    false
+}
+
+// A bound run whose parameter is missing from the arguments, rendered as it
+// would be without binding.
+function bound_inline(parts: (string | ai.MediaPart)[], assets: Asset[], preview: bool) -> string {
+    let blocks: ai.content.Block[] = [];
+    for (let part in parts) {
+        match (part) {
+            let text: string => {
+                blocks.push(ai.content.Text { text: text });
+                null
+            },
+            let media: ai.MediaPart => {
+                blocks.push(ai.content.Media.new(media));
+                null
+            },
+        };
+    }
+    lower(blocks, assets, preview)
+}
+
+// An argument as JSON, with each image replaced by its asset reference.
+function encode_argument(
+    name: string,
+    value: unknown,
+    assets: Asset[],
+    preview: bool,
+) -> baml.json.json {
+    let encoded = baml.json.to_json(value) catch_all (e) {
+        _ => throw reject(`JEV cannot send \`${name}\` as JSON: ${e.to_string()}`),
+    };
+    with_asset_refs(encoded, assets, preview)
+}
+
+// `baml.json.to_json` writes media as `{kind, source, value, mime, ...}`.
+function with_asset_refs(j: baml.json.json, assets: Asset[], preview: bool) -> baml.json.json {
+    match (j) {
+        let items: baml.json.json[] => {
+            let out: baml.json.json[] = [];
+            for (let item in items) {
+                out.push(with_asset_refs(item, assets, preview));
+            }
+            out
+        },
+        let fields: map<string, baml.json.json> => {
+            if let kind: string = media_kind(fields) {
+                if (kind != "image") {
+                    throw reject(`JEV does not support ${kind} input`)
+                }
+                let image = baml.json.from_json<image>(j) catch_all (e) {
+                    _ => throw reject(`JEV could not read an image argument: ${e.to_string()}`),
+                };
+                return attach(ai.content.Media.new(image), assets, preview);
+            }
+            let out: map<string, baml.json.json> = {};
+            for (let key in fields.keys()) {
+                let _ = out.set(key, with_asset_refs(fields.get(key) ?? null, assets, preview));
+            }
+            out
+        },
+        // JEV matches references anywhere in the request, state included.
+        let text: string => prompt_text(text),
+        _ => j,
+    }
+}
+
+function media_kind(fields: map<string, baml.json.json>) -> string? {
+    let kind: string = fields.get("kind") ?? null else {
+        return null;
+    };
+    let source: string = fields.get("source") ?? null else {
+        return null;
+    };
+    if (!["image", "audio", "video", "pdf"].includes(kind) || !["url", "base64"].includes(source)) {
+        return null;
+    }
+    kind
 }
 
 function request(
@@ -293,12 +606,25 @@ function request(
         };
         let _ = headers.set("authorization", `Bearer ${key}`);
     }
+    let body: map<string, baml.json.json> = { "model": c.model, "state": p.state, "questions": questions };
+    if (p.assets.length() > 0) {
+        let assets: map<string, baml.json.json> = {};
+        for (let asset in p.assets) {
+            let _ = assets.set(
+                asset.ref,
+                { "type": "image", "format": asset.format, "data_base64": asset.data_base64 },
+            );
+        }
+        let _ = body.set("assets", assets);
+        // TypeSafe keeps image input experimental and rejects it without this.
+        let _ = headers.set("typesafe-danger-zone-images", "true");
+    }
     let base = ai.wire.resolve_credential(c.base_url, null) ?? "https://api.typesafe.ai/v1";
     baml.http.Request {
         method: "POST",
         url: `${base}/systemone`,
         headers: headers,
-        body: baml.json.stringify({ "model": c.model, "state": p.state, "questions": questions }),
+        body: baml.json.stringify(body),
     }
 }
 
@@ -374,7 +700,7 @@ function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>
 }
 
 function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let p = plan(input);
+    let p = plan(input, false);
     // No streaming here: only the two transport deadlines apply.
     let sent = ai.wire.send_as_with_wire<Response>(
         ai.LlmTimeoutOptions._resolve(c.timeout)._apply(request(c, input, p, false)),

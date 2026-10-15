@@ -454,7 +454,7 @@ pub(crate) fn synthesize_llm_spec_body(
     // A quoted prompt is the degenerate template: regular string literals do
     // not interpolate, so the decoded value is one text segment and every
     // downstream step (role rewrite, tagged elaboration, assembly) is shared.
-    let segments = match prompt {
+    let mut segments = match prompt {
         crate::lower_cst::LlmPromptLiteral::Backtick(lit) => {
             ctx.lower_template_segments_checked(lit)
         }
@@ -499,6 +499,7 @@ pub(crate) fn synthesize_llm_spec_body(
     }
 
     let prev_synth = std::mem::replace(&mut ctx.synthesizing, true);
+    ctx.bind_parameter_interps(&mut segments, param_names);
     let tagged_expr = ctx.elaborate_tagged_body(&segments, prompt_lambda_span);
     ctx.synthesizing = prev_synth;
 
@@ -4561,6 +4562,113 @@ impl LoweringContext {
     /// empty range after the template so they land inside each `let`'s
     /// visibility window (mirrors the untagged accumulator in
     /// `elaborate_default_for`).
+    /// Wrap each `${param}` / `${param.field}` interpolation of an LLM prompt
+    /// body as `${ai.internal.make_bound("param.field", param.field)}`, so
+    /// prompt assembly can record the run of the message the parameter
+    /// rendered to (`ai.PromptMessage.bound_parts`). The rendered text is
+    /// unchanged. A name that the template itself binds anywhere (a loop
+    /// variable, a `let`, a lambda parameter, the synthesized `ctx`) is never
+    /// wrapped, since that path may not mean the parameter.
+    fn bind_parameter_interps(&mut self, segments: &mut [TemplateSegment], params: &[Name]) {
+        let mut shadowed: std::collections::HashSet<Name> = self
+            .patterns
+            .iter()
+            .filter_map(|(_, pattern)| match pattern {
+                Pattern::Bind { name, .. } => Some(name.clone()),
+                _ => None,
+            })
+            .collect();
+        for (_, expr) in self.exprs.iter() {
+            if let Expr::Lambda(lambda) = expr {
+                shadowed.extend(lambda.params.iter().map(|param| param.name.clone()));
+            }
+        }
+        let bindable: Vec<Name> = params
+            .iter()
+            .filter(|name| !shadowed.contains(*name))
+            .cloned()
+            .collect();
+        if !bindable.is_empty() {
+            self.bind_interps_in(segments, &bindable);
+        }
+    }
+
+    fn bind_interps_in(&mut self, segments: &mut [TemplateSegment], params: &[Name]) {
+        for segment in segments {
+            match segment {
+                TemplateSegment::Interp(block) => {
+                    if let Some(bound) = self.bind_interp(*block, params) {
+                        *block = bound;
+                    }
+                }
+                TemplateSegment::For { body, .. } | TemplateSegment::CStyleFor { body, .. } => {
+                    self.bind_interps_in(body, params);
+                }
+                TemplateSegment::If {
+                    branches,
+                    else_body,
+                } => {
+                    for branch in branches {
+                        self.bind_interps_in(&mut branch.body, params);
+                    }
+                    if let Some(body) = else_body {
+                        self.bind_interps_in(body, params);
+                    }
+                }
+                TemplateSegment::Text(_) | TemplateSegment::Effect { .. } => {}
+            }
+        }
+    }
+
+    /// The wrapped interpolation for `block` when it is exactly a path rooted
+    /// at one of `params`; `None` otherwise.
+    fn bind_interp(&mut self, block: ExprId, params: &[Name]) -> Option<ExprId> {
+        let path_expr = match &self.exprs[block] {
+            Expr::Block {
+                stmts,
+                tail_expr: Some(tail),
+            } if stmts.is_empty() => *tail,
+            Expr::Path(_) => block,
+            _ => return None,
+        };
+        let Expr::Path(segments) = &self.exprs[path_expr] else {
+            return None;
+        };
+        if !segments.first().is_some_and(|root| params.contains(root)) {
+            return None;
+        }
+        let path = segments
+            .iter()
+            .map(Name::as_str)
+            .collect::<Vec<_>>()
+            .join(".");
+        let span = self.source_map.expr_span(path_expr);
+        let callee = self.alloc_expr(
+            Expr::Path(vec![
+                Name::new("ai"),
+                Name::new("internal"),
+                Name::new("make_bound"),
+            ]),
+            span,
+        );
+        let label = self.alloc_expr(Expr::Literal(Literal::String(path)), span);
+        let call = self.alloc_expr(
+            Expr::Call {
+                callee,
+                type_args: vec![],
+                args: vec![CallArg::positional(label), CallArg::positional(path_expr)],
+            },
+            span,
+        );
+        if path_expr == block {
+            return Some(call);
+        }
+        if let Expr::Block { tail_expr, .. } = &mut self.exprs[block] {
+            *tail_expr = Some(call);
+        }
+        Some(block)
+    }
+
     fn elaborate_tagged_body(&mut self, segments: &[TemplateSegment], span: TextRange) -> ExprId {
         let parts = Name::new(" __tt_parts");
         let values = Name::new(" __tt_values");

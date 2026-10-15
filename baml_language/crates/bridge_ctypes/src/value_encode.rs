@@ -542,6 +542,11 @@ fn bex_prompt_ast_simple_to_proto_prompt_ast_simple(
                 BamlValuePromptAstSimpleMultiple { items: Vec::new() },
             )),
         },
+        // Unreachable from the engine, which unbinds a prompt on the way
+        // out; encoded as its content for any other caller.
+        bex_project::PromptAstSimple::Bound { content, .. } => {
+            bex_prompt_ast_simple_to_proto_prompt_ast_simple(content)
+        }
         bex_project::PromptAstSimple::Multiple(multiple) => BamlValuePromptAstSimple {
             value: Some(BamlValuePromptAstSimpleValue::Multiple(
                 BamlValuePromptAstSimpleMultiple {

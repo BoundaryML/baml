@@ -125,8 +125,25 @@ function message() -> string {
     "My production integration has been down for three hours and nobody has replied. This is unacceptable."
 }
 
-function state() -> string {
-    "Customer tier: enterprise\nTicket message: My production integration has been down for three hours and nobody has replied. This is unacceptable."
+// The prompts name their parameters, so the arguments are the state and the
+// prompt's own lines are part of every question.
+function state() -> baml.json.json {
+    let s: map<string, baml.json.json> = { "tier": tier(), "message": message() };
+    s
+}
+
+function labels() -> string {
+    "Customer tier: `tier`\nTicket message: `message`"
+}
+
+// A question from a prompt that is only the labelled parameters.
+function asked(question: string) -> string {
+    `${labels()}\n\n${question}`
+}
+
+// A question from a role("instructions") prompt followed by the labels.
+function framed(instructions: string) -> string {
+    `${instructions}\n\n${labels()}`
 }
 
 // ─── the user's functions, verbatim from the design notes ────────────────────
@@ -540,7 +557,7 @@ function case_1_1_request() -> bool {
     assert.equal(req.url, "https://api.typesafe.ai/v1/systemone");
     assert.equal(
         shape(req),
-        full_request({ "result": noul("Does this ticket require immediate attention?") }),
+        full_request({ "result": noul(framed("Does this ticket require immediate attention?")) }),
     );
     true
 }
@@ -623,12 +640,31 @@ test "1.2 float keeps 0.0" {
 
 // ─── 1.3 scalar return with no role("instructions") ──────────────────────────
 
-test "1.3 bare bool is rejected by build_request" {
-    assert.is_true(build_rejected(IsUrgentNoInstructions@spec(tier(), message())))
+// The prompt's own lines are the question, even when they only label the
+// parameters.
+function case_1_3_request() -> bool {
+    assert.equal(
+        instructions_of(IsUrgentNoInstructions@build_request(tier(), message()), "result"),
+        labels(),
+    );
+    true
 }
 
-test "1.3 bare bool is rejected before HTTP" {
-    assert.is_true(rejected_before_http(IsUrgentNoInstructions@spec(tier(), message())))
+test "1.3 a prompt of labels asks its labels" {
+    assert.is_true(case_1_3_request())
+}
+
+function IsUrgentOnlyReference(message: string) -> bool {
+    client: "typesafeai/jev-latest"
+    prompt: `${message}`
+}
+
+test "1.3 a prompt of only references is rejected by build_request" {
+    assert.is_true(build_rejected(IsUrgentOnlyReference@spec(message())))
+}
+
+test "1.3 a prompt of only references is rejected before HTTP" {
+    assert.is_true(rejected_before_http(IsUrgentOnlyReference@spec(message())))
 }
 
 // ─── 1.4 enum becomes Choice ─────────────────────────────────────────────────
@@ -636,7 +672,7 @@ test "1.3 bare bool is rejected before HTTP" {
 function case_1_4_request() -> bool {
     assert.equal(
         shape(RouteTicket@build_request(tier(), message())),
-        full_request({ "result": choice("Which team should handle this ticket?", team_criteria()) }),
+        full_request({ "result": choice(asked("Which team should handle this ticket?"), team_criteria()) }),
     );
     true
 }
@@ -672,7 +708,7 @@ function case_1_5_request() -> bool {
         questions_of(req),
         {
             "result": choice(
-                "How should this ticket be prioritized?",
+                asked("How should this ticket be prioritized?"),
                 {
                     "critical": "Production is down or data is at risk",
                     "high": null,
@@ -710,7 +746,7 @@ function case_1_6_request() -> bool {
     assert.is_true(text.starts_with(context));
     assert.is_true(text.ends_with(derived));
     assert.equal(criteria_of(req, "result"), team_criteria());
-    assert.equal(baml.json.path<string>(shape(req), ".state"), state());
+    assert.equal(baml.json.path<baml.json.json>(shape(req), ".state"), state());
     true
 }
 
@@ -725,7 +761,7 @@ function case_1_7_request() -> bool {
         questions_of(ClassifyMood@build_request(tier(), message())),
         {
             "result": choice(
-                "What is the customer's emotional state?",
+                framed("What is the customer's emotional state?"),
                 null_criteria(["calm", "concerned", "angry"]),
             ),
         },
@@ -754,12 +790,12 @@ function review() -> string {
 
 function case_1_8_request() -> bool {
     let req = StarRating@build_request(review());
-    assert.equal(baml.json.path<string>(shape(req), ".state"), review());
+    assert.equal(baml.json.path<string>(shape(req), ".state.review"), review());
     assert.equal(
         questions_of(req),
         {
             "result": choice(
-                "How many stars does this review give the product?",
+                "How many stars does this review give the product?\n\n`review`",
                 null_criteria(["1", "2", "3", "4", "5"]),
             ),
         },
@@ -819,8 +855,11 @@ function case_1_10_request() -> bool {
     let expected = team_criteria();
     let _ = expected.set("<null>", null);
     assert.equal(criteria_of(req, "result"), expected);
-    // The union has no metadata slot: only role("instructions") contributes (D9).
-    assert.equal(instructions_of(req, "result"), "Which team should handle this ticket, if any?");
+    // The union has no metadata slot: only the prompt contributes (D9).
+    assert.equal(
+        instructions_of(req, "result"),
+        framed("Which team should handle this ticket, if any?"),
+    );
     true
 }
 
@@ -840,8 +879,16 @@ test "1.10 optional enum decodes null" {
     assert.equal(case_1_10_decode("<null>"), null)
 }
 
-test "1.10 optional enum without instructions is rejected" {
-    assert.is_true(rejected_before_http(RouteOrLeaveNoInstructions@spec(tier(), message())))
+function case_1_10_labels() -> bool {
+    assert.equal(
+        instructions_of(RouteOrLeaveNoInstructions@build_request(tier(), message()), "result"),
+        labels(),
+    );
+    true
+}
+
+test "1.10 optional enum without instructions asks its labels" {
+    assert.is_true(case_1_10_labels())
 }
 
 // ─── 1.11 enum plus literal union ────────────────────────────────────────────
@@ -939,12 +986,23 @@ test "1.13 collided key resolves to the same owner in both spellings" {
 
 // ─── 2.1 flat class becomes one request with one question per field ──────────
 
-function assessment_questions() -> map<string, baml.json.json> {
+// Each TicketAssessment field's own question, before the prompt's lines.
+function assessment_wording() -> map<string, string> {
     {
-        "urgent": noul("Does this ticket require immediate attention?"),
-        "route": choice("Which team should handle this ticket?", team_criteria()),
-        "reply_within_hour": noul("How likely is it that the customer expects a reply within the hour?"),
-        "mood": choice("What is the customer's emotional state?", null_criteria(["calm", "concerned", "angry"])),
+        "urgent": "Does this ticket require immediate attention?",
+        "route": "Which team should handle this ticket?",
+        "reply_within_hour": "How likely is it that the customer expects a reply within the hour?",
+        "mood": "What is the customer's emotional state?",
+    }
+}
+
+function assessment_questions() -> map<string, baml.json.json> {
+    let wording = assessment_wording();
+    {
+        "urgent": noul(asked(wording.get("urgent") ?? "")),
+        "route": choice(asked(wording.get("route") ?? ""), team_criteria()),
+        "reply_within_hour": noul(asked(wording.get("reply_within_hour") ?? "")),
+        "mood": choice(asked(wording.get("mood") ?? ""), null_criteria(["calm", "concerned", "angry"])),
     }
 }
 
@@ -988,7 +1046,7 @@ function case_2_2_request() -> bool {
     let req = Escalate@build_request(tier(), message());
     assert.equal(
         instructions_of(req, "owner"),
-        "Which team should own the escalation, not the first response?",
+        asked("Which team should own the escalation, not the first response?"),
     );
     assert.equal(criteria_of(req, "owner"), team_criteria());
     true
@@ -1012,8 +1070,8 @@ function case_2_3_request() -> bool {
     assert.equal(
         questions_of(RouteAliased@build_request(tier(), message())),
         {
-            "route": choice("department: Which team should handle this ticket?", team_criteria()),
-            "urgent": noul("Does this ticket require immediate attention?"),
+            "route": choice(asked("department: Which team should handle this ticket?"), team_criteria()),
+            "urgent": noul(asked("Does this ticket require immediate attention?")),
         },
     );
     true
@@ -1043,14 +1101,17 @@ function case_2_4_request() -> bool {
     assert.equal(questions.keys().length(), 4);
     for (let id in ["urgent", "route", "reply_within_hour", "mood"]) {
         let text = instructions_of(req, id);
-        let local = baml.json.path<string>(assessment_questions().get(id), ".instructions");
+        let local = assessment_wording().get(id) ?? "";
         assert.is_true(text.starts_with(context));
         assert.is_true(text.ends_with(local));
     }
     // State is unchanged from 2.1.
     assert.equal(
-        baml.json.path<string>(shape(req), ".state"),
-        baml.json.path<string>(shape(AssessTicket@build_request(tier(), message())), ".state"),
+        baml.json.path<baml.json.json>(shape(req), ".state"),
+        baml.json.path<baml.json.json>(
+            shape(AssessTicket@build_request(tier(), message())),
+            ".state",
+        ),
     );
     true
 }
@@ -1081,9 +1142,9 @@ function case_2_5_request() -> bool {
     assert.equal(
         questions_of(ReportTicket@build_request(tier(), message())),
         {
-            "route": choice("Which team should handle this ticket?", team_criteria()),
-            "customer.angry": noul("customer.angry: Is the customer angry?"),
-            "customer.churn_risk": noul("customer.churn_risk: How likely is the customer to cancel?"),
+            "route": choice(asked("Which team should handle this ticket?"), team_criteria()),
+            "customer.angry": noul(asked("customer.angry: Is the customer angry?")),
+            "customer.churn_risk": noul(asked("customer.churn_risk: How likely is the customer to cancel?")),
         },
     );
     true
@@ -1134,11 +1195,11 @@ function case_2_6_request() -> bool {
     );
     assert.equal(
         instructions_of(req, "customer.sentiment.angry"),
-        "customer.sentiment.angry: Is the customer angry?",
+        asked("customer.sentiment.angry: Is the customer angry?"),
     );
     assert.equal(
         instructions_of(req, "agent.sentiment.angry"),
-        "agent.sentiment.angry: Is the customer angry?",
+        asked("agent.sentiment.angry: Is the customer angry?"),
     );
     assert.is_true(
         instructions_of(req, "customer.sentiment.angry")
@@ -1181,10 +1242,10 @@ function case_2_7_request() -> bool {
     assert.equal(
         questions_of(JudgeThreadAliased@build_request(tier(), message())),
         {
-            "customer.angry": noul("the customer.angry: Is the customer angry?"),
-            "customer.churn_risk": noul("the customer.churn_risk: How likely is the customer to cancel?"),
-            "agent.angry": noul("the support agent.angry: Is the customer angry?"),
-            "agent.churn_risk": noul("the support agent.churn_risk: How likely is the customer to cancel?"),
+            "customer.angry": noul(asked("the customer.angry: Is the customer angry?")),
+            "customer.churn_risk": noul(asked("the customer.churn_risk: How likely is the customer to cancel?")),
+            "agent.angry": noul(asked("the support agent.angry: Is the customer angry?")),
+            "agent.churn_risk": noul(asked("the support agent.churn_risk: How likely is the customer to cancel?")),
         },
     );
     true
@@ -1224,8 +1285,8 @@ function case_2_8_request() -> bool {
     assert.equal(
         questions_of(JudgeRoute@build_request(tier(), message())),
         {
-            "value": choice("Which team should handle this ticket?", team_criteria()),
-            "confident": noul("Is the judgment about this ticket clear-cut?"),
+            "value": choice(asked("Which team should handle this ticket?"), team_criteria()),
+            "confident": noul(asked("Is the judgment about this ticket clear-cut?")),
         },
     );
     true
@@ -1251,7 +1312,10 @@ test "2.8 generic class decodes" {
 function case_3_1_request() -> bool {
     let questions = questions_of(AssessWithConfidence@build_request(tier(), message()));
     assert.equal(questions.keys().length(), 5);
-    assert.equal(questions.get("route_confidence"), noul("How confident are you in the route?"));
+    assert.equal(
+        questions.get("route_confidence"),
+        noul(asked("How confident are you in the route?")),
+    );
     true
 }
 
@@ -1354,11 +1418,9 @@ test "4 reject pdf output" {
     assert.is_true(type_rejected(reflect.Type.of<pdf>()))
 }
 
-test "4 reject image input" {
+test "4 reject non-PNG/JPEG image input" {
     assert.is_true(
-        rejected_before_http(
-            DescribeScreenshot@spec(baml.media.Image.from_url("https://example.invalid/shot.png", null)),
-        ),
+        rejected_before_http(DescribeScreenshot@spec(baml.media.Image.from_base64("UklGRg==", "image/webp"))),
     )
 }
 
@@ -1410,4 +1472,28 @@ function case_5_skipped_variant() -> bool {
 
 test "5 skipped variant is excluded from criteria" {
     assert.is_true(case_5_skipped_variant())
+}
+
+// ─── 6 image input becomes a referenced asset ────────────────────────────────
+
+function case_6_image_request() -> bool {
+    let req = DescribeScreenshot@build_request(baml.media.Image.from_base64("iVBORw0KGgo=", "image/png"));
+    assert.equal(req.headers.get("typesafe-danger-zone-images"), "true");
+    let expected: map<string, baml.json.json> = {
+        "model": "jev-latest",
+        "state": { "shot": "<baml-image-0>" },
+        "questions": {
+            "result": choice(
+                "Which team should handle this? `shot`\n\nWhich team should handle this ticket?",
+                team_criteria(),
+            ),
+        },
+        "assets": { "<baml-image-0>": { "type": "image", "format": "png", "data_base64": "iVBORw0KGgo=" } },
+    };
+    assert.equal(baml.json.parse(req.body), expected);
+    true
+}
+
+test "6 image input becomes a referenced asset" {
+    assert.is_true(case_6_image_request())
 }

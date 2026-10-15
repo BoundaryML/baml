@@ -33,6 +33,14 @@ pub enum PromptAstSimple {
     /// no text, so a client that does not send it loses nothing.
     CacheDelimiter(serde_json::Value),
     Multiple(Vec<std::sync::Arc<PromptAstSimple>>),
+    /// The run a `${param}` interpolation rendered to, tagged with the
+    /// parameter path as written. `content` is a `String`, a `Media`, or a
+    /// `Multiple` of those. Never merged with its neighbours, so a client can
+    /// tell the run apart; [`Self::unbound`] gives the content without it.
+    Bound {
+        path: String,
+        content: std::sync::Arc<PromptAstSimple>,
+    },
 }
 
 impl PromptAst {
@@ -88,6 +96,46 @@ impl PromptAst {
             final_result.pop().unwrap()
         } else {
             Arc::new(PromptAst::Vec(final_result))
+        }
+    }
+
+    /// This prompt with every bound run replaced by its content (see
+    /// [`PromptAstSimple::unbound`]). Bound runs serve stdlib clients only;
+    /// a prompt that leaves the VM is unbound.
+    pub fn unbound(self: &std::sync::Arc<Self>) -> std::sync::Arc<Self> {
+        match self.as_ref() {
+            PromptAst::Simple(content) => {
+                let unbound = content.unbound();
+                if Arc::ptr_eq(&unbound, content) {
+                    self.clone()
+                } else {
+                    Arc::new(PromptAst::Simple(unbound))
+                }
+            }
+            PromptAst::Message {
+                role,
+                content,
+                metadata,
+            } => {
+                let unbound = content.unbound();
+                if Arc::ptr_eq(&unbound, content) {
+                    self.clone()
+                } else {
+                    Arc::new(PromptAst::Message {
+                        role: role.clone(),
+                        content: unbound,
+                        metadata: metadata.clone(),
+                    })
+                }
+            }
+            PromptAst::Vec(items) => {
+                let unbound: Vec<_> = items.iter().map(Self::unbound).collect();
+                if unbound.iter().zip(items).all(|(a, b)| Arc::ptr_eq(a, b)) {
+                    self.clone()
+                } else {
+                    Arc::new(PromptAst::Vec(unbound))
+                }
+            }
         }
     }
 
@@ -164,6 +212,30 @@ impl PromptAstSimple {
             PromptAstSimple::Media(media) => media.to_string(),
             PromptAstSimple::CacheDelimiter(_) => String::new(),
             PromptAstSimple::Multiple(items) => items.iter().map(|item| item.to_text()).collect(),
+            PromptAstSimple::Bound { content, .. } => content.to_text(),
+        }
+    }
+
+    /// This content with every `Bound` run replaced by its content and
+    /// adjacent strings joined: what the prompt renders to when no
+    /// interpolation is tagged.
+    pub fn unbound(self: &std::sync::Arc<Self>) -> std::sync::Arc<Self> {
+        if !self.has_bound() {
+            return self.clone();
+        }
+        let parts = match self.as_ref() {
+            PromptAstSimple::Bound { content, .. } => vec![content.unbound()],
+            PromptAstSimple::Multiple(parts) => parts.iter().map(Self::unbound).collect(),
+            _ => vec![self.clone()],
+        };
+        Arc::new(PromptAstSimple::Multiple(parts)).merge_adjacent()
+    }
+
+    fn has_bound(&self) -> bool {
+        match self {
+            PromptAstSimple::Bound { .. } => true,
+            PromptAstSimple::Multiple(parts) => parts.iter().any(|part| part.has_bound()),
+            _ => false,
         }
     }
 
@@ -179,7 +251,8 @@ impl PromptAstSimple {
             match &*current {
                 PromptAstSimple::String(_)
                 | PromptAstSimple::Media(_)
-                | PromptAstSimple::CacheDelimiter(_) => {
+                | PromptAstSimple::CacheDelimiter(_)
+                | PromptAstSimple::Bound { .. } => {
                     result.push(current);
                 }
                 PromptAstSimple::Multiple(multiple) => {
@@ -276,6 +349,10 @@ impl crate::BexRustData for PromptAstSimple {
                 for part in parts {
                     meter.shared(part, |meter| part.measure(meter));
                 }
+            }
+            PromptAstSimple::Bound { path, content } => {
+                meter.bytes(path.capacity());
+                meter.shared(content, |meter| content.measure(meter));
             }
         }
     }
@@ -472,6 +549,44 @@ mod tests {
         assert_eq!(parts.len(), 3);
         assert_eq!(*parts[1], PromptAstSimple::CacheDelimiter(args));
         assert_eq!(content.to_text(), "stable suffix");
+    }
+
+    fn text(s: &str) -> Arc<PromptAstSimple> {
+        Arc::new(PromptAstSimple::String(s.to_string()))
+    }
+
+    #[test]
+    fn bound_keeps_its_neighbours_apart_and_unbound_rejoins_them() {
+        let bound = Arc::new(PromptAstSimple::Bound {
+            path: "tier".to_string(),
+            content: text("enterprise"),
+        });
+        let content = Arc::new(PromptAstSimple::Multiple(vec![
+            text("Customer tier: "),
+            bound.clone(),
+            text("\nThanks"),
+        ]))
+        .merge_adjacent();
+        let PromptAstSimple::Multiple(parts) = content.as_ref() else {
+            panic!("expected the bound run to keep three parts, got {content:?}");
+        };
+        assert_eq!(parts.len(), 3);
+        assert_eq!(parts[1], bound);
+        assert_eq!(content.to_text(), "Customer tier: enterprise\nThanks");
+        assert_eq!(
+            *content.unbound(),
+            PromptAstSimple::String("Customer tier: enterprise\nThanks".to_string())
+        );
+    }
+
+    #[test]
+    fn unbound_without_bound_runs_is_the_same_node() {
+        let content = Arc::new(PromptAstSimple::Multiple(vec![
+            text("a"),
+            Arc::new(PromptAstSimple::CacheDelimiter(serde_json::Value::Null)),
+            text("b"),
+        ]));
+        assert!(Arc::ptr_eq(&content.unbound(), &content));
     }
 
     #[test]
