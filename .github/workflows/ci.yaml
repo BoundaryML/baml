@@ -515,7 +515,9 @@ jobs:
         run: scripts/baml-language-version check
 
       - name: "Test release contracts and workflow graph"
-        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
+        run: |
+          python3 scripts/baml-sdk-licenses check-sources
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v
 
       - name: "Validate canary/nightly version computation"
         env:

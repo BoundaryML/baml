@@ -21,7 +21,12 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist",
+    "LICENSE",
+    "LICENSE.quanta",
+    "NOTICE"
+  ],
   "scripts": {
     "build:wasm": "wasm-pack build . --target web --dev --out-dir dist/wasm --out-name bridge_web_core && wasm-pack build . --target bundler --dev --out-dir dist/workerd-wasm --out-name bridge_web_core && node scripts/sync-wasm-declarations.mjs && node scripts/prepare-wasm-package.mjs",
     "build:wasm:release": "node scripts/build-wasm-release.mjs && node scripts/sync-wasm-declarations.mjs && node scripts/prepare-wasm-package.mjs",
@@ -44,5 +49,6 @@
     "typescript": "^5.9.3",
     "vitest": "^4.1.0",
     "wrangler": "4.110.0"
-  }
+  },
+  "license": "Apache-2.0"
 }

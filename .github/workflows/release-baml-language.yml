@@ -603,10 +603,15 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.source_sha }}
           persist-credentials: false
-          sparse-checkout: tools/release-fingerprints
+          sparse-checkout: |
+            tools/release-fingerprints
+            scripts
+            baml_language/vendor/quanta
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
+      - name: Verify licenses in every produced distribution
+        run: python3 scripts/baml-sdk-licenses verify-artifacts artifacts
       # Canary runtimes only load artifacts built from their own commit, so one
       # build job that loses the commit ships binaries that reject the rest of
       # the release. Deterministic and offline: it only reads the artifacts,

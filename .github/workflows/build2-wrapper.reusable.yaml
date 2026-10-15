@@ -136,6 +136,7 @@ jobs:
             local staging="$1"
             local product="$2"
             local destination="$product-$WRAPPER_VERSION-$TARGET$ARCHIVE_SUFFIX"
+            python3 scripts/baml-sdk-licenses stage "$staging"
             case "$ARCHIVE_SUFFIX" in
               .zip) (cd "$staging" && 7z a "../$destination" .) ;;
               .tar.gz) tar -C "$staging" -czf "$destination" . ;;

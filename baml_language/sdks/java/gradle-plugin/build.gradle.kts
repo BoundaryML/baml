@@ -50,6 +50,12 @@ val bamlVersion = (project.findProperty("bamlVersion") as String?)?.takeIf { it.
 group = "com.boundaryml"
 version = bamlVersion
 
+// Keep the repository license in every published JAR, including classifiers.
+tasks.withType<Jar>().configureEach {
+    from(file("../../../../LICENSE")) { into("META-INF") }
+    from(file("../../../../NOTICE")) { into("META-INF") }
+}
+
 dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

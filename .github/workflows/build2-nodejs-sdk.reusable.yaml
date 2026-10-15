@@ -213,6 +213,9 @@ jobs:
           # assembled centrally by the publish-npm job, which downloads these.
           pnpm exec napi create-npm-dirs
           pnpm exec napi artifacts --output-dir . --npm-dir npm
+          for package in npm/*; do
+            python3 "$GITHUB_WORKSPACE/scripts/baml-sdk-licenses" stage "$package" --engine
+          done
           # create-npm-dirs lays down all 8 target dirs; keep only the one that
           # received this job's addon so each artifact is exactly one sub-package.
           keep_dir="$(dirname "$(find npm -name 'baml_node.*.node' | head -1)")"

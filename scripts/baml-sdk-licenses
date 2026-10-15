@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""Stage and verify the authoritative first-party license in release payloads.
+
+Third-party licenses remain separate. quanta's vendored MIT notice accompanies
+containers that embed the engine; existing Javadoc legal resources are untouched.
+"""
+
+import argparse
+import json
+import re
+import shutil
+import tarfile
+import zipfile
+from pathlib import Path
+from xml.etree import ElementTree
+
+ROOT = Path(__file__).resolve().parents[1]
+SOURCES = {
+    "baml_language/sdks/typescript/bridge_typescript": True,
+    "baml_language/sdks/typescript/bridge_typescript_web": True,
+    "baml_language/sdks/python": True,
+    "baml_language/sdks/rust/bridge_rust": False,
+    "typescript2/app-vscode-ext": True,
+}
+
+
+def license_sources(engine=False):
+    sources = {"LICENSE": ROOT / "LICENSE"}
+    if (ROOT / "NOTICE").is_file():
+        sources["NOTICE"] = ROOT / "NOTICE"
+    if engine:
+        sources["LICENSE.quanta"] = ROOT / "baml_language/vendor/quanta/LICENSE"
+    return sources
+
+
+def stage(destination, engine=False):
+    destination.mkdir(parents=True, exist_ok=True)
+    for name, source in license_sources(engine).items():
+        target = destination / name
+        if target.exists() and target.read_bytes() != source.read_bytes():
+            raise ValueError(f"Refusing to overwrite distinct license text: {target}")
+        shutil.copyfile(source, target)
+
+
+def verify_directory(directory, engine=False):
+    for name, source in license_sources(engine).items():
+        if (
+            not (directory / name).is_file()
+            or (directory / name).read_bytes() != source.read_bytes()
+        ):
+            raise ValueError(f"{directory}: {name} missing or differs from {source}")
+    manifest = directory / "package.json"
+    if manifest.is_file():
+        data = json.loads(manifest.read_text())
+        if data.get("license") != "Apache-2.0":
+            raise ValueError(f"{manifest}: expected first-party license Apache-2.0")
+
+
+def verify_archive(path):
+    """Read produced archives without extraction or executing package code."""
+    if zipfile.is_zipfile(path):
+        archive = zipfile.ZipFile(path)
+        files = {name: name for name in archive.namelist() if not name.endswith("/")}
+        read = archive.read
+    else:
+        archive = tarfile.open(path, "r:gz")
+        files = {
+            entry.name.removeprefix("./"): entry
+            for entry in archive.getmembers()
+            if entry.isfile()
+        }
+        read = lambda entry: archive.extractfile(entry).read()
+    with archive:
+        engine = (
+            path.name.endswith((".whl", ".nupkg", ".vsix", ".xcframework.zip"))
+            or "-natives-" in path.name
+            or path.name.startswith("baml-language-")
+        )
+        for member, entry in files.items():
+            if member == "package/package.json":
+                engine = (
+                    json.loads(read(entry))
+                    .get("name", "")
+                    .startswith("@boundaryml/baml-bridge")
+                )
+        for name, source in license_sources(engine).items():
+
+            def first_party_path(member):
+                if path.suffix == ".jar":
+                    return member == f"META-INF/{name}" or (
+                        name == "LICENSE.quanta"
+                        and member == "META-INF/licenses/quanta.LICENSE"
+                    )
+                if "package/package.json" in files:
+                    return member == f"package/{name}"
+                if "extension/package.json" in files:
+                    return member == f"extension/{name}" or (
+                        name == "LICENSE" and member == "extension/LICENSE.txt"
+                    )
+                if path.suffix == ".whl":
+                    return member.endswith(f".dist-info/licenses/{name}")
+                return (
+                    member == name
+                    or member.endswith("/" + name)
+                    or (
+                        name == "LICENSE.quanta" and member == "licenses/quanta/LICENSE"
+                    )
+                )
+
+            matches = [
+                entry for member, entry in files.items() if first_party_path(member)
+            ]
+            if not any(read(entry) == source.read_bytes() for entry in matches):
+                raise ValueError(f"{path}: authoritative {name} missing from archive")
+        for name, entry in files.items():
+            if name in {"package/package.json", "extension/package.json"}:
+                if json.loads(read(entry)).get("license") != "Apache-2.0":
+                    raise ValueError(f"{path}: {name} license must be Apache-2.0")
+            if name.endswith(".dist-info/METADATA"):
+                headers = read(entry).decode()
+                if (
+                    "License-Expression: Apache-2.0\n" not in headers
+                    or "License-File: LICENSE\n" not in headers
+                ):
+                    raise ValueError(
+                        f"{path}: missing Python license expression/file headers"
+                    )
+            if path.suffix == ".crate" and name.endswith("/Cargo.toml"):
+                manifest = read(entry).decode()
+                if not re.search(r'^license = "Apache-2.0"$', manifest, re.MULTILINE):
+                    raise ValueError(f"{path}: missing Rust Apache-2.0 metadata")
+            if name.endswith(".nuspec"):
+                root = ElementTree.fromstring(read(entry))
+                licenses = [e for e in root.iter() if e.tag.split("}")[-1] == "license"]
+                if (
+                    len(licenses) != 1
+                    or licenses[0].text != "Apache-2.0"
+                    or licenses[0].get("type") != "expression"
+                ):
+                    raise ValueError(f"{path}: missing NuGet Apache-2.0 expression")
+    print(f"license verified: {path}")
+
+
+def verify_artifacts(directory):
+    count = 0
+    for path in sorted(directory.rglob("*")):
+        if path.is_file() and path.name.endswith(
+            (".tar.gz", ".tgz", ".zip", ".whl", ".crate", ".jar", ".nupkg", ".vsix")
+        ):
+            verify_archive(path)
+            count += 1
+        elif path.name == "package.json" and path.is_file():
+            name = json.loads(path.read_text()).get("name", "")
+            if (
+                name.startswith("@boundaryml/baml-bridge-")
+                and path.parent.parent.name != "dist"
+            ):
+                verify_directory(path.parent, engine=True)
+                count += 1
+        elif path.name.startswith(("libbaml_cffi-", "baml_cffi-")) and path.suffix in {
+            ".so",
+            ".dll",
+            ".dylib",
+        }:
+            for name, source in license_sources(engine=True).items():
+                sidecar = path.with_name(path.name + "." + name)
+                if not sidecar.is_file() or sidecar.read_bytes() != source.read_bytes():
+                    raise ValueError(f"{path}: missing or incorrect {name} sidecar")
+            count += 1
+    for mirror in ("go-sdk-mirror", "swift-sdk-mirror"):
+        if (directory / mirror).is_dir():
+            verify_directory(directory / mirror)
+            count += 1
+    if not count:
+        raise ValueError(f"No release payloads found in {directory}")
+    print(f"Verified {count} release payloads")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("sync-sources")
+    commands.add_parser("check-sources")
+    staging = commands.add_parser("stage")
+    staging.add_argument("directory", type=Path)
+    staging.add_argument("--engine", action="store_true")
+    verify = commands.add_parser("verify")
+    verify.add_argument("archive", nargs="+", type=Path)
+    artifacts = commands.add_parser("verify-artifacts")
+    artifacts.add_argument("directory", type=Path)
+    args = parser.parse_args()
+    if args.command in {"sync-sources", "check-sources"}:
+        for relative, engine in SOURCES.items():
+            if args.command == "sync-sources":
+                stage(ROOT / relative, engine)
+            else:
+                verify_directory(ROOT / relative, engine)
+    elif args.command == "stage":
+        stage(args.directory, args.engine)
+    elif args.command == "verify":
+        for archive in args.archive:
+            verify_archive(archive)
+    else:
+        verify_artifacts(args.directory)
+
+
+if __name__ == "__main__":
+    main()

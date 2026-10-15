@@ -36,6 +36,8 @@ def main() -> None:
         ignore=shutil.ignore_patterns(".DS_Store", "__pycache__", "*.pyc"),
     )
     shutil.copy2(repository / "LICENSE", destination / "LICENSE")
+    if (repository / "NOTICE").is_file():
+        shutil.copy2(repository / "NOTICE", destination / "NOTICE")
 
     module_line = (destination / "go.mod").read_text(encoding="utf-8").splitlines()[0]
     if module_line != f"module {MODULE_PATH}":

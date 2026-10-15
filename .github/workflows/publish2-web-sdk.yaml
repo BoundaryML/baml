@@ -89,7 +89,10 @@ jobs:
           test -s dist/wasm/bridge_web_core_bg.wasm
           test -s dist/workerd-wasm/bridge_web_core_bg.wasm
           test -s dist/workerd/index.js
-          npm pack --dry-run --json > package-dry-run.json
+          npm pack --ignore-scripts --json > package-dry-run.json
+          archive="$(jq -r '.[0].filename' package-dry-run.json)"
+          python3 "$GITHUB_WORKSPACE/scripts/baml-sdk-licenses" verify "$archive"
+          rm "$archive"
           test "$(jq -r '.[0].version' package-dry-run.json)" = "$plan_version"
 
       - name: Publish to npm

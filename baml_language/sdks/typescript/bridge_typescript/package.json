@@ -18,7 +18,10 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "LICENSE.quanta",
+    "NOTICE"
   ],
   "napi": {
     "binaryName": "baml_node",
@@ -58,5 +61,6 @@
   },
   "dependencies": {
     "protobufjs": "^7.6.2"
-  }
+  },
+  "license": "Apache-2.0"
 }

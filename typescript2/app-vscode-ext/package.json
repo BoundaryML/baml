@@ -128,5 +128,6 @@
     "typecheck": "tsc --noEmit"
   },
   "type": "commonjs",
-  "version": "0.22.2"
+  "version": "0.22.2",
+  "license": "Apache-2.0"
 }

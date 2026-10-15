@@ -18,7 +18,9 @@ from pathlib import Path
 
 
 def download(url):
-    request = urllib.request.Request(url, headers={"User-Agent": "BoundaryML-license-audit/1.0"})
+    request = urllib.request.Request(
+        url, headers={"User-Agent": "BoundaryML-license-audit/1.0"}
+    )
     with urllib.request.urlopen(request, timeout=120) as response:
         data = response.read()
         if response.headers.get("Content-Encoding") == "gzip":
@@ -46,7 +48,10 @@ def main():
     print("ARTIFACT", record["url"], "SHA256", digest)
     if digest != record["sha256"]:
         raise SystemExit("Artifact differs from the audited bytes")
-    interesting = re.compile(r"(^|/)([^/]*(?:licen[cs]e|notice)[^/]*|package.json|METADATA|PKG-INFO|Cargo.toml|go.mod|Package.swift|[^/]*\.nuspec|[^/]*\.pom|MANIFEST.MF)$|(^|/)legal/", re.I)
+    interesting = re.compile(
+        r"(^|/)([^/]*(?:licen[cs]e|notice)[^/]*|package.json|METADATA|PKG-INFO|Cargo.toml|go.mod|Package.swift|[^/]*\.nuspec|[^/]*\.pom|MANIFEST.MF)$|(^|/)legal/",
+        re.I,
+    )
     if zipfile.is_zipfile(io.BytesIO(data)):
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             for entry in archive.infolist():
