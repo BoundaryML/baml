@@ -432,6 +432,15 @@ fn codepoint_ops_match_std_oracle() {
             let got = bex.char_at(n);
             let want = s.chars().nth(n);
             assert_eq!(got, want, "char_at({n}) for {s:?}");
+            let got = bex.char_get(n);
+            assert_eq!(
+                got.as_ref().map(BexStr::as_str),
+                want.map(String::from).as_deref(),
+                "char_get({n}) for {s:?}"
+            );
+            if let Some(one) = &got {
+                assert_ascii_prefix_exact(one, &format!("char_get({n}) of {s:?}"));
+            }
         }
 
         // substring over every codepoint range, plus past-the-end clamps.
@@ -637,6 +646,11 @@ fn codepoint_ops_on_long_strings_match_std_oracle() {
 
         for n in 0..=count + 1 {
             assert_eq!(bex.char_at(n), chars.get(n).copied(), "char_at({n})");
+            assert_eq!(
+                bex.char_get(n).map(|one| one.as_str().to_owned()),
+                chars.get(n).map(char::to_string),
+                "char_get({n})"
+            );
         }
         let mut bounds = vec![
             0,

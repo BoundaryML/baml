@@ -490,20 +490,38 @@ impl BexStr {
         self.as_str()[b..].chars().next()
     }
 
+    /// The char at index `n` as a one-char string, or `None` if
+    /// `n >= char_len()`. Inside the ASCII prefix this copies the byte, with
+    /// no decoding and no separate count for the bounds check.
+    pub fn char_get(&self, n: usize) -> Option<BexStr> {
+        let ascii_byte = match self {
+            BexStr::Inline { len, data } if len.is_ascii() => (n < len.byte_len()).then(|| data[n]),
+            _ => (n < self.ascii_prefix_len()).then(|| self.as_bytes()[n]),
+        };
+        if let Some(byte) = ascii_byte {
+            return Some(BexStr::inline(&[byte], InlineLen::new(1, true)));
+        }
+        let c = self.char_at(n)?;
+        let mut buf = [0u8; 4];
+        let bytes = c.encode_utf8(&mut buf).as_bytes();
+        Some(BexStr::inline(
+            bytes,
+            InlineLen::new(bytes.len(), c.is_ascii()),
+        ))
+    }
+
     /// Substring by char range. Clamps both ends to `char_len()` (and `end`
     /// to at least `start`), so it never panics.
     pub fn char_slice(&self, range: Range<usize>) -> BexStr {
+        // `end - start`, not `start + 1`: `start` may be `usize::MAX`.
+        if range.end.checked_sub(range.start) == Some(1) {
+            return self.char_get(range.start).unwrap_or_else(BexStr::empty);
+        }
         // `char_to_byte` maps every index past the end to `byte_len()`, which is
         // the clamp; `end` is scanned onward from `start`.
         let byte_start = self.char_to_byte(range.start);
         let end = range.end.max(range.start);
-        // `end - start`, not `start + 1`: `start` may be `usize::MAX`.
-        let byte_end = if end - range.start == 1 && byte_start < self.byte_len() {
-            // One char (`at`): its lead byte gives its width.
-            byte_start + utf8_char_width(self.as_bytes()[byte_start])
-        } else {
-            self.char_to_byte_from((range.start, byte_start), end)
-        };
+        let byte_end = self.char_to_byte_from((range.start, byte_start), end);
         self.byte_slice(byte_start..byte_end)
     }
 
@@ -981,19 +999,6 @@ fn ascii_prefix_and_char_len(bytes: &[u8]) -> (usize, usize) {
         (char_len, char_len)
     } else {
         (ascii_prefix_len(bytes), char_len)
-    }
-}
-
-/// Byte width of the UTF-8 char whose lead byte is `lead`.
-fn utf8_char_width(lead: u8) -> usize {
-    if lead < 0x80 {
-        1
-    } else if lead < 0xE0 {
-        2
-    } else if lead < 0xF0 {
-        3
-    } else {
-        4
     }
 }
 
