@@ -74,7 +74,7 @@ function main() -> ScenarioResult {
             },
         ],
     );
-    type Note = unreflect(note_t.as_type())
+    let type Note = note_t.as_type();
     let prompt = ExtractNote@render_prompt<Note>("sample").text();
     let note = ExtractNote@parse<Note>(`{"height_cm": 183, "chief_complaint": "cough", "bullets": ["dry", "night"]}`);
     let height = reflect.Class.get_field<int>(note, "height_cm");

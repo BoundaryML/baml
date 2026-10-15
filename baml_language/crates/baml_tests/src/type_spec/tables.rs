@@ -562,14 +562,14 @@ class ScopeT {}
 function scope_id<X>(value: unknown) -> reflect.Type throws never { reflect.Type.of<X>() }
 function scope_use(runtime_t: reflect.Type) -> reflect.Type throws never {
     let inner = {
-        type ScopeT = unreflect(runtime_t)
+        let type ScopeT = runtime_t;
         scope_id<ScopeT>(1)
     }
     scope_id<ScopeT>(3)
 }
 function scope_branch(runtime_t: reflect.Type, choose: bool) -> reflect.Type throws never {
     let branch_value = if choose {
-        type ScopeT = unreflect(runtime_t)
+        let type ScopeT = runtime_t;
         scope_id<ScopeT>(2)
     } else {
         scope_id<int>(0)
@@ -577,11 +577,11 @@ function scope_branch(runtime_t: reflect.Type, choose: bool) -> reflect.Type thr
     scope_id<ScopeT>(4)
 }
 function scope_bad() -> null throws never {
-    type Bad = unreflect(42)
+    let type Bad = 42;
     null
 }
 function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
-    type ShapeT = unreflect(runtime_t)
+    let type ShapeT = runtime_t;
     let impossible: ShapeT[] = 42
     null
 }

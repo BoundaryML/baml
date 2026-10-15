@@ -18,8 +18,8 @@ function main() -> string {
         "SameName",
         { "second": string.type(), "first": int.type() },
     );
-    type Left = unreflect(left.as_type())
-    type Right = unreflect(right.as_type())
+    let type Left = left.as_type();
+    let type Right = right.as_type();
     return Render@render_prompt<Left>().text()
         + "\n<RIGHT>\n"
         + Render@render_prompt<Right>().text()

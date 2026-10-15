@@ -29,7 +29,7 @@ test "a base and its view are one package to a consumer" {
                 function through(item: base.Item) -> app.Item { item }
                 function back(item: app.Item) -> base.Item { item }
                 function same() -> bool {
-                    reflect.Type.of<base.Item>() == reflect.Type.of<app.Item>()
+                    base.Item.type() == app.Item.type()
                 }
                 function tagged() -> app.Extra { app.Extra { tag: "t" } }
             `,
@@ -38,12 +38,12 @@ test "a base and its view are one package to a consumer" {
     );
     let same = consumer.get_function<() -> bool>("root.same") ?? throw "missing same";
     assert.is_true(same());
-    type Item = unreflect((base.get_class("root.Item") ?? throw "missing Item").as_type())
+    let type Item = (base.get_class("root.Item") ?? throw "missing Item").as_type();
     let through = consumer.get_function<(Item) -> Item>("root.through") ?? throw "missing through";
     let make = base.get_function<(int) -> Item>("root.make") ?? throw "missing make";
     let item = through(make(3));
     assert.equal(reflect.Type.of_value(item), reflect.Type.of<Item>());
-    type Extra = unreflect(extra.as_type())
+    let type Extra = extra.as_type();
     let tagged = consumer.get_function<() -> Extra>("root.tagged") ?? throw "missing tagged";
     assert.equal(reflect.Type.of_value(tagged()), extra.as_type())
 }
@@ -61,7 +61,7 @@ test "a view alone reaches its base, and the base's functions run in the base" {
         },
         packages = { "app": view },
     );
-    type Item = unreflect((base.get_class("root.Item") ?? throw "missing Item").as_type())
+    let type Item = (base.get_class("root.Item") ?? throw "missing Item").as_type();
     let build = consumer.get_function<() -> Item>("root.build") ?? throw "missing build";
     let item = build();
     assert.equal(reflect.Type.of_value(item), reflect.Type.of<Item>());
@@ -123,7 +123,7 @@ test "a renamed re-export is the same declaration" {
         {
             "consumer.baml": `
                 function same() -> bool {
-                    app.Twin.type() == reflect.Type.of<app.Item>()
+                    app.Twin.type() == app.Item.type()
                 }
                 function twin() -> app.Twin { app.make(9) }
             `,

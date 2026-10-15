@@ -17,7 +17,7 @@ function main() -> string {
             reflect.Enum.value("BLUE", description = "cool"),
         ],
     );
-    type T = unreflect(t)
+    let type T = t;
     let prompt = Classify@render_prompt<T>("sample").text();
     let parsed = Classify@parse<T>(`"k7"`);
     return prompt + "\n<PARSED>" + reflect.Enum.get_value(parsed);

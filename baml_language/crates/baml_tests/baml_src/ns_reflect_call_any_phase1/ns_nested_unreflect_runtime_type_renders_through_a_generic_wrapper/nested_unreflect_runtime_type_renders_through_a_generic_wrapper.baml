@@ -18,7 +18,7 @@ function main() -> string {
         "RuntimeTranscript",
         { "speaker": string.type(), "words": reflect.Type.of<string[]>() },
     );
-    type Transcript = unreflect(runtime_class.as_type())
+    let type Transcript = runtime_class.as_type();
     Extract@render_prompt<Wrapper<Transcript>>("sample").text()
 }
 

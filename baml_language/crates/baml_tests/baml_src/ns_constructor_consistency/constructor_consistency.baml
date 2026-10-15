@@ -48,7 +48,7 @@ function accept_runtime_type<T>() -> string {
 
 function use_precise_enum_as_runtime_type() -> string {
     let enum_t = reflect.Enum.new("RuntimeEnum", []);
-    type E = unreflect(enum_t);
+    let type E = enum_t;
     accept_runtime_type<E>()
 }
 

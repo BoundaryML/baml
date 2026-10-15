@@ -290,7 +290,7 @@ function rpc_schema_package() -> reflect.Package {
 test "runtime schema compiles parses and encodes" {
     let pkg = rpc_schema_package();
     let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing class";
-    type Record = unreflect(record_t.as_type())
+    let type Record = record_t.as_type();
     let record = rpc_extract@parse<Record>(`{"account":"AC-1","amount":42}`);
     assert.equal(baml.json.from(record), { "account": "AC-1", "amount": 42 })
 }
@@ -347,7 +347,7 @@ test "exact runtime types preserve static generic JSON calls" {
 
 test "render prompt uses the runtime package schema" {
     let record_t = rpc_schema_package().get_class("root.ExtractedRecord") ?? throw "missing class";
-    type Record = unreflect(record_t.as_type())
+    let type Record = record_t.as_type();
     let prompt = rpc_extract@render_prompt<Record>("sample document").text();
     assert.contains(prompt, "account");
     assert.contains(prompt, "amount")

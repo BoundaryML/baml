@@ -787,7 +787,7 @@ fn runtime_type_plan_operations_are_explicit() {
 function accept<T>(value: T) -> T { value }
 
 function f(t: reflect.Type, value: unknown) -> bool {
-    type T = unreflect(t)
+    let type T = t;
     match (value) {
         let x: T => accept<T>(x) is T,
         _ => false,
@@ -863,7 +863,7 @@ fn mounted_loc_free_runtime_call_target_is_explicit() {
         "test.baml",
         r#"
 function f(t: reflect.Type, value: unknown) -> unknown {
-    type T = unreflect(t)
+    let type T = t;
     match (value) {
         let x: T => app.accept<T>(x),
         _ => null,

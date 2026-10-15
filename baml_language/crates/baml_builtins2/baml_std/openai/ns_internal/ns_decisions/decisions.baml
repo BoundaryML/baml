@@ -31,7 +31,7 @@ function reject(detail: string) -> ai.errors.InvalidRequest {
 // is preserved; a key collision belongs to the first member that offered it.
 function options(ty: reflect.Type) -> ChoiceOption[] {
     if let en: reflect.Enum = ty.as_enum() {
-        type T = unreflect(ty);
+        let type T = ty;
         let out: ChoiceOption[] = [];
         for (let variant in en.values()) {
             if (!variant.meta.skip) {
@@ -425,7 +425,7 @@ function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>
         }
         // JSON currently cannot preserve an already-selected enum versus string
         // literal with the same JSON value. This matches the TypeSafe adapter limitation.
-        type T = unreflect(ty);
+        let type T = ty;
         return baml.json.from_string<T>(baml.json.to_string(fields));
     }
     values.get(

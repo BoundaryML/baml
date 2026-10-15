@@ -152,7 +152,7 @@ function hs7_collision_type() -> reflect.Type {
 // next/final.
 function hs7_open_collision_stream(text: string) -> unknown {
   let output_type = hs7_collision_type();
-  type OutputType = unreflect(output_type);
+  let type OutputType = output_type;
   hs7_dynamic_extract@stream<OutputType>(text)
 }
 
@@ -162,7 +162,7 @@ function hs7_open_collision_stream(text: string) -> unknown {
 // same-name class.
 function hs7_open_collision_value(json: string) -> unknown {
   let output_type = hs7_collision_type();
-  type OutputType = unreflect(output_type);
+  let type OutputType = output_type;
   baml.json.from_string<OutputType>(json)
 }
 
@@ -170,7 +170,7 @@ function hs7_open_collision_value(json: string) -> unknown {
 // realized runtime type without constructing or reflecting any type itself.
 function hs7_open_collision_spec(text: string) -> unknown {
   let output_type = hs7_collision_type();
-  type OutputType = unreflect(output_type);
+  let type OutputType = output_type;
   hs7_dynamic_extract@spec<OutputType>(text)
 }
 

@@ -263,7 +263,7 @@ function package_current_is_rejected() -> bool {
 function runtime_and_failed_contracts() -> bool {
   let s = reflect.Session.new()
   let string_t = string.type()
-  type StringT = unreflect(string_t)
+  let type StringT = string_t;
   let value = s.eval<StringT>(`"ok"`)
   let rejected = (s.eval<string>(`
     let should_not_exist = 7
@@ -330,11 +330,11 @@ function client_declaration_is_lazy() -> bool {
 function runtime_type_binding_persists() -> bool {
   let s = reflect.Session.new()
   let first = s.eval<bool>(`
-    type T = unreflect(string.type());
+    let type T = string.type();
     reflect.Type.of<T>() == string.type()
   `)
   let later = s.eval<bool>(`reflect.Type.of<T>() == string.type()`)
-  s.eval(`type T = unreflect(int.type());`)
+  s.eval(`let type T = int.type();`)
   let rebound = s.eval<bool>(`reflect.Type.of<T>() == int.type()`)
   first && later && rebound
 }
@@ -344,7 +344,7 @@ function runtime_type_binding_persists() -> bool {
 // read the value through a global. Narrowing recovers it.
 function binding_typed_step_value_leaves_as_unknown() -> bool {
   let s = reflect.Session.new()
-  s.eval(`type T = unreflect(int.type());`)
+  s.eval(`let type T = int.type();`)
   s.eval(`let v = match (1) { let x: T => x, _ => 0 }`)
   let narrowed = s.eval<int>(`match (v) { let n: int => n, _ => -1 }`)
   let unrelated = s.eval<string>(`"plain"`)

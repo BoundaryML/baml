@@ -99,7 +99,7 @@ function dir_greeter_instance() -> DirGreeter {
         {},
         implementations = [reflect.Interface.implementation<DirGreeter>()],
     );
-    type Adapter = unreflect(adapter.as_type());
+    let type Adapter = adapter.as_type();
     let instance: Adapter = baml.json.to<Adapter>({});
     match (instance) {
         let greeter: DirGreeter => greeter,

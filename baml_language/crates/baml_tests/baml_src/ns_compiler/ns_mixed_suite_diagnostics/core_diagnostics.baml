@@ -75,7 +75,7 @@ test "let type operand must be a type value" {
             "main.baml": `
                 function generic<T>() -> bool { true }
                 function main() -> bool {
-                    type Bad = unreflect(42)
+                    let type Bad = 42;
                     generic<Bad>()
                 }
             `,
@@ -155,7 +155,7 @@ test "top-level runtime type binding is rejected" {
     root.compiler.AssertHasMessage(
         {
             "main.baml": `
-                type T = unreflect(string.type())
+                let type T = string.type();
                 function main() -> string { "unreachable" }
             `,
         },
@@ -170,7 +170,7 @@ test "block-scoped runtime type binding does not escape" {
                 function invalid() -> unknown {
                     let t = string.type()
                     let escaped: unknown = {
-                        type T = unreflect(t)
+                        let type T = t;
                         null
                     }
                     let invalid: T = escaped

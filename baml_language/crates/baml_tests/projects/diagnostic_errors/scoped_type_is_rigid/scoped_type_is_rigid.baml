@@ -27,19 +27,19 @@ function as_t<T>(v: unknown) -> T throws string {
 
 // `T` carries no bound evidence, whatever the runtime type implements.
 function unbounded_binding_fails_a_bound(t: reflect.Type) -> string {
-    type T = unreflect(t)
+    let type T = t;
     needs_bound<T>()
 }
 
 // A literal is not a `T`.
 function literal_is_not_a_t(t: reflect.Type) -> unknown {
-    type T = unreflect(t)
+    let type T = t;
     echo<T>(42)
 }
 
 // A declared clause judges the scoped contribution as written, where the
 // name is in scope.
 function declared_clause_reads_the_binding(t: reflect.Type) -> int throws string {
-    type T = unreflect(t)
+    let type T = t;
     risky<T>(as_t<T>("x"), false)
 }

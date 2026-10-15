@@ -15,7 +15,7 @@ function main() -> string {
     node.field("label", string.type());
     node.field("next", next.meta(alias = "child", description = "Recursive child"));
     let built = node.build().as_type();
-    type Built = unreflect(built)
+    let type Built = built;
     Extract@render_prompt<Built>().text()
 }
 

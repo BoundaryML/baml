@@ -68,12 +68,12 @@ function ltb_bind_both(t: reflect.Type) -> string {
 }
 
 test "a type that implements the bound binds" {
-    let person = reflect.Type.of<LtbPerson>();
+    let person = LtbPerson.type();
     assert.equal(ltb_bind_named(person), "bound " + ltb_name(person))
 }
 
 test "a type that misses the bound throws TypeMismatch naming the interface" {
-    let plain = reflect.Type.of<LtbPlain>();
+    let plain = LtbPlain.type();
     let result = ltb_bind_named(plain) catch (e) {
         reflect.errors.TypeMismatch => "threw: " + e.message,
     };
@@ -87,17 +87,17 @@ test "a type that misses the bound throws TypeMismatch naming the interface" {
 }
 
 test "the else block runs instead of the throw" {
-    let plain = reflect.Type.of<LtbPlain>();
-    let person = reflect.Type.of<LtbPerson>();
+    let plain = LtbPlain.type();
+    let person = LtbPerson.type();
     assert.equal(ltb_bind_named_or_else(plain), "missed " + ltb_name(plain));
     assert.equal(ltb_bind_named_or_else(person), "bound " + ltb_name(person))
 }
 
 test "the else block can skip a loop iteration" {
-    let person = reflect.Type.of<LtbPerson>();
-    let named_only = reflect.Type.of<LtbNamedOnly>();
+    let person = LtbPerson.type();
+    let named_only = LtbNamedOnly.type();
     let names: string[] = [];
-    for (let t in [person, reflect.Type.of<LtbPlain>(), named_only]) {
+    for (let t in [person, LtbPlain.type(), named_only]) {
         let type T extends LtbNamed = t else {
             continue;
         };
@@ -107,8 +107,8 @@ test "the else block can skip a loop iteration" {
 }
 
 test "an intersection bound checks every interface" {
-    assert.equal(ltb_bind_both(reflect.Type.of<LtbPerson>()), "Ada/admin");
-    let named_only = reflect.Type.of<LtbNamedOnly>();
+    assert.equal(ltb_bind_both(LtbPerson.type()), "Ada/admin");
+    let named_only = LtbNamedOnly.type();
     let missed = ltb_bind_both(named_only) catch (e) {
         reflect.errors.TypeMismatch => e.message,
     };
@@ -122,7 +122,7 @@ test "an intersection bound checks every interface" {
 }
 
 test "the bound's members are reachable on values of the bound type" {
-    let type T extends LtbGreeter = reflect.Type.of<LtbPerson>();
+    let type T extends LtbGreeter = LtbPerson.type();
     let value = baml.json.to<T>({ "name": "Ada", "tag": "admin" });
     assert.equal(value.greet(), "hello, Ada");
     assert.equal(value.name, "Ada")
@@ -131,13 +131,13 @@ test "the bound's members are reachable on values of the bound type" {
 test "a bound is satisfied through requires" {
     // `LtbGreeter requires LtbNamed`, so a `T extends LtbGreeter` is an
     // `LtbNamed` too.
-    let type T extends LtbGreeter = reflect.Type.of<LtbPerson>();
+    let type T extends LtbGreeter = LtbPerson.type();
     let value = baml.json.to<T>({ "name": "Grace", "tag": "admin" });
     assert.equal(ltb_name_of(value), "Grace")
 }
 
 test "a bounded binding fills a bounded generic parameter" {
-    let type T extends LtbNamed = reflect.Type.of<LtbNamedOnly>();
+    let type T extends LtbNamed = LtbNamedOnly.type();
     let value = baml.json.to<T>({ "name": "Ada" });
     assert.equal(ltb_name_of<T>(value), "Ada");
     assert.equal(ltb_name_of(value), "Ada")
@@ -161,7 +161,7 @@ function ltb_count_after_late_inference(t: reflect.Type) -> int {
 }
 
 test "a bound obligation settled after the block closes still holds" {
-    assert.equal(ltb_count_after_late_inference(reflect.Type.of<LtbNamedOnly>()), 1)
+    assert.equal(ltb_count_after_late_inference(LtbNamedOnly.type()), 1)
 }
 
 interface LtbHolder<T> {
@@ -189,8 +189,8 @@ function ltb_increment_held(t: reflect.Type) -> string {
 }
 
 test "a generic interface bound checks its type arguments" {
-    assert.equal(ltb_increment_held(reflect.Type.of<LtbIntBox>()), "42");
-    assert.equal(ltb_increment_held(reflect.Type.of<LtbStringBox>()), "missed")
+    assert.equal(ltb_increment_held(LtbIntBox.type()), "42");
+    assert.equal(ltb_increment_held(LtbStringBox.type()), "missed")
 }
 
 // The shape this form exists for: a class built at run time that implements
@@ -204,10 +204,10 @@ function ltb_extract<F extends LtbFooInterface>(data: baml.json.json) -> F {
 }
 
 test "a runtime class extracts through a bounded generic function" {
-    let foo_class = reflect.class.new(
+    let foo_class = reflect.Class.new(
         "Foo",
-        { "a": reflect.Type.of<int>(), "c": reflect.Type.of<int>() },
-        implementations = [reflect.interface.implementation<LtbFooInterface>().field("a")],
+        { "a": int.type(), "c": int.type() },
+        implementations = [reflect.Interface.implementation<LtbFooInterface>().field("a")],
     );
     let type Foo extends LtbFooInterface = foo_class;
     let out = ltb_extract<Foo>({ "a": 1, "c": 2 });
@@ -220,7 +220,7 @@ test "a session binding keeps its bounds in later submissions" {
     let s = reflect.Session.new();
     s.eval(`interface SessionNamed { name string }`);
     s.eval(`class SessionPerson { name string  implements SessionNamed {} }`);
-    s.eval(`let type P extends SessionNamed = reflect.Type.of<SessionPerson>();`);
+    s.eval(`let type P extends SessionNamed = SessionPerson.type();`);
     assert.equal(s.eval<string>(`baml.json.to<P>({ "name": "Ada" }).name`), "Ada")
 }
 
@@ -228,7 +228,7 @@ test "a session binding checks its bounds where it is written" {
     let s = reflect.Session.new();
     s.eval(`interface SessionNamed { name string }`);
     let missed = s.eval<string>(
-        `let type P extends SessionNamed = reflect.Type.of<int>() else { throw "missed" }; "bound"`,
+        `let type P extends SessionNamed = int.type() else { throw "missed" }; "bound"`,
     ) catch (e) {
         reflect.errors.EvaluationError => e.message,
     };

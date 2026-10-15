@@ -15,7 +15,7 @@ function ident<T>(v: T) -> T throws never { v }
 // not be erased into the frame to fail at run time: narrow it first with
 // `match` or `is` (pinned in `ns_scoped_type_bindings`).
 function unknown_operand(x: unknown) -> bool {
-    type T = unreflect(x)
+    let type T = x;
     reflect.Type.of<T>() == reflect.Type.of<int>()
 }
 
@@ -31,7 +31,7 @@ function operand_solved_to_int() -> int {
 // The operand contract is a `reflect.Type | reflect.TypeView` (or a builder's
 // pending type); a nullable one is not narrowed yet.
 function nullable_operand(t: reflect.Type?) -> int {
-    type T = unreflect(t)
+    let type T = t;
     1
 }
 

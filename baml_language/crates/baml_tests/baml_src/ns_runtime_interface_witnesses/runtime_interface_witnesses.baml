@@ -87,7 +87,7 @@ test "scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves" {
         implementations = [anchor_impl],
     );
     //# Read a rigid runtime class through its witnessed static interface.
-    type ScenarioPerson = unreflect(person_t.as_type())
+    let type ScenarioPerson = person_t.as_type();
     let prompt = riw_extract_person@render_prompt<ScenarioPerson>("sample").text();
     let person: RiwPersonAnchor = riw_extract_person@parse<ScenarioPerson>(`{"name":"Ada","contact_email":"ada@example.com","favorite_editor":"vim"}`) else {
         throw "the runtime class does not implement RiwPersonAnchor"
@@ -134,8 +134,8 @@ test "equivalent_witnessed_definitions_render_and_parse_identically" {
         { "name": string.type(), "email": string.type() },
         implementations = [witness],
     );
-    type LeftPerson = unreflect(left.as_type())
-    type RightPerson = unreflect(right.as_type())
+    let type LeftPerson = left.as_type();
+    let type RightPerson = right.as_type();
     let left_prompt = riw_extract_equivalent_person@render_prompt<LeftPerson>().text();
     let right_prompt = riw_extract_equivalent_person@render_prompt<RightPerson>().text();
     let l: RiwPersonAnchor = riw_extract_equivalent_person@parse<LeftPerson>(`{"name":"Ada","email":"ada@example.com"}`) else {
@@ -161,7 +161,7 @@ test "witness_inherits_interface_default_methods" {
         implementations = [witness],
     );
     let is_member = person_t.as_type().implements(reflect.Type.of<RiwGreeter>());
-    type GreeterPerson = unreflect(person_t.as_type())
+    let type GreeterPerson = person_t.as_type();
     let person: RiwGreeter = riw_extract_greeter@parse<GreeterPerson>(`{"name":"Ada"}`) else {
         throw "the runtime class does not implement RiwGreeter"
     };

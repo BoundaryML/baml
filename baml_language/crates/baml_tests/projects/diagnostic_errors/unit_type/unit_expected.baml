@@ -91,6 +91,6 @@ function catch_arm_tails() -> void {
 function make<T>() -> T[] { [] }
 
 function scoped_tail(t: reflect.Type) -> void {
-  type T = unreflect(t);
+  let type T = t;
   make<T>()
 }

@@ -26,7 +26,7 @@ function caller(t: reflect.Type) -> bool {
 
     let tir = render_tir(&db, file);
     assert!(
-        tir.contains("type R = unreflect(t) : reflect.Type"),
+        tir.contains("let type R = t : reflect.Type"),
         "typed rendering lost the runtime operand:\n{tir}"
     );
     assert!(
@@ -35,7 +35,7 @@ function caller(t: reflect.Type) -> bool {
     );
     let hir = render_hir(&db, file);
     assert!(
-        hir.contains("type R = unreflect(t)"),
+        hir.contains("let type R = t"),
         "HIR rendering lost the runtime operand:\n{hir}"
     );
     assert!(
