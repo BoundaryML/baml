@@ -1174,6 +1174,40 @@ pub(crate) mod tests {
         }
     }
 
+    /// A compiled function the host calls as the entry point runs its compiled
+    /// body (not its bytecode), and an error it raises leaves the run as it
+    /// would from bytecode.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn compiled_entry_points_run_their_bodies() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static RUNS: AtomicUsize = AtomicUsize::new(0);
+        #[allow(clippy::unnecessary_wraps)] // the compiled-body signature
+        fn main(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            RUNS.fetch_add(1, Ordering::Relaxed);
+            Ok(vm.string_value("compiled"))
+        }
+        fn failing_main(
+            vm: &mut BexVm,
+            _args: &[Value],
+        ) -> Result<Value, Box<crate::errors::VmError>> {
+            Ok(Value::int(vm.div_i64(1, 0)?))
+        }
+        const SOURCE: &str = r#"function Main() -> string { "bytecode" }"#;
+        const FAILING: &str = r#"function Main() -> string { "unused" }"#;
+        for telemetry in [false, true] {
+            let before = RUNS.load(Ordering::Relaxed);
+            let out = run_with_compiled_bodies(SOURCE, &[("user.Main", main)], &[], telemetry);
+            assert_eq!(out, "compiled", "telemetry: {telemetry}");
+            assert_eq!(RUNS.load(Ordering::Relaxed), before + 1);
+        }
+        let out = run_with_compiled_bodies(FAILING, &[("user.Main", failing_main)], &[], false);
+        assert!(
+            out.contains("ThrownUnhandled") && out.contains("user.Main"),
+            "{out}"
+        );
+    }
+
     /// The unwinder never consults a compiled frame's bytecode handlers: the
     /// body runs in place of that bytecode, so an error its body does not
     /// catch leaves the frame even where the bytecode has a `catch`.
@@ -5215,6 +5249,22 @@ impl BexVm {
                 // bytecode calls now that INIT_LOCALS is gone from bytecode.
                 self.allocate_real_locals_for_frame(dispatch_ptr)
                     .expect("entry point must be a valid function frame");
+
+                // A compiled entry: `exec` runs its body in place of the
+                // bytecode, as the call path does for a compiled callee. The
+                // same two shapes keep the bytecode: a hooked entry and one
+                // with type arguments.
+                let compiled = matches!(
+                    self.get_object(dispatch_ptr),
+                    Object::Function(callee) if callee.native_body.is_some()
+                );
+                if compiled
+                    && !hooked
+                    && let Some(Frame::Bytecode(frame)) = self.frames.last_mut()
+                    && frame.type_args.is_empty()
+                {
+                    frame.body = FrameBody::Compiled { line: 0 };
+                }
             }
             FunctionKind::Native(_) | FunctionKind::SysOp(_) => {
                 self.push_trampoline_frame(
@@ -7742,6 +7792,10 @@ impl BexVm {
                     self.settle();
                     match outcome {
                         Ok(value) => {
+                            // The epilogue replaces the frame's region with the
+                            // result, which `Return` has on the stack; so does
+                            // this, even for a function with no slots.
+                            self.stack.push(value);
                             if let Some(state) =
                                 self.finish_bytecode_frame(frame_idx, function, value)?
                             {
@@ -7808,6 +7862,43 @@ impl BexVm {
             return Ok(Some(VmExecState::EarlyYield));
         }
         Ok(None)
+    }
+
+    /// Run the compiled body of the entry frame at `frame_idx`, whose
+    /// arguments are its stack region, and complete the frame as `Return`
+    /// does. On `Err` the frame stays pushed for the unwinder.
+    #[cold]
+    fn run_compiled_entry(
+        &mut self,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+    ) -> Result<Option<VmExecState>, VmError> {
+        let Some(body) = crate::compiled_rt::native_body_fn(function) else {
+            return Err(VmInternalError::CompiledBody {
+                message: format!(
+                    "entry `{}` is marked compiled but has no body",
+                    function.name
+                ),
+            }
+            .into());
+        };
+        let Frame::Bytecode(frame) = &self.frames[*frame_idx] else {
+            unreachable!("a compiled entry is a bytecode frame");
+        };
+        let locals_offset = frame.locals_offset.raw();
+        let args: SmallVec<[Value; 4]> = (0..function.arity)
+            .map(|i| self.stack.get_at(StackIndex::from_raw(locals_offset + i)))
+            .collect();
+        let outcome = body(self, &args);
+        self.settle();
+        match outcome {
+            Ok(value) => {
+                // As in the call path: the result on the stack, as `Return` has it.
+                self.stack.push(value);
+                self.finish_bytecode_frame(frame_idx, function, value)
+            }
+            Err(error) => Err(*error),
+        }
     }
 
     /// The call-site offset a call path records for a call made from the
@@ -9116,6 +9207,20 @@ impl BexVm {
 
             frame_idx = self.frames.len() - 1;
             function = unsafe { self.load_function(frame_idx)? };
+
+            // A compiled frame reaches this loop only as an entry point whose
+            // body has not run: compiled callees run inside the call path.
+            if matches!(&self.frames[frame_idx], Frame::Bytecode(frame) if frame.is_compiled()) {
+                match self.run_compiled_entry(&mut frame_idx, &mut function) {
+                    Ok(Some(state)) => return Ok(state),
+                    Ok(None) => continue,
+                    Err(VmError::Thrown(thrown)) => {
+                        self.try_unwind_exception(&mut frame_idx, &mut function, thrown)?;
+                        continue;
+                    }
+                    Err(other) => return Err(other),
+                }
+            }
 
             // ── Extract locals for the tight inner dispatch loop ──────────
             // SAFETY: code is &'static because Function is &'static.
