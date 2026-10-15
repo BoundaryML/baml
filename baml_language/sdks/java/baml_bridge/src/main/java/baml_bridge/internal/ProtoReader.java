@@ -1149,19 +1149,35 @@ public final class ProtoReader {
                 return decodeMapWithDesc(valueBytes, desc.mapValue(), lenient);
             case CLASS:
             case ENUM:
+            case TYPE_ALIAS:
+                // A recursive alias is registered under its FQN like a class.
                 return decodeFqnWithDesc(valueBytes, desc.fqn(), lenient);
             case UNION:
+                // The descriptor is the declared type; the Java shape the generated
+                // code expects follows the generator's rules for it: a union of
+                // literals of one base is that base's scalar, and a union
+                // mentioning a type variable is the bare wire value (its Java type
+                // is Object). Anything else is the arity family's arm record.
+                if (literalBaseOf(desc) != null || mentionsTypeVar(desc)) {
+                    return decodeValue(new WireReader(valueBytes), lenient);
+                }
                 return decodeUnionWithDesc(valueBytes, desc, lenient);
             case OPTIONAL:
                 return decodeWithDesc(valueBytes, desc.optionalInner(), lenient);
             case PRIMITIVE:
             case LITERAL:
+            case ENUM_VARIANT:
+            case MEDIA:
+            case INTERFACE:
+            case FUNCTION:
+            case NEVER:
             case TYPEVAR:
             case UNKNOWN:
+            case OPAQUE:
             default:
                 // A scalar/literal descriptor carries no structural recursion; the
                 // self-describing wire form already yields the right value. TypeVar /
-                // UNKNOWN are the explicit wire-driven fallbacks.
+                // UNKNOWN / OPAQUE are the explicit wire-driven fallbacks.
                 return decodeValue(new WireReader(valueBytes), lenient);
         }
     }
@@ -1361,15 +1377,12 @@ public final class ProtoReader {
         int k = arms.size();
         if (selectedType != null) {
             int selectedArm = arms.indexOf(selectedType);
-            if (selectedArm < 0) {
-                throw new BamlError(
-                        "wire selected union type " + selectedType
-                                + " is not one of the " + k + " declared arms",
-                        List.of(),
-                        null);
+            if (selectedArm >= 0) {
+                Object inner = decodeWithDesc(effective, selectedType, lenient);
+                return wrapArm(k, selectedArm, inner);
             }
-            Object inner = decodeWithDesc(effective, selectedType, lenient);
-            return wrapArm(k, selectedArm, inner);
+            // The wire names a type no arm spells the same way (a literal arm
+            // for a scalar, an alias for its body): the value's shape decides.
         }
         for (int i = 0; i < k; i++) {
             if (armMatchesValue(arms.get(i), effective)) {
@@ -1382,6 +1395,55 @@ public final class ProtoReader {
                         + " for descriptor " + unionDesc,
                 List.of(),
                 null);
+    }
+
+    /**
+     * The base of a union whose every arm is a literal of one base ({@code "a" |
+     * "b"} is a {@code string}), or {@code null}. The generator gives such a
+     * union the base's Java type, so its values decode as that scalar.
+     */
+    private static String literalBaseOf(BamlType union) {
+        String base = null;
+        for (BamlType arm : union.unionOptions()) {
+            if (arm.kind() != BamlType.Kind.LITERAL) {
+                return null;
+            }
+            if (base == null) {
+                base = arm.literalBase();
+            } else if (!base.equals(arm.literalBase())) {
+                return null;
+            }
+        }
+        return base;
+    }
+
+    /** Whether a type variable occurs anywhere in {@code type}. */
+    private static boolean mentionsTypeVar(BamlType type) {
+        if (type.kind() == BamlType.Kind.TYPEVAR) {
+            return true;
+        }
+        switch (type.kind()) {
+            case LIST -> {
+                return mentionsTypeVar(type.listItem());
+            }
+            case MAP -> {
+                return mentionsTypeVar(type.mapKey()) || mentionsTypeVar(type.mapValue());
+            }
+            case OPTIONAL -> {
+                return mentionsTypeVar(type.optionalInner());
+            }
+            case UNION -> {
+                return type.unionOptions().stream().anyMatch(ProtoReader::mentionsTypeVar);
+            }
+            case FUNCTION -> {
+                return type.functionParams().stream().anyMatch(p -> mentionsTypeVar(p.type()))
+                        || mentionsTypeVar(type.functionReturn())
+                        || mentionsTypeVar(type.functionThrows());
+            }
+            default -> {
+                return false;
+            }
+        }
     }
 
     // -- structural arm matching (shared by both arm-picking paths) -----------

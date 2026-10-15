@@ -59,6 +59,11 @@ public final class BamlTypes {
      * iteration order is insertion (De Bruijn) order; the returned view is
      * unmodifiable.
      */
+    /** The bindings as a map, for {@link BamlType#substitute(Map)}. */
+    public Map<String, BamlType> asMap() {
+        return java.util.Collections.unmodifiableMap(bindings);
+    }
+
     public Set<Map.Entry<String, BamlType>> bindings() {
         return Collections.unmodifiableMap(bindings).entrySet();
     }

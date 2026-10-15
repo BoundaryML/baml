@@ -10,11 +10,17 @@ import java.util.Map;
 
 /**
  * Encodes host arguments into a {@code CallFunctionArgs} protobuf
- * ({@code baml_inbound.proto}) for the primitives slice. The encoder
- * dispatches on the Java runtime shape of each argument — never on the
- * declared BAML parameter type — exactly like the Python bridge's
- * {@code _set_inbound_value} (proto.py §09d). Rust re-runs BAML type checking
- * after decoding, so structural mismatches surface as a {@code BamlError}.
+ * ({@code baml_inbound.proto}).
+ *
+ * <p>Every node leaves with its concrete type. A scalar, null, enum constant,
+ * media value or handle implies its own and carries nothing. A list, map,
+ * class or host callable states its type in {@code InboundValue.value_type}:
+ * the slot's type where the generated binding supplies one that fixes it (a
+ * {@code List<Long>} under a {@code (int | string)[]} parameter goes out as a
+ * {@code (int | string)[]}), and the type the value itself has where no slot
+ * fixes it ({@link #naturalType}). A callable has no type of its own, so one
+ * that reaches the encoder without a function type is refused. The engine
+ * builds exactly the value stated and checks it against the slot.
  *
  * <h2>Field numbers (against {@code baml_inbound.proto})</h2>
  * <pre>
@@ -22,13 +28,14 @@ import java.util.Map;
  *                   type_args = 3 (repeated BamlTyArg — explicit-generics bindings)
  * BamlTyArg:        type_var = 1 (string), type_value = 2 (BamlTy)
  * InboundMapEntry:  string_key = 1, value = 6 (InboundValue)
- * InboundValue:       value_type = 1 (sparse exact BamlTy annotation)
+ * InboundValue:       value_type = 1 (the node's concrete type, where not implied)
  * InboundValue oneof: string_value = 2, int_value = 3, float_value = 4,
  *                     bool_value = 5, list_value = 6, map_value = 7,
- *                     class_value = 8, enum_value = 9,
+ *                     class_value = 8, enum_value = 9, handle = 10,
  *                     uint8array_value = 11, bigint_value = 12,
- *                     prompt_ast_value = 16
- *                     (handle = 10 / ty_value = 13 are not implemented in this slice)
+ *                     media_value = 15, prompt_ast_value = 16
+ * BamlValueMedia:    media = 1 (MediaTypeEnum), mime_type = 2, url = 3, base64 = 4,
+ *                    file_content = 6 (BamlValueMediaFileContent: name = 1, base64 = 2)
  * InboundListValue:  values = 1 (repeated InboundValue)
  * InboundMapValue:   entries = 1 (repeated InboundMapEntry)
  * InboundClassValue: fields = 2 (repeated InboundMapEntry; field 1 is reserved)
@@ -67,6 +74,7 @@ public final class ProtoWriter {
     private static final int IV_HANDLE = 10;
     private static final int IV_UINT8ARRAY = 11;
     private static final int IV_BIGINT = 12;
+    private static final int IV_MEDIA = 15;
     private static final int IV_PROMPT_AST = 16;
 
     // BamlHandle (baml_handle.proto): key = 1 (uint64), handle_type = 2 (enum).
@@ -82,8 +90,14 @@ public final class ProtoWriter {
     /** The synthetic BAML class a host-thrown native exception is encoded as. */
     private static final String HOST_CALLABLE_FQN = "baml.errors.HostCallable";
 
-    // The single field name a handle-backed media class carries on the wire.
-    private static final String MEDIA_DATA_FIELD = "_data";
+    // BamlValueMedia / BamlValueMediaFileContent (baml_outbound.proto)
+    private static final int MEDIA_KIND = 1;
+    private static final int MEDIA_MIME_TYPE = 2;
+    private static final int MEDIA_URL = 3;
+    private static final int MEDIA_BASE64 = 4;
+    private static final int MEDIA_FILE_CONTENT = 6;
+    private static final int FILE_CONTENT_NAME = 1;
+    private static final int FILE_CONTENT_BASE64 = 2;
 
     // InboundListValue / InboundMapValue
     private static final int LIST_VALUES = 1;
@@ -92,12 +106,10 @@ public final class ProtoWriter {
     // InboundClassValue (field 1 reserved) / BamlTy / BamlTyClass / InboundEnumValue
     private static final int CLASS_FIELDS = 2;
     private static final int TY_CLASS = 2;
-    private static final int TY_MEDIA = 11;
     private static final int TY_CLASS_NAME = 1;
     private static final int TY_CLASS_TYPE_ARGS = 2; // BamlTyClass.type_args (repeated BamlTy)
     private static final int ENUM_NAME = 1;
     private static final int ENUM_VALUE = 2;
-    private static final int TY_MEDIA_KIND = 1;
 
     private static final BigInteger LONG_MIN = BigInteger.valueOf(Long.MIN_VALUE);
     private static final BigInteger LONG_MAX = BigInteger.valueOf(Long.MAX_VALUE);
@@ -150,9 +162,7 @@ public final class ProtoWriter {
                 // rejection naming the top-level kwarg (Python parity: "Cannot
                 // encode …" + naming the kwarg).
                 throw new IllegalArgumentException(
-                        "cannot encode argument '" + names[i] + "': unsupported Java type "
-                                + e.typeName(),
-                        e);
+                        "cannot encode argument '" + names[i] + "': " + e.getMessage(), e);
             }
         }
         w.writeInt64(CALL_ARGS_CALL_ID, callId);
@@ -208,18 +218,12 @@ public final class ProtoWriter {
     }
 
     private static byte[] encodeMapEntry(String key, Object value, BamlType contextualType) {
-        return encodeMapEntry(key, value, contextualType, false);
-    }
-
-    private static byte[] encodeMapEntry(
-            String key, Object value, BamlType contextualType, boolean exactContext) {
         WireWriter entry = new WireWriter();
         entry.writeString(MAP_ENTRY_STRING_KEY, key);
         // A null value leaves the `value` field absent, which the engine reads
         // as null (an unset oneof ≡ null).
         if (value != null) {
-            entry.writeMessage(
-                    MAP_ENTRY_VALUE, encodeInboundValue(value, contextualType, exactContext));
+            entry.writeMessage(MAP_ENTRY_VALUE, encodeInboundValue(value, contextualType));
         }
         return entry.toByteArray();
     }
@@ -231,15 +235,19 @@ public final class ProtoWriter {
      */
     public static byte[] encodeInboundValue(Object value) {
         if (value instanceof baml_bridge.BamlTypedValue typed) {
-            return encodeInboundValue(typed.value(), typed.type(), false);
+            return encodeInboundValue(typed.value(), typed.type());
         }
-        return encodeInboundValue(value, null, false);
+        return encodeInboundValue(value, null);
     }
 
-    private static byte[] encodeInboundValue(
-            Object value, BamlType contextualType, boolean selectedArm) {
+    /**
+     * Encode {@code value} for a slot of {@code contextualType} ({@code null}
+     * when the binding supplies none). The slot's type is what a container
+     * states where it fixes one; otherwise the node states its own.
+     */
+    private static byte[] encodeInboundValue(Object value, BamlType contextualType) {
         if (value instanceof baml_bridge.BamlTypedValue typed) {
-            return encodeInboundValue(typed.value(), typed.type(), false);
+            return encodeInboundValue(typed.value(), typed.type());
         }
         WireWriter w = new WireWriter();
         if (value == null) {
@@ -263,9 +271,11 @@ public final class ProtoWriter {
             Object inner = value instanceof baml_bridge.BamlUnion
                     ? unwrapGenericUnion(value)
                     : TypeRegistry.unionRecordInner(value);
-            return encodeInboundValue(inner, selected, true);
+            return encodeInboundValue(inner, selected);
         }
-        BamlType exactNodeType = selectedArm ? contextualType : null;
+        // The type a list or map node states; everything else implies its own
+        // or states it where it is written.
+        BamlType statedType = null;
         // Only a JDK proxy can be a returned BAML closure. Checking first keeps
         // pure encoding from initializing BamlFfi, which loads the native library.
         baml_bridge.BamlHandle returnedHandle =
@@ -273,9 +283,8 @@ public final class ProtoWriter {
                         ? baml_bridge.BamlFfi.returnedClosureHandle(value)
                         : null;
         if (returnedHandle != null) {
-            return encodeInboundValue(returnedHandle, contextualType, selectedArm);
+            return encodeInboundValue(returnedHandle, contextualType);
         }
-        boolean alreadyTyped = false;
         // bool must precede the integer arms (mirrors Python's isinstance order).
         if (value instanceof Boolean b) {
             w.writeBool(IV_BOOL, b);
@@ -300,29 +309,13 @@ public final class ProtoWriter {
         } else if (value instanceof byte[] bytes) {
             w.writeBytes(IV_UINT8ARRAY, bytes);
         } else if (value instanceof List<?> list) {
-            BamlType itemType = contextualType != null && contextualType.kind() == BamlType.Kind.LIST
-                    ? contextualType.listItem()
-                    : null;
-            w.writeMessage(IV_LIST, encodeList(list, itemType, selectedArm));
-            if (selectedArm
-                    && contextualType != null
-                    && contextualType.kind() == BamlType.Kind.LIST) {
-                exactNodeType = contextualType;
-            } else if (!fixesContainer(contextualType, BamlType.Kind.LIST)) {
-                exactNodeType = naturalType(list);
-            }
+            boolean slotIsList = contextualType != null && contextualType.kind() == BamlType.Kind.LIST;
+            w.writeMessage(IV_LIST, encodeList(list, slotIsList ? contextualType.listItem() : null));
+            statedType = slotIsList && isExact(contextualType) ? contextualType : naturalType(list);
         } else if (value instanceof Map<?, ?> map) {
-            BamlType valueType = contextualType != null && contextualType.kind() == BamlType.Kind.MAP
-                    ? contextualType.mapValue()
-                    : null;
-            w.writeMessage(IV_MAP, encodeMap(map, valueType, selectedArm));
-            if (selectedArm
-                    && contextualType != null
-                    && contextualType.kind() == BamlType.Kind.MAP) {
-                exactNodeType = contextualType;
-            } else if (!fixesContainer(contextualType, BamlType.Kind.MAP)) {
-                exactNodeType = naturalType(map);
-            }
+            boolean slotIsMap = contextualType != null && contextualType.kind() == BamlType.Kind.MAP;
+            w.writeMessage(IV_MAP, encodeMap(map, slotIsMap ? contextualType.mapValue() : null));
+            statedType = slotIsMap && isExact(contextualType) ? contextualType : naturalType(map);
         } else if (value instanceof Enum<?> constant) {
             // Any Java enum: encode it only if its type is a registered generated
             // enum; an unregistered enum is not a BAML value.
@@ -332,13 +325,9 @@ public final class ProtoWriter {
             }
             w.writeMessage(IV_ENUM, encodeEnum(ew));
         } else if (value instanceof baml_bridge.BamlMedia media) {
-            // Handle-backed media (baml.media.{Image,Audio,Video,Pdf}): a
-            // class_value whose only field `_data` carries the engine handle,
-            // with the exact media kind on InboundValue.value_type. The
-            // class-shaped payload is only the transport for the `_data` handle.
-            writeMediaType(w, media.bamlFqn());
-            w.writeMessage(IV_CLASS, encodeMediaClass(media));
-            alreadyTyped = true;
+            // Media crosses as its portable value, read back out of the native
+            // handle the Java wrapper holds; the kind implies the type.
+            w.writeMessage(IV_MEDIA, encodeMedia(media));
         } else if (value instanceof baml_bridge.BamlPrompt prompt) {
             // ai.Prompt is portable rather than handle-backed. Preserve the
             // canonical prompt AST bytes copied from the outbound boundary so
@@ -350,7 +339,7 @@ public final class ProtoWriter {
             // transparent on the inbound boundary, just like BamlStream: clone
             // the owned handle key so the engine may drain the wire copy while
             // the Java object remains reusable.
-            return encodeInboundValue(spec.bamlHandle(), contextualType, selectedArm);
+            return encodeInboundValue(spec.bamlHandle(), contextualType);
         } else if (value instanceof baml_bridge.BamlStream stream) {
             // BamlStream (ai.stream.Stream receiver): lifted to a bare
             // handle_value(ADT_TAGGED_HEAP_HANDLE) on the wire — the engine
@@ -360,7 +349,7 @@ public final class ProtoWriter {
             // handle (proto.py). Delegate to the BamlHandle arm below, which
             // clones the key per the drain contract; the inner handle already
             // carries handle_type = ADT_TAGGED_HEAP_HANDLE.
-            return encodeInboundValue(stream.bamlHandle(), contextualType, selectedArm);
+            return encodeInboundValue(stream.bamlHandle(), contextualType);
         } else if (value instanceof baml_bridge.BamlHandle handle) {
             // A bare engine handle (a $rust_type shell's private field, e.g.
             // baml.fs.File `_handle` / baml.http.Response `_body`): an
@@ -375,20 +364,35 @@ public final class ProtoWriter {
         } else if (value instanceof baml_bridge.BamlUnion) {
             // Generic-family arm record (Union2..Union10): unwrap to the
             // single `value()` component — no union envelope inbound.
-            return encodeInboundValue(unwrapGenericUnion(value), contextualType, selectedArm);
+            return encodeInboundValue(unwrapGenericUnion(value), contextualType);
         } else if (TypeRegistry.isUnionRecord(value)) {
             // A union wrapper record carries no wrapper on the inbound wire:
             // unwrap to its bare inner value and encode that (inbound has no
             // union arm — the engine re-validates the union at the boundary).
-            return encodeInboundValue(TypeRegistry.unionRecordInner(value), contextualType, selectedArm);
+            return encodeInboundValue(TypeRegistry.unionRecordInner(value), contextualType);
         } else if (isHostCallable(value)) {
             // A host callable (a java.util.function.* shape, or a generated
-            // @FunctionalInterface marked with baml_bridge.BamlHostCallable):
-            // register it in the Java-side host-value table and emit
-            // InboundValue.handle{key, HOST_VALUE_CALLABLE}. The engine binds it
-            // to an Object::HostClosure and dispatches back into the host when
-            // BAML invokes it. Mirrors bridge_python's register_host_callable +
-            // Handle{HOST_VALUE_CALLABLE} branch (proto.py).
+            // @FunctionalInterface marked with baml_bridge.BamlHostCallable) has
+            // no type of its own: it takes the function type the generated
+            // carrier or the slot gives it, states that type beside its handle,
+            // and is registered in the Java-side host-value table. The engine
+            // binds it to an Object::HostClosure and dispatches back into the
+            // host when BAML invokes it.
+            BamlType functionType = value instanceof baml_bridge.BamlTypedCallable typed
+                    ? typed.functionType()
+                    : contextualType != null && contextualType.kind() == BamlType.Kind.FUNCTION
+                            ? contextualType
+                            : null;
+            if (functionType == null) {
+                throw new UnsupportedInboundTypeException(
+                        "a callable has no type of its own; declare the slot as a function type");
+            }
+            if (!isExact(functionType)) {
+                throw new UnsupportedInboundTypeException(
+                        "a callable's type " + functionType + " is not fully bound; pass the "
+                                + "call's type arguments explicitly");
+            }
+            w.writeMessage(IV_VALUE_TYPE, functionType.toWireTy());
             long key = baml_bridge.BamlFfi.registerHostCallable(value);
             WireWriter handleMsg = new WireWriter();
             handleMsg.writeInt64(HANDLE_KEY, key);
@@ -402,53 +406,34 @@ public final class ProtoWriter {
             if (cw == null) {
                 throw unsupported(value);
             }
-            List<BamlType> typeArgs = TypeRegistry.typeArgsOf(value);
-            if (contextualType != null && contextualType.kind() == BamlType.Kind.CLASS) {
+            // A class node states the slot's class type where the slot fixes
+            // one, and its fields are encoded under that type's arguments;
+            // otherwise it states the instance's own type.
+            List<BamlType> typeArgs;
+            if (contextualType != null
+                    && contextualType.kind() == BamlType.Kind.CLASS
+                    && isExact(contextualType)) {
                 w.writeMessage(IV_VALUE_TYPE, contextualType.toWireTy());
+                typeArgs = contextualType.classTypeArgs();
             } else {
+                typeArgs = TypeRegistry.typeArgsOf(value);
                 writeClassType(w, cw.fqn, typeArgs);
             }
             w.writeMessage(IV_CLASS, encodeClass(cw, typeArgs));
-            alreadyTyped = true;
         }
-        if (!alreadyTyped
-                && exactNodeType != null
-                && exactNodeType.kind() != BamlType.Kind.UNION
-                && exactNodeType.kind() != BamlType.Kind.OPTIONAL
-                && exactNodeType.kind() != BamlType.Kind.TYPEVAR
-                && exactNodeType.kind() != BamlType.Kind.UNKNOWN) {
-            byte[] wireType;
-            try {
-                wireType = exactNodeType.toWireTy();
-            } catch (IllegalStateException decodeOnlyType) {
-                // A composite containing TypeVar/UNKNOWN is a host-side decode
-                // hint, not an exact encodable node type. Context still threads
-                // to its children; this node simply stays unannotated.
-                return w.toByteArray();
-            }
-            WireWriter annotated = new WireWriter();
-            annotated.writeMessage(IV_VALUE_TYPE, wireType);
-            annotated.writeRawBytes(w.toByteArray());
-            return annotated.toByteArray();
+        // A container's natural type can mention a type variable (from a slot
+        // whose binding is open) or be unknown to the token grammar (an element
+        // with no BAML type the token can spell): such a node stays unstated.
+        if (statedType != null && isExact(statedType)) {
+            WireWriter stated = new WireWriter();
+            stated.writeMessage(IV_VALUE_TYPE, statedType.toWireTy());
+            stated.writeRawBytes(w.toByteArray());
+            return stated.toByteArray();
         }
         return w.toByteArray();
     }
 
-    /**
-     * Whether the slot's declared type fixes a container of {@code kind} down to
-     * every element, so the node needs no statement of its own. A slot that is
-     * absent, {@code unknown}, a type variable, a union, or a container whose
-     * element type mentions one of those fixes nothing, and the node then states
-     * the type it has (see {@link #naturalType}).
-     */
-    private static boolean fixesContainer(BamlType contextualType, BamlType.Kind kind) {
-        return contextualType != null && contextualType.kind() == kind && isExact(contextualType);
-    }
-
-    /**
-     * No {@code TYPEVAR} or {@code UNKNOWN} anywhere in the token: exactly the
-     * tokens the wire can spell.
-     */
+    /** No {@code TYPEVAR} anywhere in the token: exactly the tokens the wire can spell. */
     private static boolean isExact(BamlType type) {
         try {
             type.toWireTy();
@@ -465,7 +450,7 @@ public final class ProtoWriter {
      * one element's type as is), and an empty container has element type
      * {@code never}. {@code null} when some part of the value has no BAML type
      * the token grammar can spell (bytes, media, handles); the node is then left
-     * unstated, as before.
+     * unstated.
      */
     private static BamlType naturalType(Object value) {
         if (value instanceof Boolean) {
@@ -595,47 +580,40 @@ public final class ProtoWriter {
         value.writeMessage(IV_VALUE_TYPE, ty.toByteArray());
     }
 
-    private static void writeMediaType(WireWriter value, String fqn) {
-        int kind = switch (fqn) {
+    /**
+     * Encode a media value as the portable {@code BamlValueMedia} the engine
+     * reads for every host: its kind, its MIME type and the one source it has
+     * (a URL, a base64 payload, or file content with its name). The payload is
+     * read out of the native handle the Java wrapper holds, which is neither
+     * cloned nor drained.
+     */
+    private static byte[] encodeMedia(baml_bridge.BamlMedia media) {
+        int kind = switch (media.bamlFqn()) {
             case "baml.media.Image" -> 1;
             case "baml.media.Audio" -> 2;
-            case "baml.media.Video" -> 3;
-            case "baml.media.Pdf" -> 4;
-            default -> throw new IllegalArgumentException("unknown BAML media type " + fqn);
+            case "baml.media.Pdf" -> 3;
+            case "baml.media.Video" -> 4;
+            default -> throw new IllegalArgumentException("unknown BAML media type " + media.bamlFqn());
         };
-        WireWriter media = new WireWriter();
-        media.writeInt64(TY_MEDIA_KIND, kind);
-        WireWriter ty = new WireWriter();
-        ty.writeMessage(TY_MEDIA, media.toByteArray());
-        value.writeMessage(IV_VALUE_TYPE, ty.toByteArray());
-    }
-
-    /**
-     * Encode a handle-backed media value as an {@code InboundClassValue}: a single
-     * {@code _data} field whose value is an {@code InboundValue.handle}
-     * ({@code BamlHandle{key, handle_type}}). The enclosing
-     * {@code InboundValue.value_type} carries the exact media kind. The key is a
-     * <em>fresh clone</em> so the engine can
-     * {@code drain} its copy on decode while the Java media object keeps its own
-     * row (mirrors {@code bridge_python}'s {@code _clone_key_for_wire}).
-     */
-    private static byte[] encodeMediaClass(baml_bridge.BamlMedia media) {
         baml_bridge.BamlHandle handle = media.bamlHandle();
-        long wireKey = handle.cloneKeyForWire();
-
-        WireWriter handleMsg = new WireWriter();
-        handleMsg.writeInt64(HANDLE_KEY, wireKey);
-        handleMsg.writeInt64(HANDLE_TYPE, handle.handleType());
-
-        WireWriter dataValue = new WireWriter();
-        dataValue.writeMessage(IV_HANDLE, handleMsg.toByteArray());
-
-        WireWriter dataEntry = new WireWriter();
-        dataEntry.writeString(MAP_ENTRY_STRING_KEY, MEDIA_DATA_FIELD);
-        dataEntry.writeMessage(MAP_ENTRY_VALUE, dataValue.toByteArray());
-
         WireWriter w = new WireWriter();
-        w.writeMessage(CLASS_FIELDS, dataEntry.toByteArray());
+        w.writeInt64(MEDIA_KIND, kind);
+        String mimeType = handle.mediaMimeType();
+        if (mimeType != null) {
+            w.writeString(MEDIA_MIME_TYPE, mimeType);
+        }
+        String url = handle.mediaUrl();
+        String name = handle.mediaName();
+        if (url != null) {
+            w.writeString(MEDIA_URL, url);
+        } else if (name != null) {
+            WireWriter content = new WireWriter();
+            content.writeString(FILE_CONTENT_NAME, name);
+            content.writeString(FILE_CONTENT_BASE64, handle.mediaBase64());
+            w.writeMessage(MEDIA_FILE_CONTENT, content.toByteArray());
+        } else {
+            w.writeString(MEDIA_BASE64, handle.mediaBase64());
+        }
         return w.toByteArray();
     }
 
@@ -648,32 +626,26 @@ public final class ProtoWriter {
     }
 
     /**
-     * The encoder cannot map a Java value to any inbound arm. Carries the
-     * offending Java type name so the top-level kwarg loop
-     * ({@link #encodeCallFunctionArgs}) can rewrap it into an
+     * The encoder cannot put a Java value on the wire: no inbound arm takes it,
+     * or it is a callable with no function type to take. The top-level kwarg
+     * loop ({@link #encodeCallFunctionArgs}) rewraps it into an
      * {@link IllegalArgumentException} that also names the owning argument
      * (mirroring bridge_python's {@code TypeError} naming the kwarg). Extends
      * {@link IllegalArgumentException} so a direct {@link #encodeInboundValue}
      * call — with no owning argument to name — still surfaces the documented
-     * "unsupported argument" exception type, just without the argument prefix.
+     * exception type, just without the argument prefix.
      */
     static final class UnsupportedInboundTypeException extends IllegalArgumentException {
         private static final long serialVersionUID = 1L;
 
-        private final String typeName;
-
-        UnsupportedInboundTypeException(String typeName) {
-            super("unsupported Java type " + typeName);
-            this.typeName = typeName;
-        }
-
-        String typeName() {
-            return typeName;
+        UnsupportedInboundTypeException(String reason) {
+            super(reason);
         }
     }
 
     private static UnsupportedInboundTypeException unsupported(Object value) {
-        return new UnsupportedInboundTypeException(value.getClass().getName());
+        return new UnsupportedInboundTypeException(
+                "unsupported Java type " + value.getClass().getName());
     }
 
 
@@ -686,25 +658,22 @@ public final class ProtoWriter {
         }
     }
 
-    private static byte[] encodeList(
-            List<?> list, BamlType itemType, boolean exactContext) {
+    private static byte[] encodeList(List<?> list, BamlType itemType) {
         WireWriter w = new WireWriter();
         for (Object item : list) {
             // Always emit an entry (even for a null item) to preserve length.
-            w.writeMessage(LIST_VALUES, encodeInboundValue(item, itemType, exactContext));
+            w.writeMessage(LIST_VALUES, encodeInboundValue(item, itemType));
         }
         return w.toByteArray();
     }
 
-    private static byte[] encodeMap(
-            Map<?, ?> map, BamlType valueType, boolean exactContext) {
+    private static byte[] encodeMap(Map<?, ?> map, BamlType valueType) {
         WireWriter w = new WireWriter();
         for (Map.Entry<?, ?> e : map.entrySet()) {
             // The engine stringifies map keys; generated maps are Map<String, V>.
             w.writeMessage(
                     MAP_ENTRIES,
-                    encodeMapEntry(
-                            String.valueOf(e.getKey()), e.getValue(), valueType, exactContext));
+                    encodeMapEntry(String.valueOf(e.getKey()), e.getValue(), valueType));
         }
         return w.toByteArray();
     }

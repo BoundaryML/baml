@@ -164,11 +164,14 @@ impl Walk<'_> {
             RuntimeTy::List(inner) => self.list(value, slot, inner),
             RuntimeTy::Map { key, value: item } => self.map(value, slot, key, item),
             RuntimeTy::Class(name, args) => self.class(value, slot, name, args),
-            RuntimeTy::Function { .. } => match value.callable(slot) {
-                Some(Ok(wire)) => Ok(stated(wire, slot.clone(), Fit::AsIs)),
-                Some(Err(error)) => Err(self.err(EncodeErrorKind::Host(error.0))),
-                None => Err(self.mismatch(value, slot)),
-            },
+            RuntimeTy::Function { .. } => {
+                let signature = callable_signature(slot);
+                match value.callable(&signature) {
+                    Some(Ok(wire)) => Ok(stated(wire, signature, Fit::AsIs)),
+                    Some(Err(error)) => Err(self.err(EncodeErrorKind::Host(error.0))),
+                    None => Err(self.mismatch(value, slot)),
+                }
+            }
             // Only a host-owned leaf inhabits these, and leaves were handled
             // above: anything else is not a member.
             RuntimeTy::Media(_)
@@ -876,6 +879,27 @@ fn exact(value: InboundValue, ty: RuntimeTy) -> Encoded {
         value,
         ty,
         fit: Fit::AsIs,
+    }
+}
+
+/// The function type a host callable is bound to: the slot's, with a throws
+/// clause the declaration left open stated as `unknown`. Such a clause is an
+/// implicit effect parameter the caller never binds, and a host callable may
+/// throw anything.
+fn callable_signature(slot: &RuntimeTy) -> RuntimeTy {
+    match slot {
+        RuntimeTy::Function {
+            params,
+            ret,
+            throws,
+        } if matches!(&**throws, RuntimeTy::TypeVar(param) if baml_type::is_synthetic_effect_param(param.name())) => {
+            RuntimeTy::Function {
+                params: params.clone(),
+                ret: ret.clone(),
+                throws: Box::new(RuntimeTy::Unknown),
+            }
+        }
+        other => other.clone(),
     }
 }
 

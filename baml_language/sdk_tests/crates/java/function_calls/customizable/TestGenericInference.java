@@ -487,11 +487,13 @@ class TestGenericInference {
 
     @Test
     void test_generic_inference_apply_closure_poisons_typevars_must_specify() {
-        // `T` is poisoned by its occurrence in the closure parameter `(T)` and
-        // `R` lives only in the closure's return, so both must be specified;
-        // bare => rejected.
-        assertTypeError(
-                () -> Fns.apply((Long v) -> v + 1, 5L), "could not infer a type", "apply");
+        // A host callable has no type of its own, so a closure whose declared
+        // type mentions `T` and `R` can be stated only once both are bound:
+        // bare => the bridge refuses it before the call reaches the engine.
+        IllegalArgumentException ex =
+                assertThrows(IllegalArgumentException.class, () -> Fns.apply((Long v) -> v + 1, 5L));
+        assertTrue(ex.getMessage().contains("not fully bound"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("'f'"), ex.getMessage());
     }
 
     @Test

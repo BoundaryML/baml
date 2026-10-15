@@ -887,13 +887,53 @@ class WireCodecTest {
                         List.of(1L), BamlType.UNKNOWN))));
     }
 
-    /** A slot that fixes the container down to its elements leaves the node unstated. */
+    /**
+     * A slot that fixes the container down to its elements is the type the node
+     * states, whatever its elements are: the host builds the value the slot
+     * declares, and an empty container has the slot's element type.
+     */
     @Test
-    void encode_container_under_exact_slot_states_nothing() {
-        assertNull(valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(
-                List.of(1L), BamlType.list(BamlType.INT)))));
-        assertNull(valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(
-                Map.of("a", 1L), BamlType.map(BamlType.STRING, BamlType.INT)))));
+    void encode_container_under_exact_slot_states_the_slot() {
+        BamlType ints = BamlType.list(BamlType.INT);
+        assertArrayEquals(
+                ints.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(1L), ints))));
+        assertArrayEquals(
+                ints.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(), ints))));
+        BamlType intsOrStrings = BamlType.list(BamlType.union(BamlType.INT, BamlType.STRING));
+        assertArrayEquals(
+                intsOrStrings.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        List.of(1L), intsOrStrings))));
+        BamlType stringToInt = BamlType.map(BamlType.STRING, BamlType.INT);
+        assertArrayEquals(
+                stringToInt.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        Map.of("a", 1L), stringToInt))));
+    }
+
+    /** A scalar under a union arm implies its own type and states nothing. */
+    @Test
+    void encode_scalar_under_union_arm_states_nothing() {
+        BamlType unionType = BamlType.union(BamlType.INT, BamlType.STRING);
+        byte[] got = ProtoWriter.encodeInboundValue(
+                new BamlTypedValue(new Union2.Arm0<Long, String>(5L), unionType));
+        assertArrayEquals(ProtoWriter.encodeInboundValue(5L), got);
+    }
+
+    /** A callable has no type of its own: without a function type it is refused. */
+    @Test
+    void encode_callable_without_a_function_type_is_refused() {
+        java.util.function.Function<Long, Long> cb = x -> x + 1;
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoWriter.encodeCallFunctionArgs(
+                        new String[] {"callback"}, new Object[] {cb}, 7L));
+        assertEquals(
+                "cannot encode argument 'callback': a callable has no type of its own; "
+                        + "declare the slot as a function type",
+                ex.getMessage());
     }
 
     /** The {@code value_type} of the first field of an encoded class value, or null. */
@@ -927,15 +967,17 @@ class WireCodecTest {
 
     /**
      * A generic class's bound type arguments are substituted into its field
-     * descriptors: `T[]` is `int[]` for a `Shapes<int>`, which fixes the field,
-     * so an empty list there states nothing. Unbound, the field's slot is open
-     * and the list states what it is.
+     * descriptors: `T[]` is `int[]` for a `Shapes<int>`, which is what an empty
+     * list there states. Unbound, the field's slot is open and the list states
+     * what it is.
      */
     @Test
     void encode_generic_class_fields_are_typed_by_the_bound_arguments() {
         Shapes bound = new Shapes(List.of());
         TypeRegistry.bindTypeArgs(bound, List.of(BamlType.INT));
-        assertNull(firstFieldValueTypeOf(ProtoWriter.encodeInboundValue(bound)));
+        assertArrayEquals(
+                BamlType.list(BamlType.INT).toWireTy(),
+                firstFieldValueTypeOf(ProtoWriter.encodeInboundValue(bound)));
 
         Shapes unbound = new Shapes(List.of());
         assertArrayEquals(

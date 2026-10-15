@@ -1813,15 +1813,26 @@ mod tests {
         );
 
         // The `types` overload (no ctx) threads the bag through the 6-arg
-        // runtime call with a `null` ctx; the return descriptor is the TypeVar
-        // token `tv:T`.
+        // runtime call with a `null` ctx, and binds the argument's declared
+        // type `T` by the bag, so a value under it states the bound type.
         assert!(
             file.contains("public static <T> T identity(T x, baml_bridge.BamlTypes types) {"),
             "{file}"
         );
         assert!(
             file.contains(
-                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, null, types);"
+                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {new baml_bridge.BamlTypedValue(x, $"
+            ),
+            "{file}"
+        );
+        assert!(
+            file.contains(".substitute(types.asMap()))}, $RET0, null, types);"),
+            "{file}"
+        );
+        // Without the bag the value goes as it is: its own type binds `T`.
+        assert!(
+            file.contains(
+                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0);"
             ),
             "{file}"
         );
@@ -1834,7 +1845,7 @@ mod tests {
             "{file}"
         );
         assert!(
-            file.contains("new java.lang.Object[] {x}, $RET0, baml, types);"),
+            file.contains(".substitute(types.asMap()))}, $RET0, baml, types);"),
             "{file}"
         );
 

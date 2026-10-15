@@ -7,6 +7,7 @@
 pub use baml_type::{
     CodegenFunctionParamTy as CallableParam, CodegenTy as Ty, Freshness,
     FunctionParamMode as CodegenFunctionParamMode, ParamTy, QualifiedTypeName as Name,
+    is_synthetic_effect_param,
 };
 
 /// Test each immediate structural child in declaration order, stopping on true.
