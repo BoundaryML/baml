@@ -91,6 +91,15 @@ def emit_case(cli, worktree, case, dest, guest_crates, shim_dir):
         shutil.rmtree(emit, ignore_errors=True)
         return {"status": "rejected", "reason": (r.stderr.strip().splitlines() or ["?"])[-1][:300]}
     shutil.rmtree(emit / "target", ignore_errors=True)
+    # The machine builds the host from `git archive` of this commit, which has
+    # no .git for the build script to read the commit from. Stamp it with that
+    # commit: the one the emitting CLI was built from (pack checks this), so
+    # the host accepts the envelope.
+    stamp = emit / "BAML_GIT_SHA"
+    if not stamp.exists() or not stamp.read_text().strip():
+        head = subprocess.run(["git", "-C", str(worktree), "rev-parse", "HEAD"],
+                              capture_output=True, text=True, check=True).stdout.strip()
+        stamp.write_text(head)
     shutil.copy(GLUE, emit / "src" / "main.rs")
     (emit / "Cargo.toml").write_text(MANIFEST.format(case=case, crates=guest_crates))
     # Resolve against the workspace's lock rather than whatever the registry has today.
