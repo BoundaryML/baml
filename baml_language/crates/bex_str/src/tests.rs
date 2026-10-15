@@ -196,7 +196,7 @@ fn empty_string() {
 #[test]
 fn from_empty_string() {
     let e = BexStr::from("");
-    assert!(matches!(e, BexStr::Inline { byte_len: 0, .. }));
+    assert!(matches!(e, BexStr::Inline { len, .. } if len.byte_len() == 0));
     assert_eq!(e.as_str(), "");
 }
 
@@ -711,6 +711,14 @@ fn assert_ascii_prefix_exact(bex: &BexStr, what: &str) {
         bex.char_len() == bex.byte_len(),
         "{what}"
     );
+    if let BexStr::Inline { len, .. } = bex {
+        assert_eq!(len.byte_len(), bytes.len(), "inline length of {what}");
+        assert_eq!(
+            len.is_ascii(),
+            bytes.is_ascii(),
+            "inline ASCII flag of {what}"
+        );
+    }
 }
 
 #[test]
@@ -753,6 +761,43 @@ fn ascii_prefix_matches_oracle_on_every_representation() {
     let outer = flat_leading.byte_slice(2..leading.len());
     cases.push(("slice of leading".into(), outer.clone()));
     cases.push(("slice of slice".into(), outer.byte_slice(5..100)));
+    // Short results are inline, and their ASCII flag comes from the receiver
+    // when it can: a flat's prefix, an inline's flag, or a scan.
+    let inline_mixed = BexStr::from("ab🪙cd");
+    for (name, short) in [
+        ("short slice in prefix", flat_mixed.byte_slice(100..128)),
+        ("short slice over é", flat_mixed.byte_slice(110..140)),
+        ("short slice after é", flat_mixed.byte_slice(130..170)),
+        ("short slice of slice", outer.byte_slice(0..20)),
+        (
+            "inline ascii slice of inline",
+            BexStr::from("plain").byte_slice(1..4),
+        ),
+        (
+            "inline ascii slice of non-ascii inline",
+            inline_mixed.byte_slice(0..2),
+        ),
+        (
+            "inline non-ascii slice of inline",
+            inline_mixed.byte_slice(1..6),
+        ),
+        (
+            "short concat ascii+ascii",
+            BexStr::concat(BexStr::from("ab"), BexStr::from("cd")),
+        ),
+        (
+            "short concat ascii+non-ascii",
+            BexStr::concat(BexStr::from("ab"), BexStr::from("é")),
+        ),
+        (
+            "short concat non-ascii+ascii",
+            BexStr::concat(BexStr::from("é"), BexStr::from("ab")),
+        ),
+        ("one-char slice", flat_mixed.char_slice(128..129)),
+    ] {
+        assert!(matches!(short, BexStr::Inline { .. }), "{name}");
+        cases.push((name.into(), short));
+    }
     // Ropes: ASCII + ASCII, ASCII + non-ASCII, non-ASCII + ASCII, nested, and
     // the same after flattening.
     let ropes = [
