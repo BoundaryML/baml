@@ -325,10 +325,7 @@ jobs:
             fi
           ) > "${outdir}/${asset}.sha256"
 
-          python3 ../scripts/baml-sdk-licenses stage "${outdir}/license-files" --engine
-          for license in "${outdir}/license-files/"*; do
-            cp "$license" "${outdir}/${asset}.$(basename "$license")"
-          done
+          cp ../LICENSE "${outdir}/${asset}.LICENSE"
           echo "dir=${outdir}" >> "$GITHUB_OUTPUT"
           echo "asset=${asset}" >> "$GITHUB_OUTPUT"
           echo "Built ${asset}"
@@ -418,6 +415,5 @@ jobs:
           path: |
             baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}
             baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}.sha256
-            baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}.LICENSE*
-            baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}.NOTICE
+            baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}.LICENSE
           if-no-files-found: error

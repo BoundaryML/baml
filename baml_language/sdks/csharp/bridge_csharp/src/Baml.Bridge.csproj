@@ -68,8 +68,6 @@
       Condition="'$(BamlNativeAssetRoot)' != ''" />
     <None Update="README.md" Pack="true" PackagePath="/" />
     <None Include="../../../../../LICENSE" Link="LICENSE" Pack="true" PackagePath="/" />
-    <None Include="../../../../vendor/quanta/LICENSE" Pack="true" PackagePath="licenses/quanta/" />
-    <None Include="../../../../../NOTICE" Link="NOTICE" Pack="true" PackagePath="/" Condition="Exists('../../../../../NOTICE')" />
     <None
       Include="$(BamlGeneratedTargetsPath)"
       Pack="true"

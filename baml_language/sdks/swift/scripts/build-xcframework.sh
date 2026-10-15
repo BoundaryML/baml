@@ -124,7 +124,7 @@ esac
 rm -rf "$OUT"
 mkdir -p "$(dirname "$OUT")"
 xcodebuild -create-xcframework "${LIB_ARGS[@]}" -output "$OUT"
-python3 "$WORKSPACE_ROOT/../scripts/baml-sdk-licenses" stage "$OUT" --engine
+cp "$WORKSPACE_ROOT/../LICENSE" "$OUT/LICENSE"
 echo "wrote $OUT"
 
 # Optional packaging for release pipelines: --zip <path> after the mode

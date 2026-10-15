@@ -18,7 +18,6 @@ from pathlib import Path
 
 
 def main() -> None:
-    """Assemble a licensed Swift source mirror referencing the checksummed release binary."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--version", required=True)
@@ -50,8 +49,6 @@ def main() -> None:
     shutil.copytree(runtime_sources, destination / "Sources" / "BamlBridge", symlinks=False)
 
     shutil.copy2(repository / "LICENSE", destination / "LICENSE")
-    if (repository / "NOTICE").is_file():
-        shutil.copy2(repository / "NOTICE", destination / "NOTICE")
 
     # Stamp Package.swift placeholders.
     manifest = destination / "Package.swift"

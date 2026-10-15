@@ -46,7 +46,6 @@ version = bamlVersion
 // Keep the repository license in every published JAR, including classifiers.
 tasks.withType<Jar>().configureEach {
     from(file("../../../../LICENSE")) { into("META-INF") }
-    from(file("../../../../NOTICE")) { into("META-INF") }
 }
 
 dependencies {

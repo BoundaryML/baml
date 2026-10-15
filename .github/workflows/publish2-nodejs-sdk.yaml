@@ -150,10 +150,7 @@ jobs:
           # a rerun resumes from where it stopped.
           publish_if_needed() {
             local pkg_dir="$1"
-            local name version existing archive
-            archive="$(cd "$pkg_dir" && npm pack --ignore-scripts --json | jq -r '.[0].filename')"
-            python3 "$GITHUB_WORKSPACE/scripts/baml-sdk-licenses" verify "$pkg_dir/$archive"
-            rm "$pkg_dir/$archive"
+            local name version existing
             name="$(jq -r '.name' "$pkg_dir/package.json")"
             version="$(jq -r '.version' "$pkg_dir/package.json")"
             # `npm view <name>@<version> version` prints the version when it exists,

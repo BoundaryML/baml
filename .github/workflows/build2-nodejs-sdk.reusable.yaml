@@ -214,7 +214,7 @@ jobs:
           pnpm exec napi create-npm-dirs
           pnpm exec napi artifacts --output-dir . --npm-dir npm
           for package in npm/*; do
-            python3 "$GITHUB_WORKSPACE/scripts/baml-sdk-licenses" stage "$package" --engine
+            cp "$GITHUB_WORKSPACE/LICENSE" "$package/LICENSE"
           done
           # create-npm-dirs lays down all 8 target dirs; keep only the one that
           # received this job's addon so each artifact is exactly one sub-package.

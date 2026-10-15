@@ -15,7 +15,6 @@ RUNTIME_VERSION_RE = re.compile(r'^const BridgeRuntimeVersion = "([^"]+)"$', re.
 
 
 def main() -> None:
-    """Assemble the stamped public Go module with its authoritative license and notices."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--version", required=True)
@@ -37,8 +36,6 @@ def main() -> None:
         ignore=shutil.ignore_patterns(".DS_Store", "__pycache__", "*.pyc"),
     )
     shutil.copy2(repository / "LICENSE", destination / "LICENSE")
-    if (repository / "NOTICE").is_file():
-        shutil.copy2(repository / "NOTICE", destination / "NOTICE")
 
     module_line = (destination / "go.mod").read_text(encoding="utf-8").splitlines()[0]
     if module_line != f"module {MODULE_PATH}":

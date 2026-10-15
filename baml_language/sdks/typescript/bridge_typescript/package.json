@@ -18,10 +18,7 @@
     }
   },
   "files": [
-    "dist",
-    "LICENSE",
-    "LICENSE.quanta",
-    "NOTICE"
+    "dist"
   ],
   "napi": {
     "binaryName": "baml_node",

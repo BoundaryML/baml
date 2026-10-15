@@ -58,7 +58,6 @@ version = bamlVersion
 // Keep the repository license in every published JAR, including classifiers.
 tasks.withType<Jar>().configureEach {
     from(file("../../../../LICENSE")) { into("META-INF") }
-    from(file("../../../../NOTICE")) { into("META-INF") }
 }
 
 // ---- Per-platform native jar --------------------------------------------
@@ -93,10 +92,6 @@ fun mappedNativeLibName(platform: String): String = when {
 val nativeJar by tasks.registering(Jar::class) {
     description = "Packages the bridge_java cdylib as a natives-<platform> classifier jar."
     archiveClassifier.set("natives-$nativePlatform")
-    from(file("../../../vendor/quanta/LICENSE")) {
-        into("META-INF/licenses")
-        rename { "quanta.LICENSE" }
-    }
     if (nativeLibPath != null) {
         val libFile = file(nativeLibPath)
         // /native/<platform>/<mapped-lib-name> — matches NativeLibraryLoader.nativeResourcePath().

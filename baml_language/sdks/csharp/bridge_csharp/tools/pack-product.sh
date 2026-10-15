@@ -273,8 +273,6 @@ unzip -Z1 "$work/normalized/package-a.nupkg" \
   echo '_rels/.rels'
   echo 'README.md'
   echo 'LICENSE'
-  echo 'licenses/quanta/LICENSE'
-  if [[ -f "$repository_root/NOTICE" ]]; then echo 'NOTICE'; fi
   echo 'baml-bridge.nuspec'
   echo 'buildTransitive/baml-bridge.targets'
   echo 'lib/net10.0/Baml.Bridge.dll'
@@ -283,8 +281,7 @@ unzip -Z1 "$work/normalized/package-a.nupkg" \
 } | LC_ALL=C sort > "$work/expected-package-entries.txt"
 diff -u "$work/expected-package-entries.txt" \
   "$work/actual-package-entries.txt"
-expected_package_entry_count="$((expected_native_count + 9))"
-if [[ -f "$repository_root/NOTICE" ]]; then expected_package_entry_count="$((expected_package_entry_count + 1))"; fi
+expected_package_entry_count="$((expected_native_count + 8))"
 test "$(wc -l < "$work/actual-package-entries.txt")" \
   -eq "$expected_package_entry_count"
 unzip -p "$work/normalized/package-a.nupkg" baml-bridge.nuspec \
@@ -304,7 +301,6 @@ fi
   --native-root "$native_root" \
   --package "$work/normalized/package-a.nupkg"
 
-python3 "$repository_root/scripts/baml-sdk-licenses" verify "$work/normalized/package-a.nupkg"
 cp "$work/normalized/package-a.nupkg" "$output_package"
 cmp "$work/normalized/package-a.nupkg" "$output_package"
 echo "product_package=$output_package"
