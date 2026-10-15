@@ -450,17 +450,39 @@ impl PackArgs {
             "Building",
             format!("{} native functions with cargo", module.functions.len()),
         );
+        // The host must accept the envelope this CLI encodes, and the
+        // fingerprint exists to refuse a host built from other sources. So the
+        // workspace must be at the commit this CLI was built from; the host
+        // then derives the same fingerprint from its own checkout.
+        if baml_artifact::ENFORCE_BUILD_FINGERPRINT {
+            let fingerprint = baml_artifact::BUILD_FINGERPRINT;
+            let head = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&workspace)
+                .args(["rev-parse", "HEAD"])
+                .output()
+                .ok()
+                .filter(|output| output.status.success())
+                .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned());
+            if head.as_deref() != Some(fingerprint) {
+                anyhow::bail!(
+                    "`--native-workspace` {} is at {}, but this CLI was built from {fingerprint}; \
+                     check out that commit so the host and this CLI agree on the program format",
+                    workspace.display(),
+                    head.as_deref().unwrap_or("an unknown commit"),
+                );
+            }
+        }
+        // Build against the workspace's own dependency versions, the ones its
+        // tests ran with, rather than resolving fresh ones.
+        let lockfile = workspace.join("Cargo.lock");
+        if lockfile.is_file() {
+            std::fs::copy(&lockfile, build_dir.join("Cargo.lock"))
+                .context("failed to copy the workspace's Cargo.lock")?;
+        }
         // An explicit target dir so the built binary's location is known
         // whatever the environment says.
         let target_dir = build_dir.join("target");
-        // The host must accept the envelope this CLI encodes: on channels that
-        // enforce the build fingerprint, stamp the host's artifact crate with
-        // this CLI's commit rather than whatever the workspace checkout is at.
-        let fingerprint = baml_artifact::BUILD_FINGERPRINT;
-        let fingerprint_is_commit = matches!(fingerprint.len(), 40 | 64)
-            && fingerprint
-                .bytes()
-                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase());
         let status = reporter.suspend(|| {
             let mut cargo = std::process::Command::new("cargo");
             cargo
@@ -470,9 +492,6 @@ impl PackArgs {
                 .arg(build_dir.join("Cargo.toml"))
                 .arg("--target-dir")
                 .arg(&target_dir);
-            if fingerprint_is_commit {
-                cargo.env("BAML_GIT_SHA", fingerprint);
-            }
             cargo
                 .status()
                 .context("failed to run cargo; is it on PATH?")
@@ -783,12 +802,7 @@ fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
 fn report_native(module: &baml_db::native::NativeModule) {
     let mut out = String::new();
     for function in &module.functions {
-        let kind = if function.observed {
-            "observed"
-        } else {
-            "folded"
-        };
-        out.push_str(&format!("native   {:<48} {kind}\n", function.name));
+        out.push_str(&format!("native   {}\n", function.name));
     }
     for (name, rejection) in &module.rejected {
         out.push_str(&format!("bytecode {name:<48} {rejection}\n"));
