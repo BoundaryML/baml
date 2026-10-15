@@ -938,7 +938,7 @@ impl ToBexExternalValue for OpaqueExternalValue {
 
 impl ToBexExternalValue for bex_vm_types::PromptAst {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(self.unbound()))
     }
 }
 

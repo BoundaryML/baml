@@ -49,6 +49,7 @@ fn collect_media_kinds(ast: &PromptAst, out: &mut Vec<baml_base::MediaKind>) {
                     collect_content(part, out);
                 }
             }
+            PromptAstSimple::Bound { content, .. } => collect_content(content, out),
         }
     }
 

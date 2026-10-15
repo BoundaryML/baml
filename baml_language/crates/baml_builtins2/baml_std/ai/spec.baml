@@ -59,6 +59,20 @@ class CacheDelimiter {
 /// One structural part of a rendered prompt message.
 type PromptPart = string | MediaPart | CacheDelimiter;
 
+/// The run of a prompt message that one function parameter rendered to:
+/// `${message}` or `${ticket.screenshot}` written directly in an LLM
+/// function's `prompt:`. `path` is the expression as written, rooted at the
+/// parameter, so a client can pair the run with `ai.events.RunStarted.arguments`.
+/// An interpolation of anything else (`${message.trim()}`, a loop variable)
+/// is not bound.
+class Bound {
+    path: string,
+    parts: (string | MediaPart)[],
+}
+
+/// One structural part of `ai.PromptMessage.bound_parts`.
+type BoundPromptPart = string | MediaPart | CacheDelimiter | Bound;
+
 /// A single chat message in a rendered prompt.
 class PromptMessage {
     /// The chat role, e.g. "system", "user", or "assistant". Empty for
@@ -70,6 +84,10 @@ class PromptMessage {
     /// Ordered structural content. Provider clients use this instead of the
     /// readable `content` projection so media survives prompt rendering.
     parts: PromptPart[],
+    /// The same content as `parts`, with each run rendered from a function
+    /// parameter kept apart as an `ai.Bound`. Unwrapping every `Bound` and
+    /// joining adjacent strings gives `parts` exactly.
+    bound_parts: BoundPromptPart[],
     /// Free-form per-message data, carried verbatim from the
     /// `ai.Role.metadata` of the `${role(...)}` marker that opened this
     /// message. Empty when the message carried none. The built-in clients do
