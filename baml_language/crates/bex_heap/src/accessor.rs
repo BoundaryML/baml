@@ -580,6 +580,17 @@ fn owned_inner(
             BexExternalValue::HostValue(hv) => {
                 Ok(BexExternalValue::HostValue(std::sync::Arc::clone(hv)))
             }
+            BexExternalValue::HostCallable {
+                handle,
+                params,
+                ret,
+                throws,
+            } => Ok(BexExternalValue::HostCallable {
+                handle: std::sync::Arc::clone(handle),
+                params: params.clone(),
+                ret: ret.clone(),
+                throws: throws.clone(),
+            }),
         },
         // Object path: either `HeapPtr` directly, or a `Value` whose payload
         // is an object pointer. The two cases share a single object deep-

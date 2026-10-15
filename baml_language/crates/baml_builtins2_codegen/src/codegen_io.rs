@@ -1332,6 +1332,10 @@ fn emit_owned_struct(
         }
 
         impl #name_ident {
+            /// The BAML class this value is an instance of, as the engine
+            /// resolves it.
+            pub const BAML_CLASS: &'static str = #full_path;
+
             pub fn from_external(__val: BexExternalValue) -> Result<Self, AccessError> {
                 match __val {
                     BexExternalValue::Instance { mut fields, .. } => Ok(Self {
@@ -1906,10 +1910,14 @@ fn emit_into_result_call(
                     #call_expr
                         .into_result_mapped(SysOp::#variant_ident, |v| {
                             BexExternalValue::Array {
-                                // `#name` is a real class, but `BamlType` drops
-                                // its generic args, so the complete element type
-                                // is only recoverable from the runtime value.
-                                element_type: baml_type::RuntimeTy::unknown(),
+                                // The owned class states the class it is an
+                                // instance of; an owned class is never generic.
+                                element_type: baml_type::RuntimeTy::Class(
+                                    baml_type::TypeName::from_dotted_path(
+                                        <#owned::#ns_ident::#name_ident>::BAML_CLASS,
+                                    ),
+                                    Box::new([]),
+                                ),
                                 items: v.into_iter()
                                     .map(|item| <#owned::#ns_ident::#name_ident as AsBexExternalValue>::into_bex_external_value(item))
                                     .collect(),

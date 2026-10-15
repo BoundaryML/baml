@@ -147,8 +147,9 @@ pub fn external_to_outbound(
 
         // Host-value handles do NOT live in HANDLE_TABLE. Encode directly using
         // the host-side key; drop semantics are preserved by the Arc
-        // (HostValueArc::drop fires HostReleaseFn on last drop).
-        BexExternalValue::HostValue(arc) => {
+        // (HostValueArc::drop fires HostReleaseFn on last drop). A callable
+        // goes back to its host by key alone: the host has its own signature.
+        BexExternalValue::HostValue(arc) | BexExternalValue::HostCallable { handle: arc, .. } => {
             use crate::baml_bridge::cffi::BamlHandleType;
             let ht = match arc.kind {
                 bex_project::HostValueKind::Callable => BamlHandleType::HostValueCallable as i32,
@@ -357,13 +358,15 @@ pub(crate) fn artifact_safe_external_to_outbound(
                 crate::ty_encode::portable_type_def_to_proto(definition.def()),
             ))
         }
-        BexExternalValue::HostValue(arc) => Some(artifact_safe_omission(
-            "hostOwnedValue",
-            match arc.kind {
-                bex_project::HostValueKind::Callable => "host-owned callable",
-                bex_project::HostValueKind::Opaque => "host-owned opaque value",
-            },
-        )),
+        BexExternalValue::HostValue(arc) | BexExternalValue::HostCallable { handle: arc, .. } => {
+            Some(artifact_safe_omission(
+                "hostOwnedValue",
+                match arc.kind {
+                    bex_project::HostValueKind::Callable => "host-owned callable",
+                    bex_project::HostValueKind::Opaque => "host-owned opaque value",
+                },
+            ))
+        }
         BexExternalValue::Handle(_)
         | BexExternalValue::FunctionRef { .. }
         | BexExternalValue::Adt(_) => Some(artifact_safe_omission(

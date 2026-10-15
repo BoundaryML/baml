@@ -5,6 +5,11 @@
 //! the declared parameter type, and `baml.json.deserialize<T>` builds the
 //! value. The host converts nothing, and a user's `from_json` override applies
 //! exactly as it would inside BAML.
+//!
+//! The value comes back as the engine describes a value it hands out, and
+//! goes in again as a host value: a union-typed position is described with
+//! the engine's union envelope, which no host value carries, so the envelopes
+//! are opened before the value is handed back.
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -53,6 +58,7 @@ impl BexEngine {
             true,
         )
         .await
+        .map(BexExternalValue::into_host_value)
     }
 
     /// The arguments of a call to `function_name`, hydrated from one JSON

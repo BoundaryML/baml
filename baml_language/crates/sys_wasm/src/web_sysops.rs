@@ -639,13 +639,13 @@ fn take_headers(
     let value = result
         .swap_remove("headers")
         .ok_or_else(|| bridge_failure("fetch result is missing headers"))?;
-    let BexExternalValue::Array { items, .. } = stated(value) else {
+    let BexExternalValue::Array { items, .. } = value else {
         return Err(bridge_failure("fetch result headers must be an array"));
     };
     items
         .into_iter()
         .map(|pair| {
-            let BexExternalValue::Array { mut items, .. } = stated(pair) else {
+            let BexExternalValue::Array { mut items, .. } = pair else {
                 return Err(bridge_failure("fetch result header must be a pair"));
             };
             if items.len() != 2 {
@@ -662,21 +662,12 @@ fn expect_map(
     value: BexExternalValue,
     context: &str,
 ) -> Result<IndexMap<String, BexExternalValue>, VmRustFnError> {
-    match stated(value) {
+    match value {
         BexExternalValue::Map { entries, .. } => Ok(entries),
         other => Err(bridge_failure(format!(
             "{context} must be a map, got {}",
             other.type_name()
         ))),
-    }
-}
-
-/// The value under the type the bridge stated for it: a node that carries
-/// `value_type` on the wire decodes as a carrier around the value itself.
-fn stated(value: BexExternalValue) -> BexExternalValue {
-    match value {
-        BexExternalValue::Union { value, .. } => stated(*value),
-        other => other,
     }
 }
 
@@ -692,7 +683,7 @@ fn take_string(
 }
 
 fn expect_string(value: BexExternalValue, context: &str) -> Result<String, VmRustFnError> {
-    match stated(value) {
+    match value {
         BexExternalValue::String(value) => Ok(value.to_string()),
         other => Err(bridge_failure(format!(
             "{context} must be a string, got {}",
@@ -706,11 +697,10 @@ fn take_int(
     key: &str,
     context: &str,
 ) -> Result<i64, VmRustFnError> {
-    match stated(
-        values
-            .swap_remove(key)
-            .ok_or_else(|| bridge_failure(format!("{context} is missing {key}")))?,
-    ) {
+    match values
+        .swap_remove(key)
+        .ok_or_else(|| bridge_failure(format!("{context} is missing {key}")))?
+    {
         BexExternalValue::Int(value) => Ok(value),
         other => Err(bridge_failure(format!(
             "{context}.{key} must be an integer, got {}",
@@ -724,11 +714,10 @@ fn take_bytes(
     key: &str,
     context: &str,
 ) -> Result<Vec<u8>, VmRustFnError> {
-    match stated(
-        values
-            .swap_remove(key)
-            .ok_or_else(|| bridge_failure(format!("{context} is missing {key}")))?,
-    ) {
+    match values
+        .swap_remove(key)
+        .ok_or_else(|| bridge_failure(format!("{context} is missing {key}")))?
+    {
         BexExternalValue::Uint8Array(value) => Ok(value),
         other => Err(bridge_failure(format!(
             "{context}.{key} must be bytes, got {}",

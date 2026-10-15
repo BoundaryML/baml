@@ -29,7 +29,6 @@ num-bigint = { workspace = true }
 prost = { workspace = true }
 rustc-hash = { workspace = true }
 serde_json = { workspace = true }
-smallvec = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "macros" ] }
 tokio-util = { workspace = true }

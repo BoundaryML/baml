@@ -3404,6 +3404,7 @@ fn arg_value_type(value: &BexExternalValue) -> Type {
         BexExternalValue::FunctionRef { .. }
         | BexExternalValue::Handle(_)
         | BexExternalValue::HostValue(_)
+        | BexExternalValue::HostCallable { .. }
         | BexExternalValue::Adt(_) => Type::Object(ObjectType::Any),
     }
 }

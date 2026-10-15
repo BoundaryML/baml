@@ -1887,7 +1887,7 @@ fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
 /// Whether `value` fits the parameter type `expected`: the membership test
 /// `is` asks ([`crate::type_match::value_is_member`]), so the string `"auto"`
 /// fits a parameter typed `"auto" | "manual"`. Fails OPEN when the value has
-/// no BAML type to compare — an opaque native handle (see
+/// no BAML type to compare — a compile-time definition object (see
 /// `value_concrete_ty`) — because refusing what we cannot check would reject
 /// working calls; the callee remains dynamically safe either way (values stay
 /// tagged).

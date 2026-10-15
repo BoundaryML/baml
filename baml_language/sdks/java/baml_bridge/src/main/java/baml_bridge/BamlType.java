@@ -1207,7 +1207,12 @@ public final class BamlType implements Comparable<BamlType> {
         }
         return switch (kind) {
             case PRIMITIVE -> wire.kind == Kind.PRIMITIVE && primitiveKind == wire.primitiveKind;
-            case CLASS, ENUM -> (wire.kind == Kind.CLASS || wire.kind == Kind.ENUM)
+            // A named type matches by its FQN whatever kind the wire spells it
+            // as: a recursive alias arrives as a type_alias token, and the arm
+            // tokens render every named type as a class.
+            case CLASS, ENUM, TYPE_ALIAS -> (wire.kind == Kind.CLASS
+                            || wire.kind == Kind.ENUM
+                            || wire.kind == Kind.TYPE_ALIAS)
                     && Objects.equals(fqn, wire.fqn);
             case LIST -> wire.kind == Kind.LIST
                     && children.get(0).matchesStructural(wire.children.get(0));

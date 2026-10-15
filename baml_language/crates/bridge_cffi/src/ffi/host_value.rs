@@ -438,26 +438,18 @@ mod tests {
                     other => panic!("expected HostThrown payload, got {other:?}"),
                 };
                 match thrown {
-                    BexExternalValue::Union { value, metadata }
-                        if metadata.is_inbound_type_annotation =>
-                    {
-                        assert_eq!(
-                            metadata.selected_option.to_string(),
-                            "baml.errors.HostCallable"
-                        );
-                        match &**value {
-                            BexExternalValue::Instance { fields, .. } => {
-                                match fields.get("message") {
-                                    Some(BexExternalValue::String(s)) => {
-                                        assert_eq!(s.as_str(), "bad input");
-                                    }
-                                    other => panic!("expected `message: String`, got {other:?}"),
-                                }
+                    BexExternalValue::Instance {
+                        class_name, fields, ..
+                    } => {
+                        assert_eq!(class_name, "baml.errors.HostCallable");
+                        match fields.get("message") {
+                            Some(BexExternalValue::String(s)) => {
+                                assert_eq!(s.as_str(), "bad input");
                             }
-                            other => panic!("expected annotated Instance, got {other:?}"),
+                            other => panic!("expected `message: String`, got {other:?}"),
                         }
                     }
-                    other => panic!("expected inbound type annotation, got {other:?}"),
+                    other => panic!("expected the thrown class instance, got {other:?}"),
                 }
             }
             sys_types::SysOpResult::Ready(_) => panic!("expected async"),
@@ -505,14 +497,7 @@ mod tests {
         let OpErrorPayload::HostThrown(value) = &error.payload else {
             panic!("expected host-thrown completion, got {:?}", error.payload)
         };
-        assert!(matches!(
-            &**value,
-            BexExternalValue::Union {
-                value,
-                metadata,
-            } if metadata.is_inbound_type_annotation
-                && matches!(&**value, BexExternalValue::Instance { .. })
-        ));
+        assert!(matches!(&**value, BexExternalValue::Instance { .. }));
         assert!(
             !take_recorded_release(key),
             "delivered throw did not retain native error identity"

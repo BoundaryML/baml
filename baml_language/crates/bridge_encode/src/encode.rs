@@ -166,8 +166,16 @@ impl Walk<'_> {
             RuntimeTy::Class(name, args) => self.class(value, slot, name, args),
             RuntimeTy::Function { .. } => {
                 let signature = callable_signature(slot);
+                // A callable's type is its slot's, so a slot that leaves a
+                // type variable open gives it none it could state.
+                if let Some(var) = first_type_var(&signature) {
+                    return Err(self.err(EncodeErrorKind::OpenCallable {
+                        signature,
+                        var: var.name().to_string(),
+                    }));
+                }
                 match value.callable(&signature) {
-                    Some(Ok(wire)) => Ok(stated(wire, signature, Fit::AsIs)),
+                    Some(Ok(wire)) => Ok(stated(self.facts, wire, signature, Fit::AsIs)),
                     Some(Err(error)) => Err(self.err(EncodeErrorKind::Host(error.0))),
                     None => Err(self.mismatch(value, slot)),
                 }
@@ -250,6 +258,7 @@ impl Walk<'_> {
                 Err(kind) => return Err(self.err(kind)),
             };
             return Ok(stated(
+                self.facts,
                 wire,
                 RuntimeTy::Class(instance.class, args.into()),
                 fit,
@@ -270,6 +279,7 @@ impl Walk<'_> {
                 .collect::<Result<Vec<_>, _>>()?;
             let element = Self::join(element_tys);
             return Ok(stated(
+                self.facts,
                 InboundValue {
                     value_type: None,
                     value: Some(Value::ListValue(InboundListValue { values })),
@@ -308,6 +318,7 @@ impl Walk<'_> {
             };
             let item = Self::join(value_tys);
             return Ok(stated(
+                self.facts,
                 InboundValue {
                     value_type: None,
                     value: Some(Value::MapValue(InboundMapValue {
@@ -418,7 +429,7 @@ impl Walk<'_> {
                 }
             }
         };
-        Ok(stated(chosen.value, chosen.ty, chosen.fit))
+        Ok(stated(self.facts, chosen.value, chosen.ty, chosen.fit))
     }
 
     /// Union members with aliases expanded and nested unions flattened, in
@@ -593,7 +604,7 @@ impl Walk<'_> {
         } else {
             slot.clone()
         };
-        Ok(stated(wire, ty, fit))
+        Ok(stated(self.facts, wire, ty, fit))
     }
 
     fn map<V: HostValue>(
@@ -647,7 +658,7 @@ impl Walk<'_> {
         } else {
             slot.clone()
         };
-        Ok(stated(wire, ty, fit))
+        Ok(stated(self.facts, wire, ty, fit))
     }
 
     /// An encoded key as the wire's map key: the wire keys maps by string,
@@ -717,6 +728,7 @@ impl Walk<'_> {
         // A class node always names its class: the wire's `class_value` has
         // no name of its own, and every typed SDK states it the same way.
         Ok(stated(
+            self.facts,
             wire,
             RuntimeTy::Class(name.clone(), args.into()),
             fit,
@@ -903,10 +915,27 @@ fn callable_signature(slot: &RuntimeTy) -> RuntimeTy {
     }
 }
 
+/// The first type variable `ty` mentions, if any.
+fn first_type_var(ty: &RuntimeTy) -> Option<ParamTy> {
+    if let RuntimeTy::TypeVar(param) = ty {
+        return Some(param.clone());
+    }
+    let mut found = None;
+    ty.visit_children(&mut |child| {
+        if found.is_none() {
+            found = first_type_var(child);
+        }
+    });
+    found
+}
+
 /// A node that states its type: a list, map, class or host callable carries
 /// the type it has; a scalar, null, enum variant, media value or handle
-/// implies its own and carries nothing.
-fn stated(mut value: InboundValue, ty: RuntimeTy, fit: Fit) -> Encoded {
+/// implies its own and carries nothing. The statement spells every
+/// non-recursive alias by its body ([`Facts::stated_form`]): the engine has a
+/// declaration to resolve only for a recursive one.
+fn stated(facts: &Facts, mut value: InboundValue, ty: RuntimeTy, fit: Fit) -> Encoded {
+    let ty = facts.stated_form(ty);
     let callable = BamlHandleType::HostValueCallable as i32;
     let needs_statement = matches!(
         value.value,
@@ -1013,6 +1042,7 @@ impl EncodeErrorKind {
             | Self::UnknownEnum(_)
             | Self::UnknownAlias(_)
             | Self::AliasCycle(_)
+            | Self::OpenCallable { .. }
             | Self::Host(_) => false,
         }
     }
@@ -1871,6 +1901,8 @@ mod tests {
     /// replace the file's content with the string it prints.
     #[test]
     fn host_callable_fixture_descriptor_is_current() {
+        // The program declares no `throws` on its callbacks, so each carries
+        // an implicit effect parameter, which a host states as `unknown`.
         let callback = |params: Vec<Ty>, ret: Ty| Ty::Function {
             params: params
                 .into_iter()
@@ -1881,7 +1913,7 @@ mod tests {
                 })
                 .collect(),
             ret: Box::new(ret),
-            throws: Box::new(Ty::Never),
+            throws: Box::new(Ty::TypeVar(ParamTy::new(0, Name::new("__effect_param_0")))),
         };
         let function = |fqn: &str, params: Vec<ParamDescriptor>, ret: Ty| FunctionDescriptor {
             fqn: fqn.into(),

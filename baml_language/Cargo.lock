@@ -1413,7 +1413,6 @@ dependencies = [
  "prost",
  "rustc-hash 2.1.2",
  "serde_json",
- "smallvec",
  "sys_native",
  "sys_ops",
  "sys_types",

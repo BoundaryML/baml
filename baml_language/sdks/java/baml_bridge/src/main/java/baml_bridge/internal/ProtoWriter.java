@@ -416,7 +416,7 @@ public final class ProtoWriter {
                 w.writeMessage(IV_VALUE_TYPE, contextualType.toWireTy());
                 typeArgs = contextualType.classTypeArgs();
             } else {
-                typeArgs = TypeRegistry.typeArgsOf(value);
+                typeArgs = instanceTypeArgs(value, cw);
                 writeClassType(w, cw.fqn, typeArgs);
             }
             w.writeMessage(IV_CLASS, encodeClass(cw, typeArgs));
@@ -491,9 +491,97 @@ public final class ProtoWriter {
         }
         TypeRegistry.ClassWire cw = value == null ? null : TypeRegistry.classWire(value);
         if (cw != null) {
-            return BamlType.classByFqn(cw.fqn, TypeRegistry.typeArgsOf(value).toArray(new BamlType[0]));
+            return BamlType.classByFqn(cw.fqn, instanceTypeArgs(value, cw).toArray(new BamlType[0]));
         }
         return null;
+    }
+
+    /**
+     * The type arguments of an instance of a generic class: the ones bound when
+     * it was decoded, else the ones its field values determine. Java erases a
+     * class's type arguments at run time, so an instance built in Java states
+     * what its fields make of each parameter ({@code new GenericBox<>(5L)} is a
+     * {@code GenericBox<int>}), as the untyped hosts do. A parameter no field
+     * determines leaves the instance with no type to state, and the caller
+     * names it.
+     */
+    private static List<BamlType> instanceTypeArgs(Object value, TypeRegistry.ClassWire cw) {
+        List<BamlType> bound = TypeRegistry.typeArgsOf(value);
+        if (!bound.isEmpty() || cw.typeParams == null || cw.typeParams.length == 0) {
+            return bound;
+        }
+        Map<String, BamlType> bindings = new java.util.HashMap<>();
+        if (cw.fieldDescs != null) {
+            for (int i = 0; i < cw.fieldNames.length; i++) {
+                BamlType desc = cw.fieldDescs[i];
+                Object fieldValue = cw.fieldValues[i];
+                if (desc == null || fieldValue == null) {
+                    continue;
+                }
+                BamlType natural = naturalType(fieldValue);
+                if (natural != null) {
+                    unify(desc, natural, bindings);
+                }
+            }
+        }
+        List<BamlType> solved = new java.util.ArrayList<>(cw.typeParams.length);
+        for (String param : cw.typeParams) {
+            BamlType binding = bindings.get(param);
+            if (binding == null) {
+                throw new IllegalArgumentException(
+                        "the fields of this " + cw.fqn + " do not determine its type argument `"
+                                + param + "`; pass the call's type arguments");
+            }
+            solved.add(binding);
+        }
+        return solved;
+    }
+
+    /**
+     * Bind the type variables of the field descriptor {@code desc} from the
+     * natural type {@code natural} of the field's value, as the shared walker's
+     * {@code unify} does: an empty container binds {@code never} (the exact
+     * type of {@code []}), two fields that disagree about a variable are an
+     * error, and a union descriptor gives no evidence.
+     */
+    private static void unify(BamlType desc, BamlType natural, Map<String, BamlType> bindings) {
+        switch (desc.kind()) {
+            case TYPEVAR -> {
+                BamlType bound = bindings.putIfAbsent(desc.fqn(), natural);
+                if (bound != null && !bound.equals(natural)) {
+                    throw new IllegalArgumentException(
+                            "the fields of this instance disagree about its type argument `"
+                                    + desc.fqn() + "`: " + bound + " and " + natural);
+                }
+            }
+            case OPTIONAL -> unify(
+                    desc.optionalInner(),
+                    natural.kind() == BamlType.Kind.OPTIONAL ? natural.optionalInner() : natural,
+                    bindings);
+            case LIST -> {
+                if (natural.kind() == BamlType.Kind.LIST) {
+                    unify(desc.listItem(), natural.listItem(), bindings);
+                }
+            }
+            case MAP -> {
+                if (natural.kind() == BamlType.Kind.MAP) {
+                    unify(desc.mapKey(), natural.mapKey(), bindings);
+                    unify(desc.mapValue(), natural.mapValue(), bindings);
+                }
+            }
+            case CLASS -> {
+                if (natural.kind() == BamlType.Kind.CLASS
+                        && java.util.Objects.equals(desc.fqn(), natural.fqn())
+                        && desc.classTypeArgs().size() == natural.classTypeArgs().size()) {
+                    for (int i = 0; i < desc.classTypeArgs().size(); i++) {
+                        unify(desc.classTypeArgs().get(i), natural.classTypeArgs().get(i), bindings);
+                    }
+                }
+            }
+            default -> {
+                // A union, literal, primitive or named leaf fixes no variable.
+            }
+        }
     }
 
     /**

@@ -133,7 +133,15 @@ async fn host_reentry_inherits_suppression_and_context_then_restores_selection()
         engine.call_function(
             "target",
             vec![
-                BexExternalValue::HostValue(HostValueArc::new(1, HostValueKind::Callable)),
+                BexExternalValue::HostCallable {
+                    handle: HostValueArc::new(1, HostValueKind::Callable),
+                    params: Box::new([baml_type::RuntimeFunctionParamTy::required(
+                        None,
+                        bex_engine::RuntimeTy::class("State"),
+                    )]),
+                    ret: Box::new(bex_engine::RuntimeTy::int()),
+                    throws: Box::new(bex_engine::RuntimeTy::Never),
+                },
                 state.clone(),
             ],
             FunctionCallContextBuilder::new(CallId::next())

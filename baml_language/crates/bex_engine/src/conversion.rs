@@ -488,8 +488,7 @@ impl BexEngine {
         vm: &BexVm,
         permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, EngineError> {
-        let selected_interface =
-            find_implemented_interface_union_member(value, declared_type, vm, permit)?;
+        let selected_interface = find_implemented_interface_union_member(value, declared_type, vm)?;
         // Select union arms while the value is still a live VM value. Some
         // values intentionally become opaque tagged handles at the host
         // boundary; re-selecting from that host carrier would discard the
@@ -558,12 +557,16 @@ impl BexEngine {
             Object::String(s) => Ok(BexExternalValue::String(s.clone())),
 
             Object::Array(arr) => {
-                // Get element type from declared type, falling back to Null when
-                // the declared type doesn't resolve (e.g., builtin class arrays)
-
+                // The element type is the declared one where the declared type
+                // is a list; where it is not (an `unknown` slot, a builtin
+                // class's array), the array's own, which the value carries.
+                let own_element_type;
                 let element_type = match effective_type {
                     RuntimeTy::List(elem_ty) => elem_ty.as_ref(),
-                    _ => &RuntimeTy::Null,
+                    _ => {
+                        own_element_type = overlay_wire_ty(arr.element_ty.as_runtime_ty())?;
+                        &own_element_type
+                    }
                 };
 
                 // Snapshot under the source's lock; the recursive
@@ -582,12 +585,19 @@ impl BexEngine {
             }
 
             Object::Map(map) => {
-                // Get key and value types from declared type, falling back to
-                // Null when the declared type doesn't resolve
-
+                // The key and value types are the declared ones where the
+                // declared type is a map; where it is not, the map's own,
+                // which the value carries.
+                let own_types;
                 let (key_type, value_type) = match effective_type {
                     RuntimeTy::Map { key, value, .. } => (key.as_ref(), value.as_ref()),
-                    _ => (&RuntimeTy::String, &RuntimeTy::Null),
+                    _ => {
+                        own_types = (
+                            overlay_wire_ty(map.key_ty.as_runtime_ty())?,
+                            overlay_wire_ty(map.value_ty.as_runtime_ty())?,
+                        );
+                        (&own_types.0, &own_types.1)
+                    }
                 };
 
                 if !anchor_wire_ty(vm, key_type)
@@ -857,307 +867,6 @@ impl BexEngine {
                 type_name: "sentinel".to_string(),
             }),
         }
-    }
-}
-
-// ============================================================================
-// External to VM Value Conversion
-// ============================================================================
-
-impl BexEngine {
-    /// Synthesize the concrete `RuntimeTy` an inbound argument *value* inhabits
-    /// (01a step 1), for driving call-site generic inference. Pure bottom-up:
-    /// with union-arm routing out of scope (00b3 G5), no `expected`-guided
-    /// disambiguation is needed. A generic instance's type is read from its
-    /// wire-supplied `type_args` (the value-level source of truth); class/enum
-    /// `TypeName`s are resolved against the engine registry so the binding
-    /// names the class admission resolves. Opaque host values — and anything else with
-    /// no readable BAML type, including empty containers — are `HostOnly`
-    /// (Case 2, → `rust_type`).
-    pub(crate) fn synth_ty_from_value(&self, value: &BexExternalValue) -> SynthTy {
-        match value {
-            BexExternalValue::Int(_) => SynthTy::Known(RuntimeTy::int()),
-            BexExternalValue::Bigint(_) => SynthTy::Known(RuntimeTy::Bigint),
-            BexExternalValue::Float(_) => SynthTy::Known(RuntimeTy::float()),
-            BexExternalValue::Bool(_) => SynthTy::Known(RuntimeTy::bool()),
-            // A `String` value widens to `string`, never a `Literal` (00b3
-            // T2/T45 — `identity("hi")` binds `T = string`).
-            BexExternalValue::String(_) => SynthTy::Known(RuntimeTy::string()),
-            BexExternalValue::Uint8Array(_) => SynthTy::Known(RuntimeTy::Uint8Array),
-            // A bare `null` carries NO inference evidence (03b §I/§H, rule 4):
-            // a `null`-only actual gives the value position no concrete leaf, so
-            // we do NOT bind `T = null` (and do NOT null-strip a `T?` formal to
-            // bind `T = null`). It rides host-only ⇒ the var defaults to
-            // `rust_type` and the value round-trips unchanged (`identity(None)
-            // == None`). This is a *runtime* leaf decision; the shared
-            // compile-time unifier still binds `null` faithfully.
-            BexExternalValue::Null => SynthTy::HostOnly,
-            BexExternalValue::Array { items, .. } => {
-                // An array always inhabits a list. When its elements carry no
-                // evidence (an empty `[]`, or elements that are themselves
-                // evidence-free), the element type is the host-only `rust_type`
-                // rather than no-evidence — `identity<T>([])` binds
-                // `T = rust_type[]`, never leaving `T` for Gate A.
-                let elem =
-                    synth_collection_element(self, items.iter()).unwrap_or(RuntimeTy::RustType);
-                SynthTy::Known(RuntimeTy::List(Box::new(elem)))
-            }
-            BexExternalValue::Map { entries, .. } => {
-                // A map always inhabits `map<string, _>`: every wire entry is
-                // string-keyed, so the key is always `string`. When the values
-                // carry no evidence (a genuinely empty `{}`, or values that are
-                // themselves evidence-free), the value type is the host-only
-                // `rust_type` — an empty map binds `Map<string, rust_type>`,
-                // never leaving the value TypeVar for Gate A.
-                let value_ty =
-                    synth_collection_element(self, entries.values()).unwrap_or(RuntimeTy::RustType);
-                SynthTy::Known(RuntimeTy::Map {
-                    key: Box::new(RuntimeTy::string()),
-                    value: Box::new(value_ty),
-                })
-            }
-            // A fully-bound generic instance carries its concrete args on the
-            // wire (`GenericBox[int]` → `[int]`). An *unbound* generic instance —
-            // a generic class whose wire type-args are EMPTY (Pydantic lets you
-            // build `GenericBox(value=5)` without `[int]`) — carries no readable
-            // BAML type, so it is host-only (03b G2/G3): the var binds `rust_type`
-            // and the instance rides opaquely through the `OpaqueExternalValue`
-            // carrier, staying distinct from a properly-bound instance (G4). A
-            // *non*-generic class legitimately has empty args and types normally.
-            // (Where a forcing formal `GenericPair<int,T>` should recover `T` from
-            // an unbound instance's FIELDS instead — 03b G1 — that is handled
-            // formal-aware in `synth_inference_actual`, not here.) An unresolvable
-            // class name is host-only too.
-            BexExternalValue::Instance {
-                class_name,
-                type_args,
-                ..
-            } => match self.resolve_class_type_name(class_name) {
-                Some(tn) => {
-                    if type_args.is_empty() && self.class_generic_arity(class_name) > 0 {
-                        SynthTy::HostOnly
-                    } else {
-                        SynthTy::Known(RuntimeTy::Class(tn, type_args.clone().into()))
-                    }
-                }
-                None => SynthTy::HostOnly,
-            },
-            BexExternalValue::Variant { enum_name, .. } => {
-                // A resolvable enum binds its concrete type; an unresolved enum
-                // name (no such enum registered) is an opaque carrier with no
-                // BAML type ⇒ host-only (`rust_type`), mirroring the unresolved
-                // `Instance` arm above.
-                match self.resolve_enum_type_name(enum_name) {
-                    Some(tn) => SynthTy::Known(RuntimeTy::Enum(tn)),
-                    None => SynthTy::HostOnly,
-                }
-            }
-            // A reflected type passed as a value inhabits the `type` metatype.
-            BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_)) => {
-                SynthTy::Known(RuntimeTy::Type)
-            }
-            // A tagged handle's wire type is annotation-only. Call paths that
-            // hold a heap permit resolve the rooted object and supply its live
-            // TypeHead; inference without that proof must treat it as opaque.
-            BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { .. }) => SynthTy::HostOnly,
-            // Media is a concrete leaf BAML type (`image`/`audio`/...): its kind
-            // is readable from the value, so `identity<T>(img)` binds T to the
-            // real media type rather than the host-only `rust_type` catch-all.
-            BexExternalValue::Adt(BexExternalAdt::Media(media)) => {
-                SynthTy::Known(RuntimeTy::Media(media.kind))
-            }
-            // A rendered prompt inhabits `ai.Prompt` — bind T to that rather than
-            // falling into the host-only catch-all below.
-            BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
-                SynthTy::Known(RuntimeTy::prompt_ast())
-            }
-            // A typed inbound value carries stronger evidence than payload
-            // shape alone (for example a literal rather than `string`, or the
-            // element type of an empty list). Actual union wrappers retain the
-            // existing payload-based inference behavior.
-            BexExternalValue::Union { value, metadata } => {
-                if metadata.is_inbound_type_annotation {
-                    SynthTy::Known(metadata.selected_option.clone())
-                } else {
-                    self.synth_ty_from_value(value)
-                }
-            }
-            // Opaque host values (Case 2) and other non-BAML-typed carriers.
-            // (Every `Adt` variant is handled explicitly above, so there is no
-            // `Adt(_)` fallthrough — a new `BexExternalAdt` variant will surface
-            // here as a non-exhaustive-match error, forcing a synth decision.)
-            BexExternalValue::Handle(_)
-            | BexExternalValue::RustData(_)
-            | BexExternalValue::HostValue(_)
-            | BexExternalValue::FunctionRef { .. } => SynthTy::HostOnly,
-        }
-    }
-
-    /// Resolve a class FQN (as it arrives on an inbound `Instance`) to the
-    /// engine-registered `TypeName`, so a synthesized `Class` type matches the
-    /// declared slot's name. `None` if no such class is registered.
-    fn resolve_class_type_name(&self, class_name: &str) -> Option<baml_type::TypeName> {
-        let ptr = self
-            .resolved_class_names
-            .get(class_name)
-            .or_else(|| resolve_named_object(&self.resolved_class_names, class_name))?;
-        // SAFETY: registered class names point to compile-time Class objects.
-        match unsafe { ptr.get() } {
-            Object::Class(class) => class.name().declared().cloned(),
-            _ => None,
-        }
-    }
-
-    /// Resolve an enum FQN to its engine-registered `TypeName`. See
-    /// [`Self::resolve_class_type_name`].
-    fn resolve_enum_type_name(&self, enum_name: &str) -> Option<baml_type::TypeName> {
-        let ptr = self
-            .resolved_enum_names
-            .get(enum_name)
-            .or_else(|| resolve_named_object(&self.resolved_enum_names, enum_name))?;
-        // SAFETY: registered enum names point to compile-time Enum objects.
-        match unsafe { ptr.get() } {
-            Object::Enum(enum_obj) => enum_obj.name().declared().cloned(),
-            _ => None,
-        }
-    }
-
-    /// Run `f` against the resolved compile-time [`Object::Class`] for `class_name`.
-    fn with_resolved_class<R>(
-        &self,
-        class_name: &str,
-        f: impl FnOnce(&bex_vm_types::Class) -> R,
-    ) -> Option<R> {
-        let ptr = self
-            .resolved_class_names
-            .get(class_name)
-            .or_else(|| resolve_named_object(&self.resolved_class_names, class_name))?;
-        // SAFETY: registered class names point to compile-time Class objects.
-        match unsafe { ptr.get() } {
-            Object::Class(class) => Some(f(class)),
-            _ => None,
-        }
-    }
-
-    /// The number of class-level generic parameters `class_name` declares, read
-    /// from the highest `TypeArgRef(N)` index across its field templates (`N+1`).
-    /// `0` for a non-generic class — used to tell an *unbound generic* instance
-    /// (empty wire args on a generic class ⇒ host-only) from a plain non-generic
-    /// instance (empty args is correct). See the `Instance` synth arm.
-    fn class_generic_arity(&self, class_name: &str) -> usize {
-        self.with_resolved_class(class_name, |class| {
-            class
-                .fields
-                .iter()
-                .filter_map(|field| template_max_type_arg_ref(&field.field_template))
-                .max()
-                .map_or(0, |max| max as usize + 1)
-        })
-        .unwrap_or(0)
-    }
-
-    /// Reconstruct the type-args of an *unbound* generic instance from its field
-    /// VALUES, by synthesizing the value of each field whose template is a direct
-    /// `TypeArgRef(N)` into slot `N`. Slots with no directly-typed field stay
-    /// `Unknown` (the unifier skips them). Returns `None` for a
-    /// non-generic / unresolvable class. This is the call-time recovery a forcing
-    /// formal needs to bind a var from an unbound instance (03b G1); it does NOT
-    /// run for bound instances (they read the wire args) or bare-`T` formals
-    /// (those keep the host-only `rust_type` synth).
-    ///
-    /// `formal_args` are the per-slot types from the formal generic-class type
-    /// (`GenericPair<GenericPair<A,B>, …>` ⇒ slot 0 formal is `GenericPair<A,B>`).
-    /// Each field is synthed against its slot's formal via the formal-aware
-    /// [`Self::synth_inference_actual`], so a slot whose value is *itself* an
-    /// unbound nested instance is recursively reconstructed (deep G1) rather than
-    /// flattened to host-only `rust_type`.
-    fn reconstruct_unbound_instance_args(
-        &self,
-        class_name: &str,
-        fields: &indexmap::IndexMap<String, BexExternalValue>,
-        formal_args: &[RuntimeTy],
-    ) -> Option<Vec<RuntimeTy>> {
-        let arity = self.class_generic_arity(class_name);
-        if arity == 0 {
-            return None;
-        }
-        let unknown = || RuntimeTy::Unknown;
-        let mut args: Vec<RuntimeTy> = (0..arity).map(|_| unknown()).collect();
-        self.with_resolved_class(class_name, |class| {
-            for field in &class.fields {
-                let slot = match &field.field_template {
-                    baml_type::TyTemplate::TypeArgRef(n) => *n as usize,
-                    _ => continue,
-                };
-                if let Some(value) = fields.get(&field.name) {
-                    if let Some(arg) = args.get_mut(slot) {
-                        // Recurse formal-first: a nested unbound instance under a
-                        // generic-class formal slot is reconstructed in turn; any
-                        // other slot formal (a bare `TypeVar`, a leaf) falls through
-                        // to the value-only synth inside `synth_inference_actual`.
-                        *arg = match formal_args.get(slot) {
-                            Some(slot_formal) => self.synth_inference_actual(slot_formal, value),
-                            None => self.synth_ty_from_value(value).into_runtime_ty(),
-                        };
-                    }
-                }
-            }
-        })?;
-        Some(args)
-    }
-
-    /// Synthesize the *actual* `RuntimeTy` for one inference pair, given the
-    /// declared `formal`. Almost always this is just [`Self::synth_ty_from_value`].
-    /// The one formal-aware exception: an **unbound** generic `Instance` (empty
-    /// wire args) met by a generic-**class** formal. The wire carries no
-    /// type-args, but the formal directs inference into specific slots, so we
-    /// reconstruct the instance's args from its field values (03b G1:
-    /// `second_of<T>(p: GenericPair<int,T>)` recovers `T=string`). A bare-`T`
-    /// formal is not a `Class`, so it falls through to the host-only `rust_type`
-    /// synth (G2/G3), keeping the unbound instance opaque on round-trip.
-    pub(crate) fn synth_inference_actual(
-        &self,
-        formal: &RuntimeTy,
-        value: &BexExternalValue,
-    ) -> RuntimeTy {
-        // A sparse class annotation is represented by the external union
-        // carrier even when the declared type is not a union. For formal-aware
-        // generic reconstruction, inspect the class payload beneath that
-        // transient carrier; otherwise an erased `GenericPair(...)` would bind
-        // every type variable to `$rust_type` instead of recovering evidence
-        // recursively from its fields.
-        let structural_value = match value {
-            BexExternalValue::Union { value, metadata } if metadata.is_inbound_type_annotation => {
-                value.as_ref()
-            }
-            _ => value,
-        };
-        if let (
-            RuntimeTy::Class(formal_name, formal_args),
-            BexExternalValue::Instance {
-                class_name,
-                type_args,
-                fields,
-            },
-        ) = (formal, structural_value)
-        {
-            if type_args.is_empty() {
-                let contextual_name;
-                let class_name = if class_name.is_empty() {
-                    contextual_name = formal_name.render_dotted(false);
-                    contextual_name.as_str()
-                } else {
-                    class_name.as_str()
-                };
-                if let (Some(tn), Some(args)) = (
-                    self.resolve_class_type_name(class_name),
-                    self.reconstruct_unbound_instance_args(class_name, fields, formal_args),
-                ) {
-                    return RuntimeTy::Class(tn, args.into());
-                }
-            }
-        }
-        self.synth_ty_from_value(value).into_runtime_ty()
     }
 }
 
@@ -1638,6 +1347,7 @@ pub(crate) fn contains_type_var(ty: &RuntimeTy) -> bool {
 /// shared [`baml_type_runtime::union_ty`]. Used when the same `TypeVar` is
 /// inferred from several arguments (`choose(5, "a")` → `T = int | string`) or a
 /// host-only sibling (`choose(5, host_obj)` → `int | rust_type`).
+#[cfg(test)]
 pub(crate) fn union_runtime_ty(a: &RuntimeTy, b: &RuntimeTy) -> RuntimeTy {
     RuntimeTy::try_from(baml_type_runtime::union_ty(&Ty::from(a), &Ty::from(b)))
         .expect("union of runtime types is a runtime type")
@@ -1756,53 +1466,6 @@ pub(crate) struct ParamVarPositions {
     pub ambiguous_union: std::collections::HashSet<String>,
 }
 
-/// The highest `TypeArgRef(N)` index appearing anywhere in a field template, or
-/// `None` if the template references no class type-arg. Used to compute a
-/// generic class's arity from its fields.
-fn template_max_type_arg_ref<N: Clone>(t: &baml_type::TyTemplate<N>) -> Option<u32> {
-    use baml_type::TyTemplate as T;
-    match t {
-        T::TypeArgRef(n) => Some(*n),
-        T::List(inner) => template_max_type_arg_ref(inner),
-        T::Map { key, value, .. } | T::Future(key, value) => template_max_type_arg_ref(key)
-            .into_iter()
-            .chain(template_max_type_arg_ref(value))
-            .max(),
-        T::Union(members) => members.iter().filter_map(template_max_type_arg_ref).max(),
-        T::Class(_, args) => args.iter().filter_map(template_max_type_arg_ref).max(),
-        T::Interface(_, args, assoc) => args
-            .iter()
-            .chain(assoc.iter().map(|(_, t)| t))
-            .filter_map(template_max_type_arg_ref)
-            .max(),
-        T::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => params
-            .iter()
-            .map(|p| &p.ty)
-            .chain([ret.as_ref(), throws.as_ref()])
-            .filter_map(template_max_type_arg_ref)
-            .max(),
-        T::AssociatedTypeProjection {
-            base, interface, ..
-        } => template_max_type_arg_ref(base)
-            .into_iter()
-            .chain(
-                interface
-                    .generics
-                    .iter()
-                    .chain(interface.associated_types.iter().map(|(_, t)| t))
-                    .filter_map(template_max_type_arg_ref),
-            )
-            .max(),
-        // Realized leaves carry no frame ref.
-        _ => None,
-    }
-}
-
 /// Classify every `TypeVar` occurring in the declared parameter types into
 /// [`ParamVarPositions`]. See that type's docs for the rule mapping.
 pub(crate) fn classify_param_var_positions(params: &[RuntimeTy]) -> ParamVarPositions {
@@ -1874,50 +1537,6 @@ fn walk_var_positions(ty: &RuntimeTy, in_closure: bool, out: &mut ParamVarPositi
         }
         _ => {}
     }
-}
-
-/// The outcome of synthesizing a `RuntimeTy` from a runtime argument value —
-/// the value→type bridge the TIR never needs (it sees typed expressions, not
-/// values). Every value yields a `RuntimeTy`: a concrete BAML type when one can
-/// be read, else the host-only `rust_type` fallback.
-pub(crate) enum SynthTy {
-    /// A concrete BAML type was synthesized (Case 1).
-    Known(RuntimeTy),
-    /// An opaque host value with no BAML type (Case 2) — binds `rust_type` and
-    /// rides through as an `Object::RustData` heap handle.
-    HostOnly,
-}
-
-impl SynthTy {
-    /// The `RuntimeTy` to feed [`infer_bindings_runtime`]. `HostOnly` lowers to
-    /// `RustType` (the recommended host-only default — round-trips as
-    /// `Object::RustData` with no materializer change; see
-    /// `BexEngine::land_engine_value`).
-    pub(crate) fn into_runtime_ty(self) -> RuntimeTy {
-        match self {
-            SynthTy::Known(ty) => ty,
-            SynthTy::HostOnly => RuntimeTy::RustType,
-        }
-    }
-}
-
-/// Union-fold the element/value synths of a collection into a single element
-/// type. `None` only when the collection is empty (every value synthesizes to a
-/// concrete type or the host-only `rust_type`, so non-empty collections always
-/// yield evidence).
-fn synth_collection_element<'a>(
-    engine: &BexEngine,
-    items: impl Iterator<Item = &'a BexExternalValue>,
-) -> Option<RuntimeTy> {
-    let mut acc: Option<RuntimeTy> = None;
-    for item in items {
-        let ty = engine.synth_ty_from_value(item).into_runtime_ty();
-        acc = Some(match acc {
-            None => ty,
-            Some(prev) => union_runtime_ty(&prev, &ty),
-        });
-    }
-    acc
 }
 
 /// Find which union member matches a value.
@@ -2021,7 +1640,7 @@ fn find_matching_member(
 /// `type_name`, refined for the mismatch diagnostics: an instance or variant
 /// names its class/enum, since "instance" alone cannot identify which
 /// declaration failed to match.
-pub(crate) fn described_value_type(value: &BexExternalValue) -> String {
+fn described_value_type(value: &BexExternalValue) -> String {
     match value {
         BexExternalValue::Instance { class_name, .. } => format!("instance of `{class_name}`"),
         BexExternalValue::Variant { enum_name, .. } => format!("variant of `{enum_name}`"),
@@ -2047,7 +1666,7 @@ fn resolve_named_object<'a>(
         return Some(found);
     }
     // MIR uses `display_name`, which strips the `user.` prefix for
-    // user-package types, so an `Instance` admitted to a declared class
+    // user-package types, so an `Instance` built for a declared class
     // may carry `lorem.MyLorem` while the engine registered
     // `user.lorem.MyLorem`. Try the `user.`
     // prefix as a fallback before giving up. Builtin/vendor types keep
@@ -2160,39 +1779,9 @@ fn value_matches_type(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         ) => true,
         (union_value @ BexExternalValue::Union { metadata, .. }, RuntimeTy::Union(members)) => {
             members.iter().any(|member| {
-                // Recurse with the ANNOTATED carrier, not the unwrapped
-                // payload: sparse inbound annotations are the value's
-                // identity for media members (the wrapper's shape never
-                // matches `Media` structurally), and the per-member arms
-                // below unwrap for every non-annotation-dependent case.
                 selected_arm_equal(member, &metadata.selected_option)
                     && value_matches_type(union_value, member)
             })
-        }
-        // `value_satisfies_json` peels sparse inbound leaf annotations (the
-        // Swift bridge annotates every json scalar leaf) but still rejects
-        // genuine union carriers and annotations outside the JSON algebra.
-        (union_value @ BexExternalValue::Union { .. }, RuntimeTy::TypeAlias(name))
-            if is_canonical_json_alias(name) =>
-        {
-            value_satisfies_json(union_value)
-        }
-        // A media value crosses the FFI as a class-shaped `{_data: handle}`
-        // wrap carrying a sparse `Media(kind)` annotation. The annotation is
-        // the value's identity — the payload shape never matches `Media`
-        // structurally — so honor it before unwrapping (otherwise media
-        // items inside union-typed containers, e.g. `image[]?`, are
-        // rejected while the direct-typed path accepts them).
-        (BexExternalValue::Union { metadata, .. }, RuntimeTy::Media(expected_kind))
-            if metadata.is_inbound_type_annotation
-                && matches!(
-                    &metadata.selected_option,
-                    RuntimeTy::Media(kind)
-                        if *expected_kind == baml_type::MediaKind::Generic
-                            || kind == expected_kind
-                ) =>
-        {
-            true
         }
         (BexExternalValue::Union { value, .. }, ty) => value_matches_type(value, ty),
         (value, RuntimeTy::TypeAlias(name)) if is_canonical_json_alias(name) => {
@@ -2317,7 +1906,6 @@ fn find_implemented_interface_union_member<'a>(
     value: Value,
     declared_type: &'a RuntimeTy,
     vm: &BexVm,
-    permit: PermitProof<'_>,
 ) -> Result<Option<&'a RuntimeTy>, EngineError> {
     let RuntimeTy::Union(members) = declared_type else {
         return Ok(None);
@@ -2331,7 +1919,7 @@ fn find_implemented_interface_union_member<'a>(
         return Ok(None);
     }
 
-    let Some(runtime_ty) = crate::value_runtime_baml_ty(value, permit) else {
+    let Some(runtime_ty) = BexEngine::landed_ty(vm, value) else {
         return Ok(None);
     };
     let mut matching: Vec<&'a RuntimeTy> = Vec::new();

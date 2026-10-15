@@ -1367,9 +1367,21 @@ fn ty_serde_to_value(
             Ok(serde_to_value(vm, json))
         }
 
-        RealizedTy::TypeAlias(_) => {
-            // Unknown / cross-package recursive aliases: fall back to untyped.
-            Ok(serde_to_value(vm, json))
+        // A recursive alias is transparent: the value is decoded against what
+        // it stands for, and a container built there carries the alias as its
+        // element type (`type Tree = int | Tree[]` decodes `[1, [2]]` as a
+        // `Tree[]`), so the value inhabits the alias as the type system reads
+        // it. The recursion terminates on finite JSON: an alias cycle passes
+        // through a list or map edge (E0068), which consumes a JSON level.
+        RealizedTy::TypeAlias(head) => {
+            let Some(body) = vm.type_alias_definition(head.ptr()).cloned() else {
+                return Err(raise_decode(
+                    vm,
+                    format!("type alias `{ty}` has no definition in this program"),
+                    path,
+                ));
+            };
+            ty_serde_to_value(vm, json, &body, path)
         }
 
         RealizedTy::Class(head, type_args) => {

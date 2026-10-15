@@ -235,10 +235,11 @@ class TestGenericInference {
     }
 
     @Test
-    void test_generic_inference_union_null_actual_binds_rust_type() {
-        // §H H3 / §I I4: a `null` actual is no evidence, and the `null` sibling
-        // absorbs it, so `T` defaults to `rust_type`.
-        assertEquals("$rust_type", Fns.tag_or_value(null));
+    void test_generic_inference_union_null_actual_binds_null() {
+        // `null` is a value of exactly one BAML type, and the engine infers from
+        // the concrete types of the values that arrived: `T | string | null`
+        // against `null` binds `T = null`, as the compile-time unifier does.
+        assertEquals("null", Fns.tag_or_value(null));
     }
 
     @Test

@@ -4,10 +4,21 @@
 //! Use when you need to traverse and convert the entire object graph,
 //! such as for FFI conversion to Python/JS objects.
 //!
+//! # Identity
+//!
+//! Every value carries the concrete type it has. A scalar, `null`, enum
+//! variant, media value or handle implies its own; a list carries its
+//! element type, a map its key and value types, a class instance its class
+//! and fully bound type arguments, a host callable its function type. The
+//! engine builds a value as what it says it is and then asks whether that
+//! type is a member of the slot the value was bound for; it never reads a
+//! slot into a value.
+//!
 //! # Union Types
 //!
-//! When a value comes from a union type (e.g., `int | string` or `Success | Failure`),
-//! it's wrapped in the `Union` variant with metadata about the union:
+//! When a value the engine produced comes from a union type (e.g., `int | string`
+//! or `Success | Failure`), it's wrapped in the `Union` variant with metadata
+//! about the union:
 //!
 //! ```ignore
 //! // Function returns Success | Failure
@@ -32,12 +43,6 @@ use indexmap::IndexMap;
 /// easy serialization for FFI consumers.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnionMetadata {
-    /// Whether this is the transient engine carrier for a sparse inbound
-    /// `InboundValue.value_type` annotation, rather than a value produced from
-    /// a declared union. The annotation carries only `selected_option`; the
-    /// contextual declared type supplies any enclosing union.
-    pub is_inbound_type_annotation: bool,
-
     /// Name of the union type (for named type aliases like `type Result = Success | Failure`).
     pub name: Option<String>,
 
@@ -69,7 +74,6 @@ impl UnionMetadata {
         };
 
         Self {
-            is_inbound_type_annotation: false,
             name: None,
             is_optional,
             is_single_pattern,
@@ -179,6 +183,12 @@ impl TypeDefRef {
 /// Use `BexEngine::call_function` to get the result. When the return type
 /// is a union, the value will be wrapped in the `Union` variant with metadata.
 ///
+/// Inbound, every value is the serialization of a concretely typed value: a
+/// container names its component types, an instance its class and type
+/// arguments, a callable its function type. The engine builds the value as it
+/// is and checks the result against its slot; nothing is read from the slot
+/// into the value.
+///
 /// # When to use BexValue vs BexExternalValue
 ///
 /// - **BexValue**: When you want to keep data in the heap and access lazily.
@@ -210,7 +220,9 @@ pub enum BexExternalValue {
 
     /// Owned array of values with element type.
     Array {
-        /// The declared element type (e.g., `int | string` for `(int | string)[]`).
+        /// The element type of the list (`int | string` for a `(int | string)[]`).
+        /// Inbound, every item must be a member of it; the list's concrete type
+        /// is `element_type[]`.
         element_type: RuntimeTy,
         /// The array items.
         items: Vec<BexExternalValue>,
@@ -218,9 +230,10 @@ pub enum BexExternalValue {
 
     /// Owned map with string keys and type information.
     Map {
-        /// The declared key type (usually `RuntimeTy::String`).
+        /// The key type (usually `RuntimeTy::String`); every key must be a member.
         key_type: RuntimeTy,
-        /// The declared value type (e.g., `int | string` for `map<string, int | string>`).
+        /// The value type (`int | string` for a `map<string, int | string>`);
+        /// every value must be a member.
         value_type: RuntimeTy,
         /// The map entries.
         entries: IndexMap<String, BexExternalValue>,
@@ -228,14 +241,13 @@ pub enum BexExternalValue {
 
     /// Class instance with class name and field values.
     Instance {
+        /// The class, as a host spells it (`user.Reading`, `baml.errors.Io`).
         class_name: String,
-        /// Concrete class type arguments for a generic class instance, in De
-        /// Bruijn (declaration) order; empty for non-generic classes. Carries a
-        /// `GenericBox<int>` instance's `[int]` across the FFI boundary (the
-        /// value-level type channel — distinct from a call's
-        /// `CallFunctionArgs.type_args`). Populated inbound from
-        /// the sparse `InboundValue.value_type`; landed into the VM
-        /// `Object::Instance::class_type_args` during contextual materialization.
+        /// The class's type arguments, in declaration order; empty for a
+        /// non-generic class. A generic instance arrives fully bound: a
+        /// `GenericBox<int>` carries `[int]` (the value-level type channel,
+        /// distinct from a call's `CallFunctionArgs.type_args`), and lands in
+        /// the VM `Object::Instance::class_type_args`.
         type_args: Vec<RuntimeTy>,
         fields: IndexMap<String, BexExternalValue>,
     },
@@ -249,7 +261,9 @@ pub enum BexExternalValue {
     /// Value from a union type with metadata.
     ///
     /// When the declared type is a union (e.g., `int | string`), the actual
-    /// value is wrapped with metadata about the union for FFI serialization.
+    /// value the engine produced is wrapped with metadata about the union for
+    /// FFI serialization. Outbound only: a host states the type of a node in
+    /// the node itself, so an inbound union envelope is refused.
     Union {
         /// The actual value (one of the union options).
         value: Box<BexExternalValue>,
@@ -281,11 +295,29 @@ pub enum BexExternalValue {
     // builtin classes and enums.
     Adt(BexExternalAdt),
 
-    /// Reference to a value owned by the host language.
+    /// Reference to a value owned by the host language, by its key and kind.
+    ///
+    /// Inbound, an opaque host value: it lands as `$rust_type` data. A host
+    /// callable arrives as [`HostCallable`](Self::HostCallable) with the
+    /// function type it inhabits; outbound, the engine hands a bound callable
+    /// back to its host's dispatch as this variant, since the host identifies
+    /// it by key alone.
     ///
     /// `Drop` of the last clone fires the registered `HostReleaseFn`.
     /// See [`bex_resource_types::HostValueArc`].
     HostValue(std::sync::Arc<bex_resource_types::HostValueArc>),
+
+    /// A host-language callable with the function type it inhabits: the type
+    /// the host declared for it, or the type of the slot it was passed to. The
+    /// engine binds it to an `Object::HostClosure` of exactly this type.
+    HostCallable {
+        /// The callable in the host's registry
+        /// (`HostValueKind::Callable`).
+        handle: std::sync::Arc<bex_resource_types::HostValueArc>,
+        params: Box<[baml_type::RuntimeFunctionParamTy]>,
+        ret: Box<RuntimeTy>,
+        throws: Box<RuntimeTy>,
+    },
 }
 
 impl std::fmt::Debug for BexExternalValue {
@@ -350,6 +382,18 @@ impl std::fmt::Debug for BexExternalValue {
                 .debug_struct("HostValue")
                 .field("key", &v.key)
                 .field("kind", &v.kind)
+                .finish(),
+            Self::HostCallable {
+                handle,
+                params,
+                ret,
+                throws,
+            } => f
+                .debug_struct("HostCallable")
+                .field("key", &handle.key)
+                .field("params", params)
+                .field("ret", ret)
+                .field("throws", throws)
                 .finish(),
         }
     }
@@ -426,6 +470,26 @@ impl PartialEq for BexExternalValue {
             (Self::Handle(a), Self::Handle(b)) => a == b,
             (Self::Adt(a), Self::Adt(b)) => a == b,
             (Self::HostValue(a), Self::HostValue(b)) => a.key == b.key && a.kind == b.kind,
+            (
+                Self::HostCallable {
+                    handle: a,
+                    params: a_params,
+                    ret: a_ret,
+                    throws: a_throws,
+                },
+                Self::HostCallable {
+                    handle: b,
+                    params: b_params,
+                    ret: b_ret,
+                    throws: b_throws,
+                },
+            ) => {
+                a.key == b.key
+                    && a.kind == b.kind
+                    && a_params == b_params
+                    && a_ret == b_ret
+                    && a_throws == b_throws
+            }
             _ => false,
         }
     }
@@ -442,50 +506,14 @@ impl BexExternalAdt {
     }
 }
 
-/// Field of the stdlib media wrapper classes (`baml.media.*`) that holds the
-/// structural media payload. The wrapper layout is private to the stdlib;
-/// host code must reach the payload through
-/// [`BexExternalValue::media_wrapper_inner`], never by naming this field
-/// elsewhere.
+/// Field of the stdlib media and prompt wrapper classes (`baml.media.*`,
+/// `ai.Prompt`) that holds the Rust-backed payload. The wrapper layout is
+/// private to the stdlib: the engine flattens a wrapper instance to its
+/// payload on the way out and builds one around a payload on the way in, so
+/// no host ever names this field.
 pub const MEDIA_WRAPPER_DATA_FIELD: &str = "_data";
 
 impl BexExternalValue {
-    /// If this is an instance of a stdlib media wrapper class
-    /// (`baml.media.{Image,Audio,Video,Pdf}`), the media kind it wraps.
-    pub fn media_wrapper_kind(&self) -> Option<baml_type::MediaKind> {
-        match self {
-            BexExternalValue::Instance { class_name, .. } => {
-                baml_type::MediaKind::from_wrapper_class_name(class_name)
-            }
-            _ => None,
-        }
-    }
-
-    /// The structural media payload of a media wrapper instance. `None` when
-    /// this is not a media wrapper, or when the wrapper is missing its
-    /// payload field (malformed; callers decide whether that is an error).
-    pub fn media_wrapper_inner(&self) -> Option<&BexExternalValue> {
-        self.media_wrapper_kind()?;
-        match self {
-            BexExternalValue::Instance { fields, .. } => fields.get(MEDIA_WRAPPER_DATA_FIELD),
-            _ => None,
-        }
-    }
-
-    /// Construct the transient carrier for an inbound value paired with its
-    /// exact host-known type. This reuses the external union representation so
-    /// existing type-directed VM materialization can honor `value_type`, while
-    /// explicitly distinguishing it from an actual declared union.
-    pub fn typed(value: BexExternalValue, value_type: RuntimeTy) -> Self {
-        let mut metadata =
-            UnionMetadata::new(RuntimeTy::Union(Box::new([value_type.clone()])), value_type);
-        metadata.is_inbound_type_annotation = true;
-        BexExternalValue::Union {
-            value: Box::new(value),
-            metadata,
-        }
-    }
-
     /// Construct a union value (`A | B | ...`) with metadata.
     ///
     /// ```ignore
@@ -557,6 +585,65 @@ impl BexExternalValue {
             BexExternalValue::FunctionRef { .. } => "function",
             BexExternalValue::Handle(_) => "handle",
             BexExternalValue::HostValue(_) => "host_value",
+            BexExternalValue::HostCallable { .. } => "host_callable",
+        }
+    }
+
+    /// This value as a host would send it back: every union envelope opened,
+    /// at every depth. The envelope says which member of a declared union a
+    /// value the engine handed out came from; a host value is just the value,
+    /// which states its own type, so an in-process caller that feeds an
+    /// engine result back in (the CLI's JSON output, a playground run) opens
+    /// the envelopes first.
+    #[must_use]
+    pub fn into_host_value(self) -> Self {
+        match self {
+            BexExternalValue::Union { value, .. } => value.into_host_value(),
+            BexExternalValue::Array {
+                element_type,
+                items,
+            } => BexExternalValue::Array {
+                element_type,
+                items: items.into_iter().map(Self::into_host_value).collect(),
+            },
+            BexExternalValue::Map {
+                key_type,
+                value_type,
+                entries,
+            } => BexExternalValue::Map {
+                key_type,
+                value_type,
+                entries: entries
+                    .into_iter()
+                    .map(|(key, value)| (key, value.into_host_value()))
+                    .collect(),
+            },
+            BexExternalValue::Instance {
+                class_name,
+                type_args,
+                fields,
+            } => BexExternalValue::Instance {
+                class_name,
+                type_args,
+                fields: fields
+                    .into_iter()
+                    .map(|(key, value)| (key, value.into_host_value()))
+                    .collect(),
+            },
+            BexExternalValue::Null
+            | BexExternalValue::Int(_)
+            | BexExternalValue::Bigint(_)
+            | BexExternalValue::Float(_)
+            | BexExternalValue::Bool(_)
+            | BexExternalValue::String(_)
+            | BexExternalValue::Variant { .. }
+            | BexExternalValue::Uint8Array(_)
+            | BexExternalValue::RustData(_)
+            | BexExternalValue::FunctionRef { .. }
+            | BexExternalValue::Handle(_)
+            | BexExternalValue::Adt(_)
+            | BexExternalValue::HostValue(_)
+            | BexExternalValue::HostCallable { .. } => self,
         }
     }
 
@@ -811,102 +898,6 @@ pub trait ToBexExternalValue: bex_vm_types::BexRustData {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue;
 }
 
-/// A structural inbound [`BexExternalValue`] that BAML cannot type — stashed
-/// verbatim so it rides through the VM as an opaque `Object::RustData`
-/// (`RuntimeTy::RustType`) and is re-emitted **unchanged** on the way out.
-///
-/// This is the round-trip carrier for *structural* host-only values: the ones
-/// that arrive with their content inline (an unbound generic `Instance`, a
-/// host-only `Map`/`Array`) rather than as a `HostValue` key-handle. Without it
-/// such a value, landed in a `RustType` slot, would either be lost or
-/// materialized into an introspectable VM object — breaking the opaque-leaf
-/// contract (e.g. an unbound `GenericBox(value=5)` must stay distinct from a
-/// bound `GenericBox[int]`). See `03c-impl-guide` "Host-only roundtripping".
-pub struct OpaqueExternalValue(pub BexExternalValue);
-
-impl bex_vm_types::BexRustData for OpaqueExternalValue {
-    fn measure(&self, meter: &mut bex_vm_types::Meter) {
-        measure_external_value(&self.0, meter);
-    }
-}
-
-/// Report what a host value keeps alive. Strings and payloads shared with
-/// the heap are reported through the meter's own rules; anything the heap or
-/// the host owns (a handle, a function reference, a host object) is not
-/// counted here.
-pub fn measure_external_value(value: &BexExternalValue, meter: &mut bex_vm_types::Meter) {
-    use bex_vm_types::BexRustData;
-    match value {
-        BexExternalValue::Null
-        | BexExternalValue::Int(_)
-        | BexExternalValue::Float(_)
-        | BexExternalValue::Bool(_)
-        | BexExternalValue::FunctionRef { .. }
-        | BexExternalValue::Handle(_) => {}
-        BexExternalValue::Bigint(bigint) => {
-            meter.bytes(usize::try_from(bigint.bits().div_ceil(8)).unwrap_or(usize::MAX));
-        }
-        BexExternalValue::String(text) => meter.string(text),
-        BexExternalValue::Array { items, .. } => {
-            meter.bytes(items.capacity() * size_of::<BexExternalValue>());
-            for item in items {
-                measure_external_value(item, meter);
-            }
-        }
-        BexExternalValue::Map { entries, .. } => {
-            meter.bytes(entries.capacity() * size_of::<(String, BexExternalValue)>());
-            for (key, entry) in entries {
-                meter.bytes(key.capacity());
-                measure_external_value(entry, meter);
-            }
-        }
-        BexExternalValue::Instance {
-            class_name,
-            type_args,
-            fields,
-        } => {
-            meter.bytes(class_name.capacity());
-            meter.bytes(type_args.capacity() * size_of::<RuntimeTy>());
-            meter.bytes(fields.capacity() * size_of::<(String, BexExternalValue)>());
-            for (key, field) in fields {
-                meter.bytes(key.capacity());
-                measure_external_value(field, meter);
-            }
-        }
-        BexExternalValue::Variant {
-            enum_name,
-            variant_name,
-        } => meter.bytes(enum_name.capacity() + variant_name.capacity()),
-        BexExternalValue::Union { value, .. } => {
-            meter.bytes(size_of::<BexExternalValue>());
-            measure_external_value(value, meter);
-        }
-        BexExternalValue::Uint8Array(bytes) => meter.bytes(bytes.capacity()),
-        BexExternalValue::RustData(data) => meter.shared(data, |meter| data.measure(meter)),
-        BexExternalValue::Adt(adt) => match adt {
-            BexExternalAdt::PromptAst(prompt) => {
-                meter.shared(prompt, |meter| prompt.measure(meter));
-            }
-            BexExternalAdt::Media(media) => meter.shared(media, |meter| media.measure(meter)),
-            BexExternalAdt::Type(_)
-            | BexExternalAdt::TypeDef(_)
-            | BexExternalAdt::TaggedHeapHandle { .. } => {}
-        },
-        BexExternalValue::HostValue(host) => meter.shared(host, |meter| host.measure(meter)),
-    }
-}
-
-impl ToBexExternalValue for OpaqueExternalValue {
-    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
-        // Re-emit the stashed value verbatim. Take ownership when this is the
-        // sole reference (the common case), else clone the inner value.
-        match std::sync::Arc::try_unwrap(self) {
-            Ok(inner) => inner.0,
-            Err(arc) => arc.0.clone(),
-        }
-    }
-}
-
 impl ToBexExternalValue for bex_vm_types::PromptAst {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
@@ -932,13 +923,6 @@ pub fn try_convert_rust_data(
         return Some(typed.to_bex_external_value());
     }
     if let Ok(typed) = arc.clone().downcast_payload::<bex_vm_types::MediaValue>() {
-        return Some(typed.to_bex_external_value());
-    }
-    // A structural host-only value stashed verbatim on the way in (an unbound
-    // generic instance, a host-only map/array): re-emit it exactly as it
-    // arrived so the host decoder reconstructs the same value. See
-    // [`OpaqueExternalValue`].
-    if let Ok(typed) = arc.clone().downcast_payload::<OpaqueExternalValue>() {
         return Some(typed.to_bex_external_value());
     }
     // A `HostValueArc` wrapped into `Object::RustData` (e.g. the `_handle`

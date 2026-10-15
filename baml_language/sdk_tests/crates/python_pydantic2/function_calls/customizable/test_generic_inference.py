@@ -275,11 +275,11 @@ def test_generic_inference_union_concrete_sibling_absorbs_value_binds_rust_type(
     assert tag_or_value("hi") == "$rust_type"
 
 
-def test_generic_inference_union_null_actual_binds_rust_type():
-    # §H H3 / §I I4 (decided): a `null` actual is no inference evidence (not bound
-    # as `T=null`), and the `null` sibling absorbs it, so `T` defaults to
-    # `rust_type`.
-    assert tag_or_value(None) == "$rust_type"
+def test_generic_inference_union_null_actual_binds_null():
+    # `None` is a value of exactly one BAML type, `null`, and the engine infers
+    # from the concrete types of the values that arrived: `T | string | null`
+    # against `null` binds `T = null`, as the compile-time unifier does.
+    assert tag_or_value(None) == "null"
 
 
 def test_generic_inference_return_only_var_still_requires_binding():

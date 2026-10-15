@@ -9,7 +9,7 @@
 //!    host-value key, call id, and encoded args bytes.
 //! 4. Returns `SysOpResult::Async` — the result is resolved when the host
 //!    calls `complete_host_call(call_id, ...)`. On completion:
-//!    * a successful return value is admitted to the declared return type
+//!    * a successful return value is checked against the declared return type
 //!      `T` by the engine, where the value lands; one that does not inhabit
 //!      it surfaces as `baml.panics.HostContractViolation`.
 //!    * a host throw is checked against the declared throws contract `E`

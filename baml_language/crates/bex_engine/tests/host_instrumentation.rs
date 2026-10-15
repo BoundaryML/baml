@@ -468,7 +468,15 @@ async fn callback_options_resolve_once_and_reserved_id_reaches_recording() {
         let value = engine
             .call_function(
                 name,
-                vec![BexExternalValue::HostValue(callback.clone())],
+                vec![BexExternalValue::HostCallable {
+                    handle: callback.clone(),
+                    params: Box::new([baml_type::RuntimeFunctionParamTy::required(
+                        None,
+                        bex_engine::RuntimeTy::int(),
+                    )]),
+                    ret: Box::new(bex_engine::RuntimeTy::int()),
+                    throws: Box::new(bex_engine::RuntimeTy::unknown()),
+                }],
                 FunctionCallContextBuilder::new(CallId::next())
                     .with_trace_options(TraceOptionsData {
                         mode: Some(InvocationMode::Hidden),

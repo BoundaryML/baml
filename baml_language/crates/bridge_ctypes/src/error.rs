@@ -28,10 +28,36 @@ pub enum CtypesError {
     #[error("Invalid decimal bigint literal ({len} bytes)")]
     InvalidBigintLiteral { len: usize },
 
+    /// A list, map, class or callable node arrived without the type it has.
+    #[error("InboundValue.{node} must state its type in value_type ({expected})")]
+    MissingValueType {
+        node: &'static str,
+        expected: &'static str,
+    },
+
+    /// A node whose type the wire implies arrived with a `value_type`.
+    #[error("InboundValue.{node} implies its own type; value_type must be absent")]
+    UnexpectedValueType { node: &'static str },
+
+    /// The stated type is not the shape of the node it is on. `stated` is
+    /// rendered bounded: a type is the host's text.
+    #[error("InboundValue.{node} states `{stated}`, which is not {expected}")]
+    ValueTypeShape {
+        node: &'static str,
+        expected: &'static str,
+        stated: String,
+    },
+
+    /// A stated type mentions a type variable, so it determines no value.
     #[error(
-        "Invalid InboundValue.value_type: a root union or optional does not identify one exact selected type"
+        "InboundValue.value_type `{stated}` is not realized: it mentions the type variable `{var}`"
     )]
-    InvalidInboundValueTypeRootUnion,
+    ValueTypeNotRealized { stated: String, var: String },
+
+    /// A wire type lacks a part no type can do without: its variant, a
+    /// container's inner type, a literal's value, a kind.
+    #[error("wire type is missing its {position}")]
+    IncompleteType { position: &'static str },
 
     #[error("Union selected type `{selected}` is not a member of declared union `{union}`")]
     UnionSelectedTypeNotMember { selected: String, union: String },

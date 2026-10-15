@@ -28,9 +28,9 @@ mod runtime_ty_identity;
 
 pub use baml_type::MediaKind;
 pub use bex_external_value::{
-    AsBexExternalValue, BexExternalAdt, BexExternalValue, MEDIA_WRAPPER_DATA_FIELD,
-    OpaqueExternalValue, RuntimeTy, TaggedHeapHandleKind, ToBexExternalValue, TypeDefRef, TypeName,
-    UnionMetadata, try_convert_rust_data,
+    AsBexExternalValue, BexExternalAdt, BexExternalValue, MEDIA_WRAPPER_DATA_FIELD, RuntimeTy,
+    TaggedHeapHandleKind, ToBexExternalValue, TypeDefRef, TypeName, UnionMetadata,
+    try_convert_rust_data,
 };
 pub use bex_resource_types::{
     HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch, host_value,

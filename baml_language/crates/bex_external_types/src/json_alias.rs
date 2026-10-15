@@ -1,7 +1,7 @@
 //! The recursive `baml.json.json` alias at the host boundary: which name is
 //! the alias, and which values are in its algebra.
 
-use baml_type::{Literal, RuntimeTy, TypeName};
+use baml_type::TypeName;
 
 use crate::BexExternalValue;
 
@@ -27,15 +27,8 @@ pub fn is_canonical_json_alias(name: &TypeName) -> bool {
 }
 
 /// Whether an external value is exactly in the recursive `baml.json.json`
-/// algebra. BAML extensions such as bytes, classes, enums, media, handles, and
-/// non-finite floats are intentionally rejected.
-///
-/// A sparse inbound `value_type` annotation (a transient
-/// `BexExternalValue::Union` with `is_inbound_type_annotation`, e.g. the
-/// Swift bridge annotates every json scalar leaf) is peeled — but only when
-/// the annotation itself stays within the JSON algebra, so a payload
-/// annotated as a class is still rejected. A genuine union carrier (a value
-/// produced from a declared union) is never JSON.
+/// algebra. BAML extensions such as bytes, classes, enums, media, handles,
+/// union envelopes and non-finite floats are intentionally rejected.
 pub fn value_satisfies_json(value: &BexExternalValue) -> bool {
     fn recurse(value: &BexExternalValue, depth: usize) -> bool {
         if depth > 256 {
@@ -54,54 +47,11 @@ pub fn value_satisfies_json(value: &BexExternalValue) -> bool {
             BexExternalValue::Map { entries, .. } => {
                 entries.values().all(|item| recurse(item, depth + 1))
             }
-            BexExternalValue::Union { value, metadata } => {
-                metadata.is_inbound_type_annotation
-                    && runtime_ty_within_json_algebra(&metadata.selected_option, 0)
-                    && recurse(value, depth + 1)
-            }
             _ => false,
         }
     }
 
     recurse(value, 0)
-}
-
-/// Whether a declared or annotated `RuntimeTy` lies entirely within the
-/// recursive `baml.json.json` algebra: the alias itself, the JSON scalar
-/// primitives, their literals, and string-keyed containers thereof.
-fn runtime_ty_within_json_algebra(ty: &RuntimeTy, depth: usize) -> bool {
-    if depth > 64 {
-        return false;
-    }
-    match ty {
-        RuntimeTy::Null
-        | RuntimeTy::Bool
-        | RuntimeTy::Int
-        | RuntimeTy::Bigint
-        | RuntimeTy::Float
-        | RuntimeTy::String => true,
-        RuntimeTy::TypeAlias(name) => is_canonical_json_alias(name),
-        RuntimeTy::Literal(literal, _) => matches!(
-            literal,
-            Literal::Bool(_)
-                | Literal::Int(_)
-                | Literal::Bigint(_)
-                | Literal::String(_)
-                | Literal::Float(_)
-        ),
-        RuntimeTy::List(inner) => runtime_ty_within_json_algebra(inner, depth + 1),
-        RuntimeTy::Map { key, value, .. } => {
-            matches!(key.as_ref(), RuntimeTy::String)
-                && runtime_ty_within_json_algebra(value, depth + 1)
-        }
-        RuntimeTy::Union(members) => {
-            !members.is_empty()
-                && members
-                    .iter()
-                    .all(|member| runtime_ty_within_json_algebra(member, depth + 1))
-        }
-        _ => false,
-    }
 }
 
 #[cfg(test)]
@@ -111,10 +61,6 @@ mod tests {
 
     use super::*;
     use crate::BexExternalValue;
-
-    fn json_ty() -> RuntimeTy {
-        RuntimeTy::TypeAlias(TypeName::from_dotted_path(BAML_JSON_JSON))
-    }
 
     #[test]
     fn canonical_json_alias_accepts_only_the_json_value_algebra() {
@@ -171,35 +117,5 @@ mod tests {
         );
         assert!(is_canonical_json_alias(&builtin));
         assert!(!is_canonical_json_alias(&shadow));
-    }
-
-    #[test]
-    fn canonical_json_alias_accepts_algebra_scoped_inbound_annotations() {
-        // The C++ codec annotates a json return's selected variant alternative
-        // (`map<string, baml.json.json>`); Swift annotates scalar leaves. Both
-        // are sparse inbound annotations inside the JSON algebra and must
-        // validate against a declared json return — including nested in a
-        // container — while annotations outside the algebra stay rejected.
-        let mut entries = IndexMap::new();
-        entries.insert(
-            "type".to_string(),
-            BexExternalValue::typed(BexExternalValue::String("ok".into()), RuntimeTy::string()),
-        );
-        let annotated_map = BexExternalValue::typed(
-            BexExternalValue::Map {
-                key_type: RuntimeTy::string(),
-                value_type: RuntimeTy::unknown(),
-                entries,
-            },
-            RuntimeTy::Map {
-                key: Box::new(RuntimeTy::string()),
-                value: Box::new(json_ty()),
-            },
-        );
-        assert!(value_satisfies_json(&annotated_map));
-
-        let annotated_bigint =
-            BexExternalValue::typed(BexExternalValue::Bigint(1.into()), RuntimeTy::bigint());
-        assert!(value_satisfies_json(&annotated_bigint));
     }
 }

@@ -92,10 +92,15 @@ async fn retained_callback_context_and_ancestry_survive_parent_completion() {
     let result = engine
         .call_function(
             "parent",
-            vec![BexExternalValue::HostValue(HostValueArc::new(
-                1,
-                HostValueKind::Callable,
-            ))],
+            vec![BexExternalValue::HostCallable {
+                handle: HostValueArc::new(1, HostValueKind::Callable),
+                params: Box::new([baml_type::RuntimeFunctionParamTy::required(
+                    None,
+                    bex_engine::RuntimeTy::int(),
+                )]),
+                ret: Box::new(bex_engine::RuntimeTy::int()),
+                throws: Box::new(bex_engine::RuntimeTy::unknown()),
+            }],
             FunctionCallContextBuilder::new(id)
                 .with_cancel_token(input.clone())
                 .with_host_environment(41)

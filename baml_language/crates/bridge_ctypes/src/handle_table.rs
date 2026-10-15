@@ -141,8 +141,9 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
             }
             BexExternalValue::Adt(a) => Ok(Self::Adt(a)),
             BexExternalValue::RustData(arc) => Ok(Self::RustData(arc)),
-            // HostValue uses a separate per-bridge registry, not HANDLE_TABLE.
+            // Host values use a separate per-bridge registry, not HANDLE_TABLE.
             BexExternalValue::HostValue(_)
+            | BexExternalValue::HostCallable { .. }
             | BexExternalValue::Null
             | BexExternalValue::Int(_)
             | BexExternalValue::Bigint(_)

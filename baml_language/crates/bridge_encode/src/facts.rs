@@ -1,6 +1,6 @@
 //! The declared types a walk reads, built once from a program descriptor.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use baml_sdkgen_types::ProgramDescriptor;
 use baml_type::{Name, ParamTy, RuntimeTy, TypeName};
@@ -14,6 +14,10 @@ pub struct Facts {
     classes: HashMap<TypeName, ClassFacts>,
     enums: HashMap<TypeName, EnumFacts>,
     aliases: HashMap<TypeName, RuntimeTy>,
+    /// The aliases that survive to run time as declarations: a recursive alias
+    /// is a name the engine resolves, a non-recursive one was expanded away at
+    /// lowering and is spelled by its body in a stated type.
+    recursive_aliases: HashSet<TypeName>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,6 +122,29 @@ impl Facts {
                 .iter()
                 .map(|alias| (alias.name.clone(), RuntimeTy::from(&alias.resolves_to)))
                 .collect(),
+            recursive_aliases: descriptor
+                .type_aliases
+                .iter()
+                .filter(|alias| alias.recursive)
+                .map(|alias| alias.name.clone())
+                .collect(),
+        }
+    }
+
+    /// `ty` as a node states it on the wire: every non-recursive alias spelled
+    /// by its body, at every depth. Type aliases are transparent, and only a
+    /// recursive one exists as a declaration at run time, so only a recursive
+    /// one is a name the engine can resolve. An alias the descriptor does not
+    /// know is left as it is, for the engine to refuse by name.
+    pub fn stated_form(&self, ty: RuntimeTy) -> RuntimeTy {
+        match ty {
+            RuntimeTy::TypeAlias(name) if !self.recursive_aliases.contains(&name) => {
+                match self.aliases.get(&name) {
+                    Some(body) => self.stated_form(body.clone()),
+                    None => RuntimeTy::TypeAlias(name),
+                }
+            }
+            other => other.map_children(&mut |child| self.stated_form(child.clone())),
         }
     }
 

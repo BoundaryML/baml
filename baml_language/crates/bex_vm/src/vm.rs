@@ -4038,27 +4038,25 @@ impl BexVm {
         Ok((callee, frame))
     }
 
-    /// The value's concrete type as a [`ConcreteRealizedTy`] — the invariant every
+    /// The value's concrete type as a [`bex_vm_types::ConcreteRealizedTy`] — the invariant every
     /// runtime value's type satisfies (a concrete top with realized arguments, no
     /// type variables) made explicit in the type. `None` for a value kind that
-    /// has no such type (a compile-time definition object or an opaque native handle).
+    /// has no such type (a compile-time definition object).
     ///
     /// Primitives construct their leaf directly; an `Instance` narrows its stored
     /// `class_type_args` into the argument list (so `Box<int>` resolves the `Box`
     /// impl at `T = int`); an enum `Variant` maps to its enum; a container narrows
     /// its element/key/value types; a future reports the `Future<T, E>` its spawn
     /// site was typed at; a `Cell` is transparent. A value's arguments
-    /// are realized by construction, so a per-argument narrow (see [`realized_arg`])
+    /// are realized by construction, so a per-argument narrow (see `realized_arg`)
     /// fails (→ `None`) only if a residual type variable leaked in — a bug.
     ///
-    /// The interface resolver wants the loose `RuntimeTy`, so the sole such caller
-    /// widens the result back. The `IsType` value matcher goes through
-    /// [`Self::value_singleton_ty`] instead — it needs the value's *most precise*
-    /// type, which for a primitive is its singleton, not its base leaf.
-    pub(crate) fn value_concrete_ty(
-        &self,
-        value: Value,
-    ) -> Option<bex_vm_types::ConcreteRealizedTy> {
+    /// The interface resolver and the host boundary (which infers a generic
+    /// call's type arguments from the values that arrived, and names a value's
+    /// type in a refusal) read this. The `IsType` value matcher goes through
+    /// `value_singleton_ty` instead — it needs the value's *most precise* type,
+    /// which for a primitive is its singleton, not its base leaf.
+    pub fn value_concrete_ty(&self, value: Value) -> Option<bex_vm_types::ConcreteRealizedTy> {
         use bex_vm_types::ConcreteRealizedTy;
         if value.as_int().is_some() {
             return Some(ConcreteRealizedTy::Int);
@@ -4194,8 +4192,11 @@ impl BexVm {
                 Box::new(fut.returns().clone()),
                 Box::new(fut.throws().clone()),
             ),
-            // Opaque native handles are not BAML data types at all.
-            Object::RustData(_) => return None,
+            // Opaque native data is a value of the leaf type `$rust_type`: a
+            // host's opaque value, a media or prompt payload, a Rust-backed
+            // resource. Membership in `$rust_type` is what a `$rust_type` field
+            // or a type variable bound to it asks, and it is decidable.
+            Object::RustData(_) => ConcreteRealizedTy::RustType,
 
             Object::Tombstone => Object::tombstone_reached(),
 

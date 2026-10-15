@@ -53,6 +53,11 @@ function ConsumeUnknownCb(callback: (int) -> unknown, x: int) -> int {
     let _ = callback(x);
     x
 }
+
+function Collect() -> int {
+    baml.sys.collect_garbage();
+    0
+}
 """
 
 
@@ -282,6 +287,13 @@ def test_host_result_encode_failure_releases_capability_clone():
 
 def test_host_throw_encode_failure_releases_capability_clone():
     rt = _make_runtime()
+    # The runtime and the handle table are process-global. Creating this
+    # runtime dropped the previous test's engine heap, but an exception a
+    # previous test raised still lingers in the synchronous call plumbing
+    # until the next call, and in a traceback cycle until the collector runs;
+    # settle both so the baseline counts this test's handles alone.
+    call_function_sync(rt, "Collect", {})
+    gc.collect()
     key, handle_type = _seed_generic_media_handle()
     handle = BamlPyHandle(key, handle_type)
     before = _live_handle_count()
@@ -292,6 +304,13 @@ def test_host_throw_encode_failure_releases_capability_clone():
     with pytest.raises(Exception):
         call_function_sync(rt, "ConsumeUnknownCb", {"callback": cb, "x": 1})
 
+    # The thrown value cannot be encoded, so the callback's native exception
+    # is registered as an opaque host value and re-raised with its identity.
+    # The engine's heap holds that registration until it collects the thrown
+    # `baml.errors.HostCallable` instance, and the exception's traceback
+    # keeps the dispatch frame (and its control handles) alive until then.
+    call_function_sync(rt, "Collect", {})
+    gc.collect()
     assert _live_handle_count() == before
 
 

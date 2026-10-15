@@ -36,7 +36,7 @@ async fn test_host_int_is_not_a_float() {
     };
     let msg = format!("{err:?}");
     assert!(
-        msg.contains("does not match any member of union"),
+        msg.contains("Value of type 'int' does not match the declared type `float | string`"),
         "expected a union mismatch, got: {msg}"
     );
 
@@ -113,7 +113,7 @@ async fn test_host_int_is_refused_by_a_numeric_union_without_int() {
             .await
             .expect_err("a host int is neither a bigint nor a float");
         assert!(
-            err.contains("does not match any member of union"),
+            err.contains("Value of type 'int' does not match the declared type"),
             "in `{union}`: {err}"
         );
     }

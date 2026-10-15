@@ -49,8 +49,8 @@ pub(crate) fn value_matches_template(
 
 /// Whether `value` is a member of `ty`: `TYPE_SYSTEM.md` "Values and
 /// membership", asked of the canonical algebra. `None` for a value with no
-/// reconstructible BAML type (an opaque native handle, or a compile-time
-/// definition object — see `BexVm::value_concrete_ty`); the caller decides
+/// reconstructible BAML type (a compile-time definition object — see
+/// `BexVm::value_concrete_ty`); the caller decides
 /// what that means for it.
 ///
 /// Every *data* value reconstructs faithfully, including the callables: a

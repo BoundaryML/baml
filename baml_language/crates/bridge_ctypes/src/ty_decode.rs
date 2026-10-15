@@ -34,11 +34,10 @@ pub struct DecodedTypeArgs {
 
 /// Decode `CallFunctionArgs.type_args` (a list of named `BamlTyArg`s) into a
 /// `TypeVar name -> concrete RuntimeTy` map, preserving wire order (the map's
-/// insertion order is the host's De Bruijn order). A `BamlTyArg` with an absent
-/// `type_value` decodes to the unknown/top type, mirroring
-/// [`proto_ty_to_runtime_ty`]'s rollout-safe default. A repeated `type_var`
-/// keeps the last binding. The engine resolves the names against the callee's
-/// generic params when seeding the entry frame.
+/// insertion order is the host's De Bruijn order). A `BamlTyArg` must carry a
+/// type or a type definition; a host that means `unknown` says so. A repeated
+/// `type_var` keeps the last binding. The engine resolves the names against
+/// the callee's generic params when seeding the entry frame.
 pub fn proto_ty_args_to_named(type_args: &[BamlTyArg]) -> Result<DecodedTypeArgs, CtypesError> {
     let mut decoded = DecodedTypeArgs::default();
     for arg in type_args {
@@ -49,10 +48,7 @@ pub fn proto_ty_args_to_named(type_args: &[BamlTyArg]) -> Result<DecodedTypeArgs
                 .insert(arg.type_var.clone(), definition.root.clone());
             decoded.type_defs.insert(arg.type_var.clone(), definition);
         } else {
-            let ty = match arg.type_value.as_ref() {
-                Some(ty) => proto_ty_to_runtime_ty(ty)?,
-                None => RuntimeTy::unknown(),
-            };
+            let ty = opt_to_runtime_ty(arg.type_value.as_ref(), "type argument's type")?;
             decoded.type_args.insert(arg.type_var.clone(), ty);
         }
     }
@@ -76,10 +72,7 @@ pub fn proto_ty_def_to_portable(
         }
     };
     Ok(PortableTypeDef {
-        root: match definition.root.as_ref() {
-            Some(root) => proto_ty_to_runtime_ty(root)?,
-            None => RuntimeTy::unknown(),
-        },
+        root: opt_to_runtime_ty(definition.root.as_ref(), "type definition's root type")?,
         classes: definition
             .classes
             .iter()
@@ -92,10 +85,7 @@ pub fn proto_ty_def_to_portable(
                         .map(|field| {
                             Ok(PortableClassFieldDef {
                                 name: field.name.clone(),
-                                ty: match field.ty.as_ref() {
-                                    Some(ty) => proto_ty_to_runtime_ty(ty)?,
-                                    None => RuntimeTy::unknown(),
-                                },
+                                ty: opt_to_runtime_ty(field.ty.as_ref(), "class field's type")?,
                                 metadata: metadata(field.metadata.as_ref()),
                                 skip: field.skip,
                             })
@@ -177,27 +167,35 @@ pub fn proto_ty_def_to_portable(
     })
 }
 
-/// Convert a wire `BamlTy` into a `RuntimeTy`. A `BamlTy` with no variant set decodes
-/// to the unknown/top type — the rollout-safe default (an absent binding
-/// constrains nothing).
+/// Convert a wire `BamlTy` into a `RuntimeTy`. A type is complete or it is
+/// malformed: a `BamlTy` with no variant, a container with no inner type, a
+/// literal with no value or a kind left unspecified is refused rather than
+/// read as `unknown`. A host that means `unknown` states it.
 pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
     let Some(variant) = ty.ty.as_ref() else {
-        return Ok(RuntimeTy::unknown());
+        return Err(CtypesError::IncompleteType {
+            position: "variant",
+        });
     };
     Ok(match variant {
-        TyVariant::Primitive(p) => primitive_to_runtime_ty(p.kind),
+        TyVariant::Primitive(p) => primitive_to_runtime_ty(p.kind)?,
         TyVariant::ClassTy(c) => {
             let type_name = TypeName::from_dotted_path(&c.name);
             let args = decode_type_args(&c.type_args)?;
             RuntimeTy::class_with_args(type_name, args)
         }
         TyVariant::Enum(e) => RuntimeTy::Enum(TypeName::from_dotted_path(&e.name)),
-        TyVariant::List(l) => RuntimeTy::list(opt_to_runtime_ty(l.item.as_deref())?),
+        TyVariant::List(l) => {
+            RuntimeTy::list(opt_to_runtime_ty(l.item.as_deref(), "list's item type")?)
+        }
         TyVariant::Map(m) => RuntimeTy::Map {
-            key: Box::new(opt_to_runtime_ty(m.key.as_deref())?),
-            value: Box::new(opt_to_runtime_ty(m.value.as_deref())?),
+            key: Box::new(opt_to_runtime_ty(m.key.as_deref(), "map's key type")?),
+            value: Box::new(opt_to_runtime_ty(m.value.as_deref(), "map's value type")?),
         },
-        TyVariant::Optional(o) => RuntimeTy::optional(opt_to_runtime_ty(o.inner.as_deref())?),
+        TyVariant::Optional(o) => RuntimeTy::optional(opt_to_runtime_ty(
+            o.inner.as_deref(),
+            "optional's inner type",
+        )?),
         TyVariant::Union(u) => RuntimeTy::union(
             u.options
                 .iter()
@@ -207,12 +205,17 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
         TyVariant::Literal(lit) => literal_to_runtime_ty(lit.literal.as_ref())?,
         TyVariant::TypeAlias(n) => RuntimeTy::TypeAlias(TypeName::from_dotted_path(&n.name)),
         TyVariant::Unknown(_) => RuntimeTy::unknown(),
-        TyVariant::Media(m) => RuntimeTy::Media(media_kind_to_runtime(m.kind)),
+        TyVariant::Media(m) => RuntimeTy::Media(media_kind_to_runtime(m.kind)?),
         TyVariant::Interface(i) => {
             let bindings = i
                 .bindings
                 .iter()
-                .map(|b| Ok((Name::new(&b.name), opt_to_runtime_ty(b.ty.as_ref())?)))
+                .map(|b| {
+                    Ok((
+                        Name::new(&b.name),
+                        opt_to_runtime_ty(b.ty.as_ref(), "associated type binding's type")?,
+                    ))
+                })
                 .collect::<Result<Vec<_>, CtypesError>>()?;
             // The wire order is untrusted (a non-BAML or future producer may send
             // bindings in any order) and `RuntimeInterface`'s derived `Eq`/`Hash`
@@ -238,12 +241,24 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
                 .iter()
                 .map(function_param_to_runtime)
                 .collect::<Result<Box<[_]>, _>>()?,
-            ret: Box::new(opt_to_runtime_ty(f.ret.as_deref())?),
-            throws: Box::new(opt_to_runtime_ty(f.throws.as_deref())?),
+            ret: Box::new(opt_to_runtime_ty(
+                f.ret.as_deref(),
+                "function's return type",
+            )?),
+            throws: Box::new(opt_to_runtime_ty(
+                f.throws.as_deref(),
+                "function's throws type",
+            )?),
         },
         TyVariant::Future(fut) => RuntimeTy::Future(
-            Box::new(opt_to_runtime_ty(fut.value.as_deref())?),
-            Box::new(opt_to_runtime_ty(fut.error.as_deref())?),
+            Box::new(opt_to_runtime_ty(
+                fut.value.as_deref(),
+                "future's value type",
+            )?),
+            Box::new(opt_to_runtime_ty(
+                fut.error.as_deref(),
+                "future's error type",
+            )?),
         ),
         TyVariant::RustType(_) => RuntimeTy::RustType,
         TyVariant::MetaType(_) => RuntimeTy::Type,
@@ -251,7 +266,10 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
         TyVariant::PromptAst(_) => RuntimeTy::PromptAst,
         TyVariant::TypeVar(v) => RuntimeTy::TypeVar(ParamTy::new(v.index, Name::new(&v.name))),
         TyVariant::AssociatedTypeProjection(p) => RuntimeTy::AssociatedTypeProjection {
-            base: Box::new(opt_to_runtime_ty(p.base.as_deref())?),
+            base: Box::new(opt_to_runtime_ty(
+                p.base.as_deref(),
+                "projection's base type",
+            )?),
             // The projection's interface constraint is wired as a `Ty` and must
             // decode to an interface existential, from which the constraint
             // (`RuntimeInterface`) is recovered. A projection always carries its
@@ -317,37 +335,69 @@ fn decode_type_args(type_args: &[BamlTy]) -> Result<Box<[RuntimeTy]>, CtypesErro
         .collect::<Result<Box<[_]>, _>>()
 }
 
-fn opt_to_runtime_ty(opt: Option<&BamlTy>) -> Result<RuntimeTy, CtypesError> {
+/// The type at a position every type must fill; `position` names it in the
+/// refusal of a wire type that left it empty.
+fn opt_to_runtime_ty(
+    opt: Option<&BamlTy>,
+    position: &'static str,
+) -> Result<RuntimeTy, CtypesError> {
     match opt {
         Some(t) => proto_ty_to_runtime_ty(t),
-        None => Ok(RuntimeTy::unknown()),
+        None => Err(CtypesError::IncompleteType { position }),
     }
 }
 
-fn primitive_to_runtime_ty(kind: i32) -> RuntimeTy {
-    match BamlTyPrimitiveKind::try_from(kind)
-        .unwrap_or(BamlTyPrimitiveKind::BamlTyPrimitiveUnspecified)
-    {
-        BamlTyPrimitiveKind::BamlTyPrimitiveString => RuntimeTy::string(),
-        BamlTyPrimitiveKind::BamlTyPrimitiveInt => RuntimeTy::int(),
-        BamlTyPrimitiveKind::BamlTyPrimitiveFloat => RuntimeTy::float(),
-        BamlTyPrimitiveKind::BamlTyPrimitiveBool => RuntimeTy::bool(),
-        BamlTyPrimitiveKind::BamlTyPrimitiveNull => RuntimeTy::null(),
-        BamlTyPrimitiveKind::BamlTyPrimitiveBytes => RuntimeTy::Uint8Array,
-        BamlTyPrimitiveKind::BamlTyPrimitiveBigint => RuntimeTy::Bigint,
-        BamlTyPrimitiveKind::BamlTyPrimitiveUnspecified => RuntimeTy::unknown(),
+/// The first type variable `ty` mentions, if any. A type that mentions one
+/// determines no value, so a host may not state it for a node.
+pub(crate) fn first_type_var(ty: &RuntimeTy) -> Option<ParamTy> {
+    if let RuntimeTy::TypeVar(param) = ty {
+        return Some(param.clone());
     }
+    let mut found = None;
+    ty.visit_children(&mut |child| {
+        if found.is_none() {
+            found = first_type_var(child);
+        }
+    });
+    found
 }
 
-fn media_kind_to_runtime(kind: i32) -> MediaKind {
-    match BamlTyMediaKind::try_from(kind).unwrap_or(BamlTyMediaKind::Unspecified) {
-        BamlTyMediaKind::Image => MediaKind::Image,
-        BamlTyMediaKind::Audio => MediaKind::Audio,
-        BamlTyMediaKind::Video => MediaKind::Video,
-        BamlTyMediaKind::Pdf => MediaKind::Pdf,
-        // An unspecified kind is the permissive "any media" type.
-        BamlTyMediaKind::Generic | BamlTyMediaKind::Unspecified => MediaKind::Generic,
-    }
+fn primitive_to_runtime_ty(kind: i32) -> Result<RuntimeTy, CtypesError> {
+    Ok(
+        match BamlTyPrimitiveKind::try_from(kind)
+            .unwrap_or(BamlTyPrimitiveKind::BamlTyPrimitiveUnspecified)
+        {
+            BamlTyPrimitiveKind::BamlTyPrimitiveString => RuntimeTy::string(),
+            BamlTyPrimitiveKind::BamlTyPrimitiveInt => RuntimeTy::int(),
+            BamlTyPrimitiveKind::BamlTyPrimitiveFloat => RuntimeTy::float(),
+            BamlTyPrimitiveKind::BamlTyPrimitiveBool => RuntimeTy::bool(),
+            BamlTyPrimitiveKind::BamlTyPrimitiveNull => RuntimeTy::null(),
+            BamlTyPrimitiveKind::BamlTyPrimitiveBytes => RuntimeTy::Uint8Array,
+            BamlTyPrimitiveKind::BamlTyPrimitiveBigint => RuntimeTy::Bigint,
+            BamlTyPrimitiveKind::BamlTyPrimitiveUnspecified => {
+                return Err(CtypesError::IncompleteType {
+                    position: "primitive kind",
+                });
+            }
+        },
+    )
+}
+
+fn media_kind_to_runtime(kind: i32) -> Result<MediaKind, CtypesError> {
+    Ok(
+        match BamlTyMediaKind::try_from(kind).unwrap_or(BamlTyMediaKind::Unspecified) {
+            BamlTyMediaKind::Image => MediaKind::Image,
+            BamlTyMediaKind::Audio => MediaKind::Audio,
+            BamlTyMediaKind::Video => MediaKind::Video,
+            BamlTyMediaKind::Pdf => MediaKind::Pdf,
+            BamlTyMediaKind::Generic => MediaKind::Generic,
+            BamlTyMediaKind::Unspecified => {
+                return Err(CtypesError::IncompleteType {
+                    position: "media kind",
+                });
+            }
+        },
+    )
 }
 
 fn function_param_to_runtime(
@@ -355,18 +405,18 @@ fn function_param_to_runtime(
 ) -> Result<RuntimeFunctionParamTy, CtypesError> {
     Ok(RuntimeFunctionParamTy {
         name: p.name.as_ref().map(Name::new),
-        ty: opt_to_runtime_ty(p.ty.as_ref())?,
-        mode: function_param_mode(p.mode),
+        ty: opt_to_runtime_ty(p.ty.as_ref(), "function parameter's type")?,
+        mode: function_param_mode(p.mode)?,
     })
 }
 
-fn function_param_mode(mode: i32) -> FunctionParamMode {
+fn function_param_mode(mode: i32) -> Result<FunctionParamMode, CtypesError> {
     match BamlTyFunctionParamMode::try_from(mode).unwrap_or(BamlTyFunctionParamMode::Unspecified) {
-        BamlTyFunctionParamMode::Optional => FunctionParamMode::Optional,
-        // Required is the conservative default for an unspecified mode.
-        BamlTyFunctionParamMode::Required | BamlTyFunctionParamMode::Unspecified => {
-            FunctionParamMode::Required
-        }
+        BamlTyFunctionParamMode::Optional => Ok(FunctionParamMode::Optional),
+        BamlTyFunctionParamMode::Required => Ok(FunctionParamMode::Required),
+        BamlTyFunctionParamMode::Unspecified => Err(CtypesError::IncompleteType {
+            position: "function parameter's mode",
+        }),
     }
 }
 
@@ -379,7 +429,11 @@ fn literal_to_runtime_ty(lit: Option<&TyLiteralVariant>) -> Result<RuntimeTy, Ct
             Literal::Bigint(parse_decimal_bigint_literal(value)?)
         }
         Some(TyLiteralVariant::FloatValue(value)) => Literal::Float(value.clone()),
-        None => return Ok(RuntimeTy::unknown()),
+        None => {
+            return Err(CtypesError::IncompleteType {
+                position: "literal's value",
+            });
+        }
     };
     Ok(RuntimeTy::Literal(literal, Freshness::Regular))
 }

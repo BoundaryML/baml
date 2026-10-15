@@ -84,6 +84,14 @@ pub enum EncodeErrorKind {
          function type"
     )]
     UntypedCallable { found: String },
+    /// The slot is a function type that mentions a type variable the call did
+    /// not bind. A callable has no type of its own to bind it from, so the
+    /// caller names the type.
+    #[error(
+        "BAML could not infer a type for `{var}`: the callable's type `{signature}` depends \
+         on it; pass the call's type arguments"
+    )]
+    OpenCallable { signature: RuntimeTy, var: String },
     #[error("{0}")]
     Host(String),
 }

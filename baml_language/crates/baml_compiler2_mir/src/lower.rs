@@ -13083,7 +13083,7 @@ impl<'db> LoweringContext<'db> {
     /// same canonical invariant subtype the emitted tests evaluate, so for
     /// values with a concrete runtime type the two always agree — with one
     /// exception: a value whose concrete type the VM cannot reconstruct
-    /// (`value_concrete_ty` is `None` — an opaque native handle) fails every
+    /// (`value_concrete_ty` is `None` — a compile-time definition object) fails every
     /// structural test, including one whose realized binding IS that value's
     /// static type. A non-final `let v: T` arm can therefore wrongly reject
     /// such a value, so an exhaustive match containing one cannot safely skip

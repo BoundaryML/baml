@@ -3,10 +3,10 @@
 //! When Python passes a callable as an argument to a BAML function, the
 //! inbound encoder (`crate::encode`) calls [`register_callable`] with the
 //! function type of the slot, obtains a `u64` key and emits
-//! `InboundValue::Handle{key, HOST_VALUE_CALLABLE}`.
-//! Rust's `inbound_to_external` decoder constructs a
-//! `BexExternalValue::HostValue(Arc<HostValueArc>)`; the engine binds it to
-//! an `Object::HostClosure`; later when BAML invokes it, the
+//! `InboundValue::Handle{key, HOST_VALUE_CALLABLE}` with that function type
+//! stated in `value_type`. Rust's `inbound_to_external` decoder constructs a
+//! `BexExternalValue::HostCallable`; the engine binds it to an
+//! `Object::HostClosure` of that type; later when BAML invokes it, the
 //! `call_host_value` sysop fires a `HostDispatchFn` via the bridge_cffi
 //! global, which lands here in [`host_dispatch_callback`].
 //!
