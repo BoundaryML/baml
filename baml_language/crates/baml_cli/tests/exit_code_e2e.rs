@@ -2168,14 +2168,8 @@ fn run_expr_takes_its_value_from_a_final_expression_or_its_returns() {
     );
 
     for (expression, printed) in [
-        (
-            "type T = unreflect(reflect.Type.of<int>()); make<T>()",
-            "[]",
-        ),
-        (
-            "type T = unreflect(reflect.Type.of<int>()); make<T>();",
-            "null",
-        ),
+        ("type T = unreflect(int.type()); make<T>()", "[]"),
+        ("type T = unreflect(int.type()); make<T>();", "null"),
         ("note();", "null"),
         ("return;", "null"),
         ("return 5;", "5"),

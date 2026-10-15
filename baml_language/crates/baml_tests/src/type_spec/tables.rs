@@ -466,7 +466,7 @@ function sc_id<T>(value: T) -> T throws never { value }
 function sc_contract<F>() -> null throws never { null }
 
 function sc_bare() -> int throws never {
-    let runtime_t = reflect.Type.of<int>();
+    let runtime_t = int.type();
     sc_id<runtime_t>(1)
 }
 function sc_ordinary_contract() -> null throws never {

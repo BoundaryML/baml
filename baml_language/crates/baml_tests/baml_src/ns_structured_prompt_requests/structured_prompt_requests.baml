@@ -68,7 +68,7 @@ function _input_for(spec: ai.FunctionSpec<string>) -> ai.ModelTurnInput {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     }
 }
 
@@ -128,7 +128,7 @@ class Outer<T> {
 }
 
 test "generic nested output format uses concrete class arguments" {
-    let rendered = ai.wire.render_output_format(reflect.Type.of<Outer<Choice>>());
+    let rendered = ai.wire.render_output_format(Outer<Choice>.type());
     assert.is_true(rendered.includes("'Empty'"));
     assert.is_true(!rendered.includes("TypeVar"));
     assert.is_true(!rendered.includes("T[]"))

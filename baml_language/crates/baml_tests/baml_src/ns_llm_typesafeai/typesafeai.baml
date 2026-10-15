@@ -319,7 +319,7 @@ test "client defaults keep a lazy credential and the TypeSafe base URL" {
     };
     assert.equal(credential.name, "TYPESAFE_API_KEY");
     assert.equal(cl.base_url, "https://api.typesafe.ai/v1");
-    let request = cl.render(input(reflect.Type.of<bool>()));
+    let request = cl.render(input(bool.type()));
     assert.equal(request.url, "https://api.typesafe.ai/v1/systemone");
     assert.equal(request.headers.get("authorization"), null)
 }
@@ -328,7 +328,7 @@ test "client constructor keeps explicit credentials and endpoint overrides" {
     let cl = typesafeai.Client.new(api_key = "test-key", base_url = "http://localhost:1234");
     assert.equal(cl.api_key, "test-key");
     assert.equal(cl.base_url, "http://localhost:1234");
-    assert.equal(cl.render(input(reflect.Type.of<bool>())).url, "http://localhost:1234/systemone")
+    assert.equal(cl.render(input(bool.type())).url, "http://localhost:1234/systemone")
 }
 
 test "int literal union" {
@@ -457,7 +457,7 @@ function wire_capture() -> bool {
         mock: root.llm_mock.MockJsonServer,
     ) -> {
         let cl = typesafeai.Client.new(api_key = "private-key", base_url = mock.base_url());
-        let turn = cl.invoke(input(reflect.Type.of<bool>()));
+        let turn = cl.invoke(input(bool.type()));
         assert.equal(turn.calls.at(0)?.http_response?.body, body);
         assert.equal(turn.calls.at(0)?.http_request?.headers.get("authorization"), "REDACTED");
         let quiet = typesafeai.Client.new(
@@ -465,7 +465,7 @@ function wire_capture() -> bool {
             base_url = mock.base_url(),
             capture_wire = false,
         );
-        let no_body = quiet.invoke(input(reflect.Type.of<bool>()));
+        let no_body = quiet.invoke(input(bool.type()));
         assert.equal(no_body.calls.at(0)?.http_response?.body, null);
         true
     })
@@ -480,7 +480,7 @@ function http_error(status: int) -> string {
         mock: root.llm_mock.MockJsonServer,
     ) -> {
         let cl = typesafeai.Client.new(api_key = "k", base_url = mock.base_url());
-        let result = cl.invoke(input(reflect.Type.of<bool>())).terminal_text() catch_all (e) {
+        let result = cl.invoke(input(bool.type())).terminal_text() catch_all (e) {
             let limited: ai.errors.RateLimited => {
                 return `limited:${limited.retry_after_ms ?? 0}`;
             },
@@ -634,15 +634,15 @@ function rejects(ty: reflect.Type, instructions: bool = true) -> bool {
 }
 
 test "reject string" {
-    assert.is_true(rejects(reflect.Type.of<string>()))
+    assert.is_true(rejects(string.type()))
 }
 
 test "reject int" {
-    assert.is_true(rejects(reflect.Type.of<int>()))
+    assert.is_true(rejects(int.type()))
 }
 
 test "reject bigint" {
-    assert.is_true(rejects(reflect.Type.of<bigint>()))
+    assert.is_true(rejects(bigint.type()))
 }
 
 test "reject string array" {
@@ -678,15 +678,15 @@ test "reject mixed structural union" {
 }
 
 test "reject unsupported leaf" {
-    assert.is_true(rejects(reflect.Type.of<WithNotes>()))
+    assert.is_true(rejects(WithNotes.type()))
 }
 
 test "reject recursive class" {
-    assert.is_true(rejects(reflect.Type.of<Node>()))
+    assert.is_true(rejects(Node.type()))
 }
 
 test "reject direct recursion by identity" {
-    assert.is_true(rejects(reflect.Type.of<DirectNode>()))
+    assert.is_true(rejects(DirectNode.type()))
 }
 
 test "reject recursive alias" {
@@ -694,19 +694,19 @@ test "reject recursive alias" {
 }
 
 test "reject image output" {
-    assert.is_true(rejects(reflect.Type.of<image>()))
+    assert.is_true(rejects(image.type()))
 }
 
 test "reject audio output" {
-    assert.is_true(rejects(reflect.Type.of<audio>()))
+    assert.is_true(rejects(audio.type()))
 }
 
 test "reject pdf output" {
-    assert.is_true(rejects(reflect.Type.of<pdf>()))
+    assert.is_true(rejects(pdf.type()))
 }
 
 test "reject empty instructions" {
-    assert.is_true(rejects(reflect.Type.of<bool>(), instructions = false))
+    assert.is_true(rejects(bool.type(), instructions = false))
 }
 
 test "union ignores member description" {
@@ -718,7 +718,7 @@ test "reject singleton" {
 }
 
 test "reject empty class" {
-    assert.is_true(rejects(reflect.Type.of<Empty>()))
+    assert.is_true(rejects(Empty.type()))
 }
 
 function malformed(body: string, ty: reflect.Type? = null) -> bool {
@@ -726,7 +726,7 @@ function malformed(body: string, ty: reflect.Type? = null) -> bool {
         mock: root.llm_mock.MockJsonServer,
     ) -> {
         let cl = typesafeai.Client.new(api_key = "k", base_url = mock.base_url());
-        let result = cl.invoke(input(ty ?? reflect.Type.of<bool>())).terminal_text() catch_all (e) {
+        let result = cl.invoke(input(ty ?? bool.type())).terminal_text() catch_all (e) {
             let failed: ai.errors.ParseFailed => {
                 return true;
             },
@@ -758,18 +758,18 @@ test "reject malformed response" {
 }
 
 test "reject unoffered choice" {
-    assert.is_true(malformed(choice_body("not-offered"), ty = reflect.Type.of<Team>()))
+    assert.is_true(malformed(choice_body("not-offered"), ty = Team.type()))
 }
 
 test "reject missing choice" {
     assert.is_true(
-        malformed(`{"answers":{"result":{"type":"choice"}}}`, ty = reflect.Type.of<Team>()),
+        malformed(`{"answers":{"result":{"type":"choice"}}}`, ty = Team.type()),
     )
 }
 
 function preview_metadata() -> bool {
     let cl = typesafeai.Client.new(api_key = "secret");
-    let req = cl.render(input(reflect.Type.of<Override>(), instructions = false));
+    let req = cl.render(input(Override.type(), instructions = false));
     assert.equal(req.headers.has("authorization"), false);
     assert.equal(req.url, "https://api.typesafe.ai/v1/systemone");
     assert.equal(
@@ -834,7 +834,7 @@ test "skipped class fields are omitted and filled with null" {
 }
 
 test "reject nonnullable skipped fields before HTTP" {
-    assert.is_true(rejects(reflect.Type.of<InvalidSkipped>()))
+    assert.is_true(rejects(InvalidSkipped.type()))
 }
 
 testset "live" with testing.Sequential() {

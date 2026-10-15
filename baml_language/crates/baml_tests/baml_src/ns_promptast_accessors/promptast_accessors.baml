@@ -15,7 +15,7 @@
 // `Context` — the shared fixture every accessor test evaluates against.
 function paa_render_ast() -> ai.Prompt {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`${role("system")}You are helpful.${role("user")}Hi World!`
     render(ctx)
 }
@@ -68,7 +68,7 @@ test "messages_expose_role_and_content" {
 // helper's declared return type type-checking.
 function paa_single_message_fn() -> ai.PromptMessage[] {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`Just a system prompt.`
     render(ctx).messages()
 }
@@ -86,7 +86,7 @@ test "messages_yields_promptmessage_instances" {
 // carried none must read as an empty map (never null).
 function pa_message_metadata_survives_assembly() -> json {
     let cc = ai.ContextClient { name: "c", provider: "anthropic", default_role: "user", allowed_roles: ["system", "user"] };
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) };
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) };
     let cached = ai.Role { name: "system", metadata: { "cache_control": { "type": "ephemeral" } } };
     let render = prompt`${cached}Long shared preamble.${role("user")}Hi World!`;
     let out: json[] = [];
@@ -108,7 +108,7 @@ test "message_metadata_survives_prompt_assembly" {
 // structural part, interleaved with the surrounding text runs.
 function pa_message_parts_preserve_media() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] };
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) };
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) };
     let img = image.from_url("https://example.com/photo.png", "image/png");
     let sound = audio.from_url("https://example.com/sound.mp3", "audio/mpeg");
     let movie = video.from_url("https://example.com/movie.mp4", "video/mp4");
@@ -142,7 +142,7 @@ test "message_parts_preserve_all_media_structurally" {
 // readable projections are those of the same prompt without it.
 function pa_cache_delimiter_parts() -> json {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["system", "user"] };
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) };
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) };
     let img = image.from_url("https://example.com/photo.png", "image/png");
     let render = prompt`${role("system")}
         Be terse.
@@ -185,7 +185,7 @@ test "cache_delimiter_is_a_part_where_it_was_written" {
 
 function pa_cache_delimiter_text() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] };
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) };
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) };
     let marked = prompt`${role("user")}stable ${ai.CacheDelimiter { args: { "type": "default" } }}variable ${ai.CacheDelimiter { args: { "type": "default" } }}`;
     let plain = prompt`${role("user")}stable variable `;
     [

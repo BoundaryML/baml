@@ -357,7 +357,7 @@ class Press {
 
 test "runtime_type_arguments_flow_through_qualified_spellings" {
     let p = Press {}
-    let t = reflect.Type.of<int>()
+    let t = int.type()
     type U = unreflect(t)
     match (5) {
         let x: U => {
@@ -457,7 +457,7 @@ class Parcel {
 
     implements Labeler {
         function label_as<T>(self, tag: T) -> string throws never {
-            if reflect.Type.of<T>() == reflect.Type.of<int>() {
+            if reflect.Type.of<T>() == int.type() {
                 self.name + ":int"
             } else {
                 self.name + ":other"

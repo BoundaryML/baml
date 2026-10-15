@@ -131,7 +131,7 @@ function prompts_are_bare() -> string throws never {
             null => false,
         }
     });
-    let fields = reflect.Type.of<root.engine.Prompt>().as_class()?.fields().map((field) -> {
+    let fields = root.engine.Prompt.type().as_class()?.fields().map((field) -> {
         field.name
     })
         ?? [];
@@ -154,11 +154,11 @@ test "prompt: the program and where it came from, and nothing else" {
 /// to the wrong one of them is how a driver would start asking an easier
 /// question than the page asks, so both are read back through reflection.
 function driven_halves() -> string throws never {
-    let asked = reflect.Type.of<root.Asked>().as_class()?.fields().map((field) -> {
+    let asked = root.Asked.type().as_class()?.fields().map((field) -> {
         field.name
     })
         ?? [];
-    let marked = reflect.Type.of<root.Marked>().as_class()?.fields().map((field) -> {
+    let marked = root.Marked.type().as_class()?.fields().map((field) -> {
         field.name
     })
         ?? [];

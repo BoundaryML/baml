@@ -30,13 +30,13 @@ function read_class(view: reflect.Class) -> reflect.Type throws never {
 }
 
 function exercise_all_kinds() -> bool {
-  classify(reflect.Type.of<Foo>()) == "class"
-    && classify(reflect.Type.of<Color>()) == "enum"
+  classify(Foo.type()) == "class"
+    && classify(Color.type()) == "enum"
     && classify(reflect.Type.of<int | string>()) == "union"
     && classify(reflect.Type.of<"fixed">()) == "literal"
     && classify(reflect.Type.of<Foo[]>()) == "array"
     && classify(reflect.Type.of<map<string, Foo>>()) == "map"
     && classify(reflect.Type.of<Marker>()) == "interface"
-    && classify(reflect.Type.of<int>()) == "primitive"
+    && classify(int.type()) == "primitive"
     && classify(reflect.Type.of<Callback>()) == "function"
 }

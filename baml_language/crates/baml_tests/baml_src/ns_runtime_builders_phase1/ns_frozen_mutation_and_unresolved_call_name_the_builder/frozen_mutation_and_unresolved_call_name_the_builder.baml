@@ -11,9 +11,9 @@ function Extract<T>() -> T {
 
 function main() -> string {
     let frozen = reflect.Class.builder("FrozenEmployee");
-    frozen.field("name", reflect.Type.of<string>());
+    frozen.field("name", string.type());
     frozen.build();
-    let frozen_error = frozen.field("age", reflect.Type.of<int>()) catch (e) {
+    let frozen_error = frozen.field("age", int.type()) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].message
     };
 

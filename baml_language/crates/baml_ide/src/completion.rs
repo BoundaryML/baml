@@ -1364,7 +1364,7 @@ function f() -> int throws <[CURSOR]
     fn the_stdlibs_internal_members_are_not_offered() {
         let test = CursorTest::new(
             r#"function f() -> int throws never {
-    let t = reflect.Type.of<int>();
+    let t = int.type();
     t.<[CURSOR]
     0
 }
@@ -1385,7 +1385,7 @@ function f() -> int throws <[CURSOR]
     fn a_typed_underscore_asks_for_the_internals() {
         let test = CursorTest::new(
             r#"function f() -> int throws never {
-    let t = reflect.Type.of<int>();
+    let t = int.type();
     t._<[CURSOR]
     0
 }

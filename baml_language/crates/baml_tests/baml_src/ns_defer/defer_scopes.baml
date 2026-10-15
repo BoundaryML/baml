@@ -359,12 +359,12 @@ function scoped_type_normal_exit(t: reflect.Type) -> string[] {
     log
 }
 test "a_defer_names_a_scoped_type_on_normal_exit" {
-    assert.equal(scoped_type_normal_exit(reflect.Type.of<int>()), ["int"])
+    assert.equal(scoped_type_normal_exit(int.type()), ["int"])
 }
 
 function scoped_type_per_iteration() -> string[] {
     let log: string[] = []
-    for (let t in [reflect.Type.of<int>(), reflect.Type.of<string>()]) {
+    for (let t in [int.type(), string.type()]) {
         type T = unreflect(t)
         defer { log.push(reflect.Type.of<T>().to_string()) }
     }
@@ -381,7 +381,7 @@ function scoped_type_unwind_body(log: string[], t: reflect.Type) -> void {
 }
 function scoped_type_unwind() -> string[] {
     let log: string[] = []
-    scoped_type_unwind_body(log, reflect.Type.of<int>()) catch (e) { _ => { log.push("c") } }
+    scoped_type_unwind_body(log, int.type()) catch (e) { _ => { log.push("c") } }
     log
 }
 test "a_defer_names_a_scoped_type_on_unwind" {
@@ -398,7 +398,7 @@ function scoped_type_nested_return_body(log: Log, t: reflect.Type, early: bool) 
 }
 function scoped_type_nested_return() -> string[] {
     let log = Log { entries: [] }
-    let r = scoped_type_nested_return_body(log, reflect.Type.of<int>(), true)
+    let r = scoped_type_nested_return_body(log, int.type(), true)
     log.entries.push(`${r}`)
     log.entries
 }
@@ -417,8 +417,8 @@ function scoped_type_bound_in_defer_body(log: Log, t: reflect.Type, early: bool)
 }
 function scoped_type_bound_in_defer() -> string[] {
     let log = Log { entries: [] }
-    let _ = scoped_type_bound_in_defer_body(log, reflect.Type.of<int>(), true)
-    let _ = scoped_type_bound_in_defer_body(log, reflect.Type.of<string>(), false)
+    let _ = scoped_type_bound_in_defer_body(log, int.type(), true)
+    let _ = scoped_type_bound_in_defer_body(log, string.type(), false)
     log.entries
 }
 test "a_defer_body_binds_its_own_scoped_type" {
@@ -454,7 +454,7 @@ function scoped_type_shadow_return_body<T>(log: Log, t: reflect.Type, early: boo
 }
 function scoped_type_shadow_return() -> string[] {
     let log = Log { entries: [] }
-    let _ = scoped_type_shadow_return_body<string>(log, reflect.Type.of<int>(), true)
+    let _ = scoped_type_shadow_return_body<string>(log, int.type(), true)
     log.entries
 }
 test "an_outer_defer_replayed_under_a_shadowing_type_binding_keeps_its_own_T" {
@@ -472,7 +472,7 @@ function scoped_type_shadow_continue_body<T>(log: Log, t: reflect.Type) -> void 
 }
 function scoped_type_shadow_continue() -> string[] {
     let log = Log { entries: [] }
-    scoped_type_shadow_continue_body<string>(log, reflect.Type.of<int>())
+    scoped_type_shadow_continue_body<string>(log, int.type())
     log.entries
 }
 test "an_outer_defer_replayed_at_continue_under_a_shadow_keeps_its_own_T" {
@@ -488,7 +488,7 @@ function scoped_type_shadow_unwind_body<T>(log: Log, t: reflect.Type) -> void {
 }
 function scoped_type_shadow_unwind() -> string[] {
     let log = Log { entries: [] }
-    scoped_type_shadow_unwind_body<string>(log, reflect.Type.of<int>()) catch (e) { _ => { log.entries.push("c") } }
+    scoped_type_shadow_unwind_body<string>(log, int.type()) catch (e) { _ => { log.entries.push("c") } }
     log.entries
 }
 test "an_outer_defers_pad_under_a_shadow_keeps_its_own_T" {

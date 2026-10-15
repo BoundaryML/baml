@@ -246,8 +246,8 @@ test "spec: every diverging or spec-only item cites a ledger entry" {
 /// Every function in this package with a fact generator's signature, by its
 /// package-local name.
 function fact_shaped_functions() -> string[] throws never {
-    let derived = reflect.Type.of<root.engine.Rolled<root.algebra.Derivation>>();
-    let seed = reflect.Type.of<root.engine.Seed>();
+    let derived = root.engine.Rolled<root.algebra.Derivation>.type();
+    let seed = root.engine.Seed.type();
     let functions = reflect.Package.current().functions();
     functions.keys().filter((name) -> {
         match (functions.get(name)) {
@@ -324,7 +324,7 @@ type RuleFn = () -> root.engine.Rule throws never;
 /// name. The rule table's entries are the only ones that reach a learner, so
 /// a rule written and left out of `rules()` would be invisible.
 function rule_shaped_functions() -> string[] throws never {
-    let produces = reflect.Type.of<root.engine.Rule>();
+    let produces = root.engine.Rule.type();
     let functions = reflect.Package.current().functions();
     functions.keys().filter((name) -> {
         match (functions.get(name)) {

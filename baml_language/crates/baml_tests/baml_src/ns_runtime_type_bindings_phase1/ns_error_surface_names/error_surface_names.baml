@@ -26,7 +26,7 @@ function compiled_messages() -> string {
 
 function minted_messages() -> string {
     let item_type = reflect.Class
-        .new("Item", { "value": reflect.Type.of<string>(), "count": reflect.Type.of<int>() })
+        .new("Item", { "value": string.type(), "count": int.type() })
         .as_type();
     type Item = unreflect(item_type)
 

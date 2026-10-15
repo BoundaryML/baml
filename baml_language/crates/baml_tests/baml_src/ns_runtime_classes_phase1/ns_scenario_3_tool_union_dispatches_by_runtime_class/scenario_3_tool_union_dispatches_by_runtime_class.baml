@@ -15,7 +15,7 @@ class ScenarioResult {
 }
 
 function main() -> ScenarioResult {
-    let read_args_t = reflect.Class.new("Tool0Args", { "path": reflect.Type.of<string>().meta(alias = "file_path") });
+    let read_args_t = reflect.Class.new("Tool0Args", { "path": string.type().meta(alias = "file_path") });
     let read_t = reflect.Class.new(
         "Tool0Action",
         {
@@ -25,7 +25,7 @@ function main() -> ScenarioResult {
     );
     let search_args_t = reflect.Class.new(
         "Tool1Args",
-        { "query": reflect.Type.of<string>(), "limit": reflect.Type.of<int>().optional().as_type() },
+        { "query": string.type(), "limit": int.type().optional().as_type() },
     );
     let search_t = reflect.Class.new(
         "Tool1Action",

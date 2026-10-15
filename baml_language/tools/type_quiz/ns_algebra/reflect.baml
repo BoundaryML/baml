@@ -74,13 +74,13 @@ function expected_kind(ty: Ty) -> Kind? throws never {
 function to_reflect(ty: Ty) -> reflect.Type? throws never {
     match (ty) {
         let p: Prim => match (p.kind) {
-            PrimKind.Int => reflect.Type.of<int>(),
-            PrimKind.Float => reflect.Type.of<float>(),
-            PrimKind.Bool => reflect.Type.of<bool>(),
-            PrimKind.String => reflect.Type.of<string>(),
-            PrimKind.Bigint => reflect.Type.of<bigint>(),
+            PrimKind.Int => int.type(),
+            PrimKind.Float => float.type(),
+            PrimKind.Bool => bool.type(),
+            PrimKind.String => string.type(),
+            PrimKind.Bigint => bigint.type(),
             PrimKind.Null => reflect.Type.of<null>(),
-            PrimKind.Uint8Array => reflect.Type.of<uint8array>(),
+            PrimKind.Uint8Array => uint8array.type(),
         },
         Never => reflect.Type.of<never>(),
         Top => reflect.Type.of<unknown>(),
@@ -98,7 +98,7 @@ function to_reflect(ty: Ty) -> reflect.Type? throws never {
         },
         let a: Array => to_reflect(a.element)?.array().as_type(),
         let m: Map => match (to_reflect(m.value)) {
-            let v: reflect.Type => reflect.Map.new(reflect.Type.of<string>(), v).as_type(),
+            let v: reflect.Type => reflect.Map.new(string.type(), v).as_type(),
             null => null,
         },
         EnumLit | Fn | Class | Enum | Iface | Alias | Var => null,

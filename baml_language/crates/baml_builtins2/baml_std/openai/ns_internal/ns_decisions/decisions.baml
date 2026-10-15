@@ -157,7 +157,7 @@ function collect(
     }
 
     let choices: ChoiceOption[] = [];
-    if (ty != reflect.Type.of<bool>() && ty != reflect.Type.of<float>()) {
+    if (ty != bool.type() && ty != float.type()) {
         let seen: map<string, bool> = {};
         for (let option in options(ty)) {
             if (!seen.has(option.key)) {
@@ -394,7 +394,7 @@ function decode(leaf: Leaf, answer: Answer) -> unknown {
         if (answer.type != "predicate" || probability < 0.0 || probability > 1.0) {
             throw failed(`Invalid predicate answer for ${leaf.id}`)
         }
-        if (leaf.ty == reflect.Type.of<bool>()) {
+        if (leaf.ty == bool.type()) {
             return probability >= 0.5;
         }
         return probability;

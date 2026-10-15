@@ -7,8 +7,8 @@ test "compiled_package_declarations_share_one_identity_across_all_access_paths" 
             "pkg.baml": `
                 class Item { value int }
                 enum State { Ready }
-                function ReflectedItem() -> reflect.Type { reflect.Type.of<Item>() }
-                function ReflectedState() -> reflect.Type { reflect.Type.of<State>() }
+                function ReflectedItem() -> reflect.Type { Item.type() }
+                function ReflectedState() -> reflect.Type { State.type() }
             `,
         },
     );

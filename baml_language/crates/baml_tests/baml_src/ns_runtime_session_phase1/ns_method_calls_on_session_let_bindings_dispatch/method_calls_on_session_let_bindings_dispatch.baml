@@ -15,7 +15,7 @@ function main() -> string {
     s.eval(`let v = ["a", "b"]`);
     s.eval(`let m = { "k": 1, "j": 2 }`);
     s.eval(`let p = P { name: "ada" }`);
-    s.eval(`let cls = reflect.Class.new("R", { "a": reflect.Type.of<string>() })`);
+    s.eval(`let cls = reflect.Class.new("R", { "a": string.type() })`);
     s.eval<string>(
         `` `\${n.abs()}|\${text.to_upper_case()}|\${v.length()}|\${m.length()}|\${v.join("-")}|\${m.keys().join("-")}|\${p.greet()}|\${cls.fields()[0].name}` ``,
     )

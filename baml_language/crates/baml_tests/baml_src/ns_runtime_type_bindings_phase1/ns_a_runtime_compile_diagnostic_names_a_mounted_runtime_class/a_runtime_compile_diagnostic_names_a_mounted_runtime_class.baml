@@ -1,5 +1,5 @@
 function main() -> string {
-    let item_type = reflect.Class.new("Item", { "value": reflect.Type.of<string>() }).as_type();
+    let item_type = reflect.Class.new("Item", { "value": string.type() }).as_type();
     let app = reflect.Package.compile({ "empty.baml": "" }).with_types({ "Item": item_type });
     let compiled = reflect.Package.compile(
         {

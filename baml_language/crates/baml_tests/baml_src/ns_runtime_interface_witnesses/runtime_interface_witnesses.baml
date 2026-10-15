@@ -48,9 +48,9 @@ test "witnessed_runtime_class_implements_static_interface" {
     let person_t = reflect.Class.new(
         "WitnessedPerson",
         {
-            "name": reflect.Type.of<string>(),
-            "email": reflect.Type.of<string>(),
-            "favorite_editor": reflect.Type.of<string>(),
+            "name": string.type(),
+            "email": string.type(),
+            "favorite_editor": string.type(),
         },
         implementations = [witness],
     );
@@ -64,7 +64,7 @@ test "witness_realizes_associated_field_binding_before_exact_type_check" {
     );
     let account_t = reflect.Class.new(
         "WitnessedAccount",
-        { "public_key": reflect.Type.of<string>() },
+        { "public_key": string.type() },
         implementations = [witness],
     );
     assert.is_true(
@@ -80,9 +80,9 @@ test "scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves" {
     let person_t = reflect.Class.new(
         "ScenarioPerson",
         {
-            "name": reflect.Type.of<string>(),
-            "contact_email": reflect.Type.of<string>(),
-            "favorite_editor": reflect.Type.of<string>(),
+            "name": string.type(),
+            "contact_email": string.type(),
+            "favorite_editor": string.type(),
         },
         implementations = [anchor_impl],
     );
@@ -103,14 +103,14 @@ test "incomplete_witness_fails_before_type_and_chain_is_immutable" {
     let complete = base.field("email", class_field = "contact_email");
     let bad = reflect.Class.new(
         "IncompletePerson",
-        { "name": reflect.Type.of<string>(), "contact_email": reflect.Type.of<string>() },
+        { "name": string.type(), "contact_email": string.type() },
         implementations = [base],
     ) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message
     };
     let good = reflect.Class.new(
         "CompletePerson",
-        { "name": reflect.Type.of<string>(), "contact_email": reflect.Type.of<string>() },
+        { "name": string.type(), "contact_email": string.type() },
         implementations = [complete],
     );
     if (bad is string) {
@@ -126,12 +126,12 @@ test "equivalent_witnessed_definitions_render_and_parse_identically" {
     let witness = reflect.Interface.implementation<RiwPersonAnchor>().field("name").field("email");
     let left = reflect.Class.new(
         "EquivalentPerson",
-        { "name": reflect.Type.of<string>(), "email": reflect.Type.of<string>() },
+        { "name": string.type(), "email": string.type() },
         implementations = [witness],
     );
     let right = reflect.Class.new(
         "EquivalentPerson",
-        { "name": reflect.Type.of<string>(), "email": reflect.Type.of<string>() },
+        { "name": string.type(), "email": string.type() },
         implementations = [witness],
     );
     type LeftPerson = unreflect(left.as_type())
@@ -157,7 +157,7 @@ test "witness_inherits_interface_default_methods" {
     let witness = reflect.Interface.implementation<RiwGreeter>().field("name");
     let person_t = reflect.Class.new(
         "GreeterPerson",
-        { "name": reflect.Type.of<string>() },
+        { "name": string.type() },
         implementations = [witness],
     );
     let is_member = person_t.as_type().implements(reflect.Type.of<RiwGreeter>());
@@ -194,7 +194,7 @@ test "session_interface_default_methods_are_bound_and_inherited" {
                 let witness = reflect.Interface.implementation<Greeter>().field("who")
                 let person_t = reflect.Class.new(
                     "SessionPerson",
-                    { "who": reflect.Type.of<string>() },
+                    { "who": string.type() },
                     implementations = [witness],
                 )
                 person_t.as_type()

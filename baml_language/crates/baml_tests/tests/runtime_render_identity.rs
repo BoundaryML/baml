@@ -16,7 +16,7 @@ async fn output_format_surfaces_deferred_recursive_generic_error() {
         }
 
         function main() -> string {
-            let rt = reflect.Type.of<Chain<int>>()
+            let rt = Chain<int>.type()
             let render_ctx = ai.Context {
                 client: ai.ContextClient {
                     name: "test",

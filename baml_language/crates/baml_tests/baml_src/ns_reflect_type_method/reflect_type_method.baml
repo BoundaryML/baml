@@ -145,7 +145,7 @@ testset "type method keeps existing type members" {
     }
 
     test "class.Builder.type() is the builder's pending type" {
-        let node = reflect.class.builder("TypeMethodNode");
+        let node = reflect.Class.builder("TypeMethodNode");
         let next: reflect.class.PendingType = node.type().optional();
         node.field("next", next);
         let built = node.build().as_type().as_class() ?? throw "expected class";

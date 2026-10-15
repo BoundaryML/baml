@@ -486,7 +486,7 @@ function vertex_media_url_passthrough() -> string {
         prompt: GoogleVision@spec(img).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
     let cl = google.VertexClient.new(
         model = "gemini-2.5-flash",
@@ -521,7 +521,7 @@ function google_media_url_inlined() -> string {
         prompt: GoogleVision@spec(img).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
             let cl = google.GeminiClient.new(
                 model = "gemini-2.5-flash",
@@ -551,7 +551,7 @@ function google_media_youtube_passthrough() -> string {
         prompt: GoogleWatch@spec(clip).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
     let cl = google.GeminiClient.new(
         model = "gemini-2.5-flash",
@@ -866,7 +866,7 @@ function vertex_claude_raw_predict() -> string {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
     let cl = google.VertexClient.new(
         model = "claude-sonnet-4-5",
@@ -917,7 +917,7 @@ function _vertex_cached_body(model: string, default_args: bool = false) -> strin
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
     let cl = google.VertexClient.new(
         model = model,
@@ -964,7 +964,7 @@ function vertex_claude_model_override() -> string {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
     let cl = google.VertexClient.new(
         model = "claude-sonnet-4-5",
@@ -1192,7 +1192,7 @@ function google_missing_key_invoke() -> string {
         prompt: GoogleEcho@spec("Say pong.").prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
     // The concrete classes, not the `ai.errors.Failure` interface: a
     // configuration error and a transport error are both typed, and matching

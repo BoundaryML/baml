@@ -12,8 +12,8 @@ function main() -> string {
     };
 
     let builder = reflect.Class.builder("Duplicate");
-    builder.field("x", reflect.Type.of<string>());
-    let duplicate_result = builder.field("x", reflect.Type.of<int>()) catch (e) {
+    builder.field("x", string.type());
+    let duplicate_result = builder.field("x", int.type()) catch (e) {
         reflect.errors.CompilationError { diagnostics } => {
             diagnostics[0].code + ":" + (diagnostics[0].span == null).to_string()
         },
