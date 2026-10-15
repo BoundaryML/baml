@@ -16,7 +16,29 @@ function deep_copy<T>(value: T) -> T throws never {
 ///
 /// Use it to test whether a type is concrete, or as a bound restricting a type
 /// parameter to concrete types.
-interface Concrete {}
+interface Concrete {
+    /// This type's runtime type value: `int.type()` is the same value as
+    /// `reflect.Type.of<int>()`.
+    ///
+    /// Spell it on a declared type written as one name, optionally qualified
+    /// or with generic arguments: `Foo.type()`, `root.models.Base.type()`,
+    /// `Box<int[]>.type()`. Array, optional, union, map and function types,
+    /// interfaces, and generic type parameters keep the `reflect.Type.of<T>()`
+    /// form. A type that declares its own `type` member keeps resolving to it.
+    function type() -> reflect.Type throws never {
+        root._type_of<Self>()
+    }
+}
+
+/// (internal) The runtime type value of `T`, the same value as
+/// `reflect.Type.of<T>()`. `baml` cannot call into the `reflect` package,
+/// which depends on `baml`, so `Concrete.type()` reifies its type argument
+/// natively.
+//baml:mut_vm
+//baml:fallible
+function _type_of<T>() -> reflect.Type throws never {
+    $rust_function
+}
 
 implement<T> Concrete for T {
 

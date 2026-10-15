@@ -1146,13 +1146,33 @@ pub(crate) fn provides_concrete_members(lang: baml_base::LangRoots, interface: &
     !interface.is_lang_root_type(lang, baml_base::LangPackage::Reflect, "AnyClass")
 }
 
-/// Whether `interface` is `reflect.Reflectable`, which every type implements
-/// for its static `type()`. Its member is reached only through a type
-/// qualifier (`int.type()`), so value receivers never see it: `x.type` keeps
-/// naming a field or method of `x`'s own. On a type qualifier it yields to
-/// any other interface that declares the same name.
-pub(crate) fn is_reflectable(lang: baml_base::LangRoots, interface: &DeclName) -> bool {
-    interface.is_lang_root_type(lang, baml_base::LangPackage::Reflect, "Reflectable")
+/// Whether `member` of `interface` is `baml.Concrete`'s static `type()`.
+/// Every concrete type implements `Concrete`, so the member is reached only
+/// through a type qualifier (`int.type()`): value receivers never see it, and
+/// `x.type` keeps naming a field or method of `x`'s own. On a type qualifier
+/// it yields to any other interface that declares `type`.
+pub fn is_concrete_type_member(
+    lang: baml_base::LangRoots,
+    interface: &DeclName,
+    member: &baml_type::Name,
+) -> bool {
+    member.as_str() == "type"
+        && interface.is_lang_root_type(lang, baml_base::LangPackage::Baml, "Concrete")
+}
+
+/// Drops `baml.Concrete` from the interfaces declaring `member` when the
+/// member is its `type` and another interface declares it too
+/// ([`is_concrete_type_member`]).
+pub(crate) fn demote_concrete_type_member<T>(
+    lang: baml_base::LangRoots,
+    member: &baml_type::Name,
+    declarers: &mut Vec<T>,
+    interface: impl Fn(&T) -> &DeclName,
+) {
+    let concrete = |declarer: &T| is_concrete_type_member(lang, interface(declarer), member);
+    if declarers.iter().any(|declarer| !concrete(declarer)) {
+        declarers.retain(|declarer| !concrete(declarer));
+    }
 }
 
 /// Compiler-derived interfaces may deliberately narrow a blanket stdlib impl.

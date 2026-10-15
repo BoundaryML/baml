@@ -367,13 +367,22 @@ pub fn lookup_interface_member<'db>(
             declarers.push((realized.clone(), member));
         }
     };
+    // A value receiver's members: `baml.Concrete`'s `type` is a static.
+    let concrete_type = |interface: &InferInterface| {
+        crate::impls::is_concrete_type_member(facts.lang(), &interface.name, name)
+    };
     for root in &roots {
         // Root-wins: the directly-named interface shadows its own closure.
-        if let Some(member) = member_on_interface(db, facts, root, receiver, name, existential) {
+        if !concrete_type(root)
+            && let Some(member) = member_on_interface(db, facts, root, receiver, name, existential)
+        {
             push(&mut declarers, root, member);
             continue;
         }
         for required in crate::impls::direct_requires_closure(db, root, receiver, 8) {
+            if concrete_type(&required) {
+                continue;
+            }
             if let Some(member) =
                 member_on_interface(db, facts, &required, receiver, name, existential)
             {
@@ -548,6 +557,9 @@ fn lookup_impl_member<'db>(
             continue;
         }
         let implemented = resolved.implemented();
+        if crate::impls::is_concrete_type_member(facts.lang(), &implemented.name, name) {
+            continue;
+        }
         if let Some(mut member) =
             member_on_interface(db, facts, &implemented, receiver, name, false)
             && !providers.iter().any(|(seen, _)| *seen == implemented)
@@ -828,9 +840,11 @@ fn extend_from_impls<'db>(
         .into_iter()
         .map(|resolved| resolved.implemented())
         .collect();
-    // `reflect.Reflectable` last: a `type` another interface declares keeps
-    // the name, as it does in `determine_concrete`.
-    explicit.sort_by_key(|interface| crate::impls::is_reflectable(facts.lang(), &interface.name));
+    // `baml.Concrete` last: a `type` another interface declares keeps the
+    // name, as it does in `determine_concrete`.
+    explicit.sort_by_key(|interface| {
+        crate::impls::is_concrete_type_member(facts.lang(), &interface.name, &Name::new("type"))
+    });
     for implemented in
         explicit
             .into_iter()
@@ -900,11 +914,7 @@ fn impls_for_receiver<'db>(
     let Ok(closed) = baml_type::interned::ClosedTy::try_from(receiver) else {
         return Vec::new();
     };
-    let lang = baml_compiler2_hir::package::lang_roots(db);
-    let mut impls = crate::impls::impls_for_type(db, viewer, &closed.to_plain());
-    // A value receiver's members: `reflect.Reflectable` has only a static.
-    impls.retain(|resolved| !crate::impls::is_reflectable(lang, &resolved.facts.interface().name));
-    impls
+    crate::impls::impls_for_type(db, viewer, &closed.to_plain())
 }
 
 /// A matched impl's generic params realized through the match, in
@@ -1370,9 +1380,7 @@ pub fn member_candidates<'db>(
             // disposition here (contrast `impls_for_receiver`, whose
             // inference-side callers can still be open).
             for resolved in crate::impls::impls_for_type(db, viewer, &receiver.to_plain()) {
-                if !env_discharges_rigid_bounds(db, facts, &resolved)
-                    || crate::impls::is_reflectable(facts.lang(), &resolved.facts.interface().name)
-                {
+                if !env_discharges_rigid_bounds(db, facts, &resolved) {
                     continue;
                 }
                 let implemented = resolved.implemented();
@@ -1545,6 +1553,10 @@ fn extend_from_interface<'db>(
 ) {
     for (name, is_method, is_static, decl) in interface_member_rows(db, facts, target, existential)
     {
+        // A value receiver's members: `baml.Concrete`'s `type` is a static.
+        if crate::impls::is_concrete_type_member(facts.lang(), &target.name, &name) {
+            continue;
+        }
         push_candidate(
             out,
             name,
@@ -1743,6 +1755,9 @@ pub fn lookup_union_member<'db>(
     }
     let mut declarers: Vec<(InferInterface, bool)> = Vec::new();
     for iface in shared.unwrap_or_default() {
+        if crate::impls::is_concrete_type_member(facts.lang(), &iface.name, name) {
+            continue;
+        }
         if let Some(is_field) = interface_declares_member(db, &iface, name)
             && !declarers.iter().any(|(seen, _)| *seen == iface)
         {

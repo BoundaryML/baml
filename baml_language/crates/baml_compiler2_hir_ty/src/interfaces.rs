@@ -2122,6 +2122,14 @@ fn resolve_via_roots<'db>(
         None => {
             let result = resolve_through_roots(db, roots, member, undeclared, fill_defaults, ns);
             if let Determination::Ambiguous(mut candidates) = result {
+                // A bound's `requires` closure can reach `baml.Concrete`
+                // (`baml.ops.Add requires root.Concrete`); its `type` yields.
+                crate::impls::demote_concrete_type_member(
+                    facts.lang(),
+                    member,
+                    &mut candidates,
+                    |iface| &iface.name,
+                );
                 crate::method_resolution::prefer_explicit_members(
                     db,
                     viewer,
@@ -2464,14 +2472,12 @@ fn determine_concrete<'db>(
             .filter_map(|(declarer, keep)| keep.then_some(declarer))
             .collect();
     }
-    // `reflect.Reflectable` declares `type` for every type; any other
+    // `baml.Concrete` declares `type` for every concrete type; any other
     // interface declaring the name keeps it (`Kinded.type()` on an
     // implementor stays `Kinded`'s).
-    let reflectable =
-        |iface: &baml_type::Interface| crate::impls::is_reflectable(facts.lang(), &iface.name);
-    if declarers.iter().any(|iface| !reflectable(iface)) {
-        declarers.retain(|iface| !reflectable(iface));
-    }
+    crate::impls::demote_concrete_type_member(facts.lang(), member, &mut declarers, |iface| {
+        &iface.name
+    });
     crate::method_resolution::prefer_explicit_members(
         db,
         viewer,

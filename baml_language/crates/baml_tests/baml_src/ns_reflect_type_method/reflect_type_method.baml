@@ -1,4 +1,4 @@
-// `X.type()`: the static method every type gets from `reflect.Reflectable`,
+// `X.type()`: the static method every concrete type gets from `baml.Concrete`,
 // the short form of `reflect.Type.of<X>()`.
 
 class Point {
@@ -84,6 +84,17 @@ function kind_type<K extends Kind>() -> string {
     K.type()
 }
 
+// `baml.Concrete` declares `type` too; another bound that declares it wins.
+function kind_and_concrete_type<K extends Kind & baml.Concrete>() -> string {
+    K.type()
+}
+
+// A type parameter bounded by `baml.Concrete` reaches the method through its
+// bound.
+function concrete_type<T extends baml.Concrete>() -> reflect.Type {
+    T.type()
+}
+
 testset "type method" {
     test "int" {
         assert.equal(int.type().to_string(), "int")
@@ -138,6 +149,16 @@ testset "type method" {
     }
 }
 
+testset "type method on a type parameter" {
+    test "bounded by Concrete" {
+        assert.is_true(concrete_type<int>() == int.type());
+        assert.is_true(concrete_type<Point>() == Point.type());
+        assert.is_true(
+            concrete_type<Pair<int, string[]>>() == reflect.Type.of<Pair<int, string[]>>(),
+        )
+    }
+}
+
 testset "type method keeps existing type members" {
     test "AnyClass.type() is the value's runtime type" {
         let value: reflect.AnyClass = Point { x: 1, y: 2 };
@@ -183,6 +204,7 @@ testset "type method keeps existing type members" {
 
     test "an interface static method called type" {
         assert.equal(Leaf.type(), "leaf");
-        assert.equal(kind_type<Leaf>(), "leaf")
+        assert.equal(kind_type<Leaf>(), "leaf");
+        assert.equal(kind_and_concrete_type<Leaf>(), "leaf")
     }
 }
