@@ -6,20 +6,23 @@
 //! walk is one function over the slot's shape; a bridge contributes only the
 //! answers its [`HostValue`] gives.
 //!
-//! Three slot shapes do not fix a node's type: `unknown`, an interface and an
-//! unbound type variable (open slots), and a union. A scalar, null, enum or
-//! handle under such a slot is self-evident. A list or map is not, so the
-//! node carries a `value_type` naming its concrete type, and the engine takes
-//! that as the node's type. A class node carries one under every slot, since
-//! the wire's `class_value` has no name of its own. Nothing else ever does.
+//! Every node leaves with its concrete type. A scalar, null, enum variant,
+//! media value or handle implies its own and carries nothing. A list, map,
+//! class or callable node states its type in `value_type`: the slot's type
+//! where the slot is realized (a Python list of ints under `(int | string)[]`
+//! goes out as a `(int | string)[]`, which the engine builds as such), and the
+//! type the value itself has where the slot fixes none (`unknown`, an
+//! interface, an unbound type variable). A callable has no type of its own,
+//! so under a slot that fixes none it is refused here.
 
 use std::collections::HashMap;
 
 use baml_type::{Literal, MediaKind, Name, ParamTy, RuntimeTy, TypeName};
 use bridge_ctypes::{
     baml_bridge::cffi::{
-        InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry, InboundMapValue,
-        InboundValue, inbound_map_entry::Key, inbound_value::Value,
+        BamlHandle, BamlHandleType, InboundClassValue, InboundEnumValue, InboundListValue,
+        InboundMapEntry, InboundMapValue, InboundValue, inbound_map_entry::Key,
+        inbound_value::Value,
     },
     runtime_ty_to_proto_ty,
 };
@@ -136,7 +139,7 @@ impl Walk<'_> {
         }
         match slot {
             RuntimeTy::Unknown | RuntimeTy::Interface(..) | RuntimeTy::TypeVar(_) => {
-                self.open(value, slot)
+                self.open(value)
             }
             RuntimeTy::Union(members) => self.union(value, members),
             // `void` is the language's spelling of `null` in a result position.
@@ -162,7 +165,7 @@ impl Walk<'_> {
             RuntimeTy::Map { key, value: item } => self.map(value, slot, key, item),
             RuntimeTy::Class(name, args) => self.class(value, slot, name, args),
             RuntimeTy::Function { .. } => match value.callable(slot) {
-                Some(Ok(wire)) => Ok(exact(wire, slot.clone())),
+                Some(Ok(wire)) => Ok(stated(wire, slot.clone(), Fit::AsIs)),
                 Some(Err(error)) => Err(self.err(EncodeErrorKind::Host(error.0))),
                 None => Err(self.mismatch(value, slot)),
             },
@@ -182,7 +185,7 @@ impl Walk<'_> {
 
     /// A slot that fixes nothing: the value is what the language says it is,
     /// and a container or class states that type on the wire.
-    fn open<V: HostValue>(&self, value: &V, slot: &RuntimeTy) -> Result<Encoded, EncodeError> {
+    fn open<V: HostValue>(&self, value: &V) -> Result<Encoded, EncodeError> {
         if value.is_null() {
             return Ok(exact(InboundValue::default(), RuntimeTy::Null));
         }
@@ -226,9 +229,8 @@ impl Walk<'_> {
                         .fields
                         .iter()
                         .map(|(name, field)| {
-                            let encoded = self
-                                .child(PathSegment::Field(name.clone()))
-                                .open(field, slot)?;
+                            let encoded =
+                                self.child(PathSegment::Field(name.clone())).open(field)?;
                             fit = fit.and(encoded.fit);
                             Ok(InboundMapEntry {
                                 key: Some(Key::StringKey(name.clone())),
@@ -257,7 +259,7 @@ impl Walk<'_> {
                 .iter()
                 .enumerate()
                 .map(|(index, item)| {
-                    let encoded = self.child(PathSegment::Index(index)).open(item, slot)?;
+                    let encoded = self.child(PathSegment::Index(index)).open(item)?;
                     fit = fit.and(encoded.fit);
                     push_distinct(&mut element_tys, encoded.ty);
                     Ok(encoded.value)
@@ -281,13 +283,13 @@ impl Walk<'_> {
                 .iter()
                 .map(|(key, item)| {
                     let key_walk = self.child(PathSegment::Key(key.describe()));
-                    let encoded_key = key_walk.open(key, slot)?;
+                    let encoded_key = key_walk.open(key)?;
                     let wire_key =
                         key_walk.wire_key(encoded_key.value, key, &RuntimeTy::Unknown)?;
                     push_distinct(&mut key_tys, encoded_key.ty);
                     let encoded = self
                         .child(PathSegment::Field(key_label(&wire_key)))
-                        .open(item, slot)?;
+                        .open(item)?;
                     fit = fit.and(encoded.fit);
                     push_distinct(&mut value_tys, encoded.ty);
                     Ok(InboundMapEntry {
@@ -316,13 +318,12 @@ impl Walk<'_> {
                 fit,
             ));
         }
-        // A callable under an open slot has no signature the host can state;
-        // it crosses as a host callable and the engine binds it to the type
-        // it declares for the slot.
-        match value.callable(slot) {
-            Some(Ok(wire)) => return Ok(exact(wire, RuntimeTy::Unknown)),
-            Some(Err(error)) => return Err(self.err(EncodeErrorKind::Host(error.0))),
-            None => {}
+        // A callable has no type of its own: only a function slot gives it
+        // one, and the slot here fixes none.
+        if value.is_callable() {
+            return Err(self.err(EncodeErrorKind::UntypedCallable {
+                found: value.describe(),
+            }));
         }
         match value.scalar(ScalarSlot::Open) {
             Answer::AsIs(scalar) | Answer::Converted(scalar) => {
@@ -355,6 +356,30 @@ impl Walk<'_> {
         members: &[RuntimeTy],
     ) -> Result<Encoded, EncodeError> {
         let members = self.flatten(members)?;
+        // A callable fits every function-typed member alike, since a host
+        // function carries no signature to tell them apart, and registering
+        // it against each would leave the losers in the host's registry. So
+        // it is bound to the one function-typed member, or declined.
+        if value.is_callable() {
+            let mut functions = members
+                .iter()
+                .filter(|member| matches!(member, RuntimeTy::Function { .. }));
+            return match (functions.next(), functions.next()) {
+                (Some(function), None) => self.encode(value, function),
+                (None, _) => Err(self.err(EncodeErrorKind::NoMember {
+                    members: members.iter().map(|m| (*m).clone()).collect(),
+                    found: value.describe(),
+                })),
+                (Some(first), Some(second)) => Err(self.err(EncodeErrorKind::Ambiguous {
+                    members: [first, second]
+                        .into_iter()
+                        .chain(functions)
+                        .map(|member| (*member).clone())
+                        .collect(),
+                    found: value.describe(),
+                })),
+            };
+        }
         let mut as_is = Vec::new();
         let mut converted = Vec::new();
         for member in &members {
@@ -559,17 +584,13 @@ impl Walk<'_> {
             value_type: None,
             value: Some(Value::ListValue(InboundListValue { values })),
         };
-        if mentions_type_var(inner) {
-            // The elements determine the element type; the node states it.
-            let element = Self::join(element_tys);
-            Ok(stated(wire, RuntimeTy::List(Box::new(element)), fit))
+        // An element type the slot leaves open is the one the elements have.
+        let ty = if mentions_type_var(inner) {
+            RuntimeTy::List(Box::new(Self::join(element_tys)))
         } else {
-            Ok(Encoded {
-                value: wire,
-                ty: slot.clone(),
-                fit,
-            })
-        }
+            slot.clone()
+        };
+        Ok(stated(wire, ty, fit))
     }
 
     fn map<V: HostValue>(
@@ -608,28 +629,22 @@ impl Walk<'_> {
                 entries: encoded_entries,
             })),
         };
-        if mentions_type_var(value_slot) || mentions_type_var(key_slot) {
-            let item = Self::join(value_tys);
+        // A key or value type the slot leaves open is the one the entries
+        // have.
+        let ty = if mentions_type_var(value_slot) || mentions_type_var(key_slot) {
             let key = if mentions_type_var(key_slot) {
                 RuntimeTy::String
             } else {
                 key_slot.clone()
             };
-            Ok(stated(
-                wire,
-                RuntimeTy::Map {
-                    key: Box::new(key),
-                    value: Box::new(item),
-                },
-                fit,
-            ))
+            RuntimeTy::Map {
+                key: Box::new(key),
+                value: Box::new(Self::join(value_tys)),
+            }
         } else {
-            Ok(Encoded {
-                value: wire,
-                ty: slot.clone(),
-                fit,
-            })
-        }
+            slot.clone()
+        };
+        Ok(stated(wire, ty, fit))
     }
 
     /// An encoded key as the wire's map key: the wire keys maps by string,
@@ -864,12 +879,17 @@ fn exact(value: InboundValue, ty: RuntimeTy) -> Encoded {
     }
 }
 
-/// A node that states its type: a list, map or class carries the type it has;
-/// a scalar, null or enum is self-evident and carries nothing.
+/// A node that states its type: a list, map, class or host callable carries
+/// the type it has; a scalar, null, enum variant, media value or handle
+/// implies its own and carries nothing.
 fn stated(mut value: InboundValue, ty: RuntimeTy, fit: Fit) -> Encoded {
+    let callable = BamlHandleType::HostValueCallable as i32;
     let needs_statement = matches!(
         value.value,
         Some(Value::ListValue(_) | Value::MapValue(_) | Value::ClassValue(_))
+    ) || matches!(
+        value.value,
+        Some(Value::Handle(BamlHandle { handle_type, .. })) if handle_type == callable
     );
     if needs_statement && value.value_type.is_none() {
         value.value_type = Some(runtime_ty_to_proto_ty(&ty));
@@ -963,7 +983,8 @@ impl EncodeErrorKind {
             | Self::MapKey { .. }
             | Self::MissingTypeArgs(_)
             | Self::TypeArgConflict { .. }
-            | Self::NoBamlType { .. } => true,
+            | Self::NoBamlType { .. }
+            | Self::UntypedCallable { .. } => true,
             Self::UnknownClass(_)
             | Self::UnknownEnum(_)
             | Self::UnknownAlias(_)
@@ -1090,8 +1111,12 @@ mod tests {
             }
         }
 
+        fn is_callable(&self) -> bool {
+            matches!(self, Mock::Callable)
+        }
+
         fn callable(&self, _signature: &RuntimeTy) -> Option<Result<InboundValue, HostError>> {
-            matches!(self, Mock::Callable).then(|| Ok(handle_wire(7)))
+            matches!(self, Mock::Callable).then(|| Ok(callable_wire(7)))
         }
 
         fn leaf(&self) -> Option<Result<Leaf, HostError>> {
@@ -1122,6 +1147,17 @@ mod tests {
             value: Some(Value::Handle(BamlHandle {
                 key,
                 ..Default::default()
+            })),
+        }
+    }
+
+    /// A host callable's wire handle, as a bridge registers one.
+    fn callable_wire(key: u64) -> InboundValue {
+        InboundValue {
+            value_type: None,
+            value: Some(Value::Handle(BamlHandle {
+                key,
+                handle_type: BamlHandleType::HostValueCallable as i32,
             })),
         }
     }
@@ -1206,6 +1242,34 @@ mod tests {
                     param("p", Ty::List(Box::new(var(0, "T")))),
                     param("q", Ty::Media(MediaKind::Image)),
                     param("r", union(vec![Ty::Media(MediaKind::Pdf), Ty::Null])),
+                    param("s", Ty::List(Box::new(Ty::Int))),
+                    param("t", Ty::List(Box::new(union(vec![Ty::Int, Ty::String])))),
+                    param(
+                        "u",
+                        union(vec![
+                            Ty::Int,
+                            Ty::Function {
+                                params: Box::new([]),
+                                ret: Box::new(Ty::Int),
+                                throws: Box::new(Ty::Never),
+                            },
+                        ]),
+                    ),
+                    param(
+                        "v",
+                        union(vec![
+                            Ty::Function {
+                                params: Box::new([]),
+                                ret: Box::new(Ty::Int),
+                                throws: Box::new(Ty::Never),
+                            },
+                            Ty::Function {
+                                params: Box::new([]),
+                                ret: Box::new(Ty::String),
+                                throws: Box::new(Ty::Never),
+                            },
+                        ]),
+                    ),
                 ],
                 ret: Ty::Null,
                 throws: Ty::Never,
@@ -1578,9 +1642,11 @@ mod tests {
             f.kind(&Mock::Callable, "a"),
             EncodeErrorKind::Mismatch { .. }
         ));
-        // A callable under an open slot crosses as a host callable the engine
-        // binds; the host states no type for it.
-        assert_eq!(f.ok(&Mock::Callable, "g").ty, RuntimeTy::Unknown);
+        // A callable has no type of its own, and an open slot gives it none.
+        assert!(matches!(
+            f.kind(&Mock::Callable, "g"),
+            EncodeErrorKind::UntypedCallable { .. }
+        ));
     }
 
     #[test]
@@ -1634,7 +1700,7 @@ mod tests {
         ));
 
         let j = f.ok(&Mock::Map(vec![(Mock::Str("k"), Mock::Int(1))]), "j");
-        assert!(j.value.value_type.is_none());
+        assert_eq!(stated_as(&j), Some(f.slot("j")));
         assert!(matches!(
             f.kind(&Mock::Map(vec![(Mock::Int(1), Mock::Int(1))]), "j"),
             EncodeErrorKind::Mismatch {
@@ -1643,10 +1709,33 @@ mod tests {
             }
         ));
 
-        assert_eq!(f.ok(&Mock::Callable, "h").ty, f.slot("h"));
+        // A callable states the function type its slot gives it, and has no
+        // type of its own under a slot that gives none.
+        let h = f.ok(&Mock::Callable, "h");
+        assert_eq!(stated_as(&h), Some(f.slot("h")));
+        assert_eq!(h.ty, f.slot("h"));
         assert!(matches!(
             f.kind(&Mock::Callable, "a"),
             EncodeErrorKind::Mismatch { .. }
+        ));
+        assert!(matches!(
+            f.kind(&Mock::Callable, "g"),
+            EncodeErrorKind::UntypedCallable { .. }
+        ));
+        // Under a union a callable is bound to the one function-typed member;
+        // two such members give the host nothing to choose by.
+        let u = f.ok(&Mock::Callable, "u");
+        let RuntimeTy::Union(members) = f.slot("u") else {
+            panic!("not a union")
+        };
+        assert_eq!(stated_as(&u), Some(members[1].clone()));
+        assert!(matches!(
+            f.kind(&Mock::Callable, "v"),
+            EncodeErrorKind::Ambiguous { members, .. } if members.len() == 2
+        ));
+        assert!(matches!(
+            f.kind(&Mock::Callable, "e"),
+            EncodeErrorKind::NoMember { .. }
         ));
 
         // `type Tree = int | Tree[]`: nested lists under the recursive alias.
@@ -1731,6 +1820,100 @@ mod tests {
             .encode(&Mock::List(vec![Mock::Int(1), Mock::Float(0.5)]), "k")
             .unwrap_err();
         assert!(matches!(*error.kind, EncodeErrorKind::NoMember { .. }));
+    }
+
+    #[test]
+    fn containers_state_the_slots_type_whatever_their_elements() {
+        let f = Fixture::new();
+        // An empty list has the type its slot declares.
+        let empty = f.ok(&Mock::List(vec![]), "s");
+        assert_eq!(stated_as(&empty), Some(f.slot("s")));
+        // Elements that fit only some members of the slot's element type do
+        // not narrow it: the host builds the value the slot declares.
+        let ints = f.ok(&Mock::List(vec![Mock::Int(1)]), "t");
+        assert_eq!(stated_as(&ints), Some(f.slot("t")));
+        let mixed = f.ok(&Mock::List(vec![Mock::Int(1), Mock::Str("a")]), "t");
+        assert_eq!(stated_as(&mixed), Some(f.slot("t")));
+        // An element type the slot leaves open is the one the elements have.
+        let open = f.ok(&Mock::List(vec![Mock::Int(1), Mock::Int(2)]), "p");
+        assert_eq!(stated_as(&open), Some(RuntimeTy::list(RuntimeTy::Int)));
+    }
+
+    /// The program the Python and TypeScript bridges' host-callable tests run
+    /// against, as a descriptor those tests install. A runtime built from
+    /// sources has no generated SDK, and a callable takes its type from the
+    /// descriptor alone, so the tests read `fixtures/host_callable_program.
+    /// descriptor` and this test keeps that file current: when it fails,
+    /// replace the file's content with the string it prints.
+    #[test]
+    fn host_callable_fixture_descriptor_is_current() {
+        let callback = |params: Vec<Ty>, ret: Ty| Ty::Function {
+            params: params
+                .into_iter()
+                .map(|ty| baml_type::CodegenFunctionParamTy {
+                    name: None,
+                    ty,
+                    mode: FunctionParamMode::Required,
+                })
+                .collect(),
+            ret: Box::new(ret),
+            throws: Box::new(Ty::Never),
+        };
+        let function = |fqn: &str, params: Vec<ParamDescriptor>, ret: Ty| FunctionDescriptor {
+            fqn: fqn.into(),
+            class_generic_params: vec![],
+            generic_params: vec![],
+            params,
+            ret,
+            throws: Ty::Unknown,
+        };
+        let program = ProgramDescriptor {
+            functions: vec![
+                function(
+                    "CallCb",
+                    vec![
+                        param("callback", callback(vec![Ty::Int], Ty::String)),
+                        param("x", Ty::Int),
+                    ],
+                    Ty::String,
+                ),
+                function(
+                    "CallIntCb",
+                    vec![
+                        param("callback", callback(vec![Ty::Int], Ty::Int)),
+                        param("x", Ty::Int),
+                    ],
+                    Ty::Int,
+                ),
+                function(
+                    "CallFloatCb",
+                    vec![param("callback", callback(vec![], Ty::Float))],
+                    Ty::Float,
+                ),
+                function(
+                    "ConsumeUnknownCb",
+                    vec![
+                        param("callback", callback(vec![Ty::Int], Ty::Unknown)),
+                        param("x", Ty::Int),
+                    ],
+                    Ty::Int,
+                ),
+            ],
+            classes: vec![],
+            enums: vec![],
+            type_aliases: vec![],
+        };
+        let current = program.encode_embedded();
+        let checked_in = include_str!("../fixtures/host_callable_program.descriptor").trim();
+        assert_eq!(
+            checked_in, current,
+            "fixtures/host_callable_program.descriptor is stale; replace its content with:\n{current}"
+        );
+        // The file is what the bridges read, so it must decode to this program.
+        assert_eq!(
+            ProgramDescriptor::decode_embedded(checked_in.as_bytes()).unwrap(),
+            program
+        );
     }
 
     #[test]

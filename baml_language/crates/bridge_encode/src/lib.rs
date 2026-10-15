@@ -14,13 +14,13 @@
 //! generated SDK's [`ProgramDescriptor`](baml_sdkgen_types::ProgramDescriptor),
 //! read once into [`Facts`].
 //!
-//! Where a value's type is not fixed by its slot (an `unknown`, a union, an
-//! unbound type variable) the wire states it: a list or map node under such a
-//! slot carries a `value_type`, and the engine takes that type as the node's.
-//! A class node always carries one, since the wire's `class_value` has no
-//! name of its own and every typed SDK states it the same way. Scalars, nulls,
-//! enums and handles are self-evident and never carry one. That is the whole
-//! contract between this encoder and the engine.
+//! Every node leaves with its concrete type on the wire. A list, map, class or
+//! callable node states it in `value_type`: the slot's type where the slot is
+//! realized, the type the value itself has where the slot fixes none. A
+//! scalar, null, enum variant, media value or handle implies its type and
+//! carries nothing. That is the whole contract between this encoder and the
+//! engine, which builds exactly the value stated and checks it against the
+//! slot.
 
 mod contract;
 mod encode;

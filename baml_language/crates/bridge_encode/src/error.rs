@@ -79,6 +79,11 @@ pub enum EncodeErrorKind {
     TypeArgConflict { class: TypeName, param: String },
     #[error("cannot encode {found}: it has no BAML type")]
     NoBamlType { found: String },
+    #[error(
+        "cannot encode {found}: a callable has no type of its own; declare the slot as a \
+         function type"
+    )]
+    UntypedCallable { found: String },
     #[error("{0}")]
     Host(String),
 }

@@ -289,7 +289,7 @@ fn take_callback_signature(call_id: u32) -> Option<bex_project::RuntimeTy> {
 pub(crate) fn register_callable(
     callable: Function<'_, DispatchArgs, ()>,
     marker_key: Option<u64>,
-    signature: Option<bex_project::RuntimeTy>,
+    signature: bex_project::RuntimeTy,
 ) -> napi::Result<u64> {
     let descriptor = bridge_cffi::host_instrumentation::registration_marker(
         marker_key.unwrap_or(0),
@@ -305,7 +305,7 @@ pub(crate) fn register_callable(
         .build()?;
     let key = REGISTRY.insert(Registered {
         tsfn: Arc::new(tsfn),
-        signature,
+        signature: Some(signature),
     });
     bex_project::HostValueArc::register_annotation(key, descriptor);
     Ok(key)

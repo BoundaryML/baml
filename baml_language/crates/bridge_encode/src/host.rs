@@ -134,10 +134,15 @@ pub trait HostValue: Sized {
     /// The value as an instance of a named class, when it is one.
     fn instance(&self) -> Option<Instance<Self>>;
 
+    /// The value is a function the engine could invoke. Asked under a slot
+    /// that is no function type, where a callable has no type to take.
+    fn is_callable(&self) -> bool;
+
     /// Register the value as a callable the engine may invoke, bound to the
-    /// slot's function type `signature`, and return its wire handle. `None`
-    /// when the value is not callable. The host records `signature` so the
-    /// callable's result can later be encoded against its return type.
+    /// slot's function type `signature` (always a [`RuntimeTy::Function`]),
+    /// and return its wire handle. `None` when the value is not callable. The
+    /// host records `signature` so the callable's result can later be encoded
+    /// against its return type.
     fn callable(&self, signature: &RuntimeTy) -> Option<Result<InboundValue, HostError>>;
 
     /// The value as a wire leaf the host owns outright, when it is one.

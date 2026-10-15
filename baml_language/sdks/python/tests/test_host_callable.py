@@ -3,7 +3,10 @@
 These tests exercise the auto-registration encoder branch and the
 dispatch round trip without needing a generated SDK — the test builds an
 ad-hoc BAML runtime that declares one function whose first parameter is
-a `(int) -> string` callable.
+a `(int) -> string` callable. A callable takes its type from the program
+descriptor alone, so the tests install the descriptor of that program
+(`crates/bridge_encode/fixtures/host_callable_program.descriptor`, kept
+current by a `bridge_encode` test) as the typemap's for their duration.
 
 Run with:
     cd baml_language/sdks/python
@@ -15,6 +18,7 @@ from __future__ import annotations
 
 import gc
 import weakref
+from pathlib import Path
 
 import pytest
 
@@ -23,8 +27,11 @@ import baml_bridge.proto as _proto
 from baml_bridge import (
     BamlPyHandle,
     BamlRuntime,
+    BamlTypeMap,
     call_function_sync,
     call_function,
+    get_type_map,
+    set_type_map,
 )
 from baml_bridge.baml_py import (
     _live_handle_count,
@@ -47,6 +54,23 @@ function ConsumeUnknownCb(callback: (int) -> unknown, x: int) -> int {
     x
 }
 """
+
+
+_DESCRIPTOR = (
+    Path(__file__).resolve().parents[3]
+    / "crates"
+    / "bridge_encode"
+    / "fixtures"
+    / "host_callable_program.descriptor"
+).read_bytes().strip()
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _program_descriptor():
+    previous = get_type_map()
+    set_type_map(BamlTypeMap.from_lazy_entries({}, {}, {}, descriptor=_DESCRIPTOR))
+    yield
+    set_type_map(previous)
 
 
 def _make_runtime() -> BamlRuntime:

@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+// BUG: importing the source module pulls in `typescript_src/typemap.ts`, whose
+// `./native.js` exists only under `dist/`, so this file fails to load under
+// vitest; every other test imports from `../dist/`.
 import { capture, registerCapture } from '../typescript_src/host_capture.js';
 import { BamlError } from '../typescript_src/errors.js';
 

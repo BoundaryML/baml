@@ -91,6 +91,9 @@ test('media crosses the call boundary as a portable payload', () => {
     expect(value.handle).toBeNull();
 });
 
+// BUG: `encodeCallArgs` is used below but never imported (it lives in
+// `../dist/proto.js`), so this test fails with a ReferenceError since the
+// canary merge that added it.
 test('media read from a file crosses the call boundary with its name', () => {
     const directory = mkdtempSync(join(tmpdir(), 'baml-media-'));
     const path = join(directory, 'cat.png');

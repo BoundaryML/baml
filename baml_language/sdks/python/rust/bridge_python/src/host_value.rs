@@ -97,14 +97,14 @@ fn take_callback_signature(call_id: u32) -> Option<bex_project::RuntimeTy> {
 pub(crate) fn register_callable(
     callable: Py<PyAny>,
     marker_key: Option<u64>,
-    signature: Option<bex_project::RuntimeTy>,
+    signature: bex_project::RuntimeTy,
 ) -> PyResult<u64> {
     let descriptor =
         bridge_cffi::host_instrumentation::registration_marker(marker_key.unwrap_or(0), "python")
             .map_err(crate::errors::bridge_error_to_sdk_panic)?;
     let key = REGISTRY.insert(Registered {
         object: callable,
-        signature,
+        signature: Some(signature),
     });
     bex_project::HostValueArc::register_annotation(key, descriptor);
     Ok(key)
@@ -623,8 +623,7 @@ fn decode_args<'py>(
 }
 
 /// Encode a host callable's result against the return type of the slot it was
-/// bound to, as `InboundValue` bytes. A callable registered without a
-/// signature has its result taken as the type the Python value has.
+/// bound to, as `InboundValue` bytes.
 fn encode_result_inbound(py: Python<'_>, call_id: u32, value: Py<PyAny>) -> PyResult<Vec<u8>> {
     let observation = bridge_cffi::host_instrumentation::callback(call_id).map(|owner| {
         let outcome = btel_types::InvocationOutcome::Ok;

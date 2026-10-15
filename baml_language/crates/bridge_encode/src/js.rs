@@ -80,10 +80,9 @@ pub trait JsView: Sized {
     /// BAML closure's handle.
     fn leaf(&self) -> Result<Option<Leaf>, HostError>;
 
-    /// Register a function as a host callable bound to `signature` (the
-    /// slot's function type, or `None` under an open slot) and return the
-    /// wire handle.
-    fn register_callable(&self, signature: Option<&RuntimeTy>) -> Result<InboundValue, HostError>;
+    /// Register a function as a host callable bound to `signature`, the
+    /// slot's function type, and return the wire handle.
+    fn register_callable(&self, signature: &RuntimeTy) -> Result<InboundValue, HostError>;
 
     /// A short, bounded rendering for error messages.
     fn describe(&self) -> String;
@@ -241,13 +240,13 @@ impl<J: JsView> HostValue for Js<J> {
         })
     }
 
+    fn is_callable(&self) -> bool {
+        matches!(self.kind_or_no(), Some(JsKind::Function))
+    }
+
     fn callable(&self, signature: &RuntimeTy) -> Option<Result<InboundValue, HostError>> {
         match self.kind_or_no()? {
-            JsKind::Function => {
-                let signature =
-                    matches!(signature, RuntimeTy::Function { .. }).then_some(signature);
-                Some(self.0.register_callable(signature))
-            }
+            JsKind::Function => Some(self.0.register_callable(signature)),
             _ => None,
         }
     }

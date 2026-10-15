@@ -829,10 +829,14 @@ impl<'py> HostValue for PyValue<'_, 'py> {
         }
     }
 
-    fn callable(&self, signature: &RuntimeTy) -> Option<Result<InboundValue, HostError>> {
+    fn is_callable(&self) -> bool {
         // Classes are callable but are types, not functions; pydantic
         // instances may be callable too and are values of their class.
-        if !self.obj.is_callable() || self.is_pyclass::<PyType>() || self.cx.is_model(&self.obj) {
+        self.obj.is_callable() && !self.is_pyclass::<PyType>() && !self.cx.is_model(&self.obj)
+    }
+
+    fn callable(&self, signature: &RuntimeTy) -> Option<Result<InboundValue, HostError>> {
+        if !self.is_callable() {
             return None;
         }
         let registration = (|| -> PyResult<u64> {
@@ -844,14 +848,11 @@ impl<'py> HostValue for PyValue<'_, 'py> {
             } else {
                 Some(marker.cast::<BamlPyHandle>()?.borrow().handle_key)
             };
-            // Under an open slot the host knows no signature; the engine
-            // binds the callable to the type it declares, and the result is
-            // taken as the type its Python value has.
-            let signature = match signature {
-                RuntimeTy::Function { .. } => Some(signature.clone()),
-                _ => None,
-            };
-            crate::host_value::register_callable(self.obj.clone().unbind(), marker, signature)
+            crate::host_value::register_callable(
+                self.obj.clone().unbind(),
+                marker,
+                signature.clone(),
+            )
         })();
         Some(match registration {
             Ok(key) => {

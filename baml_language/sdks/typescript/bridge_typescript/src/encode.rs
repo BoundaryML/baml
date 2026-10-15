@@ -464,7 +464,7 @@ impl<'env> View<'_, 'env> {
         Ok(Some(Leaf { value, kind }))
     }
 
-    fn register_inner(&self, signature: Option<&RuntimeTy>) -> napi::Result<InboundValue> {
+    fn register_inner(&self, signature: &RuntimeTy) -> napi::Result<InboundValue> {
         if self.cx.sync {
             return Err(napi::Error::new(
                 Status::InvalidArg,
@@ -488,7 +488,7 @@ impl<'env> View<'_, 'env> {
         let key = crate::host_value::register_callable(
             dispatch_fn,
             marker.map(crate::handle::BamlHandle::key_u64),
-            signature.cloned(),
+            signature.clone(),
         )?;
         self.cx.registered.borrow_mut().push(key);
         Ok(InboundValue {
@@ -608,7 +608,7 @@ impl<'env> JsView for View<'_, 'env> {
         self.leaf_inner().map_err(|error| self.cx.fail(error))
     }
 
-    fn register_callable(&self, signature: Option<&RuntimeTy>) -> Result<InboundValue, HostError> {
+    fn register_callable(&self, signature: &RuntimeTy) -> Result<InboundValue, HostError> {
         self.register_inner(signature)
             .map_err(|error| self.cx.fail(error))
     }

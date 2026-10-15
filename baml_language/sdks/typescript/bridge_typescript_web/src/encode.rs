@@ -483,7 +483,7 @@ impl View<'_> {
         Ok(Some(Leaf { value, kind }))
     }
 
-    fn register_inner(&self, signature: Option<&RuntimeTy>) -> Result<InboundValue, JsValue> {
+    fn register_inner(&self, signature: &RuntimeTy) -> Result<InboundValue, JsValue> {
         if self.cx.sync {
             return Err(crate::errors::setup_error(
                 crate::errors::INVALID_ARGUMENT,
@@ -499,9 +499,7 @@ impl View<'_> {
             .as_string()
             .and_then(|key| key.parse().ok())
             .ok_or_else(|| JsValue::from_str("dispatchFor did not answer a host-value key"))?;
-        if let Some(signature) = signature {
-            SIGNATURES.with(|cell| cell.borrow_mut().insert(key, signature.clone()));
-        }
+        SIGNATURES.with(|cell| cell.borrow_mut().insert(key, signature.clone()));
         self.cx.registered.borrow_mut().push(key);
         Ok(InboundValue {
             value_type: None,
@@ -568,7 +566,7 @@ impl JsView for View<'_> {
         self.leaf_inner().map_err(|error| self.cx.fail(error))
     }
 
-    fn register_callable(&self, signature: Option<&RuntimeTy>) -> Result<InboundValue, HostError> {
+    fn register_callable(&self, signature: &RuntimeTy) -> Result<InboundValue, HostError> {
         self.register_inner(signature)
             .map_err(|error| self.cx.fail(error))
     }
