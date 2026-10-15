@@ -2,6 +2,15 @@
 source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
+class            reflect.Class                    <builtin>/reflect/kinds.baml:2
+class            reflect.Enum                     <builtin>/reflect/kinds.baml:67
+class            reflect.Union                    <builtin>/reflect/kinds.baml:129
+class            reflect.Literal                  <builtin>/reflect/kinds.baml:161
+class            reflect.Array                    <builtin>/reflect/kinds.baml:192
+class            reflect.Map                      <builtin>/reflect/kinds.baml:214
+class            reflect.Interface                <builtin>/reflect/kinds.baml:248
+class            reflect.Primitive                <builtin>/reflect/kinds.baml:279
+class            reflect.Function                 <builtin>/reflect/kinds.baml:296
 class            reflect.Arg                      <builtin>/reflect/reflect.baml:2
 class            reflect.Meta                     <builtin>/reflect/reflect.baml:14
 class            reflect.WithMeta                 <builtin>/reflect/reflect.baml:27
@@ -22,32 +31,13 @@ class            reflect.Session                  <builtin>/reflect/reflect.baml
 function         reflect.signature                <builtin>/reflect/reflect.baml:470
 function         reflect.call_any                 <builtin>/reflect/reflect.baml:487
 class            reflect.Type                     <builtin>/reflect/type.baml:8
-class            reflect.array.Type               <builtin>/reflect/ns_array/array.baml:2
 class            reflect.class.Field              <builtin>/reflect/ns_class/class.baml:7
-function         reflect.class.new                <builtin>/reflect/ns_class/class.baml:36
-function         reflect.class.builder            <builtin>/reflect/ns_class/class.baml:61
-class            reflect.class.Builder            <builtin>/reflect/ns_class/class.baml:67
-class            reflect.class.PendingType        <builtin>/reflect/ns_class/class.baml:113
-function         reflect.class.get_field          <builtin>/reflect/ns_class/class.baml:158
-class            reflect.class.Type               <builtin>/reflect/ns_class/class.baml:163
+class            reflect.class.Builder            <builtin>/reflect/ns_class/class.baml:37
+class            reflect.class.PendingType        <builtin>/reflect/ns_class/class.baml:83
 class            reflect.enum.Value               <builtin>/reflect/ns_enum/enum.baml:2
-function         reflect.enum.value               <builtin>/reflect/ns_enum/enum.baml:9
-function         reflect.enum.new                 <builtin>/reflect/ns_enum/enum.baml:23
-function         reflect.enum.get_value           <builtin>/reflect/ns_enum/enum.baml:34
-class            reflect.enum.Type                <builtin>/reflect/ns_enum/enum.baml:39
 class            reflect.errors.CompilationError  <builtin>/reflect/ns_errors/errors.baml:2
 class            reflect.errors.EvaluationError   <builtin>/reflect/ns_errors/errors.baml:8
 class            reflect.errors.TypeMismatch      <builtin>/reflect/ns_errors/errors.baml:19
 class            reflect.errors.SessionBusy       <builtin>/reflect/ns_errors/errors.baml:24
 class            reflect.function.Parameter       <builtin>/reflect/ns_function/function.baml:3
-class            reflect.function.Type            <builtin>/reflect/ns_function/function.baml:11
-class            reflect.interface.Type           <builtin>/reflect/ns_interface/interface.baml:2
-class            reflect.interface.Implementation <builtin>/reflect/ns_interface/interface.baml:32
-function         reflect.interface.implementation <builtin>/reflect/ns_interface/interface.baml:54
-function         reflect.literal.new              <builtin>/reflect/ns_literal/literal.baml:3
-class            reflect.literal.Type             <builtin>/reflect/ns_literal/literal.baml:8
-function         reflect.map.new                  <builtin>/reflect/ns_map/map.baml:3
-class            reflect.map.Type                 <builtin>/reflect/ns_map/map.baml:8
-class            reflect.primitive.Type           <builtin>/reflect/ns_primitive/primitive.baml:2
-function         reflect.union.new                <builtin>/reflect/ns_union/union.baml:7
-class            reflect.union.Type               <builtin>/reflect/ns_union/union.baml:12
+class            reflect.interface.Implementation <builtin>/reflect/ns_interface/interface.baml:7
