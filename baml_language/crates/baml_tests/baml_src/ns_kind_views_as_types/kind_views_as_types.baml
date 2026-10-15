@@ -99,7 +99,7 @@ test "a builder field and a pending union take kinds" {
     let built = node.build();
     let fields = built.fields();
     assert.equal(fields[0].type, reflect.Type.of<Item[]>());
-    assert.equal((fields[1].type ?? throw "typed").to_string(), "Node | kind_views_as_types.Mood")
+    assert.equal(fields[1].type.to_string(), "Node | kind_views_as_types.Mood")
 }
 
 test "type operations run on a class kind" {
