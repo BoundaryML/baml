@@ -18,6 +18,7 @@ from pathlib import Path
 
 
 def download(url, *, include_raw=False):
+    """Fetch bytes without execution, optionally retaining the raw HTTP body for audit hashing."""
     request = urllib.request.Request(
         url, headers={"User-Agent": "BoundaryML-license-audit/1.0"}
     )
@@ -30,6 +31,7 @@ def download(url, *, include_raw=False):
 
 
 def main():
+    """Reproduce one baseline record, verify its raw digest and inspect decoded package data."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("record", help="Baseline table row ID, e.g. R001")
     args = parser.parse_args()

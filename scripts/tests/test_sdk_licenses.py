@@ -21,6 +21,7 @@ LOADER.exec_module(LICENSES)
 
 class DistributionLicenses(unittest.TestCase):
     def setUp(self):
+        """Create isolated packaging fixtures and load the authoritative license bytes."""
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
@@ -30,6 +31,7 @@ class DistributionLicenses(unittest.TestCase):
         ).read_bytes()
 
     def archive(self, name, files):
+        """Emit a real ZIP or gzip tar fixture without running package code."""
         path = self.root / name
         if name.endswith((".tgz", ".crate", ".tar.gz")):
             with tarfile.open(path, "w:gz") as archive:
@@ -146,6 +148,7 @@ class DistributionLicenses(unittest.TestCase):
         )
 
     def csharp_staging_fixture(self):
+        """Create all eight producer inputs and arguments for the C# release contract."""
         loader = importlib.machinery.SourceFileLoader(
             "csharp_contract", str(SCRIPT.parent / "baml-csharp-release-contract")
         )

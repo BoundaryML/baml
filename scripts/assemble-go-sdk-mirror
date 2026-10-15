@@ -15,6 +15,7 @@ RUNTIME_VERSION_RE = re.compile(r'^const BridgeRuntimeVersion = "([^"]+)"$', re.
 
 
 def main() -> None:
+    """Assemble the stamped public Go module with its authoritative license and notices."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--version", required=True)

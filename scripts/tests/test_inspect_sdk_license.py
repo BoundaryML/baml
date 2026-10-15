@@ -20,6 +20,7 @@ LOADER.exec_module(INSPECTOR)
 
 class EncodedAuditDownloads(unittest.TestCase):
     def response(self, raw):
+        """Create an in-memory gzip-encoded HTTP response for offline regression checks."""
         response = io.BytesIO(raw)
         response.headers = {"Content-Encoding": "gzip"}
         return response

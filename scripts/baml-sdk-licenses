@@ -25,6 +25,7 @@ SOURCES = {
 
 
 def license_sources(engine=False, editor=False):
+    """Return authoritative texts, keeping engine and editor component notices separate."""
     sources = {"LICENSE": ROOT / "LICENSE"}
     if (ROOT / "NOTICE").is_file():
         sources["NOTICE"] = ROOT / "NOTICE"
@@ -38,6 +39,7 @@ def license_sources(engine=False, editor=False):
 
 
 def stage(destination, engine=False, editor=False):
+    """Copy applicable license texts into a package without replacing distinct terms."""
     destination.mkdir(parents=True, exist_ok=True)
     for name, source in license_sources(engine, editor).items():
         target = destination / name
@@ -47,6 +49,7 @@ def stage(destination, engine=False, editor=False):
 
 
 def verify_directory(directory, engine=False, editor=False):
+    """Require exact source texts and first-party npm metadata in a staged package."""
     for name, source in license_sources(engine, editor).items():
         if (
             not (directory / name).is_file()
@@ -91,6 +94,7 @@ def verify_archive(path):
         for name, source in license_sources(engine, editor).items():
 
             def first_party_path(member):
+                """Select the format-specific license path without accepting unrelated component text."""
                 if path.suffix == ".jar":
                     return member == f"META-INF/{name}" or (
                         name == "LICENSE.quanta"
@@ -147,6 +151,7 @@ def verify_archive(path):
 
 
 def verify_artifacts(directory):
+    """Check every supported payload, native sidecar and source mirror in a build run."""
     count = 0
     for path in sorted(directory.rglob("*")):
         if path.is_file() and path.name.endswith(
@@ -182,6 +187,7 @@ def verify_artifacts(directory):
 
 
 def main():
+    """Dispatch license staging, source synchronization and produced-payload checks."""
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("sync-sources")

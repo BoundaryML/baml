@@ -18,6 +18,7 @@ from pathlib import Path
 
 
 def main() -> None:
+    """Assemble a licensed Swift source mirror referencing the checksummed release binary."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--version", required=True)
