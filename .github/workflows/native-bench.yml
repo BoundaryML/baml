@@ -89,7 +89,12 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/canary' }}
           shared-key: "linux-cargo"
 
+      # The R2 keys select the shared sccache bucket in .envrc; without them
+      # sccache falls back to a local cache that is cold on every runner.
       - name: "Load .envrc with direnv"
+        env:
+          BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+          BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
         run: |
           set -euo pipefail
           direnv allow .envrc
@@ -98,8 +103,15 @@ jobs:
       # The emitter. Only this is built here; the measured executables are
       # built on the VM from a clean target so their build time is a result.
       - name: "Build baml-cli"
+        env:
+          BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+          BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
         run: cargo build --release -p baml_cli
         working-directory: baml_language
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats || true
 
       - name: "Fetch the previous bundle"
         if: ${{ github.event.inputs.previous != '' }}
