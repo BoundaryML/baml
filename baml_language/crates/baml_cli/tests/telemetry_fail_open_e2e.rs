@@ -122,7 +122,7 @@ async fn run_case(delivery: Delivery, execution: Execution) {
     let temp = tempfile::tempdir().unwrap();
     let project = temp.path();
     let main = if matches!(execution, Execution::FunctionFailure) {
-        "function main() -> string throws unknown { let result = Hello(); throw \"mock-function-failed\"; }"
+        "function main() -> string { let result = Hello(); throw \"mock-function-failed\"; }"
     } else {
         "function main() -> string { Hello() }"
     };
