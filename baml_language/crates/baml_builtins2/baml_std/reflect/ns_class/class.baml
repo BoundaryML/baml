@@ -61,7 +61,10 @@ class Builder {
     /// Only the fields are copied. The new class gets neither `some_class`'s
     /// own metadata nor its interfaces; it implements what `build` is given.
     //baml:mut_vm
-    function fields_from(self, some_class: Type) -> Builder throws root.errors.CompilationError {
+    function fields_from(
+        self,
+        some_class: root.Class,
+    ) -> Builder throws root.errors.CompilationError {
         $rust_function
     }
 
