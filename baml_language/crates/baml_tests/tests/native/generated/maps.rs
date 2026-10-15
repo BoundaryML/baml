@@ -22,12 +22,11 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, CcMap, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int,
+    json, map, string,
 };
-use bex_aot::handle::{Shared, shared};
+use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Inventory`.
 #[derive(Debug, bex_aot::serde::Serialize)]
@@ -45,6 +44,13 @@ impl bex_aot::json::FromJson for user_Inventory {
             stock: bex_aot::json::field(object, "stock", false)?,
             name: bex_aot::json::field(object, "name", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Inventory {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.stock, visitor);
+        bex_aot::mem::Trace::trace(&self.name, visitor);
     }
 }
 impl ToBaml for user_Inventory {

@@ -12,7 +12,13 @@ use std::{any::Any, fmt};
 
 pub use bex_lang::render_object;
 
-use crate::{Error, Panic, errors::InvalidArgument, handle::Shared, readable::Readable};
+use crate::{
+    Error, Panic,
+    errors::InvalidArgument,
+    handle::{Kind, Shared},
+    mem::{Trace, Visitor},
+    readable::Readable,
+};
 
 /// A thrown class instance: a `baml.errors.*` / `baml.json.*` stdlib error or
 /// a user class. The stdlib errors this crate raises itself live in
@@ -39,6 +45,11 @@ pub trait ErrorObject: fmt::Debug {
 
     /// A copy of the object: for a handle, the same object.
     fn clone_box(&self) -> Box<dyn ErrorObject>;
+
+    /// The handles the object holds, for a memory manager: a thrown class
+    /// instance is one (its own handle); the runtime's own error objects
+    /// hold none.
+    fn trace(&self, visitor: &mut dyn Visitor);
 }
 
 /// A generated class as a throwable: its name and its fields rendered the
@@ -51,7 +62,7 @@ pub trait ErrorClass {
     fn readable_fields(&self) -> Vec<(&'static str, String)>;
 }
 
-impl<T: ErrorClass + fmt::Debug + 'static> ErrorObject for Shared<T> {
+impl<T: ErrorClass + fmt::Debug + Trace, H: Kind> ErrorObject for Shared<T, H> {
     fn class_fqn(&self) -> &'static str {
         T::CLASS_FQN
     }
@@ -66,6 +77,10 @@ impl<T: ErrorClass + fmt::Debug + 'static> ErrorObject for Shared<T> {
 
     fn clone_box(&self) -> Box<dyn ErrorObject> {
         Box::new(self.clone())
+    }
+
+    fn trace(&self, visitor: &mut dyn Visitor) {
+        Trace::trace(self, visitor);
     }
 }
 
@@ -251,6 +266,7 @@ mod tests {
         fn clone_box(&self) -> Box<dyn ErrorObject> {
             Box::new(self.clone())
         }
+        fn trace(&self, _visitor: &mut dyn Visitor) {}
     }
 
     /// What the backend generates for `class Coded { code: int, message: string }`.
@@ -259,6 +275,7 @@ mod tests {
         code: Int63,
         message: Str,
     }
+    crate::mem::trace_fields!(Coded, code, message);
 
     impl ErrorClass for Coded {
         const CLASS_FQN: &'static str = "user.Coded";
@@ -333,6 +350,7 @@ mod tests {
         struct Exit {
             code: Int63,
         }
+        crate::mem::trace_fields!(Exit, code);
         impl ErrorClass for Exit {
             const CLASS_FQN: &'static str = "baml.panics.Exit";
             fn readable_fields(&self) -> Vec<(&'static str, String)> {

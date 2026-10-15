@@ -36,7 +36,10 @@
 
 use std::cell::RefCell;
 
-use crate::{Int63, Str, Thrown, depth, float, handle::Shared};
+use crate::{
+    Int63, Str, Thrown, depth, float,
+    handle::{Kind, Shared, Untracked},
+};
 
 /// An override call recorded by pass 1: the object's identity and the call
 /// pass 2 makes.
@@ -66,18 +69,19 @@ pub trait ToBaml {
 /// What a class does when rendered through its handle: a class with its own
 /// `to_string` is recorded in pass 1 and spliced in pass 3; every other
 /// class renders structurally. The generated code implements this for
-/// every class; arrays take the defaults.
-pub trait Overridable: ToBaml + Sized {
+/// every class, at the class's handle kind `H`; arrays take the defaults at
+/// either kind.
+pub trait Overridable<H: Kind = Untracked>: ToBaml + Sized {
     /// Whether the class provides its own `to_string`.
     const OVERRIDES: bool = false;
 
     /// Pass 2: the class's own `to_string` on this object.
-    fn call_override(_this: &Shared<Self>) -> Result<Str, Thrown> {
+    fn call_override(_this: &Shared<Self, H>) -> Result<Str, Thrown> {
         unreachable!("call_override on a class without a `to_string` override")
     }
 }
 
-impl<T: ToBaml> Overridable for Vec<T> {}
+impl<T: ToBaml, H: Kind> Overridable<H> for Vec<T> {}
 
 thread_local! {
     /// Pass 3's override results, in pre-order, with the index of the next
@@ -225,7 +229,7 @@ impl<T: ToBaml> ToBaml for Option<T> {
 /// Through the handle: an override-bearing object is recorded in pass 1
 /// and spliced in pass 3 when it is the next pending one; anything else
 /// renders its pointee.
-impl<T: Overridable + 'static> ToBaml for Shared<T> {
+impl<T: Overridable<H> + 'static, H: Kind> ToBaml for Shared<T, H> {
     fn render(&self, out: &mut String, nested: bool) {
         if T::OVERRIDES && splice(self.id(), out) {
             return;
@@ -294,6 +298,7 @@ mod tests {
     struct Counter {
         calls: Shared<Vec<Int63>>,
     }
+    crate::mem::trace_fields!(Counter, calls);
 
     impl ToBaml for Counter {
         fn render(&self, out: &mut String, _nested: bool) {
@@ -344,6 +349,7 @@ mod tests {
         y: f64,
         label: Str,
     }
+    crate::mem::trace_fields!(Point, x, y, label);
 
     impl Overridable for Point {}
 
@@ -358,6 +364,7 @@ mod tests {
     }
 
     struct Empty;
+    crate::mem::trace_fields!(Empty);
 
     impl Overridable for Empty {}
 
@@ -372,6 +379,7 @@ mod tests {
         tag: Option<Str>,
         next: Option<Shared<Node>>,
     }
+    crate::mem::trace_fields!(Node, children, tag, next);
 
     impl Overridable for Node {}
 
