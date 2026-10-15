@@ -7,15 +7,15 @@ interface Named {
 }
 
 test "builder_build_with_implementations_validates_then_freezes_atomically" {
-    let person = reflect.class.builder("BuiltPerson");
-    let address = reflect.class.builder("BuiltAddress");
+    let person = reflect.Class.builder("BuiltPerson");
+    let address = reflect.Class.builder("BuiltAddress");
     let person_pending = person.type();
     let address_pending = address.type();
     person.field("name", reflect.Type.of<string>());
     person.field("address", address_pending);
     address.field("owner", person_pending.optional());
 
-    let incomplete = reflect.interface.implementation<Named>();
+    let incomplete = reflect.Interface.implementation<Named>();
     let failure_code = {
         person.build(implementations = [incomplete]);
         "missing witness did not fail"
@@ -46,14 +46,14 @@ test "builder_build_with_implementations_validates_then_freezes_atomically" {
 }
 
 test "map_and_builder_witnessed_classes_are_definition_equal" {
-    let witness = reflect.interface.implementation<Named>().field("name", class_field = "display_name");
-    let map_t = reflect.class.new(
+    let witness = reflect.Interface.implementation<Named>().field("name", class_field = "display_name");
+    let map_t = reflect.Class.new(
         "Person",
         { "display_name": reflect.Type.of<string>().meta(description = "public name") },
         implementations = [witness],
     );
 
-    let builder = reflect.class.builder("Person");
+    let builder = reflect.Class.builder("Person");
     builder.field("display_name", reflect.Type.of<string>().meta(description = "public name"));
     let builder_t = builder.build(implementations = [witness]);
 
@@ -64,12 +64,12 @@ test "map_and_builder_witnessed_classes_are_definition_equal" {
 }
 
 test "resolved_pending_from_frozen_group_is_accepted_by_another_builder" {
-    let child = reflect.class.builder("ResolvedChild");
+    let child = reflect.Class.builder("ResolvedChild");
     let child_pending = child.type();
     child.field("value", reflect.Type.of<string>());
     let child_t = child.build();
 
-    let parent = reflect.class.builder("Parent");
+    let parent = reflect.Class.builder("Parent");
     parent.field("child", child_pending);
     let parent_t = parent.build();
 

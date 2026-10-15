@@ -42,7 +42,7 @@ pub enum LangPackage {
     /// The core package: builtin companion classes, `baml.panics`, `baml.ops`.
     Baml,
     /// Reflection: `reflect.Type`, `reflect.AnyFunction`, `reflect.AnyClass`
-    /// and the sealed `reflect.<kind>.Type` views.
+    /// and the sealed `reflect.<Kind>` views.
     Reflect,
     /// LLM functions and clients; the `client:` desugar and prompt lowering
     /// name its declarations.

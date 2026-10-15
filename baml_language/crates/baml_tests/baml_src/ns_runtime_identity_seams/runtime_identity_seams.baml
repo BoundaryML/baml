@@ -24,31 +24,31 @@ class StaticInner {
 }
 
 test "runtime_declarations_anchor_through_every_container_seam" {
-    let inner = reflect.class.new("Inner", { "x": reflect.Type.of<string>() });
+    let inner = reflect.Class.new("Inner", { "x": reflect.Type.of<string>() });
     let inner_array = inner.as_type().array().as_type();
-    let holder_array = reflect.class.new("HolderArray", { "bs": inner_array }).as_type();
-    let holder_map = reflect.class
+    let holder_array = reflect.Class.new("HolderArray", { "bs": inner_array }).as_type();
+    let holder_map = reflect.Class
         .new(
             "HolderMap",
-            { "by_name": reflect.map.new(reflect.Type.of<string>(), inner.as_type()).as_type() },
+            { "by_name": reflect.Map.new(reflect.Type.of<string>(), inner.as_type()).as_type() },
         )
         .as_type();
-    let minted_enum = reflect.enum.new("MintedState", ["Ready", "Done"]);
+    let minted_enum = reflect.Enum.new("MintedState", ["Ready", "Done"]);
     let enum_array = minted_enum.as_type().array().as_type();
 
     let compiled_package = reflect.Package.compile({ "compiled.baml": `class CompiledInner { x string }` });
     let compiled_inner = compiled_package.get_class("root.CompiledInner") ?? throw "missing CompiledInner";
     let compiled_array = compiled_inner.as_type().array().as_type();
-    let compiled_holder_array = reflect.class.new("CompiledHolderArray", { "bs": compiled_array }).as_type();
-    let compiled_holder_map = reflect.class
+    let compiled_holder_array = reflect.Class.new("CompiledHolderArray", { "bs": compiled_array }).as_type();
+    let compiled_holder_map = reflect.Class
         .new(
             "CompiledHolderMap",
             {
-                "by_name": reflect.map.new(reflect.Type.of<string>(), compiled_inner.as_type()).as_type(),
+                "by_name": reflect.Map.new(reflect.Type.of<string>(), compiled_inner.as_type()).as_type(),
             },
         )
         .as_type();
-    let static_holder = reflect.class.new("StaticHolder", { "bs": reflect.Type.of<StaticInner[]>() }).as_type();
+    let static_holder = reflect.Class.new("StaticHolder", { "bs": reflect.Type.of<StaticInner[]>() }).as_type();
 
     let array_ok = {
         type T = unreflect(holder_array)

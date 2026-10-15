@@ -31,7 +31,7 @@ async fn an_anonymous_class_instance_crosses_as_an_opaque_handle() {
         }
 
         function main() -> unknown {
-            let widget_t = reflect.class.new("Widget", {
+            let widget_t = reflect.Class.new("Widget", {
                 "name": reflect.Type.of<string>(),
             })
             type Widget = unreflect(widget_t.as_type())

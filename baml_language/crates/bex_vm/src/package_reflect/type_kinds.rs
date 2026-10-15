@@ -561,7 +561,7 @@ impl BamlClassClass for PackageReflectImpl {
         };
         let fail_non_instance = |vm: &mut BexVm| {
             let diagnostic = runtime_type::expected_class_instance(
-                "reflect.class.get_field",
+                "reflect.Class.get_field",
                 &vm.type_of(value).to_string(),
             )
             .with_phase(DiagnosticPhase::Hir);
@@ -602,7 +602,7 @@ impl BamlClassClass for PackageReflectImpl {
         let Some(expected) = vm.current_call_type_args().first().cloned() else {
             return Err(crate::errors::VmRustFnError::InternalError(
                 bex_vm_types::errors::VmInternalError::MissingNativeFunction {
-                    name: "reflect.class.get_field: missing type argument".to_string(),
+                    name: "reflect.Class.get_field: missing type argument".to_string(),
                 },
             ));
         };
@@ -910,7 +910,7 @@ impl BamlClassInterface for PackageReflectImpl {
                     &[compiler_diagnostic(
                         DiagnosticId::TypeMismatch,
                         format!(
-                            "reflect.interface.implementation expects an interface type, got `{interface_ty}`"
+                            "reflect.Interface.implementation expects an interface type, got `{interface_ty}`"
                         ),
                     )],
                 ),
@@ -1710,7 +1710,7 @@ fn alloc_compilation_error_with_span(
 
 fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
     let Some(ptr) = value.as_object_ptr() else {
-        return Err("reflect.enum.new values must be strings or reflect.enum.Value rows".into());
+        return Err("reflect.Enum.new values must be strings or reflect.enum.Value rows".into());
     };
     match vm.get_object(ptr) {
         Object::String(name) => Ok(EnumVariant {
@@ -1730,7 +1730,7 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 .is_class(StdlibClass::EnumValue, class.type_tag)
             {
                 return Err(
-                    "reflect.enum.new values must be strings or reflect.enum.Value rows".into(),
+                    "reflect.Enum.new values must be strings or reflect.enum.Value rows".into(),
                 );
             }
             let name = vm
@@ -1785,14 +1785,14 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
                 skip,
             })
         }
-        _ => Err("reflect.enum.new values must be strings or reflect.enum.Value rows".into()),
+        _ => Err("reflect.Enum.new values must be strings or reflect.enum.Value rows".into()),
     }
 }
 
 fn invalid_enum_value(vm: &BexVm, value: Value) -> crate::errors::VmRustFnError {
     crate::errors::VmRustFnError::BamlError(crate::errors::VmBamlError::InvalidArgument {
         message: format!(
-            "reflect.enum.get_value expects an enum value, got {}",
+            "reflect.Enum.get_value expects an enum value, got {}",
             vm.type_of(&value)
         ),
     })
@@ -1969,7 +1969,7 @@ class Fresh {}
         assert!(matches!(error, crate::errors::VmRustFnError::Panic(_)));
     }
 
-    /// A fresh anonymous class, as `reflect.class.new` allocates one.
+    /// A fresh anonymous class, as `reflect.Class.new` allocates one.
     fn fresh_class(vm: &mut BexVm) -> TypeHead {
         let Object::Class(class) = vm.get_object(head(vm, "Fresh").ptr()) else {
             unreachable!()

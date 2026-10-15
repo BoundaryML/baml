@@ -3,9 +3,9 @@ interface PersonAnchor {
     email: string,
 }
 
-function TenantPersonType() -> reflect.class.Type {
-    let anchor_impl = reflect.interface.implementation<PersonAnchor>().field("name").field("email");
-    reflect.class.new(
+function TenantPersonType() -> reflect.Class {
+    let anchor_impl = reflect.Interface.implementation<PersonAnchor>().field("name").field("email");
+    reflect.Class.new(
         "AcmePerson",
         {
             "name": reflect.Type.of<string>(),

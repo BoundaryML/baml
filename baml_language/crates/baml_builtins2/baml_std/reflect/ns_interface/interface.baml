@@ -2,7 +2,7 @@
 /// `reflect.Interface.implementation<I>()`; each `field` call returns a new witness.
 /// A structural witness that a runtime-built class implements an interface.
 ///
-/// Start one with `reflect.interface.implementation<I>()` and link each
+/// Start one with `reflect.Interface.implementation<I>()` and link each
 /// interface field to the class field satisfying it with `field`.
 class Implementation {
     _handle: $rust_type,

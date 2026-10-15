@@ -10,14 +10,14 @@ function Extract<T>() -> T {
 }
 
 function main() -> string {
-    let frozen = reflect.class.builder("FrozenEmployee");
+    let frozen = reflect.Class.builder("FrozenEmployee");
     frozen.field("name", reflect.Type.of<string>());
     frozen.build();
     let frozen_error = frozen.field("age", reflect.Type.of<int>()) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].message
     };
 
-    let unresolved = reflect.class.builder("UnbuiltTenant");
+    let unresolved = reflect.Class.builder("UnbuiltTenant");
     let pending = unresolved.type();
     let pending_error = {
         type Pending = unreflect(pending)

@@ -11,8 +11,8 @@ from baml_sdk import HostParse, HostTypeEqual, HostTypeName, StaticNamed, Static
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
 def test_runtime_enum_definition_decodes_alias():
-    red = reflect.enum.value("RED", alias="k7", description="warm")
-    category = reflect.enum.new("Category", [red, "BLUE"])
+    red = reflect.Enum.value("RED", alias="k7", description="warm")
+    category = reflect.Enum.new("Category", [red, "BLUE"])
 
     assert isinstance(category, BamlType)
     assert HostParse('"k7"', _types={"T": category}) == "RED"
@@ -20,8 +20,8 @@ def test_runtime_enum_definition_decodes_alias():
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
 def test_runtime_class_definition_preserves_nested_metadata():
-    category = reflect.enum.new("Category", [reflect.enum.value("RED", alias="k7")])
-    record = reflect.class_.new(
+    category = reflect.Enum.new("Category", [reflect.Enum.value("RED", alias="k7")])
+    record = reflect.Class.new(
         "RuntimeRecord",
         {
             "label": reflect.Type.of(str).meta(alias="display_label"),
@@ -52,7 +52,7 @@ def test_compiled_package_returns_class_graph():
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
 def test_wire_occurrences_are_fresh_and_handles_reject_serialization():
-    runtime_type = reflect.class_.new("Fresh", {"value": reflect.Type.of(int)})
+    runtime_type = reflect.Class.new("Fresh", {"value": reflect.Type.of(int)})
     assert HostTypeEqual(_types={"A": runtime_type, "B": runtime_type}) is False
     with pytest.raises(TypeError, match="cannot be serialized"):
         pickle.dumps(runtime_type)

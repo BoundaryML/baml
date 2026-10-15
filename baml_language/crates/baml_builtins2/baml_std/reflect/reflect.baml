@@ -99,15 +99,15 @@ interface TypeView {
 }
 
 /// The closed set of reflection views for a runtime `type` value.
-type TypeKind = root.class.Type
-    | root.enum.Type
-    | root.union.Type
-    | root.literal.Type
-    | root.array.Type
-    | root.map.Type
-    | root.interface.Type
-    | root.primitive.Type
-    | root.function.Type;
+type TypeKind = root.Class
+    | root.Enum
+    | root.Union
+    | root.Literal
+    | root.Array
+    | root.Map
+    | root.Interface
+    | root.Primitive
+    | root.Function;
 
 /// Implemented automatically by every function value, with its parameter
 /// list erased. `Returns` pins the held function's return type and `Throws`
@@ -128,7 +128,7 @@ interface AnyFunction {
 /// Narrow an opaque value with `let value: reflect.AnyClass = opaque else { ... }`
 /// before using this surface. Ordinary class instances implement it, including
 /// runtime-minted classes. Of the sealed reflection-kind views, only
-/// `reflect.class.Type` implements it.
+/// `reflect.Class` implements it.
 interface AnyClass {
     /// Read a field as `T`. A missing field returns `null`; use `has_field` to
     /// distinguish that case from a present field whose value is null.
@@ -146,7 +146,7 @@ interface AnyClass {
 
     /// Return a value-bound field handle, or `null` when no such field exists.
     function get_field(self, name: string) -> root.class.Field? throws never {
-        let class_type: root.class.Type = root.Type.of_value(self).as_class() else {
+        let class_type: root.Class = root.Type.of_value(self).as_class() else {
             return null;
         };
         for (let field in class_type.fields()) {
@@ -165,7 +165,7 @@ interface AnyClass {
     /// Whether this value's runtime class declares a field called `name`.
     /// `false` when the runtime type is not a class.
     function has_field(self, name: string) -> bool throws never {
-        let class_type: root.class.Type = root.Type.of_value(self).as_class() else {
+        let class_type: root.Class = root.Type.of_value(self).as_class() else {
             return false;
         };
         for (let field in class_type.fields()) {
@@ -178,7 +178,7 @@ interface AnyClass {
 
     /// Reflected fields bound to this value for `Field.value<T>()`.
     function list_fields(self) -> root.class.Field[] throws never {
-        let class_type: root.class.Type = root.Type.of_value(self).as_class() else {
+        let class_type: root.Class = root.Type.of_value(self).as_class() else {
             return [];
         };
         let fields: root.class.Field[] = [];
@@ -208,7 +208,7 @@ interface AnyClass {
     /// The class declaration's schema metadata, or empty metadata when the
     /// runtime type is not a class.
     function attributes(self) -> root.Meta throws never {
-        let class_type: root.class.Type = root.Type.of_value(self).as_class() else {
+        let class_type: root.Class = root.Type.of_value(self).as_class() else {
             return root.Meta { alias: null, description: null, docstring: null, other: {}, skip: false };
         };
         class_type.meta()
@@ -304,20 +304,20 @@ class Package {
 
     /// The exported class called `name`, or `null` if the package exports none.
     //baml:mut_vm
-    function get_class(self, name: string) -> root.class.Type? throws never {
+    function get_class(self, name: string) -> root.Class? throws never {
         $rust_function
     }
 
     /// The exported enum called `name`, or `null` if the package exports none.
     //baml:mut_vm
-    function get_enum(self, name: string) -> root.enum.Type? throws never {
+    function get_enum(self, name: string) -> root.Enum? throws never {
         $rust_function
     }
 
     /// The exported interface called `name`, or `null` if the package exports
     /// none.
     //baml:mut_vm
-    function get_interface(self, name: string) -> root.interface.Type? throws never {
+    function get_interface(self, name: string) -> root.Interface? throws never {
         $rust_function
     }
 
@@ -346,25 +346,25 @@ class Package {
 
     /// Exported class types, keyed by package-local name.
     //baml:mut_vm
-    function classes(self) -> map<string, root.class.Type> throws never {
+    function classes(self) -> map<string, root.Class> throws never {
         $rust_function
     }
 
     /// Exported enum types, keyed by package-local name.
     //baml:mut_vm
-    function enums(self) -> map<string, root.enum.Type> throws never {
+    function enums(self) -> map<string, root.Enum> throws never {
         $rust_function
     }
 
     /// Exported interface types, keyed by package-local name.
     //baml:mut_vm
-    function interfaces(self) -> map<string, root.interface.Type> throws never {
+    function interfaces(self) -> map<string, root.Interface> throws never {
         $rust_function
     }
 
     //baml:mut_vm
     /// Exported free-function signatures, keyed by package-local name.
-    function functions(self) -> map<string, root.function.Type> throws never {
+    function functions(self) -> map<string, root.Function> throws never {
         $rust_function
     }
 

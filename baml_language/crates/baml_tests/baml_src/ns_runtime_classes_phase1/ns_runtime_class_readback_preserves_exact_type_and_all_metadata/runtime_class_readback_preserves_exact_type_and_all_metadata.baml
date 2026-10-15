@@ -1,6 +1,6 @@
 function main() -> bool {
-    let literal = reflect.literal.new("fixed");
-    let schema = reflect.class.new(
+    let literal = reflect.Literal.new("fixed");
+    let schema = reflect.Class.new(
         "Schema",
         {
             "tag": literal.as_type().meta(

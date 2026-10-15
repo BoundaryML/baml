@@ -30,7 +30,7 @@ function reject(detail: string) -> ai.errors.InvalidRequest {
 // Only finite Choice members are accepted. Reflected (canonical) union order
 // is preserved; a key collision belongs to the first member that offered it.
 function options(ty: reflect.Type) -> ChoiceOption[] {
-    if let en: reflect.enum.Type = ty.as_enum() {
+    if let en: reflect.Enum = ty.as_enum() {
         type T = unreflect(ty);
         let out: ChoiceOption[] = [];
         for (let variant in en.values()) {
@@ -46,7 +46,7 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
         }
         return out;
     }
-    if let union: reflect.union.Type = ty.as_union() {
+    if let union: reflect.Union = ty.as_union() {
         let out: ChoiceOption[] = [];
         for (let member in union.member_types()) {
             for (let option in options(member)) {
@@ -58,10 +58,10 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
     if (ty == reflect.Type.of<null>()) {
         return [ChoiceOption { key: "<null>", description: null, value: null }];
     }
-    if let literal: reflect.literal.Type = ty.as_literal() {
+    if let literal: reflect.Literal = ty.as_literal() {
         let value = literal.value();
-        if let en: reflect.enum.Type = reflect.Type.of_value(value).as_enum() {
-            let name = reflect.enum.get_value(value);
+        if let en: reflect.Enum = reflect.Type.of_value(value).as_enum() {
+            let name = reflect.Enum.get_value(value);
             for (let variant in en.values()) {
                 if (variant.name == name) {
                     if (variant.meta.skip) {
@@ -100,7 +100,7 @@ function accepts_null(ty: reflect.Type) -> bool {
     if (ty == reflect.Type.of<null>() || ty == reflect.Type.of<unknown>()) {
         return true;
     }
-    if let union: reflect.union.Type = ty.as_union() {
+    if let union: reflect.Union = ty.as_union() {
         for (let member in union.member_types()) {
             if (accepts_null(member)) {
                 return true;
@@ -124,7 +124,7 @@ function collect(
             throw reject(`Decisions cannot convert recursive type ${ty.to_string()}`)
         }
     }
-    if let cls: reflect.class.Type = ty.as_class() {
+    if let cls: reflect.Class = ty.as_class() {
         let out: Leaf[] = [];
         for (let field in cls.fields()) {
             let field_type: reflect.Type = field.type else {
@@ -171,7 +171,7 @@ function collect(
     }
 
     let type_description = match (ty.as_enum()) {
-        let en: reflect.enum.Type => en.meta().description,
+        let en: reflect.Enum => en.meta().description,
         null => null,
     };
     let local = description ?? type_description ?? "";
@@ -411,7 +411,7 @@ function decode(leaf: Leaf, answer: Answer) -> unknown {
 }
 
 function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>) -> unknown {
-    if let cls: reflect.class.Type = ty.as_class() {
+    if let cls: reflect.Class = ty.as_class() {
         let fields: map<string, unknown> = {};
         for (let field in cls.fields()) {
             if (field.meta.skip) {

@@ -1198,7 +1198,7 @@ fn reflect_package_resolution_uses_ordinary_builtin_items() {
 type ExportedShorthandType = reflect.RawOnly
 
 function exported_shorthand_value() -> reflect.Type throws never {
-    reflect.literal.new(1).as_type()
+    reflect.Literal.new(1).as_type()
 }
 
 function raw_only_value_is_available() -> string throws never {

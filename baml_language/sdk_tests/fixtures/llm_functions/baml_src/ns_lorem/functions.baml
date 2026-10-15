@@ -136,7 +136,7 @@ function hs7_dynamic_extract<T>(text: string) -> T {
 // above while carrying unrelated fields. Identity, never this name, decides
 // whether results become generated Pydantic models or live RuntimeValues.
 function hs7_collision_type() -> reflect.Type {
-  reflect.class.new("Hs7Collision", {
+  reflect.Class.new("Hs7Collision", {
     "title": reflect.Type.of<string?>(),
     "body": reflect.Type.of<string?>(),
     "word_count": reflect.Type.of<int?>(),

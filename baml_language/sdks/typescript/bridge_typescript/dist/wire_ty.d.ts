@@ -38,7 +38,7 @@ export interface BamlTypeMetadata {
     docstring?: string;
     other?: Record<string, string>;
 }
-/** Internal row consumed by the generated `reflect.class.new` binding. */
+/** Internal row consumed by the generated `reflect.Class.new` binding. */
 export declare class BamlTypeMetadataRow {
     readonly ty: BamlType;
     readonly alias: string | null;

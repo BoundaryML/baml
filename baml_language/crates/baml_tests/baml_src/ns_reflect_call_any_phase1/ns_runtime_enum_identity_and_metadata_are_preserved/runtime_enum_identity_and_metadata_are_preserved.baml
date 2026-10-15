@@ -12,8 +12,8 @@ function Classify<T>(input: string) -> T {
 function main() -> string {
     // Widen explicitly (`as_type`) to select `reflect.Type.meta(...)`,
     // rather than the enum-kind view's zero-argument metadata reader.
-    let left: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"]).as_type();
-    let right: reflect.Type = reflect.enum.new("Category", ["RED", "BLUE"]).as_type();
+    let left: reflect.Type = reflect.Enum.new("Category", ["RED", "BLUE"]).as_type();
+    let right: reflect.Type = reflect.Enum.new("Category", ["RED", "BLUE"]).as_type();
     type Left = unreflect(left)
     type Right = unreflect(right)
     let left_prompt = Classify@render_prompt<Left>("sample").text();

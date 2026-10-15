@@ -1,5 +1,5 @@
 function main() -> string {
-    let zero_result = reflect.union.new([]) catch (e) {
+    let zero_result = reflect.Union.new([]) catch (e) {
         reflect.errors.CompilationError { diagnostics } => {
             diagnostics[0].code + ":" + (diagnostics[0].span == null).to_string()
         },
@@ -11,7 +11,7 @@ function main() -> string {
         "zero did not throw"
     };
 
-    let builder = reflect.class.builder("Duplicate");
+    let builder = reflect.Class.builder("Duplicate");
     builder.field("x", reflect.Type.of<string>());
     let duplicate_result = builder.field("x", reflect.Type.of<int>()) catch (e) {
         reflect.errors.CompilationError { diagnostics } => {

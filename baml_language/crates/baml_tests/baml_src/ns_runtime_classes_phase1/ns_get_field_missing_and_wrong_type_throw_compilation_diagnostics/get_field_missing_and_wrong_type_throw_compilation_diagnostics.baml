@@ -10,15 +10,15 @@ function Extract<T>() -> T {
 }
 
 function main() -> string {
-    let t = reflect.class.new("OneField", { "count": reflect.Type.of<int>() });
+    let t = reflect.Class.new("OneField", { "count": reflect.Type.of<int>() });
     type OneField = unreflect(t.as_type())
     let value = Extract@parse<OneField>(`{"count": 4}`);
-    let missing = reflect.class.get_field<int>(value, "absent") catch (e) {
+    let missing = reflect.Class.get_field<int>(value, "absent") catch (e) {
         reflect.errors.CompilationError => {
             e.diagnostics[0].code + ":" + e.diagnostics[0].message
         }
     };
-    let wrong = reflect.class.get_field<string>(value, "count") catch (e) {
+    let wrong = reflect.Class.get_field<string>(value, "count") catch (e) {
         reflect.errors.CompilationError => {
             e.diagnostics[0].code + ":" + e.diagnostics[0].message
         }

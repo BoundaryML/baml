@@ -26,15 +26,15 @@ enum Kind {
 
 function kind_of(t: reflect.Type) -> Kind throws never {
     match (t.kind()) {
-        reflect.class.Type => Kind.Class,
-        reflect.enum.Type => Kind.Enum,
-        reflect.union.Type => Kind.Union,
-        reflect.literal.Type => Kind.Literal,
-        reflect.array.Type => Kind.Array,
-        reflect.map.Type => Kind.Map,
-        reflect.interface.Type => Kind.Interface,
-        reflect.primitive.Type => Kind.Primitive,
-        reflect.function.Type => Kind.Function,
+        reflect.Class => Kind.Class,
+        reflect.Enum => Kind.Enum,
+        reflect.Union => Kind.Union,
+        reflect.Literal => Kind.Literal,
+        reflect.Array => Kind.Array,
+        reflect.Map => Kind.Map,
+        reflect.Interface => Kind.Interface,
+        reflect.Primitive => Kind.Primitive,
+        reflect.Function => Kind.Function,
     }
 }
 
@@ -84,7 +84,7 @@ function to_reflect(ty: Ty) -> reflect.Type? throws never {
         },
         Never => reflect.Type.of<never>(),
         Top => reflect.Type.of<unknown>(),
-        let l: Lit => reflect.literal.new(l.value).as_type(),
+        let l: Lit => reflect.Literal.new(l.value).as_type(),
         let u: Union => {
             let members = u.members().filter_map((m) -> {
                 to_reflect(m)
@@ -92,13 +92,13 @@ function to_reflect(ty: Ty) -> reflect.Type? throws never {
             if (members.length() != u.members().length()) {
                 return null;
             }
-            reflect.union.new(members).as_type() catch (e) {
+            reflect.Union.new(members).as_type() catch (e) {
                 reflect.errors.CompilationError => null,
             }
         },
         let a: Array => to_reflect(a.element)?.array().as_type(),
         let m: Map => match (to_reflect(m.value)) {
-            let v: reflect.Type => reflect.map.new(reflect.Type.of<string>(), v).as_type(),
+            let v: reflect.Type => reflect.Map.new(reflect.Type.of<string>(), v).as_type(),
             null => null,
         },
         EnumLit | Fn | Class | Enum | Iface | Alias | Var => null,

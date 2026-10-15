@@ -251,7 +251,7 @@ mod tests {
             // Namespaced `baml` classes are out of scope, including the
             // field-carrying reflect classes the stdlib itself constructs.
             "reflect.class.Field",
-            "reflect.class.Type",
+            "reflect.Class",
             "baml.iter.Done",
             // A root-namespace `baml` class that really does hold fields.
             "baml.TaggedString",

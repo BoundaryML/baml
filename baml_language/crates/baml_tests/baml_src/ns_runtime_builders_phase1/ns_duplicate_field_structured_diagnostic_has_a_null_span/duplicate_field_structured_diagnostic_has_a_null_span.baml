@@ -1,5 +1,5 @@
 function main() -> string {
-    let builder = reflect.class.builder("Duplicate");
+    let builder = reflect.Class.builder("Duplicate");
     builder.field("name", reflect.Type.of<string>());
     let result = builder.field("name", reflect.Type.of<int>()) catch (e) {
         reflect.errors.CompilationError => {

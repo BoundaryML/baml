@@ -24,13 +24,13 @@ class Type {
 
     /// Construct an array type whose element is this type.
     //baml:mut_vm
-    function array(self) -> root.array.Type throws never {
+    function array(self) -> root.Array throws never {
         $rust_function
     }
 
     /// Construct the canonical union of this type and null.
     //baml:mut_vm
-    function optional(self) -> root.union.Type throws never {
+    function optional(self) -> root.Union throws never {
         $rust_function
     }
 
@@ -51,55 +51,55 @@ class Type {
     /// The class view of this type, or `null` when it does not describe
     /// a class.
     //baml:mut_vm
-    function as_class(self) -> root.class.Type? throws never {
+    function as_class(self) -> root.Class? throws never {
         $rust_function
     }
     /// The enum view of this type, or `null` when it does not describe
     /// an enum.
     //baml:mut_vm
-    function as_enum(self) -> root.enum.Type? throws never {
+    function as_enum(self) -> root.Enum? throws never {
         $rust_function
     }
     /// The union view of this type, or `null` when it does not describe
     /// a union.
     //baml:mut_vm
-    function as_union(self) -> root.union.Type? throws never {
+    function as_union(self) -> root.Union? throws never {
         $rust_function
     }
     /// The literal view of this type, or `null` when it does not describe
     /// a literal.
     //baml:mut_vm
-    function as_literal(self) -> root.literal.Type? throws never {
+    function as_literal(self) -> root.Literal? throws never {
         $rust_function
     }
     /// The array view of this type, or `null` when it does not describe
     /// an array.
     //baml:mut_vm
-    function as_array(self) -> root.array.Type? throws never {
+    function as_array(self) -> root.Array? throws never {
         $rust_function
     }
     /// The map view of this type, or `null` when it does not describe
     /// a map.
     //baml:mut_vm
-    function as_map(self) -> root.map.Type? throws never {
+    function as_map(self) -> root.Map? throws never {
         $rust_function
     }
     /// The interface view of this type, or `null` when it does not describe
     /// an interface.
     //baml:mut_vm
-    function as_interface(self) -> root.interface.Type? throws never {
+    function as_interface(self) -> root.Interface? throws never {
         $rust_function
     }
     /// The primitive view of this type, or `null` when it does not describe
     /// a primitive.
     //baml:mut_vm
-    function as_primitive(self) -> root.primitive.Type? throws never {
+    function as_primitive(self) -> root.Primitive? throws never {
         $rust_function
     }
     /// The function view of this type, or `null` when it does not describe
     /// a function.
     //baml:mut_vm
-    function as_function(self) -> root.function.Type? throws never {
+    function as_function(self) -> root.Function? throws never {
         $rust_function
     }
 

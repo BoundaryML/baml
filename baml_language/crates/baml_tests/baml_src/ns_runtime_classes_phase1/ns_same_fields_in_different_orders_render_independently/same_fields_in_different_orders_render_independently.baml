@@ -10,11 +10,11 @@ function Render<T>() -> T {
 }
 
 function main() -> string {
-    let left = reflect.class.new(
+    let left = reflect.Class.new(
         "SameName",
         { "first": reflect.Type.of<int>(), "second": reflect.Type.of<string>() },
     );
-    let right = reflect.class.new(
+    let right = reflect.Class.new(
         "SameName",
         { "second": reflect.Type.of<string>(), "first": reflect.Type.of<int>() },
     );

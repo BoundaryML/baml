@@ -13,19 +13,19 @@ type Callback = (value: int) -> bool throws never
 
 function classify(t: reflect.Type) -> string {
   match (t.kind()) {
-    reflect.class.Type => "class",
-    reflect.enum.Type => "enum",
-    reflect.union.Type => "union",
-    reflect.literal.Type => "literal",
-    reflect.array.Type => "array",
-    reflect.map.Type => "map",
-    reflect.interface.Type => "interface",
-    reflect.primitive.Type => "primitive",
-    reflect.function.Type => "function"
+    reflect.Class => "class",
+    reflect.Enum => "enum",
+    reflect.Union => "union",
+    reflect.Literal => "literal",
+    reflect.Array => "array",
+    reflect.Map => "map",
+    reflect.Interface => "interface",
+    reflect.Primitive => "primitive",
+    reflect.Function => "function"
   }
 }
 
-function read_class(view: reflect.class.Type) -> reflect.Type throws never {
+function read_class(view: reflect.Class) -> reflect.Type throws never {
   view.as_type()
 }
 

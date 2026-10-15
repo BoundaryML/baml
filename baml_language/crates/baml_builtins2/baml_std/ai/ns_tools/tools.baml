@@ -80,7 +80,7 @@ function _typed_arguments(
     if (fields.length() == 0) {
         return args;
     }
-    let parameters = reflect.class.new("Arguments", fields) catch (e) {
+    let parameters = reflect.Class.new("Arguments", fields) catch (e) {
         reflect.errors.CompilationError => {
             throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${e.message}` }
         },
@@ -98,7 +98,7 @@ function _typed_arguments(
         let _ = typed.set(name, args.get(name));
     }
     for (let name in fields.keys()) {
-        let value = reflect.class.get_field<unknown>(aligned, name) catch (e) {
+        let value = reflect.Class.get_field<unknown>(aligned, name) catch (e) {
             reflect.errors.CompilationError => {
                 baml.sys.panic(`the aligned arguments of ${tool} have no field ${name}`)
             },

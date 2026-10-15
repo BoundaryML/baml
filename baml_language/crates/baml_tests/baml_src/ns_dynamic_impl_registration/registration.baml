@@ -1,5 +1,5 @@
-// Registering interface witnesses on a runtime class (`reflect.class.new`,
-// `reflect.class.builder`) is judged as one batch against the rules that
+// Registering interface witnesses on a runtime class (`reflect.Class.new`,
+// `reflect.Class.builder`) is judged as one batch against the rules that
 // already exist: a witness a static blanket already covers is an overlap, not
 // a silent shadow. The published rules then live exactly as long as the class.
 
@@ -12,11 +12,11 @@ interface DirChoice<T> { type Item }
 implements<T extends DirGate> DirPick for T {}
 
 test "dynamic_registration_rejects_blanket_activated_by_same_batch" {
-    let gate = reflect.interface.implementation<DirGate>();
-    let pick = reflect.interface.implementation<DirPick>();
+    let gate = reflect.Interface.implementation<DirGate>();
+    let pick = reflect.Interface.implementation<DirPick>();
     for (let batch in [[gate, pick], [pick, gate]]) {
         let rejected = {
-            reflect.class.new("Adapter", {}, implementations = batch);
+            reflect.Class.new("Adapter", {}, implementations = batch);
             false
         } catch (e) {
             reflect.errors.CompilationError => {
@@ -29,12 +29,12 @@ test "dynamic_registration_rejects_blanket_activated_by_same_batch" {
 
 test "dynamic_registration_associated_outputs_do_not_disambiguate" {
     let rejected = {
-        reflect.class.new(
+        reflect.Class.new(
             "Adapter",
             {},
             implementations = [
-                reflect.interface.implementation<DirChoice<int, Item = int>>(),
-                reflect.interface.implementation<DirChoice<int, Item = string>>(),
+                reflect.Interface.implementation<DirChoice<int, Item = int>>(),
+                reflect.Interface.implementation<DirChoice<int, Item = string>>(),
             ],
         );
         false
@@ -47,14 +47,14 @@ test "dynamic_registration_associated_outputs_do_not_disambiguate" {
 }
 
 test "dynamic_registration_distinct_inputs_and_inapplicable_blanket_are_allowed" {
-    let adapter = reflect.class
+    let adapter = reflect.Class
         .new(
             "Adapter",
             {},
             implementations = [
-                reflect.interface.implementation<DirPick>(),
-                reflect.interface.implementation<DirChoice<int, Item = int>>(),
-                reflect.interface.implementation<DirChoice<string, Item = string>>(),
+                reflect.Interface.implementation<DirPick>(),
+                reflect.Interface.implementation<DirChoice<int, Item = int>>(),
+                reflect.Interface.implementation<DirChoice<string, Item = string>>(),
             ],
         )
         .as_type();
@@ -65,13 +65,13 @@ test "dynamic_registration_distinct_inputs_and_inapplicable_blanket_are_allowed"
 }
 
 test "dynamic_registration_rejected_batch_leaves_builder_retryable" {
-    let builder = reflect.class.builder("Adapter");
+    let builder = reflect.Class.builder("Adapter");
     let pending = builder.type();
     let rejected = {
         builder.build(
             implementations = [
-                reflect.interface.implementation<DirGate>(),
-                reflect.interface.implementation<DirPick>(),
+                reflect.Interface.implementation<DirGate>(),
+                reflect.Interface.implementation<DirPick>(),
             ],
         );
         false
@@ -82,7 +82,7 @@ test "dynamic_registration_rejected_batch_leaves_builder_retryable" {
     };
     assert.is_true(rejected);
     assert.is_true(pending.resolved() == null);
-    let built = builder.build(implementations = [reflect.interface.implementation<DirPick>()]).as_type();
+    let built = builder.build(implementations = [reflect.Interface.implementation<DirPick>()]).as_type();
     assert.equal(pending.resolved(), built);
     assert.is_true(built.implements(reflect.Type.of<DirPick>()));
 }
@@ -94,10 +94,10 @@ interface DirGreeter {
 // Returns only an instance: the class and its witness rules stay reachable
 // through the instance alone, never through a type value the caller holds.
 function dir_greeter_instance() -> DirGreeter {
-    let adapter = reflect.class.new(
+    let adapter = reflect.Class.new(
         "Adapter",
         {},
-        implementations = [reflect.interface.implementation<DirGreeter>()],
+        implementations = [reflect.Interface.implementation<DirGreeter>()],
     );
     type Adapter = unreflect(adapter.as_type());
     let instance: Adapter = baml.json.to<Adapter>({});

@@ -454,14 +454,14 @@ function DynamicOutput<T>() -> T {
 }
 
 test "an agent spec takes a scoped runtime type" {
-    let output_type = reflect.class.new("RuntimeOutput", {
+    let output_type = reflect.Class.new("RuntimeOutput", {
         "name": reflect.Type.of<string>(),
     }).as_type()
     type Out = unreflect(output_type)
     let run = ai.Agent.new(
         client = ProbeClient { reply: `{"name":"Pixel"}` },
     ).run(DynamicOutput@spec<Out>())
-    assert.equal(reflect.class.get_field<string>(run.value, "name"), "Pixel")
+    assert.equal(reflect.Class.get_field<string>(run.value, "name"), "Pixel")
 }
 
 // A written type argument resolves to the parameter the name denotes where
