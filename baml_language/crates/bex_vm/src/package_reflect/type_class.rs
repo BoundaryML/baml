@@ -198,17 +198,23 @@ impl BamlClassType for PackageReflectImpl {
         }
     }
 
-    /// BEP-044: `class_t.implements(iface_t)`.
+    /// BEP-044: `t.implements(iface_t)`, for any concrete type `t` (a class,
+    /// an enum, a primitive, a list, ...).
     ///
     /// Selects over the program-wide impl-rule index: an impl applies when its
-    /// `for_ty_pattern` matches `class_t` (with bounds satisfied) and its
+    /// `for_ty_pattern` matches `t` (with bounds satisfied) and its
     /// implemented-interface args / associated bindings match the requested
     /// instantiation. Candidates are every impl of the interface in the program —
-    /// the orphan rule does *not* localize them to `class_t`'s or the interface's
+    /// the orphan rule does *not* localize them to `t`'s or the interface's
     /// package (see [`crate::package_load::PackageIndex`]); bound obligations
-    /// recurse the same way. Because the compiler (E0125) forces a class to
-    /// implement every interface in its `requires` closure, "direct impl" already
-    /// covers transitive satisfaction.
+    /// recurse the same way. Because the compiler (E0125) forces an implementor
+    /// to implement every interface in its `requires` closure, "direct impl"
+    /// already covers transitive satisfaction.
+    ///
+    /// `iface_t` is an interface-existential type value, which carries every
+    /// associated binding (the compiler fills the defaults), so the selected
+    /// impl must bind exactly those: unlike a generic bound, the request cannot
+    /// leave an associated type open.
     fn implements(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
         // Either side may be a kind view: `implemented_by` swaps the receiver
         // with an argument typed `reflect.TypeView`.
@@ -228,8 +234,8 @@ impl BamlClassType for PackageReflectImpl {
         )
     }
 
-    /// BEP-044: `iface_t.implemented_by(class_t)` — same answer as
-    /// `class_t.implements(iface_t)` but with the receiver flipped.
+    /// BEP-044: `iface_t.implemented_by(t)` — same answer as
+    /// `t.implements(iface_t)` but with the receiver flipped.
     fn implemented_by(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
         Self::implements(vm, other, self_value)
     }

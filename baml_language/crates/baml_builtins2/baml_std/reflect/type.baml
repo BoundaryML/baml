@@ -137,20 +137,29 @@ class Type {
     }
 
     /// True iff the receiver type nominally implements the interface `other`
-    /// (BEP-044). Equivalent to: there is an `implements other { ... }` block
-    /// on the receiver class, either directly or via an interface in the
-    /// receiver's transitive `implements`/`extends` graph.
+    /// (BEP-044): an `implements other { ... }` block in the receiver's body,
+    /// or an `implement other for ...` block anywhere in the program, applies
+    /// to it with its bounds satisfied. The receiver can be any concrete type:
+    /// a class, an enum, a primitive, a list, a map, ...
     ///
-    /// Returns `false` when `other` is not an interface, or when the
-    /// receiver is not a class.
+    /// `other` is an interface type, so it names every associated type the
+    /// interface declares without a default, and an omitted one takes its
+    /// default: `baml.iter.Iterator<Item = int>` is
+    /// `baml.iter.Iterator<Item = int, Error = never>`. Only an
+    /// implementation with exactly those associated types matches, so an int
+    /// iterator that throws does not implement `Iterator<Item = int>`, and
+    /// there is no way to ask "is this any iterator".
+    ///
+    /// Returns `false` when `other` is not an interface, or when the receiver
+    /// is not a concrete type (an interface does not implement itself).
     //baml:vm
     function implements(self, other: root.TypeView) -> bool throws never {
         $rust_function
     }
 
-    /// Reverse of [`implements`]: `iface.implemented_by(klass)` is the same
-    /// as `klass.implements(iface)`. Useful when the call-site naturally
-    /// reads "does this interface include that class?".
+    /// Reverse of [`implements`]: `iface.implemented_by(t)` is the same as
+    /// `t.implements(iface)`, with the same associated-type rule. Useful when
+    /// the call site naturally reads "does this interface include that type?".
     //baml:vm
     function implemented_by(self, other: root.TypeView) -> bool throws never {
         $rust_function

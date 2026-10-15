@@ -141,16 +141,19 @@ interface TypeView {
         )
     }
 
-    /// True iff this type nominally implements the interface `other`.
-    /// `false` when `other` is not an interface, or when this type is not a
-    /// class.
+    /// True iff this type nominally implements the interface `other`. Any
+    /// concrete type can: a class, an enum, a primitive, a list, a map, ...
+    /// `other` pins the interface's associated types (an omitted one takes
+    /// its default), and only an implementation with exactly those matches:
+    /// see `reflect.Type.implements`. `false` when `other` is not an
+    /// interface, or when this type is not a concrete type.
     function implements(self, other: root.TypeView) -> bool throws never {
         self.as_type().implements(other)
     }
 
-    /// Reverse of `implements`: `iface.implemented_by(klass)` is the same as
-    /// `klass.implements(iface)`. `false` when this type is not an interface,
-    /// or when `other` is not a class.
+    /// Reverse of `implements`: `iface.implemented_by(t)` is the same as
+    /// `t.implements(iface)`. `false` when this type is not an interface, or
+    /// when `other` is not a concrete type.
     function implemented_by(self, other: root.TypeView) -> bool throws never {
         self.as_type().implemented_by(other)
     }
