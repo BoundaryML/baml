@@ -330,7 +330,7 @@ test "nested_views_of_a_runtime_type_keep_its_definitions" {
     let root_type = reflect.Class.new("Root", { "choices": choice.array() }).as_type();
     let root_class = root_type.as_class() ?? throw "expected class";
     let field = root_class.fields().at(0) ?? throw "expected field";
-    let field_type = field.type ?? throw "expected field type";
+    let field_type = field.type;
     let array = field_type.as_array() ?? throw "expected array";
     let from_array = array.element_type().as_enum() ?? throw "expected array enum";
 
@@ -374,7 +374,7 @@ test "nested_class_of_a_runtime_package_type_reads_back" {
     );
     let root_decl = package.get_class("root.Root");
     let field = root_decl.fields().at(0) ?? throw "missing field";
-    let field_type = field.type ?? throw "missing field type";
+    let field_type = field.type;
     let leaf = field_type.as_class() ?? throw "expected a class view";
     let leaf_field = leaf.fields().at(0) ?? throw "expected a leaf field";
     assert.equal(leaf_field.name, "name")
