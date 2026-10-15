@@ -4,9 +4,11 @@
       the candidate is this checkout; its emitter is baml_language/target/release/baml-cli
   python3 -m bench render BUNDLE [--previous BUNDLE]        kpis.json, kpis.html, summary.md
   python3 -m bench compare BEFORE AFTER                     summary.md with verdicts
+  python3 -m bench plan BUNDLE [--slack SECONDS]            the fewest shards that finish near the floor, from a bundle's timings
   python3 -m bench execute --stage DIR --machine FILE --protocol FILE --out DIR   (runs on the machine)
 """
 import argparse
+import concurrent.futures
 import json
 import os
 import platform
@@ -17,7 +19,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from . import kpis, machine as machines, report, runner, stage
+from . import kpis, machine as machines, report, runner, shards, stage
 from .protocol import Machine, Protocol
 
 ROOT = Path(__file__).resolve().parents[1]          # tools/native-bench
@@ -50,7 +52,7 @@ def cmd_run(a):
     (out / "stage.json").write_text(json.dumps(meta, indent=1))
     shutil.copytree(st / "native", out / "emitted", ignore=shutil.ignore_patterns("target"))
     try:
-        code = machines.provider(mach).run(st, out)
+        code = execute_shards(mach, protocol, st, tmp, out)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     results = out / "results"
@@ -66,6 +68,38 @@ def cmd_run(a):
         sys.exit(code)
     if not (results / "summary.json").exists():
         sys.exit(f"no summary; see {results / 'execute.log'}")
+
+
+def execute_shards(mach, protocol, st, tmp, out):
+    """One machine per shard of the protocol, all at once; a local machine runs the whole protocol as one."""
+    if mach.provider == "local":
+        return machines.provider(mach).run(st, out)
+    files = shards.split(protocol, tmp)
+    print(f"{len(files)} shard(s) on {mach.name}", file=sys.stderr)
+    machines.provider(mach).warm()
+
+    def one(k, f):
+        part = tmp / "parts" / str(k)
+        part.mkdir(parents=True)
+        p = machines.provider(mach, tag=f"[{k}/{len(files)}]")
+        try:
+            return part, p.run(shards.stage_for(st, f, tmp / f"stage-{k}"), part), None, p.vm
+        except Exception as error:  # noqa: BLE001
+            runner.log(f"[{k}/{len(files)}] failed: {error}")
+            return part, 1, str(error)[:400], p.vm
+
+    with concurrent.futures.ThreadPoolExecutor(len(files)) as pool:
+        parts = list(pool.map(one, range(1, len(files) + 1), files))
+    return shards.merge(out, parts, protocol)
+
+
+def cmd_plan(a):
+    t, verify, b0, binc = shards.costs(a.bundle)
+    bins = shards.plan(t, verify, b0, binc, a.slack)
+    print(f"clean build {b0:.0f}s, further case {binc:.0f}s; {len(bins)} shards, finishing by {max(f for f, _ in bins) / 60:.1f} min", file=sys.stderr)
+    for f, names in bins:
+        print(f"  {f / 60:5.1f} min  {', '.join(names)}", file=sys.stderr)
+    print(json.dumps([names for _, names in bins]))
 
 
 def render(bundle, previous=None):
@@ -139,6 +173,7 @@ def main():
     e.add_argument("--out", required=True); e.add_argument("--root"); e.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2))); e.add_argument("--rows"); e.add_argument("--keep-going", action="store_true")
     d = sub.add_parser("render"); d.add_argument("bundle"); d.add_argument("--previous")
     c = sub.add_parser("compare"); c.add_argument("before"); c.add_argument("after")
+    pl = sub.add_parser("plan"); pl.add_argument("bundle"); pl.add_argument("--slack", type=float, default=0.0, help="seconds past the floor a shard may take")
     a = p.parse_args()
     if a.cmd == "run":
         cmd_run(a)
@@ -148,6 +183,8 @@ def main():
         render(a.bundle, a.previous)
     elif a.cmd == "compare":
         print(report.markdown(a.after, a.before))
+    elif a.cmd == "plan":
+        cmd_plan(a)
 
 
 if __name__ == "__main__":

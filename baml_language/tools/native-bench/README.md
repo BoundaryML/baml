@@ -129,6 +129,30 @@ file, copies the stage in, starts the execute step detached, polls for its
 done file (for at most an hour), copies the results back and deletes the VM
 in a `finally`. `"provider": "local"` runs here.
 
+### Shards
+
+A protocol's `shards` split its scenarios across machines that run at
+once, each booted from the same snapshot and executing as above with only
+its scenarios and the cases they use. A scenario is never split: all its
+rows, `control` included, run on one machine, so every bar and its drift
+reference share a host. Hosts differ by several percent, which is why.
+Each machine's first case is a clean build. `bench/shards.py` merges the
+shards into one `results/` (`manifest.json` lists each shard, its VM and
+its status; each shard's own files stay under `results/shards/<k>/`), and
+the bundle reads as one run. A local machine runs the whole protocol as
+one shard.
+
+`python3 -m bench plan <bundle>` recomputes the shards from a bundle's
+timings. A machine running scenarios S over cases C finishes at
+
+    B0 + Binc·(|C| − 1) + Σ_c verify_c + Σ_s trials_s
+
+(clean build, each further case's build, verification, trials). The plan is
+the fewest machines that all finish by the floor, `B0 + max_s(verify +
+trials_s)`, found by an exact branch and bound; `--slack` trades minutes for
+machines. Re-plan when scenarios or their costs change; the loader rejects
+shards that do not hold every scenario exactly once.
+
 ## The bundle
 
     <out>/
@@ -175,7 +199,7 @@ file and beside it.
 
     bench/                      the package
     cases/<case>/               workload.baml and README.txt
-    protocols/tier-a.json       the matrix above
+    protocols/tier-a.json       the matrix above, in six shards
     protocols/smoke.json        two scenarios, nine rows, three trials, for plumbing
     protocols/mem.json          memory management: cases 01-04, 07, 10-14, native-off and vm-off, ten trials
     machines/bench-x86-v1.json  the Freestyle snapshot and its guest layout
@@ -196,5 +220,6 @@ file and beside it.
 
 ## Secrets and cost
 
-The workflow needs the `FREESTYLE_API_KEY` repository secret. A tier-A run
-boots one VM for about half an hour and deletes it.
+The workflow needs the `FREESTYLE_API_KEY` repository secret, and the
+`BAML_SCCACHE_R2_*` secrets for a warm emitter build. A tier-A run boots six
+VMs (4 vCPU, 8 GiB) for about 20 minutes each and deletes them.

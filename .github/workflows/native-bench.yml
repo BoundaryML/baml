@@ -1,11 +1,12 @@
 # Native backend benchmark: nine BAML programs run as the VM at every
 # telemetry level, as native executables, as a frozen native control and
-# as Rust, Go, Node, Bun and Python, on an ephemeral Freestyle VM booted
-# from a pinned snapshot. One pinned core, fresh process per trial, every
-# trial checked against an independent oracle. Advisory: it never gates.
+# as Rust, Go, Node, Bun and Python, on ephemeral Freestyle VMs booted
+# from a pinned snapshot, one per shard of the protocol. One pinned core,
+# fresh process per trial, every trial checked against an independent
+# oracle. Advisory: it never gates.
 #
 # Emission happens here (baml-cli at the candidate); measurement happens on
-# the VM. The harness is baml_language/tools/native-bench; the result is one
+# the VMs. The harness is baml_language/tools/native-bench; the result is one
 # bundle (kpis.json, kpis.html, summary.md, trials.csv) kept as
 # a workflow artifact and appended to the `bench-results` branch, where the
 # page is served read-only through raw.githack.com.

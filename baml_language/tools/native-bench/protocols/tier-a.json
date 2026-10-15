@@ -61,5 +61,13 @@
   {"name": "calls", "case": "07_function_calls", "size": 128, "jobs": 4096, "warmup": 16},
   {"name": "json-hello", "case": "09_json_hello", "jobs": 4096, "warmup": 16},
   {"name": "generate-sort", "case": "11_generate_sort", "size": 8192, "jobs": 32, "warmup": 4}
+ ],
+ "shards": [
+  ["allocation-high-retention"],
+  ["allocation-low-retention"],
+  ["array-build", "json-aggregate", "array-small"],
+  ["array-iterator", "calls", "array-empty", "calls-empty", "array-indexed"],
+  ["generate-sort", "json-hello", "startup"],
+  ["quick-random", "quick-sorted", "merge-random", "merge-duplicates", "quick-reverse", "merge-reverse", "merge-sorted", "quick-duplicates"]
  ]
 }

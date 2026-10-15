@@ -177,7 +177,7 @@ def build(bundle_dir, previous=None):
                 "rust": {"note": "prebuilt into the snapshot"}, "go": {"note": "prebuilt into the snapshot"},
                 "node": {"note": "no build step"}, "bun": {"note": "no build step"}, "python": {"note": "no build step"}}
         bl.append({"name": case, "label": f"{case.split('_', 1)[1].replace('_', ' ')}: {'clean' if bd.get('clean') else 'warm-deps'} release build", "case": case, "values": vals, "headline": {}})
-    kpis.append({"key": "build", "title": "Build time", "question": "How long from source to a runnable artifact?", "measure": MEASURE["build"] + " Native is a cargo build with fat LTO on 4 vCPU; the first case builds from a clean target, later cases reuse its dependencies.", "unit": "s", "better": "lower", "default": bl[0]["name"] if bl else None, "scenarios": bl})
+    kpis.append({"key": "build", "title": "Build time", "question": "How long from source to a runnable artifact?", "measure": MEASURE["build"] + " Native is a cargo build with fat LTO on 4 vCPU; each machine's first case builds from a clean target, later cases on it reuse its dependencies.", "unit": "s", "better": "lower", "default": bl[0]["name"] if bl else None, "scenarios": bl})
     # web server: not measured on this machine yet
     kpis.append({"key": "http", "title": "Web server", "question": "How many requests per second does a small HTTP service handle?", "measure": MEASURE["http"], "unit": "req/s", "better": "higher", "default": None, "scenarios": [], "pending": REASONS["pending_http"]})
     data = {"schema": 2,

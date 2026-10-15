@@ -52,6 +52,8 @@ class Protocol:
         for s in scenarios:
             if s.case not in d["cases"]:
                 raise ValueError(f"{path}: scenario {s.name} uses case {s.case} not in cases")
+        if "shards" in d and sorted(n for shard in d["shards"] for n in shard) != sorted(names):
+            raise ValueError(f"{path}: shards must hold every scenario exactly once")
         return cls(path=path, sha256=sha256_file(path), name=d["name"], rows=d["rows"], trials=d["trials"],
                    seed=d["seed"], cpu=d["cpu"], workers=d["workers"], timeout_s=d.get("timeout_s", 600),
                    cases=d["cases"], scenarios=scenarios, regression=d.get("regression", {}))
