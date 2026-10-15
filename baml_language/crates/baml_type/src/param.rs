@@ -23,7 +23,7 @@ impl ParamTy {
         self.index
     }
 
-    /// Whether this is a block-scoped `type T = …` parameter (its index
+    /// Whether this is a block-scoped `let type T = …` parameter (its index
     /// carries [`SCOPED_PARAM_BIT`]) rather than a declared generic.
     pub fn is_scoped(&self) -> bool {
         self.index & SCOPED_PARAM_BIT != 0
@@ -63,7 +63,7 @@ pub struct RuntimeGenericLayout {
     params: Vec<ParamTy>,
 }
 
-/// The index bit that marks a block-scoped `type T = …` parameter. Declared
+/// The index bit that marks a block-scoped `let type T = …` parameter. Declared
 /// generic parameters are De Bruijn positions in a frame and never reach it;
 /// a scoped parameter's identity is its binding statement's index in the
 /// body, and this bit keeps the two spaces disjoint.

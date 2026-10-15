@@ -1755,7 +1755,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             // Stack layout mirrors `MakeVirtualBoundMethod` with the `Self`
             // TYPE in the receiver's slot: `Self`, then the method-level type
             // args (already `Object::Type` OPERANDS — every one of them a
-            // `LoadType` temp, a scoped `type T = …` slot included),
+            // `LoadType` temp, a scoped `let type T = …` slot included),
             // then the interface type, then the method name — the opcode pops
             // in reverse.
             let self_template = self.refs.anchor_template(self_ty);

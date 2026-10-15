@@ -1065,7 +1065,7 @@ pub enum Rvalue<'db> {
         method: String,
         /// Method-level type-argument OPERANDS from the reference site,
         /// appended to the resolved impl frame by the VM. Every argument is
-        /// a template today - a scoped `type T = …` slot included - so these
+        /// a template today - a scoped `let type T = …` slot included - so these
         /// could be templates; they stay operands because the producer
         /// materializes each as a `LoadType` temp anyway and the VM pops an
         /// `Object::Type` either way, which keeps one stack discipline for

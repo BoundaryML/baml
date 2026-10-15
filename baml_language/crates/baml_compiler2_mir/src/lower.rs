@@ -1812,7 +1812,7 @@ struct LoweringContext<'db> {
     // enclosing top-level function's (and class's) params, never a lambda's.
     lambda_generic_params: Vec<ParamTy>,
 
-    /// The lexical `type T = …` parameters currently visible, innermost last.
+    /// The lexical `let type T = …` parameters currently visible, innermost last.
     /// Pushed at the binding statement and truncated at the closing brace, so
     /// the frame layout this builds mirrors what inference had in scope.
     scoped_type_binding_params: Vec<ParamTy>,
@@ -3455,7 +3455,7 @@ impl<'db> LoweringContext<'db> {
                     // The dispatched road derives `Self` from the value of
                     // argument `self_arg`, so it needs only the interface VIEW
                     // (the static frame prefix); the method's own type args
-                    // — scoped `type T = …` slots included — are lowered by
+                    // — scoped `let type T = …` slots included — are lowered by
                     // the virtual-call machinery itself.
                     let Some(plan) = self.tir_call_plan(expr_id).cloned() else {
                         return Err(self.internal_error(
@@ -3795,7 +3795,7 @@ impl<'db> LoweringContext<'db> {
     /// syntax can make the prefix runtime — turbofish binds the method's
     /// OWN generics only), and
     /// the method's own type arguments as OPERANDS — written static args and
-    /// scoped runtime slots (`m<T>(…)` under `type T = unreflect(t)`) alike,
+    /// scoped runtime slots (`m<T>(…)` under `let type T = t`) alike,
     /// so neither shape can fall off this road.
     fn interface_item_slots(
         &mut self,
@@ -9426,7 +9426,7 @@ impl<'db> LoweringContext<'db> {
         // Read from the call plan, never re-resolved from syntax: TIR bound
         // the written `T` at its lexical position to a `ParamTy` carrying its
         // identity, so a `defer` body replayed under a shadowing
-        // `type T = …` still names the parameter written at the defer site.
+        // `let type T = …` still names the parameter written at the defer site.
         let AstExpr::Call { type_args, .. } = &self.body.exprs[call_expr_id] else {
             return None;
         };
@@ -9563,25 +9563,19 @@ impl<'db> LoweringContext<'db> {
             .collect()
     }
 
-    /// `type T = …;`: evaluate (or load) the binding's runtime type and
-    /// store it in the frame slot reserved for `T`'s rigid parameter.
+    /// `let type T extends … = operand else { … };`: evaluate the operand and
+    /// store it in the frame slot reserved for `T`'s rigid parameter, then
+    /// check each declared bound against the type now bound to `T`, in written
+    /// order. A miss runs the `else` block (which TIR made diverge) or,
+    /// without one, throws `reflect.errors.TypeMismatch` naming the interface.
     fn emit_scoped_type_binding(
         &mut self,
         binding: &crate::inference_provider::ScopedTypeBinding,
+        else_branch: Option<AstExprId>,
     ) -> Lowered<()> {
-        use crate::inference_provider::ScopedTypeSource;
-        let value = match &binding.source {
-            ScopedTypeSource::Runtime(operand) => self.lower_to_operand(*operand),
-            ScopedTypeSource::Static(template_ty) => {
-                let generic_params = self.enclosing_generic_params();
-                let template = self.ty_to_template(template_ty, &generic_params);
-                let temp = self.builder.temp(RuntimeTy::type_type());
-                self.builder
-                    .assign(Place::local(temp), Rvalue::LoadType(template));
-                Ok(Operand::Copy(Place::local(temp)))
-            }
-        }?;
-        let slot = RuntimeGenericLayout::new(&self.enclosing_generic_params())
+        let value = self.lower_to_operand(binding.operand)?;
+        let generic_params = self.enclosing_generic_params();
+        let slot = RuntimeGenericLayout::new(&generic_params)
             .slot(&binding.parameter)
             .unwrap_or_else(|| unreachable!("a scoped type parameter has a frame slot"));
         self.builder.push_statement(
@@ -9591,7 +9585,74 @@ impl<'db> LoweringContext<'db> {
             },
             self.builder.current_source_span,
         );
+        if binding.bounds.is_empty() {
+            return Ok(());
+        }
+        let bound_type =
+            self.load_type_value(&Tir2Ty::TypeVar(binding.parameter.clone()), &generic_params);
+        let miss = else_branch.map(|_| self.builder.create_block());
+        for bound in &binding.bounds {
+            let interface = self.load_type_value(&bound.to_ty(), &generic_params);
+            let resume = self.builder.create_block();
+            match miss {
+                Some(miss) => {
+                    let callee = Operand::Constant(Constant::Function(self.lang_class_method(
+                        baml_base::LangPackage::Reflect,
+                        "Type",
+                        "implements",
+                    )));
+                    let implements = self.builder.temp(RuntimeTy::Bool);
+                    self.builder.call(
+                        callee,
+                        vec![bound_type.clone(), interface],
+                        Place::local(implements),
+                        resume,
+                    );
+                    self.builder.set_current_block(resume);
+                    let next = self.builder.create_block();
+                    self.builder
+                        .branch(Operand::Copy(Place::local(implements)), next, miss);
+                    self.builder.set_current_block(next);
+                }
+                None => {
+                    let callee = Operand::Constant(Constant::Function(self.lang_class_method(
+                        baml_base::LangPackage::Reflect,
+                        "Type",
+                        "_expect_implements",
+                    )));
+                    let unit = self.builder.temp(RuntimeTy::Null);
+                    self.builder.call(
+                        callee,
+                        vec![bound_type.clone(), interface],
+                        Place::local(unit),
+                        resume,
+                    );
+                    self.builder.set_current_block(resume);
+                }
+            }
+        }
+        if let (Some(miss), Some(else_expr)) = (miss, else_branch) {
+            let bound = self.builder.current_block();
+            self.builder.set_current_block(miss);
+            let else_ty = self.expr_ty(else_expr)?;
+            let else_dest = self.builder.temp(else_ty);
+            self.lower_expr(else_expr, Place::local(else_dest))?;
+            // As for `let … else`: a recovery state could leave a fall-through.
+            if !self.builder.is_current_terminated() {
+                self.builder.unreachable();
+            }
+            self.builder.set_current_block(bound);
+        }
         Ok(())
+    }
+
+    /// A `reflect.Type` value for `ty`, realized in the enclosing frame.
+    fn load_type_value(&mut self, ty: &Tir2Ty, generic_params: &[ParamTy]) -> Operand<'db> {
+        let template = self.ty_to_template(ty, generic_params);
+        let temp = self.builder.temp(RuntimeTy::type_type());
+        self.builder
+            .assign(Place::local(temp), Rvalue::LoadType(template));
+        Operand::Copy(Place::local(temp))
     }
 
     /// The owner frame a statically resolved callee expects ahead of its own
@@ -11733,7 +11794,9 @@ impl LoweringContext<'_> {
                 self.lower_expr(expr_id, Place::local(temp))?;
             }
 
-            AstStmt::TypeBinding { name, .. } => {
+            AstStmt::TypeBinding {
+                name, else_branch, ..
+            } => {
                 let binding = self.tir_type_binding(stmt_id).cloned().ok_or_else(|| {
                     self.internal_error_here(&format!(
                         "TIR recorded no binding plan for the scoped type `{name}`"
@@ -11745,13 +11808,13 @@ impl LoweringContext<'_> {
                         binding.name
                     )));
                 }
-                // The slot is reserved before the source is lowered: a static
-                // source's template may itself name earlier scoped bindings,
-                // and the layout must already contain this one for `T` to be
-                // addressable right after the statement.
+                // The slot is reserved before the operand is lowered: the
+                // layout must already contain this binding for `T` to be
+                // addressable by the bound checks and right after the
+                // statement.
                 self.scoped_type_binding_params
                     .push(binding.parameter.clone());
-                self.emit_scoped_type_binding(&binding)?;
+                self.emit_scoped_type_binding(&binding, else_branch)?;
             }
 
             // `let PATTERN = init else { … };` — refutable binding lowered

@@ -530,7 +530,7 @@ function sc_companion() -> baml.Map<string, int> throws never {
     );
     assert!(errors.iter().any(|error| matches!(
         error,
-        TirTypeError::ComputedGenericArgumentRequiresUnreflect { name }
+        TirTypeError::ComputedGenericArgumentRequiresLetType { name }
             if name.as_str() == "runtime_t"
     )));
     assert!(errors.iter().any(|error| matches!(

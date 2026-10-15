@@ -456,18 +456,20 @@ impl<'db> SemanticIndexBuilder<'db> {
     ) {
         match &body.stmts[stmt_id] {
             ast::Stmt::Expr(expr) => self.walk_expr(*expr, body, source_map, true),
-            ast::Stmt::TypeBinding { name, value } => {
+            ast::Stmt::TypeBinding {
+                name,
+                operand,
+                else_branch,
+                ..
+            } => {
                 if let Some(span) = source_map.type_binding_name_span(stmt_id) {
                     self.reject_root_name(name, span);
                 }
-                match value {
-                    // The runtime operand is an ordinary expression in the
-                    // enclosing scope (`T` is not yet in scope while its own
-                    // operand runs).
-                    ast::TypeBindingValue::Runtime(operand) => {
-                        self.walk_expr(*operand, body, source_map, true);
-                    }
-                    ast::TypeBindingValue::Static(_) => {}
+                // The operand and the `else` block are ordinary expressions
+                // in the enclosing scope (`T` is not yet in scope in either).
+                self.walk_expr(*operand, body, source_map, true);
+                if let Some(else_branch) = else_branch {
+                    self.walk_expr(*else_branch, body, source_map, true);
                 }
             }
             ast::Stmt::Let {

@@ -17,10 +17,9 @@ use crate::{
         CatchArmId, CatchClause, CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FieldPat,
         FunctionDefaults, LambdaDef, LambdaKind, LetDef, LetOrigin, Literal, LoopOrigin,
         MapExprEntry, MatchArm, MatchArmId, ObjectExprField, Param, PatId, Pattern, SpreadField,
-        Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag, TypeAnnotId,
-        TypeBindingValue, TypeExpr, TypeExprKind, UnaryOp,
+        Stmt, StmtId, TemplateIfBranch, TemplateSegment, TemplateTag, TypeAnnotId, TypeExpr,
+        TypeExprKind, UnaryOp,
     },
-    lowering_diagnostic::TypeExprOwner,
 };
 
 /// A reference to an environment variable found in source code (`env.VAR_NAME`).
@@ -1389,11 +1388,7 @@ impl LoweringContext {
         &mut self,
         type_expr: &baml_compiler_syntax::ast::TypeExpr,
     ) -> TypeExpr {
-        crate::lower_type_expr::lower_type_expr_node(
-            type_expr,
-            &mut self.diags,
-            TypeExprOwner::Body,
-        )
+        crate::lower_type_expr::lower_type_expr_node(type_expr, &mut self.diags)
     }
 
     /// Lower an associated binding written in this body, collecting its
@@ -1402,11 +1397,7 @@ impl LoweringContext {
         &mut self,
         binding: &baml_compiler_syntax::ast::AssociatedTypeDecl,
     ) -> Option<AssociatedTypeBinding> {
-        crate::lower_type_expr::lower_associated_type_binding(
-            binding,
-            &mut self.diags,
-            TypeExprOwner::Body,
-        )
+        crate::lower_type_expr::lower_associated_type_binding(binding, &mut self.diags)
     }
 
     fn warn_const_introducer(&mut self, span: TextRange) {
@@ -5547,10 +5538,12 @@ impl LoweringContext {
         self.alloc_stmt(Stmt::Return(expr), node.span_range())
     }
 
-    /// `type T = RHS;` in a body. The RHS is either the whole marker
-    /// `unreflect(expr)` — the one position that lowers it — or a static
-    /// type, which takes the ordinary type road (where a nested `unreflect`
-    /// is rejected like every other inline occurrence).
+    /// `let type T [extends A & B] = operand [else { … }];` in a body.
+    ///
+    /// The removed `type T = …;` statement lowers here too, after the parser
+    /// reported it (E0098): an `unreflect(e)` right-hand side keeps `e` as its operand
+    /// and a static right-hand side becomes a missing one, so `T` stays bound
+    /// and its later uses do not cascade.
     fn lower_type_binding_stmt(&mut self, node: &SyntaxNode) -> StmtId {
         let name_token = node
             .children_with_tokens()
@@ -5560,46 +5553,29 @@ impl LoweringContext {
             .as_ref()
             .map(|token| Name::new(token.text()))
             .unwrap_or_else(|| Name::new("<missing>"));
-        let value = match node
-            .children()
-            .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
-        {
-            Some(type_expr) => {
-                match Self::whole_unreflect_marker(&type_expr) {
-                    Some(marker) => {
-                        TypeBindingValue::Runtime(self.lower_unreflect_operand(&marker))
-                    }
-                    None => {
-                        // `unreflect(…)` somewhere inside a static right-hand
-                        // side: the generic gate's "bind it first" advice would
-                        // point at the statement it is already in. Every
-                        // occurrence is reported, not just the first: the whole
-                        // right-hand side becomes the error type, so a second
-                        // marker would otherwise never be mentioned at all.
-                        let nested: Vec<SyntaxNode> = type_expr
-                            .syntax()
-                            .descendants()
-                            .filter(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
-                            .collect();
-                        match nested.split_first() {
-                            Some((first, rest)) => {
-                                for marker in std::iter::once(first).chain(rest) {
-                                    self.diags.push(
-                                        LoweringDiagnostic::UnreflectNestedInTypeBinding {
-                                            span: marker.text_range(),
-                                        },
-                                    );
-                                }
-                                TypeBindingValue::Static(TypeExprKind::Error.at(first.text_range()))
-                            }
-                            None => TypeBindingValue::Static(self.lower_body_type_expr(&type_expr)),
-                        }
-                    }
-                }
-            }
-            None => TypeBindingValue::Static(TypeExprKind::Error.at(node.span_range())),
+        let removed = !node
+            .children_with_tokens()
+            .any(|elem| elem.kind() == SyntaxKind::KW_LET);
+        let (operand, bounds, else_branch) = if removed {
+            let operand = node
+                .children()
+                .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                .and_then(|type_expr| Self::whole_unreflect_marker(&type_expr))
+                .map(|marker| self.lower_unreflect_operand(&marker))
+                .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+            (operand, Vec::new(), None)
+        } else {
+            self.lower_let_type_binding_parts(node)
         };
-        let stmt = self.alloc_stmt(Stmt::TypeBinding { name, value }, node.span_range());
+        let stmt = self.alloc_stmt(
+            Stmt::TypeBinding {
+                name,
+                operand,
+                bounds,
+                else_branch,
+            },
+            node.span_range(),
+        );
         if let Some(token) = name_token {
             self.source_map
                 .type_binding_name_spans
@@ -5608,10 +5584,51 @@ impl LoweringContext {
         stmt
     }
 
+    /// The operand, bounds and `else` block of a `let type` statement:
+    /// `KW_LET KW_TYPE WORD GENERIC_PARAM_BOUNDS? EQUALS <expr> (KW_ELSE
+    /// BLOCK_EXPR)? SEMICOLON?`. A simple operand is a bare token, not a node.
+    fn lower_let_type_binding_parts(
+        &mut self,
+        node: &SyntaxNode,
+    ) -> (ExprId, Vec<TypeExpr>, Option<ExprId>) {
+        let mut operand = None;
+        let mut bounds = Vec::new();
+        let mut else_branch = None;
+        let mut seen_equals = false;
+        let mut seen_else = false;
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Token(token) => match token.kind() {
+                    SyntaxKind::EQUALS => seen_equals = true,
+                    SyntaxKind::KW_ELSE => seen_else = true,
+                    _ if seen_equals && !seen_else && operand.is_none() => {
+                        operand = self.try_lower_bare_token(&token);
+                    }
+                    _ => {}
+                },
+                rowan::NodeOrToken::Node(child) => {
+                    if child.kind() == SyntaxKind::GENERIC_PARAM_BOUNDS {
+                        for bound in child
+                            .children()
+                            .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                        {
+                            bounds.push(self.lower_body_type_expr(&bound));
+                        }
+                    } else if seen_equals && !seen_else && operand.is_none() {
+                        operand = Some(self.lower_expr(&child));
+                    } else if seen_else && else_branch.is_none() {
+                        else_branch = Some(self.lower_expr(&child));
+                    }
+                }
+            }
+        }
+        let operand = operand.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+        (operand, bounds, else_branch)
+    }
+
     /// The `UNREFLECT_TYPE` node when `type_expr` is exactly `unreflect(expr)`:
     /// not a union member, not under a postfix modifier, nothing else around
-    /// it. `unreflect(t)?` or `Wrapper<unreflect(t)>` are not the marker; they
-    /// take the static road and are diagnosed there.
+    /// it — the removed statement's one form that carried a runtime operand.
     fn whole_unreflect_marker(
         type_expr: &baml_compiler_syntax::ast::TypeExpr,
     ) -> Option<SyntaxNode> {

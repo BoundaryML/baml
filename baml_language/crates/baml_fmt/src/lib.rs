@@ -945,30 +945,58 @@ implements<T extends Named> Printable for Box<T> {
     }
 
     #[test]
-    fn test_runtime_type_syntax_formatting_is_idempotent() {
-        // The formatter is parse-only: it must preserve the scoped binding
-        // (the one legal `unreflect` position) and, for recovery, the inline
-        // spelling the checker rejects.
+    fn test_let_type_formatting_is_idempotent() {
+        // Every `let type` form normalizes to one spelling and round-trips.
         let source = r#"function f(t: reflect.Type, value: int) -> int {
-    type T = unreflect(t)
-    type S = Wrapper<string>
+    let type T=t
+    let type B   extends   Named&Tagged<int> = pkg.get_class("C").as_type();
+    let type E extends Named = t else {   return 0 }
+    let type C extends Named = t // keep this
     let annotated: Wrapper<T>? = null
-    let result = identity<Wrapper<unreflect(t)>, string>(value)
     match (value) {
-        Wrapper<T> => result,
+        Wrapper<T> => 1,
         _ => 0
     }
 }
 "#;
+        let expected = r#"function f(t: reflect.Type, value: int) -> int {
+    let type T = t;
+    let type B extends Named & Tagged<int> = pkg.get_class("C").as_type();
+    let type E extends Named = t else {
+        return 0;
+    };
+    let type C extends Named = t; // keep this
+    let annotated: Wrapper<T>? = null;
+    match (value) {
+        Wrapper<T> => 1,
+        _ => 0,
+    }
+}
+"#;
         let options = FormatOptions::default();
-        let formatted = format(source, &options).expect("runtime type syntax should format");
-        assert!(formatted.contains("type T = unreflect(t)"));
-        assert!(formatted.contains("type S = Wrapper<string>"));
-        assert!(formatted.contains("let annotated: Wrapper<T>? = null"));
-        assert!(formatted.contains("identity<Wrapper<unreflect(t)>, string>"));
-        assert!(formatted.contains("Wrapper<T> => result"));
+        let formatted = format(source, &options).expect("let type should format");
+        assert_eq!(formatted, expected);
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second);
+    }
+
+    #[test]
+    fn test_removed_type_binding_syntax_does_not_format() {
+        // The removed spellings are parse errors (E0098), and the formatter
+        // leaves a file with parse errors alone.
+        for source in [
+            "function f(t: reflect.Type) -> int {\n    type T = unreflect(t)\n    1\n}\n",
+            "function f() -> int {\n    type T = int[]\n    1\n}\n",
+            "function f(t: reflect.Type) -> int {\n    g<unreflect(t)>()\n}\n",
+        ] {
+            assert!(
+                matches!(
+                    format(source, &FormatOptions::default()),
+                    Err(FormatterError::ParseErrors(_))
+                ),
+                "expected a parse error for:\n{source}"
+            );
+        }
     }
 }
 

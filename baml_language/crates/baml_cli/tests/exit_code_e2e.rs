@@ -2155,7 +2155,7 @@ fn run_expr_is_a_block_whatever_it_starts_with() {
 }
 
 /// An expression that ends in a value is checked as the body of a function
-/// returning `unknown`, so a value typed by a `type T = …` of the expression
+/// returning `unknown`, so a value typed by a `let type T = …` of the expression
 /// leaves it. One that ends in a statement has no such value and returns what
 /// its `return`s say, `null` when it has none.
 #[test]

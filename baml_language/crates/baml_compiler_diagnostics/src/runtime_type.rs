@@ -127,39 +127,24 @@ pub fn unspecialized_reflected_generic_call(name: &str) -> Diagnostic {
 }
 
 /// E0002 — a value name was written where a type argument belongs. A runtime
-/// type enters a type position only through a `type T = unreflect(value)`
-/// binding; the slot then names `T`.
-pub fn computed_generic_argument_requires_unreflect(name: &str) -> Diagnostic {
+/// type enters a type position only through a `let type T = value;` binding;
+/// the slot then names `T`.
+pub fn computed_generic_argument_requires_let_type(name: &str) -> Diagnostic {
     Diagnostic::error(
         DiagnosticId::UnknownType,
         format!(
             "`{name}` is a value, not a type; bind its runtime type first with \
-             `type T = unreflect({name});` and write `T` here"
+             `let type T = {name};` and write `T` here"
         ),
     )
 }
 
-/// E0168 — `unreflect(...)` written anywhere other than as the whole
-/// right-hand side of a body-level `type T = …;` binding. The binding is the
-/// one spelling that lifts a runtime type into a type position; every other
-/// position names the bound `T`.
-pub fn runtime_type_must_be_named() -> Diagnostic {
-    Diagnostic::error(
-        DiagnosticId::RuntimeTypeMustBeNamed,
-        "this runtime type must be given a name before it can be used here",
-    )
-}
-
-/// E0172 — a value typed by a body-scoped `type T = …` binding would be
+/// E0172 — a value typed by a body-scoped `let type T = …` binding would be
 /// observable outside the block that binds `T`. The binding re-executes on
 /// every pass through its block and may bind `T` to a different type each
 /// time, so a `T`-typed value that outlived the block could break the
 /// invariants of whatever it landed in. A value leaves a block only through
 /// a type that does not mention `T` (such as `unknown`).
-///
-/// "scoped type" rather than "scoped runtime type": the rule is the same for
-/// a static right-hand side (`type S = Wrapper<int>`), which binds no runtime
-/// value at all.
 pub fn scoped_type_escapes_block(name: &str) -> Diagnostic {
     Diagnostic::error(
         DiagnosticId::ScopedTypeEscapesBlock,
@@ -286,9 +271,9 @@ mod tests {
                 "generic function `GenericList@render_prompt` cannot be invoked through reflection: its body needs type arguments",
             ),
             (
-                computed_generic_argument_requires_unreflect("runtime_t"),
+                computed_generic_argument_requires_let_type("runtime_t"),
                 "E0002",
-                "`runtime_t` is a value, not a type; bind its runtime type first with `type T = unreflect(runtime_t);` and write `T` here",
+                "`runtime_t` is a value, not a type; bind its runtime type first with `let type T = runtime_t;` and write `T` here",
             ),
             (
                 scoped_type_escapes_block("Out"),
@@ -354,11 +339,6 @@ mod tests {
                 non_data_field_at_render("Envelope.payload", "unknown"),
                 "E0164",
                 "field `Envelope.payload` has non-data type `unknown`, which cannot be rendered as an LLM output schema",
-            ),
-            (
-                runtime_type_must_be_named(),
-                "E0168",
-                "this runtime type must be given a name before it can be used here",
             ),
         ];
 

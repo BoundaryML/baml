@@ -1913,7 +1913,7 @@ const EXPRESSION_ENTRY: &str = "baml_run_expr_main__";
 /// positions are the same.
 ///
 /// The text is the body of [`EXPRESSION_ENTRY`], declared `-> unknown` so
-/// that any value is let through, one typed by a `type T = …` of the body
+/// that any value is let through, one typed by a `let type T = …` of the body
 /// included. That holds when the body ends in a final expression. One that
 /// ends in a statement (`log.info(1);`, `return 5;`, nothing at all) has no
 /// value for that return type to take, so it runs as a lambda instead: a

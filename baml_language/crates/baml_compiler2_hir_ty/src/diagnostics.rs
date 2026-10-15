@@ -26,7 +26,7 @@ use text_size::TextRange;
 
 use crate::render::{Spell, Viewpoint};
 
-/// How a value typed by a block-scoped `type T = …` binding would leave its
+/// How a value typed by a block-scoped `let type T = …` binding would leave its
 /// block (E0172); the two roads have different remedies.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScopedTypeEscapeKind {
@@ -268,9 +268,9 @@ pub enum TirTypeError {
         suggestions: Box<[Name]>,
     },
     /// A value name was written bare in a generic slot. A runtime type is
-    /// lifted into a type position only by a `type T = unreflect(value)`
-    /// binding; the slot then names `T`.
-    ComputedGenericArgumentRequiresUnreflect { name: Name },
+    /// lifted into a type position only by a `let type T = value;` binding;
+    /// the slot then names `T`.
+    ComputedGenericArgumentRequiresLetType { name: Name },
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
@@ -605,7 +605,7 @@ pub enum TirTypeError {
         expected: usize,
         got: usize,
     },
-    /// A value typed by a body-scoped `type T = …` binding would be
+    /// A value typed by a body-scoped `let type T = …` binding would be
     /// observable outside the block that binds `T` (E0172): the block's
     /// value, or a thrown type an inferred `throws` clause would publish.
     /// `value` is the escaping type as it mentions `T`.
@@ -1190,9 +1190,9 @@ impl TirTypeError {
                         }
                     }
                 }
-                TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
+                TirTypeError::ComputedGenericArgumentRequiresLetType { name } => {
                     let diagnostic =
-                    baml_compiler_diagnostics::runtime_type::computed_generic_argument_requires_unreflect(
+                    baml_compiler_diagnostics::runtime_type::computed_generic_argument_requires_let_type(
                         name.as_str(),
                     );
                     f.write_str(diagnostic.message.as_str())
@@ -1511,7 +1511,7 @@ impl TirTypeError {
                             f,
                             "write `{replacement}` instead. The `type` keyword itself is unchanged: \
                          it still names aliases (`type UserId = string`) and scoped type \
-                         bindings (`type T = unreflect(t)`)"
+                         bindings (`let type T = t;`)"
                         )
                     } else {
                         write!(

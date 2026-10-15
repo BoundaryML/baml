@@ -93,8 +93,8 @@ pub enum NoInferReason {
     /// part of it may be inferred: the only body to infer from is a default
     /// that binds no implementor (`TYPE_SYSTEM.md` Functions rule 1).
     InterfaceSignature,
-    /// The right-hand side of a `type T = …` binding. It fills `T`'s frame
-    /// slot when the statement runs, from the written type alone.
+    /// An `extends` bound of a `let type T extends I = …` binding: the
+    /// statement checks it at run time, from the written type alone.
     TypeBinding,
 }
 
@@ -294,6 +294,12 @@ impl<'db> LowerCtx<'db> {
     ) -> LowerCtx<'db> {
         self.bounds = bounds;
         self
+    }
+
+    /// Bound one more rigid parameter: a body's `let type T extends I = …`
+    /// binding, which enters the env where its statement runs.
+    pub(crate) fn add_bounds(&mut self, param: ParamTy, bounds: Vec<baml_type::Interface>) {
+        self.bounds.insert(param, bounds);
     }
 
     /// Forbid inference holes in everything this context lowers. See
