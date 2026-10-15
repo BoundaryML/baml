@@ -683,8 +683,7 @@ fn check_function_contract(
 }
 
 /// The exported class `Package.find_class` answers with, or `None` for a miss.
-fn find_class(vm: &mut BexVm, package: Value, name: &str) -> Option<Value> {
-    let ptr = package_ptr(vm, package).ok()?;
+fn find_class(vm: &mut BexVm, ptr: HeapPtr, name: &str) -> Option<Value> {
     let local = local_name(name)?;
     let class_ptr = find_export(vm, ptr, |_, _, package| {
         package.classes.get(&local).copied()
@@ -693,8 +692,7 @@ fn find_class(vm: &mut BexVm, package: Value, name: &str) -> Option<Value> {
 }
 
 /// The exported enum `Package.find_enum` answers with, or `None` for a miss.
-fn find_enum(vm: &mut BexVm, package: Value, name: &str) -> Option<Value> {
-    let ptr = package_ptr(vm, package).ok()?;
+fn find_enum(vm: &mut BexVm, ptr: HeapPtr, name: &str) -> Option<Value> {
     let local = local_name(name)?;
     let enum_ptr = find_export(vm, ptr, |_, _, package| package.enums.get(&local).copied())?;
     Some(package_enum_type(vm, enum_ptr))
@@ -702,8 +700,7 @@ fn find_enum(vm: &mut BexVm, package: Value, name: &str) -> Option<Value> {
 
 /// The exported interface `Package.find_interface` answers with, or `None`
 /// for a miss.
-fn find_interface(vm: &mut BexVm, package: Value, name: &str) -> Option<Value> {
-    let ptr = package_ptr(vm, package).ok()?;
+fn find_interface(vm: &mut BexVm, ptr: HeapPtr, name: &str) -> Option<Value> {
     let local = local_name(name)?;
     let interface_ptr = find_export(vm, ptr, |_, _, package| {
         package.interfaces.get(&local).copied()
@@ -1173,11 +1170,13 @@ impl BamlClassPackage for PackageReflectImpl {
         package: &Value,
         name: &bex_str::BexStr,
     ) -> Result<Value, VmRustFnError> {
-        find_class(vm, *package, name.as_str()).ok_or_else(|| not_found(vm, "class", name))
+        let ptr = package_ptr(vm, *package)?;
+        find_class(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "class", name))
     }
 
     fn find_class(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
-        find_class(vm, *package, name.as_str())
+        let ptr = package_ptr(vm, *package).ok()?;
+        find_class(vm, ptr, name.as_str())
     }
 
     fn get_enum(
@@ -1185,11 +1184,13 @@ impl BamlClassPackage for PackageReflectImpl {
         package: &Value,
         name: &bex_str::BexStr,
     ) -> Result<Value, VmRustFnError> {
-        find_enum(vm, *package, name.as_str()).ok_or_else(|| not_found(vm, "enum", name))
+        let ptr = package_ptr(vm, *package)?;
+        find_enum(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "enum", name))
     }
 
     fn find_enum(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
-        find_enum(vm, *package, name.as_str())
+        let ptr = package_ptr(vm, *package).ok()?;
+        find_enum(vm, ptr, name.as_str())
     }
 
     fn get_interface(
@@ -1197,11 +1198,13 @@ impl BamlClassPackage for PackageReflectImpl {
         package: &Value,
         name: &bex_str::BexStr,
     ) -> Result<Value, VmRustFnError> {
-        find_interface(vm, *package, name.as_str()).ok_or_else(|| not_found(vm, "interface", name))
+        let ptr = package_ptr(vm, *package)?;
+        find_interface(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "interface", name))
     }
 
     fn find_interface(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
-        find_interface(vm, *package, name.as_str())
+        let ptr = package_ptr(vm, *package).ok()?;
+        find_interface(vm, ptr, name.as_str())
     }
 
     fn with_types(

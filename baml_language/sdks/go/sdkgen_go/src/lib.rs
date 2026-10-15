@@ -437,6 +437,7 @@ package reflect
 
 import (
 	"context"
+	"errors"
 
 	baml_go "github.com/boundaryml/baml-go"
 	"__SDK_IMPORT__/internal/bootstrap"
@@ -581,6 +582,7 @@ func (pkg *Package) input() baml_go.Input {
 // GetClass returns the exported class called name. A miss is a *NotFound
 // error; FindClass reports a miss as nil instead.
 func (pkg *Package) GetClass(name string) (Type, error) {
+	if pkg == nil { return Type{}, errors.New("reflect: GetClass called on a nil *Package") }
 	result, err := baml_go.Call(pkg.ctx, "reflect.Package.get_class", map[string]baml_go.Input{
 		"self": pkg.input(),
 		"name": baml_go.String(name),
