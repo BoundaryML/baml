@@ -994,12 +994,14 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
     assert_eq!(
         event.event,
         Some(Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+            manual: false,
             id: id.get(),
             parent_id: thread.get(),
             call_path_id: path.get(),
             entered_at_ticks: 1,
             inputs_cas_id: Some(inputs_id),
             type_args_cas_id: Some(type_args_id),
+            receiver_cas_id: None,
         }))
     );
 
@@ -1656,4 +1658,85 @@ fn processor_ends_the_recording_only_after_producers_stop_writing() {
         .map(|state| state.0)
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(finals.len(), 2, "both runs are final by the end");
+}
+
+#[test]
+fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
+    use proto::span_event::Event;
+    let files = RefCell::new(Vec::new());
+    let (thread, _, path) = ids();
+    let id = allocate_telemetry_id();
+    let mut p = RecordingPublisher::with_snapshot_receiver(
+        RecordingId::generate(),
+        config(),
+        |f| files.borrow_mut().push(f),
+        |_| {},
+    )
+    .unwrap();
+    p.span(
+        thread,
+        &mut SpanRecord::ManualSpanAnnouncement(Box::new(btel_records::ManualSpanAnnouncement {
+            id,
+            parent_id: thread,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: None,
+            captured_type_args: Some(snapshot()),
+            captured_receiver: Some(snapshot()),
+        })),
+    );
+    p.flush_recording().unwrap();
+    let file = decode(&files.borrow()[0]);
+    assert_eq!(
+        file.header.unwrap().format_minor,
+        btel_settings::encoding::OWNED_SPAN_FORMAT_MINOR
+    );
+    let Some(Event::FunctionAnnouncement(entry)) = file
+        .spans
+        .unwrap()
+        .sections
+        .remove(0)
+        .events
+        .remove(0)
+        .event
+    else {
+        panic!("owned entry must use a function announcement");
+    };
+    assert!(!entry.manual);
+    assert!(entry.type_args_cas_id.is_some());
+    assert!(entry.receiver_cas_id.is_some());
+    p.span(
+        thread,
+        &mut SpanRecord::ManualSpanCompletion(Box::new(btel_records::ManualSpanCompletion {
+            id,
+            parent_id: thread,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            exited_at: ClockInstant::from_ticks(9),
+            await_time: AwaitDuration::ZERO.saturating_add(ClockDuration::from_ticks(4)),
+            outcome: None,
+            requires_announcement: true,
+            captured_value: None,
+        })),
+    );
+    p.flush_recording().unwrap();
+    let file = decode(&files.borrow()[1]);
+    assert_eq!(
+        file.header.unwrap().format_minor,
+        btel_settings::encoding::OWNED_SPAN_FORMAT_MINOR
+    );
+    let Some(Event::FunctionCompletion(done)) = file
+        .spans
+        .unwrap()
+        .sections
+        .remove(0)
+        .events
+        .remove(0)
+        .event
+    else {
+        panic!("owned completion must use a function completion");
+    };
+    assert_eq!(done.completion_flags, 16 | 8);
+    assert_eq!(done.self_await_ticks, 4);
+    assert_eq!(done.exited_at_ticks, 9);
 }

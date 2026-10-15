@@ -9867,9 +9867,9 @@ impl<'db> LoweringContext<'db> {
     /// Lower `foo<int>` (a `GenericApply` value). If the base resolves to a
     /// function and all type args are fully concrete, emit a pooled,
     /// interned `Constant::GenericFunction` (pointer-stable; seeds
-    /// `frame.type_args` when called). Otherwise fall back to lowering the base
-    /// value with type args erased — for exotic bases (bound methods, lambdas)
-    /// or param-dependent args (`foo<T>` inside a generic function).
+    /// `frame.type_args` when called). Runtime callable values (bound methods,
+    /// closures) and parameter-dependent arguments are specialized at runtime
+    /// while preserving their existing bindings.
     fn lower_generic_apply(
         &mut self,
         expr_id: AstExprId,

@@ -71,6 +71,32 @@ fn exact_calls_preserve_operands_and_source_positions() {
 }
 
 #[test]
+fn passthrough_entries_are_not_specialized_as_ordinary_calls() {
+    let mut program = compile_source(SIMPLE);
+    let index = program.rendered_callables()["user.leaf"].object.raw();
+    let Object::Function(leaf) = &mut (*program.objects)[index] else {
+        unreachable!()
+    };
+    // Emulate compiler-owned metadata, including a linked definition whose
+    // callers were emitted before its pass-through strategy was known.
+    leaf.trace_passthrough = true;
+    let program = convert_program(program).unwrap();
+    let instructions = ops(function(&program, "user.main"));
+    assert_eq!(
+        instructions
+            .iter()
+            .filter(|(_, op)| *op == OpCode::Call)
+            .count(),
+        2
+    );
+    assert!(
+        !instructions
+            .iter()
+            .any(|(_, op)| *op == OpCode::CallExactArgs)
+    );
+}
+
+#[test]
 fn nonmatching_argument_layout_stays_general() {
     let mut program = compile_source(SIMPLE);
     let index = program.rendered_callables()["user.main"].object.raw();

@@ -58,6 +58,8 @@ function Deferred(n: int) -> int throws Failure {
     Middle(n)
 }
 function main(n: int) -> int {
+    let span = trace.start_span(Pick<int>, inputs = { "x": n });
+    let closed = trace.start_span("closed");
     let a = Middle(n) catch (e) { Failure => 1 };
     let b = { Middle(n) catch (e) { Failure => { throw e } } } catch (outer) { Failure => 2 };
     let c = Recur(3) catch (e) { Failure => 3 };
@@ -65,6 +67,8 @@ function main(n: int) -> int {
     let child = spawn { Middle(n) };
     let e = (await child) catch (x) { Failure => 5 };
     let f = Pick(Box { value: n }).map((v) -> string { "v" }).value;
+    span.finish(n);
+    closed.close();
     a + b + c + d + e + Pick(f.length())
 }
 function crash(n: int) -> int { Middle(n) }
@@ -202,11 +206,12 @@ async fn fresh_and_incremental_indexes_are_identical() {
     let metrics = incremental.refresh().unwrap();
     assert_eq!(metrics.transactions, metrics.files_applied);
     let fresh = dump(&fresh);
-    // Pick<T> and Box<T>.map<U> recorded their type arguments.
+    // Two Pick<T> calls, Box<T>.map<U>, and the explicitly owned Pick<int>
+    // span each record type arguments on every main execution.
     let calls = &fresh.iter().find(|(table, _)| table == "call").unwrap().1;
     assert_eq!(
         calls.iter().filter(|row| row[9] != Value::Null).count(),
-        24 * 3,
+        24 * 4,
         "type_args_cas"
     );
     assert_same(&fresh, &dump(&incremental));
@@ -474,12 +479,14 @@ mod crafted {
                             }),
                             // Late: its completion was in the first file.
                             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+                                manual: false,
                                 id: 100,
                                 parent_id: T2,
                                 call_path_id: 2,
                                 entered_at_ticks: 21,
                                 inputs_cas_id: None,
                                 type_args_cas_id: Some(proto::CasId { low: 3, high: 4 }),
+                                receiver_cas_id: Some(proto::CasId { low: 5, high: 6 }),
                             }),
                         ],
                     ),

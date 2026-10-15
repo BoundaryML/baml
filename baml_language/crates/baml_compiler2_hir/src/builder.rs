@@ -1787,6 +1787,14 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn validate_function_phase1(&mut self, function: &ast::FunctionDef, is_builtin_file: bool) {
+        if function.metadata.explicit_trace_passthrough
+            && self.file.source_root(self.db).kind(self.db) != baml_base::SourceRootKind::Stdlib
+        {
+            self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
+                feature: "//baml:trace_passthrough".to_owned(),
+                span: function.span,
+            });
+        }
         for param in &function.params {
             if let Some(type_expr) = &param.type_expr {
                 self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);

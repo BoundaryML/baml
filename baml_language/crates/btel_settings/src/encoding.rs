@@ -4,8 +4,9 @@
 /// this does not shrink records; validate worst-case encodings first.
 /// Variable-length log names require additional reservation beyond this bound.
 /// Worst case: two six-byte containers, an eleven-byte thread selector,
-/// a twenty-byte context reference, and a ninety-two-byte completion.
-pub const MAX_EVENT_BYTES: usize = 135;
+/// a twenty-byte context reference, and a 103-byte announcement envelope
+/// carrying inputs, type arguments, and a bound receiver (including length padding).
+pub const MAX_EVENT_BYTES: usize = 146;
 /// **Correctness bound.** The specialized writer relies on this reserved region. Update only
 /// with encoder changes and worst-case/equivalence tests.
 pub const MAX_COMPLETION_BYTES: usize = 92;
@@ -43,3 +44,10 @@ pub const PROCESS_CONTEXT_FORMAT_MINOR: u32 = 9;
 /// A terminal recording can report SDK lifetime completion with an unknown
 /// OS process outcome (`ProcessStatus.UNKNOWN`).
 pub const UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR: u32 = 10;
+
+/// Explicit object-lifetime completions and closure without an outcome.
+pub const MANUAL_SPAN_FORMAT_MINOR: u32 = 11;
+
+/// Owned operations use ordinary function rows, named inputs, bound receivers, and
+/// neutral closure without the legacy manual-only marker. Local-only for now.
+pub const OWNED_SPAN_FORMAT_MINOR: u32 = 12;

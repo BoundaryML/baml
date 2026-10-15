@@ -1,5 +1,5 @@
 //! Engine-owned immutable policies. Publication is cold; reads never lock.
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use btel_clock::{ClockDomainId, ClockThreshold};
 use btel_types::{ClockDuration, InvocationOutcome, TelemetryPolicyId};
@@ -32,6 +32,8 @@ pub struct TelemetryPolicies {
     http_bodies: bool,
     pages: [OnceLock<Box<Page>>; PAGE_COUNT],
     interned: Mutex<FxHashMap<TelemetryPolicy, u16>>,
+    // Only owned spans subscribe. Ordinary calls keep their existing atomic read.
+    owned_watchers: Mutex<FxHashMap<btel_types::FunctionId, Weak<TelemetryPolicyId>>>,
 }
 
 impl Default for TelemetryPolicies {
@@ -51,6 +53,7 @@ impl TelemetryPolicies {
             http_bodies: true,
             pages: [const { OnceLock::new() }; PAGE_COUNT],
             interned: Mutex::new(FxHashMap::default()),
+            owned_watchers: Mutex::new(FxHashMap::default()),
         }
     }
 
@@ -79,6 +82,50 @@ impl TelemetryPolicies {
             .get()
             .and_then(|page| page[id % PAGE_SIZE].get())
             .expect("function policy ID must refer to a published policy in its engine")
+    }
+
+    pub(super) fn watch_owned(
+        self: &Arc<Self>,
+        function: btel_types::FunctionId,
+        current: &TelemetryPolicyId,
+    ) -> OwnedPolicy {
+        let mut watchers = self
+            .owned_watchers
+            .lock()
+            .expect("policy watchers poisoned");
+        let slot = watchers
+            .get(&function)
+            .and_then(Weak::upgrade)
+            .unwrap_or_else(|| {
+                let slot = Arc::new(TelemetryPolicyId::none());
+                slot.store(current.load());
+                watchers.insert(function, Arc::downgrade(&slot));
+                slot
+            });
+        OwnedPolicy {
+            policies: self.clone(),
+            slot,
+        }
+    }
+
+    pub(super) fn publish_for_function(
+        &self,
+        function: btel_types::FunctionId,
+        target: &TelemetryPolicyId,
+        policy: TelemetryPolicy,
+    ) -> Result<(), &'static str> {
+        // Serialize subscription with publication so no new watcher can miss an update.
+        let mut watchers = self
+            .owned_watchers
+            .lock()
+            .expect("policy watchers poisoned");
+        self.publish(target, policy)?;
+        if let Some(slot) = watchers.get(&function).and_then(Weak::upgrade) {
+            slot.store(target.load());
+        } else {
+            watchers.remove(&function);
+        }
+        Ok(())
     }
 
     // No external setter yet. Publish the immutable contents before releasing
@@ -115,9 +162,54 @@ impl TelemetryPolicies {
     }
 }
 
+/// A GC-independent policy subscription that may outlive the creating VM frame.
+#[derive(Clone)]
+pub(super) struct OwnedPolicy {
+    policies: Arc<TelemetryPolicies>,
+    slot: Arc<TelemetryPolicyId>,
+}
+
+impl OwnedPolicy {
+    pub(super) fn get(&self) -> TelemetryPolicy {
+        self.policies.get(self.slot.load())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn owned_policy_observes_updates_after_its_creating_frame_returns() {
+        let policies = Arc::new(TelemetryPolicies::new());
+        let function = btel_types::FunctionIdAllocator::default()
+            .allocate()
+            .unwrap();
+        let target = TelemetryPolicyId::none();
+        let first = policies.watch_owned(function, &target);
+        let second = policies.watch_owned(function, &target);
+        assert_eq!(first.get(), TelemetryPolicy::NONE);
+        let promoted = TelemetryPolicy {
+            promote_errors: true,
+            capture_error: true,
+            ..TelemetryPolicy::NONE
+        };
+        policies
+            .publish_for_function(function, &target, promoted)
+            .unwrap();
+        assert_eq!(first.get(), promoted);
+        assert_eq!(second.get(), promoted);
+        policies
+            .publish_for_function(function, &target, TelemetryPolicy::NONE)
+            .unwrap();
+        assert_eq!(first.get(), TelemetryPolicy::NONE);
+        drop(first);
+        drop(second);
+        policies
+            .publish_for_function(function, &target, promoted)
+            .unwrap();
+        assert_eq!(policies.watch_owned(function, &target).get(), promoted);
+    }
 
     #[test]
     fn readers_observe_published_policies_during_growth_and_exhaustion() {

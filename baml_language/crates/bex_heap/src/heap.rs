@@ -132,6 +132,7 @@ pub struct BexHeap {
     /// These are permanent: functions, classes, enums, string literals.
     compile_time: Vec<Object>,
     pub(crate) functions: btel_types::FunctionLookup<HeapPtr>,
+    pub(crate) span_definitions: std::sync::Mutex<HashMap<String, btel_types::FunctionId>>,
 
     /// Gen0 nursery — all TLAB allocations land here.
     /// Uses ChunkedVec for stable pointers during concurrent access.
@@ -354,6 +355,7 @@ impl BexHeap {
         Self {
             compile_time: compile_time_objects,
             functions: btel_types::FunctionLookup::default(),
+            span_definitions: std::sync::Mutex::default(),
             gen0: UnsafeCell::new(ChunkedVec::new()),
             gen1: UnsafeCell::new(ChunkedVec::new()),
             gen2: UnsafeCell::new(ChunkedVec::new()),
@@ -1378,6 +1380,7 @@ mod tests {
             origin: FunctionOrigin::Internal,
             native_key: None,
             body_meta: None,
+            trace_passthrough: false,
             owner: HeapPtr::null(),
         }))
     }

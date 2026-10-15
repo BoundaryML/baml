@@ -1247,19 +1247,21 @@ impl<'t> Applier<'t> {
                             self.tx
                                 .prepare_cached(
                                     "INSERT INTO call (rec, call_id, thread_id, parent_id, call_path_id,
-                                       announced_sequence, entered_ticks, inputs_cas, type_args_cas)
-                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                                       announced_sequence, entered_ticks, inputs_cas, type_args_cas, receiver_cas, manual)
+                                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
                                      ON CONFLICT (rec, call_id) DO UPDATE SET
                                        conflict = CASE WHEN conflict > 0 THEN conflict
                                          WHEN announced_sequence IS NOT NULL
                                            OR thread_id IS NOT excluded.thread_id
                                            OR parent_id IS NOT excluded.parent_id
+                                           OR manual IS NOT excluded.manual
                                            OR call_path_id IS NOT excluded.call_path_id
                                            OR entered_ticks IS NOT excluded.entered_ticks
                                          THEN 1 ELSE 0 END,
                                        announced_sequence = excluded.announced_sequence,
                                        inputs_cas = excluded.inputs_cas,
-                                       type_args_cas = excluded.type_args_cas",
+                                       type_args_cas = excluded.type_args_cas,
+                                       receiver_cas = excluded.receiver_cas",
                                 )?
                                 .execute(params![
                                     self.rec,
@@ -1270,7 +1272,9 @@ impl<'t> Applier<'t> {
                                     sequence_i64(sequence)?,
                                     tick(entry.entered_at_ticks),
                                     entry.inputs_cas_id.as_ref().map(cas_id),
-                                    entry.type_args_cas_id.as_ref().map(cas_id)
+                                    entry.type_args_cas_id.as_ref().map(cas_id),
+                                    entry.receiver_cas_id.as_ref().map(cas_id),
+                                    entry.manual
                                 ])?;
                         }
                         Some(Event::FunctionCompletion(done)) => {
@@ -1344,19 +1348,21 @@ impl<'t> Applier<'t> {
             .prepare_cached(
                 "INSERT INTO call (rec, call_id, thread_id, parent_id, call_path_id, reentry,
                    completed_sequence, late, entered_ticks, exited_ticks, self_await_ticks,
-                   outcome, needs_announcement, value_cas, panicked)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+                   outcome, needs_announcement, value_cas, panicked, manual)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
                  ON CONFLICT (rec, call_id) DO UPDATE SET
                    conflict = CASE WHEN conflict > 0 THEN conflict
                      WHEN completed_sequence IS NOT NULL
                        OR thread_id IS NOT excluded.thread_id
                        OR parent_id IS NOT excluded.parent_id
+                       OR manual IS NOT excluded.manual
                        OR call_path_id IS NOT excluded.call_path_id
                        OR (entered_ticks IS NOT NULL AND entered_ticks IS NOT excluded.entered_ticks)
                      THEN 1 ELSE 0 END,
                    reentry = excluded.reentry,
                    completed_sequence = excluded.completed_sequence,
                    late = excluded.late,
+                   manual = excluded.manual,
                    entered_ticks = COALESCE(entered_ticks, excluded.entered_ticks),
                    exited_ticks = excluded.exited_ticks,
                    self_await_ticks = excluded.self_await_ticks,
@@ -1380,7 +1386,8 @@ impl<'t> Applier<'t> {
                 outcome.code(),
                 needs_announcement,
                 done.value_cas_id.as_ref().map(cas_id),
-                done.panicked
+                done.panicked,
+                done.completion_flags & 32 != 0
             ])?;
         Ok(())
     }

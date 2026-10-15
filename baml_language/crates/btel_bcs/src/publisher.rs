@@ -640,6 +640,13 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
     const ERROR_EVIDENCE: bool = true;
 
     fn before_detached_span(&mut self, record: &SpanRecord<Snapshot, Snapshot>) {
+        if matches!(
+            record,
+            SpanRecord::ManualSpanAnnouncement(_) | SpanRecord::ManualSpanCompletion(_)
+        ) {
+            self.fail(DeliveryError::UnsupportedOwnedSpans);
+            return;
+        }
         self.progress();
         self.preflight_size = None;
         if self.failure.is_some() {
@@ -699,6 +706,15 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
     }
 
     fn span(&mut self, thread: TelemetryId, record: &mut SpanRecord<Snapshot, Snapshot>) {
+        // Fail before encoding or retaining captures. Local recordings support
+        // owned rows; remote delivery remains disabled until BCS supports them.
+        if matches!(
+            record,
+            SpanRecord::ManualSpanAnnouncement(_) | SpanRecord::ManualSpanCompletion(_)
+        ) {
+            self.fail(DeliveryError::UnsupportedOwnedSpans);
+            return;
+        }
         self.progress();
         if self.failure.is_none() {
             self.start_window();
@@ -839,6 +855,35 @@ mod tests {
         )
         .unwrap();
         (delivery, publisher)
+    }
+
+    #[test]
+    fn owned_spans_are_rejected_before_remote_encoding_or_capture_retention() {
+        for detached in [false, true] {
+            let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
+            let thread = allocate_telemetry_id();
+            let mut record = SpanRecord::ManualSpanAnnouncement(Box::new(
+                btel_records::ManualSpanAnnouncement {
+                    id: allocate_telemetry_id(),
+                    parent_id: thread,
+                    call_path: CallPathId::ROOT,
+                    entered_at: ClockInstant::from_ticks(1),
+                    captured_inputs: None,
+                    captured_type_args: None,
+                    captured_receiver: None,
+                },
+            ));
+            if detached {
+                publisher.before_detached_span(&record);
+            }
+            publisher.span(thread, &mut record);
+            assert_eq!(
+                publisher.failure,
+                Some(DeliveryError::UnsupportedOwnedSpans)
+            );
+            assert!(publisher.staged.is_empty());
+            assert_eq!(publisher.retained_snapshots, 0);
+        }
     }
 
     fn offer(publisher: &mut CloudPublisher, snapshot: Snapshot) {

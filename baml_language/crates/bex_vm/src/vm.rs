@@ -277,9 +277,17 @@ pub struct BytecodeFrame {
     context: Context,
 }
 
-struct CallTrace {
-    telemetry: crate::telemetry::TraceConfig,
-    context: Option<Arc<ContextPatch>>,
+struct ManualActivation {
+    frame: usize,
+    telemetry: Option<crate::telemetry::manual::ManualScope>,
+    context: Context,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct CallTrace {
+    pub(crate) telemetry: crate::telemetry::TraceConfig,
+    pub(crate) context: Option<Arc<ContextPatch>>,
+    pub(crate) reservation: Option<bex_vm_types::trace::ReservedSpanData>,
 }
 
 /// The target's existing frame waits here while its declaration hook runs.
@@ -473,6 +481,9 @@ pub(crate) mod tests {
             argv: Arc::from([]),
             pending_call_trace: None,
             pending_trace_hooks: Vec::new(),
+            held_traces: Vec::new(),
+            trace_scope_frame: usize::MAX,
+            entry_reservation: None,
             inherited_hook_suppression: false,
             pending_host_trace: None,
             entry_trace: None,
@@ -490,6 +501,7 @@ pub(crate) mod tests {
                 crate::telemetry::test_runtime(),
             )),
             trace_scope: btel_types::RecordingId::generate(),
+            manual_activations: Vec::new(),
             pending_telemetry_wait: None,
             packages: Arc::new(crate::package_load::PackageIndex::default()),
             dynamic_dispatch: Arc::new(crate::package_load::DynDispatchTables::default()),
@@ -534,6 +546,7 @@ pub(crate) mod tests {
             origin: FunctionOrigin::Internal,
             native_key: None,
             body_meta: None,
+            trace_passthrough: false,
             owner: HeapPtr::null(),
         }))
     }
@@ -1674,8 +1687,9 @@ pub struct BexVm {
     pub thread_id: u64,
 
     /// VM-owned producer state. It deliberately has no transport or buffer.
-    telemetry: Option<TelemetryState>,
+    pub(crate) telemetry: Option<TelemetryState>,
     pub(crate) trace_scope: btel_types::RecordingId,
+    manual_activations: Vec<ManualActivation>,
 
     /// Starts at VM Await suspension, or when the engine receives an async
     /// sys-op. Taken across the heap-permit release; lookup failures leave it
@@ -1706,6 +1720,11 @@ pub struct BexVm {
     /// even if the inner callback uses different ones.
     pending_call_trace: Option<CallTrace>,
     pending_trace_hooks: Vec<PendingTraceHook>,
+    held_traces: Vec<(usize, CallTrace)>,
+    /// Nearest frame with held configuration or an owned-span scope. Ordinary
+    /// returns compare one index instead of inspecting both optional stacks.
+    trace_scope_frame: usize,
+    entry_reservation: Option<bex_vm_types::trace::ReservedSpanData>,
     /// Inherited by a spawned BAML task independently of the parent's lifetime.
     inherited_hook_suppression: bool,
     pending_host_trace: Option<CallTrace>,
@@ -2402,6 +2421,9 @@ impl BexVm {
             argv,
             pending_call_trace: None,
             pending_trace_hooks: Vec::new(),
+            held_traces: Vec::new(),
+            trace_scope_frame: usize::MAX,
+            entry_reservation: None,
             inherited_hook_suppression: false,
             pending_host_trace: None,
             entry_trace: None,
@@ -2414,6 +2436,7 @@ impl BexVm {
             static_virtual_call_cache: HashMap::new(),
             telemetry,
             trace_scope,
+            manual_activations: Vec::new(),
             pending_telemetry_wait: None,
             packages,
             dynamic_dispatch,
@@ -2443,6 +2466,81 @@ impl BexVm {
     /// any call dispatch context.
     pub fn current_call_type_args(&self) -> &[bex_vm_types::RealizedTy] {
         &self.pending_call_type_args
+    }
+
+    pub(crate) fn activate_manual_span(
+        &mut self,
+        span: &crate::telemetry::manual::ManualSpan,
+    ) -> Result<(), &'static str> {
+        if span.scope != self.trace_scope || span.is_closed() {
+            return Err("span is closed or belongs to another runtime");
+        }
+        let frame_idx = self.frames.len().saturating_sub(1);
+        let Some(Frame::Bytecode(frame)) = self.frames.last_mut() else {
+            return Err("span activation requires a bytecode scope");
+        };
+        if self
+            .manual_activations
+            .last()
+            .is_some_and(|active| active.frame == frame_idx)
+        {
+            return Err("span scope is already active");
+        }
+        let context = std::mem::replace(&mut frame.context, span.context.clone());
+        self.manual_activations.push(ManualActivation {
+            frame: frame_idx,
+            context,
+            telemetry: self.telemetry.as_mut().and_then(|state| span.enter(state)),
+        });
+        self.trace_scope_frame = frame_idx;
+        Ok(())
+    }
+
+    fn hold_trace(&mut self, frame_idx: usize, trace: CallTrace) {
+        self.held_traces.push((frame_idx, trace));
+        self.trace_scope_frame = frame_idx;
+    }
+
+    #[allow(
+        clippy::inline_always,
+        reason = "benchmarked return hot path keeps one comparison inline and cleanup cold"
+    )]
+    #[inline(always)]
+    fn end_manual_activation(&mut self, frame_idx: usize) {
+        if self.trace_scope_frame == frame_idx {
+            self.restore_trace_scope(frame_idx);
+        }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn restore_trace_scope(&mut self, frame_idx: usize) {
+        if self
+            .held_traces
+            .last()
+            .is_some_and(|(frame, _)| *frame == frame_idx)
+        {
+            self.held_traces.pop();
+        }
+        if let Some(previous) = self
+            .manual_activations
+            .pop_if(|active| active.frame == frame_idx)
+        {
+            if let (Some(saved), Some(state)) = (previous.telemetry, &mut self.telemetry) {
+                saved.restore(state);
+            }
+            if let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frame_idx) {
+                frame.context = previous.context;
+            }
+        }
+        self.trace_scope_frame = self
+            .held_traces
+            .last()
+            .map(|(frame, _)| *frame)
+            .into_iter()
+            .chain(self.manual_activations.last().map(|scope| scope.frame))
+            .max()
+            .unwrap_or(usize::MAX);
     }
 
     pub(crate) fn current_span_id(&self) -> Option<bex_vm_types::trace::SpanId> {
@@ -2528,6 +2626,9 @@ impl BexVm {
         debug_assert_eq!(pending.frame, frame_idx);
         if let Some(returned) = returned {
             let previous = pending.trace.take();
+            let reservation = previous
+                .as_ref()
+                .and_then(|trace| trace.reservation.clone());
             let reserved = previous
                 .as_ref()
                 .is_some_and(|trace| trace.telemetry.reserved_id.is_some());
@@ -2568,7 +2669,11 @@ impl BexVm {
             } else {
                 returned.telemetry
             };
-            pending.trace = Some(CallTrace { telemetry, context });
+            pending.trace = Some(CallTrace {
+                telemetry,
+                context,
+                reservation,
+            });
         }
         // The pending frame inherited the caller's context; hook mutations
         // belonged to its own frame. Apply only the returned options here.
@@ -2582,10 +2687,22 @@ impl BexVm {
         {
             frame.context = frame.context.with_patch(patch);
         }
+        let context = frame.context.clone();
+        // Hook resolution belongs to entry. Keep its result even with recording off.
+        let passthrough = unsafe { self.load_function(frame_idx)? }.trace_passthrough;
+        if passthrough {
+            if let Some(state) = &mut self.telemetry {
+                state.set_context(context);
+            }
+            self.hold_trace(frame_idx, pending.trace.unwrap_or_default());
+            return Ok(());
+        }
         if self.telemetry.is_none() {
             return Ok(());
         }
-        let context = frame.context.clone();
+        let Frame::Bytecode(frame) = &self.frames[frame_idx] else {
+            unreachable!()
+        };
         let locals_offset = frame.locals_offset;
         let type_args = frame.type_args.clone();
         // SAFETY: all input slots, callable and metadata remain rooted.
@@ -2655,6 +2772,24 @@ impl BexVm {
         if let Some(telemetry) = &mut self.telemetry {
             telemetry.configure_spawn(context);
         }
+    }
+
+    pub fn set_entry_reservation(&mut self, reservation: &bex_vm_types::trace::ReservedSpanData) {
+        self.entry_reservation = Some(reservation.clone());
+    }
+
+    pub(crate) fn passthrough_trace(&self) -> Result<CallTrace, &'static str> {
+        let frame = self
+            .frames
+            .len()
+            .checked_sub(1)
+            .ok_or("trace._passthrough requires a pass-through invocation")?;
+        // Only this exact invocation can access its held config. Never search ancestors.
+        self.held_traces
+            .last()
+            .filter(|(index, _)| *index == frame)
+            .map(|(_, trace)| trace.clone())
+            .ok_or("trace._passthrough requires a pass-through invocation")
     }
 
     pub fn set_entry_trace(
@@ -2748,6 +2883,49 @@ impl BexVm {
         state.set_context(context);
     }
 
+    pub(crate) fn span_creation_trace(&self, value: Value) -> Result<CallTrace, &'static str> {
+        use bex_vm_types::trace::{ReservedSpanData, TraceOptionsData};
+        let held = self.passthrough_trace()?;
+        let handle = self
+            .as_instance(&value)
+            .ok()
+            .filter(|i| !i.fields.is_empty())
+            .map(|i| i.load_field(0))
+            .ok_or("invalid trace configuration")?;
+        let (options, reserved_id, reservation) = if let Ok(options) =
+            self.as_rust_data::<TraceOptionsData>(&handle)
+        {
+            (options.clone(), None, None)
+        } else if let Ok(reservation) = self.as_rust_data::<ReservedSpanData>(&handle) {
+            if !held
+                .reservation
+                .as_ref()
+                .is_some_and(|claim| claim.shares_claim(reservation))
+            {
+                return Err("reservation claim does not belong to this pass-through invocation");
+            }
+            let id = reservation.materialize(self.trace_scope)?;
+            (
+                reservation.options.clone(),
+                Some(id),
+                Some(reservation.clone()),
+            )
+        } else {
+            return Err("invalid trace configuration");
+        };
+        Ok(CallTrace {
+            telemetry: crate::telemetry::TraceConfig {
+                mode: options.mode,
+                inputs: options.inputs,
+                output: options.output,
+                error: options.error,
+                reserved_id,
+            },
+            context: options.context,
+            reservation,
+        })
+    }
+
     fn trace_config(&mut self, value: Value) -> Result<CallTrace, VmError> {
         use bex_vm_types::trace::{ReservationError, ReservedSpanData, TraceOptionsData};
 
@@ -2760,11 +2938,22 @@ impl BexVm {
                 self.trace_attachment_error("$trace expects trace.Options or trace.ReservedSpan")
             );
         };
-        let (options, reserved_id) =
+        let (options, reserved_id, reservation) =
             if let Ok(options) = self.as_rust_data::<TraceOptionsData>(&handle) {
-                (options.clone(), None)
+                (options.clone(), None, None)
             } else if let Ok(reservation) = self.as_rust_data::<ReservedSpanData>(&handle) {
-                let local = match reservation.attach(self.trace_scope) {
+                if reservation.is_forwarded_claim()
+                    && !self
+                        .passthrough_trace()
+                        .ok()
+                        .and_then(|held| held.reservation)
+                        .is_some_and(|claim| claim.shares_claim(reservation))
+                {
+                    return Err(self.trace_attachment_error(
+                        "reservation claim can only be forwarded by its pass-through invocation",
+                    ));
+                }
+                let local = match reservation.enter(self.trace_scope) {
                     Ok(local) => local,
                     Err(error) => {
                         return Err(self.trace_attachment_error(match error {
@@ -2777,7 +2966,11 @@ impl BexVm {
                         }));
                     }
                 };
-                (reservation.options.clone(), Some(local))
+                (
+                    reservation.options.clone(),
+                    Some(local),
+                    Some(reservation.clone()),
+                )
             } else {
                 return Err(self
                     .trace_attachment_error("$trace expects trace.Options or trace.ReservedSpan"));
@@ -2791,6 +2984,7 @@ impl BexVm {
                 reserved_id,
             },
             context: options.context,
+            reservation,
         })
     }
 
@@ -4790,6 +4984,21 @@ impl BexVm {
                     .as_ref()
                     .is_some_and(|code| code.trace_hook_finish_pc.is_some())
             });
+        let passthrough_entry = self
+            .get_object(dispatch_ptr)
+            .as_callable()
+            .is_ok_and(|callee| callee.trace_passthrough);
+        if !hooked_entry && !passthrough_entry {
+            self.entry_reservation = None;
+        }
+        if !hooked_entry && passthrough_entry {
+            let trace = CallTrace {
+                telemetry: self.entry_trace.take().unwrap_or_default(),
+                context: self.entry_trace_context.clone(),
+                reservation: self.entry_reservation.take(),
+            };
+            self.hold_trace(self.frames.len(), trace);
+        }
         if !hooked_entry && let Some(patch) = self.entry_trace_context.take() {
             self.root_context = self.root_context.with_patch(&patch);
             if let Some(state) = &mut self.telemetry {
@@ -4807,6 +5016,7 @@ impl BexVm {
                         trace: self.entry_trace.take().map(|telemetry| CallTrace {
                             telemetry,
                             context: self.entry_trace_context.take(),
+                            reservation: self.entry_reservation.take(),
                         }),
                         evaluating: false,
                     });
@@ -5017,6 +5227,7 @@ impl BexVm {
             origin: FunctionOrigin::Internal,
             native_key: None,
             body_meta: None,
+            trace_passthrough: false,
             owner: HeapPtr::null(),
         };
         let explicit_trace = self.entry_trace.is_some();
@@ -5123,6 +5334,7 @@ impl BexVm {
             origin: FunctionOrigin::Internal,
             native_key: None,
             body_meta: None,
+            trace_passthrough: false,
             owner: HeapPtr::null(),
         };
         let explicit_trace = self.entry_trace.is_some();
@@ -6993,6 +7205,16 @@ impl BexVm {
         // skip it but it's an easy and fast check.
         let callee_arity = callee.arity;
         let callee_kind = callee.kind;
+        if trace
+            .as_ref()
+            .and_then(|trace| trace.reservation.as_ref())
+            .is_some_and(bex_vm_types::trace::ReservedSpanData::is_forwarded_claim)
+            && !callee.trace_passthrough
+        {
+            return Err(self.trace_attachment_error(
+                "reservation claim can only continue into a pass-through function",
+            ));
+        }
         if trace.is_some() && !matches!(callee_kind, FunctionKind::Bytecode) {
             return Err(self.trace_attachment_error(
                 "$trace is not supported on native functions or system operations",
@@ -7219,6 +7441,9 @@ impl BexVm {
                 } else {
                     None
                 };
+                if !hooked && callee.trace_passthrough {
+                    self.hold_trace(self.frames.len(), trace.clone().unwrap_or_default());
+                }
                 if hooked {
                     self.pending_trace_hooks.push(PendingTraceHook {
                         frame: self.frames.len(),
@@ -7583,7 +7808,7 @@ impl BexVm {
 
     /// The function object a callable value runs, used as stable call-path
     /// identity; `None` for a host closure, which runs no BAML function.
-    fn callable_function_identity(&self, ptr: HeapPtr) -> Option<HeapPtr> {
+    pub(crate) fn callable_function_identity(&self, ptr: HeapPtr) -> Option<HeapPtr> {
         // SAFETY: callers hold the heap permit with `ptr` rooted (a frame's
         // function, or a plan the running instruction holds), and nothing
         // here allocates.
@@ -7605,6 +7830,7 @@ impl BexVm {
         outcome: InvocationOutcome,
         value: Option<Value>,
     ) {
+        self.end_manual_activation(frame_idx);
         let telemetry = match self.frames.get_mut(frame_idx) {
             Some(Frame::Bytecode(frame)) => frame.telemetry.take(),
             _ => None,
@@ -7633,6 +7859,7 @@ impl BexVm {
         value: Value,
         evidence: Option<&mut error_evidence::UnwindEvidence>,
     ) {
+        self.end_manual_activation(frame_idx);
         let telemetry = match self.frames.get_mut(frame_idx) {
             Some(Frame::Bytecode(frame)) => frame.telemetry.take(),
             _ => None,
@@ -7686,6 +7913,7 @@ impl BexVm {
         outcome: InvocationOutcome,
         value: Option<Value>,
     ) {
+        self.end_manual_activation(frame_idx);
         let state = self
             .telemetry
             .as_mut()
@@ -7824,6 +8052,15 @@ impl BexVm {
         }
     }
 
+    /// Validate the nominal Context class without introducing a trace → baml package cycle.
+    pub(crate) fn is_error_context(&self, value: Value) -> bool {
+        self.as_instance(&value).is_ok_and(|instance| {
+            self.error_class_ptrs
+                .get(ErrorClass::Context as usize)
+                .is_some_and(|class| *class == instance.class)
+        })
+    }
+
     /// How an escaping error ends an observed invocation: cancelled for a
     /// cancellation or `exit`, panicked for another panic, else errored.
     pub fn telemetry_outcome_for_exception(&self, value: Value) -> InvocationOutcome {
@@ -7892,7 +8129,12 @@ impl BexVm {
     #[inline(always)]
     fn begin_telemetry_wait(&mut self, frame_idx: usize) {
         let frame_idx = self.bytecode_caller_index(frame_idx);
-        if matches!(&self.frames[frame_idx], Frame::Bytecode(frame) if frame.telemetry.is_some()) {
+        if matches!(&self.frames[frame_idx], Frame::Bytecode(frame) if frame.telemetry.is_some())
+            || self
+                .manual_activations
+                .last()
+                .is_some_and(|active| active.telemetry.is_some())
+        {
             debug_assert!(self.pending_telemetry_wait.is_none());
             self.pending_telemetry_wait = Some((
                 frame_idx,
@@ -7927,6 +8169,20 @@ impl BexVm {
     /// Charge a completed semantic wait after reacquiring the heap permit.
     /// Its duration was already measured, so reacquisition time is excluded.
     pub fn record_telemetry_wait(&mut self, frame_idx: Option<usize>, elapsed: ClockDuration) {
+        if frame_idx.is_some()
+            && let Some(scope) = self
+                .manual_activations
+                .last()
+                .and_then(|active| active.telemetry.as_ref())
+        {
+            scope.add_await(
+                elapsed,
+                self.telemetry
+                    .as_ref()
+                    .expect("active telemetry scope")
+                    .clock(),
+            );
+        }
         if let Some(frame_idx) = frame_idx
             && let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frame_idx)
             && let Some(telemetry) = &mut frame.telemetry
@@ -9240,6 +9496,7 @@ impl BexVm {
                                         ..Default::default()
                                     },
                                     context: None,
+                                    reservation: None,
                                 }
                             });
                         self.finish_trace_hook_config(*frame_idx, returned)?;
@@ -9768,6 +10025,8 @@ impl BexVm {
                                 InvocationOutcome::Ok,
                                 Some(result),
                             );
+                        } else {
+                            self.end_manual_activation(*frame_idx);
                         }
 
                         // SAFETY: the compiler guarantees a result at or above the
@@ -10324,9 +10583,8 @@ impl BexVm {
                         // Curry the receiver's class type args (→ `Self`) into the
                         // value now, so the bound method is fully realized and the
                         // `CallIndirect` that invokes it needs no type-arg operands.
-                        // (Method-level fn generics — `b.m<int>` — are not yet
-                        // curried here; that needs turbofish-on-member-access
-                        // support and would append after these.)
+                        // A later explicit method specialization (`b.m<int>`)
+                        // appends its arguments in MakeGenericFunctionFromValue.
                         let type_args = self.bound_method_curried_type_args(receiver);
                         let bound = Object::BoundMethod(BoundMethod {
                             function: function_ptr,
@@ -10459,14 +10717,20 @@ impl BexVm {
                         // — then append the new instantiation args in call order, so
                         // a later indirect call seeds a complete `frame.type_args`).
                         //
-                        // A `BoundMethod` (`let f = p.method<int>`) cannot be wrapped
-                        // in a closure without losing its receiver, so it is passed
-                        // through unchanged: the explicit type args are dropped, but
-                        // the call still dispatches with the correct `self`. This is
-                        // correct for the common case of a method that does not reify
-                        // `T` at runtime, and — unlike closure-wrapping it — never
-                        // crashes. (`GenericFunction` does not reach here: TIR rejects
-                        // type args on an already-specialized value.)
+                        // A bound method must retain its receiver as well as its
+                        // class/impl frame. Specialize a fresh value so aliases of
+                        // the original method keep their own generic environment.
+                        if let Object::BoundMethod(method) = self.get_object(callable_ptr) {
+                            let mut method = method.clone();
+                            let mut carried = method.type_args.into_vec();
+                            carried.extend(type_args.tys);
+                            method.type_args = carried.into_boxed_slice();
+                            let ptr = self.tlab.alloc(Object::BoundMethod(method));
+                            self.stack.push(Value::object(ptr));
+                            continue;
+                        }
+                        // `GenericFunction` does not reach here: TIR rejects
+                        // type args on an already-specialized value.
                         let wrap: Option<(HeapPtr, Vec<Value>, Vec<bex_vm_types::RealizedTy>)> =
                             match self.get_object(callable_ptr) {
                                 Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),

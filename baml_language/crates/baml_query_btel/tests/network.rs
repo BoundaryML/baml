@@ -257,12 +257,14 @@ fn complete(
 
 fn call() -> Event {
     Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+        manual: false,
         id: CALL,
         parent_id: ROOT,
         call_path_id: 1,
         entered_at_ticks: 5_000,
         inputs_cas_id: None,
         type_args_cas_id: None,
+        receiver_cas_id: None,
     })
 }
 
@@ -1518,12 +1520,14 @@ fn hand_recorded_usage_is_dropped_only_where_a_request_prices_it() {
     let function = |id: u64| {
         [
             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+                manual: false,
                 id,
                 parent_id: ROOT,
                 call_path_id: 1,
                 entered_at_ticks: 5_000,
                 inputs_cas_id: None,
                 type_args_cas_id: None,
+                receiver_cas_id: None,
             }),
             Event::FunctionCompletion(proto::FunctionCompletion {
                 id,

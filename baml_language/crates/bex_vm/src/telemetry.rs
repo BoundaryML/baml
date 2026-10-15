@@ -161,6 +161,7 @@ impl FrameTelemetry {
 pub use btel_records::{LogLevel, SpanRecord, TimingRecord};
 
 mod host;
+pub(crate) mod manual;
 mod snapshot;
 type VmSpanRecord = SpanRecord<btel_snapshot::Snapshot, btel_snapshot::Snapshot>;
 const _: () = assert!(size_of::<TimingRecord>() <= btel_settings::layout::TIMING_RECORD_MAX_BYTES);
@@ -232,6 +233,38 @@ impl TelemetryState {
         }
         options
     }
+    pub(crate) fn operation_options(
+        &self,
+        function: &Function,
+        config: TraceConfig,
+    ) -> manual::OperationOptions {
+        let policy = self.policy_by_id(function.telemetry_policy_id.load());
+        let is_ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }));
+        manual::OperationOptions {
+            mode: config
+                .reserved_id
+                .map(|_| InvocationMode::Span)
+                .or(config.mode)
+                .or(self.entry_settings(function, config).mode)
+                .unwrap_or(InvocationMode::Hidden),
+            reserved_id: config.reserved_id,
+            inputs: config.inputs == Some(true)
+                || policy.capture_inputs
+                || (is_ai && btel_settings::policy::AI_CAPTURE_INPUTS),
+            output: config.output == Some(true)
+                || policy.capture_output
+                || (is_ai && btel_settings::policy::AI_CAPTURE_OUTPUT),
+            error: config.error == Some(true)
+                || policy.capture_error
+                || (is_ai && btel_settings::policy::AI_CAPTURE_ERROR),
+            policy,
+            live_policy: function.telemetry_function_id.map(|function_id| {
+                self.policies
+                    .watch_owned(function_id, &function.telemetry_policy_id)
+            }),
+        }
+    }
+
     pub fn set_context(&mut self, context: btel_types::context::Context) {
         #[cfg(all(not(test), not(target_arch = "wasm32")))]
         if !context.same_version(&self.context) {
@@ -313,7 +346,7 @@ impl TelemetryState {
     /// left out rather than given an invented key; nothing is recorded when
     /// no slot has one.
     #[cold]
-    fn capture_type_args(
+    pub(crate) fn capture_type_args(
         &mut self,
         function: &Function,
         type_args: CallTypeArgs<'_>,
@@ -657,6 +690,10 @@ impl TelemetryState {
         if function.telemetry_function_id.is_none()
             || !matches!(function.kind, FunctionKind::Bytecode)
         {
+            return None;
+        }
+
+        if function.trace_passthrough {
             return None;
         }
 
@@ -1264,7 +1301,13 @@ impl TelemetryState {
         if !matches!(function.kind, FunctionKind::Bytecode) {
             return Err("native telemetry policies are immutable");
         }
-        self.policies.publish(&function.telemetry_policy_id, policy)
+        self.policies.publish_for_function(
+            function
+                .telemetry_function_id
+                .expect("checked function identity"),
+            &function.telemetry_policy_id,
+            policy,
+        )
     }
 
     #[inline(always)]
@@ -2302,6 +2345,7 @@ mod tests {
             origin: bex_vm_types::FunctionOrigin::Internal,
             native_key: None,
             body_meta,
+            trace_passthrough: false,
             owner: HeapPtr::null(),
         }
     }
@@ -2785,6 +2829,123 @@ mod tests {
             SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement { id, captured_value: Some(value), .. }
                 if *id == span_id && matches!(value.roots()[0],btel_snapshot::SnapshotValue::Int(5))
         )));
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn owned_timing_span_promotes_after_its_creating_state_is_gone() {
+        #[derive(Default)]
+        struct Observed {
+            completions: Vec<(bool, bool, InvocationOutcome, Option<i64>)>,
+            population: u64,
+        }
+        struct Sink(Arc<std::sync::Mutex<Observed>>);
+        impl btel_processor::Publisher<btel_snapshot::Snapshot, btel_snapshot::Snapshot> for Sink {
+            fn aggregate(&mut self, delta: btel_processor::AggregateDelta) {
+                self.0.lock().unwrap().population += delta.count;
+            }
+            fn span(&mut self, _: TelemetryId, record: &mut VmSpanRecord) {
+                assert!(
+                    !matches!(
+                        record,
+                        SpanRecord::ManualSpanAnnouncement(_) | SpanRecord::ManualSpanCompletion(_)
+                    ),
+                    "a Timing operation must use late promotion, with no fabricated entry"
+                );
+                if let Some(done) = record.completion() {
+                    let value =
+                        done.captured_value
+                            .and_then(|snapshot| match snapshot.roots()[0] {
+                                btel_snapshot::SnapshotValue::Int(n) => Some(n),
+                                _ => None,
+                            });
+                    self.0.lock().unwrap().completions.push((
+                        done.late,
+                        done.requires_announcement,
+                        done.outcome,
+                        value,
+                    ));
+                }
+            }
+            fn flush(&mut self) {}
+        }
+
+        for outcome in [
+            Some(InvocationOutcome::Ok),
+            Some(InvocationOutcome::Errored),
+            Some(InvocationOutcome::Panicked),
+            Some(InvocationOutcome::Cancelled),
+            None,
+        ] {
+            let observed = Arc::new(std::sync::Mutex::new(Observed::default()));
+            let runtime =
+                btel_processor::TelemetryRuntime::with_publisher(Sink(observed.clone())).unwrap();
+            let policies = Arc::new(TelemetryPolicies::new());
+            let clock = test_clock();
+            let function = function(FunctionKind::Bytecode, None);
+            let mut creator =
+                TelemetryState::new_root(policies.clone(), clock.clone(), runtime.clone());
+            let options = creator.operation_options(
+                &function,
+                TraceConfig {
+                    mode: Some(InvocationMode::Timing),
+                    ..TraceConfig::default()
+                },
+            );
+            assert!(!options.output && !options.error);
+            let metadata = function.runtime_metadata().unwrap();
+            // SAFETY: the only supplied value is an immediate integer.
+            let span = unsafe {
+                manual::ManualSpan::start_with_options(
+                    Some(&mut creator),
+                    btel_types::RecordingId::generate(),
+                    btel_types::context::Context::default(),
+                    &metadata,
+                    Some(Value::int(7)),
+                    None,
+                    options,
+                    None,
+                    None,
+                )
+            };
+            drop(creator);
+            let updater = TelemetryState::new_root(policies, clock.clone(), runtime.clone());
+            updater
+                .set_policy(
+                    &function,
+                    TelemetryPolicy {
+                        promotion_duration_threshold: Some(
+                            clock.threshold(std::time::Duration::ZERO),
+                        ),
+                        capture_inputs: true,
+                        capture_output: true,
+                        capture_error: true,
+                        ..TelemetryPolicy::NONE
+                    },
+                )
+                .unwrap();
+            // SAFETY: the output/error is immediate and needs no heap traversal.
+            unsafe {
+                span.finish(outcome, outcome.map(|_| Value::int(42)));
+            }
+            drop(updater);
+            drop(span);
+            runtime.finish().unwrap();
+            let observed = observed.lock().unwrap();
+            match outcome {
+                Some(outcome) => {
+                    assert_eq!(observed.completions, vec![(true, false, outcome, Some(42))]);
+                    assert_eq!(observed.population, 1);
+                }
+                None => {
+                    assert!(observed.completions.is_empty());
+                    assert_eq!(
+                        observed.population, 0,
+                        "neutral close must not enter latency statistics"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

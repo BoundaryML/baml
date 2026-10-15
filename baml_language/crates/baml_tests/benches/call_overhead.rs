@@ -11,6 +11,9 @@ use bex_engine::{BexEngine, FunctionCallContextBuilder, logger::TraceLogger};
 use divan::{Bencher, black_box};
 use sys_native::{CallId, SysOpsExt};
 
+#[global_allocator]
+static ALLOC: divan::AllocProfiler = divan::AllocProfiler::system();
+
 fn main() {
     if cfg!(debug_assertions) {
         eprintln!("Skipping call_overhead in debug/test profile.");
@@ -82,6 +85,41 @@ include!(concat!(env!("OUT_DIR"), "/speedtest_profiling_sources.rs"));
 #[divan::bench]
 fn call_compute_pure_call_1m(bencher: Bencher) {
     bench_vm_main(bencher, PROF_SRC_COMPUTE_PURE_CALL_1M, BenchMode::Off);
+}
+
+// Tracing's ordinary-call regression probes are independent of the optional
+// speedtest corpus. Run each under BAML_TELEMETRY=off, medium, and high.
+#[divan::bench]
+fn ordinary_calls_100k(bencher: Bencher) {
+    bench_vm_main(
+        bencher,
+        r#"
+function leaf(n: int) -> int { n + 1 }
+function main() -> int {
+    let n = 0;
+    for (let i = 0; i < 100000; i += 1) { n = leaf(n); }
+    n
+}
+"#,
+        BenchMode::Off,
+    );
+}
+
+#[divan::bench]
+fn nested_calls_100k(bencher: Bencher) {
+    bench_vm_main(
+        bencher,
+        r#"
+function leaf(n: int) -> int { n + 1 }
+function middle(n: int) -> int { leaf(n) + 1 }
+function main() -> int {
+    let n = 0;
+    for (let i = 0; i < 100000; i += 1) { n = middle(n); }
+    n
+}
+"#,
+        BenchMode::Off,
+    );
 }
 
 #[divan::bench]

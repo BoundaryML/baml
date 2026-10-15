@@ -1025,6 +1025,7 @@ fn synthesized_function(
         origin: FunctionOrigin::Internal,
         native_key: None,
         body_meta: None,
+        trace_passthrough: false,
         owner: bex_vm_types::HeapPtr::null(),
     }
 }

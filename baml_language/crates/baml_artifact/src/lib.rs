@@ -103,7 +103,9 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// Version 20: `BoundMismatch` removed from the end of the instruction set. A
 /// bounded `let type` must have an `else` block, so a missed bound never
 /// throws.
-pub const FORMAT_VERSION: u32 = 20;
+///
+/// Version 21 adds pass-through tracing strategy to serialized function metadata.
+pub const FORMAT_VERSION: u32 = 21;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

@@ -1133,6 +1133,7 @@ fn builtin_emit_function(
         origin: FunctionOrigin::Builtin,
         native_key,
         body_meta: None,
+        trace_passthrough: false,
         owner: bex_vm_types::HeapPtr::null(),
     })
 }
@@ -1156,6 +1157,7 @@ fn attach_function_metadata<'db>(
         baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
     let signature_metadata = compute_function_metadata(db, func_loc, &parameter_defaults, cache);
     apply_signature_metadata(compiled_fn, &signature_metadata, anchor);
+    compiled_fn.trace_passthrough = func.metadata.trace_passthrough;
     compiled_fn.origin = emitted_function_origin(is_builtin_file, func.metadata.origin);
 
     // Set LLM-specific body_meta if this is an LLM function with a client.

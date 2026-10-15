@@ -143,6 +143,7 @@ fn spans(events: Vec<Event>) -> proto::SpanBatch {
 
 fn announce(inputs: Option<[u8; 16]>) -> Event {
     Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+        manual: false,
         id: CALL,
         parent_id: THREAD,
         call_path_id: PATH,
@@ -152,6 +153,7 @@ fn announce(inputs: Option<[u8; 16]>) -> Event {
             high: u64::from_le_bytes(b[8..].try_into().unwrap()),
         }),
         type_args_cas_id: None,
+        receiver_cas_id: None,
     })
 }
 

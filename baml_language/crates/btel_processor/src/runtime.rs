@@ -93,6 +93,12 @@ thread_local! {
     static BINDINGS: RefCell<Vec<Binding>> = const { RefCell::new(Vec::new()) };
 }
 
+/// A runtime-owned operation can outlive its last VM call. Shutdown closes
+/// these operations before sealing; registry entries never retain ownership.
+pub trait SpanOwner: Send + Sync {
+    fn close_for_shutdown(&self);
+}
+
 /// Engine-owned chunk transport and processor lifetime. VM instances retain an
 /// Arc while executing; the worker owns only the pool, never the engine/runtime.
 /// The last runtime owner closes admission, consumes outstanding chunks and joins.
@@ -111,6 +117,8 @@ pub struct TelemetryRuntime {
     /// Set when `finish` starts. A task that shutdown stopped waiting for can
     /// still run afterwards; it then sees recording as disabled.
     finished: AtomicBool,
+    deferred_spans: super::DeferredSpans<Snapshot, Snapshot>,
+    span_owners: Mutex<Vec<std::sync::Weak<dyn SpanOwner>>>,
 }
 
 /// Bounded, engine-scoped map from a failed future to the raise that failed
@@ -239,7 +247,9 @@ impl TelemetryRuntime {
             pool: pool.clone(),
             result: Arc::clone(&result),
         })?;
+        let deferred_spans = Arc::new(Mutex::new(Vec::new()));
         let worker = {
+            let deferred = Arc::clone(&deferred_spans);
             let copy = pool.clone();
             let (ready, bound) =
                 std::sync::mpsc::sync_channel(btel_settings::processor::STARTUP_CHANNEL_CAPACITY);
@@ -264,6 +274,7 @@ impl TelemetryRuntime {
                             btel_settings::processor::REQUESTED_BATCH_CHUNKS,
                             publisher,
                         )
+                        .with_deferred_spans(deferred)
                         .run()
                     }));
                     let result = match outcome {
@@ -302,6 +313,8 @@ impl TelemetryRuntime {
                 btel_settings::processor::FUTURE_ERROR_LINKS,
             )),
             finished: AtomicBool::new(false),
+            deferred_spans,
+            span_owners: Mutex::new(Vec::new()),
         }))
     }
 
@@ -382,11 +395,23 @@ impl TelemetryRuntime {
             });
             true
         });
-        ExecutionScope {
+        let scope = ExecutionScope {
             active,
             runtime: Arc::clone(self),
             _thread_bound: PhantomData,
+        };
+        if active {
+            let deferred = std::mem::take(
+                &mut *self
+                    .deferred_spans
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            );
+            for (thread, context, record) in deferred {
+                self.write_span_with_context(thread, context, None, record);
+            }
         }
+        scope
     }
 
     /// `None` once admission has closed, like `Self::is_disabled`: a late task
@@ -399,6 +424,45 @@ impl TelemetryRuntime {
                 self.pool.fail();
                 std::panic::panic_any(TransportFailed);
             }
+        }
+    }
+
+    pub fn register_span_owner(&self, owner: std::sync::Weak<dyn SpanOwner>) {
+        let mut owners = self
+            .span_owners
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        owners.retain(|owner| owner.strong_count() != 0);
+        owners.push(owner);
+    }
+
+    /// Call after execution is quiescent and before sealing the recording.
+    pub fn close_span_owners(&self) {
+        let owners = std::mem::take(
+            &mut *self
+                .span_owners
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        for owner in owners.into_iter().filter_map(|owner| owner.upgrade()) {
+            owner.close_for_shutdown();
+        }
+    }
+
+    /// Destructors may run under GC locks. Queue owned records without binding a
+    /// producer; the next safe execution scope (including shutdown) drains them.
+    pub fn defer_span(
+        &self,
+        thread: TelemetryId,
+        context: btel_records::ContextReference,
+        record: Span,
+    ) {
+        let mut deferred = self
+            .deferred_spans
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !self.is_disabled() {
+            deferred.push((thread, context, record));
         }
     }
 
@@ -604,7 +668,13 @@ impl TelemetryRuntime {
     /// permit on this thread. Blocking; async hosts should use `spawn_blocking`.
     /// Repeated/concurrent calls return the same terminal result.
     pub fn finish(&self) -> Result<(), RuntimeError> {
-        self.finished.store(true, Ordering::Release);
+        {
+            let _deferred = self
+                .deferred_spans
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            self.finished.store(true, Ordering::Release);
+        }
         self.pool.close_admission();
         let mut worker = self
             .worker
@@ -712,6 +782,8 @@ mod tests {
             result: Arc::new(RuntimeStatus::default()),
             error_evidence: true,
             future_errors: Mutex::new(FutureErrorLinks::new(4)),
+            deferred_spans: Arc::new(Mutex::new(Vec::new())),
+            span_owners: Mutex::new(Vec::new()),
             finished: AtomicBool::new(false),
         });
         (runtime, pool)
@@ -726,6 +798,49 @@ mod tests {
             captured_inputs: Some(no_arguments(runtime.acquire_snapshot().unwrap())),
             captured_type_args: None,
         }
+    }
+
+    #[test]
+    fn destructor_records_wait_for_a_safe_producer_scope() {
+        let (runtime, pool) = manual_runtime();
+        let id = allocate_telemetry_id();
+        runtime.defer_span(
+            id,
+            btel_records::ContextReference::Empty,
+            SpanRecord::ManualSpanCompletion(Box::new(btel_records::ManualSpanCompletion {
+                await_time: btel_types::AwaitDuration::ZERO,
+                id,
+                parent_id: allocate_telemetry_id(),
+                call_path: btel_types::CallPathId::ROOT,
+                entered_at: btel_types::ClockInstant::from_ticks(10),
+                exited_at: btel_types::ClockInstant::from_ticks(20),
+                outcome: None,
+                requires_announcement: false,
+                captured_value: None,
+            })),
+        );
+        assert_eq!(pool.stats().active_producers, 0);
+        assert_eq!(pool.stats().sealed_records, 0);
+        {
+            let _scope = runtime.enter();
+        }
+        let mut found = 0;
+        let mut consumer = pool.bind_consumer().unwrap();
+        consumer.drain_chunks(
+            NonZeroUsize::new(8).unwrap(),
+            |_, _| {},
+            |_, mut records| {
+                for record in records.drain() {
+                    if let SpanRecord::ManualSpanCompletion(done) = record {
+                        assert_eq!(done.id, id);
+                        assert_eq!(done.outcome, None);
+                        assert_eq!(done.exited_at.get(), 20);
+                        found += 1;
+                    }
+                }
+            },
+        );
+        assert_eq!(found, 1);
     }
 
     #[test]

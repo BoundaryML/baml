@@ -74,6 +74,7 @@ fn inject_function(
         origin: FunctionOrigin::UserDefined,
         native_key: None,
         body_meta: None,
+        trace_passthrough: false,
         owner: bex_vm_types::HeapPtr::null(),
     };
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));
@@ -329,6 +330,7 @@ fn map_result_element_ty_is_closure_return_not_receiver() {
 function f() -> string[] {
     [1, 2].map((x: int) -> string { "s" })
 }
+
 "#,
     );
     let f = program.rendered_callables()["user.f"].object.raw();
@@ -345,4 +347,29 @@ function f() -> string[] {
         ),
         other => panic!("expected Object::Array result, got {other:?}"),
     }
+}
+
+#[test]
+fn explicit_bound_method_specialization_preserves_receiver_and_aliases() {
+    let program = compile_source(
+        r#"
+class Holder<T> {
+    item: T,
+    function check<U>(self, value: U) -> bool {
+        reflect.Type.of<T>() == reflect.Type.of_value(self.item)
+            && reflect.Type.of<U>() == reflect.Type.of_value(value)
+    }
+}
+function f() -> bool {
+    let holder = Holder<int> { item: 3 };
+    let text = holder.check<string>;
+    let alias = text;
+    let number = holder.check<int>;
+    text("value") && number(5) && alias("again")
+}
+"#,
+    );
+    let f = program.rendered_callables()["user.f"].object.raw();
+    let (result, _) = run_fn(program, f);
+    assert_eq!(result.as_bool(), Some(true));
 }

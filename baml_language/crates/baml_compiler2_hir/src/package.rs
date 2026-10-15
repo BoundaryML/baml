@@ -212,13 +212,30 @@ pub enum PathHead {
 /// manifest is display metadata and the default a dependent spells the
 /// package by, never a way to reach it.
 ///
+/// Stdlib roots additionally reach their sibling language packages through
+/// the implicit edges in [`edge_table`], without cyclic manifest dependencies.
+///
 /// The ONE place a written first segment becomes a package; whether the
 /// segment is read as one at all is [`path_head`]'s call.
 pub fn path_package(db: &dyn crate::Db, own: SourceRoot, first: &Name) -> Option<SourceRoot> {
     if first.as_str() == ROOT_SEGMENT {
         return Some(own);
     }
-    dependency_named(db, own, first)
+    dependency_named(db, own, first).or_else(|| {
+        // Language packages may use each other's public types without a
+        // cyclic manifest dependency (trace.Span uses baml.errors.Context,
+        // while baml already depends on trace). These are the same implicit
+        // language-package edges exposed by edge_table; user packages still
+        // resolve written names only through their declared/prelude edges.
+        (own.kind(db) == SourceRootKind::Stdlib)
+            .then(|| {
+                edge_table(db, own)
+                    .iter()
+                    .find(|(edge, _)| edge == first)
+                    .map(|(_, target)| *target)
+            })
+            .flatten()
+    })
 }
 
 /// The [`PathHead`] of `segments`, written in the namespace `namespace` of

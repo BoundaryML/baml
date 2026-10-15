@@ -139,8 +139,8 @@ async fn each_retry_attempt_is_a_span_with_its_own_request() {
     assert_eq!(
         attempts.rows,
         vec![
-            vec![json!("user_error"), inputs(1), json!("user.Ask")],
-            vec![json!("return"), inputs(2), json!("user.Ask")],
+            vec![json!("user_error"), inputs(1), json!("user.Summarize")],
+            vec![json!("return"), inputs(2), json!("user.Summarize")],
         ]
     );
     assert_eq!(
