@@ -417,6 +417,9 @@ impl GenerateArgs {
         // Exclude both test forms before building any persisted compiler data,
         // including package interfaces and the registrars' nested lambdas.
         db.exclude_tests(package);
+        // Exclusion invalidates the test-inclusive indexes primed above.
+        // Rebuild them in parallel before the symbol pool's aggregate queries.
+        baml_db::prime_file_indexes_parallel(&db);
 
         // Build the codegen SymbolPool from the compiler database.
         let pool = baml_ide::build_symbol_pool(&db, package);
