@@ -103,7 +103,7 @@ function hygiene_for_in(xs: int[]) -> int {
 }
 
 function hygiene_static_type_binding() -> int {
-    type baml = int;
+    let type baml = reflect.Type.of<int>();
     let task = spawn { 6 };
     await task
 }

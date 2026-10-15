@@ -802,39 +802,38 @@ function f(t: reflect.Type, value: unknown) -> bool {
     );
 }
 
-/// A static right-hand side loads its template into the binding's slot; every
+/// A `let type` binding stores its operand in the binding's slot, and every
 /// later mention of the name reads that slot, including nested under a
-/// constructor (`Bound?`, `Bound[]`).
-///
-/// The `match` comes before the `is` test: the right operand of `&&` is typed
-/// with the left operand's facts, so after `value is Bound` the `_` arm of
-/// the `match` would be unreachable.
+/// constructor (`Bound?`). Each `extends` bound is then checked against the
+/// type now in the slot, in written order: through `reflect.Type.implements`
+/// and a branch into the `else` block, or, without one, through
+/// `reflect.Type._expect_implements`, which throws.
 #[test]
-fn static_type_binding_loads_its_template_into_the_slot() {
+fn bounded_type_binding_checks_its_bounds_after_binding_the_slot() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
         r#"
-class Wrapper<T> { value T }
+interface Named { name string }
+interface Tagged { tag string }
 
 function erase<T>() -> string { "ok" }
 
-function f(value: unknown) -> bool {
-    type Bound = Wrapper<string>
-    let annotated: Bound? = null
+function checked(t: reflect.Type) -> bool {
+    let type Bound extends Named & Tagged = t;
+    let annotated: Bound? = null;
+    erase<Bound>() == "ok" && annotated == null
+}
+
+function guarded(t: reflect.Type) -> bool {
+    let type Bound extends Named = t else { return false };
     erase<Bound>() == "ok"
-        && annotated == null
-        && match value {
-            Bound => true,
-            _ => false,
-        }
-        && value is Bound
 }
 "#,
     );
     baml_db::testing::assert_no_diagnostic_errors(&db);
     mir_snapshot!(
-        "static_type_binding_loads_its_template_into_the_slot",
+        "bounded_type_binding_checks_its_bounds_after_binding_the_slot",
         render_mir(&db, file)
     );
 }

@@ -1,17 +1,15 @@
-// The two contracts a `type T = …` statement has beyond scoping: a static
-// right-hand side is written in full, and a runtime operand is a
-// `reflect.Type | reflect.TypeView` value.
+// The contracts a `let type` statement has beyond scoping: its operand is a
+// `reflect.Type | reflect.TypeView` value, each `extends` bound is an
+// interface written in full, its `else` block diverges, and its bound check
+// is a throw a declared clause must name.
+
+interface Named { name string }
+
+interface Holder<T> { held T }
 
 class Wrapper<T> { inner T }
 
 function ident<T>(v: T) -> T throws never { v }
-
-// A `_` in the right-hand side has nothing to infer from: the slot is filled
-// from the written type when the statement runs.
-function hole_in_a_static_binding() -> int {
-    type T = Wrapper<_>
-    1
-}
 
 // An `unknown` is not a type operand. A value the checker has not typed may
 // not be erased into the frame to fail at run time: narrow it first with
@@ -25,17 +23,8 @@ function unknown_operand(x: unknown) -> bool {
 // `1` and the operand contract, which no type meets, so the contract is
 // reported at `v` (E0001).
 function operand_solved_to_int() -> int {
-    let v = ident(1)
-    type T = unreflect(v)
-    1
-}
-
-// `unreflect` inside a static right-hand side: the statement lifts one
-// runtime type as its whole right-hand side, so compose through a second
-// binding. Parentheses open a function type, so they nest it too.
-function nested_in_a_static_right_hand_side(t: reflect.Type) -> int {
-    type T = Wrapper<unreflect(t)>
-    type U = (unreflect(t))
+    let v = ident(1);
+    let type T = v;
     1
 }
 
@@ -43,5 +32,41 @@ function nested_in_a_static_right_hand_side(t: reflect.Type) -> int {
 // pending type); a nullable one is not narrowed yet.
 function nullable_operand(t: reflect.Type?) -> int {
     type T = unreflect(t)
+    1
+}
+
+// A bound is judged like a generic parameter's: a class is not an interface
+// (E0145), an unknown name is unresolved (E0002), the reflection-only
+// function interface is not a bound (E0154), and a `_` has nothing to infer
+// from. Each bound is reported on its own; the binding keeps the rest.
+function bounds_are_interfaces(t: reflect.Type) -> int {
+    let type A extends Wrapper<int> = t;
+    let type B extends Missing = t;
+    let type C extends reflect.AnyFunction = t;
+    let type D extends Named & Holder<_> = t;
+    1
+}
+
+// The bounds and the `else` block are judged before `T` exists, so neither
+// can name it.
+function the_binding_is_not_in_scope_yet(t: reflect.Type) -> int {
+    let type T extends Holder<T> = t else {
+        let unseen: T? = null;
+        return 0
+    };
+    1
+}
+
+// A miss runs the `else` block in place of the rest of the block, so it must
+// diverge, as in `let … else`.
+function else_must_diverge(t: reflect.Type) -> int {
+    let type T extends Named = t else { 0 };
+    1
+}
+
+// Without an `else` block a miss throws `reflect.errors.TypeMismatch` from
+// the statement, which a declared clause must name.
+function declared_clause_names_the_bound_check(t: reflect.Type) -> int throws never {
+    let type T extends Named = t;
     1
 }

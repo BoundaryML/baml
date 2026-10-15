@@ -677,7 +677,11 @@ pub(crate) mod support {
                 let else_desc = else_branch
                     .map(|else_expr| format!(" else {}", expr_desc(else_expr, body)))
                     .unwrap_or_default();
-                writeln!(output, "{pad}let type {name}{bounds} = {operand}{else_desc}").ok();
+                writeln!(
+                    output,
+                    "{pad}let type {name}{bounds} = {operand}{else_desc}"
+                )
+                .ok();
             }
             Stmt::Let {
                 pattern,

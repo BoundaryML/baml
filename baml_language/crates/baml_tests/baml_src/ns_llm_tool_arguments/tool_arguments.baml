@@ -293,7 +293,7 @@ function tool_arg_coerce_mismatch() -> string {
     gym.name
 }
 
-// The type of a coercion can be data: `unreflect` names it.
+// The type of a coercion can be data: `let type` names it.
 function tool_arg_coerce_runtime_type(t: reflect.Type) -> string {
     type T = unreflect(t);
     let sent: baml.json.json = ["a", "b"];

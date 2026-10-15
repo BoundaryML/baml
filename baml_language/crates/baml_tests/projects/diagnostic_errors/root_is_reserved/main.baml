@@ -92,6 +92,6 @@ function array_pattern(items: int[]) -> int {
 }
 
 function scoped_type() -> int {
-    type root = int
+    let type root = reflect.Type.of<int>();
     1
 }

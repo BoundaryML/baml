@@ -1,8 +1,7 @@
-// Scoped runtime type bindings: `type T = unreflect(t)` is the one position
+// Scoped runtime type bindings: `let type T = t;` is the one position
 // that lifts a runtime type into a type, and `T` is a rigid parameter of the
 // frame for the rest of its block. These tests pin that the bound name works
-// everywhere the removed inline `f<unreflect(t)>()` spelling used to be
-// written, and that the programs it produces run.
+// in every type position, and that the programs it produces run.
 
 class Holder<T> { label string }
 
@@ -39,11 +38,11 @@ test "type.of over a scoped binding realizes the bound type" {
     assert.is_true(reflect.Type.of<Wrapper<T>>() == Wrapper<string>.type())
 }
 
-// A static right-hand side binds `T` to its template in the same frame slot
-// a runtime one uses; `T` is just as opaque statically.
-test "a static right-hand side realizes its template" {
-    type T = Wrapper<string>
-    assert.is_true(reflect.Type.of<T>() == Wrapper<string>.type())
+// A type known statically binds through `reflect.Type.of`, realized in the
+// enclosing frame; `T` is just as opaque statically.
+test "a statically known operand realizes its template" {
+    let type T = reflect.Type.of<Wrapper<string>>();
+    assert.is_true(reflect.Type.of<T>() == reflect.Type.of<Wrapper<string>>())
     assert.is_true(reflect.Type.of<T[]>() == reflect.Type.of<Wrapper<string>[]>())
 }
 
@@ -348,18 +347,18 @@ test "a partial clause publishes a scoped throw through the name it wrote" {
     assert.is_true(reflect.Type.of_value(plain) == string.type())
 }
 
-// `unreflect` in a DECLARATION is E0168, and the remedy the diagnostic names
-// is this: bind the runtime type inside a body and reach the declaration
-// through an ordinary type parameter. Pinned so the advice stays followable.
+// A runtime type cannot be written in a DECLARATION; the remedy is to bind it
+// inside a body and reach the declaration through an ordinary type
+// parameter. Pinned so the advice stays followable.
 class ParameterizedField<T> { value Wrapper<T> }
 
 function takes_a_parameterized_field<T>(v: Wrapper<T>) -> reflect.Type throws never {
     reflect.Type.of_value(v.inner)
 }
 
-test "the remedy a declaration-site E0168 names compiles and runs" {
-    let t = int.type()
-    type T = unreflect(t)
+test "a declaration reaches a bound runtime type through a type parameter" {
+    let t = reflect.Type.of<int>()
+    let type T = t;
     let site = ParameterizedField<T> { value: Wrapper<T> { inner: as_t<T>(1) } }
     assert.is_true(takes_a_parameterized_field<T>(site.value) == t)
 }
@@ -392,8 +391,8 @@ function sibling_bindings(a: reflect.Type, b: reflect.Type, both: bool) -> refle
         reflect.Type.of<Wrapper<T>>()
     }
     let second: reflect.Type = {
-        type U = unreflect(b)
-        type V = Wrapper<U>
+        let type U = b;
+        let type V = reflect.Type.of<Wrapper<U>>();
         reflect.Type.of<V[]>()
     }
     if (both) {

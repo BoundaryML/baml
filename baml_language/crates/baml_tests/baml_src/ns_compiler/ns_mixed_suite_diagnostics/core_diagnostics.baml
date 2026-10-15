@@ -69,7 +69,7 @@ test "pending runtime type is not a static reflect Type" {
     )
 }
 
-test "unreflect operand must be a type value" {
+test "let type operand must be a type value" {
     root.compiler.AssertHasCode(
         {
             "main.baml": `
@@ -98,7 +98,7 @@ test "unknown values do not expose get_field" {
     )
 }
 
-test "computed generic argument diagnostic names unreflect" {
+test "computed generic argument diagnostic names let type" {
     assert_code_and_messages(
         {
             "main.baml": `
@@ -110,7 +110,7 @@ test "computed generic argument diagnostic names unreflect" {
             `,
         },
         "E0002",
-        ["unreflect"],
+        ["let type T = runtime_t;"],
     )
 }
 
@@ -159,7 +159,7 @@ test "top-level runtime type binding is rejected" {
                 function main() -> string { "unreachable" }
             `,
         },
-        "this runtime type must be given a name before it can be used here",
+        "top-level `let` bindings are not supported",
     )
 }
 

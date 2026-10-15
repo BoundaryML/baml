@@ -1,4 +1,4 @@
-// Nothing typed by a block-scoped `type T = …` binding may be observable
+// Nothing typed by a block-scoped `let type T = …` binding may be observable
 // outside the block that binds it (E0172): the binding re-executes on every
 // pass through its block and may bind `T` differently each time. A value
 // leaves only through a type that does not mention `T`, and a thrown type an

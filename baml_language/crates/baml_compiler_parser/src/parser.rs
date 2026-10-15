@@ -9118,7 +9118,8 @@ testset "dynamic" {
     fn removed_type_statement_with_a_nested_unreflect_reports_once() {
         // The statement's report covers the `unreflect` inside it, and its
         // advice does not spell the removed `unreflect` back.
-        let source = "function main(t: reflect.Type) -> int {\n  type T = Wrapper<unreflect(t)>\n  1\n}\n";
+        let source =
+            "function main(t: reflect.Type) -> int {\n  type T = Wrapper<unreflect(t)>\n  1\n}\n";
         let (_, errors) = parse_source(source);
         let messages = removed_feature_messages(&errors);
         assert_eq!(messages.len(), 1, "{messages:#?}");

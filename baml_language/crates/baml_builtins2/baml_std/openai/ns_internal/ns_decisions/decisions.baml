@@ -1,5 +1,5 @@
 // Reflection owns traversal, metadata precedence, routing, and validation.
-// Reflected enums and classes are constructed through unreflect + JSON.
+// Reflected enums and classes are constructed through `let type` + JSON.
 class ChoiceOption {
     key: string,
     description: string?,
