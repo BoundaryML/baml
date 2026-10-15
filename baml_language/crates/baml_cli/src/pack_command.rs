@@ -453,14 +453,27 @@ impl PackArgs {
         // An explicit target dir so the built binary's location is known
         // whatever the environment says.
         let target_dir = build_dir.join("target");
+        // The host must accept the envelope this CLI encodes: on channels that
+        // enforce the build fingerprint, stamp the host's artifact crate with
+        // this CLI's commit rather than whatever the workspace checkout is at.
+        let fingerprint = baml_artifact::BUILD_FINGERPRINT;
+        let fingerprint_is_commit = matches!(fingerprint.len(), 40 | 64)
+            && fingerprint
+                .bytes()
+                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase());
         let status = reporter.suspend(|| {
-            std::process::Command::new("cargo")
+            let mut cargo = std::process::Command::new("cargo");
+            cargo
                 .arg("build")
                 .arg("--release")
                 .arg("--manifest-path")
                 .arg(build_dir.join("Cargo.toml"))
                 .arg("--target-dir")
-                .arg(&target_dir)
+                .arg(&target_dir);
+            if fingerprint_is_commit {
+                cargo.env("BAML_GIT_SHA", fingerprint);
+            }
+            cargo
                 .status()
                 .context("failed to run cargo; is it on PATH?")
         })?;
