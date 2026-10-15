@@ -499,7 +499,8 @@ enum RaiseKind {
   RAISE_KIND_UNSPECIFIED = 0;
   RAISE_KIND_THROW = 1;         // `throw` of a value.
   RAISE_KIND_RETHROW = 2;       // Rethrow of a caught value (bare rethrow, no-match, defer).
-  RAISE_KIND_PANIC_RETHROW = 3; // A wildcard catch passing a panic on.
+  RAISE_KIND_PANIC_RETHROW = 3; // Retired: a wildcard catch passing a panic on. Recordings no longer
+                                // carry it; a panic no arm takes is a RAISE_KIND_RETHROW (no-match).
   RAISE_KIND_AWAIT = 4;         // Awaited future failed.
   RAISE_KIND_AWAIT_CANCELLED = 5; // Awaited future was cancelled.
   RAISE_KIND_NATIVE_BOUNDARY = 6; // A native function or call setup failed at this call site.

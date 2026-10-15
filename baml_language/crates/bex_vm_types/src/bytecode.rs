@@ -856,16 +856,6 @@ pub enum Instruction {
     /// Memory per switch scales with K (arms), not N (total classes).
     DenseTag(usize),
 
-    /// If the caught value is a panic instance (`baml.panics.*`), re-throw it
-    /// with the `baml.errors.Context` it was caught with. Otherwise pop both and
-    /// continue to the next instruction.
-    ///
-    /// Stack: `[value, context]` -> `[]` (continues) or unwinds (throws)
-    ///
-    /// Used in catch handlers before wildcard arms to prevent them from
-    /// swallowing panics the programmer didn't explicitly name.
-    ThrowIfPanic,
-
     /// Halt execution with an unreachable code error.
     ///
     /// This instruction should never be executed at runtime. If it is,
@@ -1106,7 +1096,6 @@ pub enum OpCode {
     CallIndirect,
     Discriminant,
     TypeTag,
-    ThrowIfPanic,
     Unreachable,
     MakeCell,
     SendEvent,
@@ -1320,7 +1309,6 @@ impl OpCode {
             | Self::SetCallTrace
             | Self::Discriminant
             | Self::TypeTag
-            | Self::ThrowIfPanic
             | Self::Unreachable
             | Self::MakeCell
             | Self::SendEvent
@@ -1482,7 +1470,6 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
             x if x == Self::LoadCurrentPackage as u8 => Ok(Self::LoadCurrentPackage),
-            x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
             x if x == Self::Unreachable as u8 => Ok(Self::Unreachable),
             x if x == Self::MakeCell as u8 => Ok(Self::MakeCell),
             x if x == Self::SendEvent as u8 => Ok(Self::SendEvent),
@@ -1648,7 +1635,6 @@ impl std::fmt::Display for OpCode {
             Self::TypeTag => "TYPE_TAG",
             Self::LoadCurrentPackage => "LOAD_CURRENT_PACKAGE",
             Self::Truthy => "TRUTHY",
-            Self::ThrowIfPanic => "THROW_IF_PANIC",
             Self::Unreachable => "UNREACHABLE",
             Self::MakeCell => "MAKE_CELL",
             Self::SendEvent => "SEND_EVENT",
@@ -1998,7 +1984,6 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadType(i) => write!(f, "LOAD_TYPE {i}"),
             Instruction::BindType(i) => write!(f, "BIND_TYPE {i}"),
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
-            Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
             Instruction::MakeClosure {
                 obj_idx,
@@ -2120,9 +2105,9 @@ pub struct DebugLocalScope {
 /// ranges are emitted outer-region-first).
 ///
 /// All exceptions (user-thrown values and VM panics) are routed to the
-/// handler. The handler bytecode is responsible for filtering: a
-/// `ThrowIfPanic` instruction before wildcard arms rethrows panics the
-/// programmer didn't explicitly name.
+/// handler. The handler bytecode is responsible for filtering: a wildcard arm
+/// that does not trap panics is entered only after an `IsType` test against
+/// the `PANIC` pseudo-tag, and a value no arm takes is `Rethrow`n.
 #[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ExceptionTableEntry {
     /// First protected instruction (inclusive).
@@ -2494,7 +2479,6 @@ impl Bytecode {
                 | Instruction::SetCallTrace
                 | Instruction::Discriminant
                 | Instruction::TypeTag
-                | Instruction::ThrowIfPanic
                 | Instruction::Unreachable
                 | Instruction::MakeCell
                 | Instruction::SendEvent
@@ -2908,7 +2892,6 @@ impl Bytecode {
 
             Instruction::Discriminant => OpCode::Discriminant,
             Instruction::TypeTag => OpCode::TypeTag,
-            Instruction::ThrowIfPanic => OpCode::ThrowIfPanic,
             Instruction::Unreachable => OpCode::Unreachable,
             Instruction::MakeCell => OpCode::MakeCell,
             Instruction::SendEvent => OpCode::SendEvent,

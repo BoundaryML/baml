@@ -350,7 +350,9 @@ bite first — everything else, `baml describe` it:
    Closures are `(x: T) -> R { ... }`; the `=>` arrow is **match-only**. `.map`/`.filter`
    return arrays directly (no `.collect()`). **Map keys must be `string`.**
 5. **`catch` arms are type-only and non-exhaustive**: `f(x) catch (e) { BadInput => fallback }`.
-   `throws T` is part of a function's signature; **panics are not catchable**.
+   `catch_all` must cover every error (E0062). `throws T` is part of a function's signature;
+   **panics are not errors**: `_` lets them pass, so catch one by naming it
+   (`baml.panics.IndexOutOfBounds => …`) or at a `catch_all_panics` boundary.
 
 ## Recommended workflow
 

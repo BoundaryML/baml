@@ -28,11 +28,17 @@ function fixtures.catch_throw.CatchWithFallback(x: int) -> string {
 function fixtures.catch_throw.SingleCatchWildcard(x: int) -> string {
     load_var x
     call user.fixtures.catch_throw.MayFail
-    jump L0
-    load_var2 2 3
-    throw_if_panic
+    jump L1
+    load_var e
+    is_type baml.panics.Panic
+    pop_jump_if_true L0
     load_const "caught"
+    jump L1
 
   L0:
+    load_var2 2 3
+    rethrow
+
+  L1:
     return
 }

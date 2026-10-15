@@ -151,7 +151,6 @@ macro_rules! visit_bytecode_index_operands {
             | I::Throw
             | I::Rethrow
             | I::Return
-            | I::ThrowIfPanic
             | I::Unreachable
             | I::MakeGenericFunctionFromValue { .. }
             | I::MakeCell

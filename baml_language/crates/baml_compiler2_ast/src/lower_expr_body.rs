@@ -3031,11 +3031,20 @@ impl LoweringContext {
         let mut base = None;
         let mut clauses = Vec::new();
 
-        for child in node.children() {
-            match child.kind() {
-                SyntaxKind::CATCH_CLAUSE => clauses.push(self.lower_catch_clause(&child)),
-                _ if base.is_none() => {
+        // The protected expression is a node or, for a bare name or literal
+        // (`x catch …`, `1 catch …`), a bare token: reading only child nodes
+        // lost the latter to `Expr::Missing`, which type-checked silently and
+        // then failed MIR lowering.
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) if child.kind() == SyntaxKind::CATCH_CLAUSE => {
+                    clauses.push(self.lower_catch_clause(&child));
+                }
+                rowan::NodeOrToken::Node(child) if base.is_none() => {
                     base = Some(self.lower_expr(&child));
+                }
+                rowan::NodeOrToken::Token(token) if base.is_none() => {
+                    base = self.try_lower_bare_token(&token);
                 }
                 _ => {}
             }

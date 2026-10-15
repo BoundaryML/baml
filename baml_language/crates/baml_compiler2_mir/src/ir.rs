@@ -725,18 +725,6 @@ pub enum Terminator<'db> {
         context: Operand<'db>,
     },
 
-    /// If the value is a panic instance (`baml.panics.*`), throw it.
-    /// Otherwise continue to `otherwise` block.
-    ///
-    /// Used before wildcard catch arms to prevent them from swallowing
-    /// panics the programmer didn't explicitly name.
-    ThrowIfPanic {
-        value: Operand<'db>,
-        /// The value's `baml.errors.Context`, carried by the rethrow.
-        context: Operand<'db>,
-        otherwise: BlockId,
-    },
-
     /// Short-circuit `&&` / `||` / `??`.
     ///
     /// On the short-circuit edge, assign `operand` to `destination` and go
@@ -799,7 +787,6 @@ impl Terminator<'_> {
                 succs
             }
             Terminator::Throw { .. } | Terminator::Rethrow { .. } => vec![],
-            Terminator::ThrowIfPanic { otherwise, .. } => vec![*otherwise],
             Terminator::ShortCircuit { eval_rhs, join, .. } => vec![*eval_rhs, *join],
         }
     }
