@@ -18,7 +18,7 @@ use baml_base::{
 use baml_sdkgen_types::FunctionArgument;
 use baml_sdkgen_types::{
     CallableParam, Class, ClassProperty, CodegenFunctionParamMode, EnumVariant, Function, Name,
-    ParamTy, Symbol, Ty,
+    ParamTy, Symbol, Ty, is_synthetic_effect_param,
 };
 use sha2::{Digest, Sha256};
 
@@ -2622,6 +2622,23 @@ fn render_generic_type_token(
     }
 }
 
+/// The throws-type argument of a generated `HostCallable(...)` call. A throws
+/// clause the declaration left open is an implicit effect parameter the caller
+/// never binds; a host callable may throw anything, so it is stated as
+/// `unknown`. Any other throws type is stated as its wire metadata: a throws
+/// type is never decoded, so it needs no registry token.
+fn host_callable_throws(render: &RenderContext<'_>, throws: &Ty, context: &str) -> String {
+    match throws {
+        Ty::TypeVar(param) if is_synthetic_effect_param(param.name()) => {
+            format!("{context}.UnknownThrows()")
+        }
+        other => format!(
+            "{context}.Throws({})",
+            byte_array_source(&render.wire_metadata(other))
+        ),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn render_generic_host_callable_add(
     render: &RenderContext<'_>,
@@ -2634,7 +2651,12 @@ fn render_generic_host_callable_add(
     indent: &str,
     mut type_token: impl FnMut(&Ty) -> String,
 ) -> String {
-    let Ty::Function { params, ret, .. } = ty else {
+    let Ty::Function {
+        params,
+        ret,
+        throws,
+    } = ty
+    else {
         panic!("generic host-callable rendering requires a function type")
     };
     let context = allocated(render.names, &locals.host_context_request).source();
@@ -2672,6 +2694,7 @@ fn render_generic_host_callable_add(
     } else {
         format!("{context}.Result({})", type_token(ret))
     };
+    let throws = host_callable_throws(render, throws, context);
     let invocation = params
         .iter()
         .enumerate()
@@ -2687,7 +2710,7 @@ fn render_generic_host_callable_add(
         .collect::<Vec<_>>();
 
     format!(
-        "{indent}{arguments}.AddHostCallable(\n{indent}    {argument},\n{indent}    {callback_value},\n{indent}    ({context}, {encoded_delegate}) =>\n{indent}        {context}.HostCallable(\n{indent}            {encoded_delegate},\n{indent}            new global::Baml.Generated.V1.BamlGeneratedHostParameter[] {{ {descriptors} }},\n{indent}            {result},\n{indent}            static ({invoked_delegate}, {invocation_arguments}, {invocation_cancellation}) =>\n{indent}                global::Baml.Generated.V1.BamlGeneratedHostCallableRuntime.Await(\n{indent}                    (({delegate_type}){invoked_delegate})({invocation}))));\n",
+        "{indent}{arguments}.AddHostCallable(\n{indent}    {argument},\n{indent}    {callback_value},\n{indent}    ({context}, {encoded_delegate}) =>\n{indent}        {context}.HostCallable(\n{indent}            {encoded_delegate},\n{indent}            new global::Baml.Generated.V1.BamlGeneratedHostParameter[] {{ {descriptors} }},\n{indent}            {result},\n{indent}            {throws},\n{indent}            static ({invoked_delegate}, {invocation_arguments}, {invocation_cancellation}) =>\n{indent}                global::Baml.Generated.V1.BamlGeneratedHostCallableRuntime.Await(\n{indent}                    (({delegate_type}){invoked_delegate})({invocation}))));\n",
         invocation = invocation.join(", "),
     )
 }
@@ -3529,7 +3552,11 @@ fn render_codec(render: &RenderContext<'_>, ty: &Ty, codec_name: &str) -> String
         Ty::List(item) => render_list_codec(render, item),
         Ty::Map { key, value, .. } => render_map_codec(render, key, value),
         Ty::Union(members) => render_union_codec(render, ty, members),
-        Ty::Function { params, ret, .. } => render_function_codec(render, params, ret),
+        Ty::Function {
+            params,
+            ret,
+            throws,
+        } => render_function_codec(render, params, ret, throws),
         _ => unreachable!("unsupported types are rejected before codec rendering"),
     };
     format!(
@@ -3541,6 +3568,7 @@ fn render_function_codec(
     render: &RenderContext<'_>,
     params: &[CallableParam],
     ret: &Ty,
+    throws: &Ty,
 ) -> (String, String) {
     let delegate_type = function_type_source(params, ret, |item| render.type_source(item));
     let descriptors = params
@@ -3568,6 +3596,7 @@ fn render_function_codec(
     } else {
         format!("context.Result({})", render.type_field(ret))
     };
+    let throws = host_callable_throws(render, throws, "context");
     let invocation_arguments = params
         .iter()
         .enumerate()
@@ -3583,7 +3612,7 @@ fn render_function_codec(
         .collect::<Vec<_>>();
 
     let encode = format!(
-        "            return context.HostCallable(\n                value,\n                new global::Baml.Generated.V1.BamlGeneratedHostParameter[] {{ {descriptors} }},\n                {result},\n                static (callback, arguments, cancellationToken) =>\n                    global::Baml.Generated.V1.BamlGeneratedHostCallableRuntime.Await(\n                        (({delegate_type})callback)({invocation})));\n",
+        "            return context.HostCallable(\n                value,\n                new global::Baml.Generated.V1.BamlGeneratedHostParameter[] {{ {descriptors} }},\n                {result},\n                {throws},\n                static (callback, arguments, cancellationToken) =>\n                    global::Baml.Generated.V1.BamlGeneratedHostCallableRuntime.Await(\n                        (({delegate_type})callback)({invocation})));\n",
         invocation = invocation_arguments.join(", "),
     );
     let parameter_declarations = params

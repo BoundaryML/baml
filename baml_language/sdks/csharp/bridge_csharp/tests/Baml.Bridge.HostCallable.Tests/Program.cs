@@ -159,6 +159,7 @@ internal static class Program
             callback,
             [context.Required(integer)],
             context.Result(integer),
+            context.UnknownThrows(),
             static (target, arguments, token) => BamlGeneratedHostCallableRuntime.Await(
                 ((Func<long, CancellationToken, Task<long>>)target)(
                     (long)arguments[0]!,
@@ -258,6 +259,7 @@ internal static class Program
                 context.Optional("later", integer),
             ],
             context.Result(text),
+            context.UnknownThrows(),
             static (target, arguments, token) => BamlGeneratedHostCallableRuntime.Await(
                 ((Func<long, BamlOptional<string>, BamlOptional<long>, CancellationToken, Task<string>>)target)(
                     (long)arguments[0]!,
@@ -314,6 +316,7 @@ internal static class Program
             callback,
             tooMany,
             context.Result(text),
+            context.UnknownThrows(),
             static (_, _, _) => Task.FromResult<object?>(null)));
     }
 
@@ -348,6 +351,7 @@ internal static class Program
             callback,
             [context.Required(integer), context.Optional("suffix", text)],
             context.Result(text),
+            context.UnknownThrows(),
             static (target, arguments, token) => BamlGeneratedHostCallableRuntime.Await(
                 ((Func<long, BamlOptional<string>, CancellationToken, Task<string>>)target)(
                     (long)arguments[0]!,
@@ -411,6 +415,7 @@ internal static class Program
             callback,
             [],
             context.Result(text),
+            context.UnknownThrows(),
             static (target, _, token) => BamlGeneratedHostCallableRuntime.Await(
                 ((Func<CancellationToken, Task<string>>)target)(token)))
             .ReadHostCallable();
@@ -468,6 +473,7 @@ internal static class Program
             callback,
             [context.Required(integer)],
             context.Result(integer),
+            context.UnknownThrows(),
             static (target, arguments, token) => BamlGeneratedHostCallableRuntime.Await(
                 ((Func<long, CancellationToken, Task<long>>)target)(
                     (long)arguments[0]!,
@@ -512,6 +518,7 @@ internal static class Program
             callback,
             [],
             context.Result(text),
+            context.UnknownThrows(),
             static (target, _, token) => BamlGeneratedHostCallableRuntime.Await(
                 ((Func<CancellationToken, Task<string>>)target)(token)))
             .ReadHostCallable();

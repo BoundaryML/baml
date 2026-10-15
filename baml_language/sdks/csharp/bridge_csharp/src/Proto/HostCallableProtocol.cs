@@ -22,17 +22,60 @@ internal static class HostCallableProtocol
         ArgumentNullException.ThrowIfNull(ownership);
         functionCallId = NativeApi.RequireFunctionCallIdentifier(functionCallId);
 
+        // A host callable has no type of its own: the function type its slot
+        // declares is stated beside its handle, and the engine binds it to
+        // that type.
+        BamlTy functionType = FunctionType(callable.Descriptor);
         HostValueRegistration registration =
             HostValueRegistry.Shared.RegisterCallable(callable, functionCallId);
         ownership.AddTransfer(registration);
         return new InboundValue
         {
+            ValueType = functionType,
             Handle = new global::BamlBridge.Cffi.V1.BamlHandle
             {
                 Key = registration.Key,
                 HandleType = BamlHandleType.HostValueCallable,
             },
         };
+    }
+
+    /// <summary>
+    /// The declared function type of a generated host callable: each parameter's
+    /// declared type (an optional one by its wire name), the return type (the
+    /// unit type <c>null</c> for a void result) and the throws type.
+    /// </summary>
+    private static BamlTy FunctionType(BamlGeneratedHostCallableDescriptor descriptor)
+    {
+        var function = new BamlTyFunction
+        {
+            Ret = descriptor.Result.Type is { } result
+                ? PrimitiveProtocol.ParseTypeMetadata(result.Metadata, "host callable result")
+                : new BamlTy { Primitive = new BamlTyPrimitive { Kind = BamlTyPrimitiveKind.BamlTyPrimitiveNull } },
+            Throws = PrimitiveProtocol.ParseTypeMetadata(
+                descriptor.Throws.Metadata,
+                "host callable throws type"),
+        };
+        foreach (BamlGeneratedHostParameter parameter in descriptor.Parameters)
+        {
+            var wire = new BamlTyFunctionParam
+            {
+                Ty = PrimitiveProtocol.ParseTypeMetadata(
+                    parameter.Type.Metadata,
+                    "host callable parameter"),
+                Mode = parameter.Optional
+                    ? BamlTyFunctionParamMode.Optional
+                    : BamlTyFunctionParamMode.Required,
+            };
+            if (parameter.Optional)
+            {
+                wire.Name = parameter.WireIdentity;
+            }
+
+            function.Params.Add(wire);
+        }
+
+        return new BamlTy { Function = function };
     }
 
     internal static IReadOnlyList<object?> BindArguments(

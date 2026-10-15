@@ -595,10 +595,7 @@ internal static class PrimitiveProtocol
             PrimitiveCarrierKind.Class => EncodeClass(value, api, ownership, functionCallId),
             PrimitiveCarrierKind.Enum => EncodeEnum(value),
             PrimitiveCarrierKind.Union => EncodeUnion(value, api, ownership, functionCallId),
-            PrimitiveCarrierKind.Media => MediaProtocol.Encode(
-                RequireNativeApi(api, value.Kind),
-                RequireOwnership(ownership, value.Kind),
-                value.ReadMedia()),
+            PrimitiveCarrierKind.Media => MediaProtocol.Encode(value.ReadMedia()),
             PrimitiveCarrierKind.Prompt => new InboundValue
             {
                 PromptAstValue = value.ReadPromptAst(),
@@ -707,19 +704,19 @@ internal static class PrimitiveProtocol
             list.Values.Add(Encode(item, api, ownership, functionCallId));
         }
 
-        var inbound = new InboundValue { ListValue = list };
-        if (value.ItemTypeMetadata is { Length: > 0 } itemTypeMetadata)
+        // Every list leaves with its type: the codec that built it stated the
+        // declared element type.
+        return new InboundValue
         {
-            inbound.ValueType = new BamlTy
+            ListValue = list,
+            ValueType = new BamlTy
             {
                 List = new BamlTyList
                 {
-                    Item = ParseTypeMetadata(itemTypeMetadata, "list item"),
+                    Item = ParseTypeMetadata(value.ItemTypeMetadata, "list item"),
                 },
-            };
-        }
-
-        return inbound;
+            },
+        };
     }
 
     private static InboundValue EncodeMap(
@@ -738,21 +735,20 @@ internal static class PrimitiveProtocol
             });
         }
 
-        var inbound = new InboundValue { MapValue = map };
-        if (value.KeyTypeMetadata is { Length: > 0 } keyTypeMetadata
-            && value.ValueTypeMetadata is { Length: > 0 } valueTypeMetadata)
+        // Every map leaves with its type: the codec that built it stated the
+        // declared key and value types.
+        return new InboundValue
         {
-            inbound.ValueType = new BamlTy
+            MapValue = map,
+            ValueType = new BamlTy
             {
                 Map = new BamlTyMap
                 {
-                    Key = ParseTypeMetadata(keyTypeMetadata, "map key"),
-                    Value = ParseTypeMetadata(valueTypeMetadata, "map value"),
+                    Key = ParseTypeMetadata(value.KeyTypeMetadata, "map key"),
+                    Value = ParseTypeMetadata(value.ValueTypeMetadata, "map value"),
                 },
-            };
-        }
-
-        return inbound;
+            },
+        };
     }
 
     private static InboundValue EncodeClass(
@@ -793,32 +789,16 @@ internal static class PrimitiveProtocol
             },
         };
 
+    /// <summary>
+    /// A union has no wire shape of its own: its payload leaves as the value
+    /// it is, which implies or states its own type.
+    /// </summary>
     private static InboundValue EncodeUnion(
         BamlGeneratedValue value,
         NativeApi? api,
         EncodedCallArguments? ownership,
-        ulong functionCallId)
-    {
-        InboundValue encoded =
-            Encode(value.ReadUnionPayload(), api, ownership, functionCallId);
-        if (encoded.ValueType is null
-            && value.UnionSelectedTypeMetadata is { Length: > 0 } selectedTypeMetadata)
-        {
-            BamlTy selectedType =
-                ParseTypeMetadata(selectedTypeMetadata, "selected union option");
-            if (selectedType.TyCase is BamlTy.TyOneofCase.Union
-                or BamlTy.TyOneofCase.Optional)
-            {
-                throw new BamlProtocolException(
-                    "A generated union codec selected a non-concrete inbound type.",
-                    "InboundValue.value_type must identify the selected value node, not a union or optional shell.");
-            }
-
-            encoded.ValueType = selectedType;
-        }
-
-        return encoded;
-    }
+        ulong functionCallId) =>
+        Encode(value.ReadUnionPayload(), api, ownership, functionCallId);
 
     private static InboundValue EncodeHandle(
         global::Baml.BamlHandle value,
@@ -1336,7 +1316,7 @@ internal static class PrimitiveProtocol
         return type.ToByteArray();
     }
 
-    private static BamlTy ParseTypeMetadata(byte[]? metadata, string description)
+    internal static BamlTy ParseTypeMetadata(byte[]? metadata, string description)
     {
         if (metadata is null || metadata.Length == 0)
         {
