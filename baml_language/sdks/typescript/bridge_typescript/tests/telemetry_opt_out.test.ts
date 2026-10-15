@@ -52,7 +52,8 @@ describe('source runtime telemetry opt-out (#5013)', () => {
                 BOUNDARY_API_URL: `http://127.0.0.1:${address.port}`,
                 BOUNDARY_PROJECT: 'test/test',
                 OPENAI_API_KEY: 'unused-test-key',
-                DO_NOT_TRACK: '1',
+                // Runtime opt-out must work independently of CLI analytics opt-out.
+                DO_NOT_TRACK: '0',
             });
             const { stdout, stderr } = await runNode(process.execPath, ['--input-type=module', '--eval', `
                 import assert from 'node:assert/strict';
