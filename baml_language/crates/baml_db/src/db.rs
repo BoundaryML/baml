@@ -1363,6 +1363,7 @@ mod tests {
         SourceRootSpec::new(path, SourceRootKind::Dependency).named(Name::new(package))
     }
 
+    /// Invalidate interfaces throughout the selected world while preserving other roots.
     #[test]
     fn excluding_tests_invalidates_interfaces_and_covers_source_dependencies() {
         use baml_compiler2_hir_ty::package_interface::export_interface;
@@ -1875,6 +1876,7 @@ testset "suite" { test "leaf" { null } }
         assert!(!revived.is_session_submission(&db));
     }
 
+    /// Revived inputs retain their identities and restore fresh-root compilation defaults.
     #[test]
     fn removed_roots_are_revived_and_files_tombstoned() {
         let mut db = ProjectDatabase::new();

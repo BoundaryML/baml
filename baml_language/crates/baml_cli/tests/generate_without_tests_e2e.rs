@@ -57,6 +57,7 @@ testset "ONLY_TEST_5246_suite" {
 }
 "#;
 
+/// Run a fixture command without telemetry or passive agent checks.
 fn cli(project: &Path, args: &[&str]) -> Output {
     Command::new(common::baml_cli())
         .args(["--agent-skill-check", "off"])
@@ -73,6 +74,7 @@ fn cli(project: &Path, args: &[&str]) -> Output {
         .expect("spawn baml-cli")
 }
 
+/// Report CLI output when a fixture command fails.
 fn succeeded(output: &Output) {
     assert!(
         output.status.success(),
@@ -82,6 +84,7 @@ fn succeeded(output: &Output) {
     );
 }
 
+/// Write identical offline Rust-client fixtures at arbitrary checkout paths.
 fn project(path: &Path, tests: &str) {
     std::fs::create_dir_all(path).unwrap();
     common::write_project(path, &format!("{FUNCTIONS}{tests}"));
@@ -98,7 +101,9 @@ naming_convention = "preserve-case"
     .unwrap();
 }
 
+/// Read complete output trees, including manifests, for byte comparisons.
 fn generated_files(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+    /// Collect each file under its output-relative path.
     fn visit(root: &Path, dir: &Path, files: &mut BTreeMap<PathBuf, Vec<u8>>) {
         for entry in std::fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();
@@ -117,6 +122,7 @@ fn generated_files(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     files
 }
 
+/// Reject test symbols, constants, or checkout paths in persisted bytes.
 fn assert_absent(bytes: &[u8], needle: &str) {
     assert!(
         !bytes
@@ -126,6 +132,7 @@ fn assert_absent(bytes: &[u8], needle: &str) {
     );
 }
 
+/// Compare artifacts across checkouts and exercise persisted and source execution.
 #[tokio::test]
 async fn generation_excludes_tests_and_preserves_production_closures() {
     let temp = tempfile::tempdir().unwrap();
@@ -240,6 +247,7 @@ async fn generation_excludes_tests_and_preserves_production_closures() {
     );
 }
 
+/// Keep test diagnostics visible before production compilation strips tests.
 #[test]
 fn generation_still_reports_errors_in_tests() {
     let temp = tempfile::tempdir().unwrap();
