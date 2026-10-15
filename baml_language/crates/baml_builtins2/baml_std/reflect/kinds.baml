@@ -8,7 +8,7 @@ class Class {
     /// Construct a closed runtime class. Map iteration order is definition order.
     function new(
         name: string,
-        fields: map<string, root.Type | root.WithMeta<root.Type>>,
+        fields: map<string, root.TypeView | root.WithMeta<root.Type>>,
         implementations: root.interface.Implementation[] = [],
     ) -> root.Class throws root.errors.CompilationError {
         // Native functions receive the omitted-argument sentinel instead of
@@ -22,7 +22,7 @@ class Class {
     //baml:mut_vm
     function _new(
         name: string,
-        fields: map<string, root.Type | root.WithMeta<root.Type>>,
+        fields: map<string, root.TypeView | root.WithMeta<root.Type>>,
         implementations: root.interface.Implementation[],
     ) -> root.Class throws root.errors.CompilationError {
         $rust_function
@@ -48,6 +48,11 @@ class Class {
             $rust_function
         }
     }
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self.as_type()._to_string_impl()
+        }
+    }
     /// The class's fields, in declaration order. Ownerless: these describe
     /// the type, so `Field.value` on them returns `null`.
     //baml:mut_vm
@@ -58,8 +63,13 @@ class Class {
     /// The class declaration's own schema metadata.
     //baml:mut_vm
     //baml:fallible
-    function meta(self) -> root.Meta throws never {
+    function metadata(self) -> root.Meta throws never {
         $rust_function
+    }
+    /// The class's name, rendered like `to_string`: `Runtime`,
+    /// `shape.Inner`, `Box<int>`.
+    function name(self) -> string throws never {
+        self.as_type()._to_string_impl()
     }
 }
 
@@ -111,6 +121,11 @@ class Enum {
             $rust_function
         }
     }
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self.as_type()._to_string_impl()
+        }
+    }
     //baml:mut_vm
     //baml:fallible
     /// The enum's variants, in declaration order.
@@ -120,8 +135,12 @@ class Enum {
     //baml:mut_vm
     //baml:fallible
     /// The enum declaration's own schema metadata.
-    function meta(self) -> root.Meta throws never {
+    function metadata(self) -> root.Meta throws never {
         $rust_function
+    }
+    /// The enum's name, rendered like `to_string`: `Color`, `shape.Kind`.
+    function name(self) -> string throws never {
+        self.as_type()._to_string_impl()
     }
 }
 
@@ -138,7 +157,7 @@ class Union {
     ///
     /// - `reflect.errors.CompilationError` if the members cannot form a union.
     //baml:mut_vm
-    function new(types: root.Type[]) -> root.Union throws root.errors.CompilationError {
+    function new(types: root.TypeView[]) -> root.Union throws root.errors.CompilationError {
         $rust_function
     }
 
@@ -147,6 +166,11 @@ class Union {
         //baml:fallible
         function as_type(self) -> root.Type throws never {
             $rust_function
+        }
+    }
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self.as_type()._to_string_impl()
         }
     }
     /// The union's members, in canonical order.
@@ -177,6 +201,11 @@ class Literal {
             $rust_function
         }
     }
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self.as_type()._to_string_impl()
+        }
+    }
 
     /// Returns the string, int, bigint, bool, or enum variant represented by this literal type.
     /// The return type is unknown because enum variants can belong to any enum.
@@ -202,6 +231,11 @@ class Array {
             $rust_function
         }
     }
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self.as_type()._to_string_impl()
+        }
+    }
     /// The type of the array's elements.
     //baml:mut_vm
     //baml:fallible
@@ -219,7 +253,7 @@ class Map {
 
     /// Constructs the map type `map<key, value>`.
     //baml:mut_vm
-    function new(key: root.Type, value: root.Type) -> root.Map throws never {
+    function new(key: root.TypeView, value: root.TypeView) -> root.Map throws never {
         $rust_function
     }
 
@@ -228,6 +262,11 @@ class Map {
         //baml:fallible
         function as_type(self) -> root.Type throws never {
             $rust_function
+        }
+    }
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self.as_type()._to_string_impl()
         }
     }
     /// The type of the map's keys.
@@ -265,14 +304,10 @@ class Interface {
             $rust_function
         }
     }
-    //baml:vm
-    //baml:fallible
-    /// Whether `other` nominally implements this interface.
-    ///
-    /// The mirror of `reflect.Type.implements`, asked from the interface's
-    /// side. `false` when `other` is not a class.
-    function implemented_by(self, other: root.Type) -> bool throws never {
-        $rust_function
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self.as_type()._to_string_impl()
+        }
     }
 }
 
@@ -290,6 +325,11 @@ class Primitive {
             $rust_function
         }
     }
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self.as_type()._to_string_impl()
+        }
+    }
 }
 
 /// A function-kind view of a `type` value. Throws are intentionally not part
@@ -305,6 +345,11 @@ class Function {
         //baml:fallible
         function as_type(self) -> root.Type throws never {
             $rust_function
+        }
+    }
+    implements baml.ToString {
+        function to_string(self) -> string throws never {
+            self.as_type()._to_string_impl()
         }
     }
     //baml:mut_vm

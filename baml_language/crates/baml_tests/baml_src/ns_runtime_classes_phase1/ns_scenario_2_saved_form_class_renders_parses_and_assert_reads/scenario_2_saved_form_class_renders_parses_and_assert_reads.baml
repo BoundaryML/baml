@@ -21,13 +21,13 @@ class UnknownFieldKind {
 }
 
 function NoteType(saved: SavedField[]) -> reflect.Class {
-    let fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>> = {};
+    let fields: map<string, reflect.TypeView | reflect.WithMeta<reflect.Type>> = {};
     for (let field in saved) {
         let ty = match (field.kind) {
             "dropdown" => {
-                let members: reflect.Type[] = [];
+                let members: reflect.TypeView[] = [];
                 for (let option in field.options) {
-                    members.push(reflect.Literal.new(option).as_type())
+                    members.push(reflect.Literal.new(option))
                 }
                 reflect.Union.new(members).as_type()
             },

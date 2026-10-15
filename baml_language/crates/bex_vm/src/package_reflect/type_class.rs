@@ -210,13 +210,17 @@ impl BamlClassType for PackageReflectImpl {
     /// implement every interface in its `requires` closure, "direct impl" already
     /// covers transitive satisfaction.
     fn implements(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
-        let Some(self_ty) = type_value_ty(vm, *self_value) else {
+        // Either side may be a kind view: `implemented_by` swaps the receiver
+        // with an argument typed `reflect.TypeView`.
+        let self_value = super::type_kinds::type_view_value(vm, *self_value);
+        let other = super::type_kinds::type_view_value(vm, *other);
+        let Some(self_ty) = type_value_ty(vm, self_value) else {
             return false;
         };
-        let Some((iface_head, iface_args, iface_assoc)) = reflected_interface(vm, *other) else {
+        let Some((iface_head, iface_args, iface_assoc)) = reflected_interface(vm, other) else {
             return false;
         };
-        resolve::ImplResolver::for_value(vm, *self_value).type_implements(
+        resolve::ImplResolver::for_value(vm, self_value).type_implements(
             &self_ty,
             iface_head,
             &iface_args,

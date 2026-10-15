@@ -63,7 +63,7 @@ function _typed_arguments(
     args: map<string, unknown>,
 ) -> map<string, unknown> throws baml.errors.InvalidArgument {
     let sig = reflect.signature(handler);
-    let fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>> = {};
+    let fields: map<string, reflect.TypeView | reflect.WithMeta<reflect.Type>> = {};
     let sent: map<string, baml.json.json> = {};
     for (let param in sig.args.concat(sig.opts.values())) {
         if (!args.has(param.name)) {

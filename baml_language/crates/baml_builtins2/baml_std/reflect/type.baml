@@ -22,6 +22,12 @@ class Type {
         $rust_function
     }
 
+    implements root.TypeView {
+        function as_type(self) -> root.Type throws never {
+            self
+        }
+    }
+
     /// Construct an array type whose element is this type.
     //baml:mut_vm
     function array(self) -> root.Array throws never {
@@ -138,7 +144,7 @@ class Type {
     /// Returns `false` when `other` is not an interface, or when the
     /// receiver is not a class.
     //baml:vm
-    function implements(self, other: root.Type) -> bool throws never {
+    function implements(self, other: root.TypeView) -> bool throws never {
         $rust_function
     }
 
@@ -146,7 +152,7 @@ class Type {
     /// as `klass.implements(iface)`. Useful when the call-site naturally
     /// reads "does this interface include that class?".
     //baml:vm
-    function implemented_by(self, other: root.Type) -> bool throws never {
+    function implemented_by(self, other: root.TypeView) -> bool throws never {
         $rust_function
     }
 }

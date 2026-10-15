@@ -92,10 +92,68 @@ class Diagnostic {
     related_info: DiagnosticRelatedInfo[],
 }
 
-/// Common identity-preserving surface shared by every reflection kind view.
+/// Any `type` value: `reflect.Type` itself and every reflection kind view.
+///
+/// Every reflection API that takes a type takes a `TypeView`, so a kind view
+/// goes wherever a `reflect.Type` does. The shared type operations below are
+/// default methods that run on the wrapped `type` value; `reflect.Type`
+/// declares its own. `to_string` comes from `baml.ToString`, which
+/// `reflect.Type` and every kind view implement.
 interface TypeView {
     /// The `type` value this view wraps, restoring the unnarrowed type.
+    /// `reflect.Type` returns itself.
     function as_type(self) -> root.Type throws never;
+
+    /// Render deterministic canonical BAML source for this definition.
+    /// Non-equivalent declarations with the same display name are rejected.
+    function to_baml(self) -> string throws root.errors.CompilationError {
+        self.as_type().to_baml()
+    }
+
+    /// Construct an array type whose element is this type.
+    function array(self) -> root.Array throws never {
+        self.as_type().array()
+    }
+
+    /// Construct the canonical union of this type and null.
+    function optional(self) -> root.Union throws never {
+        self.as_type().optional()
+    }
+
+    /// Returns the precise kind view of this type value.
+    function kind(self) -> root.TypeKind throws never {
+        self.as_type().kind()
+    }
+
+    /// Pair this type value with schema metadata without changing its identity.
+    function meta(
+        self,
+        alias: string? = null,
+        description: string? = null,
+        docstring: string? = null,
+        other: map<string, string>? = null,
+    ) -> root.WithMeta<root.Type> throws never {
+        self.as_type().meta(
+            alias = alias,
+            description = description,
+            docstring = docstring,
+            other = other,
+        )
+    }
+
+    /// True iff this type nominally implements the interface `other`.
+    /// `false` when `other` is not an interface, or when this type is not a
+    /// class.
+    function implements(self, other: root.TypeView) -> bool throws never {
+        self.as_type().implements(other)
+    }
+
+    /// Reverse of `implements`: `iface.implemented_by(klass)` is the same as
+    /// `klass.implements(iface)`. `false` when this type is not an interface,
+    /// or when `other` is not a class.
+    function implemented_by(self, other: root.TypeView) -> bool throws never {
+        self.as_type().implemented_by(other)
+    }
 }
 
 /// The closed set of reflection views for a runtime `type` value.
@@ -275,7 +333,7 @@ interface AnyClass {
         let class_type: root.Class = root.Type.of_value(self).as_class() else {
             return root.Meta { alias: null, description: null, docstring: null, other: {}, skip: false };
         };
-        class_type.meta()
+        class_type.metadata()
     }
 }
 
@@ -435,7 +493,7 @@ class Package {
     //baml:mut_vm
     function with_types(
         self,
-        types: map<string, root.Type | root.TypeView>,
+        types: map<string, root.TypeView>,
     ) -> Package throws root.errors.CompilationError {
         $rust_function
     }
