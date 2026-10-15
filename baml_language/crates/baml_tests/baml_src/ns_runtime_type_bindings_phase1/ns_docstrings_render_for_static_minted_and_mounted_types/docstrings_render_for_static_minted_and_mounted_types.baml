@@ -39,7 +39,7 @@ function main() -> string {
     let make_mounted = compiled.get_function<() -> DocAnchor>("root.make_mounted");
     let mounted = reflect.Type.of_value(make_mounted());
 
-    `${StaticDoc.type().to_baml()}~~${StaticState.type().to_baml()}~~${ai.wire.render_output_format(StaticDoc.type())}~~${ai.wire.render_output_format(StaticState.type())}~~${minted.as_type().to_baml()}~~${ai.wire.render_output_format(minted.as_type())}~~${mounted.to_baml()}~~${ai.wire.render_output_format(mounted)}`
+    `${StaticDoc.type().to_baml()}~~${StaticState.type().to_baml()}~~${ai.wire.render_output_format(StaticDoc.type())}~~${ai.wire.render_output_format(StaticState.type())}~~${minted.to_baml()}~~${ai.wire.render_output_format(minted.as_type())}~~${mounted.to_baml()}~~${ai.wire.render_output_format(mounted)}`
 }
 
 test "docstrings_render_for_static_minted_and_mounted_types" {

@@ -39,11 +39,11 @@ class Tag {
 }
 
 function item_class() -> reflect.Class {
-    reflect.Type.of<Item>().as_class() ?? throw "Item is a class"
+    Item.type().as_class() ?? throw "Item is a class"
 }
 
 function mood_enum() -> reflect.Enum {
-    reflect.Type.of<Mood>().as_enum() ?? throw "Mood is an enum"
+    Mood.type().as_enum() ?? throw "Mood is an enum"
 }
 
 function rendered(view: reflect.TypeView) -> string throws never {
@@ -72,22 +72,22 @@ test "a class kind and an array of it are field types" {
     );
     let fields = tags.fields();
     assert.equal(fields[0].type, reflect.Type.of<Item[]>());
-    assert.equal(fields[1].type, reflect.Type.of<Item>());
+    assert.equal(fields[1].type, Item.type());
     assert.equal(fields[1].meta.description, "the first item");
     assert.equal(fields[2].type, reflect.Type.of<Mood?>())
 }
 
 test "a union of kinds is written inline" {
-    let union = reflect.Union.new([item_class(), mood_enum(), reflect.Type.of<int>()]);
+    let union = reflect.Union.new([item_class(), mood_enum(), int.type()]);
     assert.equal(union.as_type(), reflect.Type.of<Item | Mood | int>())
 }
 
 test "a map takes kinds for its key and value" {
-    let string_kind = reflect.Type.of<string>().as_primitive() ?? throw "string is a primitive";
+    let string_kind = string.type().as_primitive() ?? throw "string is a primitive";
     let by_name = reflect.Map.new(string_kind, item_class());
     assert.equal(by_name.as_type(), reflect.Type.of<map<string, Item>>());
     assert.equal(
-        reflect.Map.new(reflect.Type.of<string>(), mood_enum()).as_type(),
+        reflect.Map.new(string.type(), mood_enum()).as_type(),
         reflect.Type.of<map<string, Mood>>(),
     )
 }
@@ -104,7 +104,7 @@ test "a builder field and a pending union take kinds" {
 
 test "type operations run on a class kind" {
     let item = item_class();
-    let note = reflect.Type.of<Note>().as_class() ?? throw "Note is a class";
+    let note = Note.type().as_class() ?? throw "Note is a class";
     assert.equal(item.array().as_type(), reflect.Type.of<Item[]>());
     assert.equal(item.optional().as_type(), reflect.Type.of<Item?>());
     assert.equal(note.to_baml(), "class kind_views_as_types.Note {\n  body string\n}");
@@ -112,12 +112,12 @@ test "type operations run on a class kind" {
 }
 
 test "implements and implemented_by take kinds on both sides" {
-    let tag = reflect.Type.of<Tag>().as_class() ?? throw "Tag is a class";
+    let tag = Tag.type().as_class() ?? throw "Tag is a class";
     let labeled = reflect.Type.of<Labeled>().as_interface() ?? throw "Labeled is an interface";
     assert.is_true(tag.implements(labeled));
     assert.is_true(labeled.implemented_by(tag));
-    assert.is_true(reflect.Type.of<Tag>().implements(labeled));
-    assert.is_true(labeled.implemented_by(reflect.Type.of<Tag>()));
+    assert.is_true(Tag.type().implements(labeled));
+    assert.is_true(labeled.implemented_by(Tag.type()));
     assert.equal(item_class().implements(labeled), false)
 }
 
@@ -132,8 +132,8 @@ test "class and enum kinds read their metadata" {
 test "class and enum kinds are named like their type" {
     let item = item_class();
     let mood = mood_enum();
-    let boxed = reflect.Type.of<Box<int>>().as_class() ?? throw "Box<int> is a class";
-    let runtime = reflect.Class.new("Runtime", { "x": reflect.Type.of<int>() });
+    let boxed = Box<int>.type().as_class() ?? throw "Box<int> is a class";
+    let runtime = reflect.Class.new("Runtime", { "x": int.type() });
     let color = reflect.Enum.new("Color", ["RED"]);
 
     assert.equal(item.name(), "kind_views_as_types.Item");
@@ -160,8 +160,8 @@ test "a class value and its class kind share a name" {
 
 test "a TypeView parameter takes reflect.Type and every kind" {
     let expected = "class kind_views_as_types.Note kind_views_as_types.Note | null class kind_views_as_types.Note {\n  body string\n}";
-    assert.equal(described(reflect.Type.of<Note>()), expected);
-    assert.equal(described(reflect.Type.of<Note>().as_class() ?? throw "Note is a class"), expected);
+    assert.equal(described(Note.type()), expected);
+    assert.equal(described(Note.type().as_class() ?? throw "Note is a class"), expected);
     assert.equal(
         described(mood_enum()),
         "enum kind_views_as_types.Mood kind_views_as_types.Mood | null enum kind_views_as_types.Mood {\n  Happy\n  Sad\n}",

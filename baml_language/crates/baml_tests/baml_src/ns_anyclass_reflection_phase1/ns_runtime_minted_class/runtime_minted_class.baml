@@ -33,7 +33,7 @@ function main() -> bool {
             "fifth": optional_string,
         },
     );
-    let type Runtime = runtime_t.as_type();
+    let type Runtime = runtime_t;
     let opaque = Extract@parse<Runtime>(`{"first":"one","second":"two","third":null,"fourth":"four","fifth":"five"}`);
     let record: reflect.AnyClass = opaque else {
         throw "Expected class"

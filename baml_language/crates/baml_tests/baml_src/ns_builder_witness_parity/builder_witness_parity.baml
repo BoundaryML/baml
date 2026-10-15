@@ -38,7 +38,7 @@ test "builder_build_with_implementations_validates_then_freezes_atomically" {
     };
 
     assert.equal(failure_code, "E0001");
-    assert.is_true(person_t.as_type().implements(reflect.Type.of<Named>()));
+    assert.is_true(person_t.implements(reflect.Type.of<Named>()));
     assert.equal(person_pending.resolved(), person_t.as_type());
     assert.equal(address_pending.resolved(), address_t.as_type());
     assert.equal(person_again.as_type(), person_t.as_type());
@@ -58,9 +58,9 @@ test "map_and_builder_witnessed_classes_are_definition_equal" {
     let builder_t = builder.build(implementations = [witness]);
 
     assert.is_true(map_t.as_type() != builder_t.as_type());
-    assert.equal(map_t.as_type().to_baml(), builder_t.as_type().to_baml());
-    assert.is_true(map_t.as_type().implements(reflect.Type.of<Named>()));
-    assert.is_true(builder_t.as_type().implements(reflect.Type.of<Named>()))
+    assert.equal(map_t.to_baml(), builder_t.to_baml());
+    assert.is_true(map_t.implements(reflect.Type.of<Named>()));
+    assert.is_true(builder_t.implements(reflect.Type.of<Named>()))
 }
 
 test "resolved_pending_from_frozen_group_is_accepted_by_another_builder" {

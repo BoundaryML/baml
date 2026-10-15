@@ -327,7 +327,7 @@ test "nested_type_walker_and_kind_specific_readback_work_end_to_end" {
 test "nested_views_of_a_runtime_type_keep_its_definitions" {
     let choice = reflect.Enum.new("Choice", ["FIRST", "SECOND"]).as_type();
 
-    let root_type = reflect.Class.new("Root", { "choices": choice.array().as_type() }).as_type();
+    let root_type = reflect.Class.new("Root", { "choices": choice.array() }).as_type();
     let root_class = root_type.as_class() ?? throw "expected class";
     let field = root_class.fields().at(0) ?? throw "expected field";
     let field_type = field.type ?? throw "expected field type";

@@ -27,7 +27,7 @@ function rl_record() -> reflect.AnyClass {
 }
 
 test "get_class hit returns the class" {
-    assert.equal(rl_package().get_class("Foo").as_type().to_string(), "Foo")
+    assert.equal(rl_package().get_class("Foo").to_string(), "Foo")
 }
 
 test "get_class miss throws NotFound" {
@@ -61,7 +61,7 @@ test "find_enum returns the enum or null" {
 }
 
 test "get_interface hit returns the interface" {
-    assert.equal(rl_package().get_interface("Shape").as_type().to_string(), "Shape")
+    assert.equal(rl_package().get_interface("Shape").to_string(), "Shape")
 }
 
 test "get_interface miss throws NotFound" {

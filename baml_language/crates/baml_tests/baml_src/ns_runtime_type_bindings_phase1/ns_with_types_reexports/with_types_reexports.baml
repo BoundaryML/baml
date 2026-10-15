@@ -38,12 +38,12 @@ test "a base and its view are one package to a consumer" {
     );
     let same = consumer.get_function<() -> bool>("root.same");
     assert.is_true(same());
-    let type Item = base.get_class("root.Item").as_type();
+    let type Item = base.get_class("root.Item");
     let through = consumer.get_function<(Item) -> Item>("root.through");
     let make = base.get_function<(int) -> Item>("root.make");
     let item = through(make(3));
     assert.equal(reflect.Type.of_value(item), reflect.Type.of<Item>());
-    let type Extra = extra.as_type();
+    let type Extra = extra;
     let tagged = consumer.get_function<() -> Extra>("root.tagged");
     assert.equal(reflect.Type.of_value(tagged()), extra.as_type())
 }
@@ -61,7 +61,7 @@ test "a view alone reaches its base, and the base's functions run in the base" {
         },
         packages = { "app": view },
     );
-    let type Item = base.get_class("root.Item").as_type();
+    let type Item = base.get_class("root.Item");
     let build = consumer.get_function<() -> Item>("root.build");
     let item = build();
     assert.equal(reflect.Type.of_value(item), reflect.Type.of<Item>());

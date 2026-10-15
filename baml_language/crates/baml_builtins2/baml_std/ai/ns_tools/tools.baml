@@ -85,7 +85,7 @@ function _typed_arguments(
             throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${e.message}` }
         },
     };
-    let type Arguments = parameters.as_type();
+    let type Arguments = parameters;
     let aligned = baml.sap.coerce<Arguments>(sent) catch (e) {
         baml.errors.ParseError => {
             // The text goes back to the model, and it quotes the value that
