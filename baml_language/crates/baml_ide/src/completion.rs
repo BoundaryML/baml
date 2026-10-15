@@ -777,6 +777,7 @@ function f() -> int {
                 "neq",
                 "to_json",
                 "to_string",
+                "type",
             ]
         );
         for item in &items {

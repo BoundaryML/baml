@@ -8,7 +8,7 @@ class Meters {
     value: int,
 }
 
-implementations (4):
+implementations (5):
   implement Scale<int> for Meters  scale.baml:8
     function scale(self, by: int) -> int throws never  scale.baml:9-11
   implement Scale<float> for Meters  scale.baml:13
@@ -16,6 +16,7 @@ implementations (4):
   implement Scale<string> for Meters  extra.baml:2
     function scale(self, by: string) -> int throws never  extra.baml:3-5
   implement<T> Concrete for T  <builtin>/baml/core.baml:21
+  implement<T> Reflectable for T  <builtin>/reflect/reflect.baml:235
 
 references (0):
 

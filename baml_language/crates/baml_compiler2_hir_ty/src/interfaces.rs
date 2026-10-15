@@ -2464,6 +2464,14 @@ fn determine_concrete<'db>(
             .filter_map(|(declarer, keep)| keep.then_some(declarer))
             .collect();
     }
+    // `reflect.Reflectable` declares `type` for every type; any other
+    // interface declaring the name keeps it (`Kinded.type()` on an
+    // implementor stays `Kinded`'s).
+    let reflectable =
+        |iface: &baml_type::Interface| crate::impls::is_reflectable(facts.lang(), &iface.name);
+    if declarers.iter().any(|iface| !reflectable(iface)) {
+        declarers.retain(|iface| !reflectable(iface));
+    }
     crate::method_resolution::prefer_explicit_members(
         db,
         viewer,

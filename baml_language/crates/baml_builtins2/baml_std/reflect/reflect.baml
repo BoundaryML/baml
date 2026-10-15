@@ -217,6 +217,23 @@ interface AnyClass {
 
 implement<T> AnyClass for T {}
 
+/// Implemented automatically by every type, giving it a static `type()`
+/// method: `int.type()` is the same value as `reflect.Type.of<int>()`.
+///
+/// Spell it on a declared type written as one name, optionally qualified or
+/// with generic arguments: `Foo.type()`, `root.models.Base.type()`,
+/// `Box<int[]>.type()`. Array, optional, union, map and function types, and
+/// generic type parameters, keep the `reflect.Type.of<T>()` form. A type that
+/// declares its own `type` method keeps resolving to that method.
+interface Reflectable {
+    /// This type's runtime type value.
+    function type() -> root.Type throws never {
+        root.Type.of<Self>()
+    }
+}
+
+implement<T> Reflectable for T {}
+
 /// The runtime signature of a function value, reconstructed from the value
 /// itself (BEP-062). Positional (required) parameters appear in `args` in
 /// declaration order; named/optional parameters appear in `opts`, keyed by

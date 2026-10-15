@@ -10,7 +10,8 @@ enum Color {
     Blue,
 }
 
-implementations (1):
+implementations (2):
   implement<T> Concrete for T  <builtin>/baml/core.baml:21
+  implement<T> Reflectable for T  <builtin>/reflect/reflect.baml:235
 
 references (0):
