@@ -63,3 +63,26 @@ source: crates/baml_tests/src/generated_tests.rs
  80 │ │           Greeting => "greeting",
  81 │ ╰─▶     }
     ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all on type int | string | Greeting; missing: Greeting
+     ╭─[catch_all_coverage.baml:107:5]
+ 107 │ ╭─▶     greet(1) catch_all (e) {
+ 108 │ │           int => "int",
+ 109 │ │           string => "string",
+ 110 │ │           Greeting { text: "hi" } => "hi",
+ 111 │ ╰─▶     }
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all_panics on type int | string | Greeting; missing: baml.panics.Panic
+     ╭─[catch_all_coverage.baml:116:5]
+ 116 │ ╭─▶     greet(1) catch_all_panics (e) {
+ 117 │ │           int => "int",
+ 118 │ │           string => "string",
+ 119 │ │           Greeting => "greeting",
+ 120 │ │           baml.panics.IndexOutOfBounds { index: 0 } => "index 0",
+ 121 │ ╰─▶     }
+     ╰────

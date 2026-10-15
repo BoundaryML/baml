@@ -103,3 +103,23 @@ function Exhaustive() -> string throws never {
     };
     a + b + c + d
 }
+
+// A refutable arm handles only some values of its type, so it covers none:
+// `Greeting { text: "hi" }` leaves other greetings unhandled...
+function RefutableErrorArm() -> string {
+    greet(1) catch_all (e) {
+        int => "int",
+        string => "string",
+        Greeting { text: "hi" } => "hi",
+    }
+}
+
+// ...and `IndexOutOfBounds { index: 0 }` leaves other out-of-bounds panics.
+function RefutablePanicArm() -> string {
+    greet(1) catch_all_panics (e) {
+        int => "int",
+        string => "string",
+        Greeting => "greeting",
+        baml.panics.IndexOutOfBounds { index: 0 } => "index 0",
+    }
+}

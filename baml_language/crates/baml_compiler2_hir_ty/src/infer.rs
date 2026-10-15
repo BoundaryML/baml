@@ -10780,18 +10780,24 @@ impl<'db> InferenceContext<'db> {
                 // bind denotes `unknown` and so definitely-matches every
                 // fact below). Bindings recorded here are overwritten by
                 // the real walk against the arm's scrutinee.
-                let claim = self
-                    .lower_pattern(body, arm.pattern, &Ty::intern(InferTy::Unknown))
-                    .matched_ty;
-                // Fact-by-fact matching: a fact INSIDE the claim is
-                // definitely handled (and subtracts); a claim inside a
-                // fact MAY receive it (narrowing view, no subtraction).
+                let probe = self.lower_pattern(body, arm.pattern, &Ty::intern(InferTy::Unknown));
+                let claim = probe.matched_ty;
+                // A refutable pattern (`Foo { x: 1 }`) handles only SOME
+                // values of its claimed type, so it discharges nothing - the
+                // B-1069 rule `match` applies to its residual.
+                let claim_is_total = probe.consumes_matched;
+                // Fact-by-fact matching: a fact INSIDE a total claim is
+                // definitely handled (and subtracts); otherwise a claim
+                // overlapping a fact MAY receive it (narrowing view, no
+                // subtraction).
                 let mut may: Vec<Ty> = Vec::new();
                 let mut definite: Vec<Ty> = Vec::new();
                 for fact in &facts {
                     if self.provable_subtype(fact, &claim) {
                         may.push(fact.clone());
-                        definite.push(fact.clone());
+                        if claim_is_total {
+                            definite.push(fact.clone());
+                        }
                     } else if self.provable_subtype(&claim, fact) {
                         may.push(fact.clone());
                     }
@@ -10805,15 +10811,26 @@ impl<'db> InferenceContext<'db> {
                 // earlier arms drained.
                 let wildcard_traps_panics =
                     matches!(claim.kind(), InferTy::Unknown) && clause.kind.wildcard_traps_panics();
-                traps_every_panic |= wildcard_traps_panics;
-                if let Some(panic) = self.panic_subset(&claim) {
-                    trapped_panics.push(panic.clone());
+                if wildcard_traps_panics {
+                    // The panics no earlier arm trapped reach it beside
+                    // whatever errors remain.
+                    if !traps_every_panic {
+                        let untrapped = self.panics_not_trapped(&trapped_panics);
+                        if untrapped.is_empty() && may.is_empty() && had_facts {
+                            self.pending_diags.push(PendingDiag::UnreachableArm {
+                                expr: arm.body,
+                                warning: true,
+                            });
+                        }
+                        may.extend(untrapped);
+                    }
+                    traps_every_panic = true;
+                } else if let Some(panic) = self.panic_subset(&claim) {
+                    if claim_is_total {
+                        trapped_panics.push(panic.clone());
+                    }
                     may.push(panic);
-                } else if !wildcard_traps_panics
-                    && had_facts
-                    && may.is_empty()
-                    && !claim.has_error()
-                {
+                } else if had_facts && may.is_empty() && !claim.has_error() {
                     // Earlier arms drained every fact this arm could
                     // receive (and it claims no panic): unreachable. An
                     // ERRORED claim (unresolved class pattern) judges
@@ -10937,13 +10954,18 @@ impl<'db> InferenceContext<'db> {
         });
     }
 
+    /// `baml.panics.Panic`, the alias naming every panic class.
+    fn every_panic(&self) -> Option<Ty> {
+        let alias = self.lang_decl(baml_base::LangPackage::Baml, &["panics"], "Panic")?;
+        Some(Ty::intern(InferTy::TypeAlias(alias)))
+    }
+
     /// The `baml.panics.*` classes no type in `trapped` covers. When none
     /// is covered, the single `baml.panics.Panic` alias stands for them all.
     fn panics_not_trapped(&mut self, trapped: &[Ty]) -> Vec<Ty> {
-        let Some(alias) = self.lang_decl(baml_base::LangPackage::Baml, &["panics"], "Panic") else {
+        let Some(alias) = self.every_panic() else {
             return Vec::new();
         };
-        let alias = Ty::intern(InferTy::TypeAlias(alias));
         let every_panic = self.expand_alias_ty(&alias);
         let members: Vec<Ty> = match every_panic.kind() {
             InferTy::Union(members) => members.to_vec(),
