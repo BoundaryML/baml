@@ -16,7 +16,7 @@
 //! generics are invariant.
 
 use baml_type::normalize;
-use bex_vm_types::{RealizedTy, Ty, TyTemplate, Value, errors::VmInternalError};
+use bex_vm_types::{Object, RealizedTy, Ty, TyTemplate, Value, errors::VmInternalError};
 
 use crate::BexVm;
 
@@ -64,10 +64,111 @@ pub(crate) fn value_matches_template(
 /// single value, so nothing decides membership in it short of the value
 /// reporting the type of exactly itself.
 pub fn value_is_member(vm: &BexVm, value: Value, ty: &Ty) -> Option<bool> {
+    if let Some(answer) = primitive_member(vm, value, ty) {
+        return Some(answer);
+    }
     // The canonical algebra operates over `Ty`; a value's realized type widens
     // into it.
     let value_ty: Ty = vm.value_singleton_ty(value)?.into();
     Some(normalize::is_subtype(&value_ty, ty, vm))
+}
+
+/// The membership question answered without the algebra where the answer is
+/// fixed by the slot alone: `unknown` admits every value, and a primitive type
+/// admits exactly the values of its own concrete type, since concrete types
+/// are atomic (`TYPE_SYSTEM.md` "Concrete Types": none is a subtype of
+/// another). Every other slot is `None`, for the algebra to decide.
+///
+/// This is the oracle in front of [`value_is_member`]'s general path, which
+/// reconstructs the value's singleton type (copying a string or bigint to
+/// build its literal) and canonicalizes both sides.
+fn primitive_member(vm: &BexVm, value: Value, ty: &Ty) -> Option<bool> {
+    let slot = match ty {
+        Ty::Unknown => return Some(true),
+        Ty::Int => Primitive::Int,
+        Ty::Bigint => Primitive::Bigint,
+        Ty::Float => Primitive::Float,
+        Ty::String => Primitive::String,
+        Ty::Bool => Primitive::Bool,
+        Ty::Null => Primitive::Null,
+        Ty::Uint8Array => Primitive::Uint8Array,
+        Ty::Media(_)
+        | Ty::Literal(..)
+        | Ty::Class(..)
+        | Ty::Interface(..)
+        | Ty::Enum(_)
+        | Ty::EnumVariant(..)
+        | Ty::List(_)
+        | Ty::Map { .. }
+        | Ty::Union(_)
+        | Ty::Function { .. }
+        | Ty::Future(..)
+        | Ty::RustType
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::TypeAlias(_)
+        | Ty::TypeVar(_)
+        | Ty::AssociatedTypeProjection { .. }
+        | Ty::Never
+        | Ty::Error => return None,
+    };
+    Some(value_primitive(vm, value) == Some(slot))
+}
+
+/// The primitive concrete types, for [`primitive_member`]'s comparison.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Primitive {
+    Int,
+    Bigint,
+    Float,
+    String,
+    Bool,
+    Null,
+    Uint8Array,
+}
+
+/// `value`'s concrete type if it is a primitive; `None` for every other value
+/// (an instance, a variant, a container, a callable, a definition object), none
+/// of which inhabits a primitive type.
+fn value_primitive(vm: &BexVm, value: Value) -> Option<Primitive> {
+    if value.as_int().is_some() {
+        return Some(Primitive::Int);
+    }
+    if value.as_bool().is_some() {
+        return Some(Primitive::Bool);
+    }
+    if value.is_null() {
+        return Some(Primitive::Null);
+    }
+    match vm.get_object(value.as_object_ptr()?) {
+        Object::Float(_) => Some(Primitive::Float),
+        Object::Bigint(_) => Some(Primitive::Bigint),
+        Object::String(_) => Some(Primitive::String),
+        Object::Uint8Array(_) => Some(Primitive::Uint8Array),
+        Object::Package(_)
+        | Object::Function(_)
+        | Object::Interface(_)
+        | Object::ImplRule(_)
+        | Object::Class(_)
+        | Object::Instance(_)
+        | Object::Enum(_)
+        | Object::TypeAlias(_)
+        | Object::Variant(_)
+        | Object::Closure(_)
+        | Object::BoundMethod(_)
+        | Object::GenericFunction(_)
+        | Object::HostClosure(_)
+        | Object::Cell(_)
+        | Object::Array(_)
+        | Object::Map(_)
+        | Object::Future(_)
+        | Object::RustData(_)
+        | Object::Type(_) => None,
+        Object::Tombstone => Object::tombstone_reached(),
+        #[cfg(feature = "heap_debug")]
+        Object::Sentinel(_) => None,
+    }
 }
 
 /// Whether `actual` is *invariantly* the type denoted by `template` (resolved
