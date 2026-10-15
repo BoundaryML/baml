@@ -612,6 +612,7 @@ impl ProjectDatabase {
                 );
                 root.set_kind(self).to(kind);
                 root.set_self_name(self).to(self_name);
+                root.set_exclude_tests(self).to(false);
                 root.set_interface(self).to(interface);
                 root.set_dependencies(self).to(dependencies);
                 root
@@ -1881,6 +1882,7 @@ testset "suite" { test "leaf" { null } }
         let path = Path::new("/dep/a.baml");
         let file = db.add_or_update_file_in(dep, path, "class A {}");
         let file_id = file.file_id(&db);
+        db.exclude_tests(dep);
 
         db.remove_source_root(dep);
         assert!(db.source_roots().is_empty());
@@ -1896,10 +1898,22 @@ testset "suite" { test "leaf" { null } }
             revived.self_name(&db).as_ref().map(Name::as_str),
             Some("dep2")
         );
-        let file_again = db.add_or_update_file_in(revived, path, "class B {}");
+        let file_again =
+            db.add_or_update_file_in(revived, path, "class B {} test \"restored\" { null }");
         assert_eq!(file_again.file_id(&db), file_id);
         assert_eq!(file_again.source_root(&db), revived);
         assert_eq!(db.root_files(revived), vec![file_again]);
+        assert!(
+            baml_compiler2_hir::item_data::file_functions(&db, file_again)
+                .iter()
+                .any(|&function| {
+                    baml_compiler2_hir::item_data::function_data(&db, function)
+                        .metadata
+                        .origin
+                        == baml_compiler2_ast::FunctionOrigin::TestInitializer
+                }),
+            "a revived root must include tests by default"
+        );
     }
 
     #[test]
