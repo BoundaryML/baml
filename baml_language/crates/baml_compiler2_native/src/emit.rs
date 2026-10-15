@@ -183,6 +183,8 @@ pub fn compile_program<'db>(
             body: body_of(unit.mir),
             analysis: &unit.analysis,
             out: String::new(),
+            pending: Vec::new(),
+            temps: 0,
         };
         match generator.function(&symbols[name]) {
             Ok(code) => {
@@ -234,6 +236,8 @@ pub fn compile_program<'db>(
                 body: body_of(unit.mir),
                 analysis: &unit.analysis,
                 out: String::new(),
+                pending: Vec::new(),
+                temps: 0,
             };
             if let Ok(code) = generator.function(&function.symbol) {
                 bodies.push_str(&code);
@@ -599,6 +603,11 @@ struct Generator<'a, 'db> {
     body: &'a MirFunctionBody<'db>,
     analysis: &'a Analysis,
     out: String,
+    /// `let` bindings to emit before the statement being generated: every
+    /// sub-expression that touches `vm` is hoisted so no VM call appears
+    /// inside another's argument list (which borrows `vm` twice).
+    pending: Vec<String>,
+    temps: usize,
 }
 
 type Gen<T> = Result<T, Rejection>;
@@ -684,6 +693,38 @@ impl<'db> Generator<'_, 'db> {
         self.out.push('\n');
     }
 
+    /// Emit a statement, preceded by the bindings its expressions hoisted.
+    fn statement(&mut self, depth: usize, text: &str) {
+        let pending = std::mem::take(&mut self.pending);
+        for binding in pending {
+            self.line(depth, &binding);
+        }
+        self.line(depth, text);
+    }
+
+    /// Bind `expr` to a temporary when it calls into the VM, so it can be an
+    /// argument of another VM call.
+    fn hoist(&mut self, expr: Expr) -> Expr {
+        if !expr.code.contains("vm.") {
+            return expr;
+        }
+        let name = format!("t{}", self.temps);
+        self.temps += 1;
+        self.pending.push(format!(
+            "let {name}: {} = {};",
+            expr.repr.rust_type(),
+            expr.code
+        ));
+        Expr::new(name, expr.repr)
+    }
+
+    /// `code`, held as `repr`, coerced to a `Value` that can be a VM call
+    /// argument.
+    fn value_arg(&mut self, code: &str, repr: Repr) -> String {
+        let coerced = coerce(code, repr, Repr::Value);
+        self.hoist(Expr::new(coerced, Repr::Value)).code
+    }
+
     fn stmt(&mut self, stmt: &Stmt, depth: usize) -> Gen<()> {
         match stmt {
             Stmt::Leaf(block) => self.leaf(BlockId(*block), depth),
@@ -767,7 +808,7 @@ impl<'db> Generator<'_, 'db> {
                 StatementKind::Assign { destination, value } => {
                     let value = self.rvalue(id, value)?;
                     let code = self.store(id, destination, &value)?;
-                    self.line(depth, &code);
+                    self.statement(depth, &code);
                 }
                 StatementKind::Drop(_) | StatementKind::Nop => {}
                 StatementKind::FreshCell { .. } => {
@@ -783,7 +824,7 @@ impl<'db> Generator<'_, 'db> {
             Terminator::Branch { condition, .. } => {
                 let condition = self.operand(id, condition)?;
                 let code = coerce(&condition.code, condition.repr, Repr::Bool);
-                self.line(depth, &format!("c{} = {code};", id.0));
+                self.statement(depth, &format!("c{} = {code};", id.0));
             }
             Terminator::NarrowBind {
                 source,
@@ -792,21 +833,21 @@ impl<'db> Generator<'_, 'db> {
                 ..
             } => {
                 let source = self.operand(id, source)?;
-                let source_value = coerce(&source.code, source.repr, Repr::Value);
-                self.line(depth, &format!("let narrowed = {source_value};"));
+                let source_value = self.value_arg(&source.code, source.repr);
+                self.statement(depth, &format!("let narrowed = {source_value};"));
                 let test = self.type_test("narrowed", test)?;
-                self.line(depth, &format!("c{} = {test};", id.0));
+                self.statement(depth, &format!("c{} = {test};", id.0));
                 let store = self.store(
                     id,
                     &Place::Local(*destination),
                     &Expr::new("narrowed", Repr::Value),
                 )?;
-                self.line(depth, &format!("if c{} {{ {store} }}", id.0));
+                self.statement(depth, &format!("if c{} {{ {store} }}", id.0));
             }
             Terminator::Switch { discriminant, .. } => {
                 let discriminant = self.operand(id, discriminant)?;
                 let code = coerce(&discriminant.code, discriminant.repr, Repr::Int);
-                self.line(depth, &format!("d{} = {code};", id.0));
+                self.statement(depth, &format!("d{} = {code};", id.0));
             }
             Terminator::Call {
                 callee,
@@ -816,7 +857,7 @@ impl<'db> Generator<'_, 'db> {
             } => {
                 let call = self.call(id, callee, args)?;
                 let code = self.store(id, destination, &Expr::new(call, Repr::Value))?;
-                self.line(depth, &code);
+                self.statement(depth, &code);
             }
             Terminator::ShortCircuit {
                 operand,
@@ -825,16 +866,16 @@ impl<'db> Generator<'_, 'db> {
                 ..
             } => {
                 let operand = self.operand(id, operand)?;
-                let value = coerce(&operand.code, operand.repr, Repr::Value);
-                self.line(depth, &format!("let lhs = {value};"));
+                let value = self.value_arg(&operand.code, operand.repr);
+                self.statement(depth, &format!("let lhs = {value};"));
                 let short = match kind {
                     ShortCircuitKind::And => "!vm.is_truthy(lhs)",
                     ShortCircuitKind::Or => "vm.is_truthy(lhs)",
                     ShortCircuitKind::Coalesce => "!lhs.is_null()",
                 };
-                self.line(depth, &format!("c{} = {short};", id.0));
+                self.statement(depth, &format!("c{} = {short};", id.0));
                 let store = self.store(id, destination, &Expr::new("lhs", Repr::Value))?;
-                self.line(depth, &format!("if c{} {{ {store} }}", id.0));
+                self.statement(depth, &format!("if c{} {{ {store} }}", id.0));
             }
             Terminator::Goto { .. }
             | Terminator::Return
@@ -861,13 +902,13 @@ impl<'db> Generator<'_, 'db> {
             }
             Terminator::Throw { value } => {
                 let value = self.operand(id, value)?;
-                let value = coerce(&value.code, value.repr, Repr::Value);
+                let value = self.value_arg(&value.code, value.repr);
                 if block.unwind.is_some() {
                     let jump = self.unwind_jump(id, "thrown", depth)?;
-                    self.line(depth, &format!("let thrown = {value};"));
+                    self.statement(depth, &format!("let thrown = {value};"));
                     self.out.push_str(&jump);
                 } else {
-                    self.line(
+                    self.statement(
                         depth,
                         &format!("return Err(bex_vm::compiled_rt::throw({value}));"),
                     );
@@ -875,13 +916,13 @@ impl<'db> Generator<'_, 'db> {
             }
             Terminator::Rethrow { value, .. } => {
                 let value = self.operand(id, value)?;
-                let value = coerce(&value.code, value.repr, Repr::Value);
+                let value = self.value_arg(&value.code, value.repr);
                 if block.unwind.is_some() {
                     let jump = self.unwind_jump(id, "thrown", depth)?;
-                    self.line(depth, &format!("let thrown = {value};"));
+                    self.statement(depth, &format!("let thrown = {value};"));
                     self.out.push_str(&jump);
                 } else {
-                    self.line(
+                    self.statement(
                         depth,
                         &format!("return Err(bex_vm::compiled_rt::rethrow({value}));"),
                     );
@@ -949,10 +990,11 @@ impl<'db> Generator<'_, 'db> {
     // ── Operands and places ───────────────────────────────────────────────
 
     fn operand(&mut self, block: BlockId, operand: &Operand<'db>) -> Gen<Expr> {
-        match operand {
-            Operand::Copy(place) | Operand::Move(place) => self.load(block, place),
-            Operand::Constant(constant) => Self::constant(constant),
-        }
+        let expr = match operand {
+            Operand::Copy(place) | Operand::Move(place) => self.load(block, place)?,
+            Operand::Constant(constant) => Self::constant(constant)?,
+        };
+        Ok(self.hoist(expr))
     }
 
     fn constant(constant: &Constant<'db>) -> Gen<Expr> {
@@ -977,7 +1019,7 @@ impl<'db> Generator<'_, 'db> {
             Place::Local(local) => Ok(Expr::new(format!("l{}", local.0), self.repr(*local))),
             Place::Field { base, field } => {
                 let base = self.load(block, base)?;
-                let base = coerce(&base.code, base.repr, Repr::Value);
+                let base = self.value_arg(&base.code, base.repr);
                 let code = self.fallible(block, &format!("vm.load_field({base}, {field})"))?;
                 Ok(Expr::new(code, Repr::Value))
             }
@@ -986,8 +1028,8 @@ impl<'db> Generator<'_, 'db> {
                     return unsupported("map index");
                 }
                 let base = self.load(block, base)?;
-                let base = coerce(&base.code, base.repr, Repr::Value);
-                let index = coerce(&format!("l{}", index.0), self.repr(*index), Repr::Value);
+                let base = self.value_arg(&base.code, base.repr);
+                let index = self.value_arg(&format!("l{}", index.0), self.repr(*index));
                 let code =
                     self.fallible(block, &format!("vm.load_array_element({base}, {index})"))?;
                 Ok(Expr::new(code, Repr::Value))
@@ -1004,9 +1046,9 @@ impl<'db> Generator<'_, 'db> {
                 Ok(format!("l{} = {code};", local.0))
             }
             Place::Field { base, field } => {
+                let value = self.value_arg(&value.code, value.repr);
                 let base = self.load(block, base)?;
-                let base = coerce(&base.code, base.repr, Repr::Value);
-                let value = coerce(&value.code, value.repr, Repr::Value);
+                let base = self.value_arg(&base.code, base.repr);
                 let code =
                     self.fallible(block, &format!("vm.store_field({base}, {field}, {value})"))?;
                 Ok(format!("{code};"))
@@ -1015,10 +1057,10 @@ impl<'db> Generator<'_, 'db> {
                 if !matches!(kind, baml_compiler2_mir::IndexKind::Array) {
                     return unsupported("map index");
                 }
+                let value = self.value_arg(&value.code, value.repr);
                 let base = self.load(block, base)?;
-                let base = coerce(&base.code, base.repr, Repr::Value);
-                let index = coerce(&format!("l{}", index.0), self.repr(*index), Repr::Value);
-                let value = coerce(&value.code, value.repr, Repr::Value);
+                let base = self.value_arg(&base.code, base.repr);
+                let index = self.value_arg(&format!("l{}", index.0), self.repr(*index));
                 let code = self.fallible(
                     block,
                     &format!("vm.store_array_element({base}, {index}, {value})"),
@@ -1045,19 +1087,19 @@ impl<'db> Generator<'_, 'db> {
             }
             Rvalue::Len(place) => {
                 let container = self.load(block, place)?;
-                let container = coerce(&container.code, container.repr, Repr::Value);
+                let container = self.value_arg(&container.code, container.repr);
                 let code = self.fallible(block, &format!("vm.container_len({container})"))?;
                 Ok(Expr::new(code, Repr::Value))
             }
             Rvalue::Discriminant(place) => {
                 let value = self.load(block, place)?;
-                let value = coerce(&value.code, value.repr, Repr::Value);
+                let value = self.value_arg(&value.code, value.repr);
                 let code = self.fallible(block, &format!("vm.discriminant({value})"))?;
                 Ok(Expr::new(code, Repr::Int))
             }
             Rvalue::TypeTag(place) => {
                 let value = self.load(block, place)?;
-                let value = coerce(&value.code, value.repr, Repr::Value);
+                let value = self.value_arg(&value.code, value.repr);
                 Ok(Expr::new(
                     format!("bex_vm::compiled_rt::type_tag({value})"),
                     Repr::Int,
@@ -1065,7 +1107,7 @@ impl<'db> Generator<'_, 'db> {
             }
             Rvalue::IsTypeTag { operand, tag } => {
                 let value = self.operand(block, operand)?;
-                let value = coerce(&value.code, value.repr, Repr::Value);
+                let value = self.value_arg(&value.code, value.repr);
                 Ok(Expr::new(
                     format!("(bex_vm::compiled_rt::type_tag({value}) == {tag}i64)"),
                     Repr::Bool,
@@ -1073,7 +1115,7 @@ impl<'db> Generator<'_, 'db> {
             }
             Rvalue::IsType { operand, test } => {
                 let value = self.operand(block, operand)?;
-                let value = coerce(&value.code, value.repr, Repr::Value);
+                let value = self.value_arg(&value.code, value.repr);
                 let code = self.type_test(&format!("({value})"), test)?;
                 Ok(Expr::new(code, Repr::Bool))
             }
@@ -1084,7 +1126,7 @@ impl<'db> Generator<'_, 'db> {
                 let mut values = Vec::with_capacity(elements.len());
                 for element in elements {
                     let element = self.operand(block, element)?;
-                    values.push(coerce(&element.code, element.repr, Repr::Value));
+                    values.push(self.value_arg(&element.code, element.repr));
                 }
                 Ok(Expr::new(
                     format!("vm.new_array({element_ty}, vec![{}])", values.join(", ")),
@@ -1115,11 +1157,16 @@ impl<'db> Generator<'_, 'db> {
                 let mut values = Vec::with_capacity(fields.len());
                 for field in fields {
                     let field = self.operand(block, field)?;
-                    values.push(coerce(&field.code, field.repr, Repr::Value));
+                    values.push(self.value_arg(&field.code, field.repr));
                 }
+                let class = self.hoist(Expr::new(
+                    format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
+                    Repr::Value,
+                ));
                 Ok(Expr::new(
                     format!(
-                        "vm.new_instance(vm.idx_to_ptr(ObjectIndex::from_raw({object})), vec![{}])",
+                        "vm.new_instance({}.as_object_ptr().expect(\"class object\"), vec![{}])",
+                        class.code,
                         values.join(", ")
                     ),
                     Repr::Value,
@@ -1230,8 +1277,8 @@ impl<'db> Generator<'_, 'db> {
             (Bool, Bool, BinOp::BitXor) => Expr::new(format!("({l} ^ {r})"), Bool),
             _ => {
                 // The interpreter's generic operator over tagged values.
-                let l = coerce(l, left.repr, Repr::Value);
-                let r = coerce(r, right.repr, Repr::Value);
+                let l = self.value_arg(l, left.repr);
+                let r = self.value_arg(r, right.repr);
                 match op {
                     BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
                         let code = self.fallible(
@@ -1263,7 +1310,7 @@ impl<'db> Generator<'_, 'db> {
         Ok(match (op, operand.repr) {
             (UnaryOp::Not, Repr::Bool) => Expr::new(format!("(!{code})"), Repr::Bool),
             (UnaryOp::Not, repr) => {
-                let value = coerce(code, repr, Repr::Value);
+                let value = self.value_arg(code, repr);
                 Expr::new(format!("vm.not({value})"), Repr::Bool)
             }
             (UnaryOp::Neg, Repr::Int) => {
@@ -1271,12 +1318,12 @@ impl<'db> Generator<'_, 'db> {
             }
             (UnaryOp::Neg, Repr::Float) => Expr::new(format!("(-{code})"), Repr::Float),
             (UnaryOp::Neg, repr) => {
-                let value = coerce(code, repr, Repr::Value);
+                let value = self.value_arg(code, repr);
                 self.fallible_expr(block, &format!("vm.neg({value})"), Repr::Value)?
             }
             (UnaryOp::Truthy, Repr::Bool) => Expr::new(code.clone(), Repr::Bool),
             (UnaryOp::Truthy, repr) => {
-                let value = coerce(code, repr, Repr::Value);
+                let value = self.value_arg(code, repr);
                 Expr::new(format!("vm.is_truthy({value})"), Repr::Bool)
             }
         })
@@ -1307,7 +1354,7 @@ impl<'db> Generator<'_, 'db> {
         let mut values = Vec::with_capacity(args.len());
         for arg in args {
             let arg = self.operand(block, arg)?;
-            values.push(coerce(&arg.code, arg.repr, Repr::Value));
+            values.push(self.value_arg(&arg.code, arg.repr));
         }
         let args = format!("&[{}]", values.join(", "));
         match info.kind {
@@ -1323,10 +1370,15 @@ impl<'db> Generator<'_, 'db> {
                         .get(&name)
                         .copied()
                         .ok_or_else(|| Rejection::Invalid(format!("`{name}` has no object")))?;
+                    let callee = self.hoist(Expr::new(
+                        format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
+                        Repr::Value,
+                    ));
                     self.fallible(
                         block,
                         &format!(
-                            "vm.call_native_body(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {args})"
+                            "vm.call_native_body({}.as_object_ptr().expect(\"function object\"), {args})",
+                            callee.code
                         ),
                     )
                 } else {
