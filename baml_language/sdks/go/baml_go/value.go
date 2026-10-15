@@ -249,6 +249,40 @@ func MetaTypeBAMLType() BAMLType {
 // UnknownBAMLType describes BAML's top type `unknown`. A dynamic Go container
 // whose elements are `any` is a container of it; each element states its own
 // type.
+// FunctionParamBAMLType is one parameter of a FunctionBAMLType. An optional
+// (by-name) parameter carries its wire name; a positional one has none.
+type FunctionParamBAMLType struct {
+	Name     string
+	Type     BAMLType
+	Optional bool
+}
+
+// FunctionBAMLType is the type of a callable: its parameters, return type and
+// throws type. A host callable has no type of its own, so the generated code
+// states the one its slot declares beside the callable's handle.
+func FunctionBAMLType(params []FunctionParamBAMLType, ret, throws BAMLType) BAMLType {
+	encoded := make([]*cffi.BamlTyFunctionParam, len(params))
+	for index, param := range params {
+		mode := cffi.BamlTyFunctionParamMode_BAML_TY_FUNCTION_PARAM_MODE_REQUIRED
+		var name *string
+		if param.Optional {
+			mode = cffi.BamlTyFunctionParamMode_BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL
+			wire := param.Name
+			name = &wire
+		}
+		encoded[index] = &cffi.BamlTyFunctionParam{Name: name, Ty: param.Type.value, Mode: mode}
+	}
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Function{Function: &cffi.BamlTyFunction{
+		Params: encoded, Ret: ret.value, Throws: throws.value,
+	}}}}
+}
+
+// NeverBAMLType is `never`, the type with no values: the throws type of a
+// callable that cannot fail.
+func NeverBAMLType() BAMLType {
+	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Never{Never: &cffi.BamlTyNever{}}}}
+}
+
 func UnknownBAMLType() BAMLType {
 	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Unknown{Unknown: &cffi.BamlTyUnknown{}}}}
 }

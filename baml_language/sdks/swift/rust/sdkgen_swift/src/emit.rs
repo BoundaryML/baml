@@ -5,7 +5,9 @@
 
 use std::fmt::Write as _;
 
-use baml_sdkgen_types::{Class, Enum, Function, Name, Symbol, Ty, TypeAlias};
+use baml_sdkgen_types::{
+    Class, Enum, Function, Name, Symbol, Ty, TypeAlias, is_synthetic_effect_param,
+};
 
 use crate::{
     escape_ident,
@@ -332,10 +334,10 @@ pub(crate) fn render_callable(
         } else if let Ty::Function {
             params: cparams,
             ret,
-            ..
+            throws,
         } = &arg.ty
         {
-            let (ty, wrapper) = render_callable_param(&name, cparams, ret, ctx)?;
+            let (ty, wrapper) = render_callable_param(&name, cparams, ret, throws, ctx)?;
             params.push(Param::Callable { name, ty, wrapper });
         } else {
             params.push(Param::Required {
@@ -629,11 +631,8 @@ pub(crate) fn render_recursive_union_alias(
     out.push_str("\t\t}\n\t}\n\n");
 
     out.push_str("\tpublic func _bamlEncode() -> BamlInboundValue {\n\t\tswitch self {\n");
-    for (i, ty) in arm_tys.iter().enumerate() {
-        let _ = writeln!(
-            out,
-            "\t\tcase .t{i}(let v): return v._bamlEncode()._bamlAnnotatingSelectedType({ty}._bamlType)"
-        );
+    for i in 0..arm_tys.len() {
+        let _ = writeln!(out, "\t\tcase .t{i}(let v): return v._bamlEncode()");
     }
     out.push_str("\t\t}\n\t}\n\n");
 
@@ -698,23 +697,35 @@ fn render_callable_param(
     name: &str,
     cparams: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
+    throws: &Ty,
     ctx: &TranslateCtx,
 ) -> Option<(String, String)> {
     let bare = name.trim_matches('`');
     let mut sig_parts: Vec<String> = Vec::new();
     let mut invoke_args: Vec<String> = Vec::new();
+    // The function type stated beside the callable's handle. A parameter
+    // whose Swift type carries no static descriptor is stated as `unknown`,
+    // which a parameter may be (parameters are contravariant).
+    let mut param_descriptors: Vec<String> = Vec::new();
     let mut positional = 0usize;
     for cp in cparams {
         match cp.mode {
             baml_sdkgen_types::CodegenFunctionParamMode::Required => {
-                sig_parts.push(translate_ty(&cp.ty, ctx)?);
+                let swift_ty = translate_ty(&cp.ty, ctx)?;
+                param_descriptors.push(format!(
+                    "BamlFunctionParamDescriptor(type: {swift_ty}._bamlType ?? .unknown)"
+                ));
+                sig_parts.push(swift_ty);
                 invoke_args.push(format!("try _args.required({positional})"));
                 positional += 1;
             }
             baml_sdkgen_types::CodegenFunctionParamMode::Optional => {
                 let inner = translate_optional_arg_inner(&cp.ty, ctx)?;
-                sig_parts.push(format!("BamlOptional<{inner}>"));
                 let arg_name = cp.name.as_ref()?.as_str();
+                param_descriptors.push(format!(
+                    "BamlFunctionParamDescriptor(name: \"{arg_name}\", type: .optional({inner}._bamlType ?? .unknown), optional: true)"
+                ));
+                sig_parts.push(format!("BamlOptional<{inner}>"));
                 invoke_args.push(format!("try _args.optional(\"{arg_name}\")"));
             }
         }
@@ -734,8 +745,26 @@ fn render_callable_param(
         "@escaping @Sendable ({}) async throws -> {ret_ty}",
         sig_parts.join(", ")
     );
-    let wrapper =
-        format!("\tlet _baml_{bare} = BamlHostCallable {{ _args in\n\t\t{wrapper_body}\n\t}}\n");
+    // A void or `never` result is the unit type; a throws clause the
+    // declaration left open is an implicit effect parameter, and a host
+    // callable may throw anything.
+    let returns = if ret.is_unit() || matches!(ret, Ty::Never) {
+        ".null".to_string()
+    } else {
+        format!("{ret_ty}._bamlType ?? .unknown")
+    };
+    let throws_descriptor = match throws {
+        Ty::TypeVar(param) if is_synthetic_effect_param(param.name()) => ".unknown".to_string(),
+        Ty::Never => ".never".to_string(),
+        other => format!("{}._bamlType ?? .unknown", translate_ty(other, ctx)?),
+    };
+    let function_type = format!(
+        "BamlTypeDescriptor.function(params: [{}], returns: {returns}, throws: {throws_descriptor})",
+        param_descriptors.join(", ")
+    );
+    let wrapper = format!(
+        "\tlet _baml_{bare} = BamlHostCallable(functionType: {function_type}) {{ _args in\n\t\t{wrapper_body}\n\t}}\n"
+    );
     Some((closure_ty, wrapper))
 }
 

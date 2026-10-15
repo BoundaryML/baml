@@ -138,9 +138,15 @@ func lookupHostCallable(key uint64) (HostCallableFunc, bool) {
 // host-release callback and is idempotent. Prompt removal after an otherwise
 // normal call is not guaranteed because the engine may retain its HostClosure
 // until a later garbage-collection cycle.
-func HostCallable(callable HostCallableFunc) Input {
+// HostCallable registers callable for the engine to invoke and sends its
+// handle, stating functionType beside it: a host callable has no type of its
+// own, so the one its slot declares is what the engine binds it to.
+func HostCallable(callable HostCallableFunc, functionType BAMLType) Input {
 	if callable == nil {
 		return InvalidInput("BAML host callable is nil")
+	}
+	if functionType.value == nil || functionType.value.GetFunction() == nil {
+		return InvalidInput("BAML host callable requires its function type")
 	}
 	return Input{deferred: &inputEncoder{encode: func(transaction *inputTransaction) (*cffi.InboundValue, error) {
 		if transaction == nil {
@@ -148,7 +154,9 @@ func HostCallable(callable HostCallableFunc) Input {
 		}
 		key := registerHostValue(hostValue{callable: callable})
 		transaction.ownHostValue(key)
-		return hostValueInput(key, cffi.BamlHandleType_HOST_VALUE_CALLABLE), nil
+		value := hostValueInput(key, cffi.BamlHandleType_HOST_VALUE_CALLABLE)
+		value.ValueType = functionType.value
+		return value, nil
 	}}}
 }
 

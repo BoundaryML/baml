@@ -350,17 +350,16 @@ static void TestTranscodeKeepsTheTypesTheEngineGave() {
   pb::InboundValue inbound_variant;
   baml::detail::transcode_outbound_to_inbound(inbound_variant, variant);
   Require(inbound_variant.string_value() == "x", "union payload changed");
-  Require(inbound_variant.value_type().primitive().kind() ==
-              pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_STRING,
-          "selected union member was not stated");
+  Require(!inbound_variant.has_value_type(),
+          "a scalar implies its type; the union envelope states nothing");
 
   pb::BamlOutboundValue literal;
   literal.mutable_literal_value()->set_int_value(7);
   pb::InboundValue inbound_literal;
   baml::detail::transcode_outbound_to_inbound(inbound_literal, literal);
   Require(inbound_literal.int_value() == 7, "literal payload changed");
-  Require(inbound_literal.value_type().literal().int_value() == 7,
-          "literal type was not stated");
+  Require(!inbound_literal.has_value_type(),
+          "a literal is implied by its scalar; nothing is stated");
 }
 
 // A media value holds content, never a path. Content that was read from a

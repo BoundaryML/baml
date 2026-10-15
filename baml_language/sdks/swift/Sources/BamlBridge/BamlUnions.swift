@@ -72,8 +72,8 @@ extension BamlUnion2: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable {
     // current-node type rather than an inbound union wrapper.
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
+        case .t0(let v): return v._bamlEncode()
+        case .t1(let v): return v._bamlEncode()
         }
     }
 }
@@ -166,9 +166,9 @@ extension BamlUnion3: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, 
 
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
-        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
+        case .t0(let v): return v._bamlEncode()
+        case .t1(let v): return v._bamlEncode()
+        case .t2(let v): return v._bamlEncode()
         }
     }
 }
@@ -271,10 +271,10 @@ extension BamlUnion4: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, 
 
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
-        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
-        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
+        case .t0(let v): return v._bamlEncode()
+        case .t1(let v): return v._bamlEncode()
+        case .t2(let v): return v._bamlEncode()
+        case .t3(let v): return v._bamlEncode()
         }
     }
 }
@@ -387,11 +387,11 @@ extension BamlUnion5: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, 
 
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
-        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
-        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
-        case .t4(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T4._bamlType)
+        case .t0(let v): return v._bamlEncode()
+        case .t1(let v): return v._bamlEncode()
+        case .t2(let v): return v._bamlEncode()
+        case .t3(let v): return v._bamlEncode()
+        case .t4(let v): return v._bamlEncode()
         }
     }
 }
@@ -514,12 +514,12 @@ extension BamlUnion6: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, 
 
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
-        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
-        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
-        case .t4(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T4._bamlType)
-        case .t5(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T5._bamlType)
+        case .t0(let v): return v._bamlEncode()
+        case .t1(let v): return v._bamlEncode()
+        case .t2(let v): return v._bamlEncode()
+        case .t3(let v): return v._bamlEncode()
+        case .t4(let v): return v._bamlEncode()
+        case .t5(let v): return v._bamlEncode()
         }
     }
 }
@@ -652,13 +652,13 @@ extension BamlUnion7: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, 
 
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
-        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
-        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
-        case .t4(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T4._bamlType)
-        case .t5(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T5._bamlType)
-        case .t6(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T6._bamlType)
+        case .t0(let v): return v._bamlEncode()
+        case .t1(let v): return v._bamlEncode()
+        case .t2(let v): return v._bamlEncode()
+        case .t3(let v): return v._bamlEncode()
+        case .t4(let v): return v._bamlEncode()
+        case .t5(let v): return v._bamlEncode()
+        case .t6(let v): return v._bamlEncode()
         }
     }
 }
@@ -801,14 +801,14 @@ extension BamlUnion8: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, 
 
     public func _bamlEncode() -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
-        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
-        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
-        case .t4(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T4._bamlType)
-        case .t5(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T5._bamlType)
-        case .t6(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T6._bamlType)
-        case .t7(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T7._bamlType)
+        case .t0(let v): return v._bamlEncode()
+        case .t1(let v): return v._bamlEncode()
+        case .t2(let v): return v._bamlEncode()
+        case .t3(let v): return v._bamlEncode()
+        case .t4(let v): return v._bamlEncode()
+        case .t5(let v): return v._bamlEncode()
+        case .t6(let v): return v._bamlEncode()
+        case .t7(let v): return v._bamlEncode()
         }
     }
 }

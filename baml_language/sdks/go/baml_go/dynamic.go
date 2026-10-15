@@ -98,55 +98,6 @@ func InvalidInput(message string) Input {
 	return Input{err: fmt.Errorf("%s", message)}
 }
 
-// SelectedUnionInput projects a generated union to its selected payload and
-// attaches that arm's exact node type. The enclosing union stays in the BAML
-// callable's declared type; inbound values never carry a union envelope. An
-// arm that is itself a union or optional describes context, not the value, so
-// it is not stated: the payload's own scalar kind or stated container type
-// already says what it is.
-func SelectedUnionInput(payload Input, unionType, selectedType BAMLType) Input {
-	if payload.err != nil {
-		return payload
-	}
-	if payload.value == nil && payload.deferred == nil {
-		return InvalidInput("selected union payload is uninitialized")
-	}
-	if unionType.value == nil || selectedType.value == nil {
-		return InvalidInput("selected union type metadata is uninitialized")
-	}
-	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
-		value, err := payload.encodeValue(transaction)
-		if err != nil {
-			return nil, fmt.Errorf("selected union payload: %w", err)
-		}
-		annotated := &cffi.InboundValue{
-			ValueType: value.ValueType,
-			Value:     value.Value,
-		}
-		if annotated.ValueType == nil && namesOneType(selectedType.value) {
-			annotated.ValueType = selectedType.value
-		}
-		return annotated, nil
-	}
-	if payload.deferred == nil {
-		value, err := prepare(nil)
-		return Input{value: value, err: err}
-	}
-	return Input{deferred: &inputEncoder{encode: prepare}}
-}
-
-// namesOneType reports whether a descriptor determines a value's type. A
-// union or optional names several, so stating it on a node says nothing the
-// node's own shape does not.
-func namesOneType(ty *cffi.BamlTy) bool {
-	switch ty.GetTy().(type) {
-	case *cffi.BamlTy_Union, *cffi.BamlTy_Optional:
-		return false
-	default:
-		return true
-	}
-}
-
 // dynamicElementType is the BAML type of a dynamic container's elements: the
 // reflected type when Go's element type has one, `unknown` when the element
 // type is an interface (each element then states its own type), and nothing

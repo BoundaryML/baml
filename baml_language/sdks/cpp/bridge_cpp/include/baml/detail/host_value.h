@@ -216,19 +216,11 @@ inline void transcode_outbound_to_inbound(pb::InboundValue& out,
     case pb::BamlOutboundValue::kNullValue:
       return;  // absent oneof = null
     case pb::BamlOutboundValue::kUnionVariantValue: {
+      // The envelope says which member the value came out of; the value
+      // itself implies or states its type.
       const pb::BamlValueUnionVariant& variant = v.union_variant_value();
       if (variant.has_value()) {
         transcode_outbound_to_inbound(out, variant.value());
-      }
-      // The envelope's selected member types a node that has no type of
-      // its own; a container or class already stated one above.
-      if (!out.has_value_type() && variant.has_selected_option_index() &&
-          variant.has_self_type() && variant.self_type().has_union_()) {
-        const auto& options = variant.self_type().union_().options();
-        const int index = static_cast<int>(variant.selected_option_index());
-        if (index >= 0 && index < options.size()) {
-          out.mutable_value_type()->CopyFrom(options.Get(index));
-        }
       }
       return;
     }
@@ -245,24 +237,20 @@ inline void transcode_outbound_to_inbound(pb::InboundValue& out,
       out.set_bool_value(v.bool_value());
       return;
     case pb::BamlOutboundValue::kLiteralValue: {
-      pb::BamlTyLiteral* literal_ty =
-          out.mutable_value_type()->mutable_literal();
+      // A literal is the one value of its base type it is; the scalar
+      // implies it.
       switch (v.literal_value().literal_case()) {
         case pb::BamlLiteralValue::kStringValue:
           out.set_string_value(v.literal_value().string_value());
-          literal_ty->set_string_value(v.literal_value().string_value());
           return;
         case pb::BamlLiteralValue::kIntValue:
           out.set_int_value(v.literal_value().int_value());
-          literal_ty->set_int_value(v.literal_value().int_value());
           return;
         case pb::BamlLiteralValue::kBoolValue:
           out.set_bool_value(v.literal_value().bool_value());
-          literal_ty->set_bool_value(v.literal_value().bool_value());
           return;
         case pb::BamlLiteralValue::kBigintValue:
           out.set_bigint_value(v.literal_value().bigint_value());
-          literal_ty->set_bigint_value(v.literal_value().bigint_value());
           return;
         default:
           throw error("cannot transcode this literal value back inbound");
@@ -525,9 +513,51 @@ void run_host_callable(const std::function<R(Ps...)>& fn,
 // that references it. Called from generated bindings for callable-typed
 // arguments; `names` are the callable's declared parameter names in
 // declared order (used to key supplied optional args).
+// The function type a host callable is bound to, from the codecs of its C++
+// signature: an `arg<U>` parameter is an optional one by its wire name, the
+// others are positional; a `void` result is the unit type `null`; `throws`
+// is what the generated binding declares for it.
+template <typename R, typename... Ps>
+pb::BamlTy callable_baml_ty(const std::array<std::string, sizeof...(Ps)>& names,
+                            const pb::BamlTy& throws) {
+  pb::BamlTy ty;
+  pb::BamlTyFunction* function = ty.mutable_function();
+  std::size_t index = 0;
+  (
+      [&] {
+        using P = std::decay_t<Ps>;
+        pb::BamlTyFunctionParam* param = function->add_params();
+        if constexpr (is_arg<P>::value) {
+          param->set_name(names[index]);
+          param->set_mode(pb::BAML_TY_FUNCTION_PARAM_MODE_OPTIONAL);
+          param->mutable_ty()->CopyFrom(
+              codec<typename arg_inner<P>::type>::baml_ty());
+        } else {
+          param->set_mode(pb::BAML_TY_FUNCTION_PARAM_MODE_REQUIRED);
+          param->mutable_ty()->CopyFrom(codec<P>::baml_ty());
+        }
+        ++index;
+      }(),
+      ...);
+  if constexpr (std::is_void<R>::value) {
+    function->mutable_ret()->mutable_primitive()->set_kind(
+        pb::BAML_TY_PRIMITIVE_NULL);
+  } else {
+    function->mutable_ret()->CopyFrom(codec<R>::baml_ty());
+  }
+  function->mutable_throws()->CopyFrom(throws);
+  return ty;
+}
+
+// Register `fn` for the engine to invoke and send its handle, stating the
+// function type beside it: a host callable has no type of its own, so the
+// one its slot declares is what the engine binds it to.
 template <typename R, typename... Ps>
 void encode_callable(pb::InboundValue& value_msg, std::function<R(Ps...)> fn,
-                     std::array<std::string, sizeof...(Ps)> names) {
+                     std::array<std::string, sizeof...(Ps)> names,
+                     const pb::BamlTy& throws) {
+  value_msg.mutable_value_type()->CopyFrom(
+      callable_baml_ty<R, Ps...>(names, throws));
   auto shared_names =
       std::make_shared<const std::array<std::string, sizeof...(Ps)>>(
           std::move(names));

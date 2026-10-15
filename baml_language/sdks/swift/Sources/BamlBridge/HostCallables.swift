@@ -81,12 +81,19 @@ public struct BamlThrownValue: Error {
 }
 
 /// Type-erased host callable, built by generated code (which knows the
-/// parameter types). Encoding it registers the body and ships a
-/// HOST_VALUE_CALLABLE handle.
+/// declared function type). Encoding it registers the body and ships a
+/// HOST_VALUE_CALLABLE handle with that type stated beside it: a host
+/// callable has no type of its own, so the one its slot declares is what the
+/// engine binds it to.
 public struct BamlHostCallable: BamlEncodable, Sendable {
+    let functionType: BamlTypeDescriptor
     let body: @Sendable (BamlHostArgs) async throws -> BamlInboundValue
 
-    public init(_ body: @escaping @Sendable (BamlHostArgs) async throws -> BamlInboundValue) {
+    public init(
+        functionType: BamlTypeDescriptor,
+        _ body: @escaping @Sendable (BamlHostArgs) async throws -> BamlInboundValue
+    ) {
+        self.functionType = functionType
         self.body = body
     }
 
@@ -96,6 +103,7 @@ public struct BamlHostCallable: BamlEncodable, Sendable {
         handle.key = key
         handle.handleType = .hostValueCallable
         var v = BamlBridge_Cffi_V1_InboundValue()
+        v.valueType = functionType.raw
         v.handle = handle
         return BamlInboundValue(v)
     }

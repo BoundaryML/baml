@@ -62,7 +62,10 @@ func outboundHostCallableFailure(key uint64, extra *cffi.BamlOutboundValue) *cff
 }
 
 func TestHostCallableTransactionRollbackAndRuntimeReleaseAreExact(t *testing.T) {
-	input := HostCallable(func(HostCallArguments) (Input, error) { return String("ok"), nil })
+	input := HostCallable(
+		func(HostCallArguments) (Input, error) { return String("ok"), nil },
+		FunctionBAMLType(nil, PrimitiveBAMLType(StringType), NeverBAMLType()),
+	)
 	transaction := &inputTransaction{}
 	encoded, err := input.encodeValue(transaction)
 	if err != nil {
@@ -129,7 +132,7 @@ func TestHostCallableRegistrationIsConcurrent(t *testing.T) {
 func TestNilHostCallableDoesNotRegister(t *testing.T) {
 	baseline := registeredHostValueCount()
 	transaction := &inputTransaction{}
-	if _, err := HostCallable(nil).encodeValue(transaction); err == nil {
+	if _, err := HostCallable(nil, FunctionBAMLType(nil, PrimitiveBAMLType(StringType), NeverBAMLType())).encodeValue(transaction); err == nil {
 		t.Fatal("nil host callable unexpectedly encoded")
 	}
 	transaction.rollback()

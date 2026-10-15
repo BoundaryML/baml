@@ -10,14 +10,6 @@ import (
 
 // List encodes a present BAML list. A nil Go slice is a present empty list;
 // nullable lists use Optional around ListEncoder to represent BAML null.
-func List[T any](values []T, encode func(T) Input) Input {
-	inputs := make([]Input, 0, len(values))
-	for _, value := range values {
-		inputs = append(inputs, encode(value))
-	}
-	return listInput(inputs, nil)
-}
-
 func listInput(inputs []Input, itemType *BAMLType) Input {
 	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
 		if itemType != nil {
@@ -78,20 +70,6 @@ func ListEncoderWithType[T any](itemType BAMLType, encode func(T) Input) func([]
 // Map encodes a present BAML map with string keys. Entries are sorted so the
 // protobuf representation is deterministic. A nil Go map is a present empty
 // map; nullable maps use Optional around MapEncoder.
-func Map[T any](values map[string]T, encode func(T) Input) Input {
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	inputs := make([]Input, 0, len(keys))
-	for _, key := range keys {
-		inputs = append(inputs, encode(values[key]))
-	}
-	return mapInput(keys, inputs, nil)
-}
-
 // NamedInput is one ordered map row. Reflection constructors use a slice of
 // these rows because Go maps do not preserve insertion order.
 type NamedInput struct {
@@ -99,16 +77,17 @@ type NamedInput struct {
 	Value Input
 }
 
-// OrderedMap preserves rows exactly as supplied. Duplicate keys are retained
-// for the native compiler-equivalent validator to diagnose.
-func OrderedMap(values []NamedInput) Input {
+// OrderedMap preserves rows exactly as supplied, as a map whose values are of
+// valueType. Duplicate keys are retained for the native compiler-equivalent
+// validator to diagnose.
+func OrderedMap(valueType BAMLType, values []NamedInput) Input {
 	keys := make([]string, len(values))
 	inputs := make([]Input, len(values))
 	for index, value := range values {
 		keys[index] = value.Name
 		inputs[index] = value.Value
 	}
-	return mapInput(keys, inputs, nil)
+	return mapInput(keys, inputs, &valueType)
 }
 
 func mapInput(keys []string, inputs []Input, valueType *BAMLType) Input {

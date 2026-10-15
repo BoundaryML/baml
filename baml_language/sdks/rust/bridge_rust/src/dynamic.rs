@@ -121,7 +121,11 @@ fn outbound_to_inbound(value: wire::BamlOutboundValue) -> wire::InboundValue {
         Some(Out::MediaValue(value)) => Some(In::MediaValue(value)),
         Some(Out::PromptAstValue(value)) => Some(In::PromptAstValue(value)),
         Some(Out::HandleValue(handle)) => {
-            value_type = handle.ty;
+            // A handle is live and typed on the heap; only a callable, which
+            // has no type of its own, states the function type it was given.
+            value_type = handle
+                .ty
+                .filter(|ty| matches!(ty.ty, Some(wire::baml_ty::Ty::Function(_))));
             Some(In::Handle(wire::BamlHandle {
                 key: handle.key,
                 handle_type: handle.handle_type,
@@ -182,47 +186,17 @@ fn outbound_to_inbound(value: wire::BamlOutboundValue) -> wire::InboundValue {
                     .collect(),
             }))
         }
+        // A union envelope says which member a value came out of; the value
+        // itself implies or states its type, so the envelope adds nothing.
         Some(Out::UnionVariantValue(union)) => {
-            let selected = union.selected_option_index.and_then(|index| {
-                match union.self_type.as_ref()?.ty.as_ref()? {
-                    wire::baml_ty::Ty::Union(union) => union.options.get(index as usize).cloned(),
-                    _ => None,
-                }
-            });
-            let mut encoded =
-                outbound_to_inbound(union.value.map(|value| *value).unwrap_or_default());
-            if encoded.value_type.is_none() {
-                encoded.value_type = selected;
-            }
-            return encoded;
+            return outbound_to_inbound(union.value.map(|value| *value).unwrap_or_default());
         }
+        // A literal is the one value of its base type's it is; the base scalar
+        // implies it.
         Some(Out::LiteralValue(literal)) => {
-            let literal_type = wire::BamlTy {
-                ty: Some(wire::baml_ty::Ty::Literal(wire::BamlTyLiteral {
-                    literal: literal.literal.clone().map(|value| match value {
-                        wire::baml_literal_value::Literal::StringValue(value) => {
-                            wire::baml_ty_literal::Literal::StringValue(value)
-                        }
-                        wire::baml_literal_value::Literal::IntValue(value) => {
-                            wire::baml_ty_literal::Literal::IntValue(value)
-                        }
-                        wire::baml_literal_value::Literal::BoolValue(value) => {
-                            wire::baml_ty_literal::Literal::BoolValue(value)
-                        }
-                        wire::baml_literal_value::Literal::BigintValue(value) => {
-                            wire::baml_ty_literal::Literal::BigintValue(value)
-                        }
-                        wire::baml_literal_value::Literal::FloatValue(value) => {
-                            wire::baml_ty_literal::Literal::FloatValue(value)
-                        }
-                    }),
-                })),
-            };
-            let mut encoded = outbound_to_inbound(crate::decode::unwrap(wire::BamlOutboundValue {
+            return outbound_to_inbound(crate::decode::unwrap(wire::BamlOutboundValue {
                 value: Some(Out::LiteralValue(literal)),
             }));
-            encoded.value_type = Some(literal_type);
-            return encoded;
         }
     };
     wire::InboundValue { value_type, value }
@@ -388,24 +362,24 @@ mod tests {
         assert!(map.value_type.is_none());
     }
 
-    /// A union envelope contributes the selected member to a scalar that
-    /// would otherwise carry no type, and defers to a container's own.
+    /// A union envelope says which member a value came out of; the value
+    /// itself implies or states its type, so re-encoding adds nothing to a
+    /// scalar and keeps a container's own statement.
     #[test]
-    fn union_envelopes_state_the_selected_member() {
-        let union_ty = wire::BamlTy {
-            ty: Some(Ty::Union(wire::BamlTyUnion {
-                options: vec![int_ty(), string_ty()],
-            })),
-        };
+    fn union_envelopes_add_nothing() {
         let scalar = outbound_to_inbound(out(Out::UnionVariantValue(Box::new(
             wire::BamlValueUnionVariant {
-                self_type: Some(union_ty),
+                self_type: Some(wire::BamlTy {
+                    ty: Some(Ty::Union(wire::BamlTyUnion {
+                        options: vec![int_ty(), string_ty()],
+                    })),
+                }),
                 selected_option_index: Some(1),
                 value: Some(Box::new(out(Out::StringValue("x".into())))),
                 ..Default::default()
             },
         ))));
-        assert_eq!(scalar.value_type, Some(string_ty()));
+        assert!(scalar.value_type.is_none());
         assert!(matches!(scalar.value, Some(In::StringValue(ref s)) if s == "x"));
 
         let list_ty = wire::BamlTy {

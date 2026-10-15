@@ -82,10 +82,7 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                 }
                 encode_arms.push(quote! {
                     Self::#variant(value) => {
-                        ::baml_bridge::baml_value::internal::annotate_selected_type(
-                            ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(value),
-                            <#payload as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty(),
-                        )
+                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(value)
                     }
                 });
                 indexed_decodes.push(quote! {
@@ -115,11 +112,8 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                 variant_defs.push(quote! { #variant });
                 encode_arms.push(quote! {
                     Self::#variant => {
-                        ::baml_bridge::baml_value::internal::annotate_selected_type(
-                            ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(
-                                &<::std::string::String as ::std::convert::From<&str>>::from(#value),
-                            ),
-                            ::baml_bridge::baml_value::internal::literal_string_ty(#value),
+                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(
+                            &<::std::string::String as ::std::convert::From<&str>>::from(#value),
                         )
                     }
                 });

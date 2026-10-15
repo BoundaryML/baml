@@ -160,17 +160,54 @@ fn lookup(key: u64) -> Option<Arc<dyn Any + Send + Sync>> {
 
 /// Register `cb` (via its [`HostCallback`] erasure) and return the wire
 /// value the generated binding sends for the callable argument.
-pub fn callable_handle<Args, Ret, Marker>(
-    cb: impl HostCallback<Args, Ret, Marker>,
+pub fn callable_handle<Args, Ret, Marker, Cb: HostCallback<Args, Ret, Marker>>(
+    cb: Cb,
     params: &'static [HostParam],
 ) -> wire::InboundValue {
+    // A host callable has no type of its own: the one the closure's own
+    // types spell is stated beside its handle, and the engine binds it to
+    // that type.
+    let function_type = Cb::function_ty(params);
     let key = insert(cb.erase(params));
     wire::InboundValue {
-        value_type: None,
+        value_type: Some(function_type),
         value: Some(In::Handle(wire::BamlHandle {
             key,
             handle_type: wire::BamlHandleType::HostValueCallable as i32,
         })),
+    }
+}
+
+/// The function type of a host callable: each parameter's type (an optional
+/// one by its wire name), the return type and the throws type.
+fn function_ty(
+    params: &[HostParam],
+    param_tys: Vec<wire::BamlTy>,
+    ret: wire::BamlTy,
+    throws: wire::BamlTy,
+) -> wire::BamlTy {
+    debug_assert_eq!(params.len(), param_tys.len());
+    wire::BamlTy {
+        ty: Some(wire::baml_ty::Ty::Function(Box::new(
+            wire::BamlTyFunction {
+                generic_params: Vec::new(),
+                params: params
+                    .iter()
+                    .zip(param_tys)
+                    .map(|(param, ty)| wire::BamlTyFunctionParam {
+                        name: param.optional.then(|| param.name.to_string()),
+                        ty: Some(ty),
+                        mode: if param.optional {
+                            wire::BamlTyFunctionParamMode::Optional as i32
+                        } else {
+                            wire::BamlTyFunctionParamMode::Required as i32
+                        },
+                    })
+                    .collect(),
+                ret: Some(Box::new(ret)),
+                throws: Some(Box::new(throws)),
+            },
+        ))),
     }
 }
 
@@ -648,6 +685,10 @@ pub trait HostCallback<Args, Ret, Marker>: Send + Sync + 'static {
     type Throws: BamlValue;
     #[doc(hidden)]
     fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable>;
+    /// The function type this closure inhabits, which the generated binding
+    /// states beside the callable's handle.
+    #[doc(hidden)]
+    fn function_ty(params: &[HostParam]) -> wire::BamlTy;
 }
 
 /// Marker types selecting a [`HostCallback`] impl family. Never
@@ -700,6 +741,14 @@ macro_rules! impl_host_callback {
             $($A: BamlValue + Send + 'static,)*
         {
             type Throws = std::convert::Infallible;
+            fn function_ty(params: &[HostParam]) -> wire::BamlTy {
+                function_ty(
+                    params,
+                    vec![$(<$A as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),)*],
+                    <R as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                    <Self::Throws as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                )
+            }
             fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable> {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
@@ -720,6 +769,14 @@ macro_rules! impl_host_callback {
             $($A: BamlValue + Send + 'static,)*
         {
             type Throws = E;
+            fn function_ty(params: &[HostParam]) -> wire::BamlTy {
+                function_ty(
+                    params,
+                    vec![$(<$A as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),)*],
+                    <R as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                    <Self::Throws as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                )
+            }
             fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable> {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
@@ -742,6 +799,14 @@ macro_rules! impl_host_callback {
             $($A: BamlValue + Send + 'static,)*
         {
             type Throws = HostCallable;
+            fn function_ty(params: &[HostParam]) -> wire::BamlTy {
+                function_ty(
+                    params,
+                    vec![$(<$A as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),)*],
+                    <R as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                    <Self::Throws as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                )
+            }
             fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable> {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
@@ -764,6 +829,14 @@ macro_rules! impl_host_callback {
             $($A: BamlValue + Send + 'static,)*
         {
             type Throws = std::convert::Infallible;
+            fn function_ty(params: &[HostParam]) -> wire::BamlTy {
+                function_ty(
+                    params,
+                    vec![$(<$A as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),)*],
+                    <R as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                    <Self::Throws as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                )
+            }
             fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable> {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
@@ -785,6 +858,14 @@ macro_rules! impl_host_callback {
             $($A: BamlValue + Send + 'static,)*
         {
             type Throws = E;
+            fn function_ty(params: &[HostParam]) -> wire::BamlTy {
+                function_ty(
+                    params,
+                    vec![$(<$A as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),)*],
+                    <R as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                    <Self::Throws as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                )
+            }
             fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable> {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();
@@ -811,6 +892,14 @@ macro_rules! impl_host_callback {
             $($A: BamlValue + Send + 'static,)*
         {
             type Throws = HostCallable;
+            fn function_ty(params: &[HostParam]) -> wire::BamlTy {
+                function_ty(
+                    params,
+                    vec![$(<$A as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),)*],
+                    <R as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                    <Self::Throws as crate::baml_value::internal::__BamlValuePrivate>::baml_ty(),
+                )
+            }
             fn erase(self, params: &'static [HostParam]) -> Arc<ErasedCallable> {
                 erased(move |args| {
                     let mut slots = slot_args(params, args)?.into_iter();

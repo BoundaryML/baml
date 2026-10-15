@@ -150,14 +150,14 @@ func TestTransactionalEncodingRollsBackTopLevelAndNestedPartialFailures(t *testi
 	}{
 		{
 			name:  "list",
-			input: List([]Input{fakeImageInput(), InvalidInput("bad list sibling")}, func(value Input) Input { return value }),
+			input: ListEncoderWithType(ImageBAMLType(), func(value Input) Input { return value })([]Input{fakeImageInput(), InvalidInput("bad list sibling")}),
 		},
 		{
 			name: "map",
-			input: Map(map[string]Input{
+			input: MapEncoderWithType(ImageBAMLType(), func(value Input) Input { return value })(map[string]Input{
 				"a_media": fakeImageInput(),
 				"z_bad":   InvalidInput("bad map sibling"),
-			}, func(value Input) Input { return value }),
+			}),
 		},
 		{
 			name: "class",
@@ -168,11 +168,7 @@ func TestTransactionalEncodingRollsBackTopLevelAndNestedPartialFailures(t *testi
 		},
 		{
 			name: "union payload",
-			input: SelectedUnionInput(
-				List([]Input{fakeImageInput(), InvalidInput("bad union payload sibling")}, func(value Input) Input { return value }),
-				UnionBAMLType(ListBAMLType(ImageBAMLType()), PrimitiveBAMLType(StringType)),
-				ListBAMLType(ImageBAMLType()),
-			),
+			input: ListEncoderWithType(ImageBAMLType(), func(value Input) Input { return value })([]Input{fakeImageInput(), InvalidInput("bad union payload sibling")}),
 		},
 	}
 	for _, test := range tests {
@@ -268,11 +264,7 @@ func TestDeferredClassCapturesFieldInputsBeforeCallerMutatesMap(t *testing.T) {
 
 func TestPostNativeCleanupCoversMalformedUnionAndLaterSiblingHandles(t *testing.T) {
 	lifecycle := installInputHandleLifecycle(t)
-	malformed := SelectedUnionInput(
-		fakeRustTypeInput(),
-		UnionBAMLType(PrimitiveBAMLType(StringType), PrimitiveBAMLType(IntType)),
-		RustTypeBAMLType(),
-	)
+	malformed := fakeRustTypeInput()
 	_, transaction, err := encodeCallForDispatch(42, map[string]Input{
 		"a_malformed_union": malformed,
 		"z_later_handle":    fakeRustTypeInput(),

@@ -490,7 +490,7 @@ func metadataInput(metadata Metadata) baml_go.Input {
 		"alias": baml_go.OptionalEncoder(baml_go.String)(metadata.Alias),
 		"description": baml_go.OptionalEncoder(baml_go.String)(metadata.Description),
 		"docstring": baml_go.OptionalEncoder(baml_go.String)(metadata.Docstring),
-		"other": baml_go.Map(metadata.Other, baml_go.String),
+		"other": baml_go.MapEncoderWithType(baml_go.PrimitiveBAMLType(baml_go.StringType), baml_go.String)(metadata.Other),
 		"skip": baml_go.Bool(false),
 	})
 }
@@ -504,7 +504,7 @@ func withMetadataInput(metadata Metadata) baml_go.Input {
 			"alias": baml_go.OptionalEncoder(baml_go.String)(metadata.Alias),
 			"description": baml_go.OptionalEncoder(baml_go.String)(metadata.Description),
 			"docstring": baml_go.OptionalEncoder(baml_go.String)(metadata.Docstring),
-			"other": baml_go.Map(metadata.Other, baml_go.String),
+			"other": baml_go.MapEncoderWithType(baml_go.PrimitiveBAMLType(baml_go.StringType), baml_go.String)(metadata.Other),
 		},
 	)
 }
@@ -525,7 +525,7 @@ func Class(ctx context.Context, name string, fields []Field) (Type, error) {
 	}
 	result, err := baml_go.Call(ctx, "reflect.class.new", map[string]baml_go.Input{
 		"name": baml_go.String(name),
-		"fields": baml_go.OrderedMap(rows),
+		"fields": baml_go.OrderedMap(baml_go.UnionBAMLType(baml_go.MetaTypeBAMLType(), baml_go.ClassBAMLType("reflect.WithMeta", baml_go.MetaTypeBAMLType())), rows),
 	})
 	if err != nil { return Type{}, err }
 	return result.Type()
@@ -543,7 +543,7 @@ func Enum(ctx context.Context, name string, values []EnumValue) (Type, error) {
 	}
 	result, err := baml_go.Call(ctx, "reflect.enum.new", map[string]baml_go.Input{
 		"name": baml_go.String(name),
-		"values": baml_go.List(rows, func(value baml_go.Input) baml_go.Input { return value }),
+		"values": baml_go.ListEncoderWithType(baml_go.ClassBAMLType("reflect.enum.Value"), func(value baml_go.Input) baml_go.Input { return value })(rows),
 	})
 	if err != nil { return Type{}, err }
 	return result.Type()
@@ -559,7 +559,7 @@ type Package struct {
 func CompilePackage(ctx context.Context, files map[string]string) (*Package, error) {
 	if err := bootstrap.Ensure(); err != nil { return nil, err }
 	result, err := baml_go.Call(ctx, "reflect.Package.compile", map[string]baml_go.Input{
-		"files": baml_go.Map(files, baml_go.String),
+		"files": baml_go.MapEncoderWithType(baml_go.PrimitiveBAMLType(baml_go.StringType), baml_go.String)(files),
 	})
 	if err != nil { return nil, err }
 	classValue, err := result.Class("reflect.Package")
@@ -3590,7 +3590,6 @@ fn render_union_codecs(
                 "func {encoder}({value_parameter} {}) {runtime}.Input {{",
                 typed.as_deref().expect("typed union has a Go type")
             );
-            let union_descriptor = baml_type_descriptor(&GoTy::TypedUnion(key.clone()), names);
             let _ = writeln!(
                 out,
                 "\tswitch {arm_local} := {value_parameter}.Variant().(type) {{"
@@ -3609,12 +3608,8 @@ fn render_union_codecs(
                     codecs,
                     TypeVarScope::default(),
                 );
-                let selected_descriptor = baml_type_descriptor(member, names);
                 let _ = writeln!(out, "\tcase {wrapper}:");
-                let _ = writeln!(
-                    out,
-                    "\t\treturn {runtime}.SelectedUnionInput({member_encoder}({arm_local}.Value), {union_descriptor}, {selected_descriptor})"
-                );
+                let _ = writeln!(out, "\t\treturn {member_encoder}({arm_local}.Value)");
             }
             let _ = writeln!(out, "\tdefault:");
             let _ = writeln!(
@@ -3637,13 +3632,6 @@ fn render_union_codecs(
                 "func {encoder}({value_parameter} any) {runtime}.Input {{"
             );
             let direct_json = key.members().contains(&GoTy::Json);
-            let union_descriptor = baml_type_descriptor(
-                &GoTy::DynamicUnion {
-                    key: key.clone(),
-                    nullable: false,
-                },
-                names,
-            );
             let mut rendered_cases = BTreeSet::new();
             for member in key.members() {
                 if !dynamic_union_arm_is_asserted(member, direct_json) {
@@ -3667,15 +3655,11 @@ fn render_union_codecs(
                     codecs,
                     TypeVarScope::default(),
                 );
-                let selected_descriptor = baml_type_descriptor(member, names);
                 let _ = writeln!(
                     out,
                     "\tif {decoded_local}, {ok_local} := {value_parameter}.({member_type}); {ok_local} {{"
                 );
-                let _ = writeln!(
-                    out,
-                    "\t\treturn {runtime}.SelectedUnionInput({member_encoder}({decoded_local}), {union_descriptor}, {selected_descriptor})\n\t}}"
-                );
+                let _ = writeln!(out, "\t\treturn {member_encoder}({decoded_local})\n\t}}");
             }
             if direct_json {
                 let _ = writeln!(out, "\treturn {runtime}.JSON({value_parameter})\n}}\n");
@@ -3991,6 +3975,7 @@ fn render_callback_codecs(
             "\t\treturn {runtime}.InvalidInput(\"BAML host callable is nil\")"
         );
         out.push_str("\t}\n");
+        let function_type = function_baml_type_descriptor(key, names);
         let _ = writeln!(
             out,
             "\treturn {runtime}.HostCallable(func({arguments} {runtime}.HostCallArguments) ({runtime}.Input, {error_type}) {{"
@@ -4140,7 +4125,7 @@ fn render_callback_codecs(
                 );
             }
         }
-        out.push_str("\t})\n}\n\n");
+        let _ = writeln!(out, "\t}}, {function_type})\n}}\n");
 
         let decoder = callback_decoder_ident(codecs, package, key);
         let mut closure_parameters = vec![format!(
@@ -4310,6 +4295,43 @@ fn render_callback_codecs(
     }
 }
 
+/// The `FunctionBAMLType` a generated binding states beside a host callable's
+/// handle: the callable's parameters (an optional one by its wire name), its
+/// return type (`null` for a void result) and its throws type. A Go callback
+/// that returns no error cannot fail, so its throws type is `never`; one that
+/// returns an `error` throws `baml.errors.HostCallable`, which is how the
+/// bridge encodes a Go error.
+fn function_baml_type_descriptor(key: &GoFunctionKey, names: &GoNames) -> String {
+    let runtime = GeneratorIdent::RuntimePackage;
+    let params = key
+        .params()
+        .iter()
+        .map(|param| {
+            let (name, optional) = match param.name() {
+                Some(name) => (name.as_str().to_string(), true),
+                None => (String::new(), false),
+            };
+            format!(
+                "{{Name: {name:?}, Type: {}, Optional: {optional}}}",
+                baml_type_descriptor(param.ty(), names)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let ret = match key.ret() {
+        Some(ret) => baml_type_descriptor(ret, names),
+        None => format!("{runtime}.PrimitiveBAMLType({runtime}.NullType)"),
+    };
+    let throws = if key.throws() {
+        format!("{runtime}.ClassBAMLType(\"baml.errors.HostCallable\")")
+    } else {
+        format!("{runtime}.NeverBAMLType()")
+    };
+    format!(
+        "{runtime}.FunctionBAMLType([]{runtime}.FunctionParamBAMLType{{{params}}}, {ret}, {throws})"
+    )
+}
+
 fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
     let runtime = GeneratorIdent::RuntimePackage;
     match ty {
@@ -4432,7 +4454,7 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        GoTy::Function(_) => unreachable!("function values do not have a public Go descriptor"),
+        GoTy::Function(key) => function_baml_type_descriptor(key, names),
         GoTy::Unsupported => unreachable!("unsupported type has no BAML descriptor"),
     }
 }
@@ -5054,11 +5076,7 @@ fn render_union_type(body: &mut String, key: &GoUnionKey, renderer: &mut ClassTy
             .wrapper()
             .identifier(renderer.current_package);
         let _ = writeln!(body, "\tcase {wrapper}:");
-        let selected_descriptor = baml_type_descriptor(member, renderer.names);
-        let _ = writeln!(
-            body,
-            "\t\treturn {runtime}.SelectedUnionInput({runtime}.Any({arm_local}.Value), {descriptor}, {selected_descriptor})"
-        );
+        let _ = writeln!(body, "\t\treturn {runtime}.Any({arm_local}.Value)");
     }
     let _ = writeln!(body, "\tdefault:");
     let _ = writeln!(
@@ -7345,7 +7363,8 @@ mod tests {
         );
         assert!(types.contains("Value: \"draft\""));
         assert!(types.contains("Value: \"published\""));
-        assert!(types.contains("SelectedUnionInput"));
+        // A union's arm leaves as the value it is; nothing is stated for it.
+        assert!(!types.contains("SelectedUnionInput"));
         assert!(types.contains("StringLiteralBAMLType(\"draft\")"));
         assert!(types.contains("StringLiteralBAMLType(\"published\")"));
     }

@@ -63,6 +63,18 @@ inline pb::BamlTy primitive_baml_ty(pb::BamlTyPrimitiveKind kind) {
   return ty;
 }
 
+inline pb::BamlTy unknown_baml_ty() {
+  pb::BamlTy ty;
+  ty.mutable_unknown();
+  return ty;
+}
+
+inline pb::BamlTy never_baml_ty() {
+  pb::BamlTy ty;
+  ty.mutable_never();
+  return ty;
+}
+
 inline void annotate_selected_type(pb::InboundValue& value,
                                    const pb::BamlTy& selected_type) {
   if (value.has_value_type()) return;
@@ -949,12 +961,13 @@ struct codec<std::variant<Ts...>> {
     return ty;
   }
 
+  // A union has no wire shape of its own: the member leaves as the value it
+  // is, which implies or states its own type.
   static void encode(detail::pb::InboundValue& value_msg, const V& v) {
     std::visit(
         [&value_msg](const auto& alt) {
           using T = std::decay_t<decltype(alt)>;
           codec<T>::encode(value_msg, alt);
-          detail::annotate_selected_type(value_msg, codec<T>::baml_ty());
         },
         v);
   }

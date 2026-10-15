@@ -53,6 +53,45 @@ public struct BamlTypeDescriptor: @unchecked Sendable, Equatable {
     public static var null: BamlTypeDescriptor { primitive(.bamlTyPrimitiveNull) }
     public static var bytes: BamlTypeDescriptor { primitive(.bamlTyPrimitiveBytes) }
 
+    /// The top type: every value is a member.
+    public static var unknown: BamlTypeDescriptor {
+        var ty = BamlBridge_Cffi_V1_BamlTy()
+        ty.unknown = BamlBridge_Cffi_V1_BamlTyUnknown()
+        return BamlTypeDescriptor(ty)
+    }
+
+    /// The empty type: the throws type of a callable that cannot fail.
+    public static var never: BamlTypeDescriptor {
+        var ty = BamlBridge_Cffi_V1_BamlTy()
+        ty.never = BamlBridge_Cffi_V1_BamlTyNever()
+        return BamlTypeDescriptor(ty)
+    }
+
+    /// The type of a callable: its parameters, return type and throws type. A
+    /// host callable has no type of its own, so the generated code states the
+    /// one its slot declares beside the callable's handle.
+    public static func function(
+        params: [BamlFunctionParamDescriptor],
+        returns: BamlTypeDescriptor,
+        throws throwsType: BamlTypeDescriptor
+    ) -> BamlTypeDescriptor {
+        var function = BamlBridge_Cffi_V1_BamlTyFunction()
+        function.params = params.map { param in
+            var wire = BamlBridge_Cffi_V1_BamlTyFunctionParam()
+            if let name = param.name {
+                wire.name = name
+            }
+            wire.ty = param.type.raw
+            wire.mode = param.optional ? .optional : .required
+            return wire
+        }
+        function.ret = returns.raw
+        function.throws = throwsType.raw
+        var ty = BamlBridge_Cffi_V1_BamlTy()
+        ty.function = function
+        return BamlTypeDescriptor(ty)
+    }
+
     public static var prompt: BamlTypeDescriptor {
         var ty = BamlBridge_Cffi_V1_BamlTy()
         ty.promptAst = BamlBridge_Cffi_V1_BamlTyPromptAst()
@@ -120,22 +159,17 @@ public struct BamlTypeDescriptor: @unchecked Sendable, Equatable {
     }
 }
 
-extension BamlInboundValue {
-    /// Attach the exact selected-arm type while keeping the selected payload
-    /// bare. Root union/optional descriptors are programmer errors: they name
-    /// a set of choices rather than the choice this value represents.
-    public func _bamlAnnotatingSelectedType(
-        _ type: BamlTypeDescriptor?
-    ) -> BamlInboundValue {
-        guard let type else { return self }
-        switch type.raw.ty {
-        case .union?, .optional?:
-            preconditionFailure("selected inbound value_type must not be a root union or optional")
-        default:
-            var annotated = raw
-            annotated.valueType = type.raw
-            return BamlInboundValue(annotated)
-        }
+/// One parameter of a function type: an optional (by-name) parameter carries
+/// its wire name, a positional one has none.
+public struct BamlFunctionParamDescriptor: Sendable {
+    public let name: String?
+    public let type: BamlTypeDescriptor
+    public let optional: Bool
+
+    public init(name: String? = nil, type: BamlTypeDescriptor, optional: Bool = false) {
+        self.name = name
+        self.type = type
+        self.optional = optional
     }
 }
 
