@@ -41,6 +41,76 @@ use crate::{
 /// the box is paid only on throw.
 pub type CompiledBody = fn(&mut BexVm, &[Value]) -> Result<Value, Box<VmError>>;
 
+/// A natively compiled body that can suspend: a state machine the VM drives.
+///
+/// It keeps its arguments and every local live across a suspension in its
+/// frame's stack slots (`slot`/`set_slot`), which the GC scans and moves, and
+/// returns a [`Step`]: finished, or a request the VM carries out before calling
+/// the body again with the outcome and the point to resume at.
+pub type ResumableBody = fn(&mut BexVm, Resume) -> Result<Step, Box<VmError>>;
+
+/// How a [`ResumableBody`] is entered.
+pub struct Resume {
+    /// 0 to start; otherwise the `point` of the [`Step`] being resumed after.
+    pub point: u32,
+    /// What that step produced.
+    pub input: ResumeInput,
+}
+
+/// The outcome of the request a [`ResumableBody`] suspended on.
+pub enum ResumeInput {
+    /// The body starts.
+    Start,
+    /// The call or pause returned this value.
+    Value(Value),
+    /// The call or pause raised this error; the body lands it in its catch
+    /// or returns it.
+    Thrown(Box<VmError>),
+}
+
+/// What a [`ResumableBody`] asks of the VM.
+pub enum Step {
+    /// The body finished with this value.
+    Return(Value),
+    /// Call `callee` through the VM's call path (bytecode, an LLM function, a
+    /// sys op, a builtin that runs callbacks, a closure, a compiled function
+    /// that can suspend) and resume at `point` with its result.
+    Call {
+        callee: HeapPtr,
+        args: Vec<Value>,
+        /// Type arguments, for a generic builtin.
+        type_args: Vec<RealizedTy>,
+        point: u32,
+    },
+    /// Run `op` on `operand` exactly as its bytecode instruction does, and
+    /// resume at `point` with the result.
+    Pause {
+        op: PauseOp,
+        operand: Value,
+        point: u32,
+    },
+}
+
+/// The suspending instructions a compiled body delegates to the VM.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PauseOp {
+    /// `await future`.
+    Await,
+    /// `baml.future.__await_any(futures)`: the index of the first settled one.
+    AwaitAny,
+    /// `spawn plan`: the spawned task's future.
+    Spawn,
+}
+
+/// A compiled body, by whether it can suspend.
+#[derive(Clone, Copy)]
+pub enum CompiledFn {
+    /// Runs to completion inside the call that enters it.
+    Inline(CompiledBody),
+    /// Driven by the VM; see [`ResumableBody`].
+    Resumable(ResumableBody),
+}
+
 /// One compiled function in a generated module's table.
 #[derive(Clone, Copy)]
 pub struct CompiledEntry {
@@ -52,7 +122,22 @@ pub struct CompiledEntry {
     /// That function's arity, checked at attach.
     pub arity: usize,
     /// The body.
-    pub body: CompiledBody,
+    pub body: CompiledFn,
+}
+
+impl CompiledFn {
+    pub(crate) fn erase(self) -> bex_vm_types::types::NativeBody {
+        match self {
+            Self::Inline(body) => bex_vm_types::types::NativeBody {
+                ptr: body as *const (),
+                resumable: false,
+            },
+            Self::Resumable(body) => bex_vm_types::types::NativeBody {
+                ptr: body as *const (),
+                resumable: true,
+            },
+        }
+    }
 }
 
 /// `throw value` from compiled code: a fresh throw, whose
@@ -121,16 +206,28 @@ fn checker_hole(expected: &str) -> VmError {
     .into()
 }
 
-/// The compiled body attached to `function`, as a callable pointer.
+/// The callable a function value refers to, for a [`Step::Call`].
+pub fn callee_ptr(value: Value) -> Result<HeapPtr, Box<VmError>> {
+    value
+        .as_object_ptr()
+        .ok_or_else(|| Box::new(checker_hole("function")))
+}
+
+/// The compiled body attached to `function`.
 #[inline]
 #[allow(unsafe_code)]
-pub(crate) fn native_body_fn(function: &Function) -> Option<CompiledBody> {
+pub(crate) fn native_body_fn(function: &Function) -> Option<CompiledFn> {
     let body = function.native_body?;
-    // SAFETY: `NativeBody` is only ever constructed from a `CompiledBody`
-    // (see `attach_native_bodies`), so casting back to that type is sound.
-    // `transmute` because Rust has no `as` cast from `*const ()` to a fn
-    // pointer.
-    Some(unsafe { std::mem::transmute::<*const (), CompiledBody>(body.0) })
+    // SAFETY: a `NativeBody` is only built by `CompiledFn::erase`, whose
+    // `resumable` flag names the type the pointer was cast from. `transmute`
+    // because Rust has no `as` cast from `*const ()` to a fn pointer.
+    Some(unsafe {
+        if body.resumable {
+            CompiledFn::Resumable(std::mem::transmute::<*const (), ResumableBody>(body.ptr))
+        } else {
+            CompiledFn::Inline(std::mem::transmute::<*const (), CompiledBody>(body.ptr))
+        }
+    })
 }
 
 impl BexVm {
@@ -610,6 +707,18 @@ impl BexVm {
         !self.is_truthy(value)
     }
 
+    /// Whether `value` is a `baml.panics.*` instance: what a wildcard catch
+    /// arm raises again instead of swallowing.
+    #[must_use]
+    pub fn is_panic(&self, value: Value) -> bool {
+        value
+            .as_object_ptr()
+            .is_some_and(|ptr| match self.get_object(ptr) {
+                Object::Instance(instance) => self.panic_class_ptrs.contains(&instance.class),
+                _ => false,
+            })
+    }
+
     // ── Enums and classes ─────────────────────────────────────────────────────
 
     /// The variant index of an enum value.
@@ -651,6 +760,19 @@ impl BexVm {
             Some(Object::Variant(variant)) => variant.enm == enm,
             _ => false,
         }
+    }
+
+    /// The type of instances of the non-generic class `class`, as a type
+    /// argument or an array's element type.
+    #[must_use]
+    pub fn class_type(&self, class: HeapPtr) -> RealizedTy {
+        let Object::Class(declaration) = self.get_object(class) else {
+            unreachable!("compiled code names classes by their class object");
+        };
+        RealizedTy::Class(
+            bex_vm_types::TypeHead::new(class, declaration.type_tag),
+            Box::new([]),
+        )
     }
 
     /// Allocate an instance of a non-generic class with its fields in slot
@@ -717,6 +839,46 @@ impl BexVm {
         result
     }
 
+    /// Size the slot region of the resumable function whose frame count is
+    /// `depth` to `slots` (at least its arguments, which arrive in the first
+    /// slots). Called once, on start; the region then sits at the top of the
+    /// stack whenever the body suspends.
+    pub fn reserve_slots(&mut self, depth: usize, slots: usize) {
+        let Some(crate::vm::Frame::Bytecode(frame)) = self.frames.get_mut(depth - 1) else {
+            unreachable!("a compiled body reserves slots in its own frame");
+        };
+        let end = frame.locals_offset.raw() + slots;
+        if let crate::vm::FrameBody::Compiled {
+            slots: reserved, ..
+        } = &mut frame.body
+        {
+            *reserved = u32::try_from(slots).unwrap_or(u32::MAX);
+        }
+        self.stack.resize(end, Value::NULL);
+    }
+
+    /// Slot `index` of the compiled function whose frame count is `depth`.
+    #[inline]
+    #[must_use]
+    pub fn slot(&self, depth: usize, index: usize) -> Value {
+        let crate::vm::Frame::Bytecode(frame) = &self.frames[depth - 1] else {
+            unreachable!("a compiled body reads its own frame");
+        };
+        self.stack
+            .get_at(StackIndex::from_raw(frame.locals_offset.raw() + index))
+    }
+
+    /// Write slot `index` of the compiled function whose frame count is
+    /// `depth`; see [`Self::slot`].
+    #[inline]
+    pub fn set_slot(&mut self, depth: usize, index: usize, value: Value) {
+        let crate::vm::Frame::Bytecode(frame) = &self.frames[depth - 1] else {
+            unreachable!("a compiled body writes its own frame");
+        };
+        let at = frame.locals_offset.raw() + index;
+        self.stack.0[at] = value;
+    }
+
     /// The frame count with the running compiled function's frame on top.
     /// A compiled body reads it on entry and hands it to [`Self::catch`].
     #[inline]
@@ -734,7 +896,7 @@ impl BexVm {
         if let Some(crate::vm::Frame::Bytecode(frame)) = depth
             .checked_sub(1)
             .and_then(|top| self.frames.get_mut(top))
-            && let crate::vm::FrameBody::Compiled { line: at } = &mut frame.body
+            && let crate::vm::FrameBody::Compiled { line: at, .. } = &mut frame.body
         {
             *at = line;
         }

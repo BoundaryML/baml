@@ -8,12 +8,13 @@
 //! what a program computes; it only removes dispatch, eval-stack traffic, and
 //! tag checks on statically typed scalars.
 //!
-//! A function is *admitted* when nothing in its body needs the VM mid-body:
-//! no suspension (await, sys op, spawn), no call whose target is not a
-//! statically known admitted function or a non-yielding builtin, no type
-//! argument known only at runtime, no captured local. Everything else stays bytecode in the same
-//! program, with identical semantics. Admission is a fixpoint over the call
-//! graph: a function calling a rejected function is rejected.
+//! A function is *admitted* when every construct in its body has a lowering;
+//! everything else stays bytecode in the same program, with identical
+//! semantics. An admitted function that can suspend (it awaits, spawns, runs a
+//! sys op, or calls bytecode, a function value, a callback-running builtin, or
+//! another suspending function) compiles to a resumable state machine the VM
+//! drives; the rest run to completion inside the call that enters them. See
+//! `DESIGN.txt`.
 
 mod emit;
 mod structure;

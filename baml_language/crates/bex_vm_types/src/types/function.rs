@@ -67,15 +67,21 @@ unsafe impl Sync for FunctionKind {}
 /// place of the bytecode while leaving everything else about the function —
 /// its kind, its telemetry identity, its frame, its exception handling — as it
 /// is for bytecode. Type-erased for the same reason as
-/// [`FunctionKind::Native`]: this crate cannot name the VM's `NativeFunction`
-/// type. Runtime-only; never serialized.
+/// [`FunctionKind::Native`]: this crate cannot name the VM's body types.
+/// Runtime-only; never serialized.
 ///
 /// # Safety
 ///
-/// The pointer must be cast from a valid `bex_vm::NativeFunction` and only
-/// cast back to that same type when calling.
+/// `ptr` must be cast from the `bex_vm::compiled_rt` body type `resumable`
+/// names (`ResumableBody` when set, `CompiledBody` otherwise) and only cast
+/// back to that same type when calling.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeBody(pub *const ());
+pub struct NativeBody {
+    pub ptr: *const (),
+    /// Whether the body can suspend: it then runs as a resumable state
+    /// machine driven by the VM instead of to completion inside a call.
+    pub resumable: bool,
+}
 
 // SAFETY: a `NativeBody` points at immutable code (a function pointer), so
 // sharing it between threads is safe, exactly as for `FunctionKind::Native`.

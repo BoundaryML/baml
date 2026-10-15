@@ -1350,6 +1350,17 @@ pub fn class_link_name<'db>(db: &'db dyn crate::Db, class: ClassRef<'db>) -> Str
     }
 }
 
+/// The name the declaration `name` (a class, enum, or other type head in a
+/// [`crate::TyTemplate`]) links as: the spelling `class_link_name` gives the
+/// same declaration.
+pub fn decl_link_name(db: &dyn crate::Db, name: &baml_type::DeclName) -> String {
+    link_name(
+        spelling(db).of(name.root()),
+        name.namespace(),
+        &[name.name().as_str()],
+    )
+}
+
 /// The name an enum links as, wherever it is declared.
 pub fn enum_link_name<'db>(db: &'db dyn crate::Db, enum_ref: EnumRef<'db>) -> String {
     match enum_ref {

@@ -10,9 +10,13 @@ speedup. Everything else here is plumbing so compiled code is
 indistinguishable from bytecode to the things that observe a running
 function: callers, the GC, the exception unwinder, and telemetry.
 
-Rule for v0: every BAML feature keeps working. A function is compiled when it
-needs nothing the VM has to provide mid-body (it never suspends). Everything
-else stays bytecode, with identical semantics, in the same program.
+Rule for v0: every BAML feature keeps working. A function compiles when every
+construct in it has a lowering; anything else stays bytecode, with identical
+semantics, in the same program, and compiled and bytecode functions call each
+other freely. A compiled function that never suspends runs to completion
+inside the call that enters it; one that can suspend (await, spawn, a sys op,
+an LLM call, a call into bytecode) is a resumable state machine the VM drives
+(section 10).
 
 
 1. The unit: one Function object, two bodies
@@ -167,34 +171,42 @@ early-yield poll). A compiled body runs under the permit, so nothing moves
 while it holds pointers. Results are Values on the eval stack. Same contract
 as every builtin.
 
-Consequence: a compiled function has no safepoints. A long loop delays every
-other thread that wants a collection, and an allocating loop grows Gen0 until
-it returns. The fix is a body that can save its live Values in its frame's
-stack slots and return to the run loop: the state machine below.
+A resumable body (section 10) suspends with nothing on the Rust stack: what it
+needs after a suspension is in its frame's stack slots, which the collector
+scans and forwards like any frame's, so a collection may run while it waits.
+
+Open: a compiled loop has no safepoint unless it suspends. A long loop delays
+every other thread that wants a collection, and an allocating loop grows Gen0
+until it returns. The mechanism exists now: a budgeted Yield at loop back
+edges, resumed like any other suspension.
 
 
 8. Admission
 
-Admission is one fixpoint over two facts: the body generates (every construct
-in it is supported), and every user function it calls is admitted. Generation
-is the only judge of the first fact, so nothing half-supported is emitted.
-(An earlier version rejected in three places and rechecked callers once,
-which could leave a caller calling a dropped function.)
+Admission is one fixpoint. A function is admitted when its body generates
+(every construct in it has a lowering); generation is the only judge, so
+nothing half-supported is emitted. Whether an admitted function suspends
+follows from its body and its callees: it suspends when it awaits, spawns,
+runs a sys op, or calls anything compiled code does not call directly
+(bytecode, a function value, a builtin that runs callbacks, a function that
+itself suspends). Calling something that is not compiled no longer keeps a
+function out; it makes the function resumable.
 
-Supported beyond scalars and control flow: arrays, class fields, class/enum
-literals and tests (non-generic), catch, calls to admitted functions, calls
-to non-yielding builtins, generic builtins when every type argument is static
-(a primitive or an array of primitives; e.g. Array.push, to_string), and
-for-in over an array: compiled as an index walk with the semantics
-baml.iter.ArrayIterator documents (array by reference, length re-read every
-step, Done at the end).
+Supported: scalars and control flow, arrays, class fields, class and enum
+literals and tests (non-generic), catch (with ctx) and rethrow, wildcard catch
+arms (ThrowIfPanic), calls with named or omitted arguments to a named callee
+(laid over the callee's slots at compile time, as the VM does at run time),
+calls to compiled functions, builtins (callback-running ones through the VM),
+sys ops and LLM functions (through the VM), function values, await,
+await_any, spawn, generic builtins when every type argument is static (a
+primitive, a non-generic class, or an array of those), string literals from
+the program's string objects, and for-in over an array (an index walk with the
+semantics baml.iter.ArrayIterator documents).
 
-Stays bytecode: await, spawn, sys ops and LLM calls; calls to bytecode
-functions (stdlib BAML included: string templates call baml.String.from,
-json.to_string calls to_json); function values, closures, interface dispatch
-other than array iteration; user generic functions; runtime type templates,
-map literals and indexes, enum variant literals, bigint; trace hooks; calls
-with omitted or named arguments made from compiled code.
+Stays bytecode: closures (creating one; calling one works), user generic
+functions, interface dispatch other than array iteration, type values
+needing frame type arguments, map literals and indexes, enum variant
+literals, bigint, trace hooks, defer cleanup pads.
 
 
 9. Performance: what caps it
@@ -216,13 +228,38 @@ when changed (lock elision when no spawn is live, unboxed int/float arrays).
 Measured with locks on aarch64: fib(32) 4.4x, array loops ~1.8x.
 
 
-10. The next step: resumable bodies
+10. Resumable bodies
 
-Almost everything in the "stays bytecode" list needs one thing: a compiled
-function that can hand control back to the VM and resume. The body returns a
-request (Return, Call, Throw, Yield/Await) after saving its live Values in its
-frame's locals region (already reserved and rooted by the call funnel); the
-VM pushes callee frames, parks for await, collects, and resumes the body at a
-saved block. That covers await, spawn, LLM calls, calls into bytecode,
-callback builtins, function values, GC safepoints in long loops, and catch
-across a suspension. Functions that cannot suspend keep the direct call.
+    ResumableBody = fn(&mut BexVm, Resume) -> Result<Step, Box<VmError>>
+    Step = Return(value)
+         | Call { callee, args, type_args, point }
+         | Pause { op: Await | AwaitAny | Spawn, operand, point }
+
+A function that can suspend is emitted as a state machine over its MIR
+blocks (`loop { match bb }`, since a resume enters the middle). Its arguments
+and every local it keeps across a suspension live in its frame's stack slots
+(local i in slot i, array-iterator positions after them; vm.slot/set_slot),
+and FrameBody::Compiled { resume } records where it continues. At a
+suspension it saves its locals, records its line, and returns the request:
+
+  Call    the VM calls `callee` through its call path, exactly as the Call
+          opcode would: a bytecode function, an LLM function, a sys op (which
+          yields to the engine), a builtin that runs callbacks, a closure, or
+          another resumable compiled function. When the callee returns into
+          the compiled frame, the Return arm hands control to the run loop
+          (one check on that path: a compiled caller resumes from the loop).
+  Pause   the VM pushes a frame that runs that one instruction
+          (`LoadVar 1; Await; Return`) with no telemetry, like the entry
+          trampolines, so await, await_any and spawn keep their exact
+          semantics: re-execution on resume, telemetry waits, cancellation.
+
+The run loop resumes the body with the result (on the stack, where the
+callee's return or the engine left it) or, when the callee raised, with the
+error: the unwinder stops at a suspended compiled frame and delivers the
+error with its context instead of popping it, and the body lands it in its
+catch or returns it. A body that cannot suspend keeps the direct, structured
+form; compiled-to-compiled calls between such bodies stay direct Rust calls.
+
+Open: liveness, so a suspension saves only the locals live after it (it
+saves all of them); a budgeted Yield at loop back edges; raise evidence for
+compiled landings.

@@ -124,18 +124,26 @@ fn compute_shaped_functions_are_admitted_and_the_rest_stay_bytecode() {
             "{name} should compile; got {admitted:?}"
         );
     }
-    // `main` builds strings through stdlib bytecode it cannot call directly.
-    assert!(!admitted.contains(&"user.main"));
+    // A function that calls bytecode (`main` builds strings through stdlib
+    // BAML; `calls_rejected` calls a function left as bytecode) compiles as
+    // a resumable body that suspends on those calls.
+    let resumable = |name: &str| {
+        module
+            .functions
+            .iter()
+            .find(|f| f.name == name)
+            .unwrap_or_else(|| panic!("{name} should compile"))
+            .resumable
+    };
+    assert!(resumable("user.main"));
+    assert!(resumable("user.calls_rejected"));
+    assert!(!resumable("user.fib"));
+    assert!(!resumable("user.sum"));
 
     let closure = rejection(&module, "user.uses_closure");
     assert!(
         matches!(closure, Rejection::Unsupported(_)),
         "closures are outside the subset: {closure}"
-    );
-    let caller = rejection(&module, "user.calls_rejected");
-    assert!(
-        matches!(caller, Rejection::Unsupported(reason) if reason.contains("uses_closure")),
-        "a caller of a rejected function is rejected for that reason: {caller}"
     );
     assert!(matches!(
         rejection(&module, "user.generic"),
@@ -161,8 +169,16 @@ fn generated_module_is_well_formed_rust() {
     for function in &module.functions {
         assert!(
             compact.contains(&format!(
-                "CompiledEntry{{object:{},name:{:?},arity:{},body:{},}}",
-                function.object, function.name, function.arity, function.symbol
+                "CompiledEntry{{object:{},name:{:?},arity:{},body:CompiledFn::{}({}),}}",
+                function.object,
+                function.name,
+                function.arity,
+                if function.resumable {
+                    "Resumable"
+                } else {
+                    "Inline"
+                },
+                function.symbol
             )),
             "{} is registered under its object index",
             function.name

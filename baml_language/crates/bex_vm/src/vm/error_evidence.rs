@@ -221,14 +221,7 @@ impl BexVm {
         if thrown.throw_kind == ThrowKind::Rethrow {
             return RaiseKind::Rethrow;
         }
-        let is_panic = thrown
-            .value
-            .as_object_ptr()
-            .is_some_and(|ptr| match self.get_object(ptr) {
-                Object::Instance(instance) => self.panic_class_ptrs.contains(&instance.class),
-                _ => false,
-            });
-        if is_panic {
+        if self.is_panic(thrown.value) {
             RaiseKind::Runtime
         } else {
             RaiseKind::Throw
