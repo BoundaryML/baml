@@ -85,18 +85,18 @@ function ext_field_names(class_t: reflect.Class) -> string {
 }
 
 test "extends_adds_the_interface_fields_then_the_given_ones" {
-    let foo_t = reflect.Class.extends<ExtFoo>("Foo", { "c": reflect.Type.of<int>() });
-    type Foo = unreflect(foo_t.as_type())
+    let foo_t = reflect.Class.extends<ExtFoo>("Foo", { "c": int.type() });
+    let type Foo = foo_t.as_type();
     let foo: ExtFoo = baml.json.from_string<Foo>(`{"a":1,"b":2,"c":3}`) else {
         throw "the extended class does not implement ExtFoo"
     };
     assert.equal(ext_field_names(foo_t), "a,b,c");
-    assert.is_true(foo_t.as_type().implements(reflect.Type.of<ExtFoo>()));
+    assert.is_true(foo_t.implements(reflect.Type.of<ExtFoo>()));
     assert.equal(foo.a + foo.b, 3)
 }
 
 test "extends_implements_the_requires_closure_base_first" {
-    let foo_bar_t = reflect.Class.extends<ExtFooBar>("FooBar", { "d": reflect.Type.of<float>() });
+    let foo_bar_t = reflect.Class.extends<ExtFooBar>("FooBar", { "d": float.type() });
     let ty = foo_bar_t.as_type();
     assert.equal(ext_field_names(foo_bar_t), "a,b,c,d");
     assert.is_true(ty.implements(reflect.Type.of<ExtHasA>()));
@@ -105,7 +105,7 @@ test "extends_implements_the_requires_closure_base_first" {
 }
 
 test "extends_takes_a_diamond_interface_once" {
-    let diamond_t = reflect.Class.extends<ExtDiamond>("Diamond", { "d": reflect.Type.of<int>() });
+    let diamond_t = reflect.Class.extends<ExtDiamond>("Diamond", { "d": int.type() });
     let ty = diamond_t.as_type();
     assert.equal(ext_field_names(diamond_t), "a,left,right,d");
     assert.is_true(ty.implements(reflect.Type.of<ExtHasA>()));
@@ -115,7 +115,7 @@ test "extends_takes_a_diamond_interface_once" {
 }
 
 test "extends_takes_kind_views_as_field_types" {
-    let item_t = reflect.Class.new("ExtItem", { "x": reflect.Type.of<int>() });
+    let item_t = reflect.Class.new("ExtItem", { "x": int.type() });
     let list_t = reflect.Class.extends<ExtFoo>("ItemList", { "first": item_t, "items": item_t.array() });
     assert.equal(ext_field_names(list_t), "a,b,first,items");
     assert.is_true(list_t.fields()[2].type == item_t.as_type());
@@ -125,9 +125,9 @@ test "extends_takes_kind_views_as_field_types" {
 test "extends_keeps_interface_field_docs" {
     let foo_bar_t = reflect.Class.extends<ExtFooBar>(
         "FooBar",
-        { "d": reflect.Type.of<int>().meta(description = "The d field.") },
+        { "d": int.type().meta(description = "The d field.") },
     );
-    let source = foo_bar_t.as_type().to_baml();
+    let source = foo_bar_t.to_baml();
     assert.contains(source, "  /// The a field.\n  a int\n");
     assert.contains(source, `  d int @description("The d field.")`)
 }
@@ -136,7 +136,7 @@ test "extends_realizes_generic_requirements" {
     let box_t = reflect.Class.extends<ExtNamedBox<int>>("NamedBox", {});
     let ty = box_t.as_type();
     assert.equal(ext_field_names(box_t), "value,name");
-    assert.is_true(box_t.fields()[0].type == reflect.Type.of<int>());
+    assert.is_true(box_t.fields()[0].type == int.type());
     assert.is_true(ty.implements(reflect.Type.of<ExtBox<int>>()));
     assert.is_true(ty.implements(reflect.Type.of<ExtNamedBox<int>>()))
 }
@@ -144,8 +144,8 @@ test "extends_realizes_generic_requirements" {
 test "extends_realizes_associated_field_types" {
     let keyed_t = reflect.Class.extends<ExtKeyed<Key = string>>("Keyed", {});
     assert.equal(ext_field_names(keyed_t), "key");
-    assert.is_true(keyed_t.fields()[0].type == reflect.Type.of<string>());
-    assert.is_true(keyed_t.as_type().implements(reflect.Type.of<ExtKeyed<Key = string>>()))
+    assert.is_true(keyed_t.fields()[0].type == string.type());
+    assert.is_true(keyed_t.implements(reflect.Type.of<ExtKeyed<Key = string>>()))
 }
 
 test "extends_merges_a_field_two_interfaces_declare_at_one_type" {
@@ -159,7 +159,7 @@ test "extends_merges_a_field_two_interfaces_declare_at_one_type" {
 
 test "extends_adopts_interface_default_methods" {
     let greeter_t = reflect.Class.extends<ExtGreeter>("Greeter", {});
-    type Greeter = unreflect(greeter_t.as_type())
+    let type Greeter = greeter_t.as_type();
     let greeter: ExtGreeter = baml.json.from_string<Greeter>(`{"name":"Ada"}`) else {
         throw "the extended class does not implement ExtGreeter"
     };
@@ -167,7 +167,7 @@ test "extends_adopts_interface_default_methods" {
 }
 
 test "extends_rejects_a_given_field_an_interface_declares" {
-    let result = reflect.Class.extends<ExtFooBar>("FooBar", { "b": reflect.Type.of<string>() }) catch (e) {
+    let result = reflect.Class.extends<ExtFooBar>("FooBar", { "b": string.type() }) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].message
     };
     if (result is string) {
