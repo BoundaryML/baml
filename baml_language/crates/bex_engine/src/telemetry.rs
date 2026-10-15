@@ -618,6 +618,7 @@ impl TelemetryRecording {
         Ok((runtime, delivery.map(RecordingDelivery::Local)))
     }
 
+    /// Start bounded cloud recording; only an explicit abort policy may cancel application work.
     #[expect(clippy::too_many_arguments)]
     fn start_cloud(
         id: RecordingId,

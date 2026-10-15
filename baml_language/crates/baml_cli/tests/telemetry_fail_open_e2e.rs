@@ -29,6 +29,7 @@ enum Execution {
     ModelFailure,
 }
 
+/// Exercise real commands across delivery failures, telemetry off, and successful uploads.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn telemetry_preserves_model_command_results_and_exit_codes() {
     for delivery in [
@@ -49,6 +50,7 @@ async fn telemetry_preserves_model_command_results_and_exit_codes() {
     }
 }
 
+/// Run one isolated model command and verify its original outcome, single request, and diagnostics.
 async fn run_case(delivery: Delivery, execution: Execution) {
     let model = MockServer::start().await;
     let boundary = MockServer::start().await;

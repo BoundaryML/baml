@@ -16,7 +16,7 @@ mod cloud_protocol;
 const KEY: &str = "bml_cli_test_key";
 const RECORDINGS: &str = ".baml/btel/recordings";
 
-// Compare the complete Boundary diagnostic; unrelated command progress precedes/follows it.
+/// Extract one complete Boundary diagnostic, excluding unrelated command progress.
 fn diagnostic(output: &std::process::Output) -> String {
     let stderr = String::from_utf8_lossy(&output.stderr);
     let lines: Vec<_> = stderr.lines().collect();
@@ -48,6 +48,7 @@ fn diagnostic(output: &std::process::Output) -> String {
     lines[start..=start + end].join("\n")
 }
 
+/// Pin credential recovery text for fail-open CLI warnings and fatal query/artifact errors.
 fn assert_api_key_rejection(
     output: &std::process::Output,
     endpoint: &str,
@@ -94,6 +95,7 @@ fn assert_api_key_rejection(
     );
 }
 
+/// Pin the permission warning and its nonfatal execution outcome.
 fn assert_ingest_forbidden(output: &std::process::Output, endpoint: &str) {
     assert_eq!(
         diagnostic(output),
@@ -288,6 +290,7 @@ fn fixture(source: &str) -> tempfile::TempDir {
     temp
 }
 
+/// A late initial refusal must preserve a result already printed by the command.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_rejection_warns_even_if_execution_finishes_before_authorization() {
     let temp = fixture("function main() -> int { 7 }\n");
@@ -327,6 +330,7 @@ async fn initial_rejection_warns_even_if_execution_finishes_before_authorization
     }
 }
 
+/// HTTP and transport failures disable recording while preserving stdout and exit status.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_connection_failures_warn_without_changing_execution() {
     let temp = fixture("function main() -> int { 7 }\n");
@@ -602,6 +606,7 @@ async fn cloud_query_displays_structured_error_codes_and_optional_messages() {
     }
 }
 
+/// Nonfatal ingestion diagnostics retain the server's public explanation.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_telemetry_rejection_preserves_the_public_api_message() {
     let temp = fixture("function main() -> int { 7 }\n");
@@ -671,6 +676,7 @@ fn cloud_configuration_errors_share_diagnostics_without_exposing_invalid_url_cre
     }
 }
 
+/// Initial refusal must leave both running main work and rooted children free to complete.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_session_rejection_allows_running_and_rooted_work_to_finish() {
     let temp = fixture(
@@ -741,6 +747,7 @@ async fn authorization_rejection_after_initial_success_does_not_fail_execution()
     }
 }
 
+/// Expression evaluation and test execution use the same fail-open recording policy.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_rejection_preserves_expressions_and_test_runs() {
     let temp = fixture(
