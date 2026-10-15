@@ -13,7 +13,7 @@ interface        baml.ToJson                      <builtin>/baml/conversions.bam
 interface        baml.FromJson                    <builtin>/baml/conversions.baml:140
 function         baml.deep_copy                   <builtin>/baml/core.baml:11
 interface        baml.Concrete                    <builtin>/baml/core.baml:19
-class            baml.TaggedString                <builtin>/baml/core.baml:33
+class            baml.TaggedString                <builtin>/baml/core.baml:55
 class            baml.Float                       <builtin>/baml/float.baml:17
 interface        baml.Hash                        <builtin>/baml/hashing.baml:15
 class            baml.Int                         <builtin>/baml/int.baml:33
