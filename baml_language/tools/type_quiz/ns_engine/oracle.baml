@@ -30,7 +30,7 @@ function type_of_spelling(declarations: string, spelling: string) -> Spelled thr
         let failed: CompileFailed => failed,
         let threw: InitThrew => threw,
         let package: reflect.Package => {
-            let probe = package.get_function<ProbeFn>("root.probe") catch (e) {
+            let probe = package.find_function<ProbeFn>("root.probe") catch (e) {
                 reflect.errors.CompilationError => null,
             };
             // Narrowed by null check rather than a function-typed pattern:

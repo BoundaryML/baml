@@ -17,8 +17,8 @@ test "current package inside a compiled package is the compiled package" {
             }
         `,
     });
-    let names = pkg.get_function<() -> string>("root.names") ?? throw "missing names";
-    let via_closure = pkg.get_function<() -> string>("root.via_closure") ?? throw "missing via_closure";
+    let names = pkg.get_function<() -> string>("root.names");
+    let via_closure = pkg.get_function<() -> string>("root.via_closure");
     assert.equal(names(), "root.Own");
     assert.equal(via_closure(), "root.Own");
     // The static caller's own package is a different one.

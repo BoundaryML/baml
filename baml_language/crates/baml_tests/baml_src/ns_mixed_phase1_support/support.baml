@@ -8,7 +8,7 @@ function compile(source: string) -> reflect.Package {
 
 function call(source: string, entry: string) -> unknown {
     let package = compile(source);
-    let function_ = package.get_function<() -> unknown>(entry) ?? throw `missing ${entry}`;
+    let function_ = package.get_function<() -> unknown>(entry);
     function_()
 }
 

@@ -1,6 +1,6 @@
 function compiled_messages() -> string {
     let pkg = reflect.Package.compile({ "items.baml": `class Item { value string, count int }` });
-    let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type();
+    let item_type = pkg.get_class("root.Item").as_type();
     let type Item = item_type;
 
     let sap = baml.sap.parse<Item>("null") catch (e) {

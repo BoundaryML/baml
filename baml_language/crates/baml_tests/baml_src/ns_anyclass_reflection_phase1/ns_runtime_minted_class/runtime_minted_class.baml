@@ -39,7 +39,7 @@ function main() -> bool {
         throw "Expected class"
     };
 
-    let first_field: reflect.class.Field = record.get_field("first") else {
+    let first_field: reflect.class.Field = record.find_field("first") else {
         throw "Expected first field"
     };
     let fields = record.list_fields();

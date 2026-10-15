@@ -105,7 +105,7 @@ test "reflected_membership_and_static_field_handles_agree_with_narrowing" {
                 let narrowed: reflect.AnyClass = point else {
                     throw "Expected class"
                 }
-                let field: reflect.class.Field = narrowed.get_field("x") else {
+                let field: reflect.class.Field = narrowed.find_field("x") else {
                     throw "Expected x"
                 }
                 let point_type: reflect.Class = Point.type().as_class() else {

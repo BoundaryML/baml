@@ -13,7 +13,7 @@ test "deferred writes do not change conditions at registration" {
             }
         `,
     );
-    let main = package.get_function<(bool) -> int>("root.main") ?? baml.sys.panic("missing main");
+    let main = package.get_function<(bool) -> int>("root.main");
     assert.equal(main(false), 0);
     assert.equal(main(true), 1);
 }
@@ -36,7 +36,7 @@ test "deferred conditions do not use registration time facts" {
             }
         `,
     );
-    let main = package.get_function<() -> int>("root.main") ?? baml.sys.panic("missing main");
+    let main = package.get_function<() -> int>("root.main");
     assert.equal(main(), 2);
 }
 
@@ -50,7 +50,7 @@ test "nested scope deferred writes invalidate outer local facts" {
             }
         `,
     );
-    let main = package.get_function<(bool) -> int>("root.main") ?? baml.sys.panic("missing main");
+    let main = package.get_function<(bool) -> int>("root.main");
     assert.equal(main(true), 0);
 }
 
@@ -89,7 +89,7 @@ test "deferred writes in both branches stay invalidated after merging" {
             }
         `,
     );
-    let main = package.get_function<(bool, bool) -> int>("root.main") ?? baml.sys.panic("missing main");
+    let main = package.get_function<(bool, bool) -> int>("root.main");
     assert.equal(main(true, true), 2);
     assert.equal(main(true, false), 2);
 }
@@ -110,7 +110,7 @@ test "defer registration preserves current facts until scope exit" {
     assert.equal(diagnostics.length(), 1);
     assert.equal(diagnostics[0].code, "E0167");
     assert.is_true(diagnostics[0].headline.includes("always falsy"));
-    let main = package.get_function<(bool) -> int>("root.main") ?? baml.sys.panic("missing main");
+    let main = package.get_function<(bool) -> int>("root.main");
     assert.equal(main(true), 0);
 }
 
@@ -126,7 +126,7 @@ test "catch arm deferred writes invalidate outer local facts" {
             }
         `,
     );
-    let main = package.get_function<(bool) -> int>("root.main") ?? baml.sys.panic("missing main");
+    let main = package.get_function<(bool) -> int>("root.main");
     assert.equal(main(true), 0);
 }
 
@@ -143,7 +143,7 @@ test "match arm deferred writes invalidate outer local facts" {
             }
         `,
     );
-    let main = package.get_function<(bool, bool) -> int>("root.main") ?? baml.sys.panic("missing main");
+    let main = package.get_function<(bool, bool) -> int>("root.main");
     assert.equal(main(true, true), 0);
     assert.equal(main(true, false), 1);
 }
@@ -162,6 +162,6 @@ test "break does not apply false loop facts after deferred writes" {
             function run() -> bool { main(Marker {}) }
         `,
     );
-    let run = package.get_function<() -> bool>("root.run") ?? baml.sys.panic("missing run");
+    let run = package.get_function<() -> bool>("root.run");
     assert.is_true(run());
 }

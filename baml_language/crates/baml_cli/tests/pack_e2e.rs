@@ -262,7 +262,6 @@ function Run(state: app.AgentState) -> PlanThenAct {
     packages = { "app": reflect.Package.current() },
   )
   let run = skill.get_function<(AgentState) -> AgentAction>("root.Run")
-    ?? throw "missing root.Run"
   run(AgentState { goal: "binary", history: [] }).summary
 }
 "####;

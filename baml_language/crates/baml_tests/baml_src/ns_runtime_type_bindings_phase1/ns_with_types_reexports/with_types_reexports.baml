@@ -36,15 +36,15 @@ test "a base and its view are one package to a consumer" {
         },
         packages = { "base": base, "app": view },
     );
-    let same = consumer.get_function<() -> bool>("root.same") ?? throw "missing same";
+    let same = consumer.get_function<() -> bool>("root.same");
     assert.is_true(same());
-    let type Item = (base.get_class("root.Item") ?? throw "missing Item").as_type();
-    let through = consumer.get_function<(Item) -> Item>("root.through") ?? throw "missing through";
-    let make = base.get_function<(int) -> Item>("root.make") ?? throw "missing make";
+    let type Item = base.get_class("root.Item").as_type();
+    let through = consumer.get_function<(Item) -> Item>("root.through");
+    let make = base.get_function<(int) -> Item>("root.make");
     let item = through(make(3));
     assert.equal(reflect.Type.of_value(item), reflect.Type.of<Item>());
     let type Extra = extra.as_type();
-    let tagged = consumer.get_function<() -> Extra>("root.tagged") ?? throw "missing tagged";
+    let tagged = consumer.get_function<() -> Extra>("root.tagged");
     assert.equal(reflect.Type.of_value(tagged()), extra.as_type())
 }
 
@@ -61,18 +61,18 @@ test "a view alone reaches its base, and the base's functions run in the base" {
         },
         packages = { "app": view },
     );
-    let type Item = (base.get_class("root.Item") ?? throw "missing Item").as_type();
-    let build = consumer.get_function<() -> Item>("root.build") ?? throw "missing build";
+    let type Item = base.get_class("root.Item").as_type();
+    let build = consumer.get_function<() -> Item>("root.build");
     let item = build();
     assert.equal(reflect.Type.of_value(item), reflect.Type.of<Item>());
-    let value = consumer.get_function<(Item) -> int>("root.value") ?? throw "missing value";
+    let value = consumer.get_function<(Item) -> int>("root.value");
     assert.equal(value(item), 7);
-    let home = consumer.get_function<() -> string>("root.home") ?? throw "missing home";
+    let home = consumer.get_function<() -> string>("root.home");
     assert.equal(home(), "root.Item");
     // The view answers for its base: the same function, the same class.
-    let make = view.get_function<(int) -> Item>("root.make") ?? throw "the view re-exports make";
+    let make = view.get_function<(int) -> Item>("root.make");
     assert.equal(reflect.Type.of_value(make(1)), reflect.Type.of<Item>());
-    assert.equal((view.get_class("root.Item") ?? throw "missing Item").as_type(), reflect.Type.of<Item>());
+    assert.equal(view.get_class("root.Item").as_type(), reflect.Type.of<Item>());
     assert.is_true(view.functions().get("root.make") != null)
 }
 
@@ -93,7 +93,7 @@ test "a view of a view re-exports every layer" {
         },
         packages = { "app": second },
     );
-    let all = consumer.get_function<() -> int>("root.all") ?? throw "missing all";
+    let all = consumer.get_function<() -> int>("root.all");
     assert.equal(all(), 6)
 }
 
@@ -112,13 +112,13 @@ test "a minted class reached through two views is one type" {
         },
         packages = { "one": one, "two": two },
     );
-    let same = consumer.get_function<() -> bool>("root.same") ?? throw "missing same";
+    let same = consumer.get_function<() -> bool>("root.same");
     assert.is_true(same())
 }
 
 test "a renamed re-export is the same declaration" {
     let base = base_package();
-    let view = base.with_types({ "Twin": base.get_class("root.Item") ?? throw "missing Item" });
+    let view = base.with_types({ "Twin": base.get_class("root.Item") });
     let consumer = reflect.Package.compile(
         {
             "consumer.baml": `
@@ -130,11 +130,11 @@ test "a renamed re-export is the same declaration" {
         },
         packages = { "app": view },
     );
-    let same = consumer.get_function<() -> bool>("root.same") ?? throw "missing same";
+    let same = consumer.get_function<() -> bool>("root.same");
     assert.is_true(same());
     assert.equal(
-        (view.get_class("root.Twin") ?? throw "missing Twin").as_type(),
-        (base.get_class("root.Item") ?? throw "missing Item").as_type(),
+        view.get_class("root.Twin").as_type(),
+        base.get_class("root.Item").as_type(),
     )
 }
 
@@ -153,10 +153,10 @@ test "with_types declares an alias for a type that is not a bare declaration" {
         },
         packages = { "app": view },
     );
-    let total = consumer.get_function<(int[]) -> int>("root.total") ?? throw "missing total";
+    let total = consumer.get_function<(int[]) -> int>("root.total");
     assert.equal(total([1, 2, 3]), 6);
     // An alias is not a class.
-    assert.is_true(view.get_class("root.Ints") == null)
+    assert.is_true(view.find_class("root.Ints") == null)
 }
 
 class HostRecord {
@@ -174,6 +174,6 @@ test "with_types re-exports a class of the host program" {
         },
         packages = { "app": view },
     );
-    let name = consumer.get_function<(HostRecord) -> string>("root.name") ?? throw "missing name";
+    let name = consumer.get_function<(HostRecord) -> string>("root.name");
     assert.equal(name(HostRecord { name: "host" }), "host")
 }

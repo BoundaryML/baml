@@ -30,7 +30,7 @@ test "witnessed_to_baml_round_trip_preserves_the_definition_tuple" {
             "person.baml": checked_source,
         },
     );
-    let compiled = compiled_package.get_class("root.Person") ?? throw "missing compiled Person";
+    let compiled = compiled_package.get_class("root.Person");
 
     assert.is_true(original.as_type().implements(reflect.Type.of<root.Named<Value = string>>()));
     assert.is_true(original.as_type() != compiled.as_type());
@@ -51,7 +51,7 @@ test "same_named_runtime_declarations_are_rejected" {
 
 test "minted_and_compiled_same_named_declarations_are_rejected" {
     let package = reflect.Package.compile({ "original.baml": `class Choice { compiled string }` });
-    let compiled_choice = package.get_class("root.Choice") ?? throw "missing Choice";
+    let compiled_choice = package.get_class("root.Choice");
     let minted_choice = reflect.Class.new("Choice", { "minted": int.type() });
     let combined = reflect.Union.new([compiled_choice.as_type(), minted_choice.as_type()]);
     let result = combined.as_type().to_baml() catch (e) {
@@ -68,8 +68,8 @@ test "equivalent_same_named_runtime_declarations_fold_and_round_trip" {
     let source = combined.as_type().to_baml();
     let round_trip = reflect.Package.compile({ "choices.baml": source });
     assert.equal(source.split("class Choice {").length(), 2);
-    assert.not_null(round_trip.get_class("root.Choice"));
-    assert.is_true(round_trip.get_class("root.Choice_2") == null);
+    assert.not_null(round_trip.find_class("root.Choice"));
+    assert.is_true(round_trip.find_class("root.Choice_2") == null);
     assert.equal(round_trip.classes().length(), 1)
 }
 
@@ -77,6 +77,6 @@ test "runtime_class_static_dependencies_are_declared_in_round_trip_source" {
     let holder = reflect.Class.new("RuntimeHolder", { "child": root.StaticChild.type() });
     let source = holder.as_type().to_baml();
     let round_trip = reflect.Package.compile({ "holder.baml": source });
-    assert.not_null(round_trip.get_class("root.RuntimeHolder"));
-    assert.not_null(round_trip.get_class("root.StaticChild"))
+    assert.not_null(round_trip.find_class("root.RuntimeHolder"));
+    assert.not_null(round_trip.find_class("root.StaticChild"))
 }

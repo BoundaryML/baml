@@ -12,7 +12,7 @@ function non_identifier_variant() -> string {
         { "main.baml": `function go() -> unknown throws never { app.Color.Red }` },
         packages = { "app": app },
     );
-    let go = consumer.get_function<() -> unknown>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<() -> unknown>("root.go");
     go().to_string()
 }
 
@@ -25,7 +25,7 @@ function identifier_variants() -> string {
         { "main.baml": `function go() -> unknown throws never { app.Color.Red }` },
         packages = { "app": app },
     );
-    let go = consumer.get_function<() -> unknown>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<() -> unknown>("root.go");
     go().to_string()
 }
 

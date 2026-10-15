@@ -1,16 +1,16 @@
 // Native coverage for the BEP-066 reflect.Package lookup and enumeration APIs.
 
 function rpac_all_finders_and_enumerators_are_available(pkg: reflect.Package) -> bool {
-    pkg.get_enum("root.E") == null
-        && pkg.get_interface("root.I") == null
+    pkg.find_enum("root.E") == null
+        && pkg.find_interface("root.I") == null
         && pkg.enums().length() == 0
         && pkg.interfaces().length() == 0
 }
 
 function rpac_kind_specific_finders_are_available(pkg: reflect.Package) -> bool {
-    pkg.get_class("root.E") == null
-        && pkg.get_enum("root.E") == null
-        && pkg.get_interface("root.I") == null
+    pkg.find_class("root.E") == null
+        && pkg.find_enum("root.E") == null
+        && pkg.find_interface("root.I") == null
 }
 
 class PurchaseOrder {
@@ -42,21 +42,21 @@ test "package_type_finders_and_enumerators_are_precise_by_kind" {
     let first = reflect.Package.compile({ "types.baml": source });
     let second = reflect.Package.compile({ "types.baml": source });
 
-    let class_t = first.get_class("root.C") ?? throw "missing class";
-    let enum_t = first.get_enum("root.E") ?? throw "missing enum";
-    let interface_t = first.get_interface("root.I") ?? throw "missing interface";
+    let class_t = first.get_class("root.C");
+    let enum_t = first.get_enum("root.E");
+    let interface_t = first.get_interface("root.I");
     let listed_class = first.classes().get("root.C") ?? throw "class not enumerated";
     let listed_enum = first.enums().get("root.E") ?? throw "enum not enumerated";
     let listed_interface = first.interfaces().get("root.I") ?? throw "interface not enumerated";
-    let second_enum = second.get_enum("root.E") ?? throw "missing second enum";
-    let second_interface = second.get_interface("root.I") ?? throw "missing second interface";
+    let second_enum = second.get_enum("root.E");
+    let second_interface = second.get_interface("root.I");
 
-    assert.is_true(first.get_class("root.E") == null);
-    assert.is_true(first.get_enum("root.C") == null);
-    assert.is_true(first.get_interface("root.C") == null);
-    assert.is_true(first.get_enum("root.I") == null);
-    assert.is_true(first.get_class("root.Alias") == null);
-    assert.is_true(first.get_enum("root.Missing") == null);
+    assert.is_true(first.find_class("root.E") == null);
+    assert.is_true(first.find_enum("root.C") == null);
+    assert.is_true(first.find_interface("root.C") == null);
+    assert.is_true(first.find_enum("root.I") == null);
+    assert.is_true(first.find_class("root.Alias") == null);
+    assert.is_true(first.find_enum("root.Missing") == null);
     assert.equal(first.classes().length(), 1);
     assert.equal(first.enums().length(), 1);
     assert.equal(first.interfaces().length(), 1);

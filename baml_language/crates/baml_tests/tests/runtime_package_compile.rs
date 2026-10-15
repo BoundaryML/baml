@@ -27,8 +27,7 @@ function init_ready() -> bool {
 class Ready { value string }
 ` })
   let init_ready = pkg.get_function<() -> bool>("root.init_ready")
-    ?? throw "missing init_ready"
-  pkg.get_class("root.Ready") != null && init_ready()
+  pkg.find_class("root.Ready") != null && init_ready()
 }
 "####;
 
@@ -80,7 +79,6 @@ function Run(state: app.AgentState) -> PlanThenAct {
     packages = { "app": reflect.Package.current() },
   )
   let run = skill.get_function<(AgentState) -> AgentAction>("root.Run")
-    ?? throw "missing root.Run"
   run(AgentState { goal: "ship", history: [] }).summary
 }
 "####;
@@ -348,8 +346,7 @@ function abandon(log: string[]) -> void {
   resource.log.push("created");
 }
 ` });
-  let abandon = pkg.get_function<(log: string[]) -> void>("root.abandon")
-    ?? throw "missing abandon";
+  let abandon = pkg.get_function<(log: string[]) -> void>("root.abandon");
   abandon(log);
   baml.sys.collect_garbage();
   log

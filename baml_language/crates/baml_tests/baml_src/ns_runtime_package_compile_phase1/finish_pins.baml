@@ -24,7 +24,7 @@ test "finish accepts the packages the artifact was compiled against" {
     let dep = dependency();
     let artifact = reflect.Package._compile(consumer_files(), { "dep": dep });
     let pkg = reflect.Package._finish(artifact, { "dep": dep });
-    let main = pkg.get_function<() -> int>("root.main") ?? throw "missing main";
+    let main = pkg.get_function<() -> int>("root.main");
     assert.equal(main(), 42)
 }
 
@@ -52,7 +52,7 @@ test "the artifact keeps its dependencies alive across a collection" {
     let artifact = reflect.Package._compile(consumer_files(), { "dep": dep });
     baml.sys.collect_garbage();
     let pkg = reflect.Package._finish(artifact, { "dep": dep });
-    let main = pkg.get_function<() -> int>("root.main") ?? throw "missing main";
+    let main = pkg.get_function<() -> int>("root.main");
     assert.equal(main(), 42)
 }
 
@@ -64,6 +64,6 @@ test "finish refuses the base of the view the artifact was compiled against" {
     // A refused finish consumed its artifact, as any finish does.
     let artifact = reflect.Package._compile(consumer_files(), { "dep": view });
     let pkg = reflect.Package._finish(artifact, { "dep": view });
-    let main = pkg.get_function<() -> int>("root.main") ?? throw "missing main";
+    let main = pkg.get_function<() -> int>("root.main");
     assert.equal(main(), 42)
 }

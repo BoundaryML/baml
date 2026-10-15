@@ -183,16 +183,13 @@ test "union callback adapter selection is actual aware" {
             `,
         },
     );
-    let adapter_demo = package.get_function<() -> int>("root.adapter_demo")
-        ?? baml.sys.panic("missing root.adapter_demo");
+    let adapter_demo = package.get_function<() -> int>("root.adapter_demo");
     assert.equal(adapter_demo(), 16)
 
-    let concrete_union_demo = package.get_function<() -> int>("root.concrete_union_demo")
-        ?? baml.sys.panic("missing root.concrete_union_demo");
+    let concrete_union_demo = package.get_function<() -> int>("root.concrete_union_demo");
     assert.equal(concrete_union_demo(), 5)
 
-    let selection_demo = package.get_function<() -> int>("root.selection_demo")
-        ?? baml.sys.panic("missing root.selection_demo");
+    let selection_demo = package.get_function<() -> int>("root.selection_demo");
     assert.equal(selection_demo(), 81)
 }
 

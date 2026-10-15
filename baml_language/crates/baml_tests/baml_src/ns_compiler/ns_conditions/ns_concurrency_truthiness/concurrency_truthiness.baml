@@ -11,7 +11,7 @@ test "interface conditions can contain falsy primitive values" {
         },
     );
     assert.equal(package.diagnostics().length(), 0);
-    let check = package.get_function<(int) -> bool>("root.check") ?? baml.sys.panic("missing check");
+    let check = package.get_function<(int) -> bool>("root.check");
     assert.is_true(!check(0));
     assert.is_true(check(1));
 }
