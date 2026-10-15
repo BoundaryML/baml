@@ -45,4 +45,5 @@ typescript2/app-website/lib/mdx/bfcl/data/**/*.jsonl filter=lfs diff=lfs merge=l
 # SDK release gates compare license text byte-for-byte across Windows and Unix.
 LICENSE text eol=lf
 LICENSE.quanta text eol=lf
+LICENSE.monospace text eol=lf
 NOTICE text eol=lf

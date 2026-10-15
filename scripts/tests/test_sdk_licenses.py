@@ -45,7 +45,11 @@ class DistributionLicenses(unittest.TestCase):
 
     def test_committed_package_license_copies_match_authoritative_sources(self):
         for relative, engine in LICENSES.SOURCES.items():
-            LICENSES.verify_directory(LICENSES.ROOT / relative, engine)
+            LICENSES.verify_directory(
+                LICENSES.ROOT / relative,
+                engine,
+                editor=relative == "typescript2/app-vscode-ext",
+            )
 
     def test_npm_metadata_and_native_notice_are_both_required(self):
         files = {
@@ -113,6 +117,10 @@ class DistributionLicenses(unittest.TestCase):
                     prefix + "LICENSE": self.license,
                     prefix + "LICENSE.quanta": self.quanta,
                 }
+                if name.startswith("baml-language-"):
+                    files[prefix + "LICENSE.monospace"] = LICENSES.license_sources(
+                        editor=True
+                    )["LICENSE.monospace"].read_bytes()
                 LICENSES.verify_archive(self.archive(name, files))
                 files[prefix + "LICENSE"] = b"wrong terms"
                 with self.assertRaises(ValueError):
@@ -122,6 +130,9 @@ class DistributionLicenses(unittest.TestCase):
         files = {
             "extension/LICENSE.txt": self.license,
             "extension/LICENSE.quanta": self.quanta,
+            "extension/LICENSE.monospace": LICENSES.license_sources(editor=True)[
+                "LICENSE.monospace"
+            ].read_bytes(),
             "extension/package.json": b'{"license":"Apache-2.0"}',
         }
         LICENSES.verify_archive(self.archive("baml-language-0.1.vsix", files))

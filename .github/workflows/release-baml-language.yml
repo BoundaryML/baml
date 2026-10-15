@@ -607,6 +607,7 @@ jobs:
             tools/release-fingerprints
             scripts
             baml_language/vendor/quanta
+            typescript2/pkg-editor/src/themes/monospace
       - uses: actions/download-artifact@v8
         with:
           path: artifacts

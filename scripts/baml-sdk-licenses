@@ -24,26 +24,30 @@ SOURCES = {
 }
 
 
-def license_sources(engine=False):
+def license_sources(engine=False, editor=False):
     sources = {"LICENSE": ROOT / "LICENSE"}
     if (ROOT / "NOTICE").is_file():
         sources["NOTICE"] = ROOT / "NOTICE"
     if engine:
         sources["LICENSE.quanta"] = ROOT / "baml_language/vendor/quanta/LICENSE"
+    if editor:
+        sources["LICENSE.monospace"] = (
+            ROOT / "typescript2/pkg-editor/src/themes/monospace/LICENSE"
+        )
     return sources
 
 
-def stage(destination, engine=False):
+def stage(destination, engine=False, editor=False):
     destination.mkdir(parents=True, exist_ok=True)
-    for name, source in license_sources(engine).items():
+    for name, source in license_sources(engine, editor).items():
         target = destination / name
         if target.exists() and target.read_bytes() != source.read_bytes():
             raise ValueError(f"Refusing to overwrite distinct license text: {target}")
         shutil.copyfile(source, target)
 
 
-def verify_directory(directory, engine=False):
-    for name, source in license_sources(engine).items():
+def verify_directory(directory, engine=False, editor=False):
+    for name, source in license_sources(engine, editor).items():
         if (
             not (directory / name).is_file()
             or (directory / name).read_bytes() != source.read_bytes()
@@ -76,6 +80,7 @@ def verify_archive(path):
             or "-natives-" in path.name
             or path.name.startswith("baml-language-")
         )
+        editor = path.suffix == ".vsix" or path.name.startswith("baml-language-")
         for member, entry in files.items():
             if member == "package/package.json":
                 engine = (
@@ -83,7 +88,7 @@ def verify_archive(path):
                     .get("name", "")
                     .startswith("@boundaryml/baml-bridge")
                 )
-        for name, source in license_sources(engine).items():
+        for name, source in license_sources(engine, editor).items():
 
             def first_party_path(member):
                 if path.suffix == ".jar":
@@ -184,6 +189,7 @@ def main():
     staging = commands.add_parser("stage")
     staging.add_argument("directory", type=Path)
     staging.add_argument("--engine", action="store_true")
+    staging.add_argument("--editor", action="store_true")
     verify = commands.add_parser("verify")
     verify.add_argument("archive", nargs="+", type=Path)
     artifacts = commands.add_parser("verify-artifacts")
@@ -192,11 +198,19 @@ def main():
     if args.command in {"sync-sources", "check-sources"}:
         for relative, engine in SOURCES.items():
             if args.command == "sync-sources":
-                stage(ROOT / relative, engine)
+                stage(
+                    ROOT / relative,
+                    engine,
+                    editor=relative == "typescript2/app-vscode-ext",
+                )
             else:
-                verify_directory(ROOT / relative, engine)
+                verify_directory(
+                    ROOT / relative,
+                    engine,
+                    editor=relative == "typescript2/app-vscode-ext",
+                )
     elif args.command == "stage":
-        stage(args.directory, args.engine)
+        stage(args.directory, args.engine, args.editor)
     elif args.command == "verify":
         for archive in args.archive:
             verify_archive(archive)

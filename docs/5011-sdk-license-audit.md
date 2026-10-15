@@ -235,3 +235,5 @@ The public pkg.boundaryml.com manifest HTTP 403 observation and npm website acce
 The C# producer-artifact contract also validates the expanded exact file set (native binary, checksum, authoritative LICENSE and quanta sidecars, plus root NOTICE if present) before staging the eight RID binaries. Integration regression cases exercise that full staging path and reject altered sidecar terms.
 
 License and NOTICE inputs use explicit LF checkout attributes so byte comparisons remain stable between Windows producers and the Linux release gate.
+
+The vendored Monospace theme is also imported by the VSIX webview through `@b/pkg-editor`. Its MIT text, including the Keksi copyright notice, is preserved as `LICENSE.monospace` in editor/toolchain containers and checked against `typescript2/pkg-editor/src/themes/monospace/LICENSE`. This component notice remains separate from both the first-party Apache text and quanta’s notice.

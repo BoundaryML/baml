@@ -134,7 +134,7 @@ jobs:
           test -f staging/assets/playground/index.html
           test -f staging/assets/playground/assets/index.js
           test -f staging/assets/playground/assets/index.css
-          python3 scripts/baml-sdk-licenses stage staging --engine
+          python3 scripts/baml-sdk-licenses stage staging --engine --editor
           echo "$VERSION" > staging/VERSION
           if [[ "$TARGET" == *windows-msvc ]]; then
             (cd staging && 7z a "../baml-language-$VERSION-$TARGET.zip" .)
