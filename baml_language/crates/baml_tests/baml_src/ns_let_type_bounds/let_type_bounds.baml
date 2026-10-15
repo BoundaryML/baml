@@ -227,10 +227,142 @@ test "a session binding keeps its bounds in later submissions" {
 test "a session binding checks its bounds where it is written" {
     let s = reflect.Session.new();
     s.eval(`interface SessionNamed { name string }`);
-    let missed = s.eval<string>(
-        `let type P extends SessionNamed = int.type() else { throw "missed" }; "bound"`,
-    ) catch (e) {
+    let missed = s.eval<string>(`let type P extends SessionNamed = int.type() else { throw "missed" }; "bound"`) catch (e) {
         reflect.errors.EvaluationError => e.message,
     };
     assert.equal(missed, "missed")
+}
+
+// A bound is a constraint, not a type: it pins only the associated types it
+// writes, and the others are free, as for a generic parameter's bound.
+interface LtbSource {
+    type Item;
+    function first(self) -> Self.Item throws never;
+}
+
+interface LtbDefaulted {
+    type Item = int;
+}
+
+class LtbIntSource {
+    name: string,
+    value: int,
+
+    implements LtbSource {
+        type Item = int;
+
+        function first(self) -> int throws never {
+            self.value
+        }
+    }
+
+    implements LtbNamed {}
+
+    implements LtbDefaulted {}
+}
+
+class LtbStringSource {
+    name: string,
+    value: string,
+
+    implements LtbSource {
+        type Item = string;
+
+        function first(self) -> string throws never {
+            self.value
+        }
+    }
+
+    implements LtbNamed {}
+
+    implements LtbDefaulted {
+        type Item = string;
+    }
+}
+
+class LtbUnnamedIntSource {
+    value: int,
+
+    implements LtbSource {
+        type Item = int;
+
+        function first(self) -> int throws never {
+            self.value
+        }
+    }
+}
+
+function ltb_any_source(t: reflect.Type) -> string {
+    let type S extends LtbSource = t else {
+        return "missed";
+    };
+    "bound"
+}
+
+function ltb_int_source(t: reflect.Type) -> string {
+    let type S extends LtbSource<Item = int> = t;
+    let value = baml.json.to<S>({ "name": "n", "value": 41 });
+    (value.first() + 1).to_string()
+}
+
+function ltb_named_int_source(t: reflect.Type) -> string {
+    let type S extends LtbSource<Item = int> & LtbNamed = t;
+    let value = baml.json.to<S>({ "name": "Ada", "value": 1 });
+    value.name + "/" + value.first().to_string()
+}
+
+function ltb_any_defaulted(t: reflect.Type) -> string {
+    let type D extends LtbDefaulted = t else {
+        return "missed";
+    };
+    "bound"
+}
+
+function ltb_mismatch_message(t: reflect.Type, bound: reflect.Type) -> string {
+    "type " + ltb_name(t) + " does not implement interface " + ltb_name(bound)
+}
+
+test "a bound leaves the associated types it does not pin free" {
+    assert.equal(ltb_any_source(LtbIntSource.type()), "bound");
+    assert.equal(ltb_any_source(LtbStringSource.type()), "bound");
+    assert.equal(ltb_any_source(LtbPlain.type()), "missed")
+}
+
+test "an unpinned associated type is free even where it has a default" {
+    assert.equal(ltb_any_defaulted(LtbIntSource.type()), "bound");
+    assert.equal(ltb_any_defaulted(LtbStringSource.type()), "bound")
+}
+
+test "a bound that pins an associated type misses on another binding" {
+    assert.equal(ltb_int_source(LtbIntSource.type()), "42");
+    let string_source = LtbStringSource.type();
+    let missed = ltb_int_source(string_source) catch (e) {
+        reflect.errors.TypeMismatch => e.message,
+    };
+    assert.equal(
+        missed,
+        ltb_mismatch_message(string_source, reflect.Type.of<LtbSource<Item = int>>()),
+    )
+}
+
+test "an intersection checks a pinned and an unpinned bound" {
+    assert.equal(ltb_named_int_source(LtbIntSource.type()), "Ada/1");
+    let string_source = LtbStringSource.type();
+    let wrong_item = ltb_named_int_source(string_source) catch (e) {
+        reflect.errors.TypeMismatch => e.message,
+    };
+    assert.equal(
+        wrong_item,
+        ltb_mismatch_message(string_source, reflect.Type.of<LtbSource<Item = int>>()),
+    );
+    let unnamed = LtbUnnamedIntSource.type();
+    let not_named = ltb_named_int_source(unnamed) catch (e) {
+        reflect.errors.TypeMismatch => e.message,
+    };
+    assert.equal(not_named, ltb_mismatch_message(unnamed, reflect.Type.of<LtbNamed>()))
+}
+
+test "an interface type does not satisfy its own bound" {
+    // As for a generic parameter, a bound wants a concrete type.
+    assert.equal(ltb_any_source(reflect.Type.of<LtbSource<Item = int>>()), "missed")
 }
