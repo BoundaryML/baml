@@ -416,6 +416,10 @@ pub enum TirTypeError {
     CannotInferType,
     /// An ordinary inference variable remained unresolved at writeback.
     TypeMustBeKnown { full_type: Ty },
+    /// A member was accessed on a value whose type was still being inferred.
+    /// Member lookup needs the receiver's structure at that point; resolving
+    /// the variable later cannot retroactively choose the member.
+    ReceiverTypeMustBeKnown { member: Name },
     /// An associated-type projection references `member`, but the subject it
     /// projects through does not declare (or cannot declare) it as an
     /// associated type.
@@ -1427,6 +1431,13 @@ impl TirTypeError {
                 }
                 TirTypeError::CannotInferType => {
                     write!(f, "type inference failed; write the type explicitly")
+                }
+                TirTypeError::ReceiverTypeMustBeKnown { member } => {
+                    write!(
+                        f,
+                        "type annotations needed: the type of this value must be known \
+                         before accessing `{member}`"
+                    )
                 }
                 TirTypeError::TypeMustBeKnown { full_type } => {
                     write!(
