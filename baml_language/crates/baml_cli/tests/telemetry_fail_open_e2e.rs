@@ -196,7 +196,7 @@ function Hello() -> string {{
     let success = matches!(execution, Execution::Success);
     assert_eq!(
         output.status.code(),
-        Some(if success { 0 } else { 1 }),
+        Some(i32::from(!success)),
         "{context}"
     );
     assert_eq!(stdout, if success { "\"ok\"\n" } else { "" }, "{context}");
