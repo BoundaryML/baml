@@ -52,12 +52,12 @@ impl std::fmt::Display for Rejection {
 pub struct CompiledFunction {
     /// `Function::name` of the bytecode function this body replaces.
     pub name: String,
-    /// The Rust symbol with the VM's native signature.
+    /// The Rust symbol of the body (`bex_vm::compiled_rt::CompiledBody`).
     pub symbol: String,
-    /// Whether the function is observed (loops, or large): it is never
-    /// inlined and calls to it from compiled code run through the VM's call
-    /// path so telemetry records it.
-    pub observed: bool,
+    /// Object index of that bytecode function in the program.
+    pub object: usize,
+    /// Its arity.
+    pub arity: usize,
 }
 
 /// The generated Rust module for one program.
@@ -70,10 +70,6 @@ pub struct NativeModule {
     /// Root-package functions it does not compile, with the reason.
     pub rejected: Vec<(String, Rejection)>,
 }
-
-/// Functions this large, or with any loop, are observed (see
-/// [`CompiledFunction::observed`]).
-const OBSERVED_STATEMENTS: usize = 64;
 
 /// Compile every admitted function of `root`'s package.
 ///
@@ -134,104 +130,50 @@ pub fn compile_program<'db>(
         }
     }
 
-    // Admission is a fixpoint: a compiled function calls another compiled
-    // function directly, so every callee must itself be compiled.
-    loop {
-        let admitted: BTreeSet<String> = units.keys().cloned().collect();
-        let dropped: Vec<(String, String)> = units
-            .iter()
-            .filter_map(|(name, unit)| {
-                unit.analysis
-                    .user_callees
-                    .iter()
-                    .find(|callee| !admitted.contains(*callee))
-                    .map(|callee| (name.clone(), callee.clone()))
-            })
-            .collect();
-        if dropped.is_empty() {
-            break;
-        }
-        for (name, callee) in dropped {
-            units.remove(&name);
-            rejected.push((
-                name,
-                Rejection::Unsupported(format!("calls `{callee}`, which is not compiled")),
-            ));
-        }
-    }
-
-    let symbols: HashMap<String, String> = units
-        .keys()
-        .enumerate()
-        .map(|(ordinal, name)| (name.clone(), symbol_for(name, ordinal)))
-        .collect();
-    let observed: HashMap<String, bool> = units
-        .iter()
-        .map(|(name, unit)| (name.clone(), unit.analysis.observed))
-        .collect();
-
-    let mut bodies = String::new();
-    let mut functions = Vec::new();
-    let mut natives: BTreeMap<String, usize> = BTreeMap::new();
-    for (name, unit) in &units {
-        let mut generator = Generator {
-            db,
-            index: &index,
-            symbols: &symbols,
-            observed: &observed,
-            natives: &mut natives,
-            body: body_of(unit.mir),
-            analysis: &unit.analysis,
-            out: String::new(),
-            pending: Vec::new(),
-            temps: 0,
-        };
-        match generator.function(&symbols[name]) {
-            Ok(code) => {
-                bodies.push_str(&code);
-                functions.push(CompiledFunction {
-                    name: name.clone(),
-                    symbol: symbols[name].clone(),
-                    observed: unit.analysis.observed,
-                });
+    // Admission is one fixpoint over two facts: a function is admitted when
+    // its body generates (every construct is supported) and every user
+    // function it calls is admitted (compiled code calls compiled code
+    // directly). Generation is the only judge of the first fact, so nothing
+    // that generates is rejected and nothing rejected is half-emitted; each
+    // round removes at least one function, so it terminates.
+    let (bodies, functions, natives) = loop {
+        loop {
+            let admitted: BTreeSet<String> = units.keys().cloned().collect();
+            let dropped: Vec<(String, String)> = units
+                .iter()
+                .filter_map(|(name, unit)| {
+                    unit.analysis
+                        .user_callees
+                        .iter()
+                        .find(|callee| !admitted.contains(*callee))
+                        .map(|callee| (name.clone(), callee.clone()))
+                })
+                .collect();
+            if dropped.is_empty() {
+                break;
             }
-            Err(rejection) => rejected.push((name.clone(), rejection)),
+            for (name, callee) in dropped {
+                units.remove(&name);
+                rejected.push((
+                    name,
+                    Rejection::Unsupported(format!("calls `{callee}`, which is not compiled")),
+                ));
+            }
         }
-    }
-    // A function rejected during generation invalidates its callers; one more
-    // pass over the fixpoint keeps the module consistent. Generation is
-    // deterministic, so the pass converges.
-    let compiled: BTreeSet<&str> = functions.iter().map(|f| f.name.as_str()).collect();
-    let mut invalid = Vec::new();
-    for function in &functions {
-        let unit = &units[&function.name];
-        if let Some(callee) = unit
-            .analysis
-            .user_callees
-            .iter()
-            .find(|callee| !compiled.contains(callee.as_str()))
-        {
-            invalid.push((function.name.clone(), callee.clone()));
-        }
-    }
-    if !invalid.is_empty() {
-        for (name, callee) in &invalid {
-            rejected.push((
-                name.clone(),
-                Rejection::Unsupported(format!("calls `{callee}`, which is not compiled")),
-            ));
-        }
-        // Re-render only the surviving bodies.
-        bodies.clear();
-        functions.retain(|f| !invalid.iter().any(|(n, _)| *n == f.name));
-        natives.clear();
-        for function in &functions {
-            let unit = &units[&function.name];
+        let symbols: HashMap<String, String> = units
+            .keys()
+            .enumerate()
+            .map(|(ordinal, name)| (name.clone(), symbol_for(name, ordinal)))
+            .collect();
+        let mut bodies = String::new();
+        let mut functions = Vec::new();
+        let mut natives: BTreeMap<String, usize> = BTreeMap::new();
+        let mut failed = Vec::new();
+        for (name, unit) in &units {
             let mut generator = Generator {
                 db,
                 index: &index,
                 symbols: &symbols,
-                observed: &observed,
                 natives: &mut natives,
                 body: body_of(unit.mir),
                 analysis: &unit.analysis,
@@ -239,11 +181,28 @@ pub fn compile_program<'db>(
                 pending: Vec::new(),
                 temps: 0,
             };
-            if let Ok(code) = generator.function(&function.symbol) {
-                bodies.push_str(&code);
+            match generator.function(&symbols[name]) {
+                Ok(code) => {
+                    bodies.push_str(&code);
+                    let info = &index.functions[name];
+                    functions.push(CompiledFunction {
+                        name: name.clone(),
+                        symbol: symbols[name].clone(),
+                        object: index.objects[name],
+                        arity: info.arity,
+                    });
+                }
+                Err(rejection) => failed.push((name.clone(), rejection)),
             }
         }
-    }
+        if failed.is_empty() {
+            break (bodies, functions, natives);
+        }
+        for (name, rejection) in failed {
+            units.remove(&name);
+            rejected.push((name, rejection));
+        }
+    };
 
     let source = render_module(&bodies, &functions, &natives, artifact_path);
     NativeModule {
@@ -290,10 +249,12 @@ struct ProgramIndex {
     functions: HashMap<String, FunctionInfo>,
     /// Function name → object index.
     objects: HashMap<String, usize>,
-    /// Class display name → (object index, field count).
+    /// Class link name → (object index, field count).
     classes: HashMap<String, (usize, usize)>,
-    /// Enum display name → object index.
+    /// Enum link name → object index.
     enums: HashMap<String, usize>,
+    /// String literal → the compile-time string object bytecode loads it from.
+    strings: HashMap<String, usize>,
 }
 
 impl ProgramIndex {
@@ -302,6 +263,7 @@ impl ProgramIndex {
         let mut objects = HashMap::new();
         let mut classes = HashMap::new();
         let mut enums = HashMap::new();
+        let mut strings = HashMap::new();
         for (index, object) in program.objects.iter().enumerate() {
             match object {
                 Object::Function(function) => {
@@ -317,14 +279,17 @@ impl ProgramIndex {
                         },
                     );
                 }
+                // Keyed by the qualified name, which is what MIR's link names
+                // spell; the display name elides the local package and is not
+                // an identity.
                 Object::Class(class) => {
-                    classes.insert(
-                        class.name.display_name().to_string(),
-                        (index, class.fields.len()),
-                    );
+                    classes.insert(class.name.to_string(), (index, class.fields.len()));
                 }
                 Object::Enum(enm) => {
-                    enums.insert(enm.name.display_name().to_string(), index);
+                    enums.insert(enm.name.to_string(), index);
+                }
+                Object::String(text) => {
+                    strings.entry(text.to_string()).or_insert(index);
                 }
                 _ => {}
             }
@@ -334,17 +299,25 @@ impl ProgramIndex {
             objects,
             classes,
             enums,
+            strings,
         }
     }
 }
 
 /// VM-owned builtins that never yield to run a callback, by `native_key`.
 /// Anything not listed is rejected: a yielding builtin cannot run inside a
-/// compiled body.
-fn builtin_is_callable(key: &str) -> bool {
+/// compiled body. `static_types` says the call's type arguments are known
+/// statically, which compiled code only allows for primitives and arrays of
+/// them (see [`static_realized`]).
+fn builtin_is_callable(key: &str, static_types: bool) -> bool {
     const ARRAY: &[&str] = &[
         "push", "pop", "first", "last", "is_empty", "reverse", "slice", "concat",
     ];
+    // Structural rendering yields only to run a user `to_string` override,
+    // which a value of a primitive type cannot contain.
+    if key == "baml._to_string_default" {
+        return static_types;
+    }
     if let Some(method) = key.strip_prefix("baml.Array.") {
         return ARRAY.contains(&method);
     }
@@ -398,9 +371,18 @@ struct Analysis {
     arity: usize,
     reprs: Vec<Repr>,
     structured: Structured,
-    observed: bool,
     /// Link names of the user functions this function calls directly.
     user_callees: BTreeSet<String>,
+    /// Locals assigned a statically known type (`LoadType` of a template that
+    /// needs no frame type arguments), with the `RealizedTy` expression that
+    /// builds it. Such a local is only ever a call's type argument.
+    static_types: HashMap<usize, String>,
+    /// Iterators over an array (`xs.iter()` of a local of array type), by
+    /// iterator local → array local. Compiled as an index walk with the
+    /// semantics `baml.iter.ArrayIterator` documents.
+    array_iters: HashMap<usize, usize>,
+    /// Whether any block has an unwind edge (a `catch` in this function).
+    catches: bool,
 }
 
 impl Analysis {
@@ -420,11 +402,53 @@ impl Analysis {
                 )));
             }
         }
-        let reprs = body
+        let mut reprs: Vec<Repr> = body
             .locals
             .iter()
             .map(|local| Repr::of(&local.ty))
             .collect();
+        // A parameter with a default arrives as `OmittedArg` and MIR's
+        // prologue tests for that sentinel in the body; such a local stays a
+        // `Value` so the test sees the sentinel instead of an unboxed zero.
+        let mut static_types = HashMap::new();
+        for block in &body.blocks {
+            for statement in &block.statements {
+                let StatementKind::Assign { destination, value } = &statement.kind else {
+                    continue;
+                };
+                match value {
+                    Rvalue::BinaryOp { left, right, .. } => {
+                        for (this, other) in [(left, right), (right, left)] {
+                            if let (
+                                Operand::Copy(Place::Local(local))
+                                | Operand::Move(Place::Local(local)),
+                                Operand::Constant(Constant::OmittedArg),
+                            ) = (this, other)
+                            {
+                                reprs[local.0] = Repr::Value;
+                            }
+                        }
+                    }
+                    Rvalue::LoadType(template) => {
+                        if let (Place::Local(local), Some(ty)) =
+                            (destination, static_realized(template))
+                        {
+                            static_types.insert(local.0, ty);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut array_iters = HashMap::new();
+        for block in &body.blocks {
+            if let Some(terminator) = &block.terminator
+                && let Some((iter, array)) = array_iter_call(body, terminator)
+            {
+                array_iters.insert(iter, array);
+            }
+        }
 
         let mut flows = Vec::with_capacity(body.blocks.len());
         let mut unwinds = Vec::with_capacity(body.blocks.len());
@@ -436,7 +460,9 @@ impl Analysis {
                     block.id
                 )));
             };
-            flows.push(flow_of(terminator)?);
+            let array_iteration = array_iter_call(body, terminator).is_some()
+                || array_next_call(terminator, &array_iters).is_some();
+            flows.push(flow_of(terminator, array_iteration)?);
             unwinds.push(block.unwind.map(|b| b.0));
             if let Terminator::Call { callee, .. } = terminator
                 && let Some(name) = user_callee_name(db, index, callee)
@@ -444,6 +470,7 @@ impl Analysis {
                 user_callees.insert(name);
             }
         }
+        let catches = unwinds.iter().any(Option::is_some);
         let cfg = Cfg {
             entry: body.entry.0,
             flows,
@@ -451,42 +478,73 @@ impl Analysis {
         };
         let structured =
             structurize(&cfg).map_err(|error| Rejection::Invalid(error.to_string()))?;
-        let statements: usize = body
-            .blocks
-            .iter()
-            .map(|block| block.statements.len() + 1)
-            .sum();
-        let observed = has_loop(&structured.stmts) || statements > OBSERVED_STATEMENTS;
         Ok(Self {
             arity: mir.arity,
             reprs,
             structured,
-            observed,
             user_callees,
+            static_types,
+            array_iters,
+            catches,
         })
     }
 }
 
-fn has_loop(stmts: &[Stmt]) -> bool {
-    stmts.iter().any(|stmt| match stmt {
-        Stmt::Loop { .. } => true,
-        Stmt::Block { body, .. } => has_loop(body),
-        Stmt::If {
-            then_branch,
-            else_branch,
-            ..
-        } => has_loop(then_branch) || has_loop(else_branch),
-        Stmt::Switch {
-            arms, otherwise, ..
-        } => arms.iter().any(|(_, body)| has_loop(body)) || has_loop(otherwise),
-        Stmt::Leaf(_) | Stmt::Break(_) | Stmt::BreakLoop(_) | Stmt::Continue(_) | Stmt::Exit(_) => {
-            false
-        }
-    })
+/// `xs.iter()` on a local of array type, as `(iterator local, array local)`.
+fn array_iter_call(
+    body: &MirFunctionBody<'_>,
+    terminator: &Terminator<'_>,
+) -> Option<(usize, usize)> {
+    let Terminator::VirtualCall {
+        has_trace: false,
+        method,
+        args,
+        ntypeargs: 0,
+        destination: Place::Local(iter),
+        ..
+    } = terminator
+    else {
+        return None;
+    };
+    let [Operand::Copy(Place::Local(array)) | Operand::Move(Place::Local(array))] = args.as_slice()
+    else {
+        return None;
+    };
+    (method == "iter"
+        && matches!(
+            body.locals[array.0].ty,
+            baml_compiler2_mir::RuntimeTy::List(_)
+        ))
+    .then_some((iter.0, array.0))
+}
+
+/// `it.next()` on an array iterator, as the iterator local.
+fn array_next_call(
+    terminator: &Terminator<'_>,
+    array_iters: &HashMap<usize, usize>,
+) -> Option<usize> {
+    let Terminator::VirtualCall {
+        has_trace: false,
+        method,
+        args,
+        ntypeargs: 0,
+        destination: Place::Local(_),
+        ..
+    } = terminator
+    else {
+        return None;
+    };
+    let [Operand::Copy(Place::Local(iter)) | Operand::Move(Place::Local(iter))] = args.as_slice()
+    else {
+        return None;
+    };
+    (method == "next" && array_iters.contains_key(&iter.0)).then_some(iter.0)
 }
 
 /// The edge shape of a terminator, or why it keeps the function bytecode.
-fn flow_of(terminator: &Terminator<'_>) -> Result<Flow, Rejection> {
+/// `array_iteration` marks a virtual call this backend compiles as array
+/// iteration (see [`Analysis::array_iters`]).
+fn flow_of(terminator: &Terminator<'_>, array_iteration: bool) -> Result<Flow, Rejection> {
     Ok(match terminator {
         Terminator::Goto { target } => Flow::Goto(target.0),
         Terminator::Branch {
@@ -521,7 +579,6 @@ fn flow_of(terminator: &Terminator<'_>) -> Result<Flow, Rejection> {
         Terminator::Call {
             target,
             has_trace,
-            ntypeargs,
             argument_layout,
             ..
         } => {
@@ -529,9 +586,6 @@ fn flow_of(terminator: &Terminator<'_>) -> Result<Flow, Rejection> {
                 return Err(Rejection::Unsupported(
                     "call with a $trace attachment".into(),
                 ));
-            }
-            if *ntypeargs > 0 {
-                return Err(Rejection::Unsupported("call passing type arguments".into()));
             }
             // A layout of required positional slots is the plain call; a
             // named or omitted optional needs the VM's slot reconciliation.
@@ -549,8 +603,14 @@ fn flow_of(terminator: &Terminator<'_>) -> Result<Flow, Rejection> {
             then_block: join.0,
             else_block: eval_rhs.0,
         },
-        Terminator::VirtualCall { .. } => {
-            return Err(Rejection::Unsupported("interface method call".into()));
+        Terminator::VirtualCall { target, method, .. } => {
+            if array_iteration {
+                Flow::Goto(target.0)
+            } else {
+                return Err(Rejection::Unsupported(format!(
+                    "interface method call `{method}` on a receiver that is not an array"
+                )));
+            }
         }
         Terminator::SysOp { .. } => return Err(Rejection::Unsupported("sys op".into())),
         Terminator::Spawn { .. } => return Err(Rejection::Unsupported("spawn".into())),
@@ -597,15 +657,14 @@ struct Generator<'a, 'db> {
     db: &'db dyn baml_compiler2_mir::Db,
     index: &'a ProgramIndex,
     symbols: &'a HashMap<String, String>,
-    observed: &'a HashMap<String, bool>,
     /// Builtin native keys the module binds, by key → ordinal.
     natives: &'a mut BTreeMap<String, usize>,
     body: &'a MirFunctionBody<'db>,
     analysis: &'a Analysis,
     out: String,
     /// `let` bindings to emit before the statement being generated: every
-    /// sub-expression that touches `vm` is hoisted so no VM call appears
-    /// inside another's argument list (which borrows `vm` twice).
+    /// operand that is not an atom is bound first, so no call's argument list
+    /// holds another call (two `vm` borrows) whatever the expression is.
     pending: Vec<String>,
     temps: usize,
 }
@@ -624,16 +683,19 @@ impl<'db> Generator<'_, 'db> {
     fn function(&mut self, symbol: &str) -> Gen<String> {
         let arity = self.body.locals.len().min(self.arity());
         let mut out = String::new();
-        let inline = if self.analysis.observed {
-            "#[inline(never)]"
-        } else {
-            "#[inline]"
-        };
         let _ = writeln!(
             out,
-            "{inline}\nfn body_{symbol}(vm: &mut BexVm, args: &[Value]) -> R<Value> {{"
+            "#[inline]\npub fn {symbol}(vm: &mut BexVm, args: &[Value]) -> R<Value> {{"
         );
+        if self.analysis.catches {
+            // The frame count with this function's frame on top; a catch pops
+            // whatever compiled callees left above it.
+            out.push_str("    let depth = vm.frame_depth();\n");
+        }
         for (i, repr) in self.analysis.reprs.iter().enumerate() {
+            if self.analysis.static_types.contains_key(&i) {
+                continue;
+            }
             let ty = repr.rust_type();
             if (1..=arity).contains(&i) {
                 let arg = coerce(&format!("args[{}]", i - 1), Repr::Value, *repr);
@@ -641,6 +703,9 @@ impl<'db> Generator<'_, 'db> {
             } else {
                 let _ = writeln!(out, "    let mut l{i}: {ty} = {};", repr.default_value());
             }
+        }
+        for iter in self.analysis.array_iters.keys() {
+            let _ = writeln!(out, "    let mut i{iter}: i64 = 0;");
         }
         for block in &self.body.blocks {
             match &block.terminator {
@@ -664,11 +729,6 @@ impl<'db> Generator<'_, 'db> {
         // Every path ends in an `Exit`; this is unreachable, and keeps the
         // function well-typed if a leaf falls through after structuring.
         out.push_str("    #[allow(unreachable_code)]\n    Ok(Value::NULL)\n}\n");
-        let _ = writeln!(
-            out,
-            "pub fn {symbol}(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {{\n    \
-             bex_vm::compiled_rt::into_native_result(body_{symbol}(vm, args))\n}}\n"
-        );
         Ok(out)
     }
 
@@ -702,10 +762,10 @@ impl<'db> Generator<'_, 'db> {
         self.line(depth, text);
     }
 
-    /// Bind `expr` to a temporary when it calls into the VM, so it can be an
-    /// argument of another VM call.
+    /// Bind `expr` to a temporary unless it is an atom (a local or a
+    /// literal), so it can be an argument of a call into the VM.
     fn hoist(&mut self, expr: Expr) -> Expr {
-        if !expr.code.contains("vm.") {
+        if is_atom(&expr.code) {
             return expr;
         }
         let name = format!("t{}", self.temps);
@@ -806,6 +866,13 @@ impl<'db> Generator<'_, 'db> {
         for statement in &block.statements {
             match &statement.kind {
                 StatementKind::Assign { destination, value } => {
+                    // A static type local is consumed as a call's type
+                    // argument; it has no runtime value of its own.
+                    if let (Place::Local(local), Rvalue::LoadType(_)) = (destination, value)
+                        && self.analysis.static_types.contains_key(&local.0)
+                    {
+                        continue;
+                    }
                     let value = self.rvalue(id, value)?;
                     let code = self.store(id, destination, &value)?;
                     self.statement(depth, &code);
@@ -852,10 +919,11 @@ impl<'db> Generator<'_, 'db> {
             Terminator::Call {
                 callee,
                 args,
+                ntypeargs,
                 destination,
                 ..
             } => {
-                let call = self.call(id, callee, args)?;
+                let call = self.call(id, callee, args, *ntypeargs)?;
                 let code = self.store(id, destination, &Expr::new(call, Repr::Value))?;
                 self.statement(depth, &code);
             }
@@ -877,13 +945,41 @@ impl<'db> Generator<'_, 'db> {
                 let store = self.store(id, destination, &Expr::new("lhs", Repr::Value))?;
                 self.statement(depth, &format!("if c{} {{ {store} }}", id.0));
             }
+            Terminator::VirtualCall { destination, .. } => {
+                if let Some((iter, array)) =
+                    array_iter_call(self.body, block.terminator.as_ref().expect("checked"))
+                {
+                    let array = coerce(&format!("l{array}"), self.repr(Local(array)), Repr::Value);
+                    self.statement(depth, &format!("l{iter} = {array}; i{iter} = 0;"));
+                } else if let Some(iter) = array_next_call(
+                    block.terminator.as_ref().expect("checked"),
+                    &self.analysis.array_iters,
+                ) {
+                    // `baml.iter.ArrayIterator.next`: the length is re-read on
+                    // every step, so a loop that grows or shrinks the array
+                    // sees it, and the end is a `Done` instance.
+                    let Some(&(done, _)) = self.index.classes.get("baml.iter.Done") else {
+                        return unsupported("`baml.iter.Done` not found in the program");
+                    };
+                    let step = format!(
+                        "if i{iter} < bex_vm::compiled_rt::expect_int(vm.container_len(l{iter})?)? {{ \
+                         let v = vm.load_array_element(l{iter}, Value::int(i{iter}))?; i{iter} += 1; v }} \
+                         else {{ vm.new_instance(vm.idx_to_ptr(ObjectIndex::from_raw({done})), Vec::new()) }}"
+                    );
+                    let code = self.store(id, destination, &Expr::new(step, Repr::Value))?;
+                    self.statement(depth, &code);
+                } else {
+                    return Err(Rejection::Invalid(
+                        "virtual call admitted without a lowering".into(),
+                    ));
+                }
+            }
             Terminator::Goto { .. }
             | Terminator::Return
             | Terminator::Unreachable
             | Terminator::Throw { .. }
             | Terminator::Rethrow { .. } => {}
-            Terminator::VirtualCall { .. }
-            | Terminator::SysOp { .. }
+            Terminator::SysOp { .. }
             | Terminator::Spawn { .. }
             | Terminator::Await { .. }
             | Terminator::AwaitAny { .. }
@@ -903,29 +999,27 @@ impl<'db> Generator<'_, 'db> {
             Terminator::Throw { value } => {
                 let value = self.operand(id, value)?;
                 let value = self.value_arg(&value.code, value.repr);
+                let error = format!("bex_vm::compiled_rt::throw({value})");
                 if block.unwind.is_some() {
-                    let jump = self.unwind_jump(id, "thrown", depth)?;
-                    self.statement(depth, &format!("let thrown = {value};"));
+                    let jump = self.unwind_jump(id, &error, depth)?;
+                    self.flush(depth);
                     self.out.push_str(&jump);
                 } else {
-                    self.statement(
-                        depth,
-                        &format!("return Err(bex_vm::compiled_rt::throw({value}));"),
-                    );
+                    self.statement(depth, &format!("return Err({error});"));
                 }
             }
-            Terminator::Rethrow { value, .. } => {
+            Terminator::Rethrow { value, context } => {
                 let value = self.operand(id, value)?;
                 let value = self.value_arg(&value.code, value.repr);
+                let context = self.operand(id, context)?;
+                let context = self.value_arg(&context.code, context.repr);
+                let error = format!("bex_vm::compiled_rt::rethrow({value}, {context})");
                 if block.unwind.is_some() {
-                    let jump = self.unwind_jump(id, "thrown", depth)?;
-                    self.statement(depth, &format!("let thrown = {value};"));
+                    let jump = self.unwind_jump(id, &error, depth)?;
+                    self.flush(depth);
                     self.out.push_str(&jump);
                 } else {
-                    self.statement(
-                        depth,
-                        &format!("return Err(bex_vm::compiled_rt::rethrow({value}));"),
-                    );
+                    self.statement(depth, &format!("return Err({error});"));
                 }
             }
             Terminator::Unreachable => {
@@ -940,9 +1034,12 @@ impl<'db> Generator<'_, 'db> {
         Ok(())
     }
 
-    /// The statements that bind the thrown `value_var` into `block`'s handler
-    /// landing and jump there.
-    fn unwind_jump(&mut self, block: BlockId, value_var: &str, depth: usize) -> Gen<String> {
+    /// The statements that land `error` (an expression of type
+    /// `Box<VmError>`) in `block`'s handler: build its context and pop the
+    /// frames of compiled callees above this one (`BexVm::catch`), bind value
+    /// and context into the handler's landing locals, and jump there. An
+    /// internal error is not catchable and propagates.
+    fn unwind_jump(&mut self, block: BlockId, error: &str, depth: usize) -> Gen<String> {
         let Some(handler) = self.body.blocks[block.0].unwind else {
             return Err(Rejection::Invalid(
                 "unwind jump from a block without a handler".into(),
@@ -954,24 +1051,35 @@ impl<'db> Generator<'_, 'db> {
             )));
         };
         let mut out = String::new();
-        let error = self.store(
+        let value = self.store(
             block,
             &Place::Local(landing.error_local),
-            &Expr::new(value_var, Repr::Value),
+            &Expr::new("thrown", Repr::Value),
         )?;
         let context = self.store(
             block,
             &Place::Local(landing.context_local),
-            &Expr::new("Value::NULL", Repr::Value),
+            &Expr::new("context", Repr::Value),
         )?;
         let saved = std::mem::take(&mut self.out);
-        self.line(depth, &error);
+        self.line(
+            depth,
+            &format!("let (thrown, context) = vm.catch({error}, depth)?;"),
+        );
+        self.line(depth, &value);
         self.line(depth, &context);
         let jumps = self.analysis.structured.unwind_jumps[block.0].clone();
         self.stmts(&jumps, depth)?;
         out.push_str(&self.out);
         self.out = saved;
         Ok(out)
+    }
+
+    /// Emit the bindings hoisted so far.
+    fn flush(&mut self, depth: usize) {
+        for binding in std::mem::take(&mut self.pending) {
+            self.line(depth, &binding);
+        }
     }
 
     /// Wrap a fallible expression (`Result<_, VmError>` or
@@ -981,9 +1089,9 @@ impl<'db> Generator<'_, 'db> {
         if self.body.blocks[block.0].unwind.is_none() {
             return Ok(format!("{code}?"));
         }
-        let jump = self.unwind_jump(block, "thrown", 0)?;
+        let jump = self.unwind_jump(block, "e.into()", 0)?;
         Ok(format!(
-            "(match {code} {{ Ok(v) => v, Err(e) => {{ let thrown = bex_vm::compiled_rt::caught(e.into())?; {jump} }} }})"
+            "(match {code} {{ Ok(v) => v, Err(e) => {{ {jump} }} }})"
         ))
     }
 
@@ -992,19 +1100,27 @@ impl<'db> Generator<'_, 'db> {
     fn operand(&mut self, block: BlockId, operand: &Operand<'db>) -> Gen<Expr> {
         let expr = match operand {
             Operand::Copy(place) | Operand::Move(place) => self.load(block, place)?,
-            Operand::Constant(constant) => Self::constant(constant)?,
+            Operand::Constant(constant) => self.constant(constant)?,
         };
         Ok(self.hoist(expr))
     }
 
-    fn constant(constant: &Constant<'db>) -> Gen<Expr> {
+    fn constant(&self, constant: &Constant<'db>) -> Gen<Expr> {
         Ok(match constant {
             Constant::Int(n) => Expr::new(format!("{n}i64"), Repr::Int),
             Constant::Float(f) => Expr::new(float_literal(*f), Repr::Float),
             Constant::Bool(b) => Expr::new(format!("{b}"), Repr::Bool),
             Constant::Null => Expr::new("Value::NULL", Repr::Value),
             Constant::OmittedArg => Expr::new("Value::OMITTED_ARG", Repr::Value),
-            Constant::String(s) => Expr::new(format!("vm.string_value({s:?})"), Repr::Value),
+            // The literal's compile-time string object, as bytecode loads it:
+            // no allocation per evaluation.
+            Constant::String(s) => match self.index.strings.get(s.as_str()) {
+                Some(object) => Expr::new(
+                    format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
+                    Repr::Value,
+                ),
+                None => Expr::new(format!("vm.string_value({s:?})"), Repr::Value),
+            },
             Constant::Bigint(_) => return unsupported("bigint literal"),
             Constant::Function(_) | Constant::GenericFunction { .. } => {
                 return unsupported("function used as a value");
@@ -1016,7 +1132,15 @@ impl<'db> Generator<'_, 'db> {
 
     fn load(&mut self, block: BlockId, place: &Place) -> Gen<Expr> {
         match place {
-            Place::Local(local) => Ok(Expr::new(format!("l{}", local.0), self.repr(*local))),
+            Place::Local(local) => {
+                if self.analysis.static_types.contains_key(&local.0) {
+                    return unsupported("type value");
+                }
+                if self.analysis.array_iters.contains_key(&local.0) {
+                    return unsupported("array iterator used as a value");
+                }
+                Ok(Expr::new(format!("l{}", local.0), self.repr(*local)))
+            }
             Place::Field { base, field } => {
                 let base = self.load(block, base)?;
                 let base = self.value_arg(&base.code, base.repr);
@@ -1120,7 +1244,7 @@ impl<'db> Generator<'_, 'db> {
                 Ok(Expr::new(code, Repr::Bool))
             }
             Rvalue::Array(template, elements) => {
-                let element_ty = primitive_realized(template).ok_or_else(|| {
+                let element_ty = static_realized(template).ok_or_else(|| {
                     Rejection::Unsupported("array of a non-primitive type".into())
                 })?;
                 let mut values = Vec::with_capacity(elements.len());
@@ -1336,6 +1460,7 @@ impl<'db> Generator<'_, 'db> {
         block: BlockId,
         callee: &Operand<'db>,
         args: &[Operand<'db>],
+        ntypeargs: usize,
     ) -> Gen<String> {
         let Operand::Constant(Constant::Function(func)) = callee else {
             return unsupported("call through a function value");
@@ -1344,12 +1469,30 @@ impl<'db> Generator<'_, 'db> {
         let Some(info) = self.index.functions.get(&name) else {
             return unsupported(format!("callee `{name}` not found in the program"));
         };
+        let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
         if info.arity != args.len() {
             return Err(Rejection::Invalid(format!(
                 "`{name}` called with {} of {} arguments",
                 args.len(),
                 info.arity
             )));
+        }
+        // Type arguments must be known statically: a non-generic caller has
+        // no frame type arguments to substitute.
+        let mut types = Vec::with_capacity(type_args.len());
+        for arg in type_args {
+            let ty = match arg {
+                Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+                    self.analysis.static_types.get(&local.0).cloned()
+                }
+                Operand::Constant(_) | Operand::Copy(_) | Operand::Move(_) => None,
+            };
+            let Some(ty) = ty else {
+                return unsupported(format!(
+                    "call to `{name}` with a type argument known only at runtime"
+                ));
+            };
+            types.push(ty);
         }
         let mut values = Vec::with_capacity(args.len());
         for arg in args {
@@ -1359,49 +1502,59 @@ impl<'db> Generator<'_, 'db> {
         let args = format!("&[{}]", values.join(", "));
         match info.kind {
             FunctionKind::Bytecode => {
+                if !types.is_empty() {
+                    return unsupported(format!("call to generic function `{name}`"));
+                }
                 let Some(symbol) = self.symbols.get(&name) else {
                     return unsupported(format!("calls `{name}`, which is not compiled"));
                 };
-                if self.observed.get(&name).copied().unwrap_or(false) {
-                    // Through the VM's own call path, so the call is observed.
-                    let object = self
-                        .index
-                        .objects
-                        .get(&name)
-                        .copied()
-                        .ok_or_else(|| Rejection::Invalid(format!("`{name}` has no object")))?;
-                    let callee = self.hoist(Expr::new(
-                        format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
-                        Repr::Value,
-                    ));
-                    self.fallible(
-                        block,
-                        &format!(
-                            "vm.call_native_body({}.as_object_ptr().expect(\"function object\"), {args})",
-                            callee.code
-                        ),
-                    )
-                } else {
-                    self.fallible(block, &format!("body_{symbol}(vm, {args})"))
-                }
+                let object = self
+                    .index
+                    .objects
+                    .get(&name)
+                    .copied()
+                    .ok_or_else(|| Rejection::Invalid(format!("`{name}` has no object")))?;
+                self.fallible(
+                    block,
+                    &format!(
+                        "vm.call_compiled(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, {args})"
+                    ),
+                )
             }
             FunctionKind::NativeUnresolved | FunctionKind::Native(_) => {
                 let Some(key) = info.native_key.as_deref() else {
                     return unsupported(format!("builtin `{name}` has no native key"));
                 };
-                if !builtin_is_callable(key) {
+                if !builtin_is_callable(key, !types.is_empty()) {
                     return unsupported(format!("builtin `{key}` may yield"));
                 }
                 let next = self.natives.len();
                 let ordinal = *self.natives.entry(key.to_owned()).or_insert(next);
-                self.fallible(
-                    block,
-                    &format!("vm.call_builtin(native_{ordinal}(), {args})"),
-                )
+                if types.is_empty() {
+                    self.fallible(
+                        block,
+                        &format!("vm.call_builtin(native_{ordinal}(), {args})"),
+                    )
+                } else {
+                    self.fallible(
+                        block,
+                        &format!(
+                            "vm.call_builtin_typed(native_{ordinal}(), &[{}], {args})",
+                            types.join(", ")
+                        ),
+                    )
+                }
             }
             FunctionKind::SysOp(_) => unsupported(format!("`{name}` is a sys op")),
         }
     }
+}
+
+/// Whether generated code `code` is a single token: a local, a literal, or a
+/// path. Anything else is bound to a temporary before it is used as a call
+/// argument.
+fn is_atom(code: &str) -> bool {
+    !code.contains(['(', ' ', '{', '[', '!', '&', '?'])
 }
 
 /// Convert `code`, held as `from`, into `to`.
@@ -1412,9 +1565,12 @@ fn coerce(code: &str, from: Repr, to: Repr) -> String {
         (Int, Value) => format!("Value::int({code})"),
         (Bool, Value) => format!("Value::bool({code})"),
         (Float, Value) => format!("vm.float_value({code})"),
-        (Value, Int) => format!("BexVm::int_of({code})"),
-        (Value, Bool) => format!("BexVm::bool_of({code})"),
-        (Value, Float) => format!("BexVm::f64_of({code})"),
+        // Checked: a value of the wrong kind here is a checker hole, reported
+        // as the internal error the interpreter's generic paths raise, never
+        // read as zero.
+        (Value, Int) => format!("bex_vm::compiled_rt::expect_int({code})?"),
+        (Value, Bool) => format!("bex_vm::compiled_rt::expect_bool({code})?"),
+        (Value, Float) => format!("bex_vm::compiled_rt::expect_f64({code})?"),
         // Scalars of different kinds never flow into one another in checked
         // MIR; go through the tagged form so the VM's own rule decides.
         (a, b) => coerce(&coerce(code, a, Value), Value, b),
@@ -1463,15 +1619,19 @@ fn binop_name(op: BinOp) -> &'static str {
     }
 }
 
-/// The `RealizedTy` constructor for a primitive element type template.
-fn primitive_realized(template: &baml_compiler2_mir::TyTemplate) -> Option<&'static str> {
-    match template {
-        TyTemplate::Int => Some("RealizedTy::Int"),
-        TyTemplate::Float => Some("RealizedTy::Float"),
-        TyTemplate::Bool => Some("RealizedTy::Bool"),
-        TyTemplate::String => Some("RealizedTy::String"),
-        _ => None,
-    }
+/// The `RealizedTy` expression for a type template that needs no frame type
+/// arguments and no program objects: primitives and arrays of them.
+fn static_realized(template: &baml_compiler2_mir::TyTemplate) -> Option<String> {
+    Some(match template {
+        TyTemplate::Int => "RealizedTy::Int".to_string(),
+        TyTemplate::Float => "RealizedTy::Float".to_string(),
+        TyTemplate::Bool => "RealizedTy::Bool".to_string(),
+        TyTemplate::String => "RealizedTy::String".to_string(),
+        TyTemplate::List(element) => {
+            format!("RealizedTy::List(Box::new({}))", static_realized(element)?)
+        }
+        _ => return None,
+    })
 }
 
 // ─── Module rendering ────────────────────────────────────────────────────────
@@ -1487,7 +1647,7 @@ fn render_module(
         "//! Generated by `baml_compiler2_native`. Do not edit.\n\
          #![allow(unused_mut, unused_variables, unused_assignments, unused_labels, unused_parens, \
          unreachable_code, non_snake_case, clippy::all, clippy::pedantic)]\n\n\
-         use bex_vm::{BexVm, NativeFunction, errors::VmError, package_baml::NativeCallResult};\n\
+         use bex_vm::{BexVm, NativeFunction, compiled_rt::CompiledEntry, errors::VmError};\n\
          use bex_vm_types::{BinOp, CmpOp, ObjectIndex, RealizedTy, Value};\n\n\
          type R<T> = Result<T, Box<VmError>>;\n\n",
     );
@@ -1500,9 +1660,16 @@ fn render_module(
         );
     }
     out.push_str(bodies);
-    out.push_str("\n/// Compiled bodies by `Function::name`.\npub static NATIVE_BODIES: &[(&str, NativeFunction)] = &[\n");
+    out.push_str(
+        "\n/// Compiled bodies by the object index of the bytecode function each replaces.\n\
+         pub static NATIVE_BODIES: &[CompiledEntry] = &[\n",
+    );
     for function in functions {
-        let _ = writeln!(out, "    ({:?}, {}),", function.name, function.symbol);
+        let _ = writeln!(
+            out,
+            "    CompiledEntry {{ object: {}, name: {:?}, arity: {}, body: {} }},",
+            function.object, function.name, function.arity, function.symbol
+        );
     }
     out.push_str("];\n\n/// The program these bodies were compiled from.\n");
     let _ = writeln!(

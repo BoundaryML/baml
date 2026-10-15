@@ -65,6 +65,27 @@ function calls_rejected(xs: int[]) -> int {
 
 function generic<T>(x: T) -> T { x }
 
+function for_sum(xs: int[]) -> int {
+  let total = 0;
+  for (let v in xs) { total += v; }
+  total
+}
+
+function build(n: int) -> int[] {
+  let out: int[] = [];
+  let i = 0;
+  while (i < n) { out.push(i); i += 1; }
+  out
+}
+
+function origin() -> Point { Point { x: 0, y: 0 } }
+
+function label(n: int) -> string { n.to_string() }
+
+function with_default(x: int, y: int = 5) -> int { x + y }
+
+function greet(name: string) -> bool { name == "build" }
+
 function main() -> string {
   let p = Point { x: 1, y: 2 };
   let q = Point { x: 4, y: 6 };
@@ -91,6 +112,12 @@ fn compute_shaped_functions_are_admitted_and_the_rest_stay_bytecode() {
         "user.manhattan",
         "user.safe_div",
         "user.mean",
+        "user.for_sum",
+        "user.build",
+        "user.origin",
+        "user.label",
+        "user.with_default",
+        "user.greet",
     ] {
         assert!(
             admitted.contains(&name),
@@ -125,39 +152,55 @@ fn compute_shaped_functions_are_admitted_and_the_rest_stay_bytecode() {
 }
 
 #[test]
-fn loops_make_a_function_observed() {
-    let module = compile(FIXTURE);
-    let observed = |name: &str| {
-        module
-            .functions
-            .iter()
-            .find(|f| f.name == name)
-            .unwrap_or_else(|| panic!("{name} should compile"))
-            .observed
-    };
-    assert!(observed("user.sum"));
-    assert!(observed("user.mean"));
-    assert!(!observed("user.fib"));
-    assert!(!observed("user.manhattan"));
-}
-
-#[test]
 fn generated_module_is_well_formed_rust() {
     let module = compile(FIXTURE);
     syn::parse_file(&module.source).expect("generated module parses as Rust");
     assert!(module.source.contains("pub static NATIVE_BODIES"));
     assert!(module.source.contains("include_bytes!(\"program.bexa\")"));
+    let compact: String = module.source.split_whitespace().collect();
     for function in &module.functions {
         assert!(
-            module
-                .source
-                .contains(&format!("({:?}, {})", function.name, function.symbol)),
-            "{} is registered under its name",
+            compact.contains(&format!(
+                "CompiledEntry{{object:{},name:{:?},arity:{},body:{},}}",
+                function.object, function.name, function.arity, function.symbol
+            )),
+            "{} is registered under its object index",
             function.name
         );
     }
+    // Every compiled call gets a frame (depth limit, traces, telemetry).
+    assert!(compact.contains("vm.call_compiled("));
+    // A string literal is the program's own string object, not a new one.
+    assert!(!compact.contains("vm.string_value("));
+    // A defaulted parameter stays a `Value` until MIR's `OmittedArg` test.
+    let with_default = body_of(&module, "user.with_default");
+    assert!(
+        with_default
+            .split_whitespace()
+            .collect::<String>()
+            .contains("letmutl2:Value=args[1];"),
+        "{with_default}"
+    );
     // Statically typed int arithmetic stays on raw operands.
-    assert!(module.source.contains("vm.add_i64("));
+    assert!(compact.contains("vm.add_i64("));
     // The float loop keeps raw floats and boxes only when storing a Value.
-    assert!(module.source.contains("vm.float_value("));
+    assert!(compact.contains("vm.float_value("));
+}
+
+/// The generated body of one function, for shape assertions.
+fn body_of(module: &NativeModule, name: &str) -> String {
+    let symbol = &module
+        .functions
+        .iter()
+        .find(|f| f.name == name)
+        .unwrap_or_else(|| panic!("{name} should compile"))
+        .symbol;
+    let start = module
+        .source
+        .find(&format!("pub fn {symbol}("))
+        .expect("body is emitted");
+    let end = module.source[start..]
+        .find("\n}\n")
+        .map_or(module.source.len(), |end| start + end);
+    module.source[start..end].to_string()
 }

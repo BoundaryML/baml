@@ -173,7 +173,7 @@ pub const MAX_FRAMES: usize = 256;
 /// bytecode. The unwinder resolves the innermost frame's handlers by `cur_pc`;
 /// no exception-table or cause-table range reaches this offset, so a throw
 /// escaping a compiled body is never caught inside its own frame.
-const NATIVE_BODY_PC: usize = usize::MAX;
+pub(crate) const NATIVE_BODY_PC: usize = usize::MAX;
 
 #[derive(Clone, Copy)]
 struct CallOptions<'a> {
@@ -273,6 +273,25 @@ pub struct BytecodeFrame {
     /// Producer-only invocation state. `None` means the invocation is hidden.
     pub(crate) telemetry: Option<FrameTelemetry>,
     context: Context,
+}
+
+impl BytecodeFrame {
+    /// The frame of a compiled-to-compiled call made with telemetry off: no
+    /// telemetry, no type arguments, no locals region (compiled code keeps its
+    /// locals in Rust), and a faulting PC no exception table covers, so the
+    /// unwinder never starts one of the function's bytecode handlers.
+    pub(crate) fn compiled(function: HeapPtr, locals_offset: StackIndex, context: Context) -> Self {
+        Self {
+            function,
+            instruction_ptr: 0,
+            locals_offset,
+            type_args: Vec::new(),
+            type_metadata: None,
+            faulting_pc: NATIVE_BODY_PC,
+            telemetry: None,
+            context,
+        }
+    }
 }
 
 struct CallTrace {
@@ -477,6 +496,7 @@ pub(crate) mod tests {
             entry_trace_context: None,
             root_context: btel_types::context::Context::default(),
             pending_call_type_args: Vec::new(),
+            compiled_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
             pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
@@ -845,9 +865,12 @@ pub(crate) mod tests {
         use crate::telemetry::{InvocationOutcome, SpanRecord, TimingRecord};
 
         static CALLS: AtomicUsize = AtomicUsize::new(0);
-        fn add_native(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+        fn add_native(
+            vm: &mut BexVm,
+            args: &[Value],
+        ) -> Result<Value, Box<crate::errors::VmError>> {
             CALLS.fetch_add(1, Ordering::Relaxed);
-            crate::compiled_rt::into_native_result(vm.add_int(args[0], args[1]).map_err(Box::new))
+            Ok(vm.add_int(args[0], args[1])?)
         }
 
         const SOURCE: &str = r#"
@@ -891,7 +914,9 @@ pub(crate) mod tests {
                     unreachable!()
                 };
                 assert!(matches!(function.kind, FunctionKind::Bytecode));
-                function.native_body = Some(NativeBody(add_native as NativeFunction as *const ()));
+                function.native_body = Some(NativeBody(
+                    add_native as crate::compiled_rt::CompiledBody as *const (),
+                ));
             }
             let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
             vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
@@ -970,6 +995,205 @@ pub(crate) mod tests {
         assert_eq!(add_outcomes.len(), 2);
         assert_eq!(add_outcomes[0], InvocationOutcome::Ok);
         assert_ne!(add_outcomes[1], InvocationOutcome::Ok);
+    }
+
+    /// Run `user.Main` of `source` with the named functions' bodies replaced
+    /// by hand-written compiled bodies, shaped as `baml_compiler2_native`
+    /// emits them. `objects` receives each named function's object index
+    /// before the run, for bodies that call or name other functions.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn run_with_compiled_bodies(
+        source: &str,
+        bodies: &[(&str, crate::compiled_rt::CompiledBody)],
+        objects: &[(&str, &std::sync::atomic::AtomicU32)],
+        telemetry: bool,
+    ) -> String {
+        use bex_vm_types::types::NativeBody;
+        let mut program = baml_test_support::compile_source(source);
+        let callables = program.rendered_callables();
+        let entry = callables["user.Main"].object.raw();
+        for (name, slot) in objects {
+            let raw = callables.get(*name).map_or_else(
+                || {
+                    program
+                        .objects
+                        .iter()
+                        .position(|object| {
+                            matches!(object, Object::Class(class)
+                                if class.name.to_string() == *name)
+                        })
+                        .unwrap_or_else(|| panic!("no callable or class `{name}`"))
+                },
+                |callable| callable.object.raw(),
+            );
+            slot.store(
+                u32::try_from(raw).unwrap(),
+                std::sync::atomic::Ordering::Relaxed,
+            );
+        }
+        let indices: Vec<usize> = bodies
+            .iter()
+            .map(|(name, _)| callables[*name].object.raw())
+            .collect();
+        for ((_, body), index) in bodies.iter().zip(indices) {
+            let Object::Function(function) = &mut program.objects[ObjectIndex::from_raw(index)]
+            else {
+                unreachable!()
+            };
+            function.native_body = Some(NativeBody(*body as *const ()));
+        }
+        let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+        if !telemetry {
+            vm.telemetry = None;
+        }
+        vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
+        loop {
+            match vm.exec() {
+                Ok(VmExecState::EarlyYield) => {}
+                Ok(VmExecState::Complete(value)) => {
+                    break vm.as_string(&value).unwrap().to_string();
+                }
+                Ok(other) => panic!("unexpected execution state: {other:?}"),
+                Err(error) => break format!("error: {error:?}"),
+            }
+        }
+    }
+
+    /// Compiled recursion counts toward the frame limit: the caller sees a
+    /// catchable `StackOverflow` at the bytecode depth, never a native stack
+    /// overflow, with telemetry off (the direct-call path) and on (the VM's
+    /// call path).
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn compiled_recursion_hits_the_frame_limit() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static DEEP: AtomicU32 = AtomicU32::new(0);
+        fn deep(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let n = BexVm::int_of(args[0]);
+            if n == 0 {
+                return Ok(Value::int(0));
+            }
+            let me = vm.idx_to_ptr(ObjectIndex::from_raw(DEEP.load(Ordering::Relaxed) as usize));
+            let below = vm.call_compiled(me, deep, &[Value::int(n - 1)])?;
+            Ok(Value::int(BexVm::int_of(below) + 1))
+        }
+        const SOURCE: &str = r#"
+            function Deep(n: int) -> int { if (n == 0) { 0 } else { 1 + Deep(n - 1) } }
+            function Main() -> string {
+                let shallow = Deep(100);
+                let d = Deep(300) catch (e) { baml.panics.StackOverflow => -7 };
+                let huge = Deep(1000000) catch (e) { baml.panics.StackOverflow => -8 };
+                `${shallow}|${d}|${huge}`
+            }
+        "#;
+        for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[("user.Deep", deep)],
+                &[("user.Deep", &DEEP)],
+                telemetry,
+            );
+            assert_eq!(out, "100|-7|-8", "telemetry: {telemetry}");
+        }
+    }
+
+    /// A compiled `catch` around a compiled callee that throws pops the
+    /// callee's frame: the program continues normally and calls again.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn compiled_catch_pops_the_frames_of_compiled_callees() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static WORK: AtomicU32 = AtomicU32::new(0);
+        static PANIC: AtomicU32 = AtomicU32::new(0);
+        fn work(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let n = BexVm::int_of(args[0]);
+            Ok(Value::int(vm.div_i64(n, 0)?))
+        }
+        fn safe(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let depth = vm.frame_depth();
+            let work_ptr =
+                vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
+            match vm.call_compiled(work_ptr, work, &[args[0]]) {
+                Ok(v) => Ok(v),
+                Err(e) => {
+                    let (thrown, ctx) = vm.catch(e, depth)?;
+                    let class = vm
+                        .idx_to_ptr(ObjectIndex::from_raw(PANIC.load(Ordering::Relaxed) as usize));
+                    if vm.is_instance_of(thrown, class) {
+                        Ok(Value::int(-1))
+                    } else {
+                        Err(crate::compiled_rt::rethrow(thrown, ctx))
+                    }
+                }
+            }
+        }
+        const SOURCE: &str = r#"
+            function Work(n: int) -> int { n / 0 }
+            function Safe(n: int) -> int { Work(n) catch (e) { baml.panics.DivisionByZero => -1 } }
+            function Main() -> string { `${Safe(5)}|${Safe(6)}|${Safe(7)}` }
+        "#;
+        for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[("user.Work", work), ("user.Safe", safe)],
+                &[("user.Work", &WORK), ("baml.panics.DivisionByZero", &PANIC)],
+                telemetry,
+            );
+            assert_eq!(out, "-1|-1|-1", "telemetry: {telemetry}");
+        }
+    }
+
+    /// A compiled catch lands the error with its real context, and a rethrow
+    /// carries it: a bytecode `catch (e, ctx)` above sees the trace of the
+    /// original throw, whose innermost frame is the compiled thrower.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn compiled_rethrow_keeps_the_original_context() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static WORK: AtomicU32 = AtomicU32::new(0);
+        fn work(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let n = BexVm::int_of(args[0]);
+            Ok(Value::int(vm.div_i64(n, 0)?))
+        }
+        fn relay(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let depth = vm.frame_depth();
+            let work_ptr =
+                vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
+            match vm.call_compiled(work_ptr, work, &[args[0]]) {
+                Ok(v) => Ok(v),
+                Err(e) => {
+                    let (thrown, ctx) = vm.catch(e, depth)?;
+                    assert!(!ctx.is_null(), "a compiled catch lands a real context");
+                    Err(crate::compiled_rt::rethrow(thrown, ctx))
+                }
+            }
+        }
+        const SOURCE: &str = r#"
+            function Work(n: int) -> int { n / 0 }
+            function Relay(n: int) -> int { Work(n) catch (e) { _ => { throw e } } }
+            function Main() -> string {
+                let name = "none";
+                let r = Relay(1) catch (e, ctx) {
+                    baml.panics.DivisionByZero => {
+                        let frames = ctx.stack_trace.frames;
+                        name = frames[frames.length() - 1].function_name;
+                        -1
+                    }
+                };
+                name
+            }
+        "#;
+        let bytecode = run_with_compiled_bodies(SOURCE, &[], &[], true);
+        assert_eq!(bytecode, "user.Work");
+        for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[("user.Work", work), ("user.Relay", relay)],
+                &[("user.Work", &WORK)],
+                telemetry,
+            );
+            assert_eq!(out, bytecode, "telemetry: {telemetry}");
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1813,7 +2037,7 @@ pub struct BexVm {
     pub thread_id: u64,
 
     /// VM-owned producer state. It deliberately has no transport or buffer.
-    telemetry: Option<TelemetryState>,
+    pub(crate) telemetry: Option<TelemetryState>,
     pub(crate) trace_scope: btel_types::RecordingId,
 
     /// Starts at VM Await suspension, or when the engine receives an async
@@ -1851,7 +2075,10 @@ pub struct BexVm {
     entry_trace: Option<crate::telemetry::TraceConfig>,
     entry_trace_context: Option<Arc<ContextPatch>>,
     root_context: Context,
-    pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
+    pub(crate) pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
+    /// Spare buffer for the type arguments compiled code passes to generic
+    /// builtins (`compiled_rt::call_builtin_typed`), kept for its capacity.
+    pub(crate) compiled_type_args: Vec<bex_vm_types::RealizedTy>,
     pending_call_type_values: Vec<Option<TypeValue>>,
     /// Set by a call that passes type arguments, for its callee's entry
     /// only: telemetry records the frame's type arguments before the call's
@@ -2037,9 +2264,9 @@ pub fn convert_program_with_trace_hooks(
     convert_program_with_natives(program, enabled, None)
 }
 
-/// Natively compiled bodies keyed by [`Function::name`], as the BAML-to-Rust
-/// compiler emits them for one program.
-pub type NativeBodyTable = [(&'static str, NativeFunction)];
+/// Natively compiled bodies for one program, as the BAML-to-Rust compiler
+/// emits them; see [`crate::compiled_rt::CompiledEntry`].
+pub type NativeBodyTable = [crate::compiled_rt::CompiledEntry];
 
 /// [`convert_program_with_trace_hooks`], additionally attaching natively
 /// compiled bodies to the bytecode functions they were compiled from.
@@ -2093,43 +2320,43 @@ pub fn convert_program_with_natives(
     })
 }
 
-/// Attach each compiled body to the bytecode function of the same name.
+/// Attach each compiled body to the bytecode function it was compiled from.
 ///
-/// The table and the program come from one build (the compiled crate embeds
-/// the program it was compiled from), so every entry must name a bytecode
-/// function the compiler could have admitted: a missing name, a non-bytecode
-/// kind, or a generic function is a build inconsistency, not a user error.
+/// An entry names its function by object index, the identity the generated
+/// code already depends on (it bakes callee and class indices in), and
+/// repeats the function's link name and arity so a table from another build
+/// is refused here instead of running against the wrong objects. A mismatch,
+/// a non-bytecode kind, or a generic function is a build inconsistency, not a
+/// user error.
 fn attach_native_bodies(
     objects: &mut [Object],
     table: &NativeBodyTable,
 ) -> Result<(), VmInternalError> {
-    let mut pending: HashMap<&str, NativeFunction> = table.iter().copied().collect();
-    for object in objects.iter_mut() {
-        let Object::Function(function) = object else {
-            continue;
+    for entry in table {
+        let mismatch = |why: &str| VmInternalError::CompiledBody {
+            message: format!(
+                "compiled body for `{}` (object {}) {why}",
+                entry.name, entry.object
+            ),
         };
-        let Some(body) = pending.remove(function.name.as_str()) else {
-            continue;
+        let Some(Object::Function(function)) = objects.get_mut(entry.object as usize) else {
+            return Err(mismatch("does not name a function in this program"));
         };
+        if function.name != entry.name || function.arity != entry.arity {
+            return Err(mismatch(&format!(
+                "was compiled from another program: object is `{}` with arity {}",
+                function.name, function.arity
+            )));
+        }
         if !matches!(function.kind, FunctionKind::Bytecode) {
-            return Err(VmInternalError::CompiledBody {
-                message: format!("`{}` is not a bytecode function", function.name),
-            });
+            return Err(mismatch("targets a function that is not bytecode"));
         }
         if !function.generic_param_bounds.is_empty() || !function.display_type_params.is_empty() {
-            return Err(VmInternalError::CompiledBody {
-                message: format!(
-                    "`{}` is generic; compiled bodies take no type arguments",
-                    function.name
-                ),
-            });
+            return Err(mismatch(
+                "targets a generic function; compiled bodies take no type arguments",
+            ));
         }
-        function.native_body = Some(bex_vm_types::types::NativeBody(body as *const ()));
-    }
-    if let Some((name, _)) = pending.into_iter().next() {
-        return Err(VmInternalError::CompiledBody {
-            message: format!("no bytecode function named `{name}` in this program"),
-        });
+        function.native_body = Some(bex_vm_types::types::NativeBody(entry.body as *const ()));
     }
     Ok(())
 }
@@ -2527,6 +2754,7 @@ impl BexVm {
             entry_trace_context: None,
             root_context: Context::default(),
             pending_call_type_args: Vec::new(),
+            compiled_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
             pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
@@ -6241,6 +6469,88 @@ impl BexVm {
             .collect()
     }
 
+    /// The context an error lands with when it is raised at the current
+    /// execution point; see the BEP-042 rules in [`Self::unwind_exception`].
+    /// Returns whether the context was converted from a handled error.
+    /// Shared with compiled code's `catch` (`compiled_rt`), which lands an
+    /// error without running the unwinder.
+    fn in_flight_context(
+        &mut self,
+        carried: Option<Value>,
+        exception_value: Value,
+    ) -> Result<(InFlightContext, bool), VmError> {
+        Ok(match carried {
+            Some(context) if self.context_error(context)? == exception_value => {
+                (InFlightContext::Carried(context), false)
+            }
+            Some(_) | None => {
+                let cause = self.find_cause_context();
+                match self.take_context_transfer(cause, exception_value) {
+                    Some(handled) => (
+                        InFlightContext::Carried(
+                            self.retargeted_context(handled, exception_value)?,
+                        ),
+                        true,
+                    ),
+                    None => (
+                        InFlightContext::Fresh {
+                            trace: Arc::from(self.capture_user_stack_trace()),
+                            cause,
+                        },
+                        false,
+                    ),
+                }
+            }
+        })
+    }
+
+    /// Land a thrown error in a compiled function's `catch`: build its
+    /// context exactly as the unwinder would (with every frame between the
+    /// throw and the handler still on the stack, so the trace is complete),
+    /// then pop the frames compiled callees left pushed above the handling
+    /// function's own frame, completing their telemetry with the error
+    /// outcome. `depth` is the frame count with the handling function's frame
+    /// on top. Returns the caught value and its `baml.errors.Context`.
+    ///
+    /// Internal errors are not catchable and come back as `Err`.
+    pub(crate) fn land_compiled_catch(
+        &mut self,
+        error: Box<VmError>,
+        depth: usize,
+    ) -> Result<(Value, Value), Box<VmError>> {
+        let VmError::Thrown(thrown) = *error else {
+            return Err(error);
+        };
+        let value = thrown.value;
+        let outcome = self.telemetry_outcome_for_exception(value);
+        let (mut context, _) = self
+            .in_flight_context(thrown.context, value)
+            .map_err(Box::new)?;
+        while self.frames.len() > depth {
+            let top = self.frames.len() - 1;
+            // SAFETY: see `load_function`; compiled frames hold functions from
+            // the compile-time heap.
+            let function = unsafe { self.load_function(top) }
+                .map_err(|error| Box::new(VmError::InternalError(error)))?;
+            let recorded = if self.frame_wants_error_capture(top, function) {
+                self.recorded_context(&mut context, value)
+            } else {
+                value
+            };
+            self.complete_unwound_frame(top, function, outcome, recorded, None);
+            if let Some(Frame::Bytecode(frame)) = self.frames.pop() {
+                self.stack.truncate(frame.locals_offset.raw());
+            }
+        }
+        let ctx = match context {
+            InFlightContext::Carried(context) => context,
+            InFlightContext::Fresh { trace, cause } => {
+                self.alloc_error_context(value, &trace, cause)
+            }
+        };
+        Ok((value, ctx))
+    }
+
     fn try_unwind_exception(
         &mut self,
         frame_idx: &mut usize,
@@ -6272,29 +6582,7 @@ impl BexVm {
         // becomes its cause, unless it throws a conversion of that error
         // (`UnknownError.from`), which takes over the error's own trace and
         // cause.
-        let (mut context, converted) = match thrown.context {
-            Some(context) if self.context_error(context)? == exception_value => {
-                (InFlightContext::Carried(context), false)
-            }
-            Some(_) | None => {
-                let cause = self.find_cause_context();
-                match self.take_context_transfer(cause, exception_value) {
-                    Some(handled) => (
-                        InFlightContext::Carried(
-                            self.retargeted_context(handled, exception_value)?,
-                        ),
-                        true,
-                    ),
-                    None => (
-                        InFlightContext::Fresh {
-                            trace: Arc::from(self.capture_user_stack_trace()),
-                            cause,
-                        },
-                        false,
-                    ),
-                }
-            }
-        };
+        let (mut context, converted) = self.in_flight_context(thrown.context, exception_value)?;
         // Exception-path telemetry; `None` unless a recording wants raises.
         let carried = match &context {
             InFlightContext::Carried(context) => Some(*context),
@@ -7365,10 +7653,16 @@ impl BexVm {
                     // range can cover while the body runs.
                     let saved_pc = self.cur_pc;
                     self.cur_pc = NATIVE_BODY_PC;
+                    // Once the body calls a compiled callee, this frame is no
+                    // longer innermost and the unwinder reads its recorded
+                    // PC instead; park that on the sentinel too.
+                    if let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] {
+                        frame.faulting_pc = NATIVE_BODY_PC;
+                    }
                     let outcome = body(self, &args);
                     self.settle();
                     match outcome {
-                        NativeCallResult::Done(value) => {
+                        Ok(value) => {
                             self.cur_pc = saved_pc;
                             if let Some(state) =
                                 self.finish_bytecode_frame(frame_idx, function, value)?
@@ -7376,21 +7670,11 @@ impl BexVm {
                                 return Ok(Some(state));
                             }
                         }
-                        // The frame stays pushed: the unwinder names the
-                        // compiled function in the trace, completes its
-                        // telemetry with the error outcome, and pops it.
-                        NativeCallResult::Error(error) => {
-                            return Err(self.native_error_to_vm_error(error));
-                        }
-                        NativeCallResult::YieldToCall { .. } => {
-                            return Err(VmInternalError::CompiledBody {
-                                message: format!(
-                                    "`{}` yielded; compiled bodies cannot suspend",
-                                    callee.name
-                                ),
-                            }
-                            .into());
-                        }
+                        // The frame stays pushed, with every compiled frame the
+                        // body pushed above it: the unwinder names them in the
+                        // trace, completes their telemetry with the error
+                        // outcome, and pops them.
+                        Err(error) => return Err(*error),
                     }
                 }
             }

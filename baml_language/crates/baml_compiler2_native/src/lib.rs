@@ -11,7 +11,7 @@
 //! A function is *admitted* when nothing in its body needs the VM mid-body:
 //! no suspension (await, sys op, spawn), no call whose target is not a
 //! statically known admitted function or a non-yielding builtin, no type
-//! argument, no captured local. Everything else stays bytecode in the same
+//! argument known only at runtime, no captured local. Everything else stays bytecode in the same
 //! program, with identical semantics. Admission is a fixpoint over the call
 //! graph: a function calling a rejected function is rejected.
 

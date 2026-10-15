@@ -29,28 +29,47 @@ use bex_vm_types::{
 };
 
 use crate::{
-    errors::{ThrowKind, VmError, VmInternalError, VmPanic, VmRustFnError, VmThrown},
+    errors::{ThrowKind, VmError, VmInternalError, VmPanic, VmThrown},
     indexable::EvalStackTrait,
     package_baml::{NativeCallResult, NativeFunction},
     vm::{BexVm, VmExecState, value_as_float},
 };
 
+/// A natively compiled BAML function body. Errors are the VM's own: a thrown
+/// BAML exception keeps its throw kind and context end to end, and an internal
+/// error keeps its own variant. Boxed so the `Result` stays two words wide;
+/// the box is paid only on throw.
+pub type CompiledBody = fn(&mut BexVm, &[Value]) -> Result<Value, Box<VmError>>;
+
+/// One compiled function in a generated module's table.
+#[derive(Clone, Copy)]
+pub struct CompiledEntry {
+    /// Object index of the bytecode `Function` this body replaces: the
+    /// identity the generated code bakes in for callees and classes.
+    pub object: u32,
+    /// That function's link name, checked at attach.
+    pub name: &'static str,
+    /// That function's arity, checked at attach.
+    pub arity: usize,
+    /// The body.
+    pub body: CompiledBody,
+}
+
 /// `throw value` from compiled code: a fresh throw, whose
-/// `baml.errors.Context` the unwinder builds when it leaves the frame.
+/// `baml.errors.Context` is built where it lands.
 #[must_use]
 pub fn throw(value: Value) -> Box<VmError> {
     Box::new(VmError::Thrown(VmThrown::fresh(value)))
 }
 
-/// A caught value raised again from compiled code. Compiled code never builds
-/// a context, so the rethrow carries none and the unwinder builds a fresh
-/// one; see the design notes on this v0 deviation.
+/// A caught error raised again with the context it was caught with, so it
+/// keeps its original trace and cause, as bytecode's rethrow does.
 #[must_use]
-pub fn rethrow(value: Value) -> Box<VmError> {
+pub fn rethrow(value: Value, context: Value) -> Box<VmError> {
     Box::new(VmError::Thrown(VmThrown {
         value,
         throw_kind: ThrowKind::Rethrow,
-        context: None,
+        context: (!context.is_null()).then_some(context),
     }))
 }
 
@@ -72,58 +91,46 @@ pub fn type_tag(value: Value) -> i64 {
     crate::vm::value_type_tag(value)
 }
 
-/// The exception value inside an error a compiled `catch` can handle.
-///
-/// A thrown BAML value is catchable; an internal error is not and keeps
-/// propagating, exactly as the interpreter's unwinder treats the two.
-// The box is the error type compiled bodies hold; taking it by value avoids
-// a re-box on the propagating path.
-#[allow(clippy::boxed_local)]
-pub fn caught(error: Box<VmError>) -> Result<Value, Box<VmError>> {
-    match *error {
-        VmError::Thrown(thrown) => Ok(thrown.value),
-        other => Err(Box::new(other)),
+/// A value the checker typed `int`, unboxed. A non-int here is a checker hole,
+/// reported as the internal error the interpreter's generic paths raise.
+#[inline]
+pub fn expect_int(value: Value) -> Result<i64, Box<VmError>> {
+    value.as_int().ok_or_else(|| Box::new(checker_hole("int")))
+}
+
+/// A value the checker typed `bool`, unboxed; see [`expect_int`].
+#[inline]
+pub fn expect_bool(value: Value) -> Result<bool, Box<VmError>> {
+    value
+        .as_bool()
+        .ok_or_else(|| Box::new(checker_hole("bool")))
+}
+
+/// A value the checker typed `float`, unboxed; see [`expect_int`].
+#[inline]
+pub fn expect_f64(value: Value) -> Result<f64, Box<VmError>> {
+    value_as_float(value).ok_or_else(|| Box::new(checker_hole("float")))
+}
+
+#[cold]
+#[inline(never)]
+fn checker_hole(expected: &str) -> VmError {
+    VmInternalError::CompiledBody {
+        message: format!("compiled code read a non-{expected} value typed {expected}"),
     }
+    .into()
 }
 
 /// The compiled body attached to `function`, as a callable pointer.
 #[inline]
 #[allow(unsafe_code)]
-pub(crate) fn native_body_fn(function: &Function) -> Option<NativeFunction> {
+pub(crate) fn native_body_fn(function: &Function) -> Option<CompiledBody> {
     let body = function.native_body?;
-    // SAFETY: `NativeBody` is only ever constructed from a `NativeFunction`
+    // SAFETY: `NativeBody` is only ever constructed from a `CompiledBody`
     // (see `attach_native_bodies`), so casting back to that type is sound.
     // `transmute` because Rust has no `as` cast from `*const ()` to a fn
     // pointer.
-    Some(unsafe { std::mem::transmute::<*const (), NativeFunction>(body.0) })
-}
-
-/// Convert a compiled function body's result into what the VM's native call
-/// path expects.
-///
-/// Compiled bodies return `Result<Value, Box<VmError>>` so that `?` composes
-/// with every helper here at no cost (the std `From<T> for Box<T>`), and so the
-/// `Result` stays two words wide. The call path only understands
-/// [`NativeCallResult`], whose error type has no room for an attached
-/// `baml.errors.Context`; a thrown value crosses with its throw kind and the
-/// unwinder rebuilds the context with the compiled frame on the stack.
-#[must_use]
-pub fn into_native_result(result: Result<Value, Box<VmError>>) -> NativeCallResult {
-    match result {
-        Ok(value) => NativeCallResult::Done(value),
-        Err(error) => NativeCallResult::Error(match *error {
-            VmError::Thrown(thrown) => VmRustFnError::Thrown {
-                value: thrown.value,
-                throw_kind: thrown.throw_kind,
-            },
-            VmError::InternalError(internal) => VmRustFnError::InternalError(internal),
-            VmError::ThrownUnhandled { .. } | VmError::TracedInternalError { .. } => {
-                VmRustFnError::InternalError(VmInternalError::CompiledBody {
-                    message: "compiled body produced an already-unwound error".to_string(),
-                })
-            }
-        }),
-    }
+    Some(unsafe { std::mem::transmute::<*const (), CompiledBody>(body.0) })
 }
 
 impl BexVm {
@@ -689,24 +696,97 @@ impl BexVm {
         }
     }
 
-    /// Call a function that has a compiled body through the VM's own call
-    /// path, so the call is observed exactly as a bytecode call would be:
-    /// frame, telemetry record, call path. Used for calls to *observed*
-    /// functions from compiled code; folded functions are called directly.
+    /// [`Self::call_builtin`] for a generic builtin (`Array.push`,
+    /// `json.to_string`, …), with its type arguments where the interpreter
+    /// puts them for a native callee: `current_call_type_args()`.
+    pub fn call_builtin_typed(
+        &mut self,
+        builtin: NativeFunction,
+        type_args: &[RealizedTy],
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
+        // Reuse the buffer's capacity: a `push` in a loop allocates nothing
+        // here after the first call.
+        let previous = std::mem::take(&mut self.pending_call_type_args);
+        let mut buffer = std::mem::take(&mut self.compiled_type_args);
+        buffer.clear();
+        buffer.extend_from_slice(type_args);
+        self.pending_call_type_args = buffer;
+        let result = self.call_builtin(builtin, args);
+        self.compiled_type_args = std::mem::replace(&mut self.pending_call_type_args, previous);
+        result
+    }
+
+    /// The frame count with the running compiled function's frame on top.
+    /// A compiled body reads it on entry and hands it to [`Self::catch`].
+    #[inline]
+    #[must_use]
+    pub fn frame_depth(&self) -> usize {
+        self.frames.len()
+    }
+
+    /// Land a thrown error in a compiled `catch`; see
+    /// [`BexVm::land_compiled_catch`]. Returns the caught value and its
+    /// `baml.errors.Context`; an internal error keeps propagating.
+    #[inline]
+    pub fn catch(
+        &mut self,
+        error: Box<VmError>,
+        depth: usize,
+    ) -> Result<(Value, Value), Box<VmError>> {
+        self.land_compiled_catch(error, depth)
+    }
+
+    /// Call a compiled function from compiled code.
+    ///
+    /// Every call gets a frame, as in bytecode: it counts toward the depth
+    /// limit (a catchable `StackOverflow`, never a native stack overflow),
+    /// names the callee in stack traces, and roots the callee. With telemetry
+    /// off that frame is all the call costs: a struct push, then a direct
+    /// Rust call LLVM can inline. With telemetry on the call goes through the
+    /// VM's call path, so records, call paths and `$trace` behave exactly as
+    /// for a bytecode call.
+    ///
+    /// On `Err` the callee's frame stays pushed, as the VM's call path leaves
+    /// it: the unwinder pops it if the error escapes, [`Self::catch`] if a
+    /// compiled handler lands it.
+    #[inline]
+    pub fn call_compiled(
+        &mut self,
+        callee: HeapPtr,
+        body: CompiledBody,
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
+        if self.telemetry.is_some() {
+            return self.call_compiled_observed(callee, args);
+        }
+        if self.frames.len() >= crate::vm::MAX_FRAMES {
+            return Err(Box::new(VmError::thrown_fresh(
+                self.panic_to_exception_value(VmPanic::StackOverflow),
+            )));
+        }
+        let context = self.current_context().clone();
+        let locals_offset = StackIndex::from_raw(self.stack.len());
+        self.frames.push(crate::vm::Frame::Bytecode(
+            crate::vm::BytecodeFrame::compiled(callee, locals_offset, context),
+        ));
+        let result = body(self, args);
+        if result.is_ok() {
+            self.frames.pop();
+        }
+        result
+    }
+
+    /// [`Self::call_compiled`] through the VM's call path, for telemetry.
+    #[cold]
+    #[inline(never)]
     #[allow(unsafe_code)]
-    pub fn call_native_body(
+    fn call_compiled_observed(
         &mut self,
         callee: HeapPtr,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
-        let Some(top) = self.frames.len().checked_sub(1) else {
-            return Err(Box::new(
-                VmInternalError::CompiledBody {
-                    message: "call_native_body with no frame".to_string(),
-                }
-                .into(),
-            ));
-        };
+        let top = self.frames.len() - 1;
         let locals_offset = StackIndex::from_raw(self.stack.len());
         self.stack.extend(args.iter().copied());
         let mut frame_idx = top;
@@ -716,23 +796,22 @@ impl BexVm {
             self.load_function(top)
                 .map_err(|error| Box::new(VmError::InternalError(error)))?
         };
-        let outcome = self.execute_call_from_locals_offset(
+        match self.execute_call_from_locals_offset(
             callee,
             locals_offset,
             args.len(),
             &mut frame_idx,
             &mut function,
-        );
-        match outcome {
-            // The callee's frame was pushed and completed inside the funnel
-            // (its body is native), so its result is on the stack. An
-            // `EarlyYield` request is left armed for the enclosing loop.
+        ) {
+            // The callee ran to completion inside the call path (its body is
+            // compiled), so its result is on the stack. An `EarlyYield`
+            // request is left armed for the enclosing loop.
             Ok(None | Some(VmExecState::EarlyYield)) if frame_idx == top => {
                 Ok(self.stack.ensure_pop())
             }
             Ok(_) => Err(Box::new(
                 VmInternalError::CompiledBody {
-                    message: "call_native_body callee has no compiled body".to_string(),
+                    message: "a compiled call reached a callee without a compiled body".to_string(),
                 }
                 .into(),
             )),
