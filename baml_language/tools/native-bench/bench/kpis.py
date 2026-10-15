@@ -43,7 +43,7 @@ MEASURE = {
     "mem": "One job builds and drops cyclic graphs, allocates beside a large live graph, or passes heap objects through small calls; the bar is jobs per second, and peak memory shows what was not reclaimed.",
     "startup": "Time from the parent launching the process to the process reporting ready, after loading its image and preparing state; milliseconds, lower is better.",
     "memory": "Peak resident memory of the whole process over the run, from the kernel's wait4 accounting; MiB, lower is better.",
-    "artifact": "Size of the executable a user would ship, stripped; BAML VM counts the bytecode plus the measurement host it needs; KB, lower is better.",
+    "artifact": "Size of the executable a user would ship, stripped; KB, lower is better.",
     "build": "Wall time of a clean release build on the measuring machine; seconds, lower is better.",
     "http": "Requests per second and p99 latency of a small HTTP service under a fixed arrival rate.",
 }
@@ -148,9 +148,8 @@ def build(bundle_dir, previous=None):
     for e in mem:
         e["headline"] = headline(e)
     kpis.append({"key": "memory", "title": "Memory", "question": "How much memory does a process use at its peak?", "measure": MEASURE["memory"], "unit": "MiB", "better": "lower", "default": mem[0]["name"] if mem else None, "scenarios": mem})
-    # artifact size per case: native stripped, VM bytecode + host, rust, go. Rows that do
-    # not apply say why instead of standing empty (a note is drawn in italics, never a bar).
-    host_bytes = (m.get("host") or {}).get("bytes")
+    # artifact size per case: native stripped, rust, go. Rows that do not apply
+    # say why instead of standing empty (a note is drawn in italics, never a bar).
     same_art = {"note": "same artifact as telemetry off"}
     art = []
     for case, bd in builds.items():
@@ -158,7 +157,7 @@ def build(bundle_dir, previous=None):
             continue
         a = arts.get(case, {})
         vals = {"native-off": {"median": bd["stripped_bytes"] / 1024},
-                "vm-off": {"median": (a["program"]["bytes"] + (host_bytes or 0)) / 1024} if "program" in a else None,
+                "vm-off": {"note": "same executable as native, bodies not attached"},
                 "vm-low": same_art, "vm-medium": same_art, "vm-high": same_art,
                 "rust": {"median": a["rust"]["bytes"] / 1024} if "rust" in a else None,
                 "go": {"median": a["go"]["bytes"] / 1024} if "go" in a else None,
@@ -167,20 +166,18 @@ def build(bundle_dir, previous=None):
         art.append({"name": case, "label": f"{case.split('_', 1)[1].replace('_', ' ')}: executable to ship", "case": case, "values": vals,
                     "headline": {"go": vals["native-off"]["median"] / vals["go"]["median"] if vals.get("go") else None, "node": None}})
     kpis.append({"key": "artifact", "title": "Binary size", "question": "How big is the thing you ship?", "measure": MEASURE["artifact"] + " The published packed CLI is 32.7 MiB.", "unit": "KB", "better": "lower", "default": art[0]["name"] if art else None, "scenarios": art})
-    # build time: native clean build; bytecode compile where recorded
+    # build time: the native cargo build; the VM rows run the same executable
     same_build = {"note": "same compile as telemetry off"}
     bl = []
     for case, bd in builds.items():
         if bd.get("status") != "ok":
             continue
-        vals = {"native-off": {"median": bd["seconds"]}, "vm-low": same_build, "vm-medium": same_build, "vm-high": same_build,
+        vals = {"native-off": {"median": bd["seconds"]}, "vm-off": {"note": "same build as native"},
+                "vm-low": same_build, "vm-medium": same_build, "vm-high": same_build,
                 "rust": {"note": "prebuilt into the snapshot"}, "go": {"note": "prebuilt into the snapshot"},
                 "node": {"note": "no build step"}, "bun": {"note": "no build step"}, "python": {"note": "no build step"}}
-        bc = (m.get("bytecode_compile_seconds") or {}).get(case)
-        if bc:
-            vals["vm-off"] = {"median": bc}
-        bl.append({"name": case, "label": f"{case.split('_', 1)[1].replace('_', ' ')}: clean release build", "case": case, "values": vals, "headline": {}})
-    kpis.append({"key": "build", "title": "Build time", "question": "How long from source to a runnable artifact?", "measure": MEASURE["build"] + " Native is a cargo build with fat LTO on 4 vCPU; VM is the bytecode compile by the pinned host.", "unit": "s", "better": "lower", "default": bl[0]["name"] if bl else None, "scenarios": bl})
+        bl.append({"name": case, "label": f"{case.split('_', 1)[1].replace('_', ' ')}: {'clean' if bd.get('clean') else 'warm-deps'} release build", "case": case, "values": vals, "headline": {}})
+    kpis.append({"key": "build", "title": "Build time", "question": "How long from source to a runnable artifact?", "measure": MEASURE["build"] + " Native is a cargo build with fat LTO on 4 vCPU; the first case builds from a clean target, later cases reuse its dependencies.", "unit": "s", "better": "lower", "default": bl[0]["name"] if bl else None, "scenarios": bl})
     # web server: not measured on this machine yet
     kpis.append({"key": "http", "title": "Web server", "question": "How many requests per second does a small HTTP service handle?", "measure": MEASURE["http"], "unit": "req/s", "better": "higher", "default": None, "scenarios": [], "pending": REASONS["pending_http"]})
     data = {"schema": 2,

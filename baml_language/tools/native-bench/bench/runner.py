@@ -36,7 +36,7 @@ def log(*a):
 @dataclass
 class Layout:
     """Where things are on the measuring machine."""
-    root: Path            # bench root: tools, ref, artifacts, host
+    root: Path            # bench root: tools, ref, artifacts
     stage: Path           # the shipped stage: cases/, native/, src.tgz
     out: Path             # results
     tools: dict           # row kind -> interpreter path (python, node, bun)
@@ -48,10 +48,6 @@ class Layout:
     @property
     def references(self):
         return self.root / "ref"
-
-    @property
-    def host(self):
-        return self.root / "artifacts" / "host"
 
     @property
     def cases(self):
@@ -100,20 +96,15 @@ def freeze_control(layout, cases, machine):
             shutil.copy(src, dst)
 
 
-def compile_bytecode(layout, cases):
-    for case in cases:
-        out = layout.artifacts / case
-        out.mkdir(parents=True, exist_ok=True)
-        start = time.perf_counter()
-        subprocess.run([str(layout.host), "compile", str(layout.cases / case / "workload.baml"), str(out / "program")],
-                       check=True, env=child_env(1, "off"))
-        (out / "program.compile_seconds").write_text(f"{time.perf_counter() - start:.3f}")
-        log(case, "bytecode", (out / "program").stat().st_size, "bytes")
-
-
 def build_native(layout, cases, jobs):
-    """Clean release builds from the emitted projects; build time is a measurement."""
+    """Release builds of the generated crates; build time is a measurement.
+
+    The cases share one target directory, cleaned once: the first case's time
+    is a clean build of the engine and its program, later cases rebuild only
+    their own crate and the LTO link."""
     builds = {}
+    target = layout.root / "native-target"
+    shutil.rmtree(target, ignore_errors=True)
     for case in cases:
         emit = layout.stage / "native" / case / "emit"
         out = layout.artifacts / case
@@ -125,9 +116,12 @@ def build_native(layout, cases, jobs):
                             if (layout.stage / "native" / case / "emit.log").exists() else "no emitted project"}
             log(case, "native: not emitted")
             continue
-        target = emit / "target"
-        shutil.rmtree(target, ignore_errors=True)
         env = {**os.environ, "CARGO_TERM_COLOR": "never"}
+        # The host must accept the envelope the emitter encoded: the same
+        # fingerprint `baml pack --native` would have given cargo.
+        fingerprint = emit / "BAML_GIT_SHA"
+        if fingerprint.exists() and fingerprint.read_text().strip():
+            env["BAML_GIT_SHA"] = fingerprint.read_text().strip()
         if case == cases[0]:
             subprocess.run(["cargo", "fetch", "--manifest-path", str(emit / "Cargo.toml")], env=env, capture_output=True)
         start = time.perf_counter()
@@ -139,16 +133,16 @@ def build_native(layout, cases, jobs):
             builds[case] = {"status": "build_failed", "seconds": seconds}
             log(case, "native: BUILD FAILED")
             continue
-        shutil.copy(target / "release" / "baml_native", out / "native")
+        shutil.copy(target / "release" / "baml_native_program", out / "native")
         shutil.copy(out / "native", out / "native.stripped")
         subprocess.run(["strip", str(out / "native.stripped")], check=True)
         toolchain = subprocess.run(["rustc", "-V"], cwd=str(emit), capture_output=True, text=True, env=env).stdout.strip()
-        builds[case] = {"status": "ok", "seconds": round(seconds, 3), "bytes": (out / "native").stat().st_size,
+        builds[case] = {"status": "ok", "seconds": round(seconds, 3), "clean": case == cases[0], "bytes": (out / "native").stat().st_size,
                         "stripped_bytes": (out / "native.stripped").stat().st_size, "sha256": digest(out / "native"), "jobs": jobs,
-                        "rustc": toolchain, "lto": "fat", "codegen_units": 1, "panic": "abort"}
+                        "rustc": toolchain, "lto": "fat", "codegen_units": 1, "panic": "unwind"}
         shutil.copy(emit / "src" / "lib.rs", layout.out / f"generated-{case}.rs")
         log(case, f"native: {seconds:.1f}s, {builds[case]['stripped_bytes']} bytes stripped")
-        shutil.rmtree(target, ignore_errors=True)
+    shutil.rmtree(target, ignore_errors=True)
     return builds
 
 
@@ -228,7 +222,7 @@ def present_rows(layout, protocol, case, note):
         if not row.supported:
             note.setdefault(case, []).append(name + " (unsupported)")
             continue
-        if row.artifact(layout, case).exists() and (row.kind != "vm" or layout.host.exists()):
+        if row.artifact(layout, case).exists():
             rows.append(row)
         else:
             note.setdefault(case, []).append(name)

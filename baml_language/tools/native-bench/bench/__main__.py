@@ -95,11 +95,6 @@ def cmd_execute(a):
     sha = runner.unpack_source(layout)
     manifest["candidate_sha"] = sha
     runner.freeze_control(layout, protocol.cases, mach)
-    if layout.host.exists():
-        manifest["host"] = {"sha256": runner.digest(layout.host), "bytes": layout.host.stat().st_size, **(mach.data.get("host") or {})}
-        runner.compile_bytecode(layout, protocol.cases)
-    else:
-        runner.log("no VM host at", layout.host, "- VM rows are skipped")
     manifest["builds"] = runner.build_native(layout, protocol.cases, a.jobs)
     broken = [c for c, b in manifest["builds"].items() if b["status"] != "ok"]
     if broken and not a.keep_going:
@@ -107,11 +102,8 @@ def cmd_execute(a):
         (out / "manifest.json").write_text(json.dumps(manifest, indent=1))
         sys.exit(f"native build failed for {', '.join(broken)}; see build-<case>.log")
     manifest["artifacts"] = {case: {k: {"bytes": (layout.artifacts / case / k).stat().st_size, "sha256": runner.digest(layout.artifacts / case / k)}
-                                    for k in ("program", "native", "native.stripped", "native-control", "rust", "go") if (layout.artifacts / case / k).exists()}
+                                    for k in ("native", "native.stripped", "native-control", "rust", "go") if (layout.artifacts / case / k).exists()}
                              for case in protocol.cases}
-    # the pinned host's bytecode compile time, written by compile_bytecode beside the program
-    manifest["bytecode_compile_seconds"] = {case: float((layout.artifacts / case / "program.compile_seconds").read_text())
-                                            for case in protocol.cases if (layout.artifacts / case / "program.compile_seconds").exists()} or None
     failures, skipped = runner.verify(layout, protocol, out)
     manifest["verify"] = {"failures": len(failures), "skipped_rows": skipped}
     if failures and not a.keep_going:

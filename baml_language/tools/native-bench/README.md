@@ -86,10 +86,10 @@ Twenty trials per bar, seed 1729, CPU 3, one worker, 600 s timeout per trial.
 
 | row | what runs | `BAML_TELEMETRY` | recording |
 |---|---|---|---|
-| `native-off` | the candidate's emitted executable, built on the VM from a clean target | off | none |
-| `native-low`, `native-medium`, `native-high` | the same executable, recording through `bex_aot::telemetry` to a local sink, as the VM rows do: the recording must exist and report no delivery loss. Only the functions the backend observes (loops and large bodies) record calls; the rest are folded into their callers | low / medium / high | local |
-| `control` | the snapshot's native executable of the same case, frozen when the snapshot was made | off | none |
-| `vm-off` | the pinned VM host running the candidate's bytecode | off | none |
+| `native-off` | the candidate's `baml pack --native` crate with the bench glue as its `main`, built on the VM; the compiled bodies are attached to the program | off | none |
+| `native-low`, `native-medium`, `native-high` | the same executable, recording to a local sink through the engine, as the VM rows do: the recording must exist and report no delivery loss. Compiled functions the backend folds into their callers record no calls of their own | low / medium / high | local |
+| `control` | the snapshot's native executable of the same case, frozen when the snapshot was made (an older backend; a drift reference, not a baseline) | off | none |
+| `vm-off` | the same executable as `native-off` with no compiled bodies attached: the candidate's VM running the candidate's bytecode | off | none |
 | `vm-low`, `vm-medium`, `vm-high` | same, recording to a local sink; the recording must exist and report no delivery loss | low / medium / high | local |
 | `rust`, `go` | the reference executables prebuilt into the snapshot | | |
 | `node`, `bun`, `python` | the reference sources under the snapshot's pinned runtimes | | |
@@ -104,18 +104,20 @@ candidate. The page reports it; a verdict subtracts it.
 
 ## What a run does
 
-1. **Stage** (on the runner). For every case, `baml __emit-rust --report`
-   records the admission report, then `--function run --function prepare`
-   emits a Cargo project with the `bex_aot` runtime path rewritten to the
-   VM's checkout and the toolchain pinned; `baml_language` is archived at
-   HEAD; the cases, the protocol, the machine file and this package are
-   copied into `stage/`.
+1. **Stage** (on the runner). For every case, `baml pack --native
+   --native-report -f prepare -f run` generates the crate and records the
+   admission report, with a stand-in `cargo` on `PATH` so nothing is built
+   here. The crate's `main` is replaced by `bench/native_glue.rs`, its
+   manifest points at the VM's checkout, and the workspace's `Cargo.lock`
+   and toolchain are copied in; `baml_language` is archived at HEAD; the
+   cases, the protocol, the machine file and this package are copied into
+   `stage/`.
 2. **Execute** (on the machine, `python3 -m bench execute`). Unpack the
    source. Freeze the snapshot's native executables as the control row.
-   Compile every case to bytecode with the pinned host and record the
-   seconds. Build every native project from a clean target in release
-   (fat LTO, one codegen unit, panic abort; the wall time and stripped size
-   are results). Verify every row on every case's edge-case inputs against
+   Build every case's crate in release (fat LTO, one codegen unit, panic
+   unwind, as `baml pack --native` builds it) into one target directory
+   cleaned once, so the first case's time is a clean build and later cases
+   reuse its dependencies; the wall time and stripped size are results. Verify every row on every case's edge-case inputs against
    the oracle, one trial each, and stop on any failure. Run the protocol's
    trials in a shuffled order from its seed. Summarize.
 3. **Collect** (on the runner). Fetch `results/`, write `manifest.json`,
@@ -132,7 +134,7 @@ in a `finally`. `"provider": "local"` runs here.
     <out>/
       manifest.json      candidate sha and branch, emitter, protocol and machine hashes, toolchains,
                          CPU, kernel, glibc, load before and after, every artifact's bytes and sha256,
-                         native build seconds, bytecode compile seconds, verify and trial counts, status
+                         native build seconds, verify and trial counts, status
       stage.json         what was emitted and why anything was not
       emitted/<case>/    the admission report, the emit log, the generated project
       results/
@@ -177,7 +179,7 @@ file and beside it.
     protocols/smoke.json        two scenarios, nine rows, three trials, for plumbing
     protocols/mem.json          memory management: cases 01-04, 07, 10-14, native-off and vm-off, ten trials
     machines/bench-x86-v1.json  the Freestyle snapshot and its guest layout
-    machines/local.json         this machine; native rows only unless a host and references are present
+    machines/local.json         this machine; BAML rows only unless references are present
 
 ## Changing things
 

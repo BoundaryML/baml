@@ -20,9 +20,7 @@ class Row:
         return self.kind in ("vm", "go", "python")
 
     def artifact(self, layout, case):
-        if self.kind == "vm":
-            return layout.artifacts / case / "program"
-        if self.kind == "native":
+        if self.kind in ("vm", "native"):
             return layout.artifacts / case / "native"
         if self.kind == "control":
             return layout.artifacts / case / "native-control"
@@ -33,7 +31,8 @@ class Row:
     def command(self, layout, case, input_path, jobs, warmup, recordings):
         art = self.artifact(layout, case)
         if self.kind == "vm":
-            return [str(layout.host), "run", str(art), str(input_path), str(jobs), str(warmup), self.sink, str(recordings)]
+            # the native row's executable with no compiled bodies attached: the candidate's VM
+            return [str(art), "run-bytecode", str(art), str(input_path), str(jobs), str(warmup), self.sink, str(recordings)]
         if self.kind in ("native", "control"):
             return [str(art), "run", str(art), str(input_path), str(jobs), str(warmup), self.sink, str(recordings)]
         if self.kind in ("rust", "go"):
