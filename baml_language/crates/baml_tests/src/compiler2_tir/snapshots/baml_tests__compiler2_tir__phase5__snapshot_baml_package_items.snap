@@ -33,6 +33,7 @@ namespace baml:
   function _to_json_default<T>
   function _to_string_default<T>
   function _trunc_to_int
+  function _type_of<T>
   function deep_copy<T>
 namespace baml.crypto:
   type Aead
