@@ -148,13 +148,13 @@ reason = "baml_* crates should not depend on bex_* crates (baml_query_btel: non-
 # compiler's Program data, without importing the engine or VM implementation.
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_linker", "baml_linker_types", "baml_db", "baml_cli", "baml_exec", "baml_pack_host", "baml_test_support"]
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_compiler2_native", "baml_linker", "baml_linker_types", "baml_db", "baml_cli", "baml_exec", "baml_pack_host", "baml_test_support"]
 regular_deps_only = true
 reason = "Only the compiler's output side (emit, the linker crates, baml_db) should depend on bex_vm_types (pure data layer)."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_linker", "baml_linker_types", "baml_db", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_btel", "baml_test_support"]
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_compiler2_native", "baml_linker", "baml_linker_types", "baml_db", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_btel", "baml_test_support"]
 reason = "Only the compiler's output side (emit, the linker crates, baml_db) should depend on bex_vm_types (pure data layer; baml_query_btel: non-production dev/build dependencies only)."
 
 

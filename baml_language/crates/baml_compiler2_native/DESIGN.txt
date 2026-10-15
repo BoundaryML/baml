@@ -1,0 +1,318 @@
+NATIVE V0: BAML -> RUST, RUNNING INSIDE BEX VM
+==============================================
+
+0. Premise
+
+The interpreter decides at runtime, on every operation, what a compiler can
+decide once: which opcode comes next, whether an operand is an int, where a
+local lives. Native code is those decisions made at compile time. That is the
+entire speedup. Everything else in this doc is plumbing so that compiled code
+is indistinguishable from bytecode to the four things that observe a running
+function: callers, the GC, the exception unwinder, and telemetry.
+
+Rule for v0: every BAML feature keeps working. The compiler admits a function
+when it can prove it needs nothing the VM has to provide mid-body. Everything
+else stays bytecode, with identical semantics, in the same program. Nothing is
+removed from the VM.
+
+The VM design this rests on (from the VM's own module headers): one VM per
+thread, a per-VM TLAB for allocation, a compacting GC that runs only when every
+thread has returned its heap permit, objects shared across threads behind
+per-object locks, and a frame stack the engine can park at any await.
+
+
+1. The unit: one Function object, two bodies
+
+A Function object (bex_vm_types/types/function.rs) is what the BAML team built
+as the single identity of a callable: name, source file, span, arity, param
+types, bytecode, kind, and the telemetry id the loader assigns. Every caller,
+every frame, every telemetry record, every stack trace, every reflection call
+points at this one object.
+
+Decision: the native body is a field on that object, not a new kind.
+
+    Function.native_body: Option<fn(&mut BexVm, &[Value]) -> NativeCallResult>
+    runtime-only, borsh(skip), None on the wire
+
+Why: everything that keys on FunctionKind::Bytecode (telemetry mode, call
+specialization, $trace, stack traces, error evidence, reflection) stays
+correct by doing nothing. The bytecode stays populated, so the same artifact
+runs with or without the native build and the parity harness has both bodies
+of the same function. A new kind would force a decision at every site that
+matches on kind; a field forces one only at the two sites that execute a body.
+
+Rejected: FunctionKind::Native. It exists to call Rust builtins, and the
+team positioned natives as hidden: no frame, no telemetry, no $trace, no
+stack entry (telemetry.rs NATIVE_DEFAULT_MODE = Hidden, vm.rs:6847). Reusing
+it would make user functions disappear from observability.
+
+
+2. Loading: where the pointer gets attached
+
+What exists. convert_program_with_trace_hooks (vm.rs:1883) is the step the
+team built to turn a deserialized Program into runnable objects: validate,
+attach_builtins (resolve NativeUnresolved -> Native(ptr) from a static table
+VM_NATIVE_PACKAGES, package_baml/mod.rs:394), strip trace hooks, then
+prepare_compact_code and call specialization, which read each callee's kind
+to pick call fast paths. After that the heap is sealed and functions are
+immutable and shared by every VM.
+
+Decision: one added step, right after attach_builtins and before
+prepare_compact_code: look each function's path up in a static registry the
+generated crate exports, set native_body. Same shape as attach_builtins.
+
+Decision: no digest. The generated crate embeds the exact Program artifact it
+was compiled from (include_bytes!) and the native binary loads that. A
+mismatch between native code and bytecode is then impossible, so the
+fail-hard/fall-back question does not exist.
+
+Rejected: a content hash per function or per artifact. Only needed if the
+artifact and the native code can travel separately. In v0 they can't.
+
+
+3. Calling: the Bytecode arm learns one branch
+
+What exists. execute_call_from_locals_offset_with_type_args (vm.rs ~6760) is
+the one funnel every call goes through. Its Bytecode arm (vm.rs:7021) does
+telemetry entry (enter_bytecode_with_trace: records the call-path node, args,
+type args, $trace options, the clock), pushes a BytecodeFrame whose
+locals_offset points at the args already on the eval stack, and sets the
+instruction pointer. The Return opcode (vm.rs:9599) later pops the frame,
+completes the telemetry record, truncates the stack, pushes the result.
+call_specialize.rs additionally rewrites some call sites into a fast path
+that pushes the frame directly.
+
+Decision: after telemetry entry and the frame push, if native_body is Some:
+copy the args out of the frame's stack region, call the body, run the same
+completion Return runs (factored into a helper both paths call), pop the
+frame, push the result. The fast path checks the same field.
+
+Why the frame push is kept (it looks like waste): it is what makes the rest
+free. The frame carries the FrameTelemetry, so completion is the existing
+Return path. If the body returns an exception, the unwinder
+(try_unwind_exception, vm.rs:6076) sees the compiled function on the frame
+stack and builds the baml.errors.Context with its name in the trace. Cost:
+one struct push per VM-to-compiled crossing. Compiled-to-compiled calls never
+cross here.
+
+Rejected: a side stack of (function, line) pushed on the error path for
+exact lines inside compiled code. Traces would otherwise name only the
+outermost compiled function at its declaration line. Precision, not
+semantics. Add when asked for.
+
+
+4. The runtime surface: one module both backends call
+
+What exists. The interpreter's per-op semantics live as private methods on
+BexVm: exec_binop, exec_cmpop, finish_int (the i63 overflow check and its
+exact message format), int_shl/shr, value_matches_type_constant, is_truthy,
+panic_to_exception_value (builds the exception instance for every VmPanic),
+alloc_* via the TlabHolder trait, as_array/as_array_mut (lock + conservative
+write barrier). A handful are inline in run_compact's match arms: array index
+get/set (resolve_index for negative indexes, IndexOutOfBounds, write_barrier),
+field load/store (AtomicValueSlot + write_barrier), MakeClosure, the AddInt/
+SubInt fast paths, float box/unbox.
+
+Decision: a module bex_vm::compiled_rt that is the only API generated code
+may use. The private helpers become pub + #[inline]. The inline arms are
+extracted into functions and the arms call them. Parity is then structural:
+there is one implementation of "index an array" and both backends run it.
+
+Why required: the alternative is generated code carrying its own copies, and
+the first divergence in an overflow message or a negative index is a bug that
+only shows under native. The same module is also where the lock cost lives,
+so a later lock decision lands once for both backends.
+
+
+5. Errors: a Rust Result carrying the VM's own exception
+
+What exists. Bytecode throws by returning VmError::Thrown(VmThrown { value,
+throw_kind, context }) from the run loop; unwind_exception builds the Context
+(stack trace, cause) at the throw site when it is None, then walks frames
+matching exception tables. Native builtins return VmRustFnError and
+native_error_to_vm_error (vm.rs:7157) converts, through the same
+panic_to_exception_value the interpreter uses.
+
+Decision: generated functions return Result<Value, Box<VmError>>: the VM's
+own error type, so every compiled_rt helper composes with `?` at no cost
+(std's From<T> for Box<T>) and internal errors, which are not catchable,
+keep their own variant. A catch is a match on Err plus the same type test
+the interpreter runs: the caught object is the identical VM instance
+bytecode would have caught. An escaping Err converts at the boundary
+exactly as a builtin's does.
+
+Decision: compiled code never builds a Context. It is observable only through
+catch (e, ctx), so a function whose catch binds the context is not admitted.
+When the exception escapes to the VM the existing unwinder builds it with the
+compiled frame on the stack.
+
+Why Box: VmError is wide; a boxed Err keeps Result at two words so it returns
+in registers. The box is paid only on throw.
+
+One guard while a body runs: the VM's current instruction offset (cur_pc)
+is set to a sentinel no exception table can match. The unwinder resolves
+the innermost frame's handlers by cur_pc, and at the branch it still holds
+the caller's call-site offset, which could land inside a `try` range of the
+compiled function's own bytecode and start a handler whose locals the body
+never populated.
+
+
+6. What the generated code looks like
+
+One signature per function, the native one. Compiled-to-compiled calls are
+direct Rust calls to that symbol. Folded callees are #[inline] and LLVM
+inlines them, at which point tag-then-untag of an int argument cancels out,
+so a separate unboxed signature buys nothing until measured otherwise.
+
+Locals are typed from MIR (LocalDecl.ty): int is i64, float is f64, bool is
+bool, everything else is Value. Tag checks happen only where the static type
+is a union or unknown, which is where bytecode checks too.
+
+Control flow is structured (loop, if, match, labeled break/continue) rebuilt
+from the dominator tree. BAML lowering only produces single-entry loops, so
+irreducibility is an assertion, not a case. No state machine anywhere in v0,
+because nothing admitted can suspend.
+
+Allocation goes through the same TlabHolder calls builtins use. Alloc debt
+accrues as it does for builtins and settle() runs at the boundary.
+
+
+7. Telemetry
+
+What exists. Every bytecode call gets a FrameTelemetry at entry, completed at
+Return or unwind, keyed by the function's telemetry id and call path. The
+mode is decided per call: hidden, timing, or span. trace.hidden functions
+fold their time into the nearest observed ancestor.
+
+Decision: the VM-to-compiled boundary is the bytecode call path, so it is
+already correct (section 3). Inside compiled code, the observed/folded split:
+
+  folded    small, no loop        #[inline], direct Rust call, no record.
+                                  This is trace.hidden semantics, not a loss.
+  observed  has a loop or is big  #[inline(never)]; every call to it from
+                                  compiled code goes through one helper,
+                                  compiled_rt::call(vm, callee, args, trace),
+                                  which is the VM call funnel re-entered:
+                                  frame push, telemetry entry, body,
+                                  completion. Same records, same call-path
+                                  ids, $trace honored, because it is the same
+                                  code.
+
+Cost: a frame push and a clock read per observed call, on functions that by
+definition contain loops. A function with a declared trace hook keeps special
+bytecode trailers (trace_hook_finish_pc), so it is not admitted in v0 and
+runs as bytecode.
+
+
+8. Memory and GC: nothing changes, and why that is sound
+
+HeapPtr is a raw pointer. The collector evacuates live objects and rewrites
+roots through a forwarding map. It may only run when every VM has returned
+its heap permit, which happens at await, sys op, spawn, or the early-yield
+poll in the bytecode loop. A compiled body runs inside the VM's call while the
+permit is held, so no collection can start while it holds pointers in
+registers. Pointers it returns are Values on the eval stack, which the VM
+roots. No stack maps, no handles, no rooting protocol: the same contract every
+builtin already runs under.
+
+Consequence: a compiled function has no safepoints, so other threads wait at
+their next poll until it returns. Latency, bounded by one function's run time.
+Accepted for v0; a budgeted yield at loop back-edges is a v1 item because it
+requires the function to spill live pointers, which is the state machine.
+
+
+9. Performance: what is gone, what remains, what caps it
+
+Gone inside a compiled function: opcode fetch and the indirect jump, eval
+stack traffic for operands, tag checks on statically typed scalars.
+
+Remains, and is the same price bytecode pays:
+  array/map access      one CAS acquire + one release store per access
+                        (LazyBiasedMutex, ~3-5 cycles uncontended). The real
+                        cost is not the cycles: it is an ordering barrier, so
+                        LLVM cannot hoist a length read or bounds check out of
+                        a loop.
+  instance fields       acquire load / release store on AtomicValueSlot.
+                        On aarch64 a plain LDAR/STLR; cheap, but a barrier.
+  stores of pointers    write_barrier: two generation lookups and a card mark.
+  floats in the heap    boxed; a float[] loop allocates per store.
+  strings               BexStr is an Arc-backed rope; clones bump an atomic.
+  boundary crossing     arg copy + frame push + telemetry entry per VM call.
+
+None of these are v0 decisions. Each is a VM representation choice the team
+made for spawn semantics or GC generations, and each is where a later speed
+decision lives:
+  - single-mutator lock elision (or lock-free reads when no spawn is live)
+  - unboxed float arrays
+  - rope nodes as GC heap objects instead of Arc (we own the allocator; the
+    refcount is redundant inside a traced heap)
+These are orthogonal to native and would speed both backends.
+
+Expectation: 3-4x on int/bool/control-flow-heavy code with array access;
+more on pure scalar loops; ~1.3x on array-sort-shaped code until the lock
+decision; float-array code bounded by boxing.
+
+
+10. Admission: what runs native in v0, and why the rest cannot
+
+A function is admitted when all of these hold. Each exclusion is a thing the
+VM must provide mid-body, which only a resumable (state machine) body can
+accept. Everything excluded runs as bytecode in the same program.
+
+  excluded in v0                      why it needs the VM mid-body
+  await / await_any / spawn / sys op  parks the thread; needs a continuation
+  LLM call                            a sys op
+  call through a function value       target may be bytecode -> yield
+  unresolved virtual call             same
+  callback builtins (map, sort_by,..) they yield to call the callback
+  user generic function               LoadType reads frame type args; v1
+  catch (e, ctx)                      Context built by the unwinder
+  declared trace hooks                bytecode trailers
+  any callee not itself admitted      compiled->compiled is a direct call
+
+Admission is a fixpoint over the call graph, computed once at build. Calling
+a builtin is fine when the builtin's Rust fn never yields (an allowlist by
+native key: Int, Float, String, and the non-callback Array methods).
+
+v0 also keeps bytecode for anything that needs a type template at runtime
+(array literals of non-primitive element type, structural type tests,
+generic class instances, type values), closures, function values, enum
+variant literals, bigint literals, map literals, top-level lets, and
+interface dispatch. These need a per-program native constant pool
+(templates relinked at load, like bytecode's) which is a v1 item; none of
+them changes the architecture.
+
+Call paths: a call from compiled code to an observed function records the
+caller's instruction offset as the sentinel, not a bytecode offset, so its
+call-path node differs from the one the all-bytecode run would mint. Self-
+consistent within a run; a known cross-backend difference.
+
+Every feature in the excluded column still works, in bytecode, with no change.
+
+
+11. What v1 adds, on top, without redoing anything
+
+  state-machine emission at suspend points  -> await, sys ops, spawn,
+                                               function-value calls,
+                                               callback builtins, catch ctx
+  frame type args read by compiled generics -> user generic functions
+  Continuation::on_throw                    -> catch across a yield
+  error-path side stack                     -> exact lines in traces
+  back-edge yield budget                    -> GC latency in long loops
+
+The v0 function bodies, the runtime module, the loader step, and the call
+branch are unchanged by all of these.
+
+
+12. Decisions to put to the team
+
+  a. native_body field vs a new FunctionKind. Argued for the field above.
+  b. observed/folded threshold (loop or size). Reuse the VM's trace.hidden
+     semantics as the definition of "folded".
+  c. the locks. Orthogonal, largest single factor, team decision on spawn.
+
+13. First experiment
+
+One pure function through the new emitter, native_body set at load, full VM
+suite with native on, the benchmark with locks in place. That proves sections
+1-5 and produces the with-locks number for decision c.
