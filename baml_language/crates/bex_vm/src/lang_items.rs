@@ -57,6 +57,7 @@ pub const REFLECT_DIAGNOSTIC_HIGHLIGHT: LangItem = lang_item!(Reflect: Diagnosti
 pub const REFLECT_DIAGNOSTIC_RELATED_INFO: LangItem = lang_item!(Reflect: DiagnosticRelatedInfo);
 pub const REFLECT_ENUM_VALUE: LangItem = lang_item!(Reflect: enum.Value);
 pub const REFLECT_ERRORS_COMPILATION_ERROR: LangItem = lang_item!(Reflect: errors.CompilationError);
+pub const REFLECT_ERRORS_TYPE_MISMATCH: LangItem = lang_item!(Reflect: errors.TypeMismatch);
 pub const REFLECT_INTERFACE_IMPLEMENTATION: LangItem =
     lang_item!(Reflect: interface.Implementation);
 pub const REFLECT_META: LangItem = lang_item!(Reflect: Meta);
@@ -114,6 +115,7 @@ pub const ALL: &[LangItem] = &[
     REFLECT_DIAGNOSTIC_RELATED_INFO,
     REFLECT_ENUM_VALUE,
     REFLECT_ERRORS_COMPILATION_ERROR,
+    REFLECT_ERRORS_TYPE_MISMATCH,
     REFLECT_INTERFACE_IMPLEMENTATION,
     REFLECT_META,
     REFLECT_WITH_META,

@@ -147,6 +147,8 @@ macro_rules! visit_bytecode_index_operands {
         | I::TraceHookSpan
         | I::TraceHookRich
         | I::TraceHookEmptySpan
+        | I::SatisfiesBound
+        | I::BoundMismatch
             | I::SetCallTrace
             | I::Throw
             | I::Rethrow

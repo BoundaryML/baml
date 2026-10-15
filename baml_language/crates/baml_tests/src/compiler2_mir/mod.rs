@@ -805,9 +805,10 @@ function f(t: reflect.Type, value: unknown) -> bool {
 /// A `let type` binding stores its operand in the binding's slot, and every
 /// later mention of the name reads that slot, including nested under a
 /// constructor (`Bound?`). Each `extends` bound is then checked against the
-/// type now in the slot, in written order: through `reflect.Type.implements`
-/// and a branch into the `else` block, or, without one, through
-/// `reflect.Type._expect_implements`, which throws.
+/// type now in the slot, in written order, by `satisfies_bound`: the bound
+/// travels as an interface constraint (only the associated types it pins),
+/// never as a type. A miss branches into the `else` block or, without one,
+/// throws the `bound_mismatch` error.
 #[test]
 fn bounded_type_binding_checks_its_bounds_after_binding_the_slot() {
     let mut db = make_db();

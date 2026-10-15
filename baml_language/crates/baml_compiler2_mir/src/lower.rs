@@ -9566,8 +9566,11 @@ impl<'db> LoweringContext<'db> {
     /// `let type T extends … = operand else { … };`: evaluate the operand and
     /// store it in the frame slot reserved for `T`'s rigid parameter, then
     /// check each declared bound against the type now bound to `T`, in written
-    /// order. A miss runs the `else` block (which TIR made diverge) or,
-    /// without one, throws `reflect.errors.TypeMismatch` naming the interface.
+    /// order. A bound is a constraint, not a type: it travels as its interface,
+    /// type arguments and the associated types it pins, and the VM asks of it
+    /// exactly what a generic parameter's bound asks. A miss runs the `else`
+    /// block (which TIR made diverge) or, without one, throws
+    /// `reflect.errors.TypeMismatch` naming the bound.
     fn emit_scoped_type_binding(
         &mut self,
         binding: &crate::inference_provider::ScopedTypeBinding,
@@ -9590,48 +9593,42 @@ impl<'db> LoweringContext<'db> {
         }
         let bound_type =
             self.load_type_value(&Tir2Ty::TypeVar(binding.parameter.clone()), &generic_params);
-        let miss = else_branch.map(|_| self.builder.create_block());
+        let else_block = else_branch.map(|_| self.builder.create_block());
         for bound in &binding.bounds {
-            let interface = self.load_type_value(&bound.to_ty(), &generic_params);
-            let resume = self.builder.create_block();
-            match miss {
-                Some(miss) => {
-                    let callee = Operand::Constant(Constant::Function(self.lang_class_method(
-                        baml_base::LangPackage::Reflect,
-                        "Type",
-                        "implements",
-                    )));
-                    let implements = self.builder.temp(RuntimeTy::Bool);
-                    self.builder.call(
-                        callee,
-                        vec![bound_type.clone(), interface],
-                        Place::local(implements),
-                        resume,
-                    );
-                    self.builder.set_current_block(resume);
-                    let next = self.builder.create_block();
-                    self.builder
-                        .branch(Operand::Copy(Place::local(implements)), next, miss);
-                    self.builder.set_current_block(next);
-                }
-                None => {
-                    let callee = Operand::Constant(Constant::Function(self.lang_class_method(
-                        baml_base::LangPackage::Reflect,
-                        "Type",
-                        "_expect_implements",
-                    )));
-                    let unit = self.builder.temp(RuntimeTy::Null);
-                    self.builder.call(
-                        callee,
-                        vec![bound_type.clone(), interface],
-                        Place::local(unit),
-                        resume,
-                    );
-                    self.builder.set_current_block(resume);
-                }
+            let bound = tir2_interface_to_template(
+                &bound.name,
+                &bound.generics,
+                &bound.associated_types,
+                &self.runtime(),
+                &generic_params,
+            );
+            let satisfied = self.builder.temp(RuntimeTy::Bool);
+            self.builder.assign(
+                Place::local(satisfied),
+                Rvalue::SatisfiesBound {
+                    ty: bound_type.clone(),
+                    bound: bound.clone(),
+                },
+            );
+            let next = self.builder.create_block();
+            let miss = else_block.unwrap_or_else(|| self.builder.create_block());
+            self.builder
+                .branch(Operand::Copy(Place::local(satisfied)), next, miss);
+            if else_block.is_none() {
+                self.builder.set_current_block(miss);
+                let mismatch = self.builder.temp(self.type_mismatch_ty());
+                self.builder.assign(
+                    Place::local(mismatch),
+                    Rvalue::BoundMismatch {
+                        ty: bound_type.clone(),
+                        bound,
+                    },
+                );
+                self.emit_throw(Operand::Copy(Place::local(mismatch)));
             }
+            self.builder.set_current_block(next);
         }
-        if let (Some(miss), Some(else_expr)) = (miss, else_branch) {
+        if let (Some(miss), Some(else_expr)) = (else_block, else_branch) {
             let bound = self.builder.current_block();
             self.builder.set_current_block(miss);
             let else_ty = self.expr_ty(else_expr)?;
@@ -9644,6 +9641,15 @@ impl<'db> LoweringContext<'db> {
             self.builder.set_current_block(bound);
         }
         Ok(())
+    }
+
+    /// `reflect.errors.TypeMismatch`, the error a missed `let type` bound
+    /// throws.
+    fn type_mismatch_ty(&self) -> RuntimeTy {
+        let item = baml_base::lang_item!(Reflect: errors.TypeMismatch);
+        DeclName::of_lang_item(self.lang(), item).map_or(RuntimeTy::Unknown, |name| {
+            RuntimeTy::Class(name, Box::new([]))
+        })
     }
 
     /// A `reflect.Type` value for `ty`, realized in the enclosing frame.

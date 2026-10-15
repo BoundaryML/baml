@@ -1085,6 +1085,19 @@ pub enum Instruction {
     /// Legacy opcode retained so existing serialized bytecode keeps its meaning.
     TraceHookRich,
     TraceHookEmptySpan,
+
+    /// Whether a type satisfies an interface bound, the check a
+    /// `let type T extends I = …` statement makes. Pops the bound (an
+    /// `Object::Type` of the interface constraint: its head, its type
+    /// arguments, and only the associated types the bound pins), then the
+    /// type, and pushes a bool. Pinned associated types must match; the
+    /// others are free. As for a generic parameter's bound, only a concrete
+    /// type can satisfy it.
+    SatisfiesBound,
+    /// The error a missed bound throws: pops the bound, then the type (as
+    /// [`Self::SatisfiesBound`]), and pushes a `reflect.errors.TypeMismatch`
+    /// naming both. The following `Throw` raises it.
+    BoundMismatch,
 }
 
 /// Compact bytecode opcodes.
@@ -1301,6 +1314,10 @@ pub enum OpCode {
     // Preserve the legacy discriminant; new compilers select Span or EmptySpan.
     TraceHookRich,
     TraceHookEmptySpan,
+    // The `let type` bound checks, appended to preserve serialized
+    // discriminants.
+    SatisfiesBound,
+    BoundMismatch,
 }
 
 impl OpCode {
@@ -1446,7 +1463,9 @@ impl OpCode {
             | Self::TraceHookTiming
             | Self::TraceHookSpan
             | Self::TraceHookRich
-            | Self::TraceHookEmptySpan => 1,
+            | Self::TraceHookEmptySpan
+            | Self::SatisfiesBound
+            | Self::BoundMismatch => 1,
             Self::AllocInstance | Self::Call | Self::CallExactArgs | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
@@ -1606,6 +1625,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::TraceHookSpan as u8 => Ok(Self::TraceHookSpan),
             x if x == Self::TraceHookRich as u8 => Ok(Self::TraceHookRich),
             x if x == Self::TraceHookEmptySpan as u8 => Ok(Self::TraceHookEmptySpan),
+            x if x == Self::SatisfiesBound as u8 => Ok(Self::SatisfiesBound),
+            x if x == Self::BoundMismatch as u8 => Ok(Self::BoundMismatch),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
@@ -1625,6 +1646,8 @@ impl std::fmt::Display for OpCode {
             Self::TraceHookSpan => "TRACE_HOOK_SPAN",
             Self::TraceHookRich => "TRACE_HOOK_RICH",
             Self::TraceHookEmptySpan => "TRACE_HOOK_EMPTY_SPAN",
+            Self::SatisfiesBound => "SATISFIES_BOUND",
+            Self::BoundMismatch => "BOUND_MISMATCH",
 
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
@@ -1943,6 +1966,8 @@ impl std::fmt::Display for Instruction {
             Instruction::TraceHookSpan => f.write_str("TRACE_HOOK_SPAN"),
             Instruction::TraceHookRich => f.write_str("TRACE_HOOK_RICH"),
             Instruction::TraceHookEmptySpan => f.write_str("TRACE_HOOK_EMPTY_SPAN"),
+            Instruction::SatisfiesBound => f.write_str("SATISFIES_BOUND"),
+            Instruction::BoundMismatch => f.write_str("BOUND_MISMATCH"),
 
             Instruction::CallHooked { callee, ntypeargs } => {
                 write!(f, "CALL_HOOKED {callee} {ntypeargs}")
@@ -2476,7 +2501,9 @@ impl Bytecode {
 
             match instr {
                 // ── Unit ops: no operands ────────────────────────────
-                Instruction::EndTraceHook
+                Instruction::SatisfiesBound
+                | Instruction::BoundMismatch
+                | Instruction::EndTraceHook
                 | Instruction::TraceHookHidden
                 | Instruction::TraceHookTiming
                 | Instruction::TraceHookSpan
@@ -2982,6 +3009,8 @@ impl Bytecode {
             Instruction::TraceHookSpan => OpCode::TraceHookSpan,
             Instruction::TraceHookRich => OpCode::TraceHookRich,
             Instruction::TraceHookEmptySpan => OpCode::TraceHookEmptySpan,
+            Instruction::SatisfiesBound => OpCode::SatisfiesBound,
+            Instruction::BoundMismatch => OpCode::BoundMismatch,
 
             Instruction::Call { .. } => OpCode::Call,
 

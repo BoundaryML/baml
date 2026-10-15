@@ -96,7 +96,10 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// a `ProgramPackage` carries its `PackageKind` (`Language(LangPackage)` or
 /// `Ordinary`) and each of its edges an `EdgeKind` (`Dependency` or
 /// `ReExported`).
-pub const FORMAT_VERSION: u32 = 18;
+///
+/// Version 19: `SatisfiesBound` and `BoundMismatch` (the run-time bound check
+/// of `let type T extends I = …`) appended to the instruction set.
+pub const FORMAT_VERSION: u32 = 19;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

@@ -149,16 +149,4 @@ class Type {
     function implemented_by(self, other: root.Type) -> bool throws never {
         $rust_function
     }
-
-    /// (internal) The run-time check behind `let type T extends I = …`, run
-    /// once per bound `I` against the type just bound to `T`: throws when the
-    /// type does not implement the interface.
-    function _expect_implements(self, bound: root.Type) -> void throws root.errors.TypeMismatch {
-        if (!self.implements(bound)) {
-            throw root.errors.TypeMismatch {
-                message: "type " + self._to_string_impl() + " does not implement interface "
-                    + bound._to_string_impl(),
-            };
-        }
-    }
 }
