@@ -194,11 +194,7 @@ function Hello() -> string {{
     let stderr = String::from_utf8_lossy(&output.stderr);
     let context = format!("{delivery:?}/{execution:?}: {output:?}");
     let success = matches!(execution, Execution::Success);
-    assert_eq!(
-        output.status.code(),
-        Some(i32::from(!success)),
-        "{context}"
-    );
+    assert_eq!(output.status.code(), Some(i32::from(!success)), "{context}");
     assert_eq!(stdout, if success { "\"ok\"\n" } else { "" }, "{context}");
     assert_eq!(
         model.received_requests().await.unwrap().len(),
