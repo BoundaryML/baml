@@ -3,10 +3,13 @@
 //!
 //! A BAML function compiled to Rust (see `Function::native_body`) must produce
 //! exactly the values and exactly the exceptions the bytecode interpreter
-//! produces for the same program. The only way to guarantee that is for both
-//! to run one implementation of each operation. This module is that
-//! implementation: the dispatch arms in `run_compact` call these methods, and
-//! generated code calls the same methods.
+//! produces for the same program. Both share the semantic primitives that
+//! decide those: `Value::try_int` and the tagged checked arithmetic, index
+//! resolution, the generic `binop`/`cmpop`, and the cold constructors of every
+//! panic. The dispatch arms in `run_compact` keep their own hand-tuned shape:
+//! routing them through these methods measurably slowed the interpreter (one
+//! giant function whose register allocation depends on every arm), so the
+//! methods here compose the same primitives for generated code instead.
 //!
 //! Every method takes operands as values rather than reading the eval stack,
 //! because compiled code keeps its locals in Rust variables and has no eval

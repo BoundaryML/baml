@@ -102,7 +102,8 @@ use ::core::sync::atomic::AtomicBool;
 use bex_heap::{BexHeap, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool,
-    ObjectType, PanicClass, PermitProof, RustDataArc as _, StackIndex, Value, Variant, VmGlobals,
+    ObjectType, PanicClass, PermitProof, RustDataArc as _, StackIndex, UnaryOp, Value, Variant,
+    VmGlobals,
     bytecode::{self, Instruction},
     types::{
         BoundMethod, Closure, ConstValue, Function, FunctionOrigin, FunctionType, Instance, Type,
@@ -9063,7 +9064,25 @@ impl BexVm {
                     OpCode::LoadField => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let top = self.stack.ensure_pop();
-                        let value = self.load_field(top, idx)?;
+                        let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
+                        let load_result = {
+                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Instance.into(),
+                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                                }
+                                .into());
+                            };
+                            instance
+                                .try_load_field(idx)
+                                .ok_or_else(|| instance.field_len())
+                        };
+                        let value = match load_result {
+                            Ok(value) => value,
+                            Err(length) => {
+                                return Err(self.invalid_field_access_error(idx, length));
+                            }
+                        };
                         self.stack.push(value);
                     }
 
@@ -9071,7 +9090,26 @@ impl BexVm {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let new_value = self.stack.ensure_pop();
                         let instance_value = self.stack.ensure_pop();
-                        self.store_field(instance_value, idx, new_value)?;
+                        let obj_ptr = self.as_object_ptr(instance_value, ObjectType::Instance)?;
+
+                        let store_error = {
+                            let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Instance.into(),
+                                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
+                                }
+                                .into());
+                            };
+                            (idx >= instance.field_len()).then_some(instance.field_len())
+                        };
+                        if let Some(length) = store_error {
+                            return Err(self.invalid_field_access_error(idx, length));
+                        }
+                        self.heap.write_barrier(obj_ptr, new_value);
+                        let Object::Instance(instance) = self.get_object(obj_ptr) else {
+                            unreachable!("already type-checked above");
+                        };
+                        instance.store_field(idx, new_value);
                     }
 
                     // ── VirtualLoadField / VirtualStoreField ──────────────────────
@@ -9942,10 +9980,45 @@ impl BexVm {
                     // ── Return ────────────────────────────────────────────────────
                     OpCode::Return => {
                         let result = self.stack.get_at(self.stack.ensure_stack_top());
-                        if let Some(state) =
-                            self.finish_bytecode_frame(frame_idx, function, result)?
-                        {
-                            return Ok(Some(state));
+
+                        let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+                            unreachable!()
+                        };
+                        let locals_offset = bf.locals_offset;
+                        let frame_telemetry = bf.telemetry.take();
+
+                        if let Some(frame_telemetry) = frame_telemetry {
+                            self.complete_bytecode_invocation_with_function(
+                                *frame_idx,
+                                function,
+                                frame_telemetry,
+                                InvocationOutcome::Ok,
+                                Some(result),
+                            );
+                        }
+
+                        // SAFETY: the compiler guarantees a result at or above the
+                        // callee's locals base. That base is therefore an existing
+                        // initialized slot, even for a zero-argument function with
+                        // no locals. Value is Copy, so discarded slots need no drop.
+                        // No allocation or GC point occurs between writing the
+                        // result and shortening the stack to the caller's new top.
+                        let consumed = self.stack.len() - locals_offset.raw();
+                        self.stack.replace_top_n_dynamic(consumed, result);
+                        // SAFETY: this instruction is executing the bytecode frame
+                        // accessed above; stack operations cannot remove that frame.
+                        unsafe { self.frames.no_return_pop() };
+                        let context = self.current_context().clone();
+                        if let Some(telemetry) = &mut self.telemetry {
+                            telemetry.set_context(context);
+                        }
+                        // Select the restored caller. Native continuations and
+                        // early yields still hand this frame back to the outer loop.
+                        if !self.frames.is_empty() {
+                            *frame_idx = self.frames.len() - 1;
+                        }
+                        if self.frames.is_empty() {
+                            return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
                         }
 
                         if self.should_early_yield() {
@@ -9953,6 +10026,7 @@ impl BexVm {
                         }
                         if let Frame::Bytecode(caller) = &self.frames[*frame_idx] {
                             *pc = caller.instruction_ptr;
+                            *function = self.load_function(*frame_idx)?;
                             *code = &function.bytecode.compact.as_ref().unwrap().code;
                             *dispatch_frame_idx = *frame_idx;
                             continue;
@@ -10345,12 +10419,13 @@ impl BexVm {
                         let captured_type_args = self.pop_type_args(ntypeargs)?;
 
                         let function_ptr = self.idx_to_ptr(ObjectIndex::from_raw(obj_idx_raw));
-                        let closure = self.make_closure(
-                            function_ptr,
-                            captures,
-                            captured_type_args.tys.into_boxed_slice(),
-                        );
-                        self.stack.push(closure);
+                        let closure = Object::Closure(Closure {
+                            function: function_ptr,
+                            captures: captures.into_boxed_slice(),
+                            captured_type_args: captured_type_args.tys.into_boxed_slice(),
+                        });
+                        let ptr = self.tlab.alloc(closure);
+                        self.stack.push(Value::object(ptr));
                     }
 
                     // ── LoadType ──────────────────────────────────────────────────
@@ -10787,14 +10862,85 @@ impl BexVm {
                     // ── Array / Map element ops ───────────────────────────────────
                     OpCode::ContainerLen => {
                         let container = self.stack.ensure_pop();
-                        let len = self.container_len(container)?;
-                        self.stack.push(len);
+                        let Some(ptr) = container.as_object_ptr() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: ObjectType::Array.into(),
+                                got: self.type_of(&container),
+                            }
+                            .into());
+                        };
+                        #[allow(clippy::cast_possible_wrap)]
+                        let len = match self.get_object(ptr) {
+                            Object::Array(arr) => arr.len() as i64,
+                            Object::Uint8Array(bytes) => bytes.len() as i64,
+                            Object::Map(map) => map.len() as i64,
+                            Object::String(s) => s.byte_len() as i64,
+                            other => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Array.into(),
+                                    got: ObjectType::of(other).into(),
+                                }
+                                .into());
+                            }
+                        };
+                        self.stack.push(Value::int(len));
                     }
 
                     OpCode::LoadArrayElement => {
                         let index_value = self.stack.ensure_pop();
                         let array_value = self.stack.ensure_pop();
-                        let element = self.load_array_element(array_value, index_value)?;
+                        let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
+                        let Some(i) = index_value.as_int() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: bex_vm_types::types::Type::Int,
+                                got: self.type_of(&index_value),
+                            }
+                            .into());
+                        };
+                        // Acquire the array's read lock for the duration of the
+                        // bounds-check + element load so it stays atomic against
+                        // a racing `push`/grow. Guard drops at the end of the
+                        // inner scope before any `&mut self` call. A negative index
+                        // counts from the end; one that still lands outside the
+                        // array reports the original index in the panic.
+                        let load_result: Result<Value, (i64, usize)> = {
+                            match self.get_object(array_obj_index) {
+                                Object::Array(arr) => {
+                                    let guard = arr.lock();
+                                    let len = guard.len();
+                                    match crate::array_index::resolve_index(i, len) {
+                                        Some(idx) => Ok(guard[idx]),
+                                        None => Err((i, len)),
+                                    }
+                                }
+                                Object::Uint8Array(bytes) => {
+                                    let guard = bytes.lock();
+                                    let len = guard.len();
+                                    match crate::array_index::resolve_index(i, len) {
+                                        Some(idx) => Ok(Value::int(i64::from(guard[idx]))),
+                                        None => Err((i, len)),
+                                    }
+                                }
+                                other => {
+                                    return Err(VmInternalError::TypeError {
+                                        expected: ObjectType::Array.into(),
+                                        got: ObjectType::of(other).into(),
+                                    }
+                                    .into());
+                                }
+                            }
+                        };
+                        let element = match load_result {
+                            Ok(v) => v,
+                            Err((idx, len)) => {
+                                return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                                    VmPanic::IndexOutOfBounds {
+                                        index: idx,
+                                        length: len,
+                                    },
+                                )));
+                            }
+                        };
                         self.stack.push(element);
                     }
 
@@ -10806,7 +10952,69 @@ impl BexVm {
                         let new_value = self.stack.ensure_pop();
                         let index_value = self.stack.ensure_pop();
                         let array_value = self.stack.ensure_pop();
-                        self.store_array_element(array_value, index_value, new_value)?;
+                        let array_object_index =
+                            self.as_object_ptr(array_value, ObjectType::Array)?;
+                        let Some(i) = index_value.as_int() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: bex_vm_types::types::Type::Int,
+                                got: self.type_of(&index_value),
+                            }
+                            .into());
+                        };
+                        let new_value_u8: Option<u8> =
+                            new_value.as_int().map(|v| (v.cast_unsigned() & 0xFF) as u8);
+                        let store_result: Result<(), (i64, usize)> = {
+                            match self.get_object(array_object_index) {
+                                Object::Array(arr) => {
+                                    let mut guard = arr.lock_mut(self.tlab.alloc_debt());
+                                    let len = guard.len();
+                                    match crate::array_index::resolve_index(i, len) {
+                                        Some(idx) => {
+                                            guard[idx] = new_value;
+                                            Ok(())
+                                        }
+                                        None => Err((i, len)),
+                                    }
+                                }
+                                Object::Uint8Array(bytes) => {
+                                    let Some(byte_v) = new_value_u8 else {
+                                        return Err(VmInternalError::TypeError {
+                                            expected: bex_vm_types::types::Type::Int,
+                                            got: self.type_of(&new_value),
+                                        }
+                                        .into());
+                                    };
+                                    let mut guard = bytes.lock_mut(self.tlab.alloc_debt());
+                                    let len = guard.len();
+                                    match crate::array_index::resolve_index(i, len) {
+                                        Some(idx) => {
+                                            guard[idx] = byte_v;
+                                            Ok(())
+                                        }
+                                        None => Err((i, len)),
+                                    }
+                                }
+                                other => {
+                                    return Err(VmInternalError::TypeError {
+                                        expected: ObjectType::Array.into(),
+                                        got: ObjectType::of(other).into(),
+                                    }
+                                    .into());
+                                }
+                            }
+                        };
+                        match store_result {
+                            Ok(()) => {}
+                            Err((idx, len)) => {
+                                return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                                    VmPanic::IndexOutOfBounds {
+                                        index: idx,
+                                        length: len,
+                                    },
+                                )));
+                            }
+                        }
+                        self.heap.write_barrier(array_object_index, new_value);
                     }
 
                     OpCode::StoreMapElement => {
@@ -10848,27 +11056,27 @@ impl BexVm {
                         let l = self.stack.get_at(self.stack.ensure_slot_from_top(1));
                         // Overflow-checked tagged add: hot path stays branchless
                         // (no untag/retag), cold path untags only for the message.
-                        match self.add_int(l, r) {
+                        match Value::tagged_int_add_checked(l, r) {
                             // SAFETY: the encoder validates two arithmetic operands.
-                            Ok(v) => self.stack.replace_top_n::<2>(v),
-                            Err(e) => {
+                            Some(v) => self.stack.replace_top_n::<2>(v),
+                            None => {
                                 // Preserve the old consumed-operand stack before
-                                // propagating the overflow error.
+                                // constructing and propagating the overflow error.
                                 self.stack.truncate_suffix(2);
-                                return Err(e);
+                                return Err(self.tagged_int_overflow(l, '+', r));
                             }
                         }
                     }
                     OpCode::SubInt => {
                         let r = self.stack.get_at(self.stack.ensure_slot_from_top(0));
                         let l = self.stack.get_at(self.stack.ensure_slot_from_top(1));
-                        match self.sub_int(l, r) {
+                        match Value::tagged_int_sub_checked(l, r) {
                             // SAFETY: the encoder validates two arithmetic operands.
-                            Ok(v) => self.stack.replace_top_n::<2>(v),
-                            Err(e) => {
-                                // Preserve the old error-path stack before propagation.
+                            Some(v) => self.stack.replace_top_n::<2>(v),
+                            None => {
+                                // Preserve the old error-path stack before error creation.
                                 self.stack.truncate_suffix(2);
-                                return Err(e);
+                                return Err(self.tagged_int_overflow(l, '-', r));
                             }
                         }
                     }
@@ -10879,7 +11087,7 @@ impl BexVm {
                         let Some(l) = self.stack.ensure_pop().as_int() else {
                             std::hint::unreachable_unchecked()
                         };
-                        let v = self.mul_int(l, r)?;
+                        let v = self.int_arith_result(l.checked_mul(r), l, '*', r)?;
                         self.stack.push(v);
                     }
                     OpCode::DivInt => {
@@ -10889,10 +11097,18 @@ impl BexVm {
                         let Some(l) = self.stack.ensure_pop().as_int() else {
                             std::hint::unreachable_unchecked()
                         };
-                        // `INT_MIN / -1` = 2^62 fits i64 (INT_MIN is -2^62, not
-                        // i64::MIN) but not i63, so the range-check in
-                        // finish_int catches it.
-                        let v = self.div_int(l, r)?;
+                        if r == 0 {
+                            return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                                VmPanic::DivisionByZero {
+                                    left: Value::int(l),
+                                    right: Value::int(r),
+                                },
+                            )));
+                        }
+                        // r != 0 guaranteed above; `INT_MIN / -1` = 2^62 fits i64
+                        // (INT_MIN is -2^62, not i64::MIN) but not i63, so the
+                        // range-check in finish_int catches it.
+                        let v = self.finish_int(l / r, l, '/', r)?;
                         self.stack.push(v);
                     }
                     OpCode::ModInt => {
@@ -10902,8 +11118,16 @@ impl BexVm {
                         let Some(l) = self.stack.ensure_pop().as_int() else {
                             std::hint::unreachable_unchecked()
                         };
+                        if r == 0 {
+                            return Err(VmError::thrown_fresh(self.panic_to_exception_value(
+                                VmPanic::DivisionByZero {
+                                    left: Value::int(l),
+                                    right: Value::int(r),
+                                },
+                            )));
+                        }
                         // |l % r| < |r| <= 2^62, always within i63 range.
-                        let v = self.mod_int(l, r)?;
+                        let v = self.finish_int(l % r, l, '%', r)?;
                         self.stack.push(v);
                     }
 
@@ -11088,8 +11312,51 @@ impl BexVm {
                     }
                     OpCode::Neg => {
                         let val = self.stack.ensure_pop();
-                        let v = self.neg(val)?;
-                        self.stack.push(v);
+                        if let Some(n) = val.as_int() {
+                            // Negating INT_MIN = -2^62 yields 2^62, which fits i64
+                            // (INT_MIN != i64::MIN) but not i63, so the range-check
+                            // in try_int catches it.
+                            match Value::try_int(n.wrapping_neg()) {
+                                Some(v) => self.stack.push(v),
+                                None => {
+                                    return Err(
+                                        self.integer_overflow(format!("-({n}) overflows int"))
+                                    );
+                                }
+                            }
+                        } else if let Some(n) = value_as_float(val) {
+                            let v = Value::object(self.alloc_float(-n));
+                            self.stack.push(v);
+                        } else if let Some(ptr) = val.as_object_ptr() {
+                            // Bigint negation. Compute the negated value into an
+                            // owned `Arc` first so the immutable `get_object` borrow
+                            // is released before the `&mut self` `alloc_bigint`.
+                            let negated = match self.get_object(ptr) {
+                                Object::Bigint(bi) => {
+                                    Some(std::sync::Arc::new(-bi.as_ref().clone()))
+                                }
+                                _ => None,
+                            };
+                            match negated {
+                                Some(arc) => {
+                                    let result = self.alloc_bigint(arc)?;
+                                    self.stack.push(result);
+                                }
+                                None => {
+                                    return Err(VmInternalError::CannotApplyUnaryOp {
+                                        op: UnaryOp::Neg,
+                                        value: self.type_of(&val),
+                                    }
+                                    .into());
+                                }
+                            }
+                        } else {
+                            return Err(VmInternalError::CannotApplyUnaryOp {
+                                op: UnaryOp::Neg,
+                                value: self.type_of(&val),
+                            }
+                            .into());
+                        }
                     }
 
                     // ── SendEvent ─────────────────────────────────────────────────
