@@ -24,12 +24,14 @@ pub struct ProjectOptions<'a> {
 
 /// Write `module` as a Cargo project under `out_dir`:
 ///
-/// - `Cargo.toml`: its own workspace, depending on `bex_aot` by path (the
-///   generated structs derive serde through `bex_aot::serde`);
+/// - `Cargo.toml`: its own workspace, depending on `bex_aot` by path with
+///   its `telemetry` feature (the generated structs derive serde through
+///   `bex_aot::serde`);
 /// - `src/lib.rs`: the generated module;
 /// - `src/main.rs`: a host shim that parses `--<param> <value>` flags for the
 ///   entry function, prints its result through `ToBaml`, and exits with the
-///   throw's exit code on an uncaught throw. When the entry takes a class,
+///   throw's exit code on an uncaught throw. It records the run at the level
+///   `BAML_TELEMETRY` names (`bex_aot::telemetry`) under the BAML home. When the entry takes a class,
 ///   array or nullable parameter the shim cannot parse
 ///   ([`CompiledFunction::shim_callable`](crate::CompiledFunction::shim_callable)
 ///   is false), `main` prints `` error: entry `user.x` takes non-scalar
@@ -54,7 +56,7 @@ fn manifest(options: &ProjectOptions<'_>) -> String {
     let mut text = format!(
         "[package]\nname = {name}\nversion = \"0.0.0\"\nedition = \"2024\"\npublish = false\n\n\
          [workspace]\n\n\
-         [dependencies]\nbex_aot = {{ path = {runtime} }}\n",
+         [dependencies]\nbex_aot = {{ path = {runtime}, features = [\"telemetry\"] }}\n",
         name = toml_string(options.crate_name),
         runtime = toml_string(&options.runtime_path.to_string_lossy()),
     );
@@ -304,7 +306,20 @@ fn host_shim(module: &NativeModule<'_>, options: &ProjectOptions<'_>) -> std::io
                 index += 1;
             }
             #(#required)*
-            match #crate_ident::#function(#(#values),*) {
+            // `BAML_TELEMETRY` (unset: medium) records the run under the
+            // BAML home, as a packed program does on the VM; a recording
+            // that cannot start or finish never fails the program.
+            if let Err(error) = bex_aot::telemetry::start(
+                #crate_ident::BAML_TELEMETRY,
+                bex_aot::telemetry::Destination::UserFiles,
+            ) {
+                eprintln!("warning: telemetry not recorded: {error}");
+            }
+            let result = bex_aot::telemetry::root(move || #crate_ident::#function(#(#values),*));
+            if let Err(error) = bex_aot::telemetry::finish() {
+                eprintln!("warning: telemetry recording incomplete: {error}");
+            }
+            match result {
                 #print
                 Err(thrown) => {
                     eprintln!("error: uncaught throw: {}", thrown.render_readable());

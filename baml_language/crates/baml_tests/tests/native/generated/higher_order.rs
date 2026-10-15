@@ -187,6 +187,7 @@ pub fn user_doubled(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Th
         let __closure: func::Func<(Int63,), Int63> = func::alloc(user_doubled__lambda0__env {});
         __closure
     };
+    bex_aot::telemetry::site(1u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &|__arg0: Int63| (_2).call((__arg0,));
@@ -227,6 +228,7 @@ pub fn user_labels(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Str>>, Throw
         let __closure: func::Func<(Int63,), Str> = func::alloc(user_labels__lambda0__env {});
         __closure
     };
+    bex_aot::telemetry::site(3u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &|__arg0: Int63| (_2).call((__arg0,));
@@ -264,6 +266,7 @@ pub fn user_evens(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thro
         let __closure: func::Func<(Int63,), bool> = func::alloc(user_evens__lambda0__env {});
         __closure
     };
+    bex_aot::telemetry::site(5u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &|__arg0: Int63| (_2).call((__arg0,));
@@ -311,6 +314,7 @@ pub fn user_halves(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thr
         let __closure: func::Func<(Int63,), Option<Int63>> = func::alloc(user_halves__lambda0__env {});
         __closure
     };
+    bex_aot::telemetry::site(7u32, 0u32);
     bex_aot::depth::probe(1)?;
     _0 = {
         let __callback = &|__arg0: Int63| (_2).call((__arg0,));
@@ -346,6 +350,7 @@ pub fn user_total(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
         let __closure: func::Func<(Int63, Int63), Int63> = func::alloc(user_total__lambda0__env {});
         __closure
     };
+    bex_aot::telemetry::site(9u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &|__arg0: Int63, __arg1: Int63| (_2).call((__arg0, __arg1));
@@ -386,6 +391,7 @@ pub fn user_joined(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
         let __closure: func::Func<(Str, Int63), Str> = func::alloc(user_joined__lambda0__env {});
         __closure
     };
+    bex_aot::telemetry::site(11u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &|__arg0: Str, __arg1: Int63| (_2).call((__arg0, __arg1));
@@ -443,6 +449,7 @@ pub fn user_summed(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
         });
         __closure
     };
+    bex_aot::telemetry::site(13u32, 0u32);
     bex_aot::depth::probe(1)?;
     _3 = {
         let __callback = &|__arg0: Int63| (_4).call((__arg0,));
@@ -491,6 +498,7 @@ pub fn user_any_big(mut _1: Shared<Vec<Int63>>, mut _2: Int63) -> Result<bool, T
         });
         __closure
     };
+    bex_aot::telemetry::site(15u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &|__arg0: Int63| (_3).call((__arg0,));
@@ -538,6 +546,7 @@ pub fn user_all_big(mut _1: Shared<Vec<Int63>>, mut _2: Int63) -> Result<bool, T
         });
         __closure
     };
+    bex_aot::telemetry::site(17u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &|__arg0: Int63| (_3).call((__arg0,));
@@ -588,6 +597,7 @@ pub fn user_first_big(
         });
         __closure
     };
+    bex_aot::telemetry::site(19u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &|__arg0: Int63| (_3).call((__arg0,));
@@ -638,6 +648,7 @@ pub fn user_first_big_at(
         });
         __closure
     };
+    bex_aot::telemetry::site(21u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &|__arg0: Int63| (_3).call((__arg0,));
@@ -688,6 +699,7 @@ pub fn user_last_big(
         });
         __closure
     };
+    bex_aot::telemetry::site(23u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &|__arg0: Int63| (_3).call((__arg0,));
@@ -738,6 +750,7 @@ pub fn user_last_big_at(
         });
         __closure
     };
+    bex_aot::telemetry::site(25u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &|__arg0: Int63| (_3).call((__arg0,));
@@ -775,6 +788,7 @@ pub fn user_pairs(mut _1: Shared<Vec<Int63>>) -> Result<Shared<Vec<Int63>>, Thro
         let __closure: func::Func<(Int63,), Shared<Vec<Int63>>> = func::alloc(user_pairs__lambda0__env {});
         __closure
     };
+    bex_aot::telemetry::site(27u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &|__arg0: Int63| (_2).call((__arg0,));
@@ -824,6 +838,7 @@ pub fn user_sorted_desc(
         let __closure: func::Func<(Int63, Int63), baml_ops_Ordering> = func::alloc(user_sorted_desc__lambda0__env {});
         __closure
     };
+    bex_aot::telemetry::site(29u32, 0u32);
     bex_aot::depth::probe(0)?;
     {
         let __callback = &|__arg0: Int63, __arg1: Int63| (_2).call((__arg0, __arg1));
@@ -878,6 +893,7 @@ pub fn user_sorted_by_abs(
         let __closure: func::Func<(Int63,), Int63> = func::alloc(user_sorted_by_abs__lambda0__env {});
         __closure
     };
+    bex_aot::telemetry::site(31u32, 0u32);
     bex_aot::depth::probe(1)?;
     {
         let __callback = &|__arg0: Int63| (_2).call((__arg0,));
@@ -907,56 +923,67 @@ pub fn user_sorted_by_name__lambda0(mut _1: Shared<user_Item>) -> Result<Str, Th
     Ok(_0)
 }
 /// BAML function `user.sorted_by_name`.
+#[inline(never)]
 pub fn user_sorted_by_name(
     mut _1: Shared<Vec<Shared<user_Item>>>,
 ) -> Result<Str, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Str;
-    let mut _2: Shared<Vec<Shared<user_Item>>>;
-    let mut _3: func::Func<(Shared<user_Item>,), Str>;
-    let mut _7: Str;
-    let mut _8: bex_aot::array::Iter<Shared<user_Item>>;
-    let mut _9: Option<Shared<user_Item>>;
-    let mut _10: bool;
-    let mut _11: Shared<user_Item>;
-    let mut _13: Str;
-    let mut _14: Str;
-    let mut _15: Str;
-    let mut _17: Str;
-    let mut _18: Str;
-    let mut _19: Int63;
-    _3 = {
-        let __closure: func::Func<(Shared<user_Item>,), Str> = func::alloc(user_sorted_by_name__lambda0__env {});
-        __closure
-    };
-    bex_aot::depth::probe(1)?;
-    {
-        let __callback = &|__arg0: Shared<user_Item>| (_3).call((__arg0,));
-        array::sort_by_key(&_1, __callback, &|left, right| string::cmp(left, right))?;
-    }
-    _2 = _1.clone();
-    _7 = string::from_literal("");
-    bex_aot::depth::probe(1)?;
-    _8 = array::iter(&_1);
-    'bb2: loop {
-        _9 = array::next(&mut _8);
-        _10 = _9.is_none();
-        if _10 {
-            _0 = _7.clone();
-            return Ok(_0);
-        } else {
-            _11 = _9.clone().expect("non-null by the checker's narrowing");
-            _17 = _11.borrow().name.clone();
-            _15 = string::concat(&_7, &_17);
-            _14 = string::concat(&_15, &string::from_literal(":"));
-            _19 = _11.borrow().weight;
-            bex_aot::depth::probe(0)?;
-            _18 = bex_aot::render::to_string(&_19)?;
-            _13 = string::concat(&_14, &_18);
-            _7 = string::concat(&_13, &string::from_literal(" "));
-            continue 'bb2;
+    let __telemetry = bex_aot::telemetry::enter(33u32);
+    let __result = (move || -> Result<Str, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Str;
+        let mut _2: Shared<Vec<Shared<user_Item>>>;
+        let mut _3: func::Func<(Shared<user_Item>,), Str>;
+        let mut _7: Str;
+        let mut _8: bex_aot::array::Iter<Shared<user_Item>>;
+        let mut _9: Option<Shared<user_Item>>;
+        let mut _10: bool;
+        let mut _11: Shared<user_Item>;
+        let mut _13: Str;
+        let mut _14: Str;
+        let mut _15: Str;
+        let mut _17: Str;
+        let mut _18: Str;
+        let mut _19: Int63;
+        _3 = {
+            let __closure: func::Func<(Shared<user_Item>,), Str> = func::alloc(user_sorted_by_name__lambda0__env {});
+            __closure
+        };
+        bex_aot::telemetry::site(33u32, 0u32);
+        bex_aot::depth::probe(1)?;
+        {
+            let __callback = &|__arg0: Shared<user_Item>| (_3).call((__arg0,));
+            array::sort_by_key(
+                &_1,
+                __callback,
+                &|left, right| string::cmp(left, right),
+            )?;
         }
-    }
+        _2 = _1.clone();
+        _7 = string::from_literal("");
+        bex_aot::depth::probe(1)?;
+        _8 = array::iter(&_1);
+        'bb2: loop {
+            _9 = array::next(&mut _8);
+            _10 = _9.is_none();
+            if _10 {
+                _0 = _7.clone();
+                return Ok(_0);
+            } else {
+                _11 = _9.clone().expect("non-null by the checker's narrowing");
+                _17 = _11.borrow().name.clone();
+                _15 = string::concat(&_7, &_17);
+                _14 = string::concat(&_15, &string::from_literal(":"));
+                _19 = _11.borrow().weight;
+                bex_aot::depth::probe(0)?;
+                _18 = bex_aot::render::to_string(&_19)?;
+                _13 = string::concat(&_14, &_18);
+                _7 = string::concat(&_13, &string::from_literal(" "));
+                continue 'bb2;
+            }
+        }
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// The environment of BAML lambda `.<lambda(comparisons, 0)>`.
 pub struct user_comparisons__lambda0__env {
@@ -1018,6 +1045,7 @@ pub fn user_comparisons(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
         });
         __closure
     };
+    bex_aot::telemetry::site(35u32, 0u32);
     bex_aot::depth::probe(0)?;
     {
         let __callback = &|__arg0: Int63, __arg1: Int63| (_4).call((__arg0, __arg1));
@@ -1105,6 +1133,7 @@ pub fn user_comparison_log(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
         });
         __closure
     };
+    bex_aot::telemetry::site(37u32, 0u32);
     bex_aot::depth::probe(0)?;
     {
         let __callback = &|__arg0: Int63, __arg1: Int63| (_4).call((__arg0, __arg1));
@@ -1205,6 +1234,7 @@ pub fn user_throwing_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
                 });
                 __closure
             };
+            bex_aot::telemetry::site(39u32, 0u32);
             match bex_aot::depth::probe(0) {
                 Ok(value) => value,
                 Err(error) => {
@@ -1304,6 +1334,7 @@ pub fn user_mutating_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Throw
         });
         __closure
     };
+    bex_aot::telemetry::site(41u32, 0u32);
     bex_aot::depth::probe(0)?;
     {
         let __callback = &|__arg0: Int63, __arg1: Int63| (_3).call((__arg0, __arg1));
@@ -1399,6 +1430,7 @@ pub fn user_reading_comparator(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown
         });
         __closure
     };
+    bex_aot::telemetry::site(43u32, 0u32);
     bex_aot::depth::probe(0)?;
     {
         let __callback = &|__arg0: Int63, __arg1: Int63| (_4).call((__arg0, __arg1));
@@ -1452,6 +1484,7 @@ pub fn user_throwing_key(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
                 let __closure: func::Func<(Int63,), Int63> = func::alloc(user_throwing_key__lambda0__env {});
                 __closure
             };
+            bex_aot::telemetry::site(45u32, 0u32);
             match bex_aot::depth::probe(1) {
                 Ok(value) => value,
                 Err(error) => {
@@ -1535,6 +1568,7 @@ pub fn user_pushing_map(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
         });
         __closure
     };
+    bex_aot::telemetry::site(47u32, 0u32);
     bex_aot::depth::probe(0)?;
     _2 = {
         let __callback = &|__arg0: Int63| (_3).call((__arg0,));
@@ -1582,6 +1616,7 @@ pub fn user_throwing_map(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
                 let __closure: func::Func<(Int63,), Int63> = func::alloc(user_throwing_map__lambda0__env {});
                 __closure
             };
+            bex_aot::telemetry::site(49u32, 0u32);
             match bex_aot::depth::probe(0) {
                 Ok(value) => value,
                 Err(error) => {
@@ -1625,6 +1660,7 @@ pub fn user_named_callback(
 ) -> Result<Shared<Vec<Int63>>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<Vec<Int63>>;
+    bex_aot::telemetry::site(51u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &user_square;
@@ -1675,6 +1711,7 @@ pub fn user_with_capture(
         });
         __closure
     };
+    bex_aot::telemetry::site(53u32, 0u32);
     bex_aot::depth::probe(0)?;
     _0 = {
         let __callback = &|__arg0: Int63| (_3).call((__arg0,));
@@ -1722,6 +1759,7 @@ pub fn user_nullable_mapped(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
         let __closure: func::Func<(Int63,), Option<Int63>> = func::alloc(user_nullable_mapped__lambda0__env {});
         __closure
     };
+    bex_aot::telemetry::site(55u32, 0u32);
     bex_aot::depth::probe(0)?;
     _2 = {
         let __callback = &|__arg0: Int63| (_3).call((__arg0,));
@@ -1832,45 +1870,54 @@ pub fn user_render(mut _1: Shared<Vec<Int63>>) -> Result<Str, Thrown> {
     let mut _39: Shared<Vec<Int63>>;
     let mut _41: Str;
     let mut _42: Shared<Vec<Int63>>;
+    bex_aot::telemetry::site(59u32, 0u32);
     _18 = user_doubled(_1.clone())?;
     bex_aot::depth::probe(0)?;
     _17 = bex_aot::render::to_string(&_18)?;
     _16 = string::concat(&_17, &string::from_literal(" "));
+    bex_aot::telemetry::site(59u32, 2u32);
     _21 = user_evens(_1.clone())?;
     bex_aot::depth::probe(0)?;
     _20 = bex_aot::render::to_string(&_21)?;
     _15 = string::concat(&_16, &_20);
     _14 = string::concat(&_15, &string::from_literal(" "));
+    bex_aot::telemetry::site(59u32, 4u32);
     _24 = user_halves(_1.clone())?;
     bex_aot::depth::probe(0)?;
     _23 = bex_aot::render::to_string(&_24)?;
     _13 = string::concat(&_14, &_23);
     _12 = string::concat(&_13, &string::from_literal(" "));
+    bex_aot::telemetry::site(59u32, 6u32);
     _27 = user_pairs(_1.clone())?;
     bex_aot::depth::probe(0)?;
     _26 = bex_aot::render::to_string(&_27)?;
     _11 = string::concat(&_12, &_26);
     _10 = string::concat(&_11, &string::from_literal(" "));
+    bex_aot::telemetry::site(59u32, 8u32);
     _30 = user_sorted_desc(_1.clone())?;
     bex_aot::depth::probe(0)?;
     _29 = bex_aot::render::to_string(&_30)?;
     _9 = string::concat(&_10, &_29);
     _8 = string::concat(&_9, &string::from_literal(" "));
+    bex_aot::telemetry::site(59u32, 10u32);
     _33 = user_sorted_by_abs(_1.clone())?;
     bex_aot::depth::probe(0)?;
     _32 = bex_aot::render::to_string(&_33)?;
     _7 = string::concat(&_8, &_32);
     _6 = string::concat(&_7, &string::from_literal(" "));
+    bex_aot::telemetry::site(59u32, 12u32);
     _36 = user_labels(_1.clone())?;
     bex_aot::depth::probe(0)?;
     _35 = bex_aot::render::to_string(&_36)?;
     _5 = string::concat(&_6, &_35);
     _4 = string::concat(&_5, &string::from_literal(" "));
+    bex_aot::telemetry::site(59u32, 14u32);
     _39 = user_named_callback(_1.clone())?;
     bex_aot::depth::probe(0)?;
     _38 = bex_aot::render::to_string(&_39)?;
     _3 = string::concat(&_4, &_38);
     _2 = string::concat(&_3, &string::from_literal(" "));
+    bex_aot::telemetry::site(59u32, 16u32);
     _42 = user_with_capture(_1.clone(), int::lit(7))?;
     bex_aot::depth::probe(0)?;
     _41 = bex_aot::render::to_string(&_42)?;
@@ -1905,6 +1952,7 @@ pub fn user_render_items(mut _1: Int63) -> Result<Str, Thrown> {
     _2 = array::new::<
         Shared<user_Item>,
     >(Vec::from([_3.clone(), _4.clone(), _5.clone(), _6.clone()]));
+    bex_aot::telemetry::site(60u32, 0u32);
     _0 = user_sorted_by_name(_2.clone())?;
     Ok(_0)
 }
@@ -1967,167 +2015,1386 @@ pub fn user_of(mut _1: Int63) -> Result<Shared<Vec<Int63>>, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.suite`.
+#[inline(never)]
 pub fn user_suite(mut _1: Int63) -> Result<Str, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Str;
-    let mut _2: Shared<Vec<Int63>>;
-    let mut _3: Str;
-    let mut _4: Str;
-    let mut _5: Str;
-    let mut _6: Str;
-    let mut _7: Str;
-    let mut _8: Str;
-    let mut _9: Str;
-    let mut _10: Str;
-    let mut _11: Str;
-    let mut _12: Str;
-    let mut _13: Str;
-    let mut _14: Str;
-    let mut _15: Str;
-    let mut _16: Str;
-    let mut _17: Str;
-    let mut _18: Str;
-    let mut _19: Str;
-    let mut _20: Str;
-    let mut _21: Str;
-    let mut _22: Str;
-    let mut _23: Str;
-    let mut _24: Str;
-    let mut _25: Str;
-    let mut _26: Str;
-    let mut _27: Str;
-    let mut _28: Str;
-    let mut _29: Str;
-    let mut _30: Str;
-    let mut _31: Str;
-    let mut _32: Str;
-    let mut _33: Str;
-    let mut _34: Str;
-    let mut _35: Str;
-    let mut _36: Str;
-    let mut _37: Str;
-    let mut _38: Str;
-    let mut _40: Str;
-    let mut _41: Int63;
-    let mut _44: Str;
-    let mut _46: Str;
-    let mut _47: Int63;
-    let mut _50: Str;
-    let mut _51: bool;
-    let mut _54: Str;
-    let mut _55: bool;
-    let mut _58: Str;
-    let mut _59: Option<Int63>;
-    let mut _61: Str;
-    let mut _62: Option<Int63>;
-    let mut _64: Str;
-    let mut _65: Option<Int63>;
-    let mut _67: Str;
-    let mut _68: Option<Int63>;
-    let mut _70: Str;
-    let mut _71: Int63;
-    let mut _72: Shared<Vec<Int63>>;
-    let mut _74: Str;
-    let mut _75: Shared<Vec<Int63>>;
-    let mut _76: Str;
-    let mut _77: Shared<Vec<Int63>>;
-    let mut _78: Str;
-    let mut _79: Shared<Vec<Int63>>;
-    let mut _80: Str;
-    let mut _81: Shared<Vec<Int63>>;
-    let mut _82: Str;
-    let mut _83: Shared<Vec<Int63>>;
-    let mut _84: Str;
-    let mut _85: Shared<Vec<Int63>>;
-    let mut _86: Str;
-    let mut _87: Int63;
-    let mut _88: Shared<Vec<Int63>>;
-    let mut _90: Str;
-    let mut _91: Shared<Vec<Int63>>;
-    _2 = user_of(_1)?;
-    _38 = user_render(_2.clone())?;
-    _37 = string::concat(&_38, &string::from_literal(" | "));
-    _41 = user_total(_2.clone())?;
-    bex_aot::depth::probe(0)?;
-    _40 = bex_aot::render::to_string(&_41)?;
-    _36 = string::concat(&_37, &_40);
-    _35 = string::concat(&_36, &string::from_literal(" "));
-    _44 = user_joined(_2.clone())?;
-    _34 = string::concat(&_35, &_44);
-    _33 = string::concat(&_34, &string::from_literal(" "));
-    _47 = user_summed(_2.clone())?;
-    bex_aot::depth::probe(0)?;
-    _46 = bex_aot::render::to_string(&_47)?;
-    _32 = string::concat(&_33, &_46);
-    _31 = string::concat(&_32, &string::from_literal(" "));
-    _51 = user_any_big(_2.clone(), int::lit(3))?;
-    bex_aot::depth::probe(0)?;
-    _50 = bex_aot::render::to_string(&_51)?;
-    _30 = string::concat(&_31, &_50);
-    _29 = string::concat(&_30, &string::from_literal(" "));
-    _55 = user_all_big(_2.clone(), int::lit(0))?;
-    bex_aot::depth::probe(0)?;
-    _54 = bex_aot::render::to_string(&_55)?;
-    _28 = string::concat(&_29, &_54);
-    _27 = string::concat(&_28, &string::from_literal(" "));
-    _59 = user_first_big(_2.clone(), int::lit(3))?;
-    bex_aot::depth::probe(0)?;
-    _58 = bex_aot::render::to_string(&_59)?;
-    _26 = string::concat(&_27, &_58);
-    _25 = string::concat(&_26, &string::from_literal(" "));
-    _62 = user_first_big_at(_2.clone(), int::lit(3))?;
-    bex_aot::depth::probe(0)?;
-    _61 = bex_aot::render::to_string(&_62)?;
-    _24 = string::concat(&_25, &_61);
-    _23 = string::concat(&_24, &string::from_literal(" "));
-    _65 = user_last_big(_2.clone(), int::lit(3))?;
-    bex_aot::depth::probe(0)?;
-    _64 = bex_aot::render::to_string(&_65)?;
-    _22 = string::concat(&_23, &_64);
-    _21 = string::concat(&_22, &string::from_literal(" "));
-    _68 = user_last_big_at(_2.clone(), int::lit(3))?;
-    bex_aot::depth::probe(0)?;
-    _67 = bex_aot::render::to_string(&_68)?;
-    _20 = string::concat(&_21, &_67);
-    _19 = string::concat(&_20, &string::from_literal(" "));
-    _72 = user_of(_1)?;
-    _71 = user_comparisons(_72.clone())?;
-    bex_aot::depth::probe(0)?;
-    _70 = bex_aot::render::to_string(&_71)?;
-    _18 = string::concat(&_19, &_70);
-    _17 = string::concat(&_18, &string::from_literal(" "));
-    _75 = user_of(_1)?;
-    _74 = user_comparison_log(_75.clone())?;
-    _16 = string::concat(&_17, &_74);
-    _15 = string::concat(&_16, &string::from_literal(" | "));
-    _77 = user_of(_1)?;
-    _76 = user_throwing_comparator(_77.clone())?;
-    _14 = string::concat(&_15, &_76);
-    _13 = string::concat(&_14, &string::from_literal(" | "));
-    _79 = user_of(_1)?;
-    _78 = user_mutating_comparator(_79.clone())?;
-    _12 = string::concat(&_13, &_78);
-    _11 = string::concat(&_12, &string::from_literal(" | "));
-    _81 = user_of(_1)?;
-    _80 = user_reading_comparator(_81.clone())?;
-    _10 = string::concat(&_11, &_80);
-    _9 = string::concat(&_10, &string::from_literal(" | "));
-    _83 = user_of(_1)?;
-    _82 = user_throwing_key(_83.clone())?;
-    _8 = string::concat(&_9, &_82);
-    _7 = string::concat(&_8, &string::from_literal(" | "));
-    _85 = user_of(_1)?;
-    _84 = user_pushing_map(_85.clone())?;
-    _6 = string::concat(&_7, &_84);
-    _5 = string::concat(&_6, &string::from_literal(" "));
-    _88 = user_of(_1)?;
-    _87 = user_throwing_map(_88.clone())?;
-    bex_aot::depth::probe(0)?;
-    _86 = bex_aot::render::to_string(&_87)?;
-    _4 = string::concat(&_5, &_86);
-    _3 = string::concat(&_4, &string::from_literal(" "));
-    _91 = user_of(_1)?;
-    _90 = user_nullable_mapped(_91.clone())?;
-    _0 = string::concat(&_3, &_90);
-    Ok(_0)
+    let __telemetry = bex_aot::telemetry::enter(62u32);
+    let __result = (move || -> Result<Str, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Str;
+        let mut _2: Shared<Vec<Int63>>;
+        let mut _3: Str;
+        let mut _4: Str;
+        let mut _5: Str;
+        let mut _6: Str;
+        let mut _7: Str;
+        let mut _8: Str;
+        let mut _9: Str;
+        let mut _10: Str;
+        let mut _11: Str;
+        let mut _12: Str;
+        let mut _13: Str;
+        let mut _14: Str;
+        let mut _15: Str;
+        let mut _16: Str;
+        let mut _17: Str;
+        let mut _18: Str;
+        let mut _19: Str;
+        let mut _20: Str;
+        let mut _21: Str;
+        let mut _22: Str;
+        let mut _23: Str;
+        let mut _24: Str;
+        let mut _25: Str;
+        let mut _26: Str;
+        let mut _27: Str;
+        let mut _28: Str;
+        let mut _29: Str;
+        let mut _30: Str;
+        let mut _31: Str;
+        let mut _32: Str;
+        let mut _33: Str;
+        let mut _34: Str;
+        let mut _35: Str;
+        let mut _36: Str;
+        let mut _37: Str;
+        let mut _38: Str;
+        let mut _40: Str;
+        let mut _41: Int63;
+        let mut _44: Str;
+        let mut _46: Str;
+        let mut _47: Int63;
+        let mut _50: Str;
+        let mut _51: bool;
+        let mut _54: Str;
+        let mut _55: bool;
+        let mut _58: Str;
+        let mut _59: Option<Int63>;
+        let mut _61: Str;
+        let mut _62: Option<Int63>;
+        let mut _64: Str;
+        let mut _65: Option<Int63>;
+        let mut _67: Str;
+        let mut _68: Option<Int63>;
+        let mut _70: Str;
+        let mut _71: Int63;
+        let mut _72: Shared<Vec<Int63>>;
+        let mut _74: Str;
+        let mut _75: Shared<Vec<Int63>>;
+        let mut _76: Str;
+        let mut _77: Shared<Vec<Int63>>;
+        let mut _78: Str;
+        let mut _79: Shared<Vec<Int63>>;
+        let mut _80: Str;
+        let mut _81: Shared<Vec<Int63>>;
+        let mut _82: Str;
+        let mut _83: Shared<Vec<Int63>>;
+        let mut _84: Str;
+        let mut _85: Shared<Vec<Int63>>;
+        let mut _86: Str;
+        let mut _87: Int63;
+        let mut _88: Shared<Vec<Int63>>;
+        let mut _90: Str;
+        let mut _91: Shared<Vec<Int63>>;
+        bex_aot::telemetry::site(62u32, 0u32);
+        _2 = user_of(_1)?;
+        bex_aot::telemetry::site(62u32, 1u32);
+        _38 = user_render(_2.clone())?;
+        _37 = string::concat(&_38, &string::from_literal(" | "));
+        bex_aot::telemetry::site(62u32, 2u32);
+        _41 = user_total(_2.clone())?;
+        bex_aot::depth::probe(0)?;
+        _40 = bex_aot::render::to_string(&_41)?;
+        _36 = string::concat(&_37, &_40);
+        _35 = string::concat(&_36, &string::from_literal(" "));
+        bex_aot::telemetry::site(62u32, 4u32);
+        _44 = user_joined(_2.clone())?;
+        _34 = string::concat(&_35, &_44);
+        _33 = string::concat(&_34, &string::from_literal(" "));
+        bex_aot::telemetry::site(62u32, 5u32);
+        _47 = user_summed(_2.clone())?;
+        bex_aot::depth::probe(0)?;
+        _46 = bex_aot::render::to_string(&_47)?;
+        _32 = string::concat(&_33, &_46);
+        _31 = string::concat(&_32, &string::from_literal(" "));
+        bex_aot::telemetry::site(62u32, 7u32);
+        _51 = user_any_big(_2.clone(), int::lit(3))?;
+        bex_aot::depth::probe(0)?;
+        _50 = bex_aot::render::to_string(&_51)?;
+        _30 = string::concat(&_31, &_50);
+        _29 = string::concat(&_30, &string::from_literal(" "));
+        bex_aot::telemetry::site(62u32, 9u32);
+        _55 = user_all_big(_2.clone(), int::lit(0))?;
+        bex_aot::depth::probe(0)?;
+        _54 = bex_aot::render::to_string(&_55)?;
+        _28 = string::concat(&_29, &_54);
+        _27 = string::concat(&_28, &string::from_literal(" "));
+        bex_aot::telemetry::site(62u32, 11u32);
+        _59 = user_first_big(_2.clone(), int::lit(3))?;
+        bex_aot::depth::probe(0)?;
+        _58 = bex_aot::render::to_string(&_59)?;
+        _26 = string::concat(&_27, &_58);
+        _25 = string::concat(&_26, &string::from_literal(" "));
+        bex_aot::telemetry::site(62u32, 13u32);
+        _62 = user_first_big_at(_2.clone(), int::lit(3))?;
+        bex_aot::depth::probe(0)?;
+        _61 = bex_aot::render::to_string(&_62)?;
+        _24 = string::concat(&_25, &_61);
+        _23 = string::concat(&_24, &string::from_literal(" "));
+        bex_aot::telemetry::site(62u32, 15u32);
+        _65 = user_last_big(_2.clone(), int::lit(3))?;
+        bex_aot::depth::probe(0)?;
+        _64 = bex_aot::render::to_string(&_65)?;
+        _22 = string::concat(&_23, &_64);
+        _21 = string::concat(&_22, &string::from_literal(" "));
+        bex_aot::telemetry::site(62u32, 17u32);
+        _68 = user_last_big_at(_2.clone(), int::lit(3))?;
+        bex_aot::depth::probe(0)?;
+        _67 = bex_aot::render::to_string(&_68)?;
+        _20 = string::concat(&_21, &_67);
+        _19 = string::concat(&_20, &string::from_literal(" "));
+        bex_aot::telemetry::site(62u32, 19u32);
+        _72 = user_of(_1)?;
+        bex_aot::telemetry::site(62u32, 20u32);
+        _71 = user_comparisons(_72.clone())?;
+        bex_aot::depth::probe(0)?;
+        _70 = bex_aot::render::to_string(&_71)?;
+        _18 = string::concat(&_19, &_70);
+        _17 = string::concat(&_18, &string::from_literal(" "));
+        bex_aot::telemetry::site(62u32, 22u32);
+        _75 = user_of(_1)?;
+        bex_aot::telemetry::site(62u32, 23u32);
+        _74 = user_comparison_log(_75.clone())?;
+        _16 = string::concat(&_17, &_74);
+        _15 = string::concat(&_16, &string::from_literal(" | "));
+        bex_aot::telemetry::site(62u32, 24u32);
+        _77 = user_of(_1)?;
+        bex_aot::telemetry::site(62u32, 25u32);
+        _76 = user_throwing_comparator(_77.clone())?;
+        _14 = string::concat(&_15, &_76);
+        _13 = string::concat(&_14, &string::from_literal(" | "));
+        bex_aot::telemetry::site(62u32, 26u32);
+        _79 = user_of(_1)?;
+        bex_aot::telemetry::site(62u32, 27u32);
+        _78 = user_mutating_comparator(_79.clone())?;
+        _12 = string::concat(&_13, &_78);
+        _11 = string::concat(&_12, &string::from_literal(" | "));
+        bex_aot::telemetry::site(62u32, 28u32);
+        _81 = user_of(_1)?;
+        bex_aot::telemetry::site(62u32, 29u32);
+        _80 = user_reading_comparator(_81.clone())?;
+        _10 = string::concat(&_11, &_80);
+        _9 = string::concat(&_10, &string::from_literal(" | "));
+        bex_aot::telemetry::site(62u32, 30u32);
+        _83 = user_of(_1)?;
+        bex_aot::telemetry::site(62u32, 31u32);
+        _82 = user_throwing_key(_83.clone())?;
+        _8 = string::concat(&_9, &_82);
+        _7 = string::concat(&_8, &string::from_literal(" | "));
+        bex_aot::telemetry::site(62u32, 32u32);
+        _85 = user_of(_1)?;
+        bex_aot::telemetry::site(62u32, 33u32);
+        _84 = user_pushing_map(_85.clone())?;
+        _6 = string::concat(&_7, &_84);
+        _5 = string::concat(&_6, &string::from_literal(" "));
+        bex_aot::telemetry::site(62u32, 34u32);
+        _88 = user_of(_1)?;
+        bex_aot::telemetry::site(62u32, 35u32);
+        _87 = user_throwing_map(_88.clone())?;
+        bex_aot::depth::probe(0)?;
+        _86 = bex_aot::render::to_string(&_87)?;
+        _4 = string::concat(&_5, &_86);
+        _3 = string::concat(&_4, &string::from_literal(" "));
+        bex_aot::telemetry::site(62u32, 37u32);
+        _91 = user_of(_1)?;
+        bex_aot::telemetry::site(62u32, 38u32);
+        _90 = user_nullable_mapped(_91.clone())?;
+        _0 = string::concat(&_3, &_90);
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(doubled, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 211u32,
+        end: 236u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.doubled",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 161u32,
+        end: 239u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 204u32,
+                end: 237u32,
+                line: 7u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(labels, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 293u32,
+        end: 335u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 320u32,
+                end: 333u32,
+                line: 11u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.labels",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 241u32,
+        end: 338u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 286u32,
+                end: 336u32,
+                line: 11u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(evens, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 391u32,
+        end: 422u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.evens",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 340u32,
+        end: 425u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 381u32,
+                end: 423u32,
+                line: 15u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(halves, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 483u32,
+        end: 549u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.halves",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 427u32,
+        end: 552u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 469u32,
+                end: 550u32,
+                line: 19u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(total, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 603u32,
+        end: 640u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.total",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 554u32,
+        end: 646u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 593u32,
+                end: 644u32,
+                line: 23u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(joined, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 701u32,
+        end: 762u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 741u32,
+                end: 754u32,
+                line: 27u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.joined",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 648u32,
+        end: 770u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 691u32,
+                end: 768u32,
+                line: 27u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(summed, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 841u32,
+        end: 876u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.summed",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 772u32,
+        end: 888u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 829u32,
+                end: 877u32,
+                line: 32u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(any_big, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 952u32,
+        end: 982u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.any_big",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 890u32,
+        end: 985u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 944u32,
+                end: 983u32,
+                line: 37u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(all_big, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1050u32,
+        end: 1080u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.all_big",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 987u32,
+        end: 1083u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1041u32,
+                end: 1081u32,
+                line: 41u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(first_big, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1155u32,
+        end: 1185u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.first_big",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1085u32,
+        end: 1188u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1147u32,
+                end: 1186u32,
+                line: 45u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(first_big_at, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1269u32,
+        end: 1299u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.first_big_at",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1190u32,
+        end: 1302u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1255u32,
+                end: 1300u32,
+                line: 49u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(last_big, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1378u32,
+        end: 1408u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.last_big",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1304u32,
+        end: 1411u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1365u32,
+                end: 1409u32,
+                line: 53u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(last_big_at, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1496u32,
+        end: 1526u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.last_big_at",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1413u32,
+        end: 1529u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1477u32,
+                end: 1527u32,
+                line: 57u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(pairs, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1584u32,
+        end: 1617u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.pairs",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1531u32,
+        end: 1620u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1572u32,
+                end: 1618u32,
+                line: 61u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(sorted_desc, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1680u32,
+        end: 1730u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1720u32,
+                end: 1728u32,
+                line: 65u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.sorted_desc",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1622u32,
+        end: 1733u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1669u32,
+                end: 1731u32,
+                line: 65u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(sorted_by_abs, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1799u32,
+        end: 1847u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.sorted_by_abs",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1735u32,
+        end: 1850u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1784u32,
+                end: 1848u32,
+                line: 69u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(sorted_by_name, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1925u32,
+        end: 1961u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.sorted_by_name",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1852u32,
+        end: 2084u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1907u32,
+                end: 1962u32,
+                line: 73u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1986u32,
+                end: 2074u32,
+                line: 75u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2042u32,
+                end: 2065u32,
+                line: 75u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(comparisons, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2161u32,
+        end: 2230u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2220u32,
+                end: 2228u32,
+                line: 81u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.comparisons",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2086u32,
+        end: 2244u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2150u32,
+                end: 2231u32,
+                line: 81u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(comparison_log, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2326u32,
+        end: 2451u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2386u32,
+                end: 2399u32,
+                line: 88u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2408u32,
+                end: 2421u32,
+                line: 88u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2437u32,
+                end: 2445u32,
+                line: 89u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.comparison_log",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2246u32,
+        end: 2463u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2315u32,
+                end: 2452u32,
+                line: 87u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(throwing_comparator, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2563u32,
+        end: 2746u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2732u32,
+                end: 2740u32,
+                line: 99u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.throwing_comparator",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2465u32,
+        end: 2851u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2552u32,
+                end: 2747u32,
+                line: 96u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2800u32,
+                end: 2818u32,
+                line: 101u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2833u32,
+                end: 2849u32,
+                line: 101u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(mutating_comparator, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2920u32,
+        end: 2983u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2960u32,
+                end: 2971u32,
+                line: 105u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2973u32,
+                end: 2981u32,
+                line: 105u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.mutating_comparator",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2853u32,
+        end: 3006u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2909u32,
+                end: 2984u32,
+                line: 105u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2990u32,
+                end: 3004u32,
+                line: 106u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(reading_comparator, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3093u32,
+        end: 3176u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3147u32,
+                end: 3164u32,
+                line: 111u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3166u32,
+                end: 3174u32,
+                line: 111u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.reading_comparator",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3008u32,
+        end: 3216u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3082u32,
+                end: 3177u32,
+                line: 111u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3183u32,
+                end: 3197u32,
+                line: 112u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(throwing_key, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3295u32,
+        end: 3356u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.throwing_key",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3218u32,
+        end: 3438u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3280u32,
+                end: 3357u32,
+                line: 116u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3418u32,
+                end: 3436u32,
+                line: 118u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(pushing_map, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3504u32,
+        end: 3537u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3522u32,
+                end: 3532u32,
+                line: 122u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.pushing_map",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3440u32,
+        end: 3583u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3497u32,
+                end: 3538u32,
+                line: 122u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3544u32,
+                end: 3558u32,
+                line: 123u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3567u32,
+                end: 3581u32,
+                line: 123u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(throwing_map, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3638u32,
+        end: 3698u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.throwing_map",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3585u32,
+        end: 3765u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3631u32,
+                end: 3699u32,
+                line: 127u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.square",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3835u32,
+        end: 3875u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.named_callback",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3767u32,
+        end: 3833u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3817u32,
+                end: 3831u32,
+                line: 132u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(with_capture, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3940u32,
+        end: 3965u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.with_capture",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3877u32,
+        end: 3968u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3933u32,
+                end: 3966u32,
+                line: 138u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(nullable_mapped, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 4029u32,
+        end: 4086u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.nullable_mapped",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3970u32,
+        end: 4101u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 4022u32,
+                end: 4087u32,
+                line: 142u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4022u32,
+                end: 4099u32,
+                line: 142u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.cmp_ints",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 4103u32,
+        end: 4303u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 4160u32,
+                end: 4168u32,
+                line: 146u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.cmp_floats",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 4305u32,
+        end: 4395u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 4359u32,
+                end: 4367u32,
+                line: 154u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4359u32,
+                end: 4393u32,
+                line: 154u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.cmp_strings",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 4397u32,
+        end: 4493u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 4454u32,
+                end: 4462u32,
+                line: 158u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4454u32,
+                end: 4491u32,
+                line: 158u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.render",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 4495u32,
+        end: 4862u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 4538u32,
+                end: 4549u32,
+                line: 162u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4538u32,
+                end: 4561u32,
+                line: 162u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4570u32,
+                end: 4579u32,
+                line: 162u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4570u32,
+                end: 4591u32,
+                line: 162u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4600u32,
+                end: 4610u32,
+                line: 162u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4600u32,
+                end: 4622u32,
+                line: 162u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4639u32,
+                end: 4648u32,
+                line: 163u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4639u32,
+                end: 4660u32,
+                line: 163u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4669u32,
+                end: 4684u32,
+                line: 163u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4669u32,
+                end: 4696u32,
+                line: 163u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4713u32,
+                end: 4730u32,
+                line: 164u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4713u32,
+                end: 4742u32,
+                line: 164u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4751u32,
+                end: 4761u32,
+                line: 164u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4751u32,
+                end: 4773u32,
+                line: 164u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4790u32,
+                end: 4808u32,
+                line: 165u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4790u32,
+                end: 4820u32,
+                line: 165u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4829u32,
+                end: 4848u32,
+                line: 165u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4829u32,
+                end: 4860u32,
+                line: 165u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.render_items",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 4864u32,
+        end: 5065u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 4910u32,
+                end: 5063u32,
+                line: 169u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.of",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 5067u32,
+        end: 5220u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.suite",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 5222u32,
+        end: 5970u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 5270u32,
+                end: 5275u32,
+                line: 177u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5281u32,
+                end: 5291u32,
+                line: 178u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5302u32,
+                end: 5311u32,
+                line: 178u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5302u32,
+                end: 5323u32,
+                line: 178u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5332u32,
+                end: 5342u32,
+                line: 178u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5351u32,
+                end: 5361u32,
+                line: 178u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5351u32,
+                end: 5373u32,
+                line: 178u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5390u32,
+                end: 5404u32,
+                line: 179u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5390u32,
+                end: 5416u32,
+                line: 179u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5425u32,
+                end: 5439u32,
+                line: 179u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5425u32,
+                end: 5451u32,
+                line: 179u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5468u32,
+                end: 5484u32,
+                line: 180u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5468u32,
+                end: 5496u32,
+                line: 180u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5505u32,
+                end: 5524u32,
+                line: 180u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5505u32,
+                end: 5536u32,
+                line: 180u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5553u32,
+                end: 5568u32,
+                line: 181u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5553u32,
+                end: 5580u32,
+                line: 181u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5589u32,
+                end: 5607u32,
+                line: 181u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5589u32,
+                end: 5619u32,
+                line: 181u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5648u32,
+                end: 5653u32,
+                line: 182u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5636u32,
+                end: 5654u32,
+                line: 182u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5636u32,
+                end: 5666u32,
+                line: 182u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5690u32,
+                end: 5695u32,
+                line: 182u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5675u32,
+                end: 5696u32,
+                line: 182u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5735u32,
+                end: 5740u32,
+                line: 183u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5715u32,
+                end: 5741u32,
+                line: 183u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5772u32,
+                end: 5777u32,
+                line: 183u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5752u32,
+                end: 5778u32,
+                line: 183u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5816u32,
+                end: 5821u32,
+                line: 184u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5797u32,
+                end: 5822u32,
+                line: 184u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5846u32,
+                end: 5851u32,
+                line: 184u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5833u32,
+                end: 5852u32,
+                line: 184u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5883u32,
+                end: 5888u32,
+                line: 185u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5871u32,
+                end: 5889u32,
+                line: 185u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5911u32,
+                end: 5916u32,
+                line: 185u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5898u32,
+                end: 5917u32,
+                line: 185u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5898u32,
+                end: 5929u32,
+                line: 185u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5962u32,
+                end: 5967u32,
+                line: 186u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 5946u32,
+                end: 5968u32,
+                line: 186u32,
+            },
+        ],
+    },
+];

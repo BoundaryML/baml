@@ -993,12 +993,15 @@ pub fn user_overridden(mut _1: Int63) -> Result<bool, Thrown> {
     _18 = shared(user_Cents {
         amount: int::lit(199),
     });
+    bex_aot::telemetry::site(8u32, 0u32);
     bex_aot::depth::probe(0)?;
     _16 = bex_aot::eq::equals(&_17.clone(), &_18.clone())?;
+    bex_aot::telemetry::site(8u32, 1u32);
     bex_aot::depth::probe(0)?;
     _22 = bex_aot::eq::equals(&_2.clone(), &_7.clone())?;
     'bb5: {
         if _22 {
+            bex_aot::telemetry::site(8u32, 2u32);
             bex_aot::depth::probe(0)?;
             _25 = bex_aot::eq::equals(&_2.clone(), &_11.clone())?;
             _21 = !_25;
@@ -1049,6 +1052,7 @@ pub fn user_enums(mut _1: Int63) -> Result<bool, Thrown> {
         _8 = _1 > int::lit(0);
         _5 = _6 == _8;
         if _5 {
+            bex_aot::telemetry::site(9u32, 1u32);
             bex_aot::depth::probe(0)?;
             _4 = bex_aot::eq::equals(&user_Loose::A, &user_Loose::B)?;
             break 'bb6;
@@ -1097,14 +1101,273 @@ pub fn user_deep_eq(mut _1: Int63) -> Result<bool, Thrown> {
         if _2 {
             _3 = shared(user_Cents { amount: int::lit(1) });
             _4 = shared(user_Cents { amount: int::lit(2) });
+            bex_aot::telemetry::site(11u32, 1u32);
             bex_aot::depth::probe(0)?;
             _0 = bex_aot::eq::equals(&_3.clone(), &_4.clone())?;
             break 'bb3;
         } else {
             _5 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(11u32, 0u32);
             _0 = user_deep_eq(_5)?;
             break 'bb3;
         }
     }
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.<(user.Cents as baml.ops.Equals)>.eq",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 581u32,
+        end: 676u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.<(user.Loose as baml.ops.Equals)>.eq",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 825u32,
+        end: 886u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.same_object",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 890u32,
+        end: 992u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 984u32,
+                end: 990u32,
+                line: 28u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.structural",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 994u32,
+        end: 1128u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1120u32,
+                end: 1126u32,
+                line: 34u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.differing",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1130u32,
+        end: 1225u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1171u32,
+                end: 1223u32,
+                line: 38u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.nested",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1227u32,
+        end: 1742u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1358u32,
+                end: 1368u32,
+                line: 42u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1469u32,
+                end: 1479u32,
+                line: 43u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1575u32,
+                end: 1585u32,
+                line: 44u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1686u32,
+                end: 1700u32,
+                line: 45u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1708u32,
+                end: 1714u32,
+                line: 46u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1720u32,
+                end: 1726u32,
+                line: 46u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1733u32,
+                end: 1739u32,
+                line: 46u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.arrays_and_maps",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1744u32,
+        end: 1986u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1848u32,
+                end: 1866u32,
+                line: 52u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1881u32,
+                end: 1899u32,
+                line: 53u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1914u32,
+                end: 1924u32,
+                line: 54u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1930u32,
+                end: 1938u32,
+                line: 55u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1944u32,
+                end: 1956u32,
+                line: 55u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1961u32,
+                end: 1969u32,
+                line: 55u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1975u32,
+                end: 1983u32,
+                line: 55u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.cyclic",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1988u32,
+        end: 2216u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2195u32,
+                end: 2201u32,
+                line: 65u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2207u32,
+                end: 2213u32,
+                line: 65u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.overridden",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2218u32,
+        end: 2643u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2554u32,
+                end: 2600u32,
+                line: 72u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2607u32,
+                end: 2615u32,
+                line: 73u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2622u32,
+                end: 2630u32,
+                line: 73u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.enums",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2645u32,
+        end: 2796u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2744u32,
+                end: 2760u32,
+                line: 78u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2776u32,
+                end: 2794u32,
+                line: 78u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.unions",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2798u32,
+        end: 2968u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2960u32,
+                end: 2966u32,
+                line: 84u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.deep_eq",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2970u32,
+        end: 3093u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3075u32,
+                end: 3089u32,
+                line: 88u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3023u32,
+                end: 3065u32,
+                line: 88u32,
+            },
+        ],
+    },
+];

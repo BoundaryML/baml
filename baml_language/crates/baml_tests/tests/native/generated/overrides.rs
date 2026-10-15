@@ -334,6 +334,7 @@ pub fn user_top(mut _1: Int63) -> Result<Str, Thrown> {
         name: _3.clone(),
         seen: _6.clone(),
     });
+    bex_aot::telemetry::site(1u32, 1u32);
     _8 = user___user_Tag_as_baml_ToString___to_string(_2.clone())?;
     _7 = string::concat(&_8, &string::from_literal("|"));
     _10 = array::len(&_2.borrow().seen);
@@ -409,6 +410,7 @@ pub fn user_nested(mut _1: Int63) -> Result<Str, Thrown> {
         by_name: _12.clone(),
         maybe: _16.clone(),
     });
+    bex_aot::telemetry::site(3u32, 1u32);
     bex_aot::depth::probe(0)?;
     _21 = bex_aot::render::to_string(&_6)?;
     _20 = string::concat(&_21, &string::from_literal("|"));
@@ -440,6 +442,7 @@ pub fn user_in_array(mut _1: Int63) -> Result<Str, Thrown> {
         seen: _3.clone(),
     });
     _6 = array::new::<Shared<user_Tag>>(Vec::from([_2.clone(), _2.clone()]));
+    bex_aot::telemetry::site(4u32, 0u32);
     bex_aot::depth::probe(0)?;
     _5 = bex_aot::render::to_string(&_6)?;
     _4 = string::concat(&_5, &string::from_literal("|"));
@@ -469,6 +472,7 @@ pub fn user_deep_override(mut _1: Int63) -> Result<Int63, Thrown> {
                 seen: _6.clone(),
             });
             _4 = array::new::<Shared<user_Tag>>(Vec::from([_5.clone()]));
+            bex_aot::telemetry::site(5u32, 1u32);
             bex_aot::depth::probe(0)?;
             _3 = bex_aot::render::to_string(&_4)?;
             bex_aot::depth::probe(1)?;
@@ -476,6 +480,7 @@ pub fn user_deep_override(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb5;
         } else {
             _8 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(5u32, 0u32);
             _7 = user_deep_override(_8)?;
             _0 = int::add(_7, int::lit(1))?;
             break 'bb5;
@@ -483,3 +488,137 @@ pub fn user_deep_override(mut _1: Int63) -> Result<Int63, Thrown> {
     }
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.<(user.Tag as baml.ToString)>.to_string",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 457u32,
+        end: 598u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 519u32,
+                end: 553u32,
+                line: 12u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.top",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 858u32,
+        end: 1003u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 921u32,
+                end: 934u32,
+                line: 33u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 952u32,
+                end: 965u32,
+                line: 34u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 974u32,
+                end: 1001u32,
+                line: 34u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.plain",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1005u32,
+        end: 1072u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1044u32,
+                end: 1070u32,
+                line: 38u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.nested",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1074u32,
+        end: 1463u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1306u32,
+                end: 1316u32,
+                line: 48u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1376u32,
+                end: 1389u32,
+                line: 51u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1398u32,
+                end: 1425u32,
+                line: 51u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1434u32,
+                end: 1461u32,
+                line: 51u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.in_array",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1465u32,
+        end: 1595u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1548u32,
+                end: 1566u32,
+                line: 56u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1575u32,
+                end: 1593u32,
+                line: 56u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.deep_override",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1597u32,
+        end: 1743u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1715u32,
+                end: 1735u32,
+                line: 60u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1655u32,
+                end: 1696u32,
+                line: 60u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1655u32,
+                end: 1705u32,
+                line: 60u32,
+            },
+        ],
+    },
+];

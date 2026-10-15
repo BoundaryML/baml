@@ -60,6 +60,7 @@ const HEADER: &str = "\
 
 /// Render every enum, class and candidate as one Rust module. `names` gives
 /// each function's Rust identifier, callees included.
+#[expect(clippy::too_many_arguments)]
 pub(crate) fn render_module<'db>(
     classes: &[&ClassInfo<'db>],
     enums: &[&EnumInfo<'db>],
@@ -68,6 +69,7 @@ pub(crate) fn render_module<'db>(
     candidates: &[Candidate<'db>],
     names: &FxHashMap<FnId<'db>, Ident>,
     types: &Types<'_, 'db>,
+    telemetry: &crate::telemetry::Plan<'db>,
 ) -> Result<(String, AllocSites), Rejection> {
     let table = types.classes;
     let mut items = quote! {
@@ -92,8 +94,9 @@ pub(crate) fn render_module<'db>(
     }
     let sites = Cell::new(AllocSites::default());
     for candidate in candidates {
-        items.extend(Printer::new(candidate, names, types, &sites).function()?);
+        items.extend(Printer::new(candidate, names, types, &sites, telemetry).function()?);
     }
+    items.extend(telemetry.render());
     Ok((render_rust_file(HEADER, items)?, sites.get()))
 }
 
@@ -633,6 +636,9 @@ struct Printer<'a, 'db> {
     types: &'a Types<'a, 'db>,
     /// The allocation sites printed so far, by kind.
     sites: &'a Cell<AllocSites>,
+    /// The program's telemetry table: this function's index, whether it is
+    /// observed, and its call sites.
+    telemetry: &'a crate::telemetry::Plan<'db>,
     /// Blocks that head a loop, whose merge label (if any) needs its own name.
     loop_headers: FxHashSet<usize>,
     /// The unwind site of the block whose code is being printed, if it has a
@@ -647,6 +653,7 @@ impl<'a, 'db> Printer<'a, 'db> {
         names: &'a FxHashMap<FnId<'db>, Ident>,
         types: &'a Types<'a, 'db>,
         sites: &'a Cell<AllocSites>,
+        telemetry: &'a crate::telemetry::Plan<'db>,
     ) -> Self {
         let mut loop_headers = FxHashSet::default();
         collect_loop_headers(&candidate.structured, &mut loop_headers);
@@ -656,6 +663,7 @@ impl<'a, 'db> Printer<'a, 'db> {
             classes: types.classes,
             types,
             sites,
+            telemetry,
             loop_headers,
             unwind: RefCell::new(None),
         }
@@ -876,14 +884,34 @@ impl<'a, 'db> Printer<'a, 'db> {
         } else {
             TokenStream::new()
         };
+        let body = quote! {
+            #guard
+            #(#celled_params)*
+            #(#locals)*
+            #(#body)*
+        };
+        // An observed function is a real call, entered and exited around its
+        // body, whatever way the body leaves; a folded one is just its body.
+        let (index, observed) = self.telemetry.function(&candidate.id)?;
+        let (inline, body) = if observed {
+            (
+                quote! { #[inline(never)] },
+                quote! {
+                    let __telemetry = bex_aot::telemetry::enter(#index);
+                    let __result = (move || -> Result<#ret, Thrown> { #body })();
+                    __telemetry.exit(&__result);
+                    __result
+                },
+            )
+        } else {
+            (TokenStream::new(), body)
+        };
         Ok(quote! {
             #env
             #[doc = #doc]
+            #inline
             pub fn #name(#(#captures,)* #(#params),*) -> Result<#ret, Thrown> {
-                #guard
-                #(#celled_params)*
-                #(#locals)*
-                #(#body)*
+                #body
             }
         })
     }
@@ -1323,6 +1351,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                     .candidate
                     .call(block)
                     .ok_or_else(|| Rejection::invalid(format!("{block} call was not analyzed")))?;
+                lines.extend(self.call_site(block, call)?);
                 lines.push(self.call(block, call, &args[*ntypeargs..], destination)?);
             }
             Terminator::VirtualCall {
@@ -1335,6 +1364,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                     .candidate
                     .call(block)
                     .ok_or_else(|| Rejection::invalid(format!("{block} call was not analyzed")))?;
+                lines.extend(self.call_site(block, call)?);
                 lines.push(self.call(block, call, &args[*ntypeargs..], destination)?);
             }
             // The guard in front of a wildcard `catch` arm: a panic is not
@@ -1349,6 +1379,27 @@ impl<'a, 'db> Printer<'a, 'db> {
             _ => {}
         }
         Ok(lines)
+    }
+
+    /// Name the call ending `block` as a telemetry site, when it can run
+    /// BAML code: the callee's call path is keyed by its physical caller and
+    /// site. Builtins that only run Rust need no site.
+    fn call_site(
+        &self,
+        block: BlockId,
+        call: &CallKind<'db>,
+    ) -> Result<Option<TokenStream>, Rejection> {
+        let reaches_baml = match call {
+            CallKind::Panic(_) => false,
+            CallKind::Direct(_) | CallKind::Indirect { .. } | CallKind::Virtual { .. } => true,
+            CallKind::Builtin { builtin, .. } => builtin_runs_baml(builtin),
+        };
+        if !reaches_baml {
+            return Ok(None);
+        }
+        let (caller, _) = self.telemetry.function(&self.candidate.id)?;
+        let site = self.telemetry.site(&self.candidate.id, block)?;
+        Ok(Some(quote! { bex_aot::telemetry::site(#caller, #site); }))
     }
 
     fn call(
@@ -3737,6 +3788,33 @@ fn float_literal(value: f64) -> TokenStream {
 /// itself (`bex_aot::array`), so its callbacks run one deeper, while a
 /// native callback method's callbacks run at the caller's depth plus one
 /// as on the VM.
+/// Whether a builtin can call BAML code: a user `eq` or `to_string`
+/// override, a comparison through a user `cmp`, or a callback.
+fn builtin_runs_baml(builtin: &Builtin<'_>) -> bool {
+    match builtin {
+        Builtin::ToStringDefault { overrides, .. } | Builtin::Equals { overrides, .. } => {
+            !overrides.is_empty()
+        }
+        Builtin::CompareVia { .. } | Builtin::ArrayCallback { .. } => true,
+        Builtin::ArrayPush
+        | Builtin::JsonDeserialize(_)
+        | Builtin::JsonToString
+        | Builtin::StringLength { .. }
+        | Builtin::StringIsAscii
+        | Builtin::FloatFloor
+        | Builtin::FloatItrunc
+        | Builtin::IsNull { .. }
+        | Builtin::EnumEq
+        | Builtin::Iter
+        | Builtin::Next
+        | Builtin::Sort(_)
+        | Builtin::Map(_)
+        | Builtin::Bigint(_)
+        | Builtin::Cmp(_)
+        | Builtin::CompareOp { .. } => false,
+    }
+}
+
 fn builtin_frames(builtin: &Builtin<'_>) -> Option<u32> {
     use crate::function::ArrayCallback;
     Some(match builtin {

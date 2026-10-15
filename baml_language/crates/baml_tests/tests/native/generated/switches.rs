@@ -141,3 +141,52 @@ pub fn user_partial(mut _1: Int63) -> Result<Int63, Thrown> {
     }
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.sw_empty",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 72u32,
+        end: 223u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.sw_same",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 224u32,
+        end: 329u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.sw_fall",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 330u32,
+        end: 444u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.chain",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 445u32,
+        end: 1051u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.partial",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1052u32,
+        end: 1193u32,
+        sites: &[],
+    },
+];

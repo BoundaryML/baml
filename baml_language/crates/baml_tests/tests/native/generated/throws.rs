@@ -687,57 +687,64 @@ pub fn user_throw_deep(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
     let mut _2: Int63;
+    bex_aot::telemetry::site(5u32, 0u32);
     _2 = user_throw_if_negative(_1)?;
     _0 = int::add(_2, int::lit(1))?;
     Ok(_0)
 }
 /// BAML function `user.throw_in_loop`.
+#[inline(never)]
 pub fn user_throw_in_loop(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Int63;
-    let mut _3: Shared<Vec<Int63>>;
-    let mut _4: bex_aot::array::Iter<Int63>;
-    let mut _5: Option<Int63>;
-    let mut _6: bool;
-    let mut _7: Int63;
-    let mut _8: Int63;
-    let mut _9: bool;
-    let mut _10: Int63;
-    let mut _11: Shared<user_Detail>;
-    let mut _12: Int63;
-    let mut _13: Int63;
-    let mut _14: Int63;
-    _2 = int::lit(0);
-    _3 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2), int::lit(3)]));
-    bex_aot::depth::probe(1)?;
-    _4 = array::iter(&_3);
-    'bb1: loop {
-        _5 = array::next(&mut _4);
-        _6 = _5.is_none();
-        if _6 {
-            _0 = _2;
-            return Ok(_0);
-        } else {
-            _7 = _5.expect("non-null by the checker's narrowing");
-            _8 = _7;
-            _10 = _8;
-            _9 = _10 == _1;
-            if _9 {
-                _12 = _8;
-                _11 = shared(user_Detail {
-                    n: _12,
-                    note: string::from_literal("loop"),
-                });
-                return Err(Thrown::error(_11.clone()));
+    let __telemetry = bex_aot::telemetry::enter(6u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Int63;
+        let mut _3: Shared<Vec<Int63>>;
+        let mut _4: bex_aot::array::Iter<Int63>;
+        let mut _5: Option<Int63>;
+        let mut _6: bool;
+        let mut _7: Int63;
+        let mut _8: Int63;
+        let mut _9: bool;
+        let mut _10: Int63;
+        let mut _11: Shared<user_Detail>;
+        let mut _12: Int63;
+        let mut _13: Int63;
+        let mut _14: Int63;
+        _2 = int::lit(0);
+        _3 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2), int::lit(3)]));
+        bex_aot::depth::probe(1)?;
+        _4 = array::iter(&_3);
+        'bb1: loop {
+            _5 = array::next(&mut _4);
+            _6 = _5.is_none();
+            if _6 {
+                _0 = _2;
+                return Ok(_0);
             } else {
-                _13 = _2;
-                _14 = _8;
-                _2 = int::add(_13, _14)?;
-                continue 'bb1;
+                _7 = _5.expect("non-null by the checker's narrowing");
+                _8 = _7;
+                _10 = _8;
+                _9 = _10 == _1;
+                if _9 {
+                    _12 = _8;
+                    _11 = shared(user_Detail {
+                        n: _12,
+                        note: string::from_literal("loop"),
+                    });
+                    return Err(Thrown::error(_11.clone()));
+                } else {
+                    _13 = _2;
+                    _14 = _8;
+                    _2 = int::add(_13, _14)?;
+                    continue 'bb1;
+                }
             }
         }
-    }
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.panic_deep`.
 pub fn user_panic_deep(mut _1: Int63) -> Result<Int63, Thrown> {
@@ -750,7 +757,108 @@ pub fn user_panic_deep(mut _1: Int63) -> Result<Int63, Thrown> {
     _2 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2), int::lit(3)]));
     _5 = _1;
     _3 = array::get(&_2, _5)?;
+    bex_aot::telemetry::site(7u32, 0u32);
     _6 = user_throw_if_negative(_1)?;
     _0 = int::add(_3, _6)?;
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.throw_if_negative",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 336u32,
+        end: 444u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.throw_coded",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 446u32,
+        end: 798u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 759u32,
+                end: 769u32,
+                line: 31u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.throw_local",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 800u32,
+        end: 1108u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.throw_stdlib",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1110u32,
+        end: 1311u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.throw_panic_class",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1313u32,
+        end: 1440u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.throw_deep",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1442u32,
+        end: 1509u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1483u32,
+                end: 1503u32,
+                line: 64u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.throw_in_loop",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1511u32,
+        end: 1705u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1574u32,
+                end: 1693u32,
+                line: 69u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.panic_deep",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1707u32,
+        end: 1802u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1780u32,
+                end: 1800u32,
+                line: 78u32,
+            },
+        ],
+    },
+];

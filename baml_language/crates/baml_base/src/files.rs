@@ -187,3 +187,23 @@ pub struct SourceFile {
     #[returns(clone)]
     pub source_root: SourceRoot,
 }
+
+impl SourceFile {
+    /// The path a program names this file by (in function metadata and
+    /// telemetry): relative to the workspace root for workspace files,
+    /// as given for the standard library and dependencies.
+    pub fn relative_path(self, db: &dyn salsa::Database) -> String {
+        let path = self.path(db);
+        let root = self.source_root(db);
+        match root.kind(db) {
+            SourceRootKind::Workspace => path
+                .strip_prefix(root.path(db))
+                .unwrap_or(&path)
+                .display()
+                .to_string(),
+            SourceRootKind::Stdlib | SourceRootKind::Dependency | SourceRootKind::Dynamic => {
+                path.display().to_string()
+            }
+        }
+    }
+}

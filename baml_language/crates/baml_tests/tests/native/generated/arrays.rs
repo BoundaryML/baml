@@ -29,74 +29,87 @@ use bex_aot::{
 use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.sum`.
+#[inline(never)]
 pub fn user_sum(mut _1: Shared<Vec<Int63>>) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Int63;
-    let mut _3: bex_aot::array::Iter<Int63>;
-    let mut _4: Option<Int63>;
-    let mut _5: bool;
-    let mut _6: Int63;
-    let mut _7: Int63;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    _2 = int::lit(0);
-    bex_aot::depth::probe(1)?;
-    _3 = array::iter(&_1);
-    'bb1: loop {
-        _4 = array::next(&mut _3);
-        _5 = _4.is_none();
-        if _5 {
-            _0 = _2;
-            return Ok(_0);
-        } else {
-            _6 = _4.expect("non-null by the checker's narrowing");
-            _7 = _6;
-            _8 = _2;
-            _9 = _7;
-            _2 = int::add(_8, _9)?;
-            continue 'bb1;
+    let __telemetry = bex_aot::telemetry::enter(0u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Int63;
+        let mut _3: bex_aot::array::Iter<Int63>;
+        let mut _4: Option<Int63>;
+        let mut _5: bool;
+        let mut _6: Int63;
+        let mut _7: Int63;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        _2 = int::lit(0);
+        bex_aot::depth::probe(1)?;
+        _3 = array::iter(&_1);
+        'bb1: loop {
+            _4 = array::next(&mut _3);
+            _5 = _4.is_none();
+            if _5 {
+                _0 = _2;
+                return Ok(_0);
+            } else {
+                _6 = _4.expect("non-null by the checker's narrowing");
+                _7 = _6;
+                _8 = _2;
+                _9 = _7;
+                _2 = int::add(_8, _9)?;
+                continue 'bb1;
+            }
         }
-    }
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.build`.
+#[inline(never)]
 pub fn user_build(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Shared<Vec<Int63>>;
-    let mut _3: Int63;
-    let mut _4: bool;
-    let mut _5: Int63;
-    let mut _6: Int63;
-    let mut _7: Int63;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    let mut _11: Int63;
-    let mut _12: Int63;
-    let mut _14: Int63;
-    _2 = array::new::<Int63>(Vec::new());
-    _3 = int::lit(0);
-    'bb1: loop {
-        _5 = _3;
-        _4 = _5 < _1;
-        if _4 {
-            _8 = _3;
-            _9 = _3;
-            _7 = int::mul(_8, _9)?;
-            bex_aot::depth::probe(0)?;
-            array::push(&_2, _7);
-            _6 = array::len(&_2);
-            _11 = _3;
-            _3 = int::add(_11, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
+    let __telemetry = bex_aot::telemetry::enter(1u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Shared<Vec<Int63>>;
+        let mut _3: Int63;
+        let mut _4: bool;
+        let mut _5: Int63;
+        let mut _6: Int63;
+        let mut _7: Int63;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        let mut _11: Int63;
+        let mut _12: Int63;
+        let mut _14: Int63;
+        _2 = array::new::<Int63>(Vec::new());
+        _3 = int::lit(0);
+        'bb1: loop {
+            _5 = _3;
+            _4 = _5 < _1;
+            if _4 {
+                _8 = _3;
+                _9 = _3;
+                _7 = int::mul(_8, _9)?;
+                bex_aot::depth::probe(0)?;
+                array::push(&_2, _7);
+                _6 = array::len(&_2);
+                _11 = _3;
+                _3 = int::add(_11, int::lit(1))?;
+                continue 'bb1;
+            } else {
+                break 'bb1;
+            }
         }
-    }
-    _12 = user_sum(_2.clone())?;
-    _14 = array::len(&_2);
-    _0 = int::add(_12, _14)?;
-    Ok(_0)
+        bex_aot::telemetry::site(1u32, 0u32);
+        _12 = user_sum(_2.clone())?;
+        _14 = array::len(&_2);
+        _0 = int::add(_12, _14)?;
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.alias_mutation`.
 pub fn user_alias_mutation(mut _1: Int63) -> Result<Int63, Thrown> {
@@ -165,197 +178,306 @@ pub fn user_negative_index(mut _1: Int63) -> Result<Int63, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.bubble`.
+#[inline(never)]
 pub fn user_bubble(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Shared<Vec<Int63>>;
-    let mut _3: Int63;
-    let mut _4: bool;
-    let mut _5: Int63;
-    let mut _6: Int63;
-    let mut _7: Int63;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    let mut _10: Int63;
-    let mut _12: Int63;
-    let mut _13: Int63;
-    let mut _14: Int63;
-    let mut _15: bool;
-    let mut _16: Int63;
-    let mut _17: Int63;
-    let mut _18: Int63;
-    let mut _19: bool;
-    let mut _20: Int63;
-    let mut _21: Int63;
-    let mut _22: Int63;
-    let mut _23: Int63;
-    let mut _24: Int63;
-    let mut _25: bool;
-    let mut _26: Int63;
-    let mut _28: Int63;
-    let mut _29: Int63;
-    let mut _31: Int63;
-    let mut _32: Int63;
-    let mut _33: Int63;
-    let mut _35: Int63;
-    let mut _37: Int63;
-    let mut _39: Int63;
-    let mut _40: Int63;
-    let mut _42: Int63;
-    let mut _43: Int63;
-    let mut _44: Int63;
-    let mut _45: Int63;
-    let mut _46: Int63;
-    let mut _48: bex_aot::array::Iter<Int63>;
-    let mut _49: Option<Int63>;
-    let mut _50: bool;
-    let mut _51: Int63;
-    let mut _52: Int63;
-    let mut _53: Int63;
-    let mut _54: Int63;
-    let mut _55: Int63;
-    _2 = array::new::<Int63>(Vec::new());
-    _3 = int::lit(0);
-    'bb1: loop {
-        _5 = _3;
-        _4 = _5 < _1;
-        if _4 {
-            _10 = _3;
-            _9 = int::sub(_1, _10)?;
-            _8 = int::mul(_9, int::lit(7))?;
-            _7 = int::rem(_8, int::lit(11))?;
-            bex_aot::depth::probe(0)?;
-            array::push(&_2, _7);
-            _6 = array::len(&_2);
-            _12 = _3;
-            _3 = int::add(_12, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
-        }
-    }
-    _13 = array::len(&_2);
-    _14 = int::lit(0);
-    'bb4: loop {
-        _16 = _14;
-        _17 = _13;
-        _15 = _16 < _17;
-        if _15 {
-            _18 = int::lit(0);
-            'bb12: loop {
-                _21 = _18;
-                _20 = int::add(_21, int::lit(1))?;
-                _23 = _13;
-                _24 = _14;
-                _22 = int::sub(_23, _24)?;
-                _19 = _20 < _22;
-                if _19 {
-                    'bb16: {
-                        _28 = _18;
-                        _26 = array::get(&_2, _28)?;
-                        _32 = _18;
-                        _31 = int::add(_32, int::lit(1))?;
-                        _29 = array::get(&_2, _31)?;
-                        _25 = _26 > _29;
-                        if _25 {
-                            _35 = _18;
-                            _33 = array::get(&_2, _35)?;
-                            _37 = _18;
-                            _40 = _18;
-                            _39 = int::add(_40, int::lit(1))?;
-                            {
-                                let value = array::get(&_2, _39)?;
-                                array::set(&_2, _37, value)?;
-                            }
-                            _43 = _18;
-                            _42 = int::add(_43, int::lit(1))?;
-                            {
-                                let value = _33;
-                                array::set(&_2, _42, value)?;
-                            }
-                            break 'bb16;
-                        } else {
-                            break 'bb16;
-                        }
-                    }
-                    _44 = _18;
-                    _18 = int::add(_44, int::lit(1))?;
-                    continue 'bb12;
-                } else {
-                    break 'bb12;
-                }
-            }
-            _45 = _14;
-            _14 = int::add(_45, int::lit(1))?;
-            continue 'bb4;
-        } else {
-            break 'bb4;
-        }
-    }
-    _46 = int::lit(0);
-    bex_aot::depth::probe(1)?;
-    _48 = array::iter(&_2);
-    'bb6: loop {
-        _49 = array::next(&mut _48);
-        _50 = _49.is_none();
-        if _50 {
-            _0 = _46;
-            return Ok(_0);
-        } else {
-            _51 = _49.expect("non-null by the checker's narrowing");
-            _52 = _51;
-            _54 = _46;
-            _53 = int::mul(_54, int::lit(13))?;
-            _55 = _52;
-            _46 = int::add(_53, _55)?;
-            continue 'bb6;
-        }
-    }
-}
-/// BAML function `user.push_during_iteration`.
-pub fn user_push_during_iteration(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Shared<Vec<Int63>>;
-    let mut _3: Int63;
-    let mut _5: bex_aot::array::Iter<Int63>;
-    let mut _6: Option<Int63>;
-    let mut _7: bool;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    let mut _10: Int63;
-    let mut _11: bool;
-    let mut _12: Int63;
-    let mut _13: Int63;
-    let mut _14: Int63;
-    let mut _15: Int63;
-    _2 = array::new::<Int63>(Vec::from([_1]));
-    _3 = int::lit(0);
-    bex_aot::depth::probe(1)?;
-    _5 = array::iter(&_2);
-    'bb1: loop {
-        _6 = array::next(&mut _5);
-        _7 = _6.is_none();
-        if _7 {
-            _0 = _3;
-            return Ok(_0);
-        } else {
-            _8 = _6.expect("non-null by the checker's narrowing");
-            _9 = _8;
-            _10 = _3;
-            _3 = int::add(_10, int::lit(1))?;
-            _12 = array::len(&_2);
-            _11 = _12 < int::lit(4);
-            if _11 {
-                _15 = _9;
-                _14 = int::add(_15, int::lit(1))?;
+    let __telemetry = bex_aot::telemetry::enter(4u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Shared<Vec<Int63>>;
+        let mut _3: Int63;
+        let mut _4: bool;
+        let mut _5: Int63;
+        let mut _6: Int63;
+        let mut _7: Int63;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        let mut _10: Int63;
+        let mut _12: Int63;
+        let mut _13: Int63;
+        let mut _14: Int63;
+        let mut _15: bool;
+        let mut _16: Int63;
+        let mut _17: Int63;
+        let mut _18: Int63;
+        let mut _19: bool;
+        let mut _20: Int63;
+        let mut _21: Int63;
+        let mut _22: Int63;
+        let mut _23: Int63;
+        let mut _24: Int63;
+        let mut _25: bool;
+        let mut _26: Int63;
+        let mut _28: Int63;
+        let mut _29: Int63;
+        let mut _31: Int63;
+        let mut _32: Int63;
+        let mut _33: Int63;
+        let mut _35: Int63;
+        let mut _37: Int63;
+        let mut _39: Int63;
+        let mut _40: Int63;
+        let mut _42: Int63;
+        let mut _43: Int63;
+        let mut _44: Int63;
+        let mut _45: Int63;
+        let mut _46: Int63;
+        let mut _48: bex_aot::array::Iter<Int63>;
+        let mut _49: Option<Int63>;
+        let mut _50: bool;
+        let mut _51: Int63;
+        let mut _52: Int63;
+        let mut _53: Int63;
+        let mut _54: Int63;
+        let mut _55: Int63;
+        _2 = array::new::<Int63>(Vec::new());
+        _3 = int::lit(0);
+        'bb1: loop {
+            _5 = _3;
+            _4 = _5 < _1;
+            if _4 {
+                _10 = _3;
+                _9 = int::sub(_1, _10)?;
+                _8 = int::mul(_9, int::lit(7))?;
+                _7 = int::rem(_8, int::lit(11))?;
                 bex_aot::depth::probe(0)?;
-                array::push(&_2, _14);
-                _13 = array::len(&_2);
+                array::push(&_2, _7);
+                _6 = array::len(&_2);
+                _12 = _3;
+                _3 = int::add(_12, int::lit(1))?;
                 continue 'bb1;
             } else {
-                continue 'bb1;
+                break 'bb1;
             }
         }
-    }
+        _13 = array::len(&_2);
+        _14 = int::lit(0);
+        'bb4: loop {
+            _16 = _14;
+            _17 = _13;
+            _15 = _16 < _17;
+            if _15 {
+                _18 = int::lit(0);
+                'bb12: loop {
+                    _21 = _18;
+                    _20 = int::add(_21, int::lit(1))?;
+                    _23 = _13;
+                    _24 = _14;
+                    _22 = int::sub(_23, _24)?;
+                    _19 = _20 < _22;
+                    if _19 {
+                        'bb16: {
+                            _28 = _18;
+                            _26 = array::get(&_2, _28)?;
+                            _32 = _18;
+                            _31 = int::add(_32, int::lit(1))?;
+                            _29 = array::get(&_2, _31)?;
+                            _25 = _26 > _29;
+                            if _25 {
+                                _35 = _18;
+                                _33 = array::get(&_2, _35)?;
+                                _37 = _18;
+                                _40 = _18;
+                                _39 = int::add(_40, int::lit(1))?;
+                                {
+                                    let value = array::get(&_2, _39)?;
+                                    array::set(&_2, _37, value)?;
+                                }
+                                _43 = _18;
+                                _42 = int::add(_43, int::lit(1))?;
+                                {
+                                    let value = _33;
+                                    array::set(&_2, _42, value)?;
+                                }
+                                break 'bb16;
+                            } else {
+                                break 'bb16;
+                            }
+                        }
+                        _44 = _18;
+                        _18 = int::add(_44, int::lit(1))?;
+                        continue 'bb12;
+                    } else {
+                        break 'bb12;
+                    }
+                }
+                _45 = _14;
+                _14 = int::add(_45, int::lit(1))?;
+                continue 'bb4;
+            } else {
+                break 'bb4;
+            }
+        }
+        _46 = int::lit(0);
+        bex_aot::depth::probe(1)?;
+        _48 = array::iter(&_2);
+        'bb6: loop {
+            _49 = array::next(&mut _48);
+            _50 = _49.is_none();
+            if _50 {
+                _0 = _46;
+                return Ok(_0);
+            } else {
+                _51 = _49.expect("non-null by the checker's narrowing");
+                _52 = _51;
+                _54 = _46;
+                _53 = int::mul(_54, int::lit(13))?;
+                _55 = _52;
+                _46 = int::add(_53, _55)?;
+                continue 'bb6;
+            }
+        }
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
+/// BAML function `user.push_during_iteration`.
+#[inline(never)]
+pub fn user_push_during_iteration(mut _1: Int63) -> Result<Int63, Thrown> {
+    let __telemetry = bex_aot::telemetry::enter(5u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Shared<Vec<Int63>>;
+        let mut _3: Int63;
+        let mut _5: bex_aot::array::Iter<Int63>;
+        let mut _6: Option<Int63>;
+        let mut _7: bool;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        let mut _10: Int63;
+        let mut _11: bool;
+        let mut _12: Int63;
+        let mut _13: Int63;
+        let mut _14: Int63;
+        let mut _15: Int63;
+        _2 = array::new::<Int63>(Vec::from([_1]));
+        _3 = int::lit(0);
+        bex_aot::depth::probe(1)?;
+        _5 = array::iter(&_2);
+        'bb1: loop {
+            _6 = array::next(&mut _5);
+            _7 = _6.is_none();
+            if _7 {
+                _0 = _3;
+                return Ok(_0);
+            } else {
+                _8 = _6.expect("non-null by the checker's narrowing");
+                _9 = _8;
+                _10 = _3;
+                _3 = int::add(_10, int::lit(1))?;
+                _12 = array::len(&_2);
+                _11 = _12 < int::lit(4);
+                if _11 {
+                    _15 = _9;
+                    _14 = int::add(_15, int::lit(1))?;
+                    bex_aot::depth::probe(0)?;
+                    array::push(&_2, _14);
+                    _13 = array::len(&_2);
+                    continue 'bb1;
+                } else {
+                    continue 'bb1;
+                }
+            }
+        }
+    })();
+    __telemetry.exit(&__result);
+    __result
+}
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.sum",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 68u32,
+        end: 188u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 124u32,
+                end: 176u32,
+                line: 5u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.build",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 190u32,
+        end: 357u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 334u32,
+                end: 341u32,
+                line: 18u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 289u32,
+                end: 303u32,
+                line: 15u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.alias_mutation",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 359u32,
+        end: 507u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.negative_index",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 509u32,
+        end: 588u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.bubble",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 590u32,
+        end: 1209u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1146u32,
+                end: 1199u32,
+                line: 56u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 690u32,
+                end: 715u32,
+                line: 38u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.push_during_iteration",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1211u32,
+        end: 1429u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1299u32,
+                end: 1418u32,
+                line: 65u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1387u32,
+                end: 1401u32,
+                line: 68u32,
+            },
+        ],
+    },
+];

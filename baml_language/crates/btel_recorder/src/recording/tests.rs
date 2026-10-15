@@ -1302,6 +1302,7 @@ fn known_function_metadata_is_published_once_and_unknown_functions_stay_placehol
             }],
         }),
         source_map: None,
+        inlined: false,
     };
     let table = std::sync::Arc::new(btel_types::FunctionMetadataTable {
         functions: vec![metadata_for(known)],

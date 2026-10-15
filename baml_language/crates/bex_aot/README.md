@@ -26,6 +26,7 @@ only collector is the cycle collector for tracked handles (`cc`).
 | fields of an uncaught throw | `Readable` | `readable`: the engine's `render_readable` for every value above (strings quoted, floats with `.0`, classes by fully qualified name) |
 | heap edges | `mem::Trace` | `mem`: every value a handle can hold reports the handles it owns (generated for every class, union, interface and closure environment); `mem-stats` feature: allocation counters, a weak registry of live objects, `BAML_MEM_TORTURE=1` |
 | recursion | `depth::Guard` | counts frames on call cycles and throws `StackOverflow` at the VM's limit |
+| `BAML_TELEMETRY` | `telemetry` | the VM's telemetry producer for the functions the backend observes (see below) |
 
 The program runs on one OS thread, so a handle takes no lock; borrows are
 short because lowering evaluates operands into temporaries before a store or
@@ -90,6 +91,31 @@ also get a cycle collector, as in Nim's ORC.
   misses no edge), and `BAML_MEM_TORTURE=1` runs `mem::collect` at every
   allocation and every buffered decrement. Without the feature an untracked
   handle is exactly `Rc<RefCell<T>>`.
+
+## Telemetry
+
+With the `telemetry` feature (on in every generated project) a program
+records what the VM records, in the VM's format and through the VM's
+pipeline: records go into `btel_processor`'s ring, its processor thread
+folds timing completions into per-call-path aggregates, and `btel_recorder`
+and `btel_file` write the files. `telemetry::start` reads `BAML_TELEMETRY`
+once (`off`, `low`, `medium` by default, `high`); `telemetry::root` runs one
+call from the host as a telemetry thread; `telemetry::finish` flushes.
+
+Only the functions the backend observes record calls: `enter` and
+`Frame::exit` around their bodies write a timing completion (`medium`) or a
+span (`high`), with the call's outcome classified as the VM does. Every
+other function is folded: it records nothing and its time is its nearest
+observed ancestor's, and the recording's function table marks it
+`inlined`. Every call site names itself first (`telemetry::site`), so a
+call path is keyed, as on the VM, by its parent path, the physical caller
+and the caller's site (`PC_COORDINATE_COMPILED_SITE`). A builtin that calls
+back into BAML names its site once; each observed callee restores it on
+exit, so every callback lands on one path. Without the feature the same
+calls compile to nothing.
+
+Not recorded yet: error evidence (`ErrorRaised`), captures (no LLM
+functions compile natively), await time (no async).
 
 ## Miri
 

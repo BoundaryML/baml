@@ -55,6 +55,7 @@ const FIXTURES: &[&str] = &[
     "recursion",
     "strings",
     "switches",
+    "telemetry",
     "throws",
 ];
 

@@ -961,199 +961,219 @@ pub fn user_self_loop(mut _1: Int63) -> Result<Int63, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.doubly_linked`.
+#[inline(never)]
 pub fn user_doubly_linked(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Cc<user_DNode>;
-    let mut _3: Cc<user_DNode>;
-    let mut _4: Int63;
-    let mut _5: bool;
-    let mut _6: Int63;
-    let mut _7: Cc<user_DNode>;
-    let mut _8: Int63;
-    let mut _10: Int63;
-    let mut _11: Option<Cc<user_DNode>>;
-    let mut _12: bool;
-    let mut _14: bool;
-    let mut _15: Cc<user_DNode>;
-    let mut _16: Int63;
-    let mut _17: Option<Cc<user_DNode>>;
-    let mut _18: bool;
-    let mut _20: bool;
-    let mut _21: Cc<user_DNode>;
-    let mut _22: Int63;
-    let mut _23: Int63;
-    _2 = cc(user_DNode {
-        value: int::lit(0),
-        prev: None,
-        next: None,
-    });
-    _3 = _2.clone();
-    _4 = int::lit(1);
-    'bb1: loop {
-        _6 = _4;
-        _5 = _6 < _1;
-        if _5 {
-            _8 = _4;
-            _7 = cc(user_DNode {
-                value: _8,
-                prev: Some(_3.clone()),
-                next: None,
-            });
-            {
-                let value = Some(_7.clone());
-                _3.borrow_mut().next = value;
+    let __telemetry = bex_aot::telemetry::enter(1u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Cc<user_DNode>;
+        let mut _3: Cc<user_DNode>;
+        let mut _4: Int63;
+        let mut _5: bool;
+        let mut _6: Int63;
+        let mut _7: Cc<user_DNode>;
+        let mut _8: Int63;
+        let mut _10: Int63;
+        let mut _11: Option<Cc<user_DNode>>;
+        let mut _12: bool;
+        let mut _14: bool;
+        let mut _15: Cc<user_DNode>;
+        let mut _16: Int63;
+        let mut _17: Option<Cc<user_DNode>>;
+        let mut _18: bool;
+        let mut _20: bool;
+        let mut _21: Cc<user_DNode>;
+        let mut _22: Int63;
+        let mut _23: Int63;
+        _2 = cc(user_DNode {
+            value: int::lit(0),
+            prev: None,
+            next: None,
+        });
+        _3 = _2.clone();
+        _4 = int::lit(1);
+        'bb1: loop {
+            _6 = _4;
+            _5 = _6 < _1;
+            if _5 {
+                _8 = _4;
+                _7 = cc(user_DNode {
+                    value: _8,
+                    prev: Some(_3.clone()),
+                    next: None,
+                });
+                {
+                    let value = Some(_7.clone());
+                    _3.borrow_mut().next = value;
+                }
+                _3 = _7.clone();
+                _4 = int::add(_4, int::lit(1))?;
+                continue 'bb1;
+            } else {
+                break 'bb1;
             }
-            _3 = _7.clone();
-            _4 = int::add(_4, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
         }
-    }
-    _10 = int::lit(0);
-    _11 = Some(_2.clone());
-    'bb3: loop {
-        bex_aot::depth::probe(0)?;
-        _14 = _11.is_none();
-        _12 = !_14;
-        if _12 {
-            _15 = _11.clone().expect("non-null by the checker's narrowing");
-            _16 = _15.borrow().value;
-            _10 = int::add(_10, _16)?;
-            _11 = _15.borrow().next.clone();
-            continue 'bb3;
-        } else {
-            _17 = Some(_3.clone());
-            'bb6: loop {
-                bex_aot::depth::probe(0)?;
-                _20 = _17.is_none();
-                _18 = !_20;
-                if _18 {
-                    _21 = _17.clone().expect("non-null by the checker's narrowing");
-                    _23 = _21.borrow().value;
-                    _22 = int::mul(_23, int::lit(2))?;
-                    _10 = int::add(_10, _22)?;
-                    _17 = _21.borrow().prev.clone();
-                    continue 'bb6;
-                } else {
-                    _0 = _10;
-                    return Ok(_0);
+        _10 = int::lit(0);
+        _11 = Some(_2.clone());
+        'bb3: loop {
+            bex_aot::depth::probe(0)?;
+            _14 = _11.is_none();
+            _12 = !_14;
+            if _12 {
+                _15 = _11.clone().expect("non-null by the checker's narrowing");
+                _16 = _15.borrow().value;
+                _10 = int::add(_10, _16)?;
+                _11 = _15.borrow().next.clone();
+                continue 'bb3;
+            } else {
+                _17 = Some(_3.clone());
+                'bb6: loop {
+                    bex_aot::depth::probe(0)?;
+                    _20 = _17.is_none();
+                    _18 = !_20;
+                    if _18 {
+                        _21 = _17.clone().expect("non-null by the checker's narrowing");
+                        _23 = _21.borrow().value;
+                        _22 = int::mul(_23, int::lit(2))?;
+                        _10 = int::add(_10, _22)?;
+                        _17 = _21.borrow().prev.clone();
+                        continue 'bb6;
+                    } else {
+                        _0 = _10;
+                        return Ok(_0);
+                    }
                 }
             }
         }
-    }
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.grow`.
+#[inline(never)]
 pub fn user_grow(mut _1: Cc<user_TNode>, mut _2: Int63) -> Result<(), Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: ();
-    let mut _3: bool;
-    let mut _4: Int63;
-    let mut _5: bool;
-    let mut _6: Int63;
-    let mut _7: Cc<user_TNode>;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    let mut _10: Int63;
-    let mut _11: Int63;
-    let mut _12: Cc<Vec<Cc<user_TNode>>>;
-    let mut _13: Int63;
-    let mut _14: Cc<Vec<Cc<user_TNode>>>;
-    let mut _17: ();
-    let mut _19: Int63;
-    'bb8: {
-        _3 = _2 == int::lit(0);
-        if _3 {
-            _0 = ();
-            break 'bb8;
-        } else {
-            _4 = int::lit(0);
-            'bb2: loop {
-                _6 = _4;
-                _5 = _6 < int::lit(2);
-                if _5 {
-                    _10 = _1.borrow().value;
-                    _9 = int::mul(_10, int::lit(2))?;
-                    _11 = _4;
-                    _8 = int::add(_9, _11)?;
-                    _12 = array::new_cc::<Cc<user_TNode>>(Vec::new());
-                    _7 = cc(user_TNode {
-                        value: _8,
-                        parent: Some(_1.clone()),
-                        children: _12.clone(),
-                    });
-                    _14 = _1.borrow().children.clone();
-                    bex_aot::depth::probe(0)?;
-                    array::push(&_14, _7.clone());
-                    _13 = array::len(&_14);
-                    _19 = int::sub(_2, int::lit(1))?;
-                    _17 = user_grow(_7.clone(), _19)?;
-                    _4 = int::add(_4, int::lit(1))?;
-                    continue 'bb2;
-                } else {
-                    break 'bb2;
+    let __telemetry = bex_aot::telemetry::enter(2u32);
+    let __result = (move || -> Result<(), Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: ();
+        let mut _3: bool;
+        let mut _4: Int63;
+        let mut _5: bool;
+        let mut _6: Int63;
+        let mut _7: Cc<user_TNode>;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        let mut _10: Int63;
+        let mut _11: Int63;
+        let mut _12: Cc<Vec<Cc<user_TNode>>>;
+        let mut _13: Int63;
+        let mut _14: Cc<Vec<Cc<user_TNode>>>;
+        let mut _17: ();
+        let mut _19: Int63;
+        'bb8: {
+            _3 = _2 == int::lit(0);
+            if _3 {
+                _0 = ();
+                break 'bb8;
+            } else {
+                _4 = int::lit(0);
+                'bb2: loop {
+                    _6 = _4;
+                    _5 = _6 < int::lit(2);
+                    if _5 {
+                        _10 = _1.borrow().value;
+                        _9 = int::mul(_10, int::lit(2))?;
+                        _11 = _4;
+                        _8 = int::add(_9, _11)?;
+                        _12 = array::new_cc::<Cc<user_TNode>>(Vec::new());
+                        _7 = cc(user_TNode {
+                            value: _8,
+                            parent: Some(_1.clone()),
+                            children: _12.clone(),
+                        });
+                        _14 = _1.borrow().children.clone();
+                        bex_aot::depth::probe(0)?;
+                        array::push(&_14, _7.clone());
+                        _13 = array::len(&_14);
+                        _19 = int::sub(_2, int::lit(1))?;
+                        bex_aot::telemetry::site(2u32, 1u32);
+                        _17 = user_grow(_7.clone(), _19)?;
+                        _4 = int::add(_4, int::lit(1))?;
+                        continue 'bb2;
+                    } else {
+                        break 'bb2;
+                    }
                 }
+                _0 = ();
+                break 'bb8;
             }
-            _0 = ();
-            break 'bb8;
         }
-    }
-    Ok(_0)
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.sum_to_root`.
+#[inline(never)]
 pub fn user_sum_to_root(mut _1: Cc<user_TNode>) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Int63;
-    let mut _3: Option<Cc<user_TNode>>;
-    let mut _4: bool;
-    let mut _6: bool;
-    let mut _7: Cc<user_TNode>;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    let mut _10: Int63;
-    let mut _11: Cc<Vec<Cc<user_TNode>>>;
-    let mut _12: bex_aot::array::Iter<Cc<user_TNode>, bex_aot::Tracked>;
-    let mut _13: Option<Cc<user_TNode>>;
-    let mut _14: bool;
-    let mut _15: Cc<user_TNode>;
-    let mut _17: Int63;
-    let mut _18: Cc<user_TNode>;
-    _2 = int::lit(0);
-    _3 = _1.borrow().parent.clone();
-    'bb1: loop {
-        bex_aot::depth::probe(0)?;
-        _6 = _3.is_none();
-        _4 = !_6;
-        if _4 {
-            _7 = _3.clone().expect("non-null by the checker's narrowing");
-            _2 = int::add(_2, int::lit(1))?;
-            _3 = _7.borrow().parent.clone();
-            continue 'bb1;
-        } else {
-            _9 = _2;
-            _10 = _1.borrow().value;
-            _8 = int::add(_9, _10)?;
-            _11 = _1.borrow().children.clone();
-            bex_aot::depth::probe(1)?;
-            _12 = array::iter(&_11);
-            'bb4: loop {
-                _13 = array::next(&mut _12);
-                _14 = _13.is_none();
-                if _14 {
-                    _0 = _8;
-                    return Ok(_0);
-                } else {
-                    _15 = _13.clone().expect("non-null by the checker's narrowing");
-                    _18 = _15.clone();
-                    _17 = user_sum_to_root(_18.clone())?;
-                    _8 = int::add(_8, _17)?;
-                    continue 'bb4;
+    let __telemetry = bex_aot::telemetry::enter(3u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Int63;
+        let mut _3: Option<Cc<user_TNode>>;
+        let mut _4: bool;
+        let mut _6: bool;
+        let mut _7: Cc<user_TNode>;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        let mut _10: Int63;
+        let mut _11: Cc<Vec<Cc<user_TNode>>>;
+        let mut _12: bex_aot::array::Iter<Cc<user_TNode>, bex_aot::Tracked>;
+        let mut _13: Option<Cc<user_TNode>>;
+        let mut _14: bool;
+        let mut _15: Cc<user_TNode>;
+        let mut _17: Int63;
+        let mut _18: Cc<user_TNode>;
+        _2 = int::lit(0);
+        _3 = _1.borrow().parent.clone();
+        'bb1: loop {
+            bex_aot::depth::probe(0)?;
+            _6 = _3.is_none();
+            _4 = !_6;
+            if _4 {
+                _7 = _3.clone().expect("non-null by the checker's narrowing");
+                _2 = int::add(_2, int::lit(1))?;
+                _3 = _7.borrow().parent.clone();
+                continue 'bb1;
+            } else {
+                _9 = _2;
+                _10 = _1.borrow().value;
+                _8 = int::add(_9, _10)?;
+                _11 = _1.borrow().children.clone();
+                bex_aot::depth::probe(1)?;
+                _12 = array::iter(&_11);
+                'bb4: loop {
+                    _13 = array::next(&mut _12);
+                    _14 = _13.is_none();
+                    if _14 {
+                        _0 = _8;
+                        return Ok(_0);
+                    } else {
+                        _15 = _13.clone().expect("non-null by the checker's narrowing");
+                        _18 = _15.clone();
+                        bex_aot::telemetry::site(3u32, 2u32);
+                        _17 = user_sum_to_root(_18.clone())?;
+                        _8 = int::add(_8, _17)?;
+                        continue 'bb4;
+                    }
                 }
             }
         }
-    }
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.tree_with_parents`.
 pub fn user_tree_with_parents(mut _1: Int63) -> Result<Int63, Thrown> {
@@ -1168,208 +1188,224 @@ pub fn user_tree_with_parents(mut _1: Int63) -> Result<Int63, Thrown> {
         parent: None,
         children: _3.clone(),
     });
+    bex_aot::telemetry::site(4u32, 0u32);
     _4 = user_grow(_2.clone(), _1)?;
+    bex_aot::telemetry::site(4u32, 1u32);
     _0 = user_sum_to_root(_2.clone())?;
     Ok(_0)
 }
 /// BAML function `user.graph`.
+#[inline(never)]
 pub fn user_graph(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Cc<Vec<Cc<user_GNode>>>;
-    let mut _3: Int63;
-    let mut _4: bool;
-    let mut _5: Int63;
-    let mut _6: Int63;
-    let mut _7: Cc<user_GNode>;
-    let mut _8: Int63;
-    let mut _9: Cc<Vec<Cc<user_GNode>>>;
-    let mut _12: bex_aot::array::Iter<Cc<user_GNode>, bex_aot::Tracked>;
-    let mut _13: Option<Cc<user_GNode>>;
-    let mut _14: bool;
-    let mut _15: Cc<user_GNode>;
-    let mut _16: Cc<user_GNode>;
-    let mut _17: Int63;
-    let mut _18: Cc<Vec<Cc<user_GNode>>>;
-    let mut _19: Cc<user_GNode>;
-    let mut _21: Int63;
-    let mut _22: Int63;
-    let mut _23: Int63;
-    let mut _25: Int63;
-    let mut _26: Cc<Vec<Cc<user_GNode>>>;
-    let mut _27: Cc<user_GNode>;
-    let mut _29: Int63;
-    let mut _30: Int63;
-    let mut _31: Int63;
-    let mut _32: Int63;
-    let mut _34: Int63;
-    let mut _36: bex_aot::array::Iter<Cc<user_GNode>, bex_aot::Tracked>;
-    let mut _37: Option<Cc<user_GNode>>;
-    let mut _38: bool;
-    let mut _39: Cc<user_GNode>;
-    let mut _40: Cc<user_GNode>;
-    let mut _41: Cc<Vec<Cc<user_GNode>>>;
-    let mut _42: bex_aot::array::Iter<Cc<user_GNode>, bex_aot::Tracked>;
-    let mut _43: Option<Cc<user_GNode>>;
-    let mut _44: bool;
-    let mut _45: Cc<user_GNode>;
-    let mut _47: Int63;
-    let mut _48: Int63;
-    let mut _49: Int63;
-    _2 = array::new_cc::<Cc<user_GNode>>(Vec::new());
-    _3 = int::lit(0);
-    'bb1: loop {
-        _5 = _3;
-        _4 = _5 < _1;
-        if _4 {
-            _8 = _3;
-            _9 = array::new_cc::<Cc<user_GNode>>(Vec::new());
-            _7 = cc(user_GNode {
-                id: _8,
-                edges: _9.clone(),
-            });
-            bex_aot::depth::probe(0)?;
-            array::push(&_2, _7.clone());
-            _6 = array::len(&_2);
-            _3 = int::add(_3, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
+    let __telemetry = bex_aot::telemetry::enter(5u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Cc<Vec<Cc<user_GNode>>>;
+        let mut _3: Int63;
+        let mut _4: bool;
+        let mut _5: Int63;
+        let mut _6: Int63;
+        let mut _7: Cc<user_GNode>;
+        let mut _8: Int63;
+        let mut _9: Cc<Vec<Cc<user_GNode>>>;
+        let mut _12: bex_aot::array::Iter<Cc<user_GNode>, bex_aot::Tracked>;
+        let mut _13: Option<Cc<user_GNode>>;
+        let mut _14: bool;
+        let mut _15: Cc<user_GNode>;
+        let mut _16: Cc<user_GNode>;
+        let mut _17: Int63;
+        let mut _18: Cc<Vec<Cc<user_GNode>>>;
+        let mut _19: Cc<user_GNode>;
+        let mut _21: Int63;
+        let mut _22: Int63;
+        let mut _23: Int63;
+        let mut _25: Int63;
+        let mut _26: Cc<Vec<Cc<user_GNode>>>;
+        let mut _27: Cc<user_GNode>;
+        let mut _29: Int63;
+        let mut _30: Int63;
+        let mut _31: Int63;
+        let mut _32: Int63;
+        let mut _34: Int63;
+        let mut _36: bex_aot::array::Iter<Cc<user_GNode>, bex_aot::Tracked>;
+        let mut _37: Option<Cc<user_GNode>>;
+        let mut _38: bool;
+        let mut _39: Cc<user_GNode>;
+        let mut _40: Cc<user_GNode>;
+        let mut _41: Cc<Vec<Cc<user_GNode>>>;
+        let mut _42: bex_aot::array::Iter<Cc<user_GNode>, bex_aot::Tracked>;
+        let mut _43: Option<Cc<user_GNode>>;
+        let mut _44: bool;
+        let mut _45: Cc<user_GNode>;
+        let mut _47: Int63;
+        let mut _48: Int63;
+        let mut _49: Int63;
+        _2 = array::new_cc::<Cc<user_GNode>>(Vec::new());
+        _3 = int::lit(0);
+        'bb1: loop {
+            _5 = _3;
+            _4 = _5 < _1;
+            if _4 {
+                _8 = _3;
+                _9 = array::new_cc::<Cc<user_GNode>>(Vec::new());
+                _7 = cc(user_GNode {
+                    id: _8,
+                    edges: _9.clone(),
+                });
+                bex_aot::depth::probe(0)?;
+                array::push(&_2, _7.clone());
+                _6 = array::len(&_2);
+                _3 = int::add(_3, int::lit(1))?;
+                continue 'bb1;
+            } else {
+                break 'bb1;
+            }
         }
-    }
-    bex_aot::depth::probe(1)?;
-    _12 = array::iter(&_2);
-    'bb3: loop {
-        _13 = array::next(&mut _12);
-        _14 = _13.is_none();
-        if _14 {
-            _34 = int::lit(0);
-            bex_aot::depth::probe(1)?;
-            _36 = array::iter(&_2);
-            'bb8: loop {
-                _37 = array::next(&mut _36);
-                _38 = _37.is_none();
-                if _38 {
-                    _0 = _34;
-                    return Ok(_0);
-                } else {
-                    _39 = _37.clone().expect("non-null by the checker's narrowing");
-                    _40 = _39.clone();
-                    _41 = _40.borrow().edges.clone();
-                    bex_aot::depth::probe(1)?;
-                    _42 = array::iter(&_41);
-                    'bb11: loop {
-                        _43 = array::next(&mut _42);
-                        _44 = _43.is_none();
-                        if _44 {
-                            continue 'bb8;
-                        } else {
-                            _45 = _43
-                                .clone()
-                                .expect("non-null by the checker's narrowing");
-                            _48 = _45.borrow().id;
-                            _49 = _40.borrow().id;
-                            _47 = int::mul(_48, _49)?;
-                            _34 = int::add(_34, _47)?;
-                            continue 'bb11;
+        bex_aot::depth::probe(1)?;
+        _12 = array::iter(&_2);
+        'bb3: loop {
+            _13 = array::next(&mut _12);
+            _14 = _13.is_none();
+            if _14 {
+                _34 = int::lit(0);
+                bex_aot::depth::probe(1)?;
+                _36 = array::iter(&_2);
+                'bb8: loop {
+                    _37 = array::next(&mut _36);
+                    _38 = _37.is_none();
+                    if _38 {
+                        _0 = _34;
+                        return Ok(_0);
+                    } else {
+                        _39 = _37.clone().expect("non-null by the checker's narrowing");
+                        _40 = _39.clone();
+                        _41 = _40.borrow().edges.clone();
+                        bex_aot::depth::probe(1)?;
+                        _42 = array::iter(&_41);
+                        'bb11: loop {
+                            _43 = array::next(&mut _42);
+                            _44 = _43.is_none();
+                            if _44 {
+                                continue 'bb8;
+                            } else {
+                                _45 = _43
+                                    .clone()
+                                    .expect("non-null by the checker's narrowing");
+                                _48 = _45.borrow().id;
+                                _49 = _40.borrow().id;
+                                _47 = int::mul(_48, _49)?;
+                                _34 = int::add(_34, _47)?;
+                                continue 'bb11;
+                            }
                         }
                     }
                 }
+            } else {
+                _15 = _13.clone().expect("non-null by the checker's narrowing");
+                _16 = _15.clone();
+                _18 = _16.borrow().edges.clone();
+                _23 = _16.borrow().id;
+                _22 = int::add(_23, int::lit(1))?;
+                _21 = int::rem(_22, _1)?;
+                _19 = array::get(&_2, _21)?;
+                bex_aot::depth::probe(0)?;
+                array::push(&_18, _19.clone());
+                _17 = array::len(&_18);
+                _26 = _16.borrow().edges.clone();
+                _32 = _16.borrow().id;
+                _31 = int::mul(_32, int::lit(7))?;
+                _30 = int::add(_31, int::lit(3))?;
+                _29 = int::rem(_30, _1)?;
+                _27 = array::get(&_2, _29)?;
+                bex_aot::depth::probe(0)?;
+                array::push(&_26, _27.clone());
+                _25 = array::len(&_26);
+                continue 'bb3;
             }
-        } else {
-            _15 = _13.clone().expect("non-null by the checker's narrowing");
-            _16 = _15.clone();
-            _18 = _16.borrow().edges.clone();
-            _23 = _16.borrow().id;
-            _22 = int::add(_23, int::lit(1))?;
-            _21 = int::rem(_22, _1)?;
-            _19 = array::get(&_2, _21)?;
-            bex_aot::depth::probe(0)?;
-            array::push(&_18, _19.clone());
-            _17 = array::len(&_18);
-            _26 = _16.borrow().edges.clone();
-            _32 = _16.borrow().id;
-            _31 = int::mul(_32, int::lit(7))?;
-            _30 = int::add(_31, int::lit(3))?;
-            _29 = int::rem(_30, _1)?;
-            _27 = array::get(&_2, _29)?;
-            bex_aot::depth::probe(0)?;
-            array::push(&_26, _27.clone());
-            _25 = array::len(&_26);
-            continue 'bb3;
         }
-    }
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.cycles_into_live`.
+#[inline(never)]
 pub fn user_cycles_into_live(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Cc<user_GNode>;
-    let mut _3: Cc<Vec<Cc<user_GNode>>>;
-    let mut _4: Int63;
-    let mut _5: Int63;
-    let mut _6: bool;
-    let mut _7: Int63;
-    let mut _8: Cc<user_GNode>;
-    let mut _9: Int63;
-    let mut _10: Cc<Vec<Cc<user_GNode>>>;
-    let mut _11: Cc<user_GNode>;
-    let mut _12: Int63;
-    let mut _13: Int63;
-    let mut _14: Cc<Vec<Cc<user_GNode>>>;
-    let mut _17: Int63;
-    let mut _18: Cc<Vec<Cc<user_GNode>>>;
-    let mut _21: Int63;
-    let mut _22: Int63;
-    let mut _23: Int63;
-    let mut _25: Int63;
-    let mut _26: Int63;
-    let mut _27: Int63;
-    let mut _28: Int63;
-    _3 = array::new_cc::<Cc<user_GNode>>(Vec::new());
-    _2 = cc(user_GNode {
-        id: int::lit(7),
-        edges: _3.clone(),
-    });
-    _4 = int::lit(0);
-    _5 = int::lit(0);
-    'bb1: loop {
-        _7 = _5;
-        _6 = _7 < _1;
-        if _6 {
-            _9 = _5;
-            _10 = array::new_cc::<Cc<user_GNode>>(Vec::new());
-            _8 = cc(user_GNode {
-                id: _9,
-                edges: _10.clone(),
-            });
-            _13 = _5;
-            _12 = int::add(_13, int::lit(1))?;
-            _14 = array::new_cc::<Cc<user_GNode>>(Vec::from([_8.clone(), _2.clone()]));
-            _11 = cc(user_GNode {
-                id: _12,
-                edges: _14.clone(),
-            });
-            _18 = _8.borrow().edges.clone();
-            bex_aot::depth::probe(0)?;
-            array::push(&_18, _11.clone());
-            _17 = array::len(&_18);
-            _22 = _8.borrow().id;
-            _23 = array::len(&_11.borrow().edges);
-            _21 = int::add(_22, _23)?;
-            _4 = int::add(_4, _21)?;
-            _5 = int::add(_5, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
+    let __telemetry = bex_aot::telemetry::enter(6u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Cc<user_GNode>;
+        let mut _3: Cc<Vec<Cc<user_GNode>>>;
+        let mut _4: Int63;
+        let mut _5: Int63;
+        let mut _6: bool;
+        let mut _7: Int63;
+        let mut _8: Cc<user_GNode>;
+        let mut _9: Int63;
+        let mut _10: Cc<Vec<Cc<user_GNode>>>;
+        let mut _11: Cc<user_GNode>;
+        let mut _12: Int63;
+        let mut _13: Int63;
+        let mut _14: Cc<Vec<Cc<user_GNode>>>;
+        let mut _17: Int63;
+        let mut _18: Cc<Vec<Cc<user_GNode>>>;
+        let mut _21: Int63;
+        let mut _22: Int63;
+        let mut _23: Int63;
+        let mut _25: Int63;
+        let mut _26: Int63;
+        let mut _27: Int63;
+        let mut _28: Int63;
+        _3 = array::new_cc::<Cc<user_GNode>>(Vec::new());
+        _2 = cc(user_GNode {
+            id: int::lit(7),
+            edges: _3.clone(),
+        });
+        _4 = int::lit(0);
+        _5 = int::lit(0);
+        'bb1: loop {
+            _7 = _5;
+            _6 = _7 < _1;
+            if _6 {
+                _9 = _5;
+                _10 = array::new_cc::<Cc<user_GNode>>(Vec::new());
+                _8 = cc(user_GNode {
+                    id: _9,
+                    edges: _10.clone(),
+                });
+                _13 = _5;
+                _12 = int::add(_13, int::lit(1))?;
+                _14 = array::new_cc::<
+                    Cc<user_GNode>,
+                >(Vec::from([_8.clone(), _2.clone()]));
+                _11 = cc(user_GNode {
+                    id: _12,
+                    edges: _14.clone(),
+                });
+                _18 = _8.borrow().edges.clone();
+                bex_aot::depth::probe(0)?;
+                array::push(&_18, _11.clone());
+                _17 = array::len(&_18);
+                _22 = _8.borrow().id;
+                _23 = array::len(&_11.borrow().edges);
+                _21 = int::add(_22, _23)?;
+                _4 = int::add(_4, _21)?;
+                _5 = int::add(_5, int::lit(1))?;
+                continue 'bb1;
+            } else {
+                break 'bb1;
+            }
         }
-    }
-    _26 = _4;
-    _27 = _2.borrow().id;
-    _25 = int::add(_26, _27)?;
-    _28 = array::len(&_2.borrow().edges);
-    _0 = int::add(_25, _28)?;
-    Ok(_0)
+        _26 = _4;
+        _27 = _2.borrow().id;
+        _25 = int::add(_26, _27)?;
+        _28 = array::len(&_2.borrow().edges);
+        _0 = int::add(_25, _28)?;
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// The environment of BAML lambda `.<lambda(closure_in_owner, 0)>`.
 pub struct user_closure_in_owner__lambda0__env {
@@ -1431,65 +1467,72 @@ pub fn user_closure_in_owner__lambda1(
     Ok(_0)
 }
 /// BAML function `user.closure_in_owner`.
+#[inline(never)]
 pub fn user_closure_in_owner(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _1: cell::Cell<Int63> = cell::with(_1);
-    let mut _0: Int63;
-    let mut _2: cell::CcCell<Cc<Vec<func::CcFunc<(), Int63>>>>;
-    let mut _3: Int63;
-    let mut _4: func::CcFunc<(), Int63>;
-    let mut _6: Int63;
-    let mut _7: func::CcFunc<(), Int63>;
-    let mut _9: Int63;
-    let mut _10: Cc<Vec<func::CcFunc<(), Int63>>>;
-    let mut _11: bex_aot::array::Iter<func::CcFunc<(), Int63>, bex_aot::Tracked>;
-    let mut _12: Option<func::CcFunc<(), Int63>>;
-    let mut _13: bool;
-    let mut _14: func::CcFunc<(), Int63>;
-    let mut _16: Int63;
-    let mut _17: func::CcFunc<(), Int63>;
-    _2 = cell::fresh();
-    {
-        let value = array::new_cc::<func::CcFunc<(), Int63>>(Vec::new());
-        cell::set(&_2, value);
-    }
-    _4 = {
-        let __closure: func::CcFunc<(), Int63> = func::alloc(user_closure_in_owner__lambda0__env {
-            _c0: cell::Cell::clone(&_2),
-        });
-        __closure
-    };
-    bex_aot::depth::probe(0)?;
-    array::push(&cell::get(&_2)?, _4.clone());
-    _3 = array::len(&cell::get(&_2)?);
-    _7 = {
-        let __closure: func::CcFunc<(), Int63> = func::alloc(user_closure_in_owner__lambda1__env {
-            _c0: cell::Cell::clone(&_1),
-            _c1: cell::Cell::clone(&_2),
-        });
-        __closure
-    };
-    bex_aot::depth::probe(0)?;
-    array::push(&cell::get(&_2)?, _7.clone());
-    _6 = array::len(&cell::get(&_2)?);
-    _9 = int::lit(0);
-    _10 = cell::get(&_2)?;
-    bex_aot::depth::probe(1)?;
-    _11 = array::iter(&_10);
-    'bb3: loop {
-        _12 = array::next(&mut _11);
-        _13 = _12.is_none();
-        if _13 {
-            _0 = _9;
-            return Ok(_0);
-        } else {
-            _14 = _12.clone().expect("non-null by the checker's narrowing");
-            _17 = _14.clone();
-            _16 = (_17).call(())?;
-            _9 = int::add(_9, _16)?;
-            continue 'bb3;
+    let __telemetry = bex_aot::telemetry::enter(9u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _1: cell::Cell<Int63> = cell::with(_1);
+        let mut _0: Int63;
+        let mut _2: cell::CcCell<Cc<Vec<func::CcFunc<(), Int63>>>>;
+        let mut _3: Int63;
+        let mut _4: func::CcFunc<(), Int63>;
+        let mut _6: Int63;
+        let mut _7: func::CcFunc<(), Int63>;
+        let mut _9: Int63;
+        let mut _10: Cc<Vec<func::CcFunc<(), Int63>>>;
+        let mut _11: bex_aot::array::Iter<func::CcFunc<(), Int63>, bex_aot::Tracked>;
+        let mut _12: Option<func::CcFunc<(), Int63>>;
+        let mut _13: bool;
+        let mut _14: func::CcFunc<(), Int63>;
+        let mut _16: Int63;
+        let mut _17: func::CcFunc<(), Int63>;
+        _2 = cell::fresh();
+        {
+            let value = array::new_cc::<func::CcFunc<(), Int63>>(Vec::new());
+            cell::set(&_2, value);
         }
-    }
+        _4 = {
+            let __closure: func::CcFunc<(), Int63> = func::alloc(user_closure_in_owner__lambda0__env {
+                _c0: cell::Cell::clone(&_2),
+            });
+            __closure
+        };
+        bex_aot::depth::probe(0)?;
+        array::push(&cell::get(&_2)?, _4.clone());
+        _3 = array::len(&cell::get(&_2)?);
+        _7 = {
+            let __closure: func::CcFunc<(), Int63> = func::alloc(user_closure_in_owner__lambda1__env {
+                _c0: cell::Cell::clone(&_1),
+                _c1: cell::Cell::clone(&_2),
+            });
+            __closure
+        };
+        bex_aot::depth::probe(0)?;
+        array::push(&cell::get(&_2)?, _7.clone());
+        _6 = array::len(&cell::get(&_2)?);
+        _9 = int::lit(0);
+        _10 = cell::get(&_2)?;
+        bex_aot::depth::probe(1)?;
+        _11 = array::iter(&_10);
+        'bb3: loop {
+            _12 = array::next(&mut _11);
+            _13 = _12.is_none();
+            if _13 {
+                _0 = _9;
+                return Ok(_0);
+            } else {
+                _14 = _12.clone().expect("non-null by the checker's narrowing");
+                _17 = _14.clone();
+                bex_aot::telemetry::site(9u32, 3u32);
+                _16 = (_17).call(())?;
+                _9 = int::add(_9, _16)?;
+                continue 'bb3;
+            }
+        }
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// The environment of BAML lambda `.<lambda(closure_captures_owner, 0)>`.
 pub struct user_closure_captures_owner__lambda0__env {
@@ -1578,10 +1621,12 @@ pub fn user_closure_captures_owner(mut _1: Int63) -> Result<Int63, Thrown> {
     _11 = cell::get(&_4)?;
     _12 = int::lit(0);
     _10 = array::get(&_11, _12)?;
+    bex_aot::telemetry::site(11u32, 1u32);
     _9 = (_10).call(())?;
     _15 = cell::get(&_4)?;
     _16 = int::lit(0);
     _14 = array::get(&_15, _16)?;
+    bex_aot::telemetry::site(11u32, 2u32);
     _13 = (_14).call(())?;
     _8 = int::add(_9, _13)?;
     _18 = cell::get(&_2)?.borrow().items.clone();
@@ -1590,157 +1635,169 @@ pub fn user_closure_captures_owner(mut _1: Int63) -> Result<Int63, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.map_cycle`.
+#[inline(never)]
 pub fn user_map_cycle(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Cc<user_MNode>;
-    let mut _4: CcMap<Str, Cc<user_MNode>>;
-    let mut _5: Cc<user_MNode>;
-    let mut _7: CcMap<Str, Cc<user_MNode>>;
-    let mut _8: CcMap<Str, Cc<user_MNode>>;
-    let mut _10: Option<Cc<user_MNode>>;
-    let mut _11: CcMap<Str, Cc<user_MNode>>;
-    let mut _13: Option<Cc<user_MNode>>;
-    let mut _14: CcMap<Str, Cc<user_MNode>>;
-    let mut _16: Option<Cc<user_MNode>>;
-    let mut _17: Int63;
-    let mut _18: Shared<Vec<Str>>;
-    let mut _19: CcMap<Str, Cc<user_MNode>>;
-    let mut _22: bex_aot::array::Iter<Str>;
-    let mut _23: Option<Str>;
-    let mut _24: bool;
-    let mut _25: Str;
-    let mut _27: Int63;
-    let mut _28: Str;
-    let mut _29: Cc<user_MNode>;
-    let mut _30: CcMap<Str, Cc<user_MNode>>;
-    let mut _31: Str;
-    let mut _32: Int63;
-    let mut _33: Int63;
-    let mut _34: Str;
-    let mut _35: Cc<user_MNode>;
-    let mut _36: CcMap<Str, Cc<user_MNode>>;
-    let mut _37: Cc<user_MNode>;
-    let mut _38: CcMap<Str, Cc<user_MNode>>;
-    _4 = map::new_cc::<Str, Cc<user_MNode>>(Vec::new());
-    _2 = cc(user_MNode {
-        name: string::from_literal("a"),
-        links: _4.clone(),
-    });
-    _7 = map::new_cc::<Str, Cc<user_MNode>>(Vec::new());
-    _5 = cc(user_MNode {
-        name: string::from_literal("b"),
-        links: _7.clone(),
-    });
-    _8 = _2.borrow().links.clone();
-    bex_aot::depth::probe(0)?;
-    _10 = map::set(&_8, string::from_literal("peer"), _5.clone());
-    _11 = _5.borrow().links.clone();
-    bex_aot::depth::probe(0)?;
-    _13 = map::set(&_11, string::from_literal("peer"), _2.clone());
-    _14 = _2.borrow().links.clone();
-    bex_aot::depth::probe(0)?;
-    _16 = map::set(&_14, string::from_literal("self"), _2.clone());
-    _17 = _1;
-    _19 = _2.borrow().links.clone();
-    bex_aot::depth::probe(0)?;
-    _18 = map::keys(&_19);
-    bex_aot::depth::probe(1)?;
-    _22 = array::iter(&_18);
-    'bb5: loop {
-        _23 = array::next(&mut _22);
-        _24 = _23.is_none();
-        if _24 {
-            _32 = _17;
-            _38 = _5.borrow().links.clone();
-            bex_aot::depth::probe(0)?;
-            _37 = map::index(&_38, &string::from_literal("peer"))?;
-            _36 = _37.borrow().links.clone();
-            bex_aot::depth::probe(0)?;
-            _35 = map::index(&_36, &string::from_literal("peer"))?;
-            _34 = _35.borrow().name.clone();
-            bex_aot::depth::probe(1)?;
-            _33 = string::length(&_34);
-            _0 = int::add(_32, _33)?;
-            return Ok(_0);
-        } else {
-            _25 = _23.clone().expect("non-null by the checker's narrowing");
-            _30 = _2.borrow().links.clone();
-            _31 = _25.clone();
-            bex_aot::depth::probe(0)?;
-            _29 = map::index(&_30, &_31)?;
-            _28 = _29.borrow().name.clone();
-            bex_aot::depth::probe(1)?;
-            _27 = string::length(&_28);
-            _17 = int::add(_17, _27)?;
-            continue 'bb5;
-        }
-    }
-}
-/// BAML function `user.generic_cycle`.
-pub fn user_generic_cycle(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Cc<user_Link__int>;
-    let mut _3: Cc<user_Link__int>;
-    let mut _4: Int63;
-    let mut _6: Cc<user_Link__int>;
-    let mut _7: Int63;
-    let mut _9: Int63;
-    let mut _10: Option<Cc<user_Link__int>>;
-    let mut _11: Int63;
-    let mut _12: bool;
-    let mut _13: Int63;
-    let mut _14: bool;
-    let mut _16: Cc<user_Link__int>;
-    let mut _17: Int63;
-    _2 = cc(user_Link__int {
-        value: _1,
-        next: None,
-    });
-    _4 = int::add(_1, int::lit(1))?;
-    _3 = cc(user_Link__int {
-        value: _4,
-        next: Some(_2.clone()),
-    });
-    _7 = int::add(_1, int::lit(2))?;
-    _6 = cc(user_Link__int {
-        value: _7,
-        next: Some(_3.clone()),
-    });
-    {
-        let value = Some(_6.clone());
-        _2.borrow_mut().next = value;
-    }
-    _9 = int::lit(0);
-    _10 = Some(_2.clone());
-    _11 = int::lit(0);
-    'bb7: {
-        'bb1: loop {
-            _13 = _11;
-            _12 = _13 < int::lit(7);
-            if _12 {
+    let __telemetry = bex_aot::telemetry::enter(12u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Cc<user_MNode>;
+        let mut _4: CcMap<Str, Cc<user_MNode>>;
+        let mut _5: Cc<user_MNode>;
+        let mut _7: CcMap<Str, Cc<user_MNode>>;
+        let mut _8: CcMap<Str, Cc<user_MNode>>;
+        let mut _10: Option<Cc<user_MNode>>;
+        let mut _11: CcMap<Str, Cc<user_MNode>>;
+        let mut _13: Option<Cc<user_MNode>>;
+        let mut _14: CcMap<Str, Cc<user_MNode>>;
+        let mut _16: Option<Cc<user_MNode>>;
+        let mut _17: Int63;
+        let mut _18: Shared<Vec<Str>>;
+        let mut _19: CcMap<Str, Cc<user_MNode>>;
+        let mut _22: bex_aot::array::Iter<Str>;
+        let mut _23: Option<Str>;
+        let mut _24: bool;
+        let mut _25: Str;
+        let mut _27: Int63;
+        let mut _28: Str;
+        let mut _29: Cc<user_MNode>;
+        let mut _30: CcMap<Str, Cc<user_MNode>>;
+        let mut _31: Str;
+        let mut _32: Int63;
+        let mut _33: Int63;
+        let mut _34: Str;
+        let mut _35: Cc<user_MNode>;
+        let mut _36: CcMap<Str, Cc<user_MNode>>;
+        let mut _37: Cc<user_MNode>;
+        let mut _38: CcMap<Str, Cc<user_MNode>>;
+        _4 = map::new_cc::<Str, Cc<user_MNode>>(Vec::new());
+        _2 = cc(user_MNode {
+            name: string::from_literal("a"),
+            links: _4.clone(),
+        });
+        _7 = map::new_cc::<Str, Cc<user_MNode>>(Vec::new());
+        _5 = cc(user_MNode {
+            name: string::from_literal("b"),
+            links: _7.clone(),
+        });
+        _8 = _2.borrow().links.clone();
+        bex_aot::depth::probe(0)?;
+        _10 = map::set(&_8, string::from_literal("peer"), _5.clone());
+        _11 = _5.borrow().links.clone();
+        bex_aot::depth::probe(0)?;
+        _13 = map::set(&_11, string::from_literal("peer"), _2.clone());
+        _14 = _2.borrow().links.clone();
+        bex_aot::depth::probe(0)?;
+        _16 = map::set(&_14, string::from_literal("self"), _2.clone());
+        _17 = _1;
+        _19 = _2.borrow().links.clone();
+        bex_aot::depth::probe(0)?;
+        _18 = map::keys(&_19);
+        bex_aot::depth::probe(1)?;
+        _22 = array::iter(&_18);
+        'bb5: loop {
+            _23 = array::next(&mut _22);
+            _24 = _23.is_none();
+            if _24 {
+                _32 = _17;
+                _38 = _5.borrow().links.clone();
                 bex_aot::depth::probe(0)?;
-                _14 = _10.is_none();
-                if _14 {
-                    _0 = int::neg(int::lit(1))?;
-                    break 'bb7;
-                } else {
-                    _16 = _10.clone().expect("non-null by the checker's narrowing");
-                    _17 = _16.borrow().value;
-                    _9 = int::add(_9, _17)?;
-                    _10 = _16.borrow().next.clone();
-                    _11 = int::add(_11, int::lit(1))?;
-                    continue 'bb1;
-                }
+                _37 = map::index(&_38, &string::from_literal("peer"))?;
+                _36 = _37.borrow().links.clone();
+                bex_aot::depth::probe(0)?;
+                _35 = map::index(&_36, &string::from_literal("peer"))?;
+                _34 = _35.borrow().name.clone();
+                bex_aot::depth::probe(1)?;
+                _33 = string::length(&_34);
+                _0 = int::add(_32, _33)?;
+                return Ok(_0);
             } else {
-                break 'bb1;
+                _25 = _23.clone().expect("non-null by the checker's narrowing");
+                _30 = _2.borrow().links.clone();
+                _31 = _25.clone();
+                bex_aot::depth::probe(0)?;
+                _29 = map::index(&_30, &_31)?;
+                _28 = _29.borrow().name.clone();
+                bex_aot::depth::probe(1)?;
+                _27 = string::length(&_28);
+                _17 = int::add(_17, _27)?;
+                continue 'bb5;
             }
         }
-        _0 = _9;
-        break 'bb7;
-    }
-    Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
+}
+/// BAML function `user.generic_cycle`.
+#[inline(never)]
+pub fn user_generic_cycle(mut _1: Int63) -> Result<Int63, Thrown> {
+    let __telemetry = bex_aot::telemetry::enter(13u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Cc<user_Link__int>;
+        let mut _3: Cc<user_Link__int>;
+        let mut _4: Int63;
+        let mut _6: Cc<user_Link__int>;
+        let mut _7: Int63;
+        let mut _9: Int63;
+        let mut _10: Option<Cc<user_Link__int>>;
+        let mut _11: Int63;
+        let mut _12: bool;
+        let mut _13: Int63;
+        let mut _14: bool;
+        let mut _16: Cc<user_Link__int>;
+        let mut _17: Int63;
+        _2 = cc(user_Link__int {
+            value: _1,
+            next: None,
+        });
+        _4 = int::add(_1, int::lit(1))?;
+        _3 = cc(user_Link__int {
+            value: _4,
+            next: Some(_2.clone()),
+        });
+        _7 = int::add(_1, int::lit(2))?;
+        _6 = cc(user_Link__int {
+            value: _7,
+            next: Some(_3.clone()),
+        });
+        {
+            let value = Some(_6.clone());
+            _2.borrow_mut().next = value;
+        }
+        _9 = int::lit(0);
+        _10 = Some(_2.clone());
+        _11 = int::lit(0);
+        'bb7: {
+            'bb1: loop {
+                _13 = _11;
+                _12 = _13 < int::lit(7);
+                if _12 {
+                    bex_aot::depth::probe(0)?;
+                    _14 = _10.is_none();
+                    if _14 {
+                        _0 = int::neg(int::lit(1))?;
+                        break 'bb7;
+                    } else {
+                        _16 = _10.clone().expect("non-null by the checker's narrowing");
+                        _17 = _16.borrow().value;
+                        _9 = int::add(_9, _17)?;
+                        _10 = _16.borrow().next.clone();
+                        _11 = int::add(_11, int::lit(1))?;
+                        continue 'bb1;
+                    }
+                } else {
+                    break 'bb1;
+                }
+            }
+            _0 = _9;
+            break 'bb7;
+        }
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.union_cycle`.
 pub fn user_union_cycle(mut _1: Int63) -> Result<Int63, Thrown> {
@@ -1817,55 +1874,61 @@ pub fn user_union_cycle(mut _1: Int63) -> Result<Int63, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.built_then_broken`.
+#[inline(never)]
 pub fn user_built_then_broken(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Int63;
-    let mut _3: Int63;
-    let mut _4: bool;
-    let mut _5: Int63;
-    let mut _6: Cc<user_Node>;
-    let mut _7: Int63;
-    let mut _8: Cc<user_Node>;
-    let mut _9: Int63;
-    let mut _10: Int63;
-    let mut _12: Int63;
-    let mut _13: Int63;
-    let mut _14: Int63;
-    _2 = int::lit(0);
-    _3 = int::lit(0);
-    'bb1: loop {
-        _5 = _3;
-        _4 = _5 < _1;
-        if _4 {
-            _7 = _3;
-            _6 = cc(user_Node { value: _7, next: None });
-            _10 = _3;
-            _9 = int::add(_10, int::lit(1))?;
-            _8 = cc(user_Node {
-                value: _9,
-                next: Some(_6.clone()),
-            });
-            {
-                let value = Some(_8.clone());
-                _6.borrow_mut().next = value;
+    let __telemetry = bex_aot::telemetry::enter(15u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Int63;
+        let mut _3: Int63;
+        let mut _4: bool;
+        let mut _5: Int63;
+        let mut _6: Cc<user_Node>;
+        let mut _7: Int63;
+        let mut _8: Cc<user_Node>;
+        let mut _9: Int63;
+        let mut _10: Int63;
+        let mut _12: Int63;
+        let mut _13: Int63;
+        let mut _14: Int63;
+        _2 = int::lit(0);
+        _3 = int::lit(0);
+        'bb1: loop {
+            _5 = _3;
+            _4 = _5 < _1;
+            if _4 {
+                _7 = _3;
+                _6 = cc(user_Node { value: _7, next: None });
+                _10 = _3;
+                _9 = int::add(_10, int::lit(1))?;
+                _8 = cc(user_Node {
+                    value: _9,
+                    next: Some(_6.clone()),
+                });
+                {
+                    let value = Some(_8.clone());
+                    _6.borrow_mut().next = value;
+                }
+                _13 = _6.borrow().value;
+                _14 = _8.borrow().value;
+                _12 = int::add(_13, _14)?;
+                _2 = int::add(_2, _12)?;
+                {
+                    let value = None;
+                    _6.borrow_mut().next = value;
+                }
+                _3 = int::add(_3, int::lit(1))?;
+                continue 'bb1;
+            } else {
+                break 'bb1;
             }
-            _13 = _6.borrow().value;
-            _14 = _8.borrow().value;
-            _12 = int::add(_13, _14)?;
-            _2 = int::add(_2, _12)?;
-            {
-                let value = None;
-                _6.borrow_mut().next = value;
-            }
-            _3 = int::add(_3, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
         }
-    }
-    _0 = _2;
-    Ok(_0)
+        _0 = _2;
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.throw_cycle`.
 pub fn user_throw_cycle(mut _1: Int63) -> Result<Int63, Thrown> {
@@ -1906,6 +1969,7 @@ pub fn user_cycle_in_error(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _12: Str;
     'bb8: {
         'bb1: {
+            bex_aot::telemetry::site(17u32, 0u32);
             _0 = match user_throw_cycle(_1) {
                 Ok(value) => value,
                 Err(error) => {
@@ -2056,46 +2120,487 @@ pub fn user_cycle_across_defer(mut _1: Int63) -> Result<Str, Thrown> {
     Err(_7.clone())
 }
 /// BAML function `user.long_list`.
+#[inline(never)]
 pub fn user_long_list(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Option<Cc<user_Node>>;
-    let mut _3: Int63;
-    let mut _4: bool;
-    let mut _5: Int63;
-    let mut _6: Int63;
-    let mut _8: bool;
-    let mut _10: Cc<user_Node>;
-    _2 = None;
-    _3 = int::lit(0);
-    'bb1: loop {
-        _5 = _3;
-        _4 = _5 < _1;
-        if _4 {
-            _6 = _3;
-            _2 = Some(
-                cc(user_Node {
-                    value: _6,
-                    next: _2.clone(),
-                }),
-            );
-            _3 = int::add(_3, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
+    let __telemetry = bex_aot::telemetry::enter(19u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Option<Cc<user_Node>>;
+        let mut _3: Int63;
+        let mut _4: bool;
+        let mut _5: Int63;
+        let mut _6: Int63;
+        let mut _8: bool;
+        let mut _10: Cc<user_Node>;
+        _2 = None;
+        _3 = int::lit(0);
+        'bb1: loop {
+            _5 = _3;
+            _4 = _5 < _1;
+            if _4 {
+                _6 = _3;
+                _2 = Some(
+                    cc(user_Node {
+                        value: _6,
+                        next: _2.clone(),
+                    }),
+                );
+                _3 = int::add(_3, int::lit(1))?;
+                continue 'bb1;
+            } else {
+                break 'bb1;
+            }
         }
-    }
-    bex_aot::depth::probe(0)?;
-    _8 = _2.is_none();
-    'bb6: {
-        if _8 {
-            _0 = int::lit(0);
-            break 'bb6;
-        } else {
-            _10 = _2.clone().expect("non-null by the checker's narrowing");
-            _0 = _10.borrow().value;
-            break 'bb6;
+        bex_aot::depth::probe(0)?;
+        _8 = _2.is_none();
+        'bb6: {
+            if _8 {
+                _0 = int::lit(0);
+                break 'bb6;
+            } else {
+                _10 = _2.clone().expect("non-null by the checker's narrowing");
+                _0 = _10.borrow().value;
+                break 'bb6;
+            }
         }
-    }
-    Ok(_0)
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.self_loop",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 376u32,
+        end: 584u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 502u32,
+                end: 514u32,
+                line: 13u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.doubly_linked",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 725u32,
+        end: 1389u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1110u32,
+                end: 1124u32,
+                line: 34u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1269u32,
+                end: 1281u32,
+                line: 40u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.grow",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1720u32,
+        end: 2011u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1929u32,
+                end: 1954u32,
+                line: 63u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1964u32,
+                end: 1986u32,
+                line: 64u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.sum_to_root",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2080u32,
+        end: 2393u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2178u32,
+                end: 2188u32,
+                line: 73u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2316u32,
+                end: 2381u32,
+                line: 79u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2360u32,
+                end: 2378u32,
+                line: 79u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.tree_with_parents",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1561u32,
+        end: 1718u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1676u32,
+                end: 1693u32,
+                line: 54u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1699u32,
+                end: 1716u32,
+                line: 55u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.graph",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2552u32,
+        end: 2989u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2722u32,
+                end: 2859u32,
+                line: 94u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2756u32,
+                end: 2797u32,
+                line: 95u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2807u32,
+                end: 2852u32,
+                line: 96u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2881u32,
+                end: 2979u32,
+                line: 99u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2915u32,
+                end: 2973u32,
+                line: 100u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2656u32,
+                end: 2694u32,
+                line: 91u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.cycles_into_live",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3133u32,
+        end: 3504u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3380u32,
+                end: 3395u32,
+                line: 114u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(closure_in_owner, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3743u32,
+        end: 3779u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(closure_in_owner, 1)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3800u32,
+        end: 3835u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.closure_in_owner",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 3631u32,
+        end: 3926u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 3729u32,
+                end: 3780u32,
+                line: 125u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3786u32,
+                end: 3836u32,
+                line: 126u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3861u32,
+                end: 3914u32,
+                line: 128u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 3902u32,
+                end: 3911u32,
+                line: 128u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(closure_captures_owner, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 4203u32,
+        end: 4307u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 4249u32,
+                end: 4280u32,
+                line: 140u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.closure_captures_owner",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 4046u32,
+        end: 4360u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 4193u32,
+                end: 4308u32,
+                line: 138u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4314u32,
+                end: 4323u32,
+                line: 143u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4326u32,
+                end: 4335u32,
+                line: 143u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.map_cycle",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 4468u32,
+        end: 4820u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 4596u32,
+                end: 4615u32,
+                line: 152u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4621u32,
+                end: 4640u32,
+                line: 153u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4646u32,
+                end: 4665u32,
+                line: 154u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4706u32,
+                end: 4720u32,
+                line: 156u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4690u32,
+                end: 4762u32,
+                line: 156u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4733u32,
+                end: 4745u32,
+                line: 156u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4733u32,
+                end: 4759u32,
+                line: 156u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4775u32,
+                end: 4790u32,
+                line: 157u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4775u32,
+                end: 4804u32,
+                line: 157u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 4775u32,
+                end: 4818u32,
+                line: 157u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.generic_cycle",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 4922u32,
+        end: 5399u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 5236u32,
+                end: 5250u32,
+                line: 172u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.union_cycle",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 5551u32,
+        end: 5938u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 5883u32,
+                end: 5904u32,
+                line: 194u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.built_then_broken",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 6010u32,
+        end: 6315u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.throw_cycle",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 6367u32,
+        end: 6560u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.cycle_in_error",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 6628u32,
+        end: 6886u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 6673u32,
+                end: 6687u32,
+                line: 225u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 6783u32,
+                end: 6795u32,
+                line: 228u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 6847u32,
+                end: 6865u32,
+                line: 228u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.cycle_across_defer",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 6962u32,
+        end: 7397u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 7348u32,
+                end: 7367u32,
+                line: 244u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 7329u32,
+                end: 7368u32,
+                line: 244u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 7222u32,
+                end: 7234u32,
+                line: 242u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 7284u32,
+                end: 7306u32,
+                line: 242u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 7261u32,
+                end: 7307u32,
+                line: 242u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 7380u32,
+                end: 7395u32,
+                line: 246u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.long_list",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 7543u32,
+        end: 7797u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 7724u32,
+                end: 7736u32,
+                line: 258u32,
+            },
+        ],
+    },
+];

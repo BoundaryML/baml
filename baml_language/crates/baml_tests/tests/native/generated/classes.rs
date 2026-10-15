@@ -413,6 +413,7 @@ pub fn user_roundtrip(mut _1: Str) -> Result<Int63, Thrown> {
     let mut _2: Shared<user_Point>;
     bex_aot::depth::probe(1)?;
     _2 = json::deserialize::<Shared<user_Point>>(&_1)?;
+    bex_aot::telemetry::site(2u32, 1u32);
     _0 = user_area(_2.clone())?;
     Ok(_0)
 }
@@ -528,11 +529,145 @@ pub fn user_borrowed_argument(mut _1: Int63) -> Result<Int63, Thrown> {
         total: int::lit(0),
     });
     _6 = _2.borrow().c.clone();
+    bex_aot::telemetry::site(7u32, 0u32);
     _5 = user_bump(_6.clone(), _2.clone())?;
     _9 = _2.borrow().c.clone();
+    bex_aot::telemetry::site(7u32, 1u32);
     _8 = user_bump(_9.clone(), _2.clone())?;
     _4 = int::add(_5, _8)?;
     _11 = _2.borrow().total;
     _0 = int::add(_4, _11)?;
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.area",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 172u32,
+        end: 220u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.make",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 222u32,
+        end: 458u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 324u32,
+                end: 337u32,
+                line: 12u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 434u32,
+                end: 456u32,
+                line: 15u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.roundtrip",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 460u32,
+        end: 561u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 513u32,
+                end: 546u32,
+                line: 19u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 552u32,
+                end: 559u32,
+                line: 20u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.box_roundtrip",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 563u32,
+        end: 684u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 623u32,
+                end: 654u32,
+                line: 24u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 660u32,
+                end: 682u32,
+                line: 25u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.render",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 686u32,
+        end: 776u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 761u32,
+                end: 774u32,
+                line: 30u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.nullable",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 778u32,
+        end: 1022u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 955u32,
+                end: 968u32,
+                line: 38u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.bump",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1303u32,
+        end: 1410u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.borrowed_argument",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1412u32,
+        end: 1553u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1514u32,
+                end: 1526u32,
+                line: 59u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1529u32,
+                end: 1541u32,
+                line: 59u32,
+            },
+        ],
+    },
+];

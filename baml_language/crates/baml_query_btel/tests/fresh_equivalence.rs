@@ -270,6 +270,7 @@ mod crafted {
                 source_map: Some(proto::SourceMap {
                     coordinate: proto::PcCoordinate::CompactByteOffset as i32,
                     code_bytes: 40,
+                    site_count: 0,
                     pc: vec![2, 10, 20],
                     file_id: vec![3, 3, 3],
                     start: vec![100, 120, 140],

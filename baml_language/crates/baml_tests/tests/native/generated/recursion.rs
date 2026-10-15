@@ -42,6 +42,7 @@ pub fn user_fact(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb4;
         } else {
             _4 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(0u32, 0u32);
             _3 = user_fact(_4)?;
             _0 = int::mul(_1, _3)?;
             break 'bb4;
@@ -62,6 +63,7 @@ pub fn user_is_odd(mut _1: Int63) -> Result<bool, Thrown> {
             break 'bb3;
         } else {
             _3 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(1u32, 0u32);
             _0 = user_is_even(_3)?;
             break 'bb3;
         }
@@ -81,6 +83,7 @@ pub fn user_is_even(mut _1: Int63) -> Result<bool, Thrown> {
             break 'bb3;
         } else {
             _3 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(2u32, 0u32);
             _0 = user_is_odd(_3)?;
             break 'bb3;
         }
@@ -101,6 +104,7 @@ pub fn user_deep(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb4;
         } else {
             _4 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(3u32, 0u32);
             _3 = user_deep(_4)?;
             _0 = int::add(_3, int::lit(1))?;
             break 'bb4;
@@ -124,8 +128,10 @@ pub fn user_fib(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb5;
         } else {
             _4 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(4u32, 0u32);
             _3 = user_fib(_4)?;
             _6 = int::sub(_1, int::lit(2))?;
+            bex_aot::telemetry::site(4u32, 1u32);
             _5 = user_fib(_6)?;
             _0 = int::add(_3, _5)?;
             break 'bb5;
@@ -137,6 +143,7 @@ pub fn user_fib(mut _1: Int63) -> Result<Int63, Thrown> {
 pub fn user_start(mut _1: Int63) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Int63;
+    bex_aot::telemetry::site(5u32, 0u32);
     _0 = user_deep(_1)?;
     Ok(_0)
 }
@@ -156,6 +163,7 @@ pub fn user_deep_length(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb4;
         } else {
             _5 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(6u32, 0u32);
             _4 = user_deep_length(_5)?;
             _0 = int::add(_4, int::lit(1))?;
             break 'bb4;
@@ -178,6 +186,7 @@ pub fn user_deep_str_length(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb4;
         } else {
             _4 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(7u32, 0u32);
             _3 = user_deep_str_length(_4)?;
             _0 = int::add(_3, int::lit(1))?;
             break 'bb4;
@@ -186,51 +195,58 @@ pub fn user_deep_str_length(mut _1: Int63) -> Result<Int63, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.deep_for_in`.
+#[inline(never)]
 pub fn user_deep_for_in(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: bool;
-    let mut _3: Int63;
-    let mut _4: Shared<Vec<Int63>>;
-    let mut _5: bex_aot::array::Iter<Int63>;
-    let mut _6: Option<Int63>;
-    let mut _7: bool;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    let mut _10: Int63;
-    let mut _11: Int63;
-    let mut _12: Int63;
-    let mut _13: Int63;
-    'bb8: {
-        _2 = _1 == int::lit(0);
-        if _2 {
-            _3 = int::lit(0);
-            _4 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2)]));
-            bex_aot::depth::probe(1)?;
-            _5 = array::iter(&_4);
-            'bb4: loop {
-                _6 = array::next(&mut _5);
-                _7 = _6.is_none();
-                if _7 {
-                    _0 = _3;
-                    break 'bb8;
-                } else {
-                    _8 = _6.expect("non-null by the checker's narrowing");
-                    _9 = _8;
-                    _10 = _3;
-                    _11 = _9;
-                    _3 = int::add(_10, _11)?;
-                    continue 'bb4;
+    let __telemetry = bex_aot::telemetry::enter(8u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: bool;
+        let mut _3: Int63;
+        let mut _4: Shared<Vec<Int63>>;
+        let mut _5: bex_aot::array::Iter<Int63>;
+        let mut _6: Option<Int63>;
+        let mut _7: bool;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        let mut _10: Int63;
+        let mut _11: Int63;
+        let mut _12: Int63;
+        let mut _13: Int63;
+        'bb8: {
+            _2 = _1 == int::lit(0);
+            if _2 {
+                _3 = int::lit(0);
+                _4 = array::new::<Int63>(Vec::from([int::lit(1), int::lit(2)]));
+                bex_aot::depth::probe(1)?;
+                _5 = array::iter(&_4);
+                'bb4: loop {
+                    _6 = array::next(&mut _5);
+                    _7 = _6.is_none();
+                    if _7 {
+                        _0 = _3;
+                        break 'bb8;
+                    } else {
+                        _8 = _6.expect("non-null by the checker's narrowing");
+                        _9 = _8;
+                        _10 = _3;
+                        _11 = _9;
+                        _3 = int::add(_10, _11)?;
+                        continue 'bb4;
+                    }
                 }
+            } else {
+                _13 = int::sub(_1, int::lit(1))?;
+                bex_aot::telemetry::site(8u32, 0u32);
+                _12 = user_deep_for_in(_13)?;
+                _0 = int::add(_12, int::lit(1))?;
+                break 'bb8;
             }
-        } else {
-            _13 = int::sub(_1, int::lit(1))?;
-            _12 = user_deep_for_in(_13)?;
-            _0 = int::add(_12, int::lit(1))?;
-            break 'bb8;
         }
-    }
-    Ok(_0)
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// The environment of BAML lambda `.<lambda(deep_map, 0)>`.
 pub struct user_deep_map__lambda0__env {}
@@ -269,6 +285,7 @@ pub fn user_deep_map(mut _1: Int63) -> Result<Int63, Thrown> {
                 let __closure: func::Func<(Int63,), Int63> = func::alloc(user_deep_map__lambda0__env {});
                 __closure
             };
+            bex_aot::telemetry::site(10u32, 1u32);
             bex_aot::depth::probe(0)?;
             _3 = {
                 let __callback = &|__arg0: Int63| (_5).call((__arg0,));
@@ -278,6 +295,7 @@ pub fn user_deep_map(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb5;
         } else {
             _10 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(10u32, 0u32);
             _9 = user_deep_map(_10)?;
             _0 = int::add(_9, int::lit(1))?;
             break 'bb5;
@@ -343,6 +361,7 @@ pub fn user_deep_for_each(mut _1: Int63) -> Result<Int63, Thrown> {
                 });
                 __closure
             };
+            bex_aot::telemetry::site(12u32, 1u32);
             bex_aot::depth::probe(1)?;
             _4 = {
                 let __callback = &|__arg0: Int63| (_6).call((__arg0,));
@@ -352,6 +371,7 @@ pub fn user_deep_for_each(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb5;
         } else {
             _10 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(12u32, 0u32);
             _9 = user_deep_for_each(_10)?;
             _0 = int::add(_9, int::lit(1))?;
             break 'bb5;
@@ -396,6 +416,7 @@ pub fn user_deep_for_each_empty(mut _1: Int63) -> Result<Int63, Thrown> {
                 let __closure: func::Func<(Int63,), ()> = func::alloc(user_deep_for_each_empty__lambda0__env {});
                 __closure
             };
+            bex_aot::telemetry::site(14u32, 1u32);
             bex_aot::depth::probe(1)?;
             _4 = {
                 let __callback = &|__arg0: Int63| (_5).call((__arg0,));
@@ -405,6 +426,7 @@ pub fn user_deep_for_each_empty(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb5;
         } else {
             _9 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(14u32, 0u32);
             _8 = user_deep_for_each_empty(_9)?;
             _0 = int::add(_8, int::lit(1))?;
             break 'bb5;
@@ -450,6 +472,7 @@ pub fn user_deep_sort_by_key(mut _1: Int63) -> Result<Int63, Thrown> {
                 let __closure: func::Func<(Int63,), Int63> = func::alloc(user_deep_sort_by_key__lambda0__env {});
                 __closure
             };
+            bex_aot::telemetry::site(16u32, 1u32);
             bex_aot::depth::probe(1)?;
             {
                 let __callback = &|__arg0: Int63| (_5).call((__arg0,));
@@ -465,6 +488,7 @@ pub fn user_deep_sort_by_key(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb5;
         } else {
             _11 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(16u32, 0u32);
             _10 = user_deep_sort_by_key(_11)?;
             _0 = int::add(_10, int::lit(1))?;
             break 'bb5;
@@ -492,6 +516,7 @@ pub fn user_deep_json(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb5;
         } else {
             _6 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(17u32, 0u32);
             _5 = user_deep_json(_6)?;
             _0 = int::add(_5, int::lit(1))?;
             break 'bb5;
@@ -518,6 +543,7 @@ pub fn user_deep_panic(mut _1: Int63) -> Result<Int63, Thrown> {
             break 'bb4;
         } else {
             _4 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(18u32, 0u32);
             _3 = user_deep_panic(_4)?;
             _0 = int::add(_3, int::lit(1))?;
             break 'bb4;
@@ -525,3 +551,318 @@ pub fn user_deep_panic(mut _1: Int63) -> Result<Int63, Thrown> {
     }
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.fact",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 76u32,
+        end: 151u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 136u32,
+                end: 147u32,
+                line: 3u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.is_odd",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 235u32,
+        end: 316u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 298u32,
+                end: 312u32,
+                line: 7u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.is_even",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 153u32,
+        end: 233u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 216u32,
+                end: 229u32,
+                line: 5u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.deep",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 318u32,
+        end: 393u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 374u32,
+                end: 385u32,
+                line: 9u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.fib",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 395u32,
+        end: 476u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 449u32,
+                end: 459u32,
+                line: 11u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 462u32,
+                end: 472u32,
+                line: 11u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.start",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 761u32,
+        end: 802u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 793u32,
+                end: 800u32,
+                line: 17u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.deep_length",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 804u32,
+        end: 911u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 885u32,
+                end: 903u32,
+                line: 20u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.deep_str_length",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 913u32,
+        end: 1026u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 996u32,
+                end: 1018u32,
+                line: 24u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 973u32,
+                end: 986u32,
+                line: 24u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.deep_for_in",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1028u32,
+        end: 1209u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1179u32,
+                end: 1197u32,
+                line: 33u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1111u32,
+                end: 1147u32,
+                line: 30u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(deep_map, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1275u32,
+        end: 1300u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.deep_map",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1211u32,
+        end: 1343u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1320u32,
+                end: 1335u32,
+                line: 38u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1264u32,
+                end: 1301u32,
+                line: 38u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(deep_for_each, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1448u32,
+        end: 1483u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.deep_for_each",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1345u32,
+        end: 1551u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1519u32,
+                end: 1539u32,
+                line: 47u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1432u32,
+                end: 1484u32,
+                line: 44u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(deep_for_each_empty, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1665u32,
+        end: 1684u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.deep_for_each_empty",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1553u32,
+        end: 1756u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1718u32,
+                end: 1744u32,
+                line: 57u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1653u32,
+                end: 1685u32,
+                line: 54u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: ".<lambda(deep_sort_by_key, 0)>",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1838u32,
+        end: 1859u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.deep_sort_by_key",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1758u32,
+        end: 1904u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 1873u32,
+                end: 1896u32,
+                line: 62u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1819u32,
+                end: 1860u32,
+                line: 62u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.deep_json",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 1906u32,
+        end: 2027u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2003u32,
+                end: 2019u32,
+                line: 66u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1960u32,
+                end: 1984u32,
+                line: 66u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 1960u32,
+                end: 1993u32,
+                line: 66u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.deep_panic",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 2029u32,
+        end: 2143u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 2118u32,
+                end: 2135u32,
+                line: 70u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 2084u32,
+                end: 2108u32,
+                line: 70u32,
+            },
+        ],
+    },
+];

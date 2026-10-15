@@ -29,245 +29,324 @@ use bex_aot::{
 use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.collatz_steps`.
+#[inline(never)]
 pub fn user_collatz_steps(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Int63;
-    let mut _3: Int63;
-    let mut _4: bool;
-    let mut _5: Int63;
-    let mut _6: bool;
-    let mut _7: Int63;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    let mut _10: Int63;
-    let mut _11: Int63;
-    let mut _12: Int63;
-    _2 = int::lit(0);
-    _3 = _1;
-    'bb1: loop {
-        _5 = _3;
-        _4 = _5 != int::lit(1);
-        if _4 {
-            'bb7: {
-                _8 = _3;
-                _7 = int::rem(_8, int::lit(2))?;
-                _6 = _7 == int::lit(0);
-                if _6 {
-                    _9 = _3;
-                    _3 = int::div(_9, int::lit(2))?;
-                    break 'bb7;
-                } else {
-                    _11 = _3;
-                    _10 = int::mul(int::lit(3), _11)?;
-                    _3 = int::add(_10, int::lit(1))?;
-                    break 'bb7;
-                }
-            }
-            _12 = _2;
-            _2 = int::add(_12, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
-        }
-    }
-    _0 = _2;
-    Ok(_0)
-}
-/// BAML function `user.sum_odd_squares`.
-pub fn user_sum_odd_squares(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Int63;
-    let mut _3: Int63;
-    let mut _4: bool;
-    let mut _5: Int63;
-    let mut _6: bool;
-    let mut _7: Int63;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    let mut _10: Int63;
-    let mut _11: Int63;
-    let mut _12: bool;
-    let mut _13: Int63;
-    let mut _14: Int63;
-    let mut _15: Int63;
-    let mut _16: Int63;
-    let mut _17: Int63;
-    _2 = int::lit(0);
-    _3 = int::lit(0);
-    'bb1: loop {
-        _5 = _3;
-        _4 = _5 < int::lit(1000000);
-        if _4 {
-            'bb7: {
-                _8 = _3;
-                _7 = int::rem(_8, int::lit(2))?;
-                _6 = _7 == int::lit(0);
-                if _6 {
-                    break 'bb7;
-                } else {
-                    _10 = _3;
-                    _11 = _3;
-                    _9 = int::mul(_10, _11)?;
-                    _14 = _2;
-                    _15 = _9;
-                    _13 = int::add(_14, _15)?;
-                    _12 = _13 > _1;
-                    if _12 {
-                        break 'bb1;
+    let __telemetry = bex_aot::telemetry::enter(0u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Int63;
+        let mut _3: Int63;
+        let mut _4: bool;
+        let mut _5: Int63;
+        let mut _6: bool;
+        let mut _7: Int63;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        let mut _10: Int63;
+        let mut _11: Int63;
+        let mut _12: Int63;
+        _2 = int::lit(0);
+        _3 = _1;
+        'bb1: loop {
+            _5 = _3;
+            _4 = _5 != int::lit(1);
+            if _4 {
+                'bb7: {
+                    _8 = _3;
+                    _7 = int::rem(_8, int::lit(2))?;
+                    _6 = _7 == int::lit(0);
+                    if _6 {
+                        _9 = _3;
+                        _3 = int::div(_9, int::lit(2))?;
+                        break 'bb7;
                     } else {
-                        _16 = _2;
-                        _17 = _9;
-                        _2 = int::add(_16, _17)?;
+                        _11 = _3;
+                        _10 = int::mul(int::lit(3), _11)?;
+                        _3 = int::add(_10, int::lit(1))?;
                         break 'bb7;
                     }
                 }
-            }
-            _3 = int::add(_3, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
-        }
-    }
-    _0 = _2;
-    Ok(_0)
-}
-/// BAML function `user.gcd`.
-pub fn user_gcd(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _3: Int63;
-    let mut _4: Int63;
-    let mut _5: bool;
-    let mut _6: Int63;
-    let mut _7: Int63;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    _3 = _1;
-    _4 = _2;
-    'bb1: loop {
-        _6 = _4;
-        _5 = _6 != int::lit(0);
-        if _5 {
-            _7 = _4;
-            _8 = _3;
-            _9 = _4;
-            _4 = int::rem(_8, _9)?;
-            _3 = _7;
-            continue 'bb1;
-        } else {
-            break 'bb1;
-        }
-    }
-    _0 = _3;
-    Ok(_0)
-}
-/// BAML function `user.first_factor`.
-pub fn user_first_factor(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Int63;
-    let mut _3: bool;
-    let mut _4: Int63;
-    let mut _5: Int63;
-    let mut _6: Int63;
-    let mut _7: bool;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    let mut _10: Int63;
-    _2 = int::lit(2);
-    'bb6: {
-        'bb1: loop {
-            _5 = _2;
-            _6 = _2;
-            _4 = int::mul(_5, _6)?;
-            _3 = _4 <= _1;
-            if _3 {
-                _9 = _2;
-                _8 = int::rem(_1, _9)?;
-                _7 = _8 == int::lit(0);
-                if _7 {
-                    _0 = _2;
-                    break 'bb6;
-                } else {
-                    _10 = _2;
-                    _2 = int::add(_10, int::lit(1))?;
-                    continue 'bb1;
-                }
+                _12 = _2;
+                _2 = int::add(_12, int::lit(1))?;
+                continue 'bb1;
             } else {
                 break 'bb1;
             }
         }
-        _0 = _1;
-        break 'bb6;
-    }
-    Ok(_0)
+        _0 = _2;
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
-/// BAML function `user.nested`.
-pub fn user_nested(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Int63;
-    let mut _3: Int63;
-    let mut _4: bool;
-    let mut _5: Int63;
-    let mut _6: Int63;
-    let mut _7: bool;
-    let mut _8: Int63;
-    let mut _9: Int63;
-    let mut _10: bool;
-    let mut _11: Int63;
-    let mut _12: Int63;
-    let mut _13: Int63;
-    let mut _14: Int63;
-    let mut _15: Int63;
-    let mut _16: Int63;
-    let mut _17: Int63;
-    let mut _18: Int63;
-    _2 = int::lit(0);
-    _3 = int::lit(0);
-    'bb1: loop {
-        _5 = _3;
-        _4 = _5 < _1;
-        if _4 {
-            _6 = int::lit(0);
-            'bb5: loop {
-                if true {
-                    _8 = _6;
-                    _9 = _3;
-                    _7 = _8 > _9;
-                    if _7 {
-                        break 'bb5;
+/// BAML function `user.sum_odd_squares`.
+#[inline(never)]
+pub fn user_sum_odd_squares(mut _1: Int63) -> Result<Int63, Thrown> {
+    let __telemetry = bex_aot::telemetry::enter(1u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Int63;
+        let mut _3: Int63;
+        let mut _4: bool;
+        let mut _5: Int63;
+        let mut _6: bool;
+        let mut _7: Int63;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        let mut _10: Int63;
+        let mut _11: Int63;
+        let mut _12: bool;
+        let mut _13: Int63;
+        let mut _14: Int63;
+        let mut _15: Int63;
+        let mut _16: Int63;
+        let mut _17: Int63;
+        _2 = int::lit(0);
+        _3 = int::lit(0);
+        'bb1: loop {
+            _5 = _3;
+            _4 = _5 < int::lit(1000000);
+            if _4 {
+                'bb7: {
+                    _8 = _3;
+                    _7 = int::rem(_8, int::lit(2))?;
+                    _6 = _7 == int::lit(0);
+                    if _6 {
+                        break 'bb7;
                     } else {
-                        _13 = _3;
-                        _14 = _6;
-                        _12 = int::add(_13, _14)?;
-                        _11 = int::rem(_12, int::lit(3))?;
-                        _10 = _11 == int::lit(0);
-                        if _10 {
-                            _15 = _6;
-                            _6 = int::add(_15, int::lit(1))?;
-                            continue 'bb5;
+                        _10 = _3;
+                        _11 = _3;
+                        _9 = int::mul(_10, _11)?;
+                        _14 = _2;
+                        _15 = _9;
+                        _13 = int::add(_14, _15)?;
+                        _12 = _13 > _1;
+                        if _12 {
+                            break 'bb1;
                         } else {
                             _16 = _2;
-                            _2 = int::add(_16, int::lit(1))?;
-                            _17 = _6;
-                            _6 = int::add(_17, int::lit(1))?;
-                            continue 'bb5;
+                            _17 = _9;
+                            _2 = int::add(_16, _17)?;
+                            break 'bb7;
                         }
                     }
+                }
+                _3 = int::add(_3, int::lit(1))?;
+                continue 'bb1;
+            } else {
+                break 'bb1;
+            }
+        }
+        _0 = _2;
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
+}
+/// BAML function `user.gcd`.
+#[inline(never)]
+pub fn user_gcd(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
+    let __telemetry = bex_aot::telemetry::enter(2u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _3: Int63;
+        let mut _4: Int63;
+        let mut _5: bool;
+        let mut _6: Int63;
+        let mut _7: Int63;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        _3 = _1;
+        _4 = _2;
+        'bb1: loop {
+            _6 = _4;
+            _5 = _6 != int::lit(0);
+            if _5 {
+                _7 = _4;
+                _8 = _3;
+                _9 = _4;
+                _4 = int::rem(_8, _9)?;
+                _3 = _7;
+                continue 'bb1;
+            } else {
+                break 'bb1;
+            }
+        }
+        _0 = _3;
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
+}
+/// BAML function `user.first_factor`.
+#[inline(never)]
+pub fn user_first_factor(mut _1: Int63) -> Result<Int63, Thrown> {
+    let __telemetry = bex_aot::telemetry::enter(3u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Int63;
+        let mut _3: bool;
+        let mut _4: Int63;
+        let mut _5: Int63;
+        let mut _6: Int63;
+        let mut _7: bool;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        let mut _10: Int63;
+        _2 = int::lit(2);
+        'bb6: {
+            'bb1: loop {
+                _5 = _2;
+                _6 = _2;
+                _4 = int::mul(_5, _6)?;
+                _3 = _4 <= _1;
+                if _3 {
+                    _9 = _2;
+                    _8 = int::rem(_1, _9)?;
+                    _7 = _8 == int::lit(0);
+                    if _7 {
+                        _0 = _2;
+                        break 'bb6;
+                    } else {
+                        _10 = _2;
+                        _2 = int::add(_10, int::lit(1))?;
+                        continue 'bb1;
+                    }
                 } else {
-                    break 'bb5;
+                    break 'bb1;
                 }
             }
-            _18 = _3;
-            _3 = int::add(_18, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
+            _0 = _1;
+            break 'bb6;
         }
-    }
-    _0 = _2;
-    Ok(_0)
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
+/// BAML function `user.nested`.
+#[inline(never)]
+pub fn user_nested(mut _1: Int63) -> Result<Int63, Thrown> {
+    let __telemetry = bex_aot::telemetry::enter(4u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Int63;
+        let mut _3: Int63;
+        let mut _4: bool;
+        let mut _5: Int63;
+        let mut _6: Int63;
+        let mut _7: bool;
+        let mut _8: Int63;
+        let mut _9: Int63;
+        let mut _10: bool;
+        let mut _11: Int63;
+        let mut _12: Int63;
+        let mut _13: Int63;
+        let mut _14: Int63;
+        let mut _15: Int63;
+        let mut _16: Int63;
+        let mut _17: Int63;
+        let mut _18: Int63;
+        _2 = int::lit(0);
+        _3 = int::lit(0);
+        'bb1: loop {
+            _5 = _3;
+            _4 = _5 < _1;
+            if _4 {
+                _6 = int::lit(0);
+                'bb5: loop {
+                    if true {
+                        _8 = _6;
+                        _9 = _3;
+                        _7 = _8 > _9;
+                        if _7 {
+                            break 'bb5;
+                        } else {
+                            _13 = _3;
+                            _14 = _6;
+                            _12 = int::add(_13, _14)?;
+                            _11 = int::rem(_12, int::lit(3))?;
+                            _10 = _11 == int::lit(0);
+                            if _10 {
+                                _15 = _6;
+                                _6 = int::add(_15, int::lit(1))?;
+                                continue 'bb5;
+                            } else {
+                                _16 = _2;
+                                _2 = int::add(_16, int::lit(1))?;
+                                _17 = _6;
+                                _6 = int::add(_17, int::lit(1))?;
+                                continue 'bb5;
+                            }
+                        }
+                    } else {
+                        break 'bb5;
+                    }
+                }
+                _18 = _3;
+                _3 = int::add(_18, int::lit(1))?;
+                continue 'bb1;
+            } else {
+                break 'bb1;
+            }
+        }
+        _0 = _2;
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
+}
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.collatz_steps",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 73u32,
+        end: 315u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.sum_odd_squares",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 317u32,
+        end: 615u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.gcd",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 617u32,
+        end: 772u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.first_factor",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 774u32,
+        end: 943u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.nested",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 945u32,
+        end: 1339u32,
+        sites: &[],
+    },
+];

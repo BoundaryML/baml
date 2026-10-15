@@ -524,6 +524,29 @@ which the collector never buffers. A class's `EqHandle` and `Overridable`
 impls are at its handle's kind. `NativeModule::memory` lists every heap type with its
 decision and reason, and counts the allocation sites of each kind.
 
+## Telemetry
+
+Logging every call would put back the calls inlining removes, so the
+backend partitions functions when it compiles them (`telemetry.rs`). A
+function whose body loops, or whose MIR has more than 64 statements and
+terminators, is **observed**: emitted `#[inline(never)]`, its body run
+inside `bex_aot::telemetry::enter` / `Frame::exit`, which record its calls
+as the VM does. Every other function is **folded**: no instrumentation, and
+its time is its nearest observed ancestor's, as a `trace.hidden` helper's
+is on the VM. (The design's other rules, an explicit trace policy and
+reaching a sys op, await or LLM call, select nothing yet: the backend
+admits none of those.) `__emit-rust --observe-all` observes every
+function, which is what `BAML_TELEMETRY=high` profiles in full.
+
+Every call that can run BAML code (a call, a virtual or indirect call, a
+builtin with a callback or an override) is preceded by
+`bex_aot::telemetry::site(caller, site)`: a site is the index of the call
+terminator's span in the BAML function's source map. The module ends with
+`BAML_TELEMETRY`, the table of every BAML function (generic instances
+share their declaration's entry) with its source and sites, which
+`bex_aot::telemetry::start` publishes. The host shim records under the
+BAML home; `native_telemetry.rs` checks a recording against the VM's.
+
 ## Invariants of the MIR this relies on
 
 Neither is checked by `verify_mir` today; both are checked here, so a MIR

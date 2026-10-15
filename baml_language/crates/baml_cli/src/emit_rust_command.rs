@@ -82,6 +82,12 @@ pub struct EmitRustArgs {
     /// instead of emitting a project.
     #[arg(long)]
     pub report: bool,
+
+    /// Record telemetry for every function, not only roots, loops and large
+    /// functions: what `BAML_TELEMETRY=high` profiles in full. Calls no
+    /// longer inline, so the program runs slower at every level.
+    #[arg(long)]
+    pub observe_all: bool,
 }
 
 /// A Cargo package name the generated manifest and binary can carry: an
@@ -205,7 +211,12 @@ impl EmitRustArgs {
                 .collect::<Vec<_>>()
                 .join(", "),
         );
-        let module = match native::compile_many(db, &roots) {
+        let observe = if self.observe_all {
+            native::Observe::All
+        } else {
+            native::Observe::Default
+        };
+        let module = match native::compile_observing(db, &roots, observe) {
             Ok(module) => module,
             Err(native::Rejection::Unsupported(reason)) => {
                 reporter.abandon();

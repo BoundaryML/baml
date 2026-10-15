@@ -47,6 +47,7 @@ pub struct SourceSpan {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RuntimeFunctionKind {
     Bytecode,
+    Compiled,
     SysOp(String),
     Native,
     NativeUnresolved,
@@ -100,16 +101,105 @@ pub struct FunctionMetadata {
     /// PC-to-source table of the code the VM executes; `None` when the
     /// function has no compact code (native functions, unlowered bytecode).
     pub source_map: Option<SourceMap>,
+    /// A compiled function the producer never records (its calls may be
+    /// inlined); its time is its nearest recorded ancestor's.
+    pub inlined: bool,
 }
 
-/// Line table of one function's compact bytecode. PCs are byte offsets into
-/// that code, the same coordinate as call-path and error PCs. Entries are
-/// sorted by PC and each applies until the next one. Cold metadata: copied
-/// once per recording, never consulted by the VM.
+/// What a function's metadata derives from its fully qualified name: the
+/// last segment, the package, the namespace between them, the class a
+/// method belongs to and the function a lambda is nested in. Shared by every
+/// producer, so the VM and natively compiled code name a function alike.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FunctionNames {
+    pub display_name: String,
+    pub package_name: Option<String>,
+    pub namespace: Vec<String>,
+    pub owner_type: Option<DefinitionKey>,
+    pub parent_function: Option<DefinitionKey>,
+    pub lambda_path: Option<String>,
+}
+
+impl FunctionNames {
+    pub fn from_fqn(fqn: &str) -> Self {
+        let owner_type = derive_owner_type_definition_key(fqn);
+        let (parent_function, lambda_path) = derive_lambda_metadata(fqn);
+        let mut parts = fqn.split('.').map(str::to_string).collect::<Vec<_>>();
+        let display_name = parts.last().cloned().unwrap_or_else(|| fqn.to_string());
+        let package_name = if parts.len() > 1 {
+            Some(parts.remove(0))
+        } else {
+            None
+        };
+        let namespace = if parts.len() > 1 {
+            parts[..parts.len() - 1].to_vec()
+        } else {
+            Vec::new()
+        };
+        Self {
+            display_name,
+            package_name,
+            namespace,
+            owner_type,
+            parent_function,
+            lambda_path,
+        }
+    }
+}
+
+// TODO(bep-053): replace with compiler-owned metadata — capital-letter
+// sniffing on FQN segments is an acknowledged-interim heuristic and must not
+// become load-bearing.
+fn derive_owner_type_definition_key(fqn: &str) -> Option<DefinitionKey> {
+    let parts = fqn.split('.').collect::<Vec<_>>();
+    if parts.len() < 3 {
+        return None;
+    }
+
+    let owner = parts[parts.len() - 2];
+    if !owner
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_ascii_uppercase())
+    {
+        return None;
+    }
+
+    Some(DefinitionKey(format!(
+        "class:{}",
+        parts[..parts.len() - 1].join(".")
+    )))
+}
+
+// TODO(bep-053): replace with compiler-owned lambda identity — the
+// `find("<lambda")` name sniff is an acknowledged-interim heuristic.
+fn derive_lambda_metadata(fqn: &str) -> (Option<DefinitionKey>, Option<String>) {
+    let Some(lambda_start) = fqn.find("<lambda") else {
+        return (None, None);
+    };
+
+    let parent = fqn[..lambda_start].trim_end_matches(['.', ':']).to_string();
+    let parent_function = (!parent.is_empty()).then(|| DefinitionKey(format!("function:{parent}")));
+    let lambda_path = Some(fqn[lambda_start..].to_string());
+    (parent_function, lambda_path)
+}
+
+/// Coordinate system used by a function's recorded call and error locations.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SourceCoordinate {
+    #[default]
+    CompactByteOffset,
+    /// An exact source-site index, independent of compiled continuation state.
+    CompiledSite,
+}
+
+/// Cold source metadata copied once per recording. Bytecode entries cover
+/// ranges; compiled entries identify exact sites and never cover missing sites.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SourceMap {
-    /// Length of the compact code; a valid PC is below it.
-    pub code_bytes: u32,
+    pub coordinate: SourceCoordinate,
+    /// Exclusive upper bound in this map's coordinate system.
+    pub extent: u32,
     pub entries: Vec<SourceMapEntry>,
 }
 

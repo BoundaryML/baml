@@ -56,33 +56,39 @@ pub fn user_greet(mut _1: Int63) -> Result<Str, Thrown> {
     Ok(_0)
 }
 /// BAML function `user.repeat_len`.
+#[inline(never)]
 pub fn user_repeat_len(mut _1: Int63) -> Result<Int63, Thrown> {
-    let _frame = bex_aot::depth::Guard::enter()?;
-    let mut _0: Int63;
-    let mut _2: Str;
-    let mut _3: Str;
-    let mut _4: Int63;
-    let mut _5: bool;
-    let mut _6: Int63;
-    let mut _9: Int63;
-    _2 = string::from_literal("héllo");
-    _3 = string::from_literal("");
-    _4 = int::lit(0);
-    'bb1: loop {
-        _6 = _4;
-        _5 = _6 < _1;
-        if _5 {
-            _3 = string::concat(&_3, &_2);
-            _9 = _4;
-            _4 = int::add(_9, int::lit(1))?;
-            continue 'bb1;
-        } else {
-            break 'bb1;
+    let __telemetry = bex_aot::telemetry::enter(1u32);
+    let __result = (move || -> Result<Int63, Thrown> {
+        let _frame = bex_aot::depth::Guard::enter()?;
+        let mut _0: Int63;
+        let mut _2: Str;
+        let mut _3: Str;
+        let mut _4: Int63;
+        let mut _5: bool;
+        let mut _6: Int63;
+        let mut _9: Int63;
+        _2 = string::from_literal("héllo");
+        _3 = string::from_literal("");
+        _4 = int::lit(0);
+        'bb1: loop {
+            _6 = _4;
+            _5 = _6 < _1;
+            if _5 {
+                _3 = string::concat(&_3, &_2);
+                _9 = _4;
+                _4 = int::add(_9, int::lit(1))?;
+                continue 'bb1;
+            } else {
+                break 'bb1;
+            }
         }
-    }
-    bex_aot::depth::probe(1)?;
-    _0 = string::length(&_3);
-    Ok(_0)
+        bex_aot::depth::probe(1)?;
+        _0 = string::length(&_3);
+        Ok(_0)
+    })();
+    __telemetry.exit(&__result);
+    __result
 }
 /// BAML function `user.same`.
 pub fn user_same(mut _1: Int63) -> Result<bool, Thrown> {
@@ -156,3 +162,92 @@ pub fn user_ascii_check(mut _1: Int63) -> Result<bool, Thrown> {
     _0 = string::is_ascii(&_2);
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.greet",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 56u32,
+        end: 222u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 110u32,
+                end: 123u32,
+                line: 4u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.repeat_len",
+        observed: true,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 224u32,
+        end: 402u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 388u32,
+                end: 400u32,
+                line: 21u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.same",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 404u32,
+        end: 533u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 454u32,
+                end: 467u32,
+                line: 25u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 487u32,
+                end: 506u32,
+                line: 26u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.ordered",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 535u32,
+        end: 641u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 582u32,
+                end: 595u32,
+                line: 31u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 609u32,
+                end: 628u32,
+                line: 32u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.ascii_check",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 643u32,
+        end: 766u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 752u32,
+                end: 764u32,
+                line: 41u32,
+            },
+        ],
+    },
+];

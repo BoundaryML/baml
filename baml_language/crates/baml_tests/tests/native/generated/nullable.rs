@@ -131,6 +131,7 @@ pub fn user_or_zero(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _2: Option<Int63>;
     let mut _3: bool;
     let mut _4: Option<Int63>;
+    bex_aot::telemetry::site(1u32, 0u32);
     _2 = user_pick(_1)?;
     _4 = _2;
     bex_aot::depth::probe(0)?;
@@ -151,6 +152,7 @@ pub fn user_describe(mut _1: Int63) -> Result<Str, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Option<Int63>;
+    bex_aot::telemetry::site(2u32, 0u32);
     _2 = user_pick(_1)?;
     bex_aot::depth::probe(0)?;
     _0 = bex_aot::render::to_string(&_2)?;
@@ -170,6 +172,7 @@ pub fn user_build(mut _1: Int63) -> Result<Option<Cc<user_Node>>, Thrown> {
             break 'bb4;
         } else {
             _4 = int::sub(_1, int::lit(1))?;
+            bex_aot::telemetry::site(3u32, 0u32);
             _3 = user_build(_4)?;
             _0 = Some(
                 cc(user_Node {
@@ -187,6 +190,7 @@ pub fn user_chain(mut _1: Int63) -> Result<Str, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Str;
     let mut _2: Option<Cc<user_Node>>;
+    bex_aot::telemetry::site(4u32, 0u32);
     _2 = user_build(_1)?;
     bex_aot::depth::probe(1)?;
     _0 = json::to_string(&_2)?;
@@ -204,3 +208,106 @@ pub fn user_sparse(mut _1: Int63) -> Result<Str, Thrown> {
     _0 = bex_aot::render::to_string(&_2)?;
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.pick",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 123u32,
+        end: 193u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.or_zero",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 195u32,
+        end: 287u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 241u32,
+                end: 248u32,
+                line: 8u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 258u32,
+                end: 267u32,
+                line: 9u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.describe",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 289u32,
+        end: 367u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 339u32,
+                end: 346u32,
+                line: 13u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 352u32,
+                end: 365u32,
+                line: 14u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.build",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 369u32,
+        end: 482u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 464u32,
+                end: 476u32,
+                line: 18u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.chain",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 484u32,
+        end: 575u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 534u32,
+                end: 542u32,
+                line: 22u32,
+            },
+            bex_aot::telemetry::Site {
+                start: 548u32,
+                end: 573u32,
+                line: 23u32,
+            },
+        ],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.sparse",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 577u32,
+        end: 680u32,
+        sites: &[
+            bex_aot::telemetry::Site {
+                start: 664u32,
+                end: 678u32,
+                line: 28u32,
+            },
+        ],
+    },
+];

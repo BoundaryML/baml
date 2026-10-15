@@ -76,3 +76,61 @@ pub fn user_mix(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
     _0 = int::bit_xor(_3, _1);
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.band",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 73u32,
+        end: 119u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.bor",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 121u32,
+        end: 166u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.bxor",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 168u32,
+        end: 214u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.shl",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 216u32,
+        end: 262u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.shr",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 264u32,
+        end: 310u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.mix",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 312u32,
+        end: 377u32,
+        sites: &[],
+    },
+];

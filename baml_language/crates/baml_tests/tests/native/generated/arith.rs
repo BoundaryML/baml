@@ -183,3 +183,79 @@ pub fn user_compare(mut _1: Int63, mut _2: Int63) -> Result<Int63, Thrown> {
     }
     Ok(_0)
 }
+/// Every compiled BAML function, by telemetry index: the table
+/// `bex_aot::telemetry::start` records.
+pub static BAML_TELEMETRY: &[bex_aot::telemetry::Function] = &[
+    bex_aot::telemetry::Function {
+        fqn: "user.arith",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 74u32,
+        end: 250u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.divide",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 252u32,
+        end: 304u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.remainder",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 306u32,
+        end: 361u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.add_to_max",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 363u32,
+        end: 429u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.negate",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 431u32,
+        end: 472u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.in_range",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 474u32,
+        end: 552u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.is_edge",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 554u32,
+        end: 654u32,
+        sites: &[],
+    },
+    bex_aot::telemetry::Function {
+        fqn: "user.compare",
+        observed: false,
+        file: "test.baml",
+        file_id: 125u32,
+        start: 656u32,
+        end: 790u32,
+        sites: &[],
+    },
+];
