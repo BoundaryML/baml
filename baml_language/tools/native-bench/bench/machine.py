@@ -14,7 +14,7 @@ def log(*a):
 # Pinned: `@latest` would let a CLI release change the run under us.
 FREESTYLE = "freestyle@0.2.16"
 # The trials take about half an hour; give up well before the job's timeout.
-DEADLINE_S = 60 * 60
+DEADLINE_S = 3 * 60 * 60
 
 # -I would ignore PYTHONPATH and the cwd; the package is shipped beside the stage, so cwd is the path.
 EXECUTE = "cd {home}/ship && mkdir -p results && setsid -f bash -c 'export PATH=$HOME/.cargo/bin:$PATH; {python} -m bench execute --stage . --machine machine.json --protocol protocol.json --out results > results/execute.log 2>&1; echo $? > results/execute.exit; touch results/execute.done' < /dev/null > /dev/null 2>&1; echo started"

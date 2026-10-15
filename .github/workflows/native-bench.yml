@@ -45,6 +45,9 @@ defaults:
     shell: bash
 
 env:
+  # Stacked on #5264 (brr/native-v0): publish and comment there, where the
+  # native backend under test is reviewed. Drop before merging.
+  BENCH_COMMENT_PR: "5264"
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
@@ -55,7 +58,8 @@ jobs:
     # Forks have no access to the secret; skip rather than fail.
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 90
+    # The native rows build one fat-LTO executable per case on the VM.
+    timeout-minutes: 240
     outputs:
       rendered: ${{ steps.rendered.outputs.rendered }}
     steps:
@@ -157,7 +161,7 @@ jobs:
       - name: "Append to bench-results"
         env:
           GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ env.BENCH_COMMENT_PR || github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
@@ -188,7 +192,7 @@ jobs:
         if: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
         env:
           GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          PR: ${{ env.BENCH_COMMENT_PR || github.event.pull_request.number || github.event.inputs.pr_number }}
         run: |
           set -euo pipefail
           [[ "$PR" =~ ^[0-9]+$ ]] || { echo "bad pr_number: $PR"; exit 1; }
