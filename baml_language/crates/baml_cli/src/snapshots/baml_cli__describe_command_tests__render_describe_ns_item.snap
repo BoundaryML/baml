@@ -9,7 +9,8 @@ class Config {
     temperature: float,
 }
 
-implementations (1):
-  implement<T> Concrete for T  <builtin>/baml/core.baml:33
+implementations (2):
+  implement<T> Concrete for T  <builtin>/baml/core.baml:21
+  implement<T> Reflectable for T  <builtin>/reflect/reflect.baml:337
 
 references (0):

@@ -8,7 +8,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[scoped_type_binding_forms.baml:18:18]
  18 │     let type T = x;
     ·                  ┬
-    ·                  ╰── expected `reflect.Type | reflect.TypeView`, found `unknown`
+    ·                  ╰── expected `reflect.TypeView`, found `unknown`
     ╰────
 
   [type] E0001
@@ -17,7 +17,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[scoped_type_binding_forms.baml:27:18]
  27 │     let type T = v;
     ·                  ┬
-    ·                  ╰── expected `reflect.Type | reflect.TypeView`, found `1`
+    ·                  ╰── expected `reflect.TypeView`, found `1`
     ╰────
 
   [type] E0001
@@ -26,7 +26,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[scoped_type_binding_forms.baml:34:18]
  34 │     let type T = t;
     ·                  ┬
-    ·                  ╰── expected `reflect.Type | reflect.TypeView`, found `reflect.Type | null`
+    ·                  ╰── expected `reflect.TypeView`, found `reflect.Type | null`
     ╰────
 
   [type] E0145
