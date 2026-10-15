@@ -1277,6 +1277,10 @@ mod contextual_keyword_name_tests {
         assert_round_trips(
             "function f(dog_t: reflect.Type, animal_t: reflect.Type) -> bool {\n    let views = dog_t.class.enum.function.interface;\n    dog_t.implements(animal_t)\n}\n",
         );
+        // Past the second segment too: `reflect.Class.extends<I>(…)`.
+        assert_round_trips(
+            "function f() -> bool {\n    let foo_t = reflect.Class.extends<Foo>(\"Foo\", {});\n    let ok = a.b.implements(c);\n    a.b.requires\n}\n",
+        );
     }
 }
 

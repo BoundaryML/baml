@@ -7849,7 +7849,7 @@ impl<'a> Parser<'a> {
         // unambiguous in segment position — a leading `spawn`/`await` is
         // handled before this point. `is_ident_token` in
         // `baml_compiler2_ast::lower_expr_body` must mirror this set.
-        let segment = |k: TokenKind| {
+        let path_start = |k: TokenKind| {
             matches!(
                 k,
                 TokenKind::Word
@@ -7862,10 +7862,15 @@ impl<'a> Parser<'a> {
                     | TokenKind::Function
             )
         };
+        // Once a path has started, any `.member` name continues it, so a member
+        // named by a keyword stays reachable deep in a path
+        // (`reflect.Class.extends`). Right after the head (`t.implements`) it
+        // is not a path start, and parses as member access instead.
+        let segment = |k: TokenKind| path_start(k) || Self::kind_is_member_name(k);
 
         // Check if this looks like a path (ident.client followed by dot and another ident)
         if self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
-            && self.peek(2).map(|t| segment(t.kind)).unwrap_or(false)
+            && self.peek(2).map(|t| path_start(t.kind)).unwrap_or(false)
             && !(self
                 .peek(2)
                 .is_some_and(|t| t.kind == TokenKind::Word && t.text == "as")
@@ -10325,6 +10330,36 @@ function f(ctx: Context) -> string {
             errors.is_empty(),
             "`ctx.client.provider` member access should parse cleanly: {errors:?}"
         );
+    }
+
+    #[test]
+    fn keyword_member_names_are_valid_deep_in_a_path() {
+        // `reflect.Class.extends<I>(…)`: a member named by a declaration
+        // keyword stays reachable past the second path segment.
+        let source = r#"
+function f() -> bool {
+  let a = reflect.Class.extends<Foo>("Foo", {});
+  let b = x.y.implements(z);
+  let c = x.y.requires;
+  true
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert!(
+            errors.is_empty(),
+            "keyword member names deep in a path should parse cleanly: {errors:?}"
+        );
+        let paths: Vec<String> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::PATH_EXPR)
+            .map(|n| n.text().to_string().trim().to_string())
+            .collect();
+        for expected in ["reflect.Class.extends", "x.y.implements", "x.y.requires"] {
+            assert!(
+                paths.iter().any(|path| path == expected),
+                "expected a `{expected}` path, got {paths:?}"
+            );
+        }
     }
 
     #[test]
