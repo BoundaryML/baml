@@ -86,6 +86,14 @@ pub struct SourceRoot {
     #[returns(ref)]
     pub files: Vec<SourceFile>,
 
+    /// Omit test/testset registrars from the compiler's semantic input. Used
+    /// by SDK generation so test bodies, closures, constants, and interface
+    /// rows never enter the persisted program. Normal compilation includes
+    /// tests by default.
+    #[default]
+    #[returns(clone)]
+    pub exclude_tests: bool,
+
     /// The package's serialized compiler interface (`borsh(PackageInterface)`,
     /// versioned as a `baml_artifact`), when the package is served from one
     /// instead of from source: a runtime mount, or a precompiled stdlib

@@ -1157,6 +1157,19 @@ impl ProjectDatabase {
 
     // ── Bytecode ─────────────────────────────────────────────────────────────
 
+    /// Exclude test/testset blocks from subsequent compilation of `root` and
+    /// its source dependencies. This is a tracked semantic-input change, so
+    /// already-queried HIR and package interfaces are invalidated as well.
+    ///
+    /// SDK generation calls this after checking the complete project. Compile
+    /// the resulting program fresh: cached programs/packages include tests.
+    pub fn exclude_tests(&mut self, root: SourceRoot) {
+        let roots = baml_compiler2_hir::package::world_roots(self, root).clone();
+        for root in roots {
+            root.set_exclude_tests(self).to(true);
+        }
+    }
+
     /// The compiled bytecode of `root`'s program — the root and its
     /// dependency closure, never another workspace root that shares this
     /// database.
@@ -1347,6 +1360,67 @@ mod tests {
 
     fn dependency_spec(path: &str, package: &str) -> SourceRootSpec {
         SourceRootSpec::new(path, SourceRootKind::Dependency).named(Name::new(package))
+    }
+
+    #[test]
+    fn excluding_tests_invalidates_interfaces_and_covers_source_dependencies() {
+        use baml_compiler2_hir_ty::package_interface::export_interface;
+
+        let mut db = ProjectDatabase::new();
+        db.ensure_stdlib_sources();
+        let dep = db.add_source_root(dependency_spec("/dep", "dep")).unwrap();
+        let root = db
+            .add_source_root(workspace_spec("/ws").depending_on(vec![Dependency {
+                name: Name::new("dep"),
+                root: dep,
+            }]))
+            .unwrap();
+        let other = db.add_source_root(workspace_spec("/other")).unwrap();
+        for package in [dep, root, other] {
+            let path = package.path(&db).join("main.baml");
+            db.add_or_update_file_in(
+                package,
+                &path,
+                r#"
+function Keep() -> int { 42 }
+test "inline" { null }
+testset "suite" { test "leaf" { null } }
+"#,
+            );
+        }
+        let names = |db: &ProjectDatabase, package| {
+            export_interface(db, package)
+                .rows
+                .functions
+                .values()
+                .flat_map(|functions| functions.keys().map(ToString::to_string))
+                .collect::<Vec<_>>()
+        };
+        // Prime semantic indexes and typed interfaces before changing mode.
+        for package in [dep, root, other] {
+            assert!(
+                names(&db, package)
+                    .iter()
+                    .any(|name| name.starts_with("$init_test"))
+            );
+        }
+        db.exclude_tests(root);
+        for package in [dep, root] {
+            assert_eq!(names(&db, package), ["Keep"]);
+        }
+        assert!(
+            names(&db, other)
+                .iter()
+                .any(|name| name.starts_with("$init_test"))
+        );
+
+        // The tracked input can restore the full test surface in the same DB.
+        root.set_exclude_tests(&mut db).to(false);
+        assert!(
+            names(&db, root)
+                .iter()
+                .any(|name| name.starts_with("$init_test"))
+        );
     }
 
     #[test]

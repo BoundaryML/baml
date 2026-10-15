@@ -317,7 +317,7 @@ impl GenerateArgs {
         }
         let _ = session.warm_prep();
         session.prime();
-        let (db, package, from) = (session.db, session.package, session.resolved.root);
+        let (mut db, package, from) = (session.db, session.package, session.resolved.root);
         // `SourceFile` paths are canonicalized by `ProjectDatabase`. Canonicalize
         // the root too so Windows short paths and `\\?\` paths can be relativized.
         let from = from
@@ -412,6 +412,11 @@ impl GenerateArgs {
         let provisioning = self
             .telemetry
             .prepare(&mut telemetry, default_environment, "bridge")?;
+
+        // Tests were checked above, but generated clients never run them.
+        // Exclude both test forms before building any persisted compiler data,
+        // including package interfaces and the registrars' nested lambdas.
+        db.exclude_tests(package);
 
         // Build the codegen SymbolPool from the compiler database.
         let pool = baml_ide::build_symbol_pool(&db, package);
