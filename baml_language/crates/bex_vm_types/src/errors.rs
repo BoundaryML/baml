@@ -107,6 +107,58 @@ pub enum VmPanic {
     },
 }
 
+/// Lift a backend-neutral [`bex_lang::Panic`] into the VM's panic type.
+///
+/// `bex_lang` carries only `Int63` and strings; this is where the VM attaches
+/// its own `Value` representation (`DivisionByZero` keeps both operands, the
+/// divisor being the zero that caused it).
+impl From<bex_lang::Panic> for VmPanic {
+    fn from(panic: bex_lang::Panic) -> Self {
+        use bex_lang::Panic;
+        match panic {
+            Panic::DivisionByZero { dividend } => Self::DivisionByZero {
+                left: Value::int(dividend.get()),
+                right: Value::int(0),
+            },
+            Panic::IntegerOverflow { message } => Self::IntegerOverflow { message },
+            Panic::IndexOutOfBounds { index, length } => Self::IndexOutOfBounds {
+                index: index.get(),
+                // A sequence length is never negative; `0` only guards the
+                // conversion, it cannot be reached from a real access.
+                length: usize::try_from(length.get()).unwrap_or(0),
+            },
+            // Native code renders a bigint dividend as its decimal text; the VM
+            // keeps the operand as a heap `Value`, which cannot be built here
+            // without a heap. The VM never raises this variant through
+            // `bex_lang`, so the dividend is left `null` and the zero divisor kept.
+            Panic::BigintDivisionByZero { dividend: _ } => Self::DivisionByZero {
+                left: Value::NULL,
+                right: Value::int(0),
+            },
+            Panic::MapKeyNotFound => Self::MapKeyNotFound,
+            Panic::AllocFailure { message } => Self::AllocFailure { message },
+            Panic::NegativeBitShift { message } => Self::NegativeBitShift { message },
+            Panic::UserPanic { message } => Self::UserPanic { message },
+            Panic::AssertionFailed => Self::AssertionFailed,
+            Panic::Unreachable => Self::Unreachable,
+            Panic::StackOverflow => Self::StackOverflow,
+            Panic::Exit { code } => Self::Exit { code: code.get() },
+        }
+    }
+}
+
+/// A shared builtin's failure, as the VM's native-function error.
+impl From<bex_lang::Error> for VmRustFnError {
+    fn from(error: bex_lang::Error) -> Self {
+        match error {
+            bex_lang::Error::Panic(panic) => Self::Panic(panic.into()),
+            bex_lang::Error::InvalidArgument { message } => {
+                Self::BamlError(VmBamlError::InvalidArgument { message })
+            }
+        }
+    }
+}
+
 /// An error value from the BAML standard library. Maps 1:1 to a `baml.errors.*` class.
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmBamlError {

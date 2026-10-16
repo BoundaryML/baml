@@ -1,13 +1,13 @@
 use std::{borrow::Cow, cmp::Ordering, collections::HashMap};
 
 use bex_heap::TlabHolder;
+use bex_lang::index::{resolve_index, resolve_insert_index, resolve_slice_bound};
 use bex_vm_types::{HeapPtr, Object, ObjectType, types::Value};
 use num_bigint::BigInt;
 
 use super::{ArrayView, BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl};
 use crate::{
     BexVm,
-    array_index::{resolve_index, resolve_insert_index, resolve_slice_bound},
     errors::{VmBamlError, VmInternalError, VmRustFnError},
 };
 
