@@ -1,0 +1,282 @@
+//! Calls and the frame: builtins, compiled callees, the slots a resumable body
+//! keeps, and what a body reports to the VM.
+
+use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::ConstValue};
+
+use super::{CompiledBody, stack_address};
+use crate::{
+    errors::{VmError, VmInternalError, VmPanic},
+    indexable::EvalStackTrait,
+    package_baml::{NativeCallResult, NativeFunction},
+    vm::{BexVm, VmExecState},
+};
+
+impl BexVm {
+    // ── Calls ─────────────────────────────────────────────────────────────────
+
+    /// Call a VM-owned builtin synchronously. A builtin that yields (to run a
+    /// callback) cannot be called from compiled code; the compiler admits only
+    /// builtins that never do.
+    pub fn call_builtin(
+        &mut self,
+        builtin: NativeFunction,
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
+        let outcome = builtin(self, args);
+        self.settle();
+        match outcome {
+            NativeCallResult::Done(value) => Ok(value),
+            NativeCallResult::Error(error) => Err(Box::new(self.native_error_to_vm_error(error))),
+            NativeCallResult::YieldToCall { .. } => Err(Box::new(
+                VmInternalError::CompiledBody {
+                    message: "a builtin yielded inside compiled code".to_string(),
+                }
+                .into(),
+            )),
+        }
+    }
+
+    /// [`Self::call_builtin`] for a generic builtin (`Array.push`,
+    /// `json.to_string`, …), with its type arguments where the interpreter
+    /// puts them for a native callee: `current_call_type_args()`.
+    pub fn call_builtin_typed(
+        &mut self,
+        builtin: NativeFunction,
+        type_args: &[RealizedTy],
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
+        // Reuse the buffer's capacity: a `push` in a loop allocates nothing
+        // here after the first call.
+        let previous = std::mem::take(&mut self.pending_call_type_args);
+        let mut buffer = std::mem::take(&mut self.compiled_type_args);
+        buffer.clear();
+        buffer.extend_from_slice(type_args);
+        self.pending_call_type_args = buffer;
+        let result = self.call_builtin(builtin, args);
+        self.compiled_type_args = std::mem::replace(&mut self.pending_call_type_args, previous);
+        result
+    }
+
+    /// Size the slot region of the compiled function whose frame count is
+    /// `depth` to `slots` (a resumable body's arguments arrive in the first
+    /// ones). Called once, on start; a resumable body's region then sits at
+    /// the top of the stack whenever it suspends.
+    pub fn reserve_slots(&mut self, depth: usize, slots: usize) {
+        let crate::vm::Frame::Bytecode(frame) = &self.frames[depth - 1] else {
+            unreachable!("a compiled body reserves slots in its own frame");
+        };
+        let end = frame.locals_offset.raw() + slots;
+        self.stack.resize(end, Value::NULL);
+    }
+
+    /// Slot `index` of the compiled function whose frame count is `depth`.
+    #[inline]
+    #[must_use]
+    pub fn slot(&self, depth: usize, index: usize) -> Value {
+        let crate::vm::Frame::Bytecode(frame) = &self.frames[depth - 1] else {
+            unreachable!("a compiled body reads its own frame");
+        };
+        self.stack
+            .get_at(StackIndex::from_raw(frame.locals_offset.raw() + index))
+    }
+
+    /// Write slot `index` of the compiled function whose frame count is
+    /// `depth`; see [`Self::slot`].
+    #[inline]
+    pub fn set_slot(&mut self, depth: usize, index: usize, value: Value) {
+        let crate::vm::Frame::Bytecode(frame) = &self.frames[depth - 1] else {
+            unreachable!("a compiled body writes its own frame");
+        };
+        let at = frame.locals_offset.raw() + index;
+        self.stack.0[at] = value;
+    }
+
+    /// Push an argument of the call a resumable body is about to request
+    /// ([`Step::Call`]); arguments sit above the body's slots, rooted.
+    #[inline]
+    pub fn push_arg(&mut self, value: Value) {
+        self.stack.push(value);
+    }
+
+    /// Push a type argument of the call a resumable body is about to request
+    /// ([`Step::Call`]), into a buffer the VM reuses: a generic call
+    /// allocates nothing for them.
+    #[inline]
+    pub fn push_type_arg(&mut self, ty: RealizedTy) {
+        self.call_type_args.push(ty);
+    }
+
+    /// The value of `future` when it has settled with one and awaiting it
+    /// would not poll for a yield: `await`'s fast path, with no suspension.
+    /// `None` sends the body through the interpreter's own `Await`
+    /// ([`Step::Await`]), which raises, parks or yields exactly as bytecode
+    /// does. Counts the `Await`'s control-flow check, as bytecode does.
+    #[inline]
+    pub fn ready(&mut self, future: Value) -> Option<Value> {
+        if self.early_yield.is_due() {
+            return None;
+        }
+        let value = match self.get_object(future.as_object_ptr()?) {
+            Object::Future(future) => match future.read() {
+                bex_vm_types::FutureRead::Ready(value) => value,
+                _ => return None,
+            },
+            _ => return None,
+        };
+        self.early_yield.tick();
+        Some(value)
+    }
+
+    /// Whether a resumable body should yield ([`Step::Yield`]) at a loop back
+    /// edge: the interpreter's control-flow check.
+    #[inline]
+    pub fn should_yield(&mut self) -> bool {
+        self.should_early_yield()
+    }
+
+    /// The frame count with the running compiled function's frame on top.
+    /// A compiled body reads it on entry and hands it to [`Self::catch`].
+    #[inline]
+    #[must_use]
+    pub fn frame_depth(&self) -> usize {
+        self.frames.len()
+    }
+
+    /// Record `line` as the source position of the compiled function whose
+    /// frame count is `depth` (see [`Self::frame_depth`]). Compiled code calls
+    /// this only when an error leaves the function, lands in its `catch`, or
+    /// it suspends, so stack traces name the statement that raised, at no
+    /// cost otherwise. A compiled frame keeps its line in `faulting_pc`; see
+    /// `stub`.
+    #[cold]
+    pub fn note_line(&mut self, depth: usize, line: u32) {
+        if let Some(crate::vm::Frame::Bytecode(frame)) = depth
+            .checked_sub(1)
+            .and_then(|top| self.frames.get_mut(top))
+        {
+            frame.faulting_pc = line as usize;
+        }
+    }
+
+    /// Land a thrown error in a compiled `catch`; see
+    /// `BexVm::land_compiled_catch`. Returns the caught value and its
+    /// `baml.errors.Context`; an internal error keeps propagating.
+    #[inline]
+    pub fn catch(
+        &mut self,
+        error: Box<VmError>,
+        depth: usize,
+    ) -> Result<(Value, Value), Box<VmError>> {
+        self.land_compiled_catch(error, depth)
+    }
+
+    /// `unreachable` reached in compiled code: the catchable
+    /// `baml.panics.Unreachable` bytecode's `Unreachable` throws.
+    #[cold]
+    #[inline(never)]
+    pub fn unreachable_panic(&mut self) -> Box<VmError> {
+        Box::new(VmError::thrown_fresh(
+            self.panic_to_exception_value(VmPanic::Unreachable),
+        ))
+    }
+
+    /// Call a compiled function from compiled code.
+    ///
+    /// Every call gets a frame, as in bytecode: it counts toward the depth
+    /// limit (a catchable `StackOverflow`, never a native stack overflow),
+    /// names the callee in stack traces, and roots the callee. With telemetry
+    /// off that frame is all the call costs: a struct push, then a direct
+    /// Rust call LLVM can inline. With telemetry on the call goes through the
+    /// VM's call path, so records, call paths and `$trace` behave exactly as
+    /// for a bytecode call.
+    ///
+    /// On `Err` the callee's frame stays pushed, as the VM's call path leaves
+    /// it: the unwinder pops it if the error escapes, [`Self::catch`] if a
+    /// compiled handler lands it.
+    #[inline]
+    pub fn call_compiled(
+        &mut self,
+        callee: HeapPtr,
+        body: CompiledBody,
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
+        if self.frames.len() >= crate::vm::MAX_FRAMES || stack_address() < self.stack_floor {
+            return Err(Box::new(VmError::thrown_fresh(
+                self.panic_to_exception_value(VmPanic::StackOverflow),
+            )));
+        }
+        if self.telemetry.is_some() {
+            return self.call_compiled_observed(callee, args);
+        }
+        let context = self.current_context().clone();
+        let locals_offset = StackIndex::from_raw(self.stack.len());
+        self.frames.push(crate::vm::Frame::Bytecode(
+            crate::vm::BytecodeFrame::compiled(callee, locals_offset, context),
+        ));
+        let result = body(self, args);
+        if result.is_ok() {
+            self.frames.pop();
+            self.stack.truncate(locals_offset.raw());
+        }
+        result
+    }
+
+    /// [`Self::call_compiled`] through the VM's call path, for telemetry.
+    #[cold]
+    #[inline(never)]
+    #[allow(unsafe_code)]
+    fn call_compiled_observed(
+        &mut self,
+        callee: HeapPtr,
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
+        let top = self.frames.len() - 1;
+        let locals_offset = StackIndex::from_raw(self.stack.len());
+        self.stack.extend(args.iter().copied());
+        let mut frame_idx = top;
+        // SAFETY: the running compiled frame's function object lives in the
+        // compile-time heap, which is never collected; see `load_function`.
+        let mut function = unsafe {
+            self.load_function(top)
+                .map_err(|error| Box::new(VmError::InternalError(error)))?
+        };
+        let outcome = self.compiled_caller_call(
+            callee,
+            locals_offset,
+            args.len(),
+            &[],
+            &mut frame_idx,
+            &mut function,
+        );
+        match outcome {
+            // The callee ran to completion inside the call path (its body is
+            // compiled), so its result is on the stack. An `EarlyYield`
+            // request is left armed for the enclosing loop.
+            Ok(None | Some(VmExecState::EarlyYield)) if frame_idx == top => {
+                Ok(self.stack.ensure_pop())
+            }
+            Ok(_) => Err(Box::new(
+                VmInternalError::CompiledBody {
+                    message: "a compiled call reached a callee without a compiled body".to_string(),
+                }
+                .into(),
+            )),
+            Err(error) => Err(Box::new(error)),
+        }
+    }
+
+    // ── Type tests ────────────────────────────────────────────────────────────
+
+    /// `value is T` against a type constant from the function's constant pool,
+    /// with the caller's resolved generic type arguments (empty when the
+    /// enclosing function is not generic).
+    pub fn value_is_type(
+        &self,
+        type_args: &[RealizedTy],
+        value: Value,
+        raw_const: &ConstValue,
+        resolved_const: Value,
+    ) -> Result<bool, VmInternalError> {
+        self.value_matches_type_constant_with_type_args(type_args, value, raw_const, resolved_const)
+    }
+}

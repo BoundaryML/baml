@@ -16,7 +16,10 @@
 //! drives; the rest run to completion inside the call that enters them. See
 //! `DESIGN.txt`.
 
-mod emit;
+mod admit;
+mod analysis;
+mod codegen;
+mod render;
 mod structure;
 
-pub use emit::{CompiledFunction, NativeModule, Rejection, compile_program};
+pub use admit::{CompiledFunction, NativeModule, Rejection, compile_program};
