@@ -203,8 +203,12 @@ A resumable body (section 10) suspends with nothing on the Rust stack: what it
 needs after a suspension is in its frame's stack slots, which the collector
 scans and forwards like any frame's, so a collection may run while it waits.
 
-A resumable body checks for a yield at each loop header, the interpreter's
-control-flow check, and yields (Step::Yield) like any other suspension.
+A resumable body counts loop iterations in a register and takes the
+interpreter's control-flow check every sixteenth one at a loop header,
+yielding (Step::Yield) like any other suspension. Ticking the VM's counter
+in memory every iteration cost a loop with no calls 1 ns per iteration
+(1.69 vs 0.64); a compiled iteration is a fraction of an interpreted one, so
+this still polls about as often in time.
 
 Open: an inline body has no safepoint. Its loops run on the Rust stack, which
 a yield cannot leave; a long one delays every other thread that wants a
@@ -283,6 +287,14 @@ them), the point it suspended at, and its cause slot. At a suspension it
 saves the locals live once it resumes (MIR's backward liveness, plus every
 handler's context while it has a cause slot), records its point and line,
 pushes a call's arguments above its slots, and returns the request.
+
+A local that some suspension keeps but that is assigned only outside loops
+is written through: each assignment also writes its slot, and no
+suspension saves it. A loop that calls bytecode then saves only what the
+loop changes, where bytecode, whose locals always live in their slots,
+saves nothing; a body with forty locals set before such a loop went from
+saving forty-three slots per call to two. A call's type arguments are inline
+(TypeArgs), so a suspending generic call allocates nothing.
 
 The frame then parks at its stub, code the loader appends to every compiled
 function's bytecode (compiled_rt::stub):

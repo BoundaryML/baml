@@ -75,8 +75,8 @@ pub enum Step {
     Call {
         callee: HeapPtr,
         argc: u32,
-        /// Type arguments, for a generic builtin.
-        type_args: Vec<RealizedTy>,
+        /// Type arguments, for a generic callee.
+        type_args: TypeArgs,
     },
     /// `await future`, run by the interpreter's own `Await` on this frame.
     Await(Value),
@@ -87,6 +87,10 @@ pub enum Step {
     /// Let the scheduler run (a GC, another task) and continue.
     Yield,
 }
+
+/// The type arguments of a [`Step::Call`]: inline for the one or two a
+/// generic call has, so a suspending call allocates nothing for them.
+pub type TypeArgs = smallvec::SmallVec<[RealizedTy; 2]>;
 
 /// A compiled body, by whether it can suspend.
 #[derive(Clone, Copy)]
