@@ -1261,7 +1261,7 @@ pub(crate) mod tests {
                     Ok(Step::Call {
                         callee: helper,
                         argc: 1,
-                        type_args: Vec::new(),
+                        type_args: crate::compiled_rt::TypeArgs::new(),
                     })
                 }
                 Resume::Value(h) => {

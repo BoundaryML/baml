@@ -212,6 +212,7 @@ pub fn compile_program<'db>(
                 point_slot: 0,
                 preds: Vec::new(),
                 loop_headers: BTreeSet::new(),
+                write_through: BTreeSet::new(),
             };
             match generator.function(&symbols[name]) {
                 Ok(code) => {
@@ -249,9 +250,11 @@ pub fn compile_program<'db>(
     }
 }
 
-/// The targets of `body`'s back edges: edges to a block on the depth-first
-/// path from the entry, which for structured source are loop headers.
-fn loop_headers(body: &MirFunctionBody<'_>) -> BTreeSet<usize> {
+/// `body`'s loops: the targets of its back edges (edges to a block on the
+/// depth-first path from the entry, which for structured source are loop
+/// headers), and whether each block lies in some loop (a header, or a block
+/// that reaches a back edge's source without passing its header).
+fn loops(body: &MirFunctionBody<'_>) -> (BTreeSet<usize>, Vec<bool>) {
     let successors = |block: usize| {
         body.blocks[block]
             .terminator
@@ -260,9 +263,17 @@ fn loop_headers(body: &MirFunctionBody<'_>) -> BTreeSet<usize> {
             .map(|id| id.0)
             .collect::<Vec<_>>()
     };
+    let n = body.blocks.len();
+    let mut preds = vec![Vec::new(); n];
+    for block in 0..n {
+        for succ in successors(block) {
+            preds[succ].push(block);
+        }
+    }
     let mut headers = BTreeSet::new();
-    let mut on_path = vec![false; body.blocks.len()];
-    let mut seen = vec![false; body.blocks.len()];
+    let mut back_edges = Vec::new();
+    let mut on_path = vec![false; n];
+    let mut seen = vec![false; n];
     let mut stack = vec![(body.entry.0, successors(body.entry.0), 0)];
     seen[body.entry.0] = true;
     on_path[body.entry.0] = true;
@@ -275,13 +286,28 @@ fn loop_headers(body: &MirFunctionBody<'_>) -> BTreeSet<usize> {
         *next += 1;
         if on_path[succ] {
             headers.insert(succ);
+            back_edges.push((*block, succ));
         } else if !seen[succ] {
             seen[succ] = true;
             on_path[succ] = true;
             stack.push((succ, successors(succ), 0));
         }
     }
-    headers
+    let mut in_loop = vec![false; n];
+    for (source, header) in back_edges {
+        let mut members = vec![false; n];
+        members[header] = true;
+        let mut work = vec![source];
+        while let Some(block) = work.pop() {
+            if !std::mem::replace(&mut members[block], true) {
+                work.extend(preds[block].iter().copied());
+            }
+        }
+        for (member, in_loop) in members.iter().zip(in_loop.iter_mut()) {
+            *in_loop |= *member;
+        }
+    }
+    (headers, in_loop)
 }
 
 fn body_of<'a, 'db>(mir: &'a MirFunction<'db>) -> &'a MirFunctionBody<'db> {
@@ -828,9 +854,17 @@ struct Generator<'a, 'db> {
     preds: Vec<Vec<usize>>,
     /// A resumable body's loop headers: where it checks for a yield.
     loop_headers: BTreeSet<usize>,
+    /// A resumable body's write-through locals: kept across suspensions but
+    /// assigned only outside loops, so each assignment also writes the
+    /// local's slot and no suspension saves it.
+    write_through: BTreeSet<usize>,
 }
 
 type Gen<T> = Result<T, Rejection>;
+
+/// Loop iterations of a resumable body per check for a yield; see
+/// `Generator::leaf`.
+const YIELD_EVERY: u32 = 16;
 
 /// What a suspension keeps: live locals (local `i` in slot `i`), then live
 /// array iterators with the slot of their position.
@@ -1054,11 +1088,91 @@ impl<'db> Generator<'_, 'db> {
             self.cause_slot = catches.then_some(base + 1);
             self.slots = base + 1 + usize::from(catches);
             self.live_in = baml_compiler2_mir::live_in(self.body);
-            self.loop_headers = loop_headers(self.body);
+            let (headers, in_loop) = loops(self.body);
+            self.loop_headers = headers;
+            self.write_through = self.write_through_locals(&in_loop);
         } else {
             self.cause_slot = catches.then_some(0);
             self.slots = usize::from(catches);
         }
+    }
+
+    /// The locals a resumable body writes through to their slots: each one
+    /// that some suspension keeps, is assigned only in blocks outside every
+    /// loop (so writing its slot at each assignment runs a bounded number of
+    /// times, where saving it runs at every suspension), and is a plain
+    /// scalar or value (not a float, which writing would box, nor an
+    /// iterator or a handler's landing local, which are assigned elsewhere).
+    fn write_through_locals(&self, in_loop: &[bool]) -> BTreeSet<usize> {
+        let mut kept = BTreeSet::new();
+        for block in 0..self.body.blocks.len() {
+            if self.block_suspends(block)
+                && let Ok((locals, _)) = self.saved_at(BlockId(block))
+            {
+                kept.extend(locals);
+            }
+        }
+        for &header in &self.loop_headers {
+            kept.extend(self.saved(self.live_in[header].clone()).0);
+        }
+        let mut excluded: BTreeSet<usize> = self.analysis.array_iters.keys().copied().collect();
+        for block in &self.body.blocks {
+            if let Some(landing) = block.landing {
+                excluded.insert(landing.error_local.0);
+                excluded.insert(landing.context_local.0);
+            }
+        }
+        for (block, &looped) in self.body.blocks.iter().zip(in_loop) {
+            if !looped {
+                continue;
+            }
+            for statement in &block.statements {
+                if let StatementKind::Assign {
+                    destination: Place::Local(local),
+                    ..
+                } = &statement.kind
+                {
+                    excluded.insert(local.0);
+                }
+            }
+            if let Some(
+                Terminator::Call {
+                    destination: Place::Local(local),
+                    ..
+                }
+                | Terminator::VirtualCall {
+                    destination: Place::Local(local),
+                    ..
+                }
+                | Terminator::SysOp {
+                    destination: Place::Local(local),
+                    ..
+                }
+                | Terminator::Await {
+                    destination: Place::Local(local),
+                    ..
+                }
+                | Terminator::AwaitAny {
+                    destination: Place::Local(local),
+                    ..
+                }
+                | Terminator::Spawn {
+                    future: Place::Local(local),
+                    ..
+                },
+            ) = &block.terminator
+            {
+                excluded.insert(local.0);
+            }
+            if let Some(Terminator::NarrowBind { destination, .. }) = &block.terminator {
+                excluded.insert(destination.0);
+            }
+        }
+        kept.into_iter()
+            .filter(|local| {
+                !excluded.contains(local) && !matches!(self.repr(Local(*local)), Repr::Float)
+            })
+            .collect()
     }
 
     /// Whether the handler `block` runs under differs from one it can be
@@ -1138,6 +1252,9 @@ impl<'db> Generator<'_, 'db> {
         for iter in &iters {
             let _ = writeln!(self.out, "    let mut i{iter}: i64 = 0;");
         }
+        if !self.loop_headers.is_empty() {
+            let _ = writeln!(self.out, "    let mut iterations: u32 = 0;");
+        }
         for block in &self.body.blocks {
             match &block.terminator {
                 Some(
@@ -1170,6 +1287,10 @@ impl<'db> Generator<'_, 'db> {
                 self.repr(Local(i)),
             );
             self.line(3, &format!("l{i} = {arg};"));
+            if self.write_through.contains(&i) {
+                let slot = coerce(&format!("l{i}"), self.repr(Local(i)), Repr::Value);
+                self.line(3, &format!("vm.set_slot(depth, {i}, {slot});"));
+            }
         }
         let entry = self.body.entry.0;
         self.line(3, &format!("bb = {entry};"));
@@ -1274,9 +1395,13 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// Save `saved` in the frame's slots.
+    /// Save `saved` in the frame's slots: all but the write-through locals,
+    /// whose slots already hold them.
     fn save(&mut self, (locals, iters): Saved, depth: usize) {
         for i in locals {
+            if self.write_through.contains(&i) {
+                continue;
+            }
             let value = self.value_arg(&format!("l{i}"), self.repr(Local(i)));
             self.statement(depth, &format!("vm.set_slot(depth, {i}, {value});"));
         }
@@ -1396,9 +1521,9 @@ impl<'db> Generator<'_, 'db> {
                     _ => self.arg_values(block, args)?,
                 };
                 let type_args = if types.is_empty() {
-                    "Vec::new()".to_string()
+                    "TypeArgs::new()".to_string()
                 } else {
-                    format!("vec![{}]", types.join(", "))
+                    format!("TypeArgs::from_iter([{}])", types.join(", "))
                 };
                 (
                     format!(
@@ -1413,7 +1538,7 @@ impl<'db> Generator<'_, 'db> {
                 let args = self.arg_values(block, args)?;
                 (
                     format!(
-                        "Step::Call {{ callee, argc: {}, type_args: Vec::new() }}",
+                        "Step::Call {{ callee, argc: {}, type_args: TypeArgs::new() }}",
                         args.len()
                     ),
                     args,
@@ -1676,12 +1801,19 @@ impl<'db> Generator<'_, 'db> {
         // A leaf can be entered from several places; nothing about `line` is
         // known on entry.
         self.current_line = None;
-        // A resumable body lets the scheduler in at each loop iteration.
+        // A resumable body lets the scheduler in from its loops. It counts
+        // iterations in a register and takes the VM's control-flow check
+        // every `YIELD_EVERY`th: a compiled iteration is a fraction of an
+        // interpreted one, so this still polls about as often in time.
         if self.suspends && self.loop_headers.contains(&id.0) {
             let live = self.live_in[id.0].clone();
             let point = self.yield_point(id.0);
             let point_slot = self.point_slot;
-            self.line(depth, "if vm.should_yield() {");
+            self.line(depth, "iterations = iterations.wrapping_add(1);");
+            self.line(
+                depth,
+                &format!("if iterations % {YIELD_EVERY} == 0 && vm.should_yield() {{"),
+            );
             self.save(self.saved(live), depth + 1);
             self.line(
                 depth + 1,
@@ -2060,6 +2192,13 @@ impl<'db> Generator<'_, 'db> {
         match place {
             Place::Local(local) => {
                 let code = coerce(&value.code, value.repr, self.repr(*local));
+                if self.suspends && self.write_through.contains(&local.0) {
+                    let slot = coerce(&format!("l{}", local.0), self.repr(*local), Repr::Value);
+                    return Ok(format!(
+                        "l{0} = {code}; vm.set_slot(depth, {0}, {slot});",
+                        local.0
+                    ));
+                }
                 Ok(format!("l{} = {code};", local.0))
             }
             Place::Field { base, field } => {
@@ -2573,7 +2712,7 @@ fn render_module(
          #![allow(unused_mut, unused_variables, unused_assignments, unused_labels, unused_parens, \
          unreachable_code, non_snake_case, clippy::all, clippy::pedantic)]\n\n\
          use bex_vm::{BexVm, NativeFunction, errors::VmError};\n\
-         use bex_vm::compiled_rt::{CompiledEntry, CompiledFn, Resume, Step};\n\
+         use bex_vm::compiled_rt::{CompiledEntry, CompiledFn, Resume, Step, TypeArgs};\n\
          use bex_vm_types::{BinOp, CmpOp, ObjectIndex, RealizedTy, Value};\n\n\
          type R<T> = Result<T, Box<VmError>>;\n\n",
     );
