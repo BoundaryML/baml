@@ -290,6 +290,10 @@ class CloudflareVisionClient {
             "llama-3.2-11b-vision-instruct"
         }
 
+        function provider(self) -> string {
+            "cloudflare"
+        }
+
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             self.build_request(input, preview = true) catch_all (error) {
                 _ => throw ai.errors.normalize(error),

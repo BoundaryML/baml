@@ -710,10 +710,7 @@ class Fallback {
 /// (internal) `stream`, from `member`, relayed
 /// without retrying, so its turn is a child of the relay's, as a wrapper's
 /// turn has its member's.
-function _relayed(
-    stream: root.stream.TurnStream,
-    member: root.Client,
-) -> root.stream.TurnStream {
+function _relayed(stream: root.stream.TurnStream, member: root.Client) -> root.stream.TurnStream {
     let relay = StreamRelay {
         open: () -> root.stream.TurnStream {
             stream

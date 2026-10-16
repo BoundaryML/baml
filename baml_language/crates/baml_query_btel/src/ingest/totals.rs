@@ -179,7 +179,7 @@ fn lookup(tx: &Transaction<'_>, rec: i64, node: [u8; 8]) -> Result<Option<Node>,
             ))
         })
         .optional()?;
-    Ok(thread
+    thread
         .map(|(parent, total, defined)| -> Result<Node, Error> {
             Ok(Node {
                 table: "thread",
@@ -192,7 +192,7 @@ fn lookup(tx: &Transaction<'_>, rec: i64, node: [u8; 8]) -> Result<Option<Node>,
                 undefined_thread: !defined && parent.is_none(),
             })
         })
-        .transpose()?)
+        .transpose()
 }
 
 fn stored(text: &str) -> Result<Vec<ModelUsage>, Error> {
