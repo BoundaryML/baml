@@ -279,13 +279,35 @@ pub(super) fn eliminate_dead_stores(body: &mut MirFunctionBody<'_>, arity: usize
 /// The locals live on entry to each block, indexed by block then local. A
 /// block with an unwind edge keeps its handler's live locals live throughout,
 /// since a panic can enter the handler before any statement completes.
+///
+/// A terminator's destination (a call's, an await's) is not counted as its
+/// definition, so a local such a terminator assigns is live before it, back
+/// to the function's entry when nothing else assigns it: conservative, which
+/// is all dead-store elimination needs. See [`live_in_precise`].
 pub fn live_in(body: &MirFunctionBody<'_>) -> Vec<Vec<bool>> {
+    live_in_with(body, false)
+}
+
+/// [`live_in`] with each terminator's destination counted as its definition
+/// on its normal edges (not its unwind edge, where it was not assigned). A
+/// local is then live only where it holds a value that will be read: what a
+/// consumer that saves and restores live locals needs, since a local live
+/// before its first assignment would be read back unassigned.
+pub fn live_in_precise(body: &MirFunctionBody<'_>) -> Vec<Vec<bool>> {
+    live_in_with(body, true)
+}
+
+fn live_in_with(body: &MirFunctionBody<'_>, terminator_defs: bool) -> Vec<Vec<bool>> {
     let n = body.locals.len();
     let mut live_in = vec![vec![false; n]; body.blocks.len()];
     loop {
         let mut changed = false;
         for block in body.blocks.iter().rev() {
-            let (mut live, exceptional) = live_out(body, block, &live_in);
+            let (mut live, exceptional) = if terminator_defs {
+                precise_live_out(body, block, &live_in)
+            } else {
+                live_out(body, block, &live_in)
+            };
             for statement in block.statements.iter().rev() {
                 transfer(statement, &mut live, &exceptional);
             }
@@ -314,6 +336,73 @@ fn live_out(
     if let Some(term) = &block.terminator {
         for successor in term.successors() {
             union(&mut live, &live_in[successor.0]);
+        }
+        let mut uses = vec![0; live.len()];
+        super::count_in_terminator(term, &mut uses);
+        for (live, uses) in live.iter_mut().zip(uses) {
+            *live |= uses != 0;
+        }
+        if matches!(term, Terminator::Return) {
+            live[0] = true;
+        }
+    }
+    union(&mut live, &exceptional);
+    (live, exceptional)
+}
+
+/// [`live_out`] with the terminator's destination killed on its normal
+/// edges: live after the terminator is what its normal successors read less
+/// what it assigns, plus what its unwind successor reads and what it uses.
+fn precise_live_out(
+    body: &MirFunctionBody<'_>,
+    block: &crate::BasicBlock<'_>,
+    live_in: &[Vec<bool>],
+) -> (Vec<bool>, Vec<bool>) {
+    let mut live = vec![false; body.locals.len()];
+    let mut exceptional = live.clone();
+    if let Some(handler) = block.unwind {
+        union(&mut exceptional, &live_in[handler.0]);
+    }
+    if let Some(term) = &block.terminator {
+        let (destination, unwind) = match term {
+            Terminator::Call {
+                destination,
+                unwind,
+                ..
+            }
+            | Terminator::VirtualCall {
+                destination,
+                unwind,
+                ..
+            }
+            | Terminator::SysOp {
+                destination,
+                unwind,
+                ..
+            }
+            | Terminator::Await {
+                destination,
+                unwind,
+                ..
+            }
+            | Terminator::AwaitAny {
+                destination,
+                unwind,
+                ..
+            } => (Some(destination), *unwind),
+            Terminator::Spawn { future, .. } => (Some(future), None),
+            _ => (None, None),
+        };
+        for successor in term.successors() {
+            if Some(successor) != unwind {
+                union(&mut live, &live_in[successor.0]);
+            }
+        }
+        if let Some(Place::Local(local)) = destination {
+            live[local.0] = false;
+        }
+        if let Some(unwind) = unwind {
+            union(&mut live, &live_in[unwind.0]);
         }
         let mut uses = vec![0; live.len()];
         super::count_in_terminator(term, &mut uses);

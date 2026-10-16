@@ -1087,7 +1087,7 @@ impl<'db> Generator<'_, 'db> {
             self.point_slot = base;
             self.cause_slot = catches.then_some(base + 1);
             self.slots = base + 1 + usize::from(catches);
-            self.live_in = baml_compiler2_mir::live_in(self.body);
+            self.live_in = baml_compiler2_mir::live_in_precise(self.body);
             let (headers, in_loop) = loops(self.body);
             self.loop_headers = headers;
             self.write_through = self.write_through_locals(&in_loop);
