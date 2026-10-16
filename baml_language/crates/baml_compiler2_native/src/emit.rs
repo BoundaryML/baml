@@ -199,6 +199,7 @@ pub fn compile_program<'db>(
                 out: String::new(),
                 pending: Vec::new(),
                 temps: 0,
+                live_in: Vec::new(),
             };
             match generator.function(&symbols[name]) {
                 Ok(code) => {
@@ -740,9 +741,16 @@ struct Generator<'a, 'db> {
     /// holds another call (two `vm` borrows) whatever the expression is.
     pending: Vec<String>,
     temps: usize,
+    /// For a resumable function, the locals live on entry to each block:
+    /// what a suspension keeps in the frame's slots.
+    live_in: Vec<Vec<bool>>,
 }
 
 type Gen<T> = Result<T, Rejection>;
+
+/// What a suspension keeps: live locals (local `i` in slot `i`), then live
+/// array iterators with the slot of their position.
+type Saved = (Vec<usize>, Vec<(usize, usize)>);
 
 fn unsupported<T>(what: impl Into<String>) -> Gen<T> {
     Err(Rejection::Unsupported(what.into()))
@@ -866,15 +874,77 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// Locals saved across a suspension, with their slot: every local but
-    /// the static type ones, then each array iterator's position.
-    fn saved(&self) -> (Vec<usize>, Vec<usize>) {
-        let locals = (0..self.analysis.reprs.len())
-            .filter(|i| !self.analysis.static_types.contains_key(i))
-            .collect();
+    /// The array iterators, in the order their positions take slots after
+    /// the locals'.
+    fn iters(&self) -> Vec<usize> {
         let mut iters: Vec<usize> = self.analysis.array_iters.keys().copied().collect();
         iters.sort_unstable();
-        (locals, iters)
+        iters
+    }
+
+    /// What a suspension at the end of `block` keeps in the frame's slots:
+    /// each local live once it resumes, then the position of each live array
+    /// iterator, with its slot. Live once it resumes means live into the
+    /// block the resume continues at, less the local the resume writes, plus
+    /// live into the block's handler when a raise can land there. Every other
+    /// local is dead across the suspension: it is neither saved nor restored,
+    /// and keeps its default until it is next written.
+    fn saved_at(&self, block: BlockId) -> Gen<Saved> {
+        let (destination, target) = self.resume_edge(block)?;
+        let mut live = self.live_in[target.0].clone();
+        if let Place::Local(local) = destination {
+            live[local.0] = false;
+        }
+        if let Some(handler) = self.body.blocks[block.0].unwind {
+            for (live, handler) in live.iter_mut().zip(&self.live_in[handler.0]) {
+                *live |= *handler;
+            }
+        }
+        let locals = (0..self.analysis.reprs.len())
+            .filter(|&i| live[i] && !self.analysis.static_types.contains_key(&i))
+            .collect();
+        let base = self.analysis.reprs.len().max(self.arity());
+        let iters = self
+            .iters()
+            .into_iter()
+            .enumerate()
+            .filter(|&(_, iter)| live[iter])
+            .map(|(j, iter)| (iter, base + j))
+            .collect();
+        Ok((locals, iters))
+    }
+
+    /// The local a suspension at the end of `block` writes when it resumes,
+    /// and the block it continues at.
+    fn resume_edge(&self, block: BlockId) -> Gen<(Place, BlockId)> {
+        match self.body.blocks[block.0].terminator.as_ref() {
+            Some(
+                Terminator::Call {
+                    destination,
+                    target,
+                    ..
+                }
+                | Terminator::SysOp {
+                    destination,
+                    target,
+                    ..
+                }
+                | Terminator::Await {
+                    destination,
+                    target,
+                    ..
+                }
+                | Terminator::AwaitAny {
+                    destination,
+                    target,
+                    ..
+                },
+            ) => Ok((destination.clone(), *target)),
+            Some(Terminator::Spawn { future, resume, .. }) => Ok((future.clone(), *resume)),
+            _ => Err(Rejection::Invalid(
+                "resume after a non-suspending block".into(),
+            )),
+        }
     }
 
     /// A resumable function: the VM drives it through `Resume`/`Step`. Its
@@ -884,8 +954,9 @@ impl<'db> Generator<'_, 'db> {
     /// `loop { match bb }`, since a resume enters the middle of the function.
     fn resumable_function(&mut self, symbol: &str) -> Gen<String> {
         let arity = self.body.locals.len().min(self.arity());
-        let (locals, iters) = self.saved();
+        let iters = self.iters();
         let slots = self.analysis.reprs.len().max(arity) + iters.len();
+        self.live_in = baml_compiler2_mir::live_in(self.body);
         let declared = self.declared_at.map_or(0, |span| self.line_of(span));
         self.out.clear();
         let _ = writeln!(
@@ -940,22 +1011,8 @@ impl<'db> Generator<'_, 'db> {
         let entry = self.body.entry.0;
         self.line(3, &format!("bb = {entry};"));
         self.line(2, "}");
+        // Each resume arm restores what its suspension saved (`saved_at`).
         self.line(2, "point => {");
-        for &i in &locals {
-            let value = coerce(
-                &format!("vm.slot(depth, {i})"),
-                Repr::Value,
-                self.repr(Local(i)),
-            );
-            self.line(3, &format!("l{i} = {value};"));
-        }
-        for (j, iter) in iters.iter().enumerate() {
-            let slot = self.analysis.reprs.len().max(arity) + j;
-            self.line(
-                3,
-                &format!("i{iter} = bex_vm::compiled_rt::expect_int(vm.slot(depth, {slot}))?;"),
-            );
-        }
         self.line(3, "match (point, resume.input) {");
         for block in 0..self.body.blocks.len() {
             if self.block_suspends(block) {
@@ -994,50 +1051,43 @@ impl<'db> Generator<'_, 'db> {
     /// handler.
     fn resume_arms(&mut self, block: BlockId, depth: usize) -> Gen<()> {
         let point = block.0 + 1;
-        let (destination, target) = match self.body.blocks[block.0].terminator.as_ref() {
-            Some(
-                Terminator::Call {
-                    destination,
-                    target,
-                    ..
-                }
-                | Terminator::SysOp {
-                    destination,
-                    target,
-                    ..
-                }
-                | Terminator::Await {
-                    destination,
-                    target,
-                    ..
-                }
-                | Terminator::AwaitAny {
-                    destination,
-                    target,
-                    ..
-                },
-            ) => (destination, target),
-            Some(Terminator::Spawn { future, resume, .. }) => (future, resume),
-            _ => {
-                return Err(Rejection::Invalid(
-                    "resume after a non-suspending block".into(),
-                ));
-            }
-        };
+        let (destination, target) = self.resume_edge(block)?;
         if !matches!(destination, Place::Local(_)) {
             return unsupported("a suspending call's result stored into a field or element");
         }
-        let store = self.store(block, destination, &Expr::new("v", Repr::Value))?;
+        let store = self.store(block, &destination, &Expr::new("v", Repr::Value))?;
         self.line(depth, &format!("({point}, ResumeInput::Value(v)) => {{"));
+        self.restore_locals(block, depth + 1)?;
         self.line(depth + 1, &store);
         self.line(depth + 1, &format!("bb = {};", target.0));
         self.line(depth, "}");
         if self.body.blocks[block.0].unwind.is_some() {
             self.line(depth, &format!("({point}, ResumeInput::Thrown(e)) => {{"));
+            self.restore_locals(block, depth + 1)?;
             let jump = self.unwind_jump(block, "e", depth + 1)?;
             self.flush(depth + 1);
             self.out.push_str(&jump);
             self.line(depth, "}");
+        }
+        Ok(())
+    }
+
+    /// Read back what the suspension at the end of `block` saved.
+    fn restore_locals(&mut self, block: BlockId, depth: usize) -> Gen<()> {
+        let (locals, iters) = self.saved_at(block)?;
+        for i in locals {
+            let value = coerce(
+                &format!("vm.slot(depth, {i})"),
+                Repr::Value,
+                self.repr(Local(i)),
+            );
+            self.line(depth, &format!("l{i} = {value};"));
+        }
+        for (iter, slot) in iters {
+            self.line(
+                depth,
+                &format!("i{iter} = bex_vm::compiled_rt::expect_int(vm.slot(depth, {slot}))?;"),
+            );
         }
         Ok(())
     }
@@ -1179,7 +1229,7 @@ impl<'db> Generator<'_, 'db> {
             }
             _ => return Err(Rejection::Invalid("pause at a non-suspending block".into())),
         };
-        self.save_locals(depth);
+        self.save_locals(block, depth)?;
         self.flush(depth);
         self.line(depth, "vm.note_line(depth, line);");
         self.line(depth, &format!("return Ok({step});"));
@@ -1262,21 +1312,20 @@ impl<'db> Generator<'_, 'db> {
         Ok(values.join(", "))
     }
 
-    /// Save every local and iterator position in the frame's slots.
-    fn save_locals(&mut self, depth: usize) {
-        let arity = self.body.locals.len().min(self.arity());
-        let (locals, iters) = self.saved();
+    /// Save what stays live across the suspension at the end of `block`.
+    fn save_locals(&mut self, block: BlockId, depth: usize) -> Gen<()> {
+        let (locals, iters) = self.saved_at(block)?;
         for i in locals {
             let value = self.value_arg(&format!("l{i}"), self.repr(Local(i)));
             self.statement(depth, &format!("vm.set_slot(depth, {i}, {value});"));
         }
-        for (j, iter) in iters.iter().enumerate() {
-            let slot = self.analysis.reprs.len().max(arity) + j;
+        for (iter, slot) in iters {
             self.statement(
                 depth,
                 &format!("vm.set_slot(depth, {slot}, Value::int(i{iter}));"),
             );
         }
+        Ok(())
     }
 
     fn arity(&self) -> usize {

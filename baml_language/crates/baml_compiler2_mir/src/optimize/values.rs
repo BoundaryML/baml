@@ -249,24 +249,7 @@ fn simplify_boolean_diamonds(body: &mut MirFunctionBody<'_>) {
 /// requiring the entire local to be unused. Potentially failing RHSs stay put.
 pub(super) fn eliminate_dead_stores(body: &mut MirFunctionBody<'_>, arity: usize, opt: OptLevel) {
     let effects = super::effects::Analysis::new(body);
-    let n = body.locals.len();
-    let mut live_in = vec![vec![false; n]; body.blocks.len()];
-    loop {
-        let mut changed = false;
-        for block in body.blocks.iter().rev() {
-            let (mut live, exceptional) = live_out(body, block, &live_in);
-            for statement in block.statements.iter().rev() {
-                transfer(statement, &mut live, &exceptional);
-            }
-            if live != live_in[block.id.0] {
-                live_in[block.id.0] = live;
-                changed = true;
-            }
-        }
-        if !changed {
-            break;
-        }
-    }
+    let live_in = live_in(body);
     for index in 0..body.blocks.len() {
         let (mut live, exceptional) = live_out(body, &body.blocks[index], &live_in);
         let statements = &mut body.blocks[index].statements;
@@ -291,6 +274,31 @@ pub(super) fn eliminate_dead_stores(body: &mut MirFunctionBody<'_>, arity: usize
         }
         statements.retain(|statement| !matches!(statement.kind, StatementKind::Nop));
     }
+}
+
+/// The locals live on entry to each block, indexed by block then local. A
+/// block with an unwind edge keeps its handler's live locals live throughout,
+/// since a panic can enter the handler before any statement completes.
+pub fn live_in(body: &MirFunctionBody<'_>) -> Vec<Vec<bool>> {
+    let n = body.locals.len();
+    let mut live_in = vec![vec![false; n]; body.blocks.len()];
+    loop {
+        let mut changed = false;
+        for block in body.blocks.iter().rev() {
+            let (mut live, exceptional) = live_out(body, block, &live_in);
+            for statement in block.statements.iter().rev() {
+                transfer(statement, &mut live, &exceptional);
+            }
+            if live != live_in[block.id.0] {
+                live_in[block.id.0] = live;
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    live_in
 }
 
 fn live_out(
