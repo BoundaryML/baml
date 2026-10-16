@@ -74,7 +74,7 @@ pub(crate) fn complete_attributes(position: AttributePosition, out: &mut Complet
     // Unknown `@` names are legal user schema annotations (hoisted for
     // reflection read-back), so this list is a menu of the names the compiler
     // gives meaning to at this position, not a closed set.
-    for spec in baml_base::schema_attribute_specs_at(position) {
+    for spec in baml_base::user_attribute_specs_at(position) {
         out.add_attribute(spec.name);
     }
 }

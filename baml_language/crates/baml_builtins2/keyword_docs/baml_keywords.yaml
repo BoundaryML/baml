@@ -131,6 +131,19 @@ stream.done:
   details: |
     `@stream.done` applies to a class field: while the value is incomplete the partial parse uses the field's default, `""` for a string, rather than the text received so far. `@@stream.done` applies to a class: the object has no partial parse until every field is complete. Without either, a field streams its partial value whenever its type has one, which strings, arrays, maps, classes, and unions do. Takes no arguments, at most once per declaration.
 
+rust_type:
+  summary: "Standard library only: the class's state lives in the runtime, not in fields."
+  syntax: |
+    class Regex {
+      function has_match(self, haystack: string) -> bool {
+        $rust_function
+      }
+
+      @@rust_type("Regex")
+    }
+  details: |
+    A `@@rust_type("Kind")` class declares no fields; each instance holds runtime state of that kind, reached only through the class's methods. The attribute goes last in the class body. No literal builds an instance, and only media kinds have a JSON form. Outside the standard library the attribute is an error.
+
 stream.must_exist:
   summary: "Removes a class field's default, so the class has no partial parse until that field arrives. Takes no arguments."
   syntax: |

@@ -4,11 +4,56 @@
 //! editor tooling. Human-readable documentation lives in `baml_builtins2` and
 //! is keyed by the stable names exposed here.
 
+use borsh::{BorshDeserialize, BorshSerialize};
+
 /// The argument shape accepted by a built-in schema attribute.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SchemaAttributeArguments {
     None,
-    String { placeholder: &'static str },
+    String {
+        placeholder: &'static str,
+    },
+    /// No argument, or one string from a closed list. The lowering checks
+    /// membership, so a carrier only ever stores a listed choice.
+    OptionalChoice {
+        choices: &'static [&'static str],
+        placeholder: &'static str,
+    },
+}
+
+/// The kind of Rust-owned state a `@@rust_type` class keeps, one per runtime
+/// payload variant. Bare `@@rust_type` is [`Self::Foreign`]; every other kind
+/// is named by its spelling: `@@rust_type("OrderedSet")`.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, BorshSerialize, BorshDeserialize,
+)]
+pub enum RustPayloadKind {
+    /// A value the VM cannot look inside, reached only through its `Arc`.
+    /// Transitional: the kind of every class that has no kind of its own yet.
+    Foreign,
+}
+
+impl RustPayloadKind {
+    /// Every kind, in declaration order.
+    pub const ALL: [Self; 1] = [Self::Foreign];
+
+    /// The spellings `@@rust_type("…")` accepts, in [`Self::ALL`] order.
+    pub const SPELLINGS: &'static [&'static str] = &[];
+
+    /// How this kind is named in `@@rust_type("…")`, or `None` for the kind
+    /// bare `@@rust_type` means.
+    pub fn spelling(self) -> Option<&'static str> {
+        match self {
+            Self::Foreign => None,
+        }
+    }
+
+    /// The kind `@@rust_type("spelling")` names.
+    pub fn from_spelling(spelling: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|kind| kind.spelling() == Some(spelling))
+    }
 }
 
 /// Where a schema attribute is written. Attributes belong to declarations: a
@@ -61,6 +106,9 @@ pub struct SchemaAttributeSpec {
     pub name: &'static str,
     pub arguments: SchemaAttributeArguments,
     pub repeatable: bool,
+    /// Written only in the standard library: a user file is refused, and the
+    /// menus and diagnostics shown to a user never list it.
+    pub builtin_only: bool,
     /// The positions the attribute has meaning at. Anywhere else it is an
     /// error: an attribute the compiler knows but does not read at a position
     /// would otherwise be accepted and silently ignored.
@@ -72,7 +120,8 @@ impl SchemaAttributeSpec {
     pub fn signature(self) -> String {
         match self.arguments {
             SchemaAttributeArguments::None => self.name.to_string(),
-            SchemaAttributeArguments::String { placeholder } => {
+            SchemaAttributeArguments::String { placeholder }
+            | SchemaAttributeArguments::OptionalChoice { placeholder, .. } => {
                 format!(r#"{}("{placeholder}")"#, self.name)
             }
         }
@@ -106,6 +155,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
             placeholder: "text",
         },
         repeatable: false,
+        builtin_only: false,
         positions: DATA_MEMBERS_AND_BLOCKS,
     },
     SchemaAttributeSpec {
@@ -114,12 +164,14 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
             placeholder: "name",
         },
         repeatable: false,
+        builtin_only: false,
         positions: DATA_MEMBERS_AND_BLOCKS,
     },
     SchemaAttributeSpec {
         name: "skip",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: DATA_MEMBERS,
     },
     // BEP-075: the streaming attributes are declaration attributes. A field's
@@ -129,6 +181,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "stream.done",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: &[AttributePosition::ClassField, AttributePosition::Class],
     },
     // The field has no default, so its class has no partial parse until the
@@ -137,6 +190,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "stream.must_exist",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: &[AttributePosition::ClassField],
     },
     // The JSON key of a field or variant, in `baml.json` and generated SDK
@@ -145,6 +199,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "json.rename",
         arguments: SchemaAttributeArguments::String { placeholder: "key" },
         repeatable: false,
+        builtin_only: false,
         positions: DATA_MEMBERS,
     },
     // A `map<string, json>` field that holds every key no other field took,
@@ -153,6 +208,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "json.flatten",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: &[AttributePosition::ClassField],
     },
     // A `map<string, json>` field that makes its class the member of a union
@@ -162,6 +218,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "json.fallback",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: &[AttributePosition::ClassField],
     },
     // The class's optional fields holding `null` are left out when it is
@@ -170,6 +227,7 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "json.omit_nulls",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: &[AttributePosition::Class],
     },
     // Telemetry records a redaction marker in place of the value: a field's
@@ -179,7 +237,20 @@ pub const SCHEMA_ATTRIBUTE_SPECS: &[SchemaAttributeSpec] = &[
         name: "trace.redact",
         arguments: SchemaAttributeArguments::None,
         repeatable: false,
+        builtin_only: false,
         positions: &[AttributePosition::ClassField, AttributePosition::Class],
+    },
+    // The one attribute here that is about the language rather than the
+    // schema: the class keeps its state in Rust, of the kind named.
+    SchemaAttributeSpec {
+        name: "rust_type",
+        arguments: SchemaAttributeArguments::OptionalChoice {
+            choices: RustPayloadKind::SPELLINGS,
+            placeholder: "Kind",
+        },
+        repeatable: false,
+        builtin_only: true,
+        positions: &[AttributePosition::Class],
     },
 ];
 
@@ -194,6 +265,15 @@ pub fn schema_attribute_specs_at(
     SCHEMA_ATTRIBUTE_SPECS
         .iter()
         .filter(move |spec| spec.allows(position))
+}
+
+/// The attributes a user may write at `position`: those with meaning there
+/// that are not builtin-only. What a completion menu offers and what an
+/// unknown-attribute diagnostic suggests.
+pub fn user_attribute_specs_at(
+    position: AttributePosition,
+) -> impl Iterator<Item = &'static SchemaAttributeSpec> {
+    schema_attribute_specs_at(position).filter(|spec| !spec.builtin_only)
 }
 
 /// Presentation-neutral identity and signature for a well-known client
@@ -286,6 +366,20 @@ mod tests {
         );
         assert_eq!(
             names_at(AttributePosition::Class),
+            [
+                "description",
+                "alias",
+                "stream.done",
+                "json.omit_nulls",
+                "trace.redact",
+                "rust_type"
+            ]
+        );
+        // A user is never offered what a user cannot write.
+        assert_eq!(
+            user_attribute_specs_at(AttributePosition::Class)
+                .map(|spec| spec.name)
+                .collect::<Vec<_>>(),
             [
                 "description",
                 "alias",

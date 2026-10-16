@@ -1897,7 +1897,8 @@ impl<'db> InferenceContext<'db> {
         crate::extern_loc::mounted_class_loc(self.db, qtn)
             .map(|class| {
                 crate::extern_loc::extern_class_row(self.db, class)
-                    .fields
+                    .body
+                    .fields()
                     .iter()
                     .map(|(_, field_ty, _)| self.pattern_field_ty(&Ty::from_plain(field_ty), args))
                     .collect()

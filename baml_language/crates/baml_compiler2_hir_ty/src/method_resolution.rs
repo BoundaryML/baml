@@ -1336,7 +1336,7 @@ pub fn member_candidates<'db>(
         && let Some(class) = crate::extern_loc::mounted_class_loc(db, &qtn)
     {
         let row = crate::extern_loc::extern_class_row(db, class);
-        for (index, (name, ..)) in row.fields.iter().enumerate() {
+        for (index, (name, ..)) in row.body.fields().iter().enumerate() {
             push_candidate(
                 &mut out,
                 name.clone(),

@@ -427,6 +427,9 @@ pub enum DiagnosticId {
     ServedInterfaceExportsFunctionsOnly,
     /// A constant pattern passed to `baml.regex.new` does not compile (E0174).
     InvalidRegexPattern,
+    /// A `@@rust_type` class declared a field. Its state lives in Rust, so it
+    /// has no fields: a field there would be a second, unrelated store (E0186).
+    RustTypeClassHasFields,
     /// An unparenthesized function/union boundary has two syntactic owners (E0175).
     AmbiguousUnion,
     /// A builtin the compiler lowers where it is called (`log.info`,
@@ -687,6 +690,7 @@ impl DiagnosticId {
             DiagnosticId::LlmOutputMemberDropped => "E0184",
             DiagnosticId::LlmOutputFieldAlwaysNull => "E0185",
             DiagnosticId::InvalidJsonAttribute => "E0186",
+            DiagnosticId::RustTypeClassHasFields => "E0187",
         }
     }
 }
