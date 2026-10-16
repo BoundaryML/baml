@@ -1789,13 +1789,15 @@ fn enum_row(vm: &BexVm, value: Value) -> Result<EnumVariant, String> {
     }
 }
 
-fn invalid_enum_value(vm: &BexVm, value: Value) -> crate::errors::VmRustFnError {
-    crate::errors::VmRustFnError::BamlError(crate::errors::VmBamlError::InvalidArgument {
-        message: format!(
-            "reflect.Enum.get_value expects an enum value, got {}",
-            vm.type_of(&value)
-        ),
-    })
+fn invalid_enum_value(vm: &mut BexVm, value: Value) -> crate::errors::VmRustFnError {
+    let message = format!(
+        "reflect.Enum.get_value expects an enum value, got {}",
+        vm.type_of(&value)
+    );
+    let message = Value::object(vm.alloc_string(message.as_str()));
+    crate::errors::VmRustFnError::thrown_fresh(
+        copy::errors::InvalidArgument { message }.to_value(vm),
+    )
 }
 
 macro_rules! impl_as_type {

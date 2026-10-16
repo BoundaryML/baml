@@ -219,6 +219,13 @@ test "literal_values_preserve_enum_identity_not_alias_or_name_strings" {
     assert.equal(hidden.value(), WithSkippedVariant.Hidden)
 }
 
+test "enum_get_value_rejects_a_non_enum_with_reflect_invalid_argument" {
+    let message = reflect.Enum.get_value(1) catch (e) {
+        reflect.errors.InvalidArgument => e.message,
+    };
+    assert.equal(message, "reflect.Enum.get_value expects an enum value, got int")
+}
+
 test "runtime_literal_constructors_roundtrip_values" {
     assert.equal(reflect.Literal.new("hello").value(), "hello");
     assert.equal(reflect.Literal.new(0).value(), 0);
