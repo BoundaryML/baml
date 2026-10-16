@@ -47,7 +47,6 @@ walkdir = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_cli = { workspace = true }
 baml_compiler2_emit = { workspace = true }
-# The native backend, for `tests/native_backend.rs` only.
 baml_db = { workspace = true, features = [ "native" ] }
 baml_fmt = { workspace = true }
 baml_linker = { workspace = true }
