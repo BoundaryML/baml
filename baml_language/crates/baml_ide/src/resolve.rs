@@ -1460,7 +1460,8 @@ pub(crate) fn member_resolution_target<'db>(
                     .iter()
                     .position(|f| f.name == *field)?,
                 DeclRef::External(class) => extern_class_row(db, *class)
-                    .fields
+                    .body
+                    .fields()
                     .iter()
                     .position(|(name, ..)| name == field)?,
             };
@@ -1575,7 +1576,8 @@ fn constructor_field_at<'db>(
                 .position(|f| f.name == field.name)?,
             DeclRef::External(class) => {
                 baml_compiler2_hir_ty::extern_loc::extern_class_row(db, class)
-                    .fields
+                    .body
+                    .fields()
                     .iter()
                     .position(|(name, _, _)| *name == field.name)?
             }

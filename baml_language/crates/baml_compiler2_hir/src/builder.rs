@@ -1362,7 +1362,17 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_class(&mut self, c: &ast::ClassDef) {
-        let attrs = crate::attrs::lower_attributes(&c.attributes, &mut self.diagnostics);
+        let attrs: crate::item_tree::ClassAttrs =
+            crate::attrs::lower_attributes(&c.attributes, &mut self.diagnostics);
+        if attrs.rust_type.is_some()
+            && let Some(first) = c.fields.first()
+        {
+            self.diagnostics
+                .push(Hir2Diagnostic::RustTypeClassHasFields {
+                    class_name: c.name.clone(),
+                    span: first.name_span,
+                });
+        }
         let field_attrs: Vec<crate::item_tree::ClassFieldAttrs> = c
             .fields
             .iter()
@@ -1767,6 +1777,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.validate_function_phase1(function, is_builtin_file);
             }
             ast::Item::Class(class) => {
+                self.reject_builtin_only_attributes(&class.attributes, is_builtin_file);
                 for field in &class.fields {
                     let type_expr = &field.type_expr;
                     self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
@@ -1790,6 +1801,28 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// A builtin-only attribute (see `SchemaAttributeSpec::builtin_only`) in a
+    /// file that is not the standard library's.
+    fn reject_builtin_only_attributes(
+        &mut self,
+        attributes: &[ast::RawAttribute],
+        is_builtin_file: bool,
+    ) {
+        if is_builtin_file {
+            return;
+        }
+        for attr in attributes {
+            if let Some(spec) = baml_base::schema_attribute_spec(attr.name.as_str())
+                && spec.builtin_only
+            {
+                self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
+                    feature: format!("@@{}", spec.name),
+                    span: attr.span,
+                });
+            }
         }
     }
 

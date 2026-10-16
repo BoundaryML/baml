@@ -54,6 +54,8 @@ pub enum Hir2Diagnostic {
     },
     /// Builtin-only syntax used outside builtin stdlib files.
     BuiltinOnlySyntax { feature: String, span: TextRange },
+    /// A `@@rust_type` class declared a field; `span` is the first one's name.
+    RustTypeClassHasFields { class_name: Name, span: TextRange },
     /// A binding, item, or type parameter named `root`, the path to the
     /// package itself.
     RootIsReserved { span: TextRange },
@@ -373,7 +375,7 @@ impl Hir2Diagnostic {
                 span,
             } => {
                 let sigil = position.sigil();
-                let valid = baml_base::schema_attribute_specs_at(*position)
+                let valid = baml_base::user_attribute_specs_at(*position)
                     .map(|spec| format!("`{sigil}{}`", spec.name))
                     .collect::<Vec<_>>();
                 let valid = if valid.is_empty() {
@@ -412,6 +414,21 @@ impl Hir2Diagnostic {
                 .with_primary(Span { file_id, range: *span }, "not valid here")
                 .with_phase(DiagnosticPhase::Hir)
             }
+            Hir2Diagnostic::RustTypeClassHasFields { class_name, span } => Diagnostic::error(
+                DiagnosticId::RustTypeClassHasFields,
+                format!(
+                    "class `{class_name}` is a `@@rust_type` class and cannot declare fields: its \
+                     state lives in Rust"
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "field on a `@@rust_type` class",
+            )
+            .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::RootIsReserved { span } => Diagnostic::error(
                 DiagnosticId::RootIsReserved,
                 "`root` is the path to this package and cannot name a binding, an item, or a \
