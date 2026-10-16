@@ -54,6 +54,7 @@ const packageRootExports = [
   "reflectType",
   "registerCapture",
   "setTypeMap",
+  "shutdownRuntime",
   "wrapNativeError",
 ] as const;
 

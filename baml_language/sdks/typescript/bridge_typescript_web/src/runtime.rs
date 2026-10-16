@@ -42,6 +42,16 @@ pub fn stage_runtime_sources(root_path: &str, files: JsValue) -> Result<(), JsVa
         .map_err(|error| crate::errors::bridge_error(&error))
 }
 
+/// Finalize the SDK lifetime: drain in-flight calls and spawned work, then
+/// release the runtime. Repeated calls are harmless; BAML calls made
+/// afterwards fail.
+#[wasm_bindgen(js_name = shutdownRuntime)]
+pub async fn shutdown_runtime() -> Result<(), JsValue> {
+    bridge_cffi::shutdown_runtime(None)
+        .await
+        .map_err(|error| crate::errors::bridge_error(&error))
+}
+
 #[wasm_bindgen(js_name = callFunctionSync)]
 pub fn call_function_sync(encoded_args: &[u8]) -> Vec<u8> {
     sys_wasm::with_web_sync_mode(|| bridge_cffi::call_function_in_wasm_sync(encoded_args))
