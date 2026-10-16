@@ -1651,16 +1651,25 @@ impl BexEngine {
                 // as an opaque handle) can branch on the declared shape.
                 let mut values = Vec::with_capacity(class_fields.len());
                 for class_field in class_fields {
-                    let ext = fields.get(&class_field.name).ok_or_else(|| {
-                        EngineError::TypeMismatch {
+                    let field_ty = class_field.field_template.substitute_symbolic(&type_args);
+                    let wire_field_ty = overlay_wire_ty(&field_ty)?;
+                    let Some(ext) = fields.get(&class_field.name) else {
+                        // A host may leave an optional (`T?`) field out, the
+                        // way JSON decoding may: the field arrives absent,
+                        // which reads as `null` but stays distinct from an
+                        // explicit `null` entry. The same rule picks a class
+                        // arm for a plain host object (`map_matches_class_shape`).
+                        if wire_field_ty.is_nullable_union() {
+                            values.push(Value::ABSENT);
+                            continue;
+                        }
+                        return Err(EngineError::TypeMismatch {
                             message: format!(
                                 "Missing field `{}` in external Instance for class `{class_name}`",
                                 class_field.name
                             ),
-                        }
-                    })?;
-                    let field_ty = class_field.field_template.substitute_symbolic(&type_args);
-                    let wire_field_ty = overlay_wire_ty(&field_ty)?;
+                        });
+                    };
                     let field_value = self.coerce_inbound_arg(ext.clone(), &wire_field_ty)?;
                     values.push(self.convert_external_to_vm_value_with_ty_and_runtime(
                         holder,
