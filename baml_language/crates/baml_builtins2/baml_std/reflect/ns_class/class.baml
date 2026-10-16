@@ -46,11 +46,25 @@ class Builder {
     /// A recursive field carries metadata the same way a resolved one does:
     /// `PendingType.meta(...)` produces the `WithMeta<PendingType>` row, and the
     /// metadata survives the atomic group build.
-    //baml:mut_vm
     function field(
         self,
         name: string,
         ty: root.TypeView | root.WithMeta<root.Type> | PendingType | root.WithMeta<PendingType>,
+    ) -> Builder throws root.errors.CompilationError {
+        let row = match (ty) {
+            let view: root.TypeView => view.as_type(),
+            let other => other,
+        };
+        self._field(name, row)
+    }
+
+    /// (internal) Internal native backing `field`; a field type that is not
+    /// pending is a `type` value.
+    //baml:mut_vm
+    function _field(
+        self,
+        name: string,
+        ty: root.Type | root.WithMeta<root.Type> | PendingType | root.WithMeta<PendingType>,
     ) -> Builder throws root.errors.CompilationError {
         $rust_function
     }
@@ -112,8 +126,24 @@ class PendingType {
     }
 
     /// Construct a union containing this pending type and `others`.
-    //baml:mut_vm
     function union(self, others: (root.TypeView | PendingType)[]) -> PendingType throws never {
+        let members: (root.Type | PendingType)[] = [];
+        // NOTE: an index loop, not `for ... in`; see `reflect.AnyClass.get_field`.
+        for (let i = 0; i < others.length(); i += 1) {
+            members.push(
+                match (others[i]) {
+                    let view: root.TypeView => view.as_type(),
+                    let pending => pending,
+                },
+            );
+        }
+        self._union(members)
+    }
+
+    /// (internal) Internal native backing `union`; a member that is not
+    /// pending is a `type` value.
+    //baml:mut_vm
+    function _union(self, others: (root.Type | PendingType)[]) -> PendingType throws never {
         $rust_function
     }
 

@@ -95,10 +95,11 @@ class Diagnostic {
 /// Any `type` value: `reflect.Type` itself and every reflection kind view.
 ///
 /// Every reflection API that takes a type takes a `TypeView`, so a kind view
-/// goes wherever a `reflect.Type` does. The shared type operations below are
-/// default methods that run on the wrapped `type` value; `reflect.Type`
-/// declares its own. `to_string` comes from `baml.ToString`, which
-/// `reflect.Type` and every kind view implement.
+/// goes wherever a `reflect.Type` does, and so does a class of your own that
+/// implements `TypeView`: the API calls its `as_type()`. The shared type
+/// operations below are default methods that run on the wrapped `type` value;
+/// `reflect.Type` declares its own. `to_string` comes from `baml.ToString`,
+/// which `reflect.Type` and every kind view implement.
 interface TypeView {
     /// The `type` value this view wraps, restoring the unnarrowed type.
     /// `reflect.Type` returns itself.
@@ -157,6 +158,38 @@ interface TypeView {
     function implemented_by(self, other: root.TypeView) -> bool throws never {
         self.as_type().implemented_by(other)
     }
+}
+
+/// (internal) `types` with each view replaced by the `type` value it views.
+///
+/// Every API that takes a `TypeView` converts it in BAML before it reaches a
+/// native, so a class of the caller's own that implements `TypeView` runs
+/// its own `as_type()`, and the native only ever receives `type` values.
+function _as_types(types: root.TypeView[]) -> root.Type[] throws never {
+    let out: root.Type[] = [];
+    // NOTE: an index loop, not `for ... in`; see `AnyClass.get_field`.
+    for (let i = 0; i < types.length(); i += 1) {
+        out.push(types[i].as_type());
+    }
+    out
+}
+
+/// (internal) Class field rows with each view replaced by the `type` value it
+/// views, and each `WithMeta` row kept as is; see `_as_types`.
+function _as_field_rows(
+    fields: map<string, root.TypeView | root.WithMeta<root.Type>>,
+) -> map<string, root.Type | root.WithMeta<root.Type>> throws never {
+    let rows: map<string, root.Type | root.WithMeta<root.Type>> = {};
+    // NOTE: an index loop, not `for ... in`; see `AnyClass.get_field`.
+    let names = fields.keys();
+    for (let i = 0; i < names.length(); i += 1) {
+        let name = names[i];
+        rows[name] = match (fields[name]) {
+            let view: root.TypeView => view.as_type(),
+            let row => row,
+        };
+    }
+    rows
 }
 
 /// The closed set of reflection views for a runtime `type` value.
@@ -493,10 +526,25 @@ class Package {
     /// one type), any other type is declared as an alias, and every
     /// declaration a mounted type reaches is exported under its own name. A
     /// name this package already exports is refused.
-    //baml:mut_vm
     function with_types(
         self,
         types: map<string, root.TypeView>,
+    ) -> Package throws root.errors.CompilationError {
+        let mounted: map<string, root.Type> = {};
+        // NOTE: an index loop, not `for ... in`; see `AnyClass.get_field`.
+        let names = types.keys();
+        for (let i = 0; i < names.length(); i += 1) {
+            mounted[names[i]] = types[names[i]].as_type();
+        }
+        self._with_types(mounted)
+    }
+
+    /// (internal) Internal native backing `with_types`; every type is a `type`
+    /// value.
+    //baml:mut_vm
+    function _with_types(
+        self,
+        types: map<string, root.Type>,
     ) -> Package throws root.errors.CompilationError {
         $rust_function
     }

@@ -12,8 +12,10 @@
 //!
 //! This program compiles the stdlib and calls each `AnyClass` body (which
 //! iterate lists and render a `reflect.Type` inside `reflect`, including the
-//! `NotFound` messages of `get` and `get_field`), `Concrete.type()`, and the
-//! error path of `Enum.get_value`, so either hazard fails here.
+//! `NotFound` messages of `get` and `get_field`), `Concrete.type()`, the
+//! error path of `Enum.get_value`, and every BAML wrapper that turns a
+//! `reflect.TypeView` argument into a `type` value (which iterate lists and
+//! map keys), so either hazard fails here.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -26,6 +28,18 @@ const PROGRAM: &str = r#"
 
     enum Color {
         Red
+    }
+
+    interface Named {
+        name: string,
+    }
+
+    class IntView {
+        implements reflect.TypeView {
+            function as_type(self) -> reflect.Type throws never {
+                int.type()
+            }
+        }
     }
 
     function main() -> string {
@@ -48,6 +62,16 @@ const PROGRAM: &str = r#"
         let invalid = reflect.Enum.get_value(1) catch (e) {
             reflect.errors.InvalidArgument => e.message,
         };
+        let view = IntView {};
+        let built = reflect.Class.new(
+            "Built",
+            { "n": view, "m": string.type().meta(description = "m") },
+        );
+        let extended = reflect.Class.extends<Named>("Extended", { "n": view });
+        let node = reflect.Class.builder("Node");
+        node.field("n", view);
+        node.field("next", node.type().union([view]));
+        let mounted = reflect.Package.current().with_types({ "N": view });
         [
             names,
             p.name(),
@@ -63,6 +87,14 @@ const PROGRAM: &str = r#"
             `${int.type() == reflect.Type.of<int>()}`,
             reflect.Enum.get_value(Color.Red),
             invalid,
+            built.fields()[0].type.to_string(),
+            extended.fields()[1].type.to_string(),
+            reflect.Union.new([view, string.type()]).to_string(),
+            reflect.Map.new(string.type(), view).to_string(),
+            node.build().fields()[1].type.to_string(),
+            `${mounted.find_class("N") == null}`,
+            `${extended.implements(reflect.Type.of<Named>())}`,
+            `${reflect.Type.of<Named>().implemented_by(view)}`,
         ].join("|")
     }
 "#;
@@ -88,6 +120,14 @@ async fn reflect_bodies_compile_and_run_without_a_baml_dependency() {
                 "true",
                 "Red",
                 "reflect.Enum.get_value expects an enum value, got int",
+                "int",
+                "int",
+                "int | string",
+                "map<string, int>",
+                "Node | int",
+                "true",
+                "true",
+                "false",
             ]
             .join("|")
             .into()

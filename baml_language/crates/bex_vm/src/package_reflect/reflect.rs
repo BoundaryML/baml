@@ -1207,7 +1207,7 @@ impl BamlClassPackage for PackageReflectImpl {
         find_interface(vm, ptr, name.as_str())
     }
 
-    fn with_types(
+    fn _with_types(
         vm: &mut BexVm,
         package: &Value,
         types: &IndexMap<bex_str::BexStr, Value>,
@@ -1237,24 +1237,13 @@ impl BamlClassPackage for PackageReflectImpl {
                 namespace: Vec::new(),
                 name: baml_type::Name::new(&export),
             };
-            let Some(mut type_ptr) = value.as_object_ptr() else {
+            let Some(type_ptr) = value.as_object_ptr() else {
                 return Err(compilation_error(
                     vm,
                     DiagnosticId::TypeMismatch,
                     format!("with_types value for `{export}` must be a type"),
                 ));
             };
-            // A kind view mounts the `type` value it wraps.
-            if let Some(ty_value) = super::type_kinds::as_view_type_value(vm, *value) {
-                let Some(inner) = ty_value.as_object_ptr() else {
-                    return Err(compilation_error(
-                        vm,
-                        DiagnosticId::TypeMismatch,
-                        format!("with_types value for `{export}` must be a type"),
-                    ));
-                };
-                type_ptr = inner;
-            }
             let Object::Type(type_value) = vm.get_object(type_ptr) else {
                 return Err(compilation_error(
                     vm,
