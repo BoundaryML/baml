@@ -10150,15 +10150,21 @@ impl<'db> LoweringContext<'db> {
         };
 
         if spreads.is_empty() {
-            // Lower fields in class-definition order, filling unspecified slots
-            // with Null. Source order in the literal does not match definition
-            // order, so a partial literal like `ScanOptions { absolute: true }`
-            // would otherwise put `absolute` into whichever slot happens to be
-            // first. TIR resolves every user-written class literal to its
-            // declaration, so the layout is always known here.
+            // Lower fields in class-definition order, leaving unspecified
+            // slots absent. Source order in the literal does not match
+            // definition order, so a partial literal like
+            // `ScanOptions { absolute: true }` would otherwise put `absolute`
+            // into whichever slot happens to be first. TIR resolves every
+            // user-written class literal to its declaration, so the layout is
+            // always known here.
+            //
+            // TIR admits an omitted field only when its type admits `null`.
+            // The slot gets the omitted sentinel rather than `null`: the
+            // field reads as `null`, and JSON encoding leaves it out, while a
+            // field written `name: null` stays an explicit `null`.
             let mut field_operands: Vec<Operand<'db>> =
                 (0..layout::class_field_count(self.db, class))
-                    .map(|_| Operand::Constant(Constant::Null))
+                    .map(|_| Operand::Constant(Constant::OmittedArg))
                     .collect();
             for field in fields {
                 let idx = slot_of(self, class, &field.name)?;
