@@ -36,6 +36,7 @@ test-log.workspace = true
 regex.workspace = true
 thiserror = "2.0.9"
 unicode-normalization = "0.1.24"
+toon-format.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { workspace = true, features = ["v4", "js"] }
