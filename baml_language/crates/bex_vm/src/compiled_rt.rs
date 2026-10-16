@@ -184,6 +184,7 @@ pub(crate) const RUNNING: usize = usize::MAX;
 /// `StackOverflow` instead of overflowing the thread's stack, whose size (a
 /// 2 MiB tokio worker, an 8 MiB main thread, a host's own thread) the VM does
 /// not choose.
+#[cfg(not(target_arch = "wasm32"))]
 const STACK_RED_ZONE: usize = 256 << 10;
 
 /// The lowest stack address compiled code on this thread may reach before a
