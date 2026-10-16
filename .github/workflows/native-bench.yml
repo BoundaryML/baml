@@ -46,9 +46,9 @@ defaults:
     shell: bash
 
 env:
-  # Stacked on #5264 (brr/native-v0): publish and comment there, where the
-  # native backend under test is reviewed. Drop before merging.
-  BENCH_COMMENT_PR: "5264"
+  # Benching #5289 (brr/native-v1-frame, stacked on #5264): publish and
+  # comment there. Drop before merging.
+  BENCH_COMMENT_PR: "5289"
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   CARGO_TERM_COLOR: always
