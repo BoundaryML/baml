@@ -1297,6 +1297,9 @@ impl<'db> Generator<'_, 'db> {
                 self.line(3, &format!("vm.set_slot(depth, {local}, {default});"));
             }
         }
+        // Argument `i` arrives in slot `i - 1`, but local `i` keeps slot
+        // `i`: read every argument before writing any write-through slot,
+        // which would land on the next argument.
         for i in 1..=arity {
             let arg = coerce(
                 &format!("vm.slot(depth, {})", i - 1),
@@ -1304,10 +1307,13 @@ impl<'db> Generator<'_, 'db> {
                 self.repr(Local(i)),
             );
             self.line(3, &format!("l{i} = {arg};"));
-            if self.write_through.contains(&i) {
-                let slot = coerce(&format!("l{i}"), self.repr(Local(i)), Repr::Value);
-                self.line(3, &format!("vm.set_slot(depth, {i}, {slot});"));
-            }
+        }
+        let synced: Vec<usize> = (1..=arity)
+            .filter(|i| self.write_through.contains(i))
+            .collect();
+        for i in synced {
+            let slot = coerce(&format!("l{i}"), self.repr(Local(i)), Repr::Value);
+            self.line(3, &format!("vm.set_slot(depth, {i}, {slot});"));
         }
         let entry = self.body.entry.0;
         self.line(3, &format!("bb = {entry};"));
