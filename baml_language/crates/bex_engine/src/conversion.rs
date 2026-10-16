@@ -1649,17 +1649,22 @@ impl BexEngine {
                 // as an opaque handle) can branch on the declared shape.
                 let mut values = Vec::with_capacity(class_fields.len());
                 for class_field in class_fields {
-                    let ext = fields.get(&class_field.name).ok_or_else(|| {
-                        EngineError::TypeMismatch {
+                    let field_ty = class_field.field_template.substitute_symbolic(&type_args);
+                    let wire_field_ty = overlay_wire_ty(&field_ty)?;
+                    let ext = match fields.get(&class_field.name) {
+                        Some(ext) => ext.clone(),
+                        None => omitted_inbound_field_value(
+                            &wire_field_ty,
+                            &self.inbound_alias_view,
+                        )
+                        .ok_or_else(|| EngineError::TypeMismatch {
                             message: format!(
                                 "Missing field `{}` in external Instance for class `{class_name}`",
                                 class_field.name
                             ),
-                        }
-                    })?;
-                    let field_ty = class_field.field_template.substitute_symbolic(&type_args);
-                    let wire_field_ty = overlay_wire_ty(&field_ty)?;
-                    let field_value = self.coerce_inbound_arg(ext.clone(), &wire_field_ty)?;
+                        })?,
+                    };
+                    let field_value = self.coerce_inbound_arg(ext, &wire_field_ty)?;
                     values.push(self.convert_external_to_vm_value_with_ty_and_runtime(
                         holder,
                         field_value,
@@ -3188,6 +3193,48 @@ fn runtime_ty_resolves_to_exact_null<'a>(
     false
 }
 
+/// The value an inbound class payload stands for in a declared field it
+/// omits, or `None` when the field is required.
+///
+/// BAML has a single "no value" state for a field, so a host that leaves out
+/// a field whose declared type admits `null` (`T?`, a union with a `null`
+/// arm, or an alias to either) means `null`; any other omitted field is
+/// still a type error. Plain host objects (a TypeScript literal that skips an
+/// optional key, a Python dict, replayed JSON) depend on this. Both
+/// materialization and the class-shape check that selects a union arm
+/// consult this one rule, so they cannot drift apart.
+fn omitted_inbound_field_value(
+    field_ty: &RuntimeTy,
+    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+) -> Option<BexExternalValue> {
+    runtime_ty_admits_null(field_ty, aliases).then_some(BexExternalValue::Null)
+}
+
+/// Whether `null` inhabits `ty`, looking through aliases.
+fn runtime_ty_admits_null(
+    ty: &RuntimeTy,
+    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+) -> bool {
+    fn admits<'a>(
+        ty: &'a RuntimeTy,
+        aliases: &'a indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+        visiting: &mut std::collections::HashSet<&'a baml_type::TypeName>,
+    ) -> bool {
+        match ty {
+            RuntimeTy::Null => true,
+            RuntimeTy::Union(members) => members
+                .iter()
+                .any(|member| admits(member, aliases, visiting)),
+            RuntimeTy::TypeAlias(name) => match aliases.get(name) {
+                Some(body) if visiting.insert(name) => admits(body, aliases, visiting),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+    admits(ty, aliases, &mut std::collections::HashSet::new())
+}
+
 fn type_name_matches_external_name(external_name: &str, type_name: &baml_type::TypeName) -> bool {
     external_name == type_name.display_name().as_str()
         || external_name == type_name.render_dotted(false)
@@ -3276,13 +3323,7 @@ fn map_matches_class_shape(
             Some(value) => {
                 value_matches_type_with_definitions(value, &field.field_type, aliases, classes)
             }
-            None => {
-                field.skip
-                    || matches!(
-                        &field.field_type,
-                        RuntimeTy::Union(members) if members.iter().any(RuntimeTy::is_null)
-                    )
-            }
+            None => field.skip || omitted_inbound_field_value(&field.field_type, aliases).is_some(),
         }
     })
 }

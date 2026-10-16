@@ -30,6 +30,10 @@ pub(crate) struct TypeScriptClass {
 pub(crate) struct TypeScriptClassProperty {
     pub(crate) name: String,
     pub(crate) ty: Ty,
+    /// The field's type admits `null` (directly or through an alias). Such a
+    /// key is optional (`name?: T | null`): the runtime reads an omitted
+    /// nullable field as `null`.
+    pub(crate) nullable: bool,
     /// Joined `///` doc-comment lines preceding the field.
     pub(crate) docstring: Option<String>,
 }
