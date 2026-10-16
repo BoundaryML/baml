@@ -123,10 +123,17 @@ pub(crate) fn loaded_api() -> Option<&'static Api> {
     LOADED.get().and_then(|loaded| loaded.as_ref().ok())
 }
 
-/// The process-wide API table, loading the engine on first use.
+/// The process-wide API table, loading the engine on first use (which also
+/// registers the runtime's shutdown for process exit).
 pub(crate) fn api() -> Result<&'static Api, SdkError> {
     LOADED
-        .get_or_init(load)
+        .get_or_init(|| {
+            let loaded = load();
+            if loaded.is_ok() {
+                crate::runtime::shutdown_at_exit();
+            }
+            loaded
+        })
         .as_ref()
         .map_err(|e| SdkError::new(e.to_string()))
 }
