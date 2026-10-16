@@ -279,8 +279,10 @@ export declare function completeHostCallThrow(callId: number, value: unknown): v
  * against the return type of the slot the callable was bound to.
  *
  * Exposed to JS as `completeHostCallValue(callId, value)`. A value that does
- * not fit raises, and the JS dispatch wrapper then completes the call with
- * that error instead.
+ * not fit completes the call as a `HostContractViolation` panic; a value the
+ * bridge could not carry as an `SdkPanic`; an error the callable's own code
+ * raised while the value was read is raised here, and the JS dispatch
+ * wrapper then completes the call with that error.
  */
 export declare function completeHostCallValue(callId: number, value: unknown): void
 
@@ -347,8 +349,8 @@ export declare function newFunctionCall(): string
 
 /**
  * Install the runtime's adapter: `classOf(value)`, `typeArgsOf(value)`,
- * `leafOf(value)`, `dispatchFor(fn)` and `describe(value)`. Called once at
- * module load by the TypeScript runtime.
+ * `leafKindOf(value)`, `leafOf(value)`, `dispatchFor(fn)` and
+ * `describe(value)`. Called once at module load by the TypeScript runtime.
  */
 export declare function registerHostAdapter(adapter: object): void
 

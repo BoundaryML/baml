@@ -83,10 +83,8 @@ export interface EncodedCall {
  * path blocks the event loop the callback would need.
  */
 export declare function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): EncodedCall;
-/** A leaf as the bridge takes it from {@link hostAdapter.leafOf}. */
+/** A leaf's payload as the bridge takes it from {@link hostAdapter.leafOf}: an `InboundValue`. */
 interface HostLeaf {
-    /** 0 handle, 1 image, 2 audio, 3 video, 4 pdf, 5 prompt, 6 type value. */
-    kind: number;
     bytes: Uint8Array;
     /** The handle key cloned for the wire, as a decimal string, so the bridge can release it if the call never goes out. */
     cloned?: string;
@@ -101,11 +99,17 @@ export declare const hostAdapter: {
     classOf(value: unknown): string | undefined;
     /** A generic instance's `$types`, lowered to wire `BamlTy` bytes, when every parameter is present. */
     typeArgsOf(value: unknown): Uint8Array[] | undefined;
-    /** The wire leaf a runtime-owned value is, or undefined for any other value. */
-    leafOf(value: unknown): HostLeaf | undefined;
+    /**
+     * The kind of leaf a runtime-owned value is, or undefined for any other
+     * value. A question only: nothing is cloned or serialized until the bridge
+     * asks for the payload with `leafOf`.
+     */
+    leafKindOf(value: unknown): number | undefined;
+    /** The wire payload of a value `leafKindOf` classified as a leaf, cloning a handle's key for the wire. */
+    leafOf(value: unknown): HostLeaf;
     /** Bind a user function as a host callable; what comes back is the platform's (see `registerCallableDispatch`). */
     dispatchFor(fn: (...args: unknown[]) => unknown): unknown;
-    /** A short, bounded rendering for error messages. */
+    /** A short rendering for error messages, bounded in work as in length: a container by its size, never stringified whole. */
     describe(value: unknown): string;
 };
 interface InvocationSnapshot {

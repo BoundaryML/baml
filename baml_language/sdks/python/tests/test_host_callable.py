@@ -58,6 +58,18 @@ function Collect() -> int {
     baml.sys.collect_garbage();
     0
 }
+
+function UnionCbs(callbacks: ((int) -> int throws never)[] | string[]) -> int {
+    0
+}
+
+function AmbiguousCbs(callbacks: ((int) -> int throws never)[] | ((int) -> string throws never)[]) -> int {
+    0
+}
+
+function TakeUnknown(value: unknown) -> int {
+    0
+}
 """
 
 
@@ -216,38 +228,38 @@ async def test_async_outer_call_with_sync_callback():
 # ---------------------------------------------------------------------------
 
 
-def test_callable_returning_unencodable_surfaces_as_error():
-    """A callback whose *result* cannot be encoded must surface as a BAML
-    error, not hang the engine. `object()` has no inbound encoding, so
-    `encode_result_inbound` raises a `TypeError`; the dispatch path turns it
-    into a thrown `baml.errors.HostCallable` Instance and completes the call."""
+def test_callable_returning_unencodable_breaks_the_contract():
+    """A callback whose *result* is not a member of the return type it was
+    bound to broke its contract: the call completes as a
+    `baml.panics.HostContractViolation`, never hangs. `object()` has no BAML
+    type, so it is not a `string`."""
     rt = _make_runtime()
 
     def cb(_x: int):
         return object()  # fits no declared type the bridge can encode
 
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(BamlPanic, match="HostContractViolation") as exc_info:
         call_function_sync(rt, "CallCb", {"callback": cb, "x": 1})
-    # The important property is that it raised (completed) rather than hung.
-    assert exc_info.value is not None
+    assert "expected string" in str(exc_info.value)
 
 
-def test_callable_raising_during_result_property_still_completes():
-    """A callback that returns an object whose attribute access raises while
-    being encoded must still complete the call with an error."""
+def test_callable_raising_while_its_result_is_read_raises_that_error():
+    """A callback that returns an object which raises while the bridge reads
+    it raised, as far as BAML is concerned: the caller gets that exception,
+    not a contract violation, and the call completes."""
     rt = _make_runtime()
+    raised = RuntimeError("hostile iter")
 
-    class Hostile:
+    class Hostile(list):
         def __iter__(self):
-            raise RuntimeError("hostile iter")
+            raise raised
 
     def cb(_x: int):
-        # A non-dict, non-list object with no inbound mapping → TypeError in
-        # the encoder; completes as an error.
         return Hostile()
 
-    with pytest.raises(Exception):
+    with pytest.raises(Exception) as exc_info:
         call_function_sync(rt, "CallCb", {"callback": cb, "x": 1})
+    assert exc_info.value is raised
 
 
 def test_host_result_successful_encode_transfers_capability_clone_to_engine():
@@ -279,7 +291,8 @@ def test_host_result_encode_failure_releases_capability_clone():
     def cb(_x: int):
         return [handle, object()]
 
-    with pytest.raises(Exception):
+    # The list is refused as a whole before anything is cloned for the wire.
+    with pytest.raises(BamlPanic, match="no BAML type"):
         call_function_sync(rt, "ConsumeUnknownCb", {"callback": cb, "x": 1})
 
     assert _live_handle_count() == before
@@ -312,6 +325,58 @@ def test_host_throw_encode_failure_releases_capability_clone():
     call_function_sync(rt, "Collect", {})
     gc.collect()
     assert _live_handle_count() == before
+
+
+# ---------------------------------------------------------------------------
+# A union is decided before anything is registered.
+# ---------------------------------------------------------------------------
+
+
+def test_union_members_register_only_what_ships():
+    """`((int) -> int)[] | string[]` with `[cb]`: the function member takes
+    the list, the other does not, and exactly one registration per call is
+    made, which is the engine's until it collects the call. A union both of
+    whose members would take the callable is ambiguous, and registers
+    nothing."""
+    from baml_bridge.baml_py import _host_value_registry_len
+
+    rt = _make_runtime()
+    call_function_sync(rt, "Collect", {})
+    gc.collect()
+    before = _host_value_registry_len()
+
+    def cb(x: int) -> int:
+        return x
+
+    for _ in range(5):
+        assert call_function_sync(rt, "UnionCbs", {"callbacks": [cb]}).result() == 0
+    # Only the shipped registrations may remain, one per call.
+    assert _host_value_registry_len() == before + 5
+    with pytest.raises(TypeError, match="fits more than one"):
+        call_function_sync(rt, "AmbiguousCbs", {"callbacks": [cb]})
+    assert _host_value_registry_len() == before + 5
+    call_function_sync(rt, "Collect", {})
+    gc.collect()
+    assert _host_value_registry_len() == before
+
+
+def test_leaves_nest_under_an_open_slot():
+    """An image inside a list or dict under `unknown` crosses as itself."""
+    from baml_bridge.proto import BamlImage
+
+    rt = _make_runtime()
+    image = BamlImage.from_url("https://example.com/a.png", None)
+    assert call_function_sync(rt, "TakeUnknown", {"value": [image]}).result() == 0
+    assert call_function_sync(rt, "TakeUnknown", {"value": {"k": image}}).result() == 0
+
+
+def test_a_value_nested_deeper_than_the_wire_carries_is_refused_at_once():
+    rt = _make_runtime()
+    value: object = 1
+    for _ in range(200):
+        value = [value]
+    with pytest.raises(TypeError, match="nested too deeply"):
+        call_function_sync(rt, "TakeUnknown", {"value": value})
 
 
 # ---------------------------------------------------------------------------

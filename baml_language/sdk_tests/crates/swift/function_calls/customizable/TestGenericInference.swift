@@ -44,7 +44,7 @@ final class TestGenericInference: XCTestCase {
         XCTAssertEqual(r, 7)
     }
 
-    func test_generic_inference_identity_null_round_trips() throws {
+    func test_generic_inference_identity_null_binds_null() throws {
         let r: Int? = try G.identity(x: Int?.none)
         XCTAssertNil(r)
     }
@@ -111,20 +111,22 @@ final class TestGenericInference: XCTestCase {
         XCTAssertEqual(try G.tag_or_value(x: .t0(5)), "int")
     }
 
-    func test_generic_inference_union_concrete_sibling_absorbs_value_binds_rust_type() throws {
-        // The string value binds the CONCRETE union sibling; T (Int at
-        // the Swift level, but never sent) defaults engine-side to the
-        // host-only sentinel — identical to Python's bare call.
+    func test_generic_inference_union_concrete_sibling_absorbs_value_binds_never() throws {
+        // The string value binds the CONCRETE union sibling; T (Int at the
+        // Swift level, but never sent) is pinned by nothing, so the tie breaks
+        // to `T = never`.
         XCTAssertEqual(
             try G.tag_or_value(x: BamlUnion2<Int, Swift.String>.t1("hi")),
-            "$rust_type"
+            "never"
         )
     }
 
-    func test_generic_inference_union_null_actual_binds_rust_type() throws {
+    func test_generic_inference_union_null_actual_binds_null() throws {
+        // `null` is a value of exactly one BAML type: `T | string | null`
+        // against `null` binds `T = null`, as the compile-time unifier does.
         XCTAssertEqual(
             try G.tag_or_value(x: BamlUnion2<Int, Swift.String>?.none),
-            "$rust_type"
+            "null"
         )
     }
 

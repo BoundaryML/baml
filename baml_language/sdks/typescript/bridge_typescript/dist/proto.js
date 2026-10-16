@@ -172,13 +172,31 @@ export function encodeCallArgs(kwargs, options) {
         throw err;
     }
 }
+/** The leaf kinds {@link hostAdapter.leafKindOf} answers, as the bridge numbers them. */
+const LEAF_HANDLE = 0;
+const LEAF_IMAGE = 1;
+const LEAF_AUDIO = 2;
+const LEAF_VIDEO = 3;
+const LEAF_PDF = 4;
+const LEAF_PROMPT = 5;
+const LEAF_TYPE_VALUE = 6;
 function keyToDecimal(key) {
     return (BigInt.asUintN(32, BigInt(key.high)) << 32n | BigInt.asUintN(32, BigInt(key.low))).toString();
 }
 function handleLeaf(handle) {
     const key = handle._cloneKeyForWire();
     const bytes = InboundValue.encode(InboundValue.create({ handle: { key, handleType: handle.handleType } })).finish();
-    return { kind: 0, bytes, cloned: keyToDecimal(key) };
+    return { bytes, cloned: keyToDecimal(key) };
+}
+/** The engine handle a runtime-owned value wraps, if it wraps one. */
+function handleOf(value) {
+    if (value instanceof BamlHandle)
+        return value;
+    if (value instanceof BamlStream || value instanceof BamlFunctionSpec)
+        return value._toHandle();
+    if (typeof value === 'function')
+        return bamlClosureHandles.get(value);
+    return undefined;
 }
 /**
  * What the runtime answers the bridge's walker: everything about a value that
@@ -210,47 +228,66 @@ export const hostAdapter = {
             return baml_bridge.cffi.v1.BamlTy.encode(baml_bridge.cffi.v1.BamlTy.create(wire ?? {})).finish();
         });
     },
-    /** The wire leaf a runtime-owned value is, or undefined for any other value. */
+    /**
+     * The kind of leaf a runtime-owned value is, or undefined for any other
+     * value. A question only: nothing is cloned or serialized until the bridge
+     * asks for the payload with `leafOf`.
+     */
+    leafKindOf(value) {
+        if (value instanceof BamlType)
+            return LEAF_TYPE_VALUE;
+        if (value instanceof BamlPrompt)
+            return LEAF_PROMPT;
+        if (value instanceof BamlImage)
+            return LEAF_IMAGE;
+        if (value instanceof BamlAudio)
+            return LEAF_AUDIO;
+        if (value instanceof BamlVideo)
+            return LEAF_VIDEO;
+        if (value instanceof BamlPdf)
+            return LEAF_PDF;
+        if (handleOf(value) !== undefined)
+            return LEAF_HANDLE;
+        return undefined;
+    },
+    /** The wire payload of a value `leafKindOf` classified as a leaf, cloning a handle's key for the wire. */
     leafOf(value) {
         if (value instanceof BamlType) {
-            return { kind: 6, bytes: InboundValue.encode(InboundValue.create({ tyDefValue: value._wireCopy() })).finish() };
+            return { bytes: InboundValue.encode(InboundValue.create({ tyDefValue: value._wireCopy() })).finish() };
         }
         if (value instanceof BamlPrompt) {
-            return { kind: 5, bytes: InboundValue.encode(InboundValue.create({ promptAstValue: value._wireCopy() })).finish() };
+            return { bytes: InboundValue.encode(InboundValue.create({ promptAstValue: value._wireCopy() })).finish() };
         }
-        if (value instanceof BamlHandle)
-            return handleLeaf(value);
-        if (value instanceof BamlStream || value instanceof BamlFunctionSpec)
-            return handleLeaf(value._toHandle());
         if (value instanceof BamlImage || value instanceof BamlAudio || value instanceof BamlVideo || value instanceof BamlPdf) {
-            const media = wireMedia(value);
-            const kind = value instanceof BamlImage ? 1 : value instanceof BamlAudio ? 2 : value instanceof BamlVideo ? 3 : 4;
-            return { kind, bytes: InboundValue.encode(InboundValue.create({ mediaValue: media })).finish() };
+            return { bytes: InboundValue.encode(InboundValue.create({ mediaValue: wireMedia(value) })).finish() };
         }
-        if (typeof value === 'function') {
-            const handle = bamlClosureHandles.get(value);
-            if (handle)
-                return handleLeaf(handle);
-        }
-        return undefined;
+        const handle = handleOf(value);
+        if (handle !== undefined)
+            return handleLeaf(handle);
+        throw new TypeError(`${hostAdapter.describe(value)} is not a leaf`);
     },
     /** Bind a user function as a host callable; what comes back is the platform's (see `registerCallableDispatch`). */
     dispatchFor(fn) {
         return registerCallableDispatch(makeHostCallableDispatch(fn), hostMarker(fn)?.handle);
     },
-    /** A short, bounded rendering for error messages. */
+    /** A short rendering for error messages, bounded in work as in length: a container by its size, never stringified whole. */
     describe(value) {
-        const kind = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value === 'object' ? (value.constructor?.name ?? 'object') : typeof value;
-        let shown;
-        try {
-            shown = typeof value === 'string' ? JSON.stringify(value) : String(value);
+        if (value === null)
+            return 'null';
+        if (Array.isArray(value))
+            return `array of length ${value.length}`;
+        if (typeof value === 'object') {
+            const name = value.constructor?.name ?? 'object';
+            return name === 'Object' ? `object with ${Object.keys(value).length} keys` : name;
         }
-        catch {
-            shown = '';
-        }
+        if (typeof value === 'function')
+            return 'function';
+        if (typeof value === 'symbol')
+            return 'symbol';
+        let shown = typeof value === 'string' ? JSON.stringify(value) : String(value);
         if (shown.length > 48)
             shown = `${shown.slice(0, 48)}…`;
-        return `${kind} ${shown}`;
+        return `${typeof value} ${shown}`;
     },
 };
 const encodedInvocationOwners = new WeakMap();

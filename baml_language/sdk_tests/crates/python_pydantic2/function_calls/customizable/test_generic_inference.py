@@ -100,24 +100,27 @@ async def test_generic_inference_identity_async_infers():
     assert await identity_async(7) == 7
 
 
-def test_generic_inference_identity_null_round_trips():
-    # §I I4 (decided): a `null` actual is no inference evidence (NOT bound as
-    # `T=null`) ⇒ `T` defaults to host-only `rust_type`, and the value round-trips
-    # unchanged.
+def test_generic_inference_identity_null_binds_null():
+    # §I I4: `None` is a value of exactly one BAML type, `null`, and the engine
+    # infers from the concrete types of the values that arrived ⇒ T = null, as
+    # the compile-time unifier does; the value round-trips.
     assert identity(None) is None
 
 
 # SDK_PARITY_LINT(skip): validates Python default-argument stubs and runtime TypeVar inference
 def test_generic_inference_default_only_value_position():
-    assert optional_only() is None
+    # With the only argument left to its default, no value arrives to bind `T`,
+    # and BAML never guesses a type argument ⇒ must-specify; a value binds it.
+    _assert_type_error(lambda: optional_only(), "could not infer a type", "optional_only")
     assert optional_only(x=7) == 7
+    assert optional_only(_types={"T": int}) is None
 
 
 def test_generic_inference_identity_unbound_generic_instance_round_trips():
-    # §G G2 (decided): an UNBOUND generic instance — constructed without the
-    # `[int]` subscript — carries no wire type-args, so it is host-only
-    # (`T=rust_type`) and rides through the VM opaquely, round-tripping unchanged
-    # (and staying distinct from a properly-bound `GenericBox[int]`, G4).
+    # §G G2: an UNBOUND generic instance — constructed without the `[int]`
+    # subscript — knows only its head, so the bridge solves its type arguments
+    # from its fields (`GenericBox<int>` here) and states them on the wire;
+    # the engine binds `T` from the stated type and the value round-trips.
     unbound = GenericBox(value=5)
     assert identity(unbound) == unbound
 
@@ -267,12 +270,12 @@ def test_generic_inference_union_with_concrete_sibling_infers_typevar():
     assert tag_or_value(5) == "int"
 
 
-def test_generic_inference_union_concrete_sibling_absorbs_value_binds_rust_type():
-    # §H H3 (decided): a `string` actual IS absorbed by the concrete `string`
-    # sibling, so nothing routes to `T`. `T` still has a value position (the `x`
-    # param) and no closure occurrence, so it defaults to host-only `rust_type`
-    # (rule 4) rather than being rejected.
-    assert tag_or_value("hi") == "$rust_type"
+def test_generic_inference_union_concrete_sibling_absorbs_value_binds_never():
+    # §H H3: a `string` actual IS absorbed by the concrete `string` sibling, so
+    # nothing pins `T`: the value could be a `T` or not, and the tie breaks to
+    # `T = never`. Naming `T` still wins.
+    assert tag_or_value("hi") == "never"
+    assert tag_or_value("hi", _types={"T": int}) == "int"
 
 
 def test_generic_inference_union_null_actual_binds_null():
@@ -424,16 +427,19 @@ def test_generic_inference_tag_or_value_binds_generic_instance():
 
 
 # ===========================================================================
-# §B — empty collections on a FREE function (low-evidence ⇒ rust_type)
+# §B — empty collections on a FREE function (no evidence ⇒ must-specify)
 # ===========================================================================
 
 
-def test_generic_inference_first_or_empty_list_round_trips_none():
-    # B7: a free function has no wire-arg channel and an empty list yields no
-    # element evidence ⇒ the element T = rust_type; `first_or([])` returns None.
-    # (Contrast read_items over a *bound* instance with empty fields, B6, where
-    # T is still recovered from the wire type-arg.)
-    assert first_or([]) is None
+# SDK_PARITY_LINT(skip): a dynamic host has no static element type for an empty container; the typed SDKs state theirs and round-trip
+def test_generic_inference_first_or_empty_list_requires_binding():
+    # B7: an empty list yields no element evidence, so `T` stays unbound and the
+    # bridge refuses the call before it goes out, as the compiler refuses `[]`
+    # with no annotation; naming `T` makes `[]` an `int[]`. (Contrast read_items
+    # over a *bound* instance with empty fields, B6, where T is still recovered
+    # from the wire type-arg.)
+    _assert_type_error(lambda: first_or([]), "could not infer a type", "first_or")
+    assert first_or([], _types={"T": int}) is None
 
 
 def test_generic_inference_first_or_nonempty_infers_element():
@@ -442,11 +448,13 @@ def test_generic_inference_first_or_nonempty_infers_element():
     assert first_or([7, 8, 9]) == 7
 
 
-def test_generic_inference_values_of_empty_map_round_trips_empty_list():
+# SDK_PARITY_LINT(skip): a dynamic host has no static value type for an empty map; the typed SDKs state theirs and round-trip
+def test_generic_inference_values_of_empty_map_requires_binding():
     # B9: the map-value position is the only evidence channel and the empty map
-    # yields no value ⇒ T = rust_type; `values_of({})` returns []. Pins that the
-    # empty-collection rule applies to `map<_, T>`, not just `T[]`.
-    assert values_of({}) == []
+    # yields no value ⇒ `T` stays unbound and the bridge refuses the call. Pins
+    # that the empty-collection rule applies to `map<_, T>`, not just `T[]`.
+    _assert_type_error(lambda: values_of({}), "could not infer a type", "values_of")
+    assert values_of({}, _types={"T": int}) == []
 
 
 def test_generic_inference_values_of_nonempty_returns_values():
@@ -500,8 +508,8 @@ def test_generic_inference_parse_as_explicit_types_succeeds():
 
 
 # ===========================================================================
-# §G — unbound generic instances: recover if the formal forces recursion,
-# else host-only `rust_type` (and bound ≠ unbound).
+# §G — unbound generic instances: the bridge recovers the type arguments from
+# the fields, so bound and unbound instances cross the wire alike.
 # ===========================================================================
 
 
@@ -514,8 +522,9 @@ def test_generic_inference_second_of_unbound_instance_recovers_field_type():
 
 
 def test_generic_inference_identity_nested_unbound_round_trips():
-    # G3: an outer UNBOUND instance under a bare-`T` formal ⇒ the whole value is
-    # rust_type and rides opaquely, round-tripping unchanged.
+    # G3: an outer UNBOUND instance under a bare-`T` formal: the bridge solves
+    # the inner instance from its field and the outer from the inner, stating
+    # `GenericBox<GenericBox<string>>`; the value round-trips.
     nested = GenericBox(value=GenericBox(value="hello"))
     assert identity(nested) == nested
 
@@ -542,9 +551,11 @@ def test_generic_inference_maybe_id_present_value_infers():
 
 
 def test_generic_inference_maybe_id_null_round_trips():
-    # I4: a `null`-only actual gives the value position no concrete leaf ⇒
-    # T=rust_type (we do NOT null-strip `T?` to bind `T=null`); None round-trips.
+    # I4: a `null` actual is a value of type `null`; under `T?` the engine
+    # binds what the union leaves to `T` and the value round-trips. Naming `T`
+    # explicitly is accepted too.
     assert maybe_id(None) is None
+    assert maybe_id(None, _types={"T": int}) is None
 
 
 def test_generic_inference_identity_enum_round_trips():
@@ -699,8 +710,8 @@ def test_generic_inference_elem_type_three_way_heterogeneous_array_unifies():
 # §G generalized — an UNBOUND generic instance (constructed WITHOUT type args)
 # is still inferrable when the formal forces recursion into its fields.
 #
-# Normally an unbound generic instance carries no wire type-args and rides as
-# host-only `rust_type` (G2). But when the parameter's formal is itself
+# An unbound generic instance knows only its head; the bridge solves its type
+# arguments from its fields (G2). When the parameter's formal is itself
 # `Container<T>` / `Recursive<T>` / nested `Pair<...>`, inference is DIRECTED
 # into the corresponding field values and recovers `T` from them (G1) — so a
 # Python caller who forgot the `[int]` subscript still gets a working call.

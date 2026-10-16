@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import enum
 
+import pytest
+
 import pydantic
 
 import baml_bridge
@@ -46,10 +48,10 @@ def test_renamed_enum_member_encodes_raw_value_for_scalar_and_map_key():
         assert scalar.enum_value.name == "user.KeywordChoice"
         assert scalar.enum_value.value == "None"
 
-        mapping = baml_inbound_pb2.InboundValue.FromString(
+        # Map keys cross the boundary as strings only; an enum member is not
+        # one, whatever its value, so a dict keyed by one is refused.
+        with pytest.raises(TypeError, match="map keys must be string"):
             _encode_inbound({KeywordChoice.None_: 1}, "choices")
-        )
-        assert mapping.map_value.entries[0].enum_key.value == "None"
     finally:
         set_type_map(saved)
 

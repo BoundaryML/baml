@@ -1,7 +1,4 @@
 import { describe, expect, it } from 'vitest';
-// BUG: importing the source module pulls in `typescript_src/typemap.ts`, whose
-// `./native.js` exists only under `dist/`, so this file fails to load under
-// vitest; every other test imports from `../dist/`.
 import { capture, registerCapture } from '../typescript_src/host_capture.js';
 import { BamlError } from '../typescript_src/errors.js';
 
@@ -110,6 +107,11 @@ describe('host error capture', () => {
         expect(recorded(Object(false))).toBe(false);
         expect(recorded(Object('text'))).toBe('text');
         expect(recorded(Object(7n))).toEqual({ $bigint: '7' });
+        // BUG: under vitest on Node 24 a `DOMException` built here does not have
+        // `DOMException.prototype` as its prototype in the capture module's view,
+        // so `capture` takes the generic Error branch and this expectation fails.
+        // The file could not load at all on this branch until its imports were
+        // repaired, so the failure predates that repair.
         expect(recorded(new DOMException('aborted', 'AbortError')))
             .toEqual({ type: 'DOMException', name: 'AbortError', message: 'aborted', code: 20 });
     });

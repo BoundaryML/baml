@@ -153,8 +153,8 @@ function identity_with_default<T>(x: T, label: string = "default") -> T {
   x
 }
 
-// Defaulted parameters remain runtime inference positions: when omitted,
-// Rule 4 binds T to rust_type, so Python stubs may omit `_types=`.
+// Defaulted parameters remain runtime inference positions: when omitted, no
+// value arrives to bind T and the call is must-specify (`_types=`).
 function optional_only<T>(x: T? = null) -> T? {
   x
 }
@@ -368,9 +368,8 @@ function two_in_union_with_values<T, U>(x: T | U | int, left: T, right: U) -> st
 
 // ---------------------------------------------------------------------------
 // §I nullable param: the non-null arm of `T?` binds against a present actual
-// (`maybe_id(5)` ⇒ T=int), while a `null`-only actual is no evidence ⇒ T falls
-// to host-only `rust_type` (we do NOT null-strip `T?` to bind `T=null`). Returns
-// the value so the host can assert the round trip.
+// (`maybe_id(5)` ⇒ T=int); a `null` actual is a value of type `null`, which the
+// solver binds to `T`. Returns the value so the host can assert the round trip.
 // ---------------------------------------------------------------------------
 
 function maybe_id<T>(x: T?) -> T? {
@@ -378,10 +377,10 @@ function maybe_id<T>(x: T?) -> T? {
 }
 
 // ---------------------------------------------------------------------------
-// §B low-evidence free functions: a free function has no wire-arg channel, so an
-// EMPTY collection yields no element/value evidence and the element/value
-// TypeVar falls to host-only `rust_type` (B7/B9). The bodies return the empty
-// container so the host reads back `[]` / `None` rather than a reflected name.
+// §B low-evidence free functions: an EMPTY collection yields no element/value
+// evidence, so the element/value TypeVar stays unbound and the call is refused
+// until the caller names it (B7/B9). The bodies return the empty container so
+// a host that names `T` reads back `[]` / `None` rather than a reflected name.
 // (Contrast the *bound instance* path, where an empty field still recovers `T`
 // from the wire type-arg — B6.)
 // ---------------------------------------------------------------------------
