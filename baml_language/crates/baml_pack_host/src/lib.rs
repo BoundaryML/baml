@@ -4,6 +4,17 @@
 //! and hands it to [`run_envelope`]. A natively compiled pack (`baml pack
 //! --native`) is a generated crate that embeds the same packed program and
 //! links the compiled bodies, and calls [`run_embedded`] with both.
+//!
+//! # `BAML_NATIVE_BODIES`
+//!
+//! A natively compiled binary runs its bytecode alone when the environment
+//! variable `BAML_NATIVE_BODIES` is `0`, `off` or `false` (case-insensitive);
+//! any other value, or none, keeps the linked bodies. This exists for
+//! differential testing: the same binary, holding the same program bytes,
+//! run twice with the same argv — once native, once interpreted — so the two
+//! runs differ in nothing but which implementation of each function executed,
+//! and their output and log format can be compared verbatim. A binary without
+//! native bodies ignores the variable.
 //
 // Startup:
 //   1. Extract the versioned `PackEnvelope` from the OS-native embedded section.
@@ -36,14 +47,43 @@ use baml_exec::{
 use bex_engine::{BexEngine, UserFunctionInfo};
 use sys_native::SysOpsExt;
 
+/// The environment variable that turns a native binary's bodies off; see the
+/// crate docs.
+pub const NATIVE_BODIES_ENV: &str = "BAML_NATIVE_BODIES";
+
+/// Whether a `BAML_NATIVE_BODIES` value asks for the bytecode alone.
+fn native_bodies_disabled(value: Option<&str>) -> bool {
+    value.is_some_and(|value| {
+        let value = value.trim();
+        value.eq_ignore_ascii_case("0")
+            || value.eq_ignore_ascii_case("off")
+            || value.eq_ignore_ascii_case("false")
+    })
+}
+
+/// The bodies to run with: `native_bodies`, unless the environment turns
+/// them off.
+fn native_bodies_from_env(
+    native_bodies: Option<&'static bex_engine::NativeBodyTable>,
+) -> Option<&'static bex_engine::NativeBodyTable> {
+    let value = std::env::var(NATIVE_BODIES_ENV).ok();
+    if native_bodies_disabled(value.as_deref()) {
+        None
+    } else {
+        native_bodies
+    }
+}
+
 /// Run a decoded pack envelope: dispatch per its mode and exit.
 ///
 /// `native_bodies` are the compiled bodies of a `baml pack --native` build,
-/// attached to the program at load; `None` runs the bytecode alone.
+/// attached to the program at load; `None` runs the bytecode alone, as does
+/// `BAML_NATIVE_BODIES=0` in the environment (see the crate docs).
 pub fn run_envelope(
     envelope: PackEnvelope,
     native_bodies: Option<&'static bex_engine::NativeBodyTable>,
 ) -> ExitCode {
+    let native_bodies = native_bodies_from_env(native_bodies);
     match envelope.mode {
         PackMode::Single => run_single(envelope, native_bodies),
         PackMode::Subcommand => run_subcommand(envelope, native_bodies),
@@ -357,5 +397,23 @@ fn finalize_dispatch(
             print_error(e);
             ExitCode::FAILURE
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::native_bodies_disabled;
+
+    /// Only an explicit off value turns the bodies off: an unset or
+    /// unrecognized variable keeps the binary's default.
+    #[test]
+    fn native_bodies_env_off_values() {
+        for value in ["0", "off", "OFF", "Off", "false", "FALSE", " 0 ", "False"] {
+            assert!(native_bodies_disabled(Some(value)), "{value:?}");
+        }
+        for value in ["1", "on", "true", "", "yes", "no", "native"] {
+            assert!(!native_bodies_disabled(Some(value)), "{value:?}");
+        }
+        assert!(!native_bodies_disabled(None));
     }
 }
