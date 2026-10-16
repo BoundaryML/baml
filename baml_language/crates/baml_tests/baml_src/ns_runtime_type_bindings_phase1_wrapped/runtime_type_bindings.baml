@@ -604,8 +604,8 @@ function source_15() -> string {
             let second = reflect.Package.compile({ "b.baml": \`
                 class Item { value string }
             \` })
-            let type First = first.get_class("root.Item").as_type();
-            let type Second = second.get_class("root.Item").as_type();
+            let type First = first.get_class("root.Item");
+            let type Second = second.get_class("root.Item");
 
             let make = first.get_function<() -> First>("root.Make")
             let value: unknown = make()
@@ -638,8 +638,8 @@ function source_16() -> string {
             let second = reflect.Package.compile({ "b.baml": \`
                 class Item { beta int, next Item? }
             \` })
-            let type First = first.get_class("root.Item").as_type();
-            let type Second = second.get_class("root.Item").as_type();
+            let type First = first.get_class("root.Item");
+            let type Second = second.get_class("root.Item");
 
             \`\${Render@render_prompt<First[]>()}~\${Render@render_prompt<Second[]>()}\`
         }

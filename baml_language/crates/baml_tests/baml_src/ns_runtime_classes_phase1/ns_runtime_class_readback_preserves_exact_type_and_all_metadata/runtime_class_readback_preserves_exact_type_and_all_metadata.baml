@@ -3,7 +3,7 @@ function main() -> bool {
     let schema = reflect.Class.new(
         "Schema",
         {
-            "tag": literal.as_type().meta(
+            "tag": literal.meta(
                 alias = "wire_tag",
                 description = "dispatch key",
                 docstring = "source docs",

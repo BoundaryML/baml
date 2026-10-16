@@ -106,8 +106,8 @@ test "nested_non_data_class_field_reports_the_full_path" {
 
 test "runtime_minted_nested_non_data_field_is_rejected" {
     let inner = reflect.Class.new("RuntimeInner", { "payload": reflect.Type.of<unknown>() });
-    let outer = reflect.Class.new("RuntimeOuter", { "inner": inner.as_type() });
-    let type RuntimeOuterType = outer.as_type();
+    let outer = reflect.Class.new("RuntimeOuter", { "inner": inner });
+    let type RuntimeOuterType = outer;
     let result = GenericValue@render_prompt<RuntimeOuterType>("runtime") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
         _ => "wrong error",
@@ -146,10 +146,10 @@ test "generic_class_output_fails_before_provider_io" {
 }
 
 test "never_nested_in_a_runtime_class_field_is_rejected_not_panicked" {
-    let outer = reflect.Class.new("RuntimeOuter", { "items": reflect.Type.of<never>().array().as_type() }) catch (e) {
+    let outer = reflect.Class.new("RuntimeOuter", { "items": reflect.Type.of<never>().array() }) catch (e) {
         _ => throw "reflect.Class.new threw",
     };
-    let type RuntimeOuterType = outer.as_type();
+    let type RuntimeOuterType = outer;
     let result = GenericValue@render_prompt<RuntimeOuterType>("runtime") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
         _ => "wrong error",

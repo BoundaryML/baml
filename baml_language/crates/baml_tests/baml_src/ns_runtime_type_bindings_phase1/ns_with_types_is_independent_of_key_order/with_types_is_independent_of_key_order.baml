@@ -6,7 +6,7 @@
 
 function person_and_address() -> reflect.Class[] {
     let address = reflect.Class.new("Address", { "city": string.type() });
-    let person = reflect.Class.new("Person", { "home": address.as_type() });
+    let person = reflect.Class.new("Person", { "home": address });
     [person, address]
 }
 

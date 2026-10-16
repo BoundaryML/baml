@@ -8,7 +8,7 @@ class Class {
     /// Construct a closed runtime class. Map iteration order is definition order.
     function new(
         name: string,
-        fields: map<string, root.Type | root.WithMeta<root.Type>>,
+        fields: map<string, root.TypeView | root.WithMeta<root.Type>>,
         implementations: root.interface.Implementation[] = [],
     ) -> root.Class throws root.errors.CompilationError {
         // Native functions receive the omitted-argument sentinel instead of
@@ -22,7 +22,7 @@ class Class {
     //baml:mut_vm
     function _new(
         name: string,
-        fields: map<string, root.Type | root.WithMeta<root.Type>>,
+        fields: map<string, root.TypeView | root.WithMeta<root.Type>>,
         implementations: root.interface.Implementation[],
     ) -> root.Class throws root.errors.CompilationError {
         $rust_function
@@ -58,8 +58,13 @@ class Class {
     /// The class declaration's own schema metadata.
     //baml:mut_vm
     //baml:fallible
-    function meta(self) -> root.Meta throws never {
+    function metadata(self) -> root.Meta throws never {
         $rust_function
+    }
+    /// The class's name, rendered like `to_string`: `Runtime`,
+    /// `shape.Inner`, `Box<int>`.
+    function name(self) -> string throws never {
+        self.as_type()._to_string_impl()
     }
 }
 
@@ -120,8 +125,12 @@ class Enum {
     //baml:mut_vm
     //baml:fallible
     /// The enum declaration's own schema metadata.
-    function meta(self) -> root.Meta throws never {
+    function metadata(self) -> root.Meta throws never {
         $rust_function
+    }
+    /// The enum's name, rendered like `to_string`: `Color`, `shape.Kind`.
+    function name(self) -> string throws never {
+        self.as_type()._to_string_impl()
     }
 }
 
@@ -138,7 +147,7 @@ class Union {
     ///
     /// - `reflect.errors.CompilationError` if the members cannot form a union.
     //baml:mut_vm
-    function new(types: root.Type[]) -> root.Union throws root.errors.CompilationError {
+    function new(types: root.TypeView[]) -> root.Union throws root.errors.CompilationError {
         $rust_function
     }
 
@@ -219,7 +228,7 @@ class Map {
 
     /// Constructs the map type `map<key, value>`.
     //baml:mut_vm
-    function new(key: root.Type, value: root.Type) -> root.Map throws never {
+    function new(key: root.TypeView, value: root.TypeView) -> root.Map throws never {
         $rust_function
     }
 
@@ -264,15 +273,6 @@ class Interface {
         function as_type(self) -> root.Type throws never {
             $rust_function
         }
-    }
-    //baml:vm
-    //baml:fallible
-    /// Whether `other` nominally implements this interface.
-    ///
-    /// The mirror of `reflect.Type.implements`, asked from the interface's
-    /// side. `false` when `other` is not a class.
-    function implemented_by(self, other: root.Type) -> bool throws never {
-        $rust_function
     }
 }
 

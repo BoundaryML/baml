@@ -19,22 +19,22 @@ function main() -> ScenarioResult {
     let read_t = reflect.Class.new(
         "Tool0Action",
         {
-            "tool": reflect.Literal.new("filesystem/read_file").as_type(),
-            "args": read_args_t.as_type(),
+            "tool": reflect.Literal.new("filesystem/read_file"),
+            "args": read_args_t,
         },
     );
     let search_args_t = reflect.Class.new(
         "Tool1Args",
-        { "query": string.type(), "limit": int.type().optional().as_type() },
+        { "query": string.type(), "limit": int.type().optional() },
     );
     let search_t = reflect.Class.new(
         "Tool1Action",
-        { "tool": reflect.Literal.new("web/search").as_type(), "args": search_args_t.as_type() },
+        { "tool": reflect.Literal.new("web/search"), "args": search_args_t },
     );
-    let action_t = reflect.Union.new([read_t.as_type(), search_t.as_type()]);
-    let type Action = action_t.as_type();
-    let type Read = read_t.as_type();
-    let type Search = search_t.as_type();
+    let action_t = reflect.Union.new([read_t, search_t]);
+    let type Action = action_t;
+    let type Read = read_t;
+    let type Search = search_t;
     let prompt = PickAction@render_prompt<Action>("read the file").text();
     let action = PickAction@parse<Action>(`{"tool": "filesystem/read_file", "args": {"file_path": "/tmp/a.txt"}`);
 

@@ -171,7 +171,7 @@ function collect(
     }
 
     let type_description = match (ty.as_enum()) {
-        let en: reflect.Enum => en.meta().description,
+        let en: reflect.Enum => en.metadata().description,
         null => null,
     };
     let local = description ?? type_description ?? "";

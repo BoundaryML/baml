@@ -1,6 +1,6 @@
 function main() -> string {
     let inner = reflect.Class.new("MountedInner", { "value": string.type() });
-    let outer = reflect.Class.new("MountedOuter", { "inner": inner.as_type() });
+    let outer = reflect.Class.new("MountedOuter", { "inner": inner });
     let app = reflect.Package.compile({ "empty.baml": "" }).with_types({ "OuterAlias": outer });
     let s = reflect.Session.new(packages = { "app": app });
     s.eval<string>(

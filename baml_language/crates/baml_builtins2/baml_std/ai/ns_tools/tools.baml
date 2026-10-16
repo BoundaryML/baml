@@ -63,7 +63,7 @@ function _typed_arguments(
     args: map<string, unknown>,
 ) -> map<string, unknown> throws baml.errors.InvalidArgument {
     let sig = reflect.signature(handler);
-    let fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>> = {};
+    let fields: map<string, reflect.TypeView | reflect.WithMeta<reflect.Type>> = {};
     let sent: map<string, baml.json.json> = {};
     for (let param in sig.args.concat(sig.opts.values())) {
         if (!args.has(param.name)) {
@@ -85,7 +85,7 @@ function _typed_arguments(
             throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${e.message}` }
         },
     };
-    let type Arguments = parameters.as_type();
+    let type Arguments = parameters;
     let aligned = baml.sap.coerce<Arguments>(sent) catch (e) {
         baml.errors.ParseError => {
             // The text goes back to the model, and it quotes the value that

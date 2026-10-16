@@ -8,21 +8,21 @@ function main() -> string {
         { "b": string.type().meta(description = "second"), "a": int.type() },
     );
     let literal = reflect.Literal.new("fixed");
-    let union = reflect.Union.new([literal.as_type(), int.type()]);
-    let map_t = reflect.Map.new(string.type(), union.as_type());
-    let array_t = map_t.as_type().array();
-    let optional_t = array_t.as_type().optional();
+    let union = reflect.Union.new([literal, int.type()]);
+    let map_t = reflect.Map.new(string.type(), union);
+    let array_t = map_t.array();
+    let optional_t = array_t.optional();
     let empty = reflect.Class.new("Empty", {});
-    let source = left.as_type().to_baml();
+    let source = left.to_baml();
     return source
         + "\n<RIGHT>\n"
-        + right.as_type().to_baml()
+        + right.to_baml()
         + "\n<OPTIONAL>\n"
-        + optional_t.as_type().to_baml()
+        + optional_t.to_baml()
         + "\n<FLAGS>"
         + (left != right).to_string()
         + "|"
-        + (source == left.as_type().to_baml()).to_string()
+        + (source == left.to_baml()).to_string()
         + "|"
         + (literal.as_type().as_literal() != null).to_string()
         + "|"

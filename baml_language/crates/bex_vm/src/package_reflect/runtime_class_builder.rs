@@ -339,6 +339,9 @@ impl BamlClassClassBuilder for PackageReflectImpl {
         name: &bex_str::BexStr,
         ty: &Value,
     ) -> Result<Value, VmRustFnError> {
+        // A kind view is stored as the `type` it wraps, so every root a
+        // builder holds is a `type`, a pending type, or a `WithMeta` of one.
+        let ty = &super::type_kinds::type_view_value(vm, *ty);
         let (_, handle) = builder_parts(vm, *builder)
             .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
         let builder_name = lock_state(&handle, vm).name.clone();
@@ -469,7 +472,11 @@ impl BamlClassClassPendingType for PackageReflectImpl {
     fn union(vm: &mut BexVm, pendingtype: &Value, others: &[Value]) -> Value {
         let mut roots = Vec::with_capacity(others.len() + 1);
         roots.push(*pendingtype);
-        roots.extend_from_slice(others);
+        roots.extend(
+            others
+                .iter()
+                .map(|other| super::type_kinds::type_view_value(vm, *other)),
+        );
         alloc_pending(vm, PendingOp::Union, roots)
     }
 

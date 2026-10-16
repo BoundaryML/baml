@@ -21,8 +21,8 @@ use super::{
     BamlClassReflectTypeView_for_Enum, BamlClassReflectTypeView_for_Function,
     BamlClassReflectTypeView_for_Interface, BamlClassReflectTypeView_for_Literal,
     BamlClassReflectTypeView_for_Map, BamlClassReflectTypeView_for_Primitive,
-    BamlClassReflectTypeView_for_Union, BamlClassType, BamlClassUnion, BamlNamespaceClass,
-    BamlNamespaceInterface, BamlNamespaceReflect, PackageReflectImpl, copy,
+    BamlClassReflectTypeView_for_Union, BamlClassUnion, BamlNamespaceClass, BamlNamespaceInterface,
+    BamlNamespaceReflect, PackageReflectImpl, copy,
 };
 use crate::{BexVm, package_load::StdlibClass};
 
@@ -663,7 +663,7 @@ impl BamlClassClass for PackageReflectImpl {
             .collect())
     }
 
-    fn meta(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
+    fn metadata(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
         let (class, _) = reflected_class(vm, *r#type)?;
         Ok(alloc_meta(
             vm,
@@ -824,7 +824,7 @@ impl BamlClassEnum for PackageReflectImpl {
             .collect())
     }
 
-    fn meta(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
+    fn metadata(vm: &mut BexVm, r#type: &Value) -> Result<Value, crate::errors::VmRustFnError> {
         let enm = reflected_enum(vm, *r#type)?;
         Ok(alloc_meta(
             vm,
@@ -950,22 +950,6 @@ impl BamlClassInterface for PackageReflectImpl {
             }),
         }
         .to_value(vm))
-    }
-
-    #[expect(
-        clippy::used_underscore_items,
-        reason = "the generated view accessor is named for the `_ty` field it reads"
-    )]
-    fn implemented_by(
-        vm: &BexVm,
-        r#type: &super::view::Interface<'_>,
-        other: &Value,
-    ) -> Result<bool, crate::errors::VmRustFnError> {
-        let ty_value =
-            check_kind_invariant(vm, r#type._ty(), baml_type::type_kind::TypeKind::Interface)?;
-        Ok(<PackageReflectImpl as BamlClassType>::implemented_by(
-            vm, &ty_value, other,
-        ))
     }
 }
 impl BamlClassLiteral for PackageReflectImpl {
@@ -1255,7 +1239,7 @@ fn substitute_witness_field_type(
 }
 
 pub(super) fn reflected_type_value(vm: &BexVm, value: Value) -> TypeValue {
-    let ptr = value
+    let ptr = type_view_value(vm, value)
         .as_object_ptr()
         .unwrap_or_else(|| unreachable!("type argument must be Object::Type"));
     let Object::Type(type_value) = vm.get_object(ptr) else {
@@ -1346,6 +1330,7 @@ pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaR
 pub(super) fn reflected_type_row(vm: &BexVm, value: Value) -> Result<ReflectedTypeRow, String> {
     const EXPECTED: &str =
         "class fields must be type values or reflect.WithMeta<reflect.Type> rows";
+    let value = type_view_value(vm, value);
     let Some(ptr) = value.as_object_ptr() else {
         return Err(EXPECTED.into());
     };
@@ -1434,6 +1419,13 @@ pub(crate) fn as_view_type_value(vm: &BexVm, value: Value) -> Option<Value> {
         .iter()
         .any(|kind| vm.lang_declaration(kind.class()) == Some(instance.class));
     is_view.then(|| instance.fields[0].load())
+}
+
+/// The `type` value a `reflect.TypeView` argument denotes: a kind view
+/// converts to the `type` it wraps, and anything else (a `type` value itself)
+/// is returned as is.
+pub(crate) fn type_view_value(vm: &BexVm, value: Value) -> Value {
+    as_view_type_value(vm, value).unwrap_or(value)
 }
 
 /// The `Object::Type` value a kind-view instance wraps (`_ty`, its sole

@@ -21,13 +21,13 @@ class UnknownFieldKind {
 }
 
 function NoteType(saved: SavedField[]) -> reflect.Class {
-    let fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>> = {};
+    let fields: map<string, reflect.TypeView | reflect.WithMeta<reflect.Type>> = {};
     for (let field in saved) {
         let ty = match (field.kind) {
             "dropdown" => {
-                let members: reflect.Type[] = [];
+                let members: reflect.TypeView[] = [];
                 for (let option in field.options) {
-                    members.push(reflect.Literal.new(option).as_type())
+                    members.push(reflect.Literal.new(option))
                 }
                 reflect.Union.new(members).as_type()
             },
@@ -74,7 +74,7 @@ function main() -> ScenarioResult {
             },
         ],
     );
-    let type Note = note_t.as_type();
+    let type Note = note_t;
     let prompt = ExtractNote@render_prompt<Note>("sample").text();
     let note = ExtractNote@parse<Note>(`{"height_cm": 183, "chief_complaint": "cough", "bullets": ["dry", "night"]}`);
     let height = reflect.Class.get_field<int>(note, "height_cm");

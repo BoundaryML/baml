@@ -5,7 +5,7 @@ interface Labelled {
 function main() -> bool {
     let base = reflect.Package.compile({ "base.baml": `interface Labelled { label string }` });
     let labelled = base.get_interface("root.Labelled");
-    let type MountedLabelled = labelled.as_type();
+    let type MountedLabelled = labelled;
     let witness = reflect.Interface.implementation<MountedLabelled>().field("label", class_field = "display_name");
     let person = reflect.Class.new(
         "InternalPerson",

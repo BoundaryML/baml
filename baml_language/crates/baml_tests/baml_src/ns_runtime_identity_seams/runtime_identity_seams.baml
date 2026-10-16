@@ -25,26 +25,26 @@ class StaticInner {
 
 test "runtime_declarations_anchor_through_every_container_seam" {
     let inner = reflect.Class.new("Inner", { "x": string.type() });
-    let inner_array = inner.as_type().array().as_type();
+    let inner_array = inner.array().as_type();
     let holder_array = reflect.Class.new("HolderArray", { "bs": inner_array }).as_type();
     let holder_map = reflect.Class
         .new(
             "HolderMap",
-            { "by_name": reflect.Map.new(string.type(), inner.as_type()).as_type() },
+            { "by_name": reflect.Map.new(string.type(), inner) },
         )
         .as_type();
     let minted_enum = reflect.Enum.new("MintedState", ["Ready", "Done"]);
-    let enum_array = minted_enum.as_type().array().as_type();
+    let enum_array = minted_enum.array().as_type();
 
     let compiled_package = reflect.Package.compile({ "compiled.baml": `class CompiledInner { x string }` });
     let compiled_inner = compiled_package.get_class("root.CompiledInner");
-    let compiled_array = compiled_inner.as_type().array().as_type();
+    let compiled_array = compiled_inner.array().as_type();
     let compiled_holder_array = reflect.Class.new("CompiledHolderArray", { "bs": compiled_array }).as_type();
     let compiled_holder_map = reflect.Class
         .new(
             "CompiledHolderMap",
             {
-                "by_name": reflect.Map.new(string.type(), compiled_inner.as_type()).as_type(),
+                "by_name": reflect.Map.new(string.type(), compiled_inner),
             },
         )
         .as_type();

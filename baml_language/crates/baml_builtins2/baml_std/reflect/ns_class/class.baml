@@ -50,7 +50,7 @@ class Builder {
     function field(
         self,
         name: string,
-        ty: root.Type | root.WithMeta<root.Type> | PendingType | root.WithMeta<PendingType>,
+        ty: root.TypeView | root.WithMeta<root.Type> | PendingType | root.WithMeta<PendingType>,
     ) -> Builder throws root.errors.CompilationError {
         $rust_function
     }
@@ -100,7 +100,7 @@ class PendingType {
 
     /// Construct a union containing this pending type and `others`.
     //baml:mut_vm
-    function union(self, others: (root.Type | PendingType)[]) -> PendingType throws never {
+    function union(self, others: (root.TypeView | PendingType)[]) -> PendingType throws never {
         $rust_function
     }
 

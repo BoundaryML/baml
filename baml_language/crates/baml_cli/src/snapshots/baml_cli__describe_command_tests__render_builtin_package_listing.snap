@@ -9,8 +9,8 @@ class            baml.Map                         <builtin>/baml/containers.baml
 interface        baml.Summable                    <builtin>/baml/containers.baml:858
 interface        baml.FloatStats                  <builtin>/baml/containers.baml:927
 interface        baml.ToString                    <builtin>/baml/conversions.baml:24
-interface        baml.ToJson                      <builtin>/baml/conversions.baml:96
-interface        baml.FromJson                    <builtin>/baml/conversions.baml:138
+interface        baml.ToJson                      <builtin>/baml/conversions.baml:160
+interface        baml.FromJson                    <builtin>/baml/conversions.baml:202
 function         baml.deep_copy                   <builtin>/baml/core.baml:11
 interface        baml.Concrete                    <builtin>/baml/core.baml:19
 class            baml.TaggedString                <builtin>/baml/core.baml:45

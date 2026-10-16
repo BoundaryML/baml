@@ -604,7 +604,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
             matches!(
                 &diag.error,
                 TirTypeError::TypeMismatch { expected, got }
-                    if expected.render_with(&Viewpoint::canonical(&db)) == "reflect.Type | reflect.TypeView" && got.render_with(&Viewpoint::canonical(&db)) == "42"
+                    if expected.render_with(&Viewpoint::canonical(&db)) == "reflect.TypeView" && got.render_with(&Viewpoint::canonical(&db)) == "42"
             )
         });
         saw_static_shape_error |= result.diagnostics.iter().any(|diag| {

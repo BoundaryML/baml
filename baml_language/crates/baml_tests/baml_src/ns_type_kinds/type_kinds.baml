@@ -250,10 +250,10 @@ test "runtime_package_enum_literal_values_keep_their_declaration" {
 
 test "class_and_enum_readback_preserves_schema_metadata" {
     let class_view = Person.type().as_class() ?? throw "class";
-    let class_meta = class_view.meta();
+    let class_meta = class_view.metadata();
     let field = class_view.fields()[0];
     let enum_view = Color.type().as_enum() ?? throw "enum";
-    let enum_meta = enum_view.meta();
+    let enum_meta = enum_view.metadata();
     let red = enum_view.values()[0];
 
     assert.equal(class_meta.alias, "PersonAlias");
@@ -292,8 +292,8 @@ test "skip_flag_reads_back_on_fields_and_variants_only" {
     assert.equal(enum_view.values()[0].meta.skip, false);
     assert.is_true(enum_view.values()[1].meta.skip);
     // A class or enum itself is never skipped.
-    assert.equal(class_view.meta().skip, false);
-    assert.equal(enum_view.meta().skip, false);
+    assert.equal(class_view.metadata().skip, false);
+    assert.equal(enum_view.metadata().skip, false);
     // Rows built without the flag default to not skipped.
     assert.equal(reflect.Enum.value("Fresh").meta.skip, false)
 }
@@ -327,7 +327,7 @@ test "nested_type_walker_and_kind_specific_readback_work_end_to_end" {
 test "nested_views_of_a_runtime_type_keep_its_definitions" {
     let choice = reflect.Enum.new("Choice", ["FIRST", "SECOND"]).as_type();
 
-    let root_type = reflect.Class.new("Root", { "choices": choice.array().as_type() }).as_type();
+    let root_type = reflect.Class.new("Root", { "choices": choice.array() }).as_type();
     let root_class = root_type.as_class() ?? throw "expected class";
     let field = root_class.fields().at(0) ?? throw "expected field";
     let field_type = field.type ?? throw "expected field type";

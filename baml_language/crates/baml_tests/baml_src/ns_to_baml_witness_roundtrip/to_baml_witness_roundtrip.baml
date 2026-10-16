@@ -11,7 +11,7 @@ test "witnessed_to_baml_round_trip_preserves_the_definition_tuple" {
         { "display_name": string.type() },
         implementations = [witness],
     );
-    let source = original.as_type().to_baml();
+    let source = original.to_baml();
     let checked_source = source
         + `
 
@@ -32,7 +32,7 @@ test "witnessed_to_baml_round_trip_preserves_the_definition_tuple" {
     );
     let compiled = compiled_package.get_class("root.Person");
 
-    assert.is_true(original.as_type().implements(reflect.Type.of<root.Named<Value = string>>()));
+    assert.is_true(original.implements(reflect.Type.of<root.Named<Value = string>>()));
     assert.is_true(original.as_type() != compiled.as_type());
     assert.equal(compiled.fields()[0].name, "display_name");
     assert.not_null(compiled_package.functions().get("root.as_named"))
@@ -41,8 +41,8 @@ test "witnessed_to_baml_round_trip_preserves_the_definition_tuple" {
 test "same_named_runtime_declarations_are_rejected" {
     let first = reflect.Class.new("Choice", { "left": string.type() });
     let second = reflect.Class.new("Choice", { "right": int.type() });
-    let combined = reflect.Union.new([first.as_type(), second.as_type()]);
-    let result = combined.as_type().to_baml() catch (e) {
+    let combined = reflect.Union.new([first, second]);
+    let result = combined.to_baml() catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code,
         _ => "wrong error",
     };
@@ -53,8 +53,8 @@ test "minted_and_compiled_same_named_declarations_are_rejected" {
     let package = reflect.Package.compile({ "original.baml": `class Choice { compiled string }` });
     let compiled_choice = package.get_class("root.Choice");
     let minted_choice = reflect.Class.new("Choice", { "minted": int.type() });
-    let combined = reflect.Union.new([compiled_choice.as_type(), minted_choice.as_type()]);
-    let result = combined.as_type().to_baml() catch (e) {
+    let combined = reflect.Union.new([compiled_choice, minted_choice]);
+    let result = combined.to_baml() catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code,
         _ => "wrong error",
     };
@@ -64,8 +64,8 @@ test "minted_and_compiled_same_named_declarations_are_rejected" {
 test "equivalent_same_named_runtime_declarations_fold_and_round_trip" {
     let first = reflect.Class.new("Choice", { "value": string.type() });
     let second = reflect.Class.new("Choice", { "value": string.type() });
-    let combined = reflect.Union.new([first.as_type(), second.as_type()]);
-    let source = combined.as_type().to_baml();
+    let combined = reflect.Union.new([first, second]);
+    let source = combined.to_baml();
     let round_trip = reflect.Package.compile({ "choices.baml": source });
     assert.equal(source.split("class Choice {").length(), 2);
     assert.not_null(round_trip.find_class("root.Choice"));
@@ -75,7 +75,7 @@ test "equivalent_same_named_runtime_declarations_fold_and_round_trip" {
 
 test "runtime_class_static_dependencies_are_declared_in_round_trip_source" {
     let holder = reflect.Class.new("RuntimeHolder", { "child": root.StaticChild.type() });
-    let source = holder.as_type().to_baml();
+    let source = holder.to_baml();
     let round_trip = reflect.Package.compile({ "holder.baml": source });
     assert.not_null(round_trip.find_class("root.RuntimeHolder"));
     assert.not_null(round_trip.find_class("root.StaticChild"))
