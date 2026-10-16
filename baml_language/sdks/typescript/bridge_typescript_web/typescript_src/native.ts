@@ -32,6 +32,7 @@ import initWasm, {
   releaseWebHostCallable,
   seedFunctionRefHandle as seedWasmFunctionRefHandle,
   seedGenericMediaHandle as seedWasmGenericMediaHandle,
+  shutdownRuntime as shutdownWasmRuntime,
   stageRuntimeBytecode,
   stageRuntimeSources,
 } from "./wasm/bridge_web_core.js";
@@ -432,6 +433,19 @@ let hostRelease: ((key: HandleKey) => void) | undefined;
 export function getRuntime(): BamlRuntime {
   if (!runtime) throw new BamlClientError("BAML runtime has not been initialized");
   return runtime;
+}
+/**
+ * Finalize the SDK lifetime: drain in-flight calls and spawned work, then
+ * release the runtime. Repeated calls are harmless; BAML calls made
+ * afterwards fail.
+ */
+export async function shutdownRuntime(): Promise<void> {
+  try {
+    await shutdownWasmRuntime();
+  } catch (error) {
+    throw wrapNativeError(error);
+  }
+  runtime = undefined;
 }
 export function newFunctionCall(): bigint { return newWasmFunctionCall(); }
 export function releaseFunctionCall(callId: string): boolean { return releaseWasmFunctionCall(parseCallId(callId)); }
