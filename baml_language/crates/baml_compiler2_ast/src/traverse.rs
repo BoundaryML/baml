@@ -19,9 +19,7 @@
 
 use std::collections::HashSet;
 
-use crate::ast::{
-    Expr, ExprBody, ExprId, Stmt, StmtId, TemplateSegment, TemplateTag, TypeBindingValue,
-};
+use crate::ast::{Expr, ExprBody, ExprId, Stmt, StmtId, TemplateSegment, TemplateTag};
 
 /// A direct child of an expression or statement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -161,13 +159,13 @@ impl ExprBody {
                 out.push(BodyNode::Expr(*expr));
             }
             Stmt::TypeBinding {
-                value: TypeBindingValue::Runtime(operand),
+                operand,
+                else_branch,
                 ..
-            } => out.push(BodyNode::Expr(*operand)),
-            Stmt::TypeBinding {
-                value: TypeBindingValue::Static(_),
-                ..
-            } => {}
+            } => {
+                out.push(BodyNode::Expr(*operand));
+                out.extend(else_branch.map(BodyNode::Expr));
+            }
             Stmt::Return(expr) => out.extend(expr.map(BodyNode::Expr)),
             Stmt::Let {
                 initializer,

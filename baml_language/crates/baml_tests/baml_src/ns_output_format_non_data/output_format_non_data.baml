@@ -60,7 +60,7 @@ test "static_never_specialization_throws_compilation_error" {
 
 test "runtime_never_specialization_uses_the_same_diagnostic" {
     let runtime_type = reflect.Type.of<never>();
-    type RuntimeNever = unreflect(runtime_type)
+    let type RuntimeNever = runtime_type;
     let result = GenericList@render_prompt<RuntimeNever>("items") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
         _ => "wrong error",
@@ -107,7 +107,7 @@ test "nested_non_data_class_field_reports_the_full_path" {
 test "runtime_minted_nested_non_data_field_is_rejected" {
     let inner = reflect.Class.new("RuntimeInner", { "payload": reflect.Type.of<unknown>() });
     let outer = reflect.Class.new("RuntimeOuter", { "inner": inner.as_type() });
-    type RuntimeOuterType = unreflect(outer.as_type())
+    let type RuntimeOuterType = outer.as_type();
     let result = GenericValue@render_prompt<RuntimeOuterType>("runtime") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
         _ => "wrong error",
@@ -149,7 +149,7 @@ test "never_nested_in_a_runtime_class_field_is_rejected_not_panicked" {
     let outer = reflect.Class.new("RuntimeOuter", { "items": reflect.Type.of<never>().array().as_type() }) catch (e) {
         _ => throw "reflect.Class.new threw",
     };
-    type RuntimeOuterType = unreflect(outer.as_type())
+    let type RuntimeOuterType = outer.as_type();
     let result = GenericValue@render_prompt<RuntimeOuterType>("runtime") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
         _ => "wrong error",

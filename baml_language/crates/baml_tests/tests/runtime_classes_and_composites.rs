@@ -34,7 +34,7 @@ async fn an_anonymous_class_instance_crosses_as_an_opaque_handle() {
             let widget_t = reflect.Class.new("Widget", {
                 "name": string.type(),
             })
-            type Widget = unreflect(widget_t.as_type())
+            let type Widget = widget_t.as_type();
             Extract@parse<Widget>(`{"name":"anonymous"}`)
         }
         "##
@@ -87,7 +87,7 @@ async fn a_runtime_compiled_class_instance_crosses_as_an_opaque_handle() {
                 "schema.baml": "class ExtractedRecord { account string }"
             })
             let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
-            type Record = unreflect(record_t.as_type())
+            let type Record = record_t.as_type();
             Extract@parse<Record>(`{"account":"AC-1"}`)
         }
         "##

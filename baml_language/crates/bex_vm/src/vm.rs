@@ -175,6 +175,14 @@ struct CallOptions<'a> {
     type_values: &'a [Option<TypeValue>],
 }
 
+/// An interface bound as the VM checks it: the interface, its type arguments,
+/// and the associated types the bound pins.
+type BoundParts = (
+    bex_vm_types::TypeHead,
+    Box<[bex_vm_types::RealizedTy]>,
+    Box<[(Name, bex_vm_types::RealizedTy)]>,
+);
+
 #[derive(Clone, Debug, Default)]
 struct TakenTypeArgs {
     tys: Vec<bex_vm_types::RealizedTy>,
@@ -2817,6 +2825,61 @@ impl BexVm {
             got: self.type_of(&value),
         }
         .into())
+    }
+
+    /// The interface constraint a bound check reads, as its head, its type
+    /// arguments, and the associated types it pins. The emitter loads it as
+    /// the constraint's `Object::Type`, which carries exactly what the bound
+    /// wrote and nothing an existential would add.
+    fn bound_parts(&self, bound: Value) -> Result<BoundParts, VmError> {
+        if let Some(ptr) = bound.as_object_ptr()
+            && let Object::Type(type_value) = self.get_object(ptr)
+            && let bex_vm_types::RealizedTy::Interface(head, args, assoc) = &type_value.ty
+        {
+            return Ok((*head, args.clone(), assoc.clone()));
+        }
+        Err(VmInternalError::TypeError {
+            expected: Type::Object(ObjectType::Type),
+            got: self.type_of(&bound),
+        }
+        .into())
+    }
+
+    /// The question a generic parameter's bound asks, at run time: does the
+    /// type `value` holds implement the bound's interface, at its type
+    /// arguments and the associated types it pins (the others are free)? As
+    /// statically, only a concrete type can: a union, an interface, `unknown`
+    /// and `never` have no single runtime type to dispatch on.
+    fn satisfies_bound(&mut self, value: Value, bound: Value) -> Result<bool, VmError> {
+        let ty = self.type_operand_value(value)?.ty;
+        if matches!(
+            ty,
+            bex_vm_types::RealizedTy::Union(..)
+                | bex_vm_types::RealizedTy::Interface(..)
+                | bex_vm_types::RealizedTy::Unknown
+                | bex_vm_types::RealizedTy::Never
+        ) {
+            return Ok(false);
+        }
+        let (head, args, assoc) = self.bound_parts(bound)?;
+        Ok(
+            crate::package_baml::resolve::ImplResolver::for_value(self, value)
+                .type_implements(&ty, head, &args, &assoc),
+        )
+    }
+
+    /// The `reflect.errors.TypeMismatch` a missed bound throws when its
+    /// statement has no `else` block, naming the type and the bound.
+    fn bound_mismatch(&mut self, value: Value, bound: Value) -> Result<Value, VmError> {
+        let ty = self.type_operand_value(value)?.ty;
+        let (head, args, assoc) = self.bound_parts(bound)?;
+        let message = format!(
+            "type {ty} does not implement interface {}",
+            bex_vm_types::RealizedTy::Interface(head, args, assoc)
+        );
+        let message = Value::object(self.alloc_string(message));
+        let class = self.lang_object(crate::lang_items::REFLECT_ERRORS_TYPE_MISMATCH);
+        Ok(Value::object(self.alloc_instance(class, vec![message])))
     }
 
     fn take_type_args(&mut self, start: usize, count: usize) -> Result<TakenTypeArgs, VmError> {
@@ -10234,6 +10297,20 @@ impl BexVm {
                             value
                         };
                         self.stack.push(value);
+                    }
+
+                    // ── `let type T extends I = …` bound checks ─────────────────
+                    OpCode::SatisfiesBound => {
+                        let bound = self.stack.ensure_pop();
+                        let value = self.stack.ensure_pop();
+                        let satisfied = self.satisfies_bound(value, bound)?;
+                        self.stack.push(Value::bool(satisfied));
+                    }
+                    OpCode::BoundMismatch => {
+                        let bound = self.stack.ensure_pop();
+                        let value = self.stack.ensure_pop();
+                        let error = self.bound_mismatch(value, bound)?;
+                        self.stack.push(error);
                     }
 
                     // ── Lexical runtime type binding ────────────────────────────

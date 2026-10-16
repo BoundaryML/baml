@@ -177,7 +177,12 @@ pub struct RuntimePackageMount {
 pub enum SessionVisibleKind {
     Declaration,
     Let,
-    TypeBinding { type_value: String },
+    /// A `let type` step: the global holding its type value, and its
+    /// `extends …` clause (empty when unbounded), re-bound in later steps.
+    TypeBinding {
+        type_value: String,
+        bounds: String,
+    },
 }
 
 /// One source-visible name and the hygienic name used in replayed source.

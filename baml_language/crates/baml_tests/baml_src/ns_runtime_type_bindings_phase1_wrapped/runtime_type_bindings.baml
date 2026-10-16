@@ -15,7 +15,7 @@ function source_1() -> string {
             }
 
             let escaped: unknown = {
-                type T = unreflect(operand());
+                let type T = operand();
                 if (reflect.Type.of<T>() != item_ct.as_type()) {
                     throw "reflect.Type.of<T>() did not preserve the bound value"
                 }
@@ -41,13 +41,13 @@ function source_2() -> string {
             let string_t = string.type()
             let int_t = int.type()
             let check = (bound: reflect.Type) -> {
-                type T = unreflect(bound);
+                let type T = bound;
                 reflect.Type.of<T>() == bound
             }
 
-            type T = unreflect(string_t);
+            let type T = string_t;
             let inner = {
-                type T = unreflect(int_t);
+                let type T = int_t;
                 reflect.Type.of<T>() == int_t
             }
             reflect.Type.of<T>() == string_t && inner && check(int_t)
@@ -82,7 +82,7 @@ function source_3() -> string {
             let output_type = reflect.Class.new("RuntimeOutput", {
                 "name": string.type(),
             }).as_type()
-            type Out = unreflect(output_type)
+            let type Out = output_type;
 
             let holder = Holder<Out>.new()
             let parsed = holder.parse_it(\`{"name":"Pixel"}\`)
@@ -135,7 +135,7 @@ function source_4() -> string {
             let output_type = reflect.Class.new("RuntimeOutput", {
                 "name": string.type(),
             }).as_type()
-            type Out = unreflect(output_type)
+            let type Out = output_type;
 
             // Control: the direct SAP call has always worked.
             let direct = baml.sap.parse<Out>(\`{"name":"Pixel"}\`)
@@ -197,7 +197,7 @@ function source_5() -> string {
                     docstring = "Minted runner field docs",
                 ),
             }).as_type()
-            type MintedRecord = unreflect(minted_class)
+            let type MintedRecord = minted_class;
             let class_client = ProbeClient { reply: \`{"minted_field":"ok"}\`, requests: [] }
             let _ = ai.Agent.new(
                 client = class_client,
@@ -207,7 +207,7 @@ function source_5() -> string {
                 "MintedChoice",
                 ["PENDING", "RUNNING"],
             ).as_type()
-            type MintedChoice = unreflect(minted_enum)
+            let type MintedChoice = minted_enum;
             let enum_client = ProbeClient { reply: \`"RUNNING"\`, requests: [] }
             let _ = ai.Agent.new(
                 client = enum_client,
@@ -220,7 +220,7 @@ function source_5() -> string {
                 "beta_only": int.type(),
             }).as_type()
             let union = reflect.Union.new([alpha, beta]).as_type()
-            type MintedUnion = unreflect(union)
+            let type MintedUnion = union;
             let union_client = ProbeClient { reply: \`{"alpha_only":"ok"}\`, requests: [] }
             let _ = ai.Agent.new(
                 client = union_client,
@@ -231,7 +231,7 @@ function source_5() -> string {
             \` })
             let compiled = (package.get_class("root.CompiledRecord")
                 ?? throw "missing CompiledRecord").as_type()
-            type CompiledRecord = unreflect(compiled)
+            let type CompiledRecord = compiled;
             let compiled_client = ProbeClient { reply: \`{"compiled_field":"ok"}\`, requests: [] }
             let _ = ai.Agent.new(
                 client = compiled_client,
@@ -283,7 +283,7 @@ function source_6() -> string {
             let output_type = reflect.Class.new("RuntimeOutput", {
                 "name": string.type(),
             }).as_type()
-            type Out = unreflect(output_type)
+            let type Out = output_type;
 
             let holder = Holder<Out>.new()
             let impl_method = holder.same(output_type)
@@ -331,8 +331,8 @@ function source_7() -> string {
             let second_type = reflect.Class.new("Shape", {
                 "name": string.type(),
             }).as_type()
-            type First = unreflect(first_type)
-            type Second = unreflect(second_type)
+            let type First = first_type;
+            let type Second = second_type;
 
             let first_entry = Entry { key: first_type, label: "first" }
             let second_entry = Entry { key: second_type, label: "second" }
@@ -369,7 +369,7 @@ function source_8() -> string {
             let other = reflect.Class.new("Shape", {
                 "name": string.type(),
             }).as_type()
-            type Mine = unreflect(mine)
+            let type Mine = mine;
 
             let holder = Holder<Mine>.new()
             let own_mint = holder.same(mine)
@@ -409,7 +409,7 @@ function source_9() -> string {
                 class Item { value string }
             \` })
             let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
-            type Item = unreflect(item_type)
+            let type Item = item_type;
 
             let holder = Holder<Item>.new()
             \`\${holder.same(item_type)}|\${holder.name()}\`
@@ -446,7 +446,7 @@ function source_10() -> string {
             let runtime_item = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
             // Binding it merges \`user.Item\` into this frame's overlay, which is
             // what every type materialized here from now on carries.
-            type Shadow = unreflect(runtime_item)
+            let type Shadow = runtime_item;
             let _shadow_holder = Holder<Shadow>.new()
 
             let holder = Holder<Item>.new()
@@ -482,8 +482,8 @@ function source_11() -> string {
             \` })
             let first_item = (first.get_class("root.Item") ?? throw "missing A").as_type()
             let second_item = (second.get_class("root.Item") ?? throw "missing B").as_type()
-            type First = unreflect(first_item)
-            type Second = unreflect(second_item)
+            let type First = first_item;
+            let type Second = second_item;
 
             let _first_holder = Holder<First>.new()
             let holder = Holder<Second>.new()
@@ -520,8 +520,8 @@ function source_12() -> string {
             let method_type = reflect.Class.new("Method", {
                 "name": string.type(),
             }).as_type()
-            type Owner = unreflect(owner_type)
-            type Method = unreflect(method_type)
+            let type Owner = owner_type;
+            let type Method = method_type;
 
             Holder<Owner>.new().pair<Method>(owner_type, method_type)
         }
@@ -549,7 +549,7 @@ function source_13() -> string {
         function main() -> string {
             let choice = reflect.Enum.new("Choice", ["FIRST", "SECOND"]).as_type()
             let other = reflect.Enum.new("Choice", ["FIRST", "SECOND"]).as_type()
-            type Choice = unreflect(choice)
+            let type Choice = choice;
 
             let holder = Holder<Choice>.new()
             \`\${holder.same(choice)}|\${holder.same(other)}\`
@@ -578,7 +578,7 @@ function source_14() -> string {
                 function Items() -> Item[] { [Item { value: "bound", next: null }] }
             \` })
             let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
-            type Item = unreflect(item_type)
+            let type Item = item_type;
 
             // A diagnostic that has to name the type it rejected.
             let contract = pkg.get_function<() -> Item>("root.Items") catch (e) {
@@ -606,8 +606,8 @@ function source_15() -> string {
             let second = reflect.Package.compile({ "b.baml": \`
                 class Item { value string }
             \` })
-            type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
-            type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
+            let type First = (first.get_class("root.Item") ?? throw "missing A").as_type();
+            let type Second = (second.get_class("root.Item") ?? throw "missing B").as_type();
 
             let make = first.get_function<() -> First>("root.Make") ?? throw "missing root.Make"
             let value: unknown = make()
@@ -640,8 +640,8 @@ function source_16() -> string {
             let second = reflect.Package.compile({ "b.baml": \`
                 class Item { beta int, next Item? }
             \` })
-            type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
-            type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
+            let type First = (first.get_class("root.Item") ?? throw "missing A").as_type();
+            let type Second = (second.get_class("root.Item") ?? throw "missing B").as_type();
 
             \`\${Render@render_prompt<First[]>()}~\${Render@render_prompt<Second[]>()}\`
         }

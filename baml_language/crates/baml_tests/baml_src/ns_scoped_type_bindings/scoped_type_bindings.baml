@@ -1,8 +1,7 @@
-// Scoped runtime type bindings: `type T = unreflect(t)` is the one position
+// Scoped runtime type bindings: `let type T = t;` is the one position
 // that lifts a runtime type into a type, and `T` is a rigid parameter of the
 // frame for the rest of its block. These tests pin that the bound name works
-// everywhere the removed inline `f<unreflect(t)>()` spelling used to be
-// written, and that the programs it produces run.
+// in every type position, and that the programs it produces run.
 
 class Holder<T> { label string }
 
@@ -23,7 +22,7 @@ function as_t<T>(v: unknown) -> T throws string {
 
 test "the bound name works in every position the inline spelling had" {
     let t = int.type()
-    type Out = unreflect(t)
+    let type Out = t;
     let literal = Holder<Out> { label: "h" }
     let wrapped = wrap<Out>(as_t<Out>(1))
     assert.equal(literal.label, "h")
@@ -35,14 +34,14 @@ test "the bound name works in every position the inline spelling had" {
 // binding filled, so it is the same type as the static spelling.
 test "type.of over a scoped binding realizes the bound type" {
     let t = string.type()
-    type T = unreflect(t)
+    let type T = t;
     assert.is_true(reflect.Type.of<Wrapper<T>>() == Wrapper<string>.type())
 }
 
-// A static right-hand side binds `T` to its template in the same frame slot
-// a runtime one uses; `T` is just as opaque statically.
-test "a static right-hand side realizes its template" {
-    type T = Wrapper<string>
+// A type known statically binds through `reflect.Type.of`, realized in the
+// enclosing frame; `T` is just as opaque statically.
+test "a statically known operand realizes its template" {
+    let type T = Wrapper<string>.type();
     assert.is_true(reflect.Type.of<T>() == Wrapper<string>.type())
     assert.is_true(reflect.Type.of<T[]>() == reflect.Type.of<Wrapper<string>[]>())
 }
@@ -51,7 +50,7 @@ test "a static right-hand side realizes its template" {
 // through the ordinary `is`/`match` road.
 test "a scoped binding in a pattern tests membership against the bound type" {
     let t = string.type()
-    type T = unreflect(t)
+    let type T = t;
     let value: unknown = Wrapper<string> { inner: "ok" }
     let text: unknown = "plain"
     assert.is_true(value is Wrapper<T>)
@@ -72,7 +71,7 @@ class Source {
 // the value, so all five agree.
 function transports() -> string {
     let t = string.type()
-    type T = unreflect(t)
+    let type T = t;
     let src = Source {}
     let direct = ident<T>(as_t<T>("a"))
     let awaited = await spawn { ident<T>(as_t<T>("b")) }
@@ -99,7 +98,7 @@ function risky<T>(v: T, fail: bool) -> int throws Boom<T> {
 // publish is caught inside the block instead.
 test "a scoped runtime type in the error channel runs" {
     let t = string.type()
-    type Out = unreflect(t)
+    let type Out = t;
     let outcome = risky<Out>(as_t<Out>("x"), false) catch (e) {
         Boom<Out> => -1,
         string => -2,
@@ -112,12 +111,12 @@ test "a scoped runtime type in the error channel runs" {
 // is free of `T`), so the clause is precise, not extraneous. The thrown value
 // keeps its runtime type.
 function throws_boom(t: reflect.Type) -> int throws unknown {
-    type T = unreflect(t)
+    let type T = t;
     risky<T>(as_t<T>("x"), true)
 }
 
 function throws_list(t: reflect.Type) -> string throws unknown {
-    type T = unreflect(t)
+    let type T = t;
     let v: T = as_t<T>(1)
     let a: T[] = [v]
     throw a
@@ -137,20 +136,20 @@ test "a declared throws unknown covers a scoped thrown type" {
 // type only through a catch inside the block or a clause that names its
 // nearest relaxation.
 function leaves_as_unknown(t: reflect.Type) -> unknown {
-    type T = unreflect(t)
+    let type T = t;
     as_t<T>(1)
 }
 
 function published_through_an_annotation(t: reflect.Type) -> reflect.Type {
     let boxed: unknown = {
-        type T = unreflect(t)
+        let type T = t;
         as_t<T>("a")
     }
     reflect.Type.of_value(boxed)
 }
 
 function caught_inside(t: reflect.Type) -> int throws never {
-    type T = unreflect(t)
+    let type T = t;
     risky<T>(as_t<T>("x"), true) catch (e) {
         Boom<T> => 1,
         string => 2,
@@ -161,7 +160,7 @@ function caught_inside(t: reflect.Type) -> int throws never {
 // `unknown` again afterwards.
 function narrowing_ends_with_the_block(t: reflect.Type, v: unknown) -> bool {
     {
-        type T = unreflect(t)
+        let type T = t;
         if (v is T) {
             let narrowed: T = v
             let _ = narrowed
@@ -173,7 +172,7 @@ function narrowing_ends_with_the_block(t: reflect.Type, v: unknown) -> bool {
 // A `return` from inside the binding's scope leaves through the frame's
 // declared return type, exactly as a tail value leaves through its context.
 function returns_through_the_declared_type(t: reflect.Type, early: bool) -> unknown {
-    type T = unreflect(t)
+    let type T = t;
     if (early) { return as_t<T>(1) }
     as_t<T>(2)
 }
@@ -182,7 +181,7 @@ function returns_through_the_declared_type(t: reflect.Type, early: bool) -> unkn
 // the block closes, so the `T`-typed element is stored as an `unknown`.
 function collected_as_unknown_list(t: reflect.Type) -> unknown[] {
     let vs: unknown[] = {
-        type T = unreflect(t);
+        let type T = t;
         [ident(as_t<T>(42))]
     }
     vs
@@ -191,7 +190,7 @@ function collected_as_unknown_list(t: reflect.Type) -> unknown[] {
 // A binding's frame slot is keyed by the parameter's identity, never by its
 // name, so even the compiler's own effect-parameter spelling is just a name.
 function binding_named_like_an_effect_param(t: reflect.Type) -> reflect.Type {
-    type __effect_param_0 = unreflect(t)
+    let type __effect_param_0 = t;
     reflect.Type.of<__effect_param_0>()
 }
 
@@ -201,7 +200,7 @@ function binding_named_like_an_effect_param(t: reflect.Type) -> reflect.Type {
 function bind_narrowed(x: unknown) -> string {
     match (x) {
         let t: reflect.Type => {
-            type T = unreflect(t)
+            let type T = t;
             reflect.Type.of<T>().to_string()
         },
         _ => "not a type",
@@ -220,7 +219,7 @@ test "an operand is narrowed to a type before it binds" {
 interface KeyedStore {
     type Key;
     function probe(self) -> string throws never {
-        type Key = unreflect(int.type())
+        let type Key = int.type();
         reflect.Type.of<Key>().to_string() + "/" + reflect.Type.of<Self.Key>().to_string()
     }
 }
@@ -239,7 +238,7 @@ test "a scoped binding does not shadow a same-named associated type" {
 // exactly as a statement's would be.
 function discarded_by_a_wildcard(t: reflect.Type) -> int {
     let _ = {
-        type T = unreflect(t)
+        let type T = t;
         as_t<T>(1)
     }
     2
@@ -264,14 +263,14 @@ test "values and effects leave a block only through binding-free types" {
 // Spec rules that nothing else in the corpus pins. Each behaves as
 // `TYPE_SYSTEM.md` says; these keep that from changing silently.
 function binding_in_a_parameter_default(
-    n: int = { type D = unreflect(int.type()); 4 },
+    n: int = { let type D = int.type(); 4 },
 ) -> int throws never {
     n
 }
 
 function the_same_name_bound_twice(t: reflect.Type, u: reflect.Type) -> reflect.Type throws never {
-    type T = unreflect(t)
-    type T = unreflect(u)
+    let type T = t;
+    let type T = u;
     reflect.Type.of<T>()
 }
 
@@ -279,11 +278,11 @@ function the_same_name_bound_twice(t: reflect.Type, u: reflect.Type) -> reflect.
 // called after a sibling block rebound the same frame slot.
 function closure_outlives_a_sibling_rebinding(a: reflect.Type, b: reflect.Type) -> reflect.Type throws never {
     let f: () -> reflect.Type throws never = {
-        type T = unreflect(a)
+        let type T = a;
         () -> { reflect.Type.of<T>() }
     }
     {
-        type U = unreflect(b)
+        let type U = b;
         let _ = reflect.Type.of<U>()
     }
     f()
@@ -292,7 +291,7 @@ function closure_outlives_a_sibling_rebinding(a: reflect.Type, b: reflect.Type) 
 // A union relaxes its members and simplifies, so `T | int` relaxes to
 // `unknown` and a declared `throws unknown` is precise for it.
 function throws_a_union_naming_the_binding(t: reflect.Type) -> int throws unknown {
-    type T = unreflect(t)
+    let type T = t;
     let v: T | int = as_t<T>(1)
     throw v
 }
@@ -312,7 +311,7 @@ test "spec rules with no other pin" {
 // `() -> T` is a function type, and a function type only survives a union when
 // the union parenthesizes it - this is the printed clause, pasted back.
 function advised_clause_applied(t: reflect.Type) -> int throws string | (() -> unknown throws never) {
-    type T = unreflect(t)
+    let type T = t;
     let v: T = as_t<T>(1)
     throw () -> { ident<T>(v) }
 }
@@ -334,7 +333,7 @@ test "the clause E0097 prints compiles and keeps the thrown value" {
 // a partial clause cannot run at all today (see the `BUG` note on the
 // lambda's clause judgment in `infer.rs`).
 function partial_clause_publishes_a_scoped_throw(t: reflect.Type, plain: bool) -> int throws unknown | _ {
-    type T = unreflect(t)
+    let type T = t;
     if (plain) { throw "plain" }
     throw Boom<T> { payload: as_t<T>(1) }
 }
@@ -348,18 +347,18 @@ test "a partial clause publishes a scoped throw through the name it wrote" {
     assert.is_true(reflect.Type.of_value(plain) == string.type())
 }
 
-// `unreflect` in a DECLARATION is E0168, and the remedy the diagnostic names
-// is this: bind the runtime type inside a body and reach the declaration
-// through an ordinary type parameter. Pinned so the advice stays followable.
+// A runtime type cannot be written in a DECLARATION; the remedy is to bind it
+// inside a body and reach the declaration through an ordinary type
+// parameter. Pinned so the advice stays followable.
 class ParameterizedField<T> { value Wrapper<T> }
 
 function takes_a_parameterized_field<T>(v: Wrapper<T>) -> reflect.Type throws never {
     reflect.Type.of_value(v.inner)
 }
 
-test "the remedy a declaration-site E0168 names compiles and runs" {
+test "a declaration reaches a bound runtime type through a type parameter" {
     let t = int.type()
-    type T = unreflect(t)
+    let type T = t;
     let site = ParameterizedField<T> { value: Wrapper<T> { inner: as_t<T>(1) } }
     assert.is_true(takes_a_parameterized_field<T>(site.value) == t)
 }
@@ -371,7 +370,7 @@ test "the remedy a declaration-site E0168 names compiles and runs" {
 function probed_union_arm_names_the_binding(t: reflect.Type) -> int throws never {
     let f = (a) -> { a }
     {
-        type T = unreflect(t)
+        let type T = t;
         let h: ((a: int) -> int throws never) | ((a: T) -> T throws never) = f
         let _ = h
     }
@@ -388,12 +387,12 @@ test "a speculatively probed arm naming the binding is not an escape" {
 // the consumer sits on a later branch.
 function sibling_bindings(a: reflect.Type, b: reflect.Type, both: bool) -> reflect.Type[] {
     let first: reflect.Type = {
-        type T = unreflect(a)
+        let type T = a;
         reflect.Type.of<Wrapper<T>>()
     }
     let second: reflect.Type = {
-        type U = unreflect(b)
-        type V = Wrapper<U>
+        let type U = b;
+        let type V = reflect.Type.of<Wrapper<U>>();
         reflect.Type.of<V[]>()
     }
     if (both) {
@@ -457,7 +456,7 @@ test "an agent spec takes a scoped runtime type" {
     let output_type = reflect.Class.new("RuntimeOutput", {
         "name": string.type(),
     }).as_type()
-    type Out = unreflect(output_type)
+    let type Out = output_type;
     let run = ai.Agent.new(
         client = ProbeClient { reply: `{"name":"Pixel"}` },
     ).run(DynamicOutput@spec<Out>())
@@ -470,7 +469,7 @@ test "an agent spec takes a scoped runtime type" {
 // bound most recently.
 function written_args_under_a_shadow<T>(log: string[], t: reflect.Type) -> void {
     {
-        type T = unreflect(t)
+        let type T = t;
         log.push(reflect.Type.of<T>().to_string())
         log.push(reflect.Type.of<T[]>().to_string())
     }

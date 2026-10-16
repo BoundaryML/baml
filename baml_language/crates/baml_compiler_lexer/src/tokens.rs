@@ -497,7 +497,6 @@ pub fn is_baml_identifier(value: &str) -> bool {
         "null",
         "true",
         "type",
-        "unreflect",
         "with",
     ];
 
@@ -1074,7 +1073,6 @@ mod tests {
             "null",
             "true",
             "type",
-            "unreflect",
             "with",
         ] {
             assert!(
@@ -1083,7 +1081,15 @@ mod tests {
             );
         }
 
-        for identifier in ["Thing", "field_name", "get_client", "$companion", "Foo$bar"] {
+        // `unreflect` was a contextual keyword until `let type` replaced it.
+        for identifier in [
+            "Thing",
+            "field_name",
+            "get_client",
+            "$companion",
+            "Foo$bar",
+            "unreflect",
+        ] {
             assert!(
                 is_baml_identifier(identifier),
                 "ordinary spelling {identifier:?} must remain a valid identifier"

@@ -1,6 +1,5 @@
-// `unreflect` is contextual syntax in one exact position and an ordinary
-// identifier everywhere else: here a user's own class name and a local
-// binding.
+// `unreflect` (the removed runtime type spelling) is an ordinary identifier:
+// here a user's own class name and a local binding.
 
 class unreflect { value int }
 

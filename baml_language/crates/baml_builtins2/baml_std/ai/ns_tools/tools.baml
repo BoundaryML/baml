@@ -70,7 +70,7 @@ function _typed_arguments(
             continue;
         }
         if let value: baml.json.json = args.get(param.name) {
-            type Declared = unreflect(param.type);
+            let type Declared = param.type;
             if (!(value is Declared)) {
                 let _ = fields.set(param.name, param.type);
                 let _ = sent.set(param.name, value);
@@ -85,7 +85,7 @@ function _typed_arguments(
             throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${e.message}` }
         },
     };
-    type Arguments = unreflect(parameters.as_type());
+    let type Arguments = parameters.as_type();
     let aligned = baml.sap.coerce<Arguments>(sent) catch (e) {
         baml.errors.ParseError => {
             // The text goes back to the model, and it quotes the value that

@@ -4,7 +4,7 @@ function inspect<T>() -> string throws never {
 
 function main() -> string throws reflect.errors.CompilationError {
     let t = reflect.Enum.new("Category", ["RED", "BLUE"]);
-    type T = unreflect(t)
+    let type T = t;
     return inspect<T>();
 }
 

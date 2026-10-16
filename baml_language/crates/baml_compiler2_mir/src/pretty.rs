@@ -659,6 +659,16 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             write_operand(f, db, operand)?;
             write!(f, ", {})", Names::of(db).template(&test.template(db)))
         }
+        Rvalue::SatisfiesBound { ty, bound } => {
+            write!(f, "satisfies_bound(")?;
+            write_operand(f, db, ty)?;
+            write!(f, ", {})", Names::of(db).interface(bound))
+        }
+        Rvalue::BoundMismatch { ty, bound } => {
+            write!(f, "bound_mismatch(")?;
+            write_operand(f, db, ty)?;
+            write!(f, ", {})", Names::of(db).interface(bound))
+        }
         Rvalue::IsTypeTag { operand, tag } => {
             write!(f, "is_type_tag(")?;
             write_operand(f, db, operand)?;

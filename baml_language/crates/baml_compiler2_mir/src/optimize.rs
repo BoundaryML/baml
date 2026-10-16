@@ -403,7 +403,10 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
             crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
                 scan_place_read(p, set);
             }
-            crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
+            crate::Rvalue::IsType { operand, .. }
+            | crate::Rvalue::IsTypeTag { operand, .. }
+            | crate::Rvalue::SatisfiesBound { ty: operand, .. }
+            | crate::Rvalue::BoundMismatch { ty: operand, .. } => {
                 scan_operand(operand, set);
             }
             crate::Rvalue::MakeClosure { captures, .. } => {
@@ -696,7 +699,10 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::Discriminant(p) => count_in_place(p, uses),
         crate::Rvalue::TypeTag(p) => count_in_place(p, uses),
         crate::Rvalue::Len(p) => count_in_place(p, uses),
-        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
+        crate::Rvalue::IsType { operand, .. }
+        | crate::Rvalue::IsTypeTag { operand, .. }
+        | crate::Rvalue::SatisfiesBound { ty: operand, .. }
+        | crate::Rvalue::BoundMismatch { ty: operand, .. } => {
             count_in_operand(operand, uses);
         }
         crate::Rvalue::MakeClosure { captures, .. } => {
@@ -1103,7 +1109,10 @@ fn apply_subst_to_rvalue<'db>(rv: &mut crate::Rvalue<'db>, subst: &HashMap<Local
         crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
             apply_subst_to_place_locals(p, subst);
         }
-        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
+        crate::Rvalue::IsType { operand, .. }
+        | crate::Rvalue::IsTypeTag { operand, .. }
+        | crate::Rvalue::SatisfiesBound { ty: operand, .. }
+        | crate::Rvalue::BoundMismatch { ty: operand, .. } => {
             apply_subst_to_operand(operand, subst);
         }
         crate::Rvalue::MakeClosure { captures, .. } => {
@@ -1429,7 +1438,10 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
             remap_place(p, map);
         }
-        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
+        crate::Rvalue::IsType { operand, .. }
+        | crate::Rvalue::IsTypeTag { operand, .. }
+        | crate::Rvalue::SatisfiesBound { ty: operand, .. }
+        | crate::Rvalue::BoundMismatch { ty: operand, .. } => {
             remap_operand(operand, map);
         }
         crate::Rvalue::MakeClosure { captures, .. } => {
@@ -1705,7 +1717,9 @@ fn verify_mir(
                         | crate::Rvalue::TypeTag(p)
                         | crate::Rvalue::Len(p) => check_place(p, &blk),
                         crate::Rvalue::IsType { operand, .. }
-                        | crate::Rvalue::IsTypeTag { operand, .. } => {
+                        | crate::Rvalue::IsTypeTag { operand, .. }
+                        | crate::Rvalue::SatisfiesBound { ty: operand, .. }
+                        | crate::Rvalue::BoundMismatch { ty: operand, .. } => {
                             check_operand(operand, &blk);
                         }
                         crate::Rvalue::MakeClosure { captures, .. } => {

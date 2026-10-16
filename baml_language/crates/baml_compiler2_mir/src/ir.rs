@@ -1001,6 +1001,25 @@ pub enum Rvalue<'db> {
     /// other coarse tag checks.
     IsTypeTag { operand: Operand<'db>, tag: i64 },
 
+    /// Whether the type value `ty` satisfies the interface bound `bound`, the
+    /// check a `let type T extends I = …` statement makes: the question a
+    /// generic parameter's bound asks, at run time. The bound is a constraint,
+    /// not a type: only the associated types it pins are compared. Lowers to
+    /// `LoadType` of the constraint, then `SatisfiesBound`; yields a bool.
+    SatisfiesBound {
+        ty: Operand<'db>,
+        bound: TyTemplateInterface,
+    },
+
+    /// The `reflect.errors.TypeMismatch` a missed [`Rvalue::SatisfiesBound`]
+    /// throws when its statement has no `else` block, naming `ty` and
+    /// `bound`. Lowers like it, to `BoundMismatch`; the value is thrown by an
+    /// ordinary `Throw` terminator.
+    BoundMismatch {
+        ty: Operand<'db>,
+        bound: TyTemplateInterface,
+    },
+
     /// Allocate a closure object from a child lambda function.
     ///
     /// `lambda_idx` indexes into `MirFunction::lambdas` of the enclosing function.
@@ -1065,7 +1084,7 @@ pub enum Rvalue<'db> {
         method: String,
         /// Method-level type-argument OPERANDS from the reference site,
         /// appended to the resolved impl frame by the VM. Every argument is
-        /// a template today - a scoped `type T = …` slot included - so these
+        /// a template today - a scoped `let type T = …` slot included - so these
         /// could be templates; they stay operands because the producer
         /// materializes each as a `LoadType` temp anyway and the VM pops an
         /// `Object::Type` either way, which keeps one stack discipline for
@@ -1190,6 +1209,7 @@ impl Rvalue<'_> {
             Self::IsType { operand: arg, .. } | Self::IsTypeTag { operand: arg, .. } => {
                 operand(arg)
             }
+            Self::SatisfiesBound { ty, .. } | Self::BoundMismatch { ty, .. } => operand(ty),
             Self::TypeTag(place) | Self::Discriminant(place) | Self::Len(place) => {
                 read(place, &in_bounds)
             }

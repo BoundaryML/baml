@@ -196,8 +196,9 @@ impl bex_vm_types::BexRustData for RuntimeCompileArtifactSlot {
 
 fn measure_session_symbol(meter: &mut bex_vm_types::Meter, symbol: &SessionVisibleSymbol) {
     meter.bytes(symbol.internal.capacity());
-    if let bex_vm_types::SessionVisibleKind::TypeBinding { type_value } = &symbol.kind {
+    if let bex_vm_types::SessionVisibleKind::TypeBinding { type_value, bounds } = &symbol.kind {
         meter.bytes(type_value.capacity());
+        meter.bytes(bounds.capacity());
     }
 }
 

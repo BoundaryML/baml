@@ -382,10 +382,11 @@ pub enum DiagnosticId {
     /// A condition whose static type decides the branch (always truthy /
     /// always falsy) - B-1563 truthiness.
     ConditionAlwaysConstant,
-    /// `unreflect(value)` was written somewhere other than as the whole
-    /// right-hand side of a body-level `type T = …;` binding. The binding is
-    /// the one spelling that lifts a runtime type; every other position names
-    /// the bound `T`.
+    /// Retired (E0168): `unreflect(value)` written anywhere other than as the
+    /// whole right-hand side of a body-level `type T = …;` binding. Nothing
+    /// produces it since `let type T = value;` replaced both spellings (their
+    /// removal reports E0098); the variant stays so later variants keep their
+    /// cached discriminants.
     RuntimeTypeMustBeNamed,
     /// `reflect.Function.specialize` was given type arguments the
     /// callable cannot accept: the wrong number of them, one that fails a
@@ -399,7 +400,7 @@ pub enum DiagnosticId {
     /// `map<string>`), diagnosed at AST lowering before the arguments could
     /// be silently erased.
     InvalidBuiltinTypeArguments,
-    /// A value typed by a body-scoped `type T = …` binding would be
+    /// A value typed by a body-scoped `let type T = …` binding would be
     /// observable outside the block that binds `T`: the block's value, a
     /// thrown type a published clause would carry, or a type still being
     /// inferred that would be decided as one.

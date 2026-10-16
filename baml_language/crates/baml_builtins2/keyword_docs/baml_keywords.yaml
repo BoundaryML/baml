@@ -376,11 +376,11 @@ type:
       }
     }
     function from_runtime(t: reflect.Type) -> reflect.Type {
-      type T = unreflect(t)
+      let type T = t;
       reflect.Type.of<T>()
     }
   details: |
-    At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`. Inside a function, lambda, or block body, `type T = unreflect(t)` binds a block-scoped type parameter to a runtime type value (`t: reflect.Type | reflect.TypeView`, or a `reflect.class.PendingType` from a builder; an `unknown` must be narrowed first with `match` or `is`), and `type T = SomeType` binds one to a static type. `T` is a rigid type parameter for the rest of the block: nothing typed by `T` may leave the block except through a type that does not mention it, such as `unknown`. `unreflect` is legal only as the whole right-hand side of such a statement. The old `type.of<T>()` shorthand and bare `type` value annotation do not exist; write `reflect.Type.of<T>()` and `reflect.Type`.
+    At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`. Inside a function, lambda, or block body, `let type T = t;` binds a block-scoped type parameter to a runtime type value (`t: reflect.Type | reflect.TypeView`, or a builder's pending type; an `unknown` must be narrowed first with `match` or `is`). `T` is a rigid type parameter for the rest of the block: nothing typed by `T` may leave the block except through a type that does not mention it, such as `unknown`. `let type T extends I = t;` also gives `T` the interface bound `I` (several bounds join with `&`): the statement checks the bound when it runs, throwing `reflect.errors.TypeMismatch` when the type misses it, or running a diverging `else { ... }` block instead when one is written. A body-level `type T = ...` alias and `unreflect(...)` no longer exist; write `let type`. The old `type.of<T>()` shorthand and bare `type` value annotation do not exist either; write `reflect.Type.of<T>()` and `reflect.Type`.
 
 void:
   summary: "The unit type, written as the return type of a function that produces no value."
@@ -515,6 +515,9 @@ let:
   syntax: |
     let name = "Alice"
     let count = items.length()
+    let type T = runtime_type;
+  details: |
+    `let type T = t;` binds the runtime type value `t` as the block-scoped type `T`; see `type`.
 
 const:
   summary: "Declares a compile-time constant binding."

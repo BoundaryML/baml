@@ -363,7 +363,7 @@ function coerce_unspecialized_generic() -> string {
         }
     ` });
     let class_type = package.get_class("RBox") ?? baml.sys.panic("RBox is missing");
-    type T = unreflect(class_type.as_type());
+    let type T = class_type.as_type();
     let json: json = {"item": 1};
     let _ = baml.sap.coerce<T>(json) catch (e) {
         baml.errors.ParseError { message } => {

@@ -588,7 +588,7 @@ pub fn export_file_throw_facts(
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_ast::{Stmt, TypeBindingValue};
+    use baml_compiler2_ast::Stmt;
 
     use super::*;
 
@@ -605,7 +605,9 @@ mod tests {
         let binding_throw = throwing_expr(&mut body, "binding");
         let binding = body.stmts.alloc(Stmt::TypeBinding {
             name: Name::new("T"),
-            value: TypeBindingValue::Runtime(binding_throw),
+            operand: binding_throw,
+            bounds: Vec::new(),
+            else_branch: None,
         });
         let root = body.exprs.alloc(Expr::Block {
             stmts: vec![binding],

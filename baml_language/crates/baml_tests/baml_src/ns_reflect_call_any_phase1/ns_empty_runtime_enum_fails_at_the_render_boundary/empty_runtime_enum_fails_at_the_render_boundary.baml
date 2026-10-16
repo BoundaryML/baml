@@ -15,7 +15,7 @@ function main() -> string throws never {
             return "constructor threw";
         }
     };
-    type T = unreflect(t)
+    let type T = t;
     let rendered = Classify@render_prompt<T>("sample") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
         _ => "wrong render error",

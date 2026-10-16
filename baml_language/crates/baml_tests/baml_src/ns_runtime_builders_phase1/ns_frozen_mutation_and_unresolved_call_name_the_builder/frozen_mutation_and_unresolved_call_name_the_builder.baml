@@ -20,7 +20,7 @@ function main() -> string {
     let unresolved = reflect.Class.builder("UnbuiltTenant");
     let pending = unresolved.type();
     let pending_error = {
-        type Pending = unreflect(pending)
+        let type Pending = pending;
         Extract@render_prompt<Pending>()
     } catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].message

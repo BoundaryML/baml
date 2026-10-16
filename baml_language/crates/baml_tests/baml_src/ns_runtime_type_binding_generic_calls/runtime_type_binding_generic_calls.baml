@@ -1,4 +1,4 @@
-// Generic calls made in the scope of a `type T = unreflect(expr)` binding.
+// Generic calls made in the scope of a `let type T = expr` binding.
 // `Bound` is a rigid parameter of the frame, so every callee slot it fills
 // solves statically and lowers as an ordinary type argument.
 
@@ -10,7 +10,7 @@ test "non-closure generic list ops over a runtime-bound element type" {
     let item_t = reflect.Class
         .new("BoundItem", { "value": string.type() })
         .as_type();
-    type Bound = unreflect(item_t);
+    let type Bound = item_t;
     let items = EmptyOf<Bound>();
 
     assert.equal(items.length(), 0);
@@ -24,7 +24,7 @@ function ClosureOverRuntimeBoundElement() -> int {
     let item_t = reflect.Class
         .new("BoundPredicate", { "value": string.type() })
         .as_type();
-    type Bound = unreflect(item_t);
+    let type Bound = item_t;
     let items = EmptyOf<Bound>();
 
     items
@@ -67,7 +67,7 @@ test "method calls on a generic class receiver with a runtime-bound argument" {
     let item_t = reflect.Class
         .new("BoundHeld", { "value": string.type() })
         .as_type();
-    type Bound = unreflect(item_t);
+    let type Bound = item_t;
     // A bare `[]` argument solves its element slot from the declared `T[]`
     // with `T = Bound`, exactly as it would for a static type argument.
     let holder = Holder<Bound>.new([]);

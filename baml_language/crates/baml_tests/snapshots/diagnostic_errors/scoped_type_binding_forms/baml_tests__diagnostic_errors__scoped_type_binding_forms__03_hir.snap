@@ -5,21 +5,27 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Wrapper {
   inner: T
 }
-function user.hole_in_a_static_binding() -> int  [expr] {
-  { type T = user.Wrapper<_> } 1
+function user.bounds_are_interfaces(t: reflect.Type) -> int  [expr] {
+  { let type A extends user.Wrapper<int> = t; let type B extends Missing = t; let type C extends reflect.AnyFunction = t; let type D extends Named & Holder<_> = t } 1
+}
+function user.declared_clause_names_the_bound_check(t: reflect.Type) -> int  [expr] {
+  { let type T extends Named = t } 1
+}
+function user.else_must_diverge(t: reflect.Type) -> int  [expr] {
+  { let type T extends Named = t else {  } 0 } 1
 }
 function user.ident(v: T) -> T  [expr] {
   {  } v
 }
-function user.nested_in_a_static_right_hand_side(t: reflect.Type) -> int  [expr] {
-  { type T = error; type U = error } 1
-}
 function user.nullable_operand(t: reflect.Type?) -> int  [expr] {
-  { type T = unreflect(t) } 1
+  { let type T = t } 1
 }
 function user.operand_solved_to_int() -> int  [expr] {
-  { let v = ident(1); type T = unreflect(v) } 1
+  { let v = ident(1); let type T = v } 1
+}
+function user.the_binding_is_not_in_scope_yet(t: reflect.Type) -> int  [expr] {
+  { let type T extends Holder<T> = t else { let unseen: T? = null; return 0 } } 1
 }
 function user.unknown_operand(x: unknown) -> bool  [expr] {
-  { type T = unreflect(x) } reflect.Type.of() Eq reflect.Type.of()
+  { let type T = x } reflect.Type.of() Eq reflect.Type.of()
 }

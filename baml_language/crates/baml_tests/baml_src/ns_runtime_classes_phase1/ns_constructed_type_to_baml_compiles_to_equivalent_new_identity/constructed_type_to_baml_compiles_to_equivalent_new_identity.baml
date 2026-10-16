@@ -32,8 +32,8 @@ function main() -> bool {
                         "scores": {"priority": 7, "followup": null}
                     }
     `;
-    type Original = unreflect(original.as_type())
-    type Compiled = unreflect(compiled.as_type())
+    let type Original = original.as_type();
+    let type Compiled = compiled.as_type();
     let original_value = RoundTrip@parse<Original>(document);
     let compiled_value = RoundTrip@parse<Compiled>(document);
 

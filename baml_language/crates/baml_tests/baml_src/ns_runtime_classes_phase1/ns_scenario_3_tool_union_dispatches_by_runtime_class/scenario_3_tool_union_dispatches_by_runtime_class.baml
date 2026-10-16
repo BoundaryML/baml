@@ -32,9 +32,9 @@ function main() -> ScenarioResult {
         { "tool": reflect.Literal.new("web/search").as_type(), "args": search_args_t.as_type() },
     );
     let action_t = reflect.Union.new([read_t.as_type(), search_t.as_type()]);
-    type Action = unreflect(action_t.as_type())
-    type Read = unreflect(read_t.as_type())
-    type Search = unreflect(search_t.as_type())
+    let type Action = action_t.as_type();
+    let type Read = read_t.as_type();
+    let type Search = search_t.as_type();
     let prompt = PickAction@render_prompt<Action>("read the file").text();
     let action = PickAction@parse<Action>(`{"tool": "filesystem/read_file", "args": {"file_path": "/tmp/a.txt"}`);
 

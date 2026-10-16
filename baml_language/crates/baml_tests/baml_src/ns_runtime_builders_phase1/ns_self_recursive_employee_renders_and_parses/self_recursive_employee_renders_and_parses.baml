@@ -26,7 +26,7 @@ function main() -> ScenarioResult {
     );
     employee.field("manager", pending.optional());
     let employee_t = employee.build();
-    type Employee = unreflect(employee_t.as_type())
+    let type Employee = employee_t.as_type();
     let prompt = Extract@render_prompt<Employee>().text();
     let value = Extract@parse<Employee>(`{"full_name":"Ada","manager":{"full_name":"Grace","manager":null}`);
     let manager = reflect.Class.get_field<unknown>(value, "manager");

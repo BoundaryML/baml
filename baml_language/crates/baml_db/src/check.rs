@@ -1638,8 +1638,8 @@ fn new_tir_diagnostic(
             .with_primary(span, label)
             .with_phase(DiagnosticPhase::Type);
     }
-    if let TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } = error {
-        return runtime_type::computed_generic_argument_requires_unreflect(name.as_str())
+    if let TirTypeError::ComputedGenericArgumentRequiresLetType { name } = error {
+        return runtime_type::computed_generic_argument_requires_let_type(name.as_str())
             .with_primary_span(span)
             .with_phase(DiagnosticPhase::Type);
     }
@@ -1956,8 +1956,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::UnresolvedName { .. } | TirTypeError::UnresolvedPropertyShorthand { .. } => {
             DiagnosticId::UnknownVariable
         }
-        TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
-            runtime_type::computed_generic_argument_requires_unreflect(name.as_str()).id
+        TirTypeError::ComputedGenericArgumentRequiresLetType { name } => {
+            runtime_type::computed_generic_argument_requires_let_type(name.as_str()).id
         }
         TirTypeError::MountedPackageCallUnsupported { path } => {
             runtime_type::mounted_package_call_unsupported(path.as_str()).id

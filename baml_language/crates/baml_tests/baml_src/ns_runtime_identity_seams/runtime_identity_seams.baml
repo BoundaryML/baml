@@ -51,35 +51,35 @@ test "runtime_declarations_anchor_through_every_container_seam" {
     let static_holder = reflect.Class.new("StaticHolder", { "bs": reflect.Type.of<StaticInner[]>() }).as_type();
 
     let array_ok = {
-        type T = unreflect(holder_array)
+        let type T = holder_array;
         Check<T>(holder_array, `{"bs":[{"x":"one"}]}`)
     };
     let empty_array_ok = {
-        type T = unreflect(holder_array)
+        let type T = holder_array;
         Check<T>(holder_array, `{"bs":[]}`)
     };
     let map_ok = {
-        type T = unreflect(holder_map)
+        let type T = holder_map;
         Check<T>(holder_map, `{"by_name":{"one":{"x":"one"}}}`)
     };
     let enum_ok = {
-        type T = unreflect(enum_array)
+        let type T = enum_array;
         Check<T>(enum_array, `["Ready","Done"]`)
     };
     let top_level_array_ok = {
-        type T = unreflect(inner_array)
+        let type T = inner_array;
         Check<T>(inner_array, `[{"x":"one"}]`)
     };
     let compiled_array_ok = {
-        type T = unreflect(compiled_holder_array)
+        let type T = compiled_holder_array;
         Check<T>(compiled_holder_array, `{"bs":[{"x":"one"}]}`)
     };
     let compiled_map_ok = {
-        type T = unreflect(compiled_holder_map)
+        let type T = compiled_holder_map;
         Check<T>(compiled_holder_map, `{"by_name":{"one":{"x":"one"}}}`)
     };
     let static_control_ok = {
-        type T = unreflect(static_holder)
+        let type T = static_holder;
         Check<T>(static_holder, `{"bs":[{"x":"one"}]}`)
     };
 

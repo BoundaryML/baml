@@ -172,10 +172,10 @@ source: crates/baml_tests/src/generated_tests.rs
   [hir] E0176
 
   × `root` is the path to this package and cannot name a binding, an item, or a type parameter
-    ╭─[main.baml:95:10]
- 95 │     type root = int
-    ·          ──┬─
-    ·            ╰── `root` is this package
+    ╭─[main.baml:95:14]
+ 95 │     let type root = reflect.Type.of<int>();
+    ·              ──┬─
+    ·                ╰── `root` is this package
     ╰────
 
   [hir] E0176

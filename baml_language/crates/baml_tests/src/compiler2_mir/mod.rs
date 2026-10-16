@@ -787,7 +787,7 @@ fn runtime_type_plan_operations_are_explicit() {
 function accept<T>(value: T) -> T { value }
 
 function f(t: reflect.Type, value: unknown) -> bool {
-    type T = unreflect(t)
+    let type T = t;
     match (value) {
         let x: T => accept<T>(x) is T,
         _ => false,
@@ -802,39 +802,39 @@ function f(t: reflect.Type, value: unknown) -> bool {
     );
 }
 
-/// A static right-hand side loads its template into the binding's slot; every
+/// A `let type` binding stores its operand in the binding's slot, and every
 /// later mention of the name reads that slot, including nested under a
-/// constructor (`Bound?`, `Bound[]`).
-///
-/// The `match` comes before the `is` test: the right operand of `&&` is typed
-/// with the left operand's facts, so after `value is Bound` the `_` arm of
-/// the `match` would be unreachable.
+/// constructor (`Bound?`). Each `extends` bound is then checked against the
+/// type now in the slot, in written order, by `satisfies_bound`: the bound
+/// travels as an interface constraint (only the associated types it pins),
+/// never as a type. A miss branches into the `else` block or, without one,
+/// throws the `bound_mismatch` error.
 #[test]
-fn static_type_binding_loads_its_template_into_the_slot() {
+fn bounded_type_binding_checks_its_bounds_after_binding_the_slot() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
         r#"
-class Wrapper<T> { value T }
+interface Named { name string }
+interface Tagged { tag string }
 
 function erase<T>() -> string { "ok" }
 
-function f(value: unknown) -> bool {
-    type Bound = Wrapper<string>
-    let annotated: Bound? = null
+function checked(t: reflect.Type) -> bool {
+    let type Bound extends Named & Tagged = t;
+    let annotated: Bound? = null;
+    erase<Bound>() == "ok" && annotated == null
+}
+
+function guarded(t: reflect.Type) -> bool {
+    let type Bound extends Named = t else { return false };
     erase<Bound>() == "ok"
-        && annotated == null
-        && match value {
-            Bound => true,
-            _ => false,
-        }
-        && value is Bound
 }
 "#,
     );
     baml_db::testing::assert_no_diagnostic_errors(&db);
     mir_snapshot!(
-        "static_type_binding_loads_its_template_into_the_slot",
+        "bounded_type_binding_checks_its_bounds_after_binding_the_slot",
         render_mir(&db, file)
     );
 }
@@ -864,7 +864,7 @@ fn mounted_loc_free_runtime_call_target_is_explicit() {
         "test.baml",
         r#"
 function f(t: reflect.Type, value: unknown) -> unknown {
-    type T = unreflect(t)
+    let type T = t;
     match (value) {
         let x: T => app.accept<T>(x),
         _ => null,
