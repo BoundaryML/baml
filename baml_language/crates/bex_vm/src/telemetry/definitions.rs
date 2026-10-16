@@ -111,7 +111,7 @@ unsafe fn make(ptr: HeapPtr, cell: &DefinitionCell) -> &Definition {
 unsafe fn alone(ptr: HeapPtr) -> bool {
     // SAFETY: inherited, here and for the heads read.
     match unsafe { ptr.get() } {
-        Object::Class(class) => class.fields.iter().all(|field| {
+        Object::Class(class) => class.declared_fields().iter().all(|field| {
             let mut defined = true;
             field.field_template.visit_heads(&mut |head| {
                 defined &= !head.is_resolved()
@@ -205,7 +205,7 @@ impl Search {
         let start = self.successors.len();
         // SAFETY: inherited.
         if let Object::Class(class) = unsafe { ptr.get() } {
-            for field in &class.fields {
+            for field in class.declared_fields() {
                 field.field_template.visit_heads(&mut |head| {
                     // SAFETY: inherited; a resolved head points at a live
                     // declaration.
@@ -310,7 +310,7 @@ fn class_definition<'a>(
         ),
         stream_done: class.stream_done,
         fields: class
-            .fields
+            .declared_fields()
             .iter()
             .map(|field| Field {
                 name: field.name.as_str(),
@@ -399,7 +399,7 @@ mod tests {
         Object::Class(Box::new(Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new(name)),
-            fields: Vec::new(),
+            body: bex_vm_types::ClassBody::Fields(Vec::new()),
             description: None,
             alias: None,
             docstring: None,
@@ -421,7 +421,10 @@ mod tests {
         let Object::Class(class) = (unsafe { ptr.get_mut() }) else {
             unreachable!()
         };
-        class.fields.push(ClassField {
+        let bex_vm_types::ClassBody::Fields(fields) = &mut class.body else {
+            unreachable!()
+        };
+        fields.push(ClassField {
             name: name.into(),
             field_type: RuntimeTy::Null,
             field_template: Template::Union(Box::new([

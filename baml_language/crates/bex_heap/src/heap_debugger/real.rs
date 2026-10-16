@@ -300,10 +300,10 @@ impl BexHeap {
                     panic!("instance.class not Class: obj_idx={idx:?} class_idx={class_idx:?}");
                 };
                 assert!(
-                    instance.fields.len() == class.fields.len(),
+                    instance.fields.len() == class.instance_fields().len(),
                     "instance field count mismatch: obj_idx={idx:?} fields_len={} class_fields_len={}",
                     instance.fields.len(),
-                    class.fields.len()
+                    class.instance_fields().len()
                 );
                 for slot in &instance.fields {
                     self.debug_assert_valid_value(&slot.load());

@@ -70,7 +70,10 @@ impl BexVm {
         let Object::Class(class) = self.get_object(instance.class) else {
             return None;
         };
-        let index = class.fields.iter().position(|field| field.name == name)?;
+        let index = class
+            .instance_fields()
+            .iter()
+            .position(|field| field.name == name)?;
         instance.try_load_field(index)
     }
 }

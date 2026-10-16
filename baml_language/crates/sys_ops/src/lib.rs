@@ -345,8 +345,10 @@ mod schema {
                         return false;
                     }
                     find_class_definition(ctx, head).is_some_and(|class_def| {
-                        class_def
-                            .fields
+                        let sys_types::ClassDefinitionBody::Fields(fields) = &class_def.body else {
+                            return false;
+                        };
+                        fields
                             .iter()
                             .filter(|field| !field.skip)
                             .any(|field| walk(&field.field_type, ctx, analysis, seen))
@@ -648,11 +650,13 @@ mod schema {
             let naming = self.naming;
             let mut properties = serde_json::Map::new();
             let mut required = Vec::new();
-            for field in class_def
-                .fields
-                .iter()
-                .filter(|field| naming.shows(field.skip))
-            {
+            let sys_types::ClassDefinitionBody::Fields(class_fields) = &class_def.body else {
+                return Err(format!(
+                    "json_schema: `{}` has no JSON form",
+                    head.display_name()
+                ));
+            };
+            for field in class_fields.iter().filter(|field| naming.shows(field.skip)) {
                 let key = naming.key(&field.name, field.alias.as_deref());
                 let mut property = self.emit(&field.field_type)?;
                 describe(
@@ -858,7 +862,7 @@ mod schema {
                 description: None,
                 docstring: None,
                 alias: None,
-                fields,
+                body: sys_types::ClassDefinitionBody::Fields(fields),
                 stream_done: false,
             }
         }

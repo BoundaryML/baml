@@ -725,9 +725,19 @@ pub struct ClassDefinition {
     pub description: Option<String>,
     pub docstring: Option<String>,
     pub alias: Option<String>,
-    pub fields: Vec<ClassFieldDefinition>,
+    pub body: ClassDefinitionBody,
     /// `@@stream.done`: no partial parse until the whole object is complete.
     pub stream_done: bool,
+}
+
+/// What a [`ClassDefinition`]'s values are made of.
+#[derive(Clone, Debug)]
+pub enum ClassDefinitionBody {
+    /// Its fields, `@skip` ones included, in declaration order.
+    Fields(Vec<ClassFieldDefinition>),
+    /// State that is the runtime's own (a `@@rust_type` class, a capability
+    /// such as `reflect.Package`): no value has a JSON form.
+    RuntimeOwned,
 }
 
 /// A field in a pre-extracted class definition.

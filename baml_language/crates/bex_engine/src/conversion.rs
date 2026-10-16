@@ -522,11 +522,11 @@ impl BexEngine {
                     panic!("Instance.class should point to a Class object")
                 };
                 debug_assert_eq!(
-                    class.fields.len(),
+                    class.instance_fields().len(),
                     instance.fields.len(),
                     "Class '{}' has {} fields but instance has {} fields",
                     class.name(),
-                    class.fields.len(),
+                    class.instance_fields().len(),
                     instance.fields.len(),
                 );
                 let ty = || {
@@ -573,7 +573,7 @@ impl BexEngine {
                     // wrapper around it.
                     form @ (ClassCrossing::Media(_) | ClassCrossing::Prompt) => {
                         let payload = class
-                            .fields
+                            .declared_fields()
                             .iter()
                             .position(|field| {
                                 field.name == bex_external_types::MEDIA_WRAPPER_DATA_FIELD
@@ -778,7 +778,7 @@ impl BexEngine {
         permit: PermitProof<'_>,
     ) -> Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> {
         class
-            .fields
+            .instance_fields()
             .iter()
             .zip(instance.fields.iter())
             .map(|(field, slot)| {
@@ -2095,7 +2095,7 @@ mod outbound_selection_tests {
             tlab.alloc(Object::Class(Box::new(Class {
                 declared_crossing: baml_type::ClassCrossing::Fields,
                 path,
-                fields: Vec::new(),
+                body: bex_vm_types::ClassBody::Fields(Vec::new()),
                 description: None,
                 alias: None,
                 docstring: None,

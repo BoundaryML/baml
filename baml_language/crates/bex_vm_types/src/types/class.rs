@@ -38,6 +38,29 @@ pub struct ClassField {
     pub runtime_type: Option<TypeValue>,
 }
 
+/// What a class's instances are made of.
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+pub enum ClassBody {
+    /// BAML fields, with type and schema metadata: an instance is an
+    /// [`Instance`] with one slot per field.
+    Fields(Vec<ClassField>),
+    /// `@@rust_type("Kind")`: an instance is a
+    /// [`RustInstance`](super::RustInstance) holding the kind's payload, which
+    /// only the runtime builds.
+    RustType(baml_base::RustPayloadKind),
+}
+
+/// Why an instance of a class cannot be built from field values.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unbuildable {
+    /// A `@@rust_type` class: its state is Rust's, which only the runtime
+    /// builds.
+    RustType(baml_base::RustPayloadKind),
+    /// A class with fields whose values are the runtime's own (a
+    /// `reflect.Package`): it crosses as `crossing`, never by its fields.
+    RuntimeOwned(baml_type::ClassCrossing),
+}
+
 /// Runtime class representation.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Class {
@@ -48,8 +71,9 @@ pub struct Class {
     /// declaration object itself.
     pub path: super::LocalName,
 
-    /// Class fields with type and schema metadata.
-    pub fields: Vec<ClassField>,
+    /// What the class's instances are made of: BAML fields, or the Rust
+    /// state of a `@@rust_type` class.
+    pub body: ClassBody,
 
     /// Class-level description for LLM prompt schema rendering.
     pub description: Option<String>,
@@ -140,6 +164,46 @@ impl Class {
             baml_type::ClassCrossing::Opaque
         } else {
             self.declared_crossing
+        }
+    }
+
+    /// The fields an instance is built from, or why none can be: the one
+    /// question every structural builder (decoding, parsing, reflection,
+    /// defaults) asks. A class built by reflection declares `Fields` and is
+    /// buildable whatever its dynamic tag makes [`Self::crossing`] say.
+    pub fn buildable_fields(&self) -> Result<&[ClassField], Unbuildable> {
+        match &self.body {
+            ClassBody::RustType(kind) => Err(Unbuildable::RustType(*kind)),
+            ClassBody::Fields(_) if self.declared_crossing.runtime_owned() => {
+                Err(Unbuildable::RuntimeOwned(self.declared_crossing))
+            }
+            ClassBody::Fields(fields) => Ok(fields),
+        }
+    }
+
+    /// The fields the class declares, for describing it (reflection,
+    /// telemetry, display): none for a `@@rust_type` class. Code that builds
+    /// an instance asks [`Self::buildable_fields`] instead, which refuses one.
+    pub fn declared_fields(&self) -> &[ClassField] {
+        match &self.body {
+            ClassBody::Fields(fields) => fields,
+            ClassBody::RustType(_) => &[],
+        }
+    }
+
+    /// The fields of a class whose instances are [`Instance`]s. Only an
+    /// `Instance`'s own class is asked, and only a `Fields` class has
+    /// `Instance`s: every builder goes through [`Self::buildable_fields`] or
+    /// is the runtime building a class it declared with fields.
+    #[track_caller]
+    pub fn instance_fields(&self) -> &[ClassField] {
+        match &self.body {
+            ClassBody::Fields(fields) => fields,
+            ClassBody::RustType(kind) => panic!(
+                "`{}` is a `@@rust_type(\"{}\")` class, which has no `Instance`s",
+                self.path,
+                kind.spelling().unwrap_or("Foreign"),
+            ),
         }
     }
 

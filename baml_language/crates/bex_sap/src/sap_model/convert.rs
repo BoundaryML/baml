@@ -173,11 +173,21 @@ impl fmt::Display for NamedTy {
 
 impl crate::sap_model::TypeIdent for NamedTy {}
 
-/// The schema of one class instantiation ([`NamedTyKind::Class`]): the fields the parser reads
-/// (`@skip` fields are not among them), each typed at the instantiation's
-/// type arguments.
+/// The schema of one class instantiation ([`NamedTyKind::Class`]).
 #[derive(Clone, Debug)]
-pub struct ParseClass {
+pub enum ParseClass {
+    /// A class a parse builds from its fields.
+    Fields(ParseClassFields),
+    /// A class only the runtime builds (a `@@rust_type` class, a capability
+    /// such as `reflect.Package`): no value has a JSON form, so no parse
+    /// builds one.
+    RuntimeOwned,
+}
+
+/// The fields the parser reads of a [`ParseClass::Fields`] (`@skip` fields are
+/// not among them), each typed at the instantiation's type arguments.
+#[derive(Clone, Debug)]
+pub struct ParseClassFields {
     pub fields: Vec<ParseField>,
     /// `@@stream.done`: no partial parse until the whole object is complete.
     pub stream_done: bool,
@@ -318,6 +328,9 @@ impl TypeCtx {
         let class_definitions: IndexMap<NamedTy, ParseClass> = class_definitions
             .into_iter()
             .map(|(k, class)| {
+                let ParseClass::Fields(class) = class else {
+                    return (k, ParseClass::RuntimeOwned);
+                };
                 let fields = class
                     .fields
                     .into_iter()
@@ -332,11 +345,11 @@ impl TypeCtx {
                     .collect();
                 (
                     k,
-                    ParseClass {
+                    ParseClass::Fields(ParseClassFields {
                         fields,
                         stream_done: class.stream_done,
                         unfillable: class.unfillable,
-                    },
+                    }),
                 )
             })
             .collect();
@@ -394,8 +407,10 @@ impl TypeCtx {
         let mut visit = |ty: &ParseTy| collect_unparsable(&json, ty, &mut unparsable);
         visit(target);
         for class in self.class_definitions.values() {
-            for field in &class.fields {
-                visit(&field.ty);
+            if let ParseClass::Fields(class) = class {
+                for field in &class.fields {
+                    visit(&field.ty);
+                }
             }
         }
         for body in self.type_alias_definitions.values() {
@@ -571,6 +586,13 @@ impl TypeCtx {
         name: &NamedTy,
         class_def: &'a ParseClass,
     ) -> Result<ClassTy<'a, NamedTy>, ConvertError> {
+        // Only a class whose status is `Json` is converted, and a
+        // runtime-owned class has no JSON form.
+        let ParseClass::Fields(class_def) = class_def else {
+            return Err(ConvertError::InternalError(
+                "a runtime-owned class has no parse type",
+            ));
+        };
         let fields = class_def
             .fields
             .iter()
@@ -888,10 +910,14 @@ impl JsonDefs<DefKey> for TypeCtx {
             })
             .collect::<Result<Vec<_>, _>>()?;
         let name = NamedTy::class(head.clone(), args);
-        let class = self
+        let class = match self
             .class_definitions
             .get(&name)
-            .ok_or_else(|| ConvertError::UnknownName(name.clone()))?;
+            .ok_or_else(|| ConvertError::UnknownName(name.clone()))?
+        {
+            ParseClass::Fields(class) => class,
+            ParseClass::RuntimeOwned => return Ok(JsonClass::RuntimeOwned),
+        };
         let mut fields: Vec<JsonField<DefKey>> = class
             .fields
             .iter()
@@ -913,7 +939,7 @@ impl JsonDefs<DefKey> for TypeCtx {
                 ty: RuntimeTy::Never,
             });
         }
-        Ok(JsonClass { fields })
+        Ok(JsonClass::Fields(fields))
     }
 
     fn variants(&self, head: &DefKey) -> Result<Vec<JsonVariant>, ConvertError> {

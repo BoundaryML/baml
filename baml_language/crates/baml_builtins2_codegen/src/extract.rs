@@ -15,8 +15,8 @@ use baml_compiler2_ast::ast::{
 };
 
 use crate::types::{
-    BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,
-    ReceiverType, VmUsage,
+    BamlType, BuiltinPipeline, NativeBuiltin, NativeClassBody, NativeClassDef, NativeClassField,
+    Param, Receiver, ReceiverType, VmUsage,
 };
 
 /// Convert a byte offset in source text to a 1-based `(line, column)` pair.
@@ -370,6 +370,7 @@ fn extract_from_class(
                 .map_or("", |(_, namespaces)| namespaces)
                 .to_string(),
             instance_backed: class_is_instance_backed(class_def, namespace_prefix),
+            rust_type: rust_type_of(class_def),
             class_generics: class_generics.clone(),
             receiver_type,
             builtin: package_of(namespace_prefix) == baml_builtins2::PACKAGE_BAML,
@@ -422,19 +423,47 @@ fn extract_from_class(
     }
 }
 
-/// Whether `class_def`'s values are `Object::Instance`s with a generated `view::`
-/// struct. The `baml` package's classes that keep dedicated `Object` variants
-/// (Array, Map, String, `Uint8Array`) are not, and neither are field-less
-/// classes (pure namespace markers, method-only and opaque classes). The ONE
-/// rule behind [`extract_class_fields`] and every receiver built for the class,
-/// so a receiver can never promise a view struct that was not generated.
+/// Whether `class_def`'s values are instances with a generated `view::` struct:
+/// an `Object::Instance` of its fields, or the `Object::RustInstance` of a
+/// `@@rust_type` class. The `baml` package's classes that keep dedicated
+/// `Object` variants (Array, Map, String, `Uint8Array`) are not, and neither
+/// are field-less untagged classes (pure namespace markers, method-only
+/// classes). The ONE rule behind [`extract_class_fields`] and every receiver
+/// built for the class, so a receiver can never promise a view struct that was
+/// not generated.
 fn class_is_instance_backed(class_def: &ClassDef, namespace_prefix: &str) -> bool {
     let dedicated_variant = package_of(namespace_prefix) == baml_builtins2::PACKAGE_BAML
         && matches!(
             class_def.name.as_str(),
             "Array" | "Map" | "String" | "Uint8Array"
         );
-    !dedicated_variant && !class_def.fields.is_empty()
+    !dedicated_variant && (!class_def.fields.is_empty() || rust_type_of(class_def).is_some())
+}
+
+/// The `@@rust_type` kind of `class_def`, if it is tagged. The compiler has
+/// already checked the attribute, so a spelling it does not know is a build
+/// error here, never a guess.
+fn rust_type_of(class_def: &ClassDef) -> Option<baml_base::RustPayloadKind> {
+    let attr = class_def
+        .attributes
+        .iter()
+        .find(|attr| attr.name.as_str() == "rust_type")?;
+    Some(match attr.args.as_slice() {
+        [] => baml_base::RustPayloadKind::Foreign,
+        [arg] => {
+            let spelling =
+                baml_compiler2_ast::parse_string_attr_value(&arg.value).unwrap_or_else(|| {
+                    panic!("`@@rust_type` argument `{}` is not a string", arg.value)
+                });
+            baml_base::RustPayloadKind::from_spelling(&spelling).unwrap_or_else(|| {
+                panic!("`@@rust_type(\"{spelling}\")` names no kind of Rust state")
+            })
+        }
+        _ => panic!(
+            "`@@rust_type` on `{}` takes at most one argument",
+            class_def.name.as_str()
+        ),
+    })
 }
 
 /// Extract field definitions from a class, producing a `NativeClassDef`.
@@ -458,25 +487,36 @@ fn extract_class_fields(
         .map(|param| param.name.as_str().to_string())
         .collect();
 
-    let fields: Vec<NativeClassField> = class_def
-        .fields
-        .iter()
-        .enumerate()
-        .map(|(index, field)| {
-            let field_type = type_expr_to_baml_type(&field.type_expr, &generic_params);
-            NativeClassField {
-                name: field.name.as_str().to_string(),
-                field_type,
-                index,
-            }
-        })
-        .collect();
+    let body = match rust_type_of(class_def) {
+        Some(kind) => {
+            assert!(
+                class_def.fields.is_empty(),
+                "`@@rust_type` class `{class_name}` declares fields"
+            );
+            NativeClassBody::RustType(kind)
+        }
+        None => NativeClassBody::Fields(
+            class_def
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(index, field)| {
+                    let field_type = type_expr_to_baml_type(&field.type_expr, &generic_params);
+                    NativeClassField {
+                        name: field.name.as_str().to_string(),
+                        field_type,
+                        index,
+                    }
+                })
+                .collect(),
+        ),
+    };
 
     Some(NativeClassDef {
         name: class_name.to_string(),
         namespace_prefix: namespace_prefix.to_string(),
         generic_params,
-        fields,
+        body,
         source_file: source_file.to_string(),
     })
 }
@@ -706,6 +746,7 @@ fn extract_from_implements_for(
                 .map_or("", |(_, namespaces)| namespaces)
                 .to_string(),
             instance_backed: impl_receiver.is_instance_backed(namespace_prefix),
+            rust_type: impl_receiver.rust_type(),
             class_generics: impl_generics.clone(),
             receiver_type: ReceiverType::RefSelf,
             builtin: match impl_receiver {
@@ -814,6 +855,13 @@ impl<'a> ImplReceiver<'a> {
         match self {
             Self::Builtin(_) => false,
             Self::Class(class_def) => class_is_instance_backed(class_def, namespace_prefix),
+        }
+    }
+
+    fn rust_type(self) -> Option<baml_base::RustPayloadKind> {
+        match self {
+            Self::Builtin(_) => None,
+            Self::Class(class_def) => rust_type_of(class_def),
         }
     }
 }
@@ -1238,10 +1286,10 @@ mod tests {
             .find(|c| c.name == "Pdf")
             .expect("missing Pdf");
         assert_eq!(pdf.namespace_prefix, "baml.media");
-        assert_eq!(pdf.fields.len(), 1);
-        assert_eq!(pdf.fields[0].name, "_data");
-        assert_eq!(pdf.fields[0].index, 0);
-        assert!(matches!(pdf.fields[0].field_type, BamlType::RustType));
+        assert_eq!(pdf.fields().len(), 1);
+        assert_eq!(pdf.fields()[0].name, "_data");
+        assert_eq!(pdf.fields()[0].index, 0);
+        assert!(matches!(pdf.fields()[0].field_type, BamlType::RustType));
 
         assert!(
             class_defs.iter().any(|c| c.name == "Audio"),
@@ -1275,18 +1323,18 @@ mod tests {
             .find(|c| c.name == "File")
             .expect("missing File");
         assert_eq!(file.namespace_prefix, "baml.fs");
-        assert_eq!(file.fields.len(), 1);
-        assert_eq!(file.fields[0].name, "_handle");
-        assert!(matches!(file.fields[0].field_type, BamlType::RustType));
+        assert_eq!(file.fields().len(), 1);
+        assert_eq!(file.fields()[0].name, "_handle");
+        assert!(matches!(file.fields()[0].field_type, BamlType::RustType));
 
         let socket = class_defs
             .iter()
             .find(|c| c.name == "TcpStream")
             .expect("missing TcpStream");
         assert_eq!(socket.namespace_prefix, "baml.net");
-        assert_eq!(socket.fields.len(), 1);
-        assert_eq!(socket.fields[0].name, "_handle");
-        assert!(matches!(socket.fields[0].field_type, BamlType::RustType));
+        assert_eq!(socket.fields().len(), 1);
+        assert_eq!(socket.fields()[0].name, "_handle");
+        assert!(matches!(socket.fields()[0].field_type, BamlType::RustType));
 
         // UDP datagram is a plain data class (payload + sender address).
         let datagram = class_defs
@@ -1294,29 +1342,35 @@ mod tests {
             .find(|c| c.name == "Datagram")
             .expect("missing Datagram");
         assert_eq!(datagram.namespace_prefix, "baml.net");
-        assert_eq!(datagram.fields.len(), 2);
-        assert_eq!(datagram.fields[0].name, "data");
+        assert_eq!(datagram.fields().len(), 2);
+        assert_eq!(datagram.fields()[0].name, "data");
         assert!(matches!(
-            datagram.fields[0].field_type,
+            datagram.fields()[0].field_type,
             BamlType::Uint8Array
         ));
-        assert_eq!(datagram.fields[1].name, "addr");
-        assert!(matches!(datagram.fields[1].field_type, BamlType::String));
+        assert_eq!(datagram.fields()[1].name, "addr");
+        assert!(matches!(datagram.fields()[1].field_type, BamlType::String));
 
         let response = class_defs
             .iter()
             .find(|c| c.name == "Response")
             .expect("missing Response");
         assert_eq!(response.namespace_prefix, "baml.http");
-        assert_eq!(response.fields.len(), 4);
-        assert_eq!(response.fields[0].name, "status_code");
-        assert!(matches!(response.fields[0].field_type, BamlType::Int));
-        assert_eq!(response.fields[1].name, "headers");
-        assert!(matches!(response.fields[1].field_type, BamlType::Map(_, _)));
-        assert_eq!(response.fields[2].name, "url");
-        assert!(matches!(response.fields[2].field_type, BamlType::String));
-        assert_eq!(response.fields[3].name, "_body");
-        assert!(matches!(response.fields[3].field_type, BamlType::RustType));
+        assert_eq!(response.fields().len(), 4);
+        assert_eq!(response.fields()[0].name, "status_code");
+        assert!(matches!(response.fields()[0].field_type, BamlType::Int));
+        assert_eq!(response.fields()[1].name, "headers");
+        assert!(matches!(
+            response.fields()[1].field_type,
+            BamlType::Map(_, _)
+        ));
+        assert_eq!(response.fields()[2].name, "url");
+        assert!(matches!(response.fields()[2].field_type, BamlType::String));
+        assert_eq!(response.fields()[3].name, "_body");
+        assert!(matches!(
+            response.fields()[3].field_type,
+            BamlType::RustType
+        ));
 
         let request = class_defs
             .iter()
@@ -1324,7 +1378,7 @@ mod tests {
             .expect("missing Request");
         assert_eq!(request.namespace_prefix, "baml.http");
         // method, url, headers, body, timeout, connect_timeout
-        assert_eq!(request.fields.len(), 6);
+        assert_eq!(request.fields().len(), 6);
 
         // The structural prompt lives in the ai package.
         let (_ai_vm, _ai_io, ai_class_defs) = extract_native_builtins_for("ai").unwrap();
@@ -1333,8 +1387,8 @@ mod tests {
             .find(|c| c.name == "Prompt")
             .expect("missing ai.Prompt");
         assert_eq!(prompt.namespace_prefix, "ai");
-        assert_eq!(prompt.fields.len(), 1);
-        assert!(matches!(prompt.fields[0].field_type, BamlType::RustType));
+        assert_eq!(prompt.fields().len(), 1);
+        assert!(matches!(prompt.fields()[0].field_type, BamlType::RustType));
     }
 
     #[test]

@@ -206,10 +206,10 @@ impl BexVm {
     #[inline]
     #[must_use]
     pub fn is_instance_of(&self, value: Value, class: HeapPtr) -> bool {
-        match value.as_object_ptr().map(|ptr| self.get_object(ptr)) {
-            Some(Object::Instance(instance)) => instance.class == class,
-            _ => false,
-        }
+        value
+            .as_object_ptr()
+            .and_then(|ptr| self.get_object(ptr).class_instance())
+            .is_some_and(|(instance_class, _)| instance_class == class)
     }
 
     #[inline]

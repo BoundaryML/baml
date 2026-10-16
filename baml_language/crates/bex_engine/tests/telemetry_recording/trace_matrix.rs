@@ -1174,7 +1174,7 @@ fn recorded(program: &Program, tag: baml_type::typetag::TypeTag) -> btel_types::
     // The definitions its fields name, other than its own, made first.
     let mut named: Vec<(baml_type::typetag::TypeTag, btel_types::Definition)> = Vec::new();
     if let Object::Class(class) = declaration(tag) {
-        for field in &class.fields {
+        for field in class.declared_fields() {
             field.field_template.visit_heads(&mut |head| {
                 if head.tag() != tag && !named.iter().any(|(seen, _)| *seen == head.tag()) {
                     named.push((head.tag(), recorded(program, head.tag())));
@@ -1194,7 +1194,7 @@ fn recorded(program: &Program, tag: baml_type::typetag::TypeTag) -> btel_types::
             ),
             stream_done: class.stream_done,
             fields: class
-                .fields
+                .declared_fields()
                 .iter()
                 .map(|field| Field {
                     name: field.name.clone(),
@@ -1250,7 +1250,7 @@ fn one_field_instance(
     additional_args: &[External],
 ) -> Snapshot {
     let (class, class_name) = class_named(program, name);
-    assert_eq!(class.fields.len(), 1);
+    assert_eq!(class.instance_fields().len(), 1);
     let pool = SnapshotPool::unbounded(Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let definition = recorded(program, class.type_tag);
@@ -1259,7 +1259,7 @@ fn one_field_instance(
     let declaration = b.leaves().object(named).unwrap();
     let value = scalar(&mut b, field);
     let instance = b.instance(declaration, [], std::iter::once(value), |_, value| {
-        (class.fields[0].name.as_str().into(), value)
+        (class.instance_fields()[0].name.as_str().into(), value)
     });
     let object = b.leaves().object(instance).unwrap();
     let mut roots = vec![Value::Object(object)];

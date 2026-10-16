@@ -385,7 +385,7 @@ fn mint_class(
     let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
     let class_ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
         path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(class_name)),
-        fields: class_fields,
+        body: bex_vm_types::ClassBody::Fields(class_fields),
         description: None,
         alias: None,
         docstring: None,
@@ -715,7 +715,7 @@ impl BamlClassClass for PackageReflectImpl {
                 unreachable!("Instance.class must point to Object::Class")
             };
             let Some(index) = class
-                .fields
+                .instance_fields()
                 .iter()
                 .position(|field| field.name == name.as_str())
             else {
@@ -801,6 +801,16 @@ impl BamlClassClass for PackageReflectImpl {
                 ),
             ));
         }
+        // A `@@rust_type` class, whose instance is its payload, or a
+        // capability whose fields are the runtime's own.
+        let Ok(class_fields) = class.buildable_fields() else {
+            return Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Class.instantiate cannot build `{class_ty}`: its state is the runtime's own, which only the class's own functions create"
+                ),
+            ));
+        };
         let param_count = class.generic_param_count;
         if type_args.len() != param_count {
             return Err(invalid_argument(
@@ -814,8 +824,7 @@ impl BamlClassClass for PackageReflectImpl {
         // Each declared field with its type realized against `T`'s arguments,
         // and whether a missing value may stand in as `null`.
         let program: &BexVm = vm;
-        let declared: Vec<(String, bex_vm_types::RealizedTy, bool)> = class
-            .fields
+        let declared: Vec<(String, bex_vm_types::RealizedTy, bool)> = class_fields
             .iter()
             .map(|field| {
                 let ty = program.realize_field_ty(&field.field_template, type_args);
@@ -2188,8 +2197,11 @@ pub(super) fn reflected_class_fields(
     view: Value,
 ) -> Result<Vec<(ClassField, TypeValue)>, crate::errors::VmRustFnError> {
     let (class, args) = reflected_class(vm, view)?;
-    Ok(class
-        .fields
+    let fields = match class.body {
+        bex_vm_types::ClassBody::Fields(fields) => fields,
+        bex_vm_types::ClassBody::RustType(_) => Vec::new(),
+    };
+    Ok(fields
         .into_iter()
         .map(|field| {
             let type_value = if let Some(type_value) = &field.runtime_type {

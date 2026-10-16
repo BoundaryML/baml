@@ -467,7 +467,7 @@ pub(crate) mod tests {
         Object::Class(Box::new(Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Resource")),
-            fields: vec![],
+            body: bex_vm_types::ClassBody::Fields(vec![]),
             description: None,
             alias: None,
             docstring: None,
@@ -1268,7 +1268,7 @@ pub(crate) mod tests {
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("LiveArg")),
-            fields: Vec::new(),
+            body: bex_vm_types::ClassBody::Fields(Vec::new()),
             description: None,
             alias: None,
             docstring: None,
@@ -1325,7 +1325,7 @@ pub(crate) mod tests {
                 Vec::new(),
                 baml_type::Name::new("PendingNativeArg"),
             ),
-            fields: Vec::new(),
+            body: bex_vm_types::ClassBody::Fields(Vec::new()),
             description: None,
             alias: None,
             docstring: None,
@@ -4063,44 +4063,42 @@ impl BexVm {
                 type_args_templates,
             } => {
                 let class_ptr = self.idx_to_ptr(*class_obj);
-                match value.as_object_ptr() {
-                    Some(val_ptr) => match self.get_object(val_ptr) {
-                        // Class-pointer identity (above) fixes the class; each
-                        // type arg is then related *invariantly* through the
-                        // canonical algebra (BAML generics are invariant). No
-                        // covariance is needed for a reified frame type-param
-                        // that inference widened to a union (`T = Shape | Sq`
-                        // vs a value's narrower `Shape`): the algebra knows
-                        // `Sq <: Shape` and absorbs `Shape | Sq == Shape`, so
-                        // the invariant relation already holds — the retired
-                        // guard needed a covariant band-aid only because it
-                        // could not see that membership.
-                        Object::Instance(inst) if inst.class == class_ptr => {
-                            debug_assert_eq!(
-                                type_args_templates.len(),
-                                inst.class_type_args.len(),
-                                "Class should have consistent number of generic parameters",
-                            );
-                            if type_args_templates.len() != inst.class_type_args.len() {
+                match value
+                    .as_object_ptr()
+                    .and_then(|ptr| self.get_object(ptr).class_instance())
+                {
+                    // Class-pointer identity (above) fixes the class; each
+                    // type arg is then related *invariantly* through the
+                    // canonical algebra (BAML generics are invariant). No
+                    // covariance is needed for a reified frame type-param
+                    // that inference widened to a union (`T = Shape | Sq`
+                    // vs a value's narrower `Shape`): the algebra knows
+                    // `Sq <: Shape` and absorbs `Shape | Sq == Shape`, so
+                    // the invariant relation already holds — the retired
+                    // guard needed a covariant band-aid only because it
+                    // could not see that membership.
+                    Some((instance_class, class_type_args)) if instance_class == class_ptr => {
+                        debug_assert_eq!(
+                            type_args_templates.len(),
+                            class_type_args.len(),
+                            "Class should have consistent number of generic parameters",
+                        );
+                        if type_args_templates.len() != class_type_args.len() {
+                            return Ok(false);
+                        }
+                        for (template, actual) in type_args_templates.iter().zip(class_type_args) {
+                            if !crate::type_match::class_type_arg_matches(
+                                self,
+                                template,
+                                frame_type_args,
+                                actual.as_ty(),
+                            )? {
                                 return Ok(false);
                             }
-                            for (template, actual) in
-                                type_args_templates.iter().zip(&inst.class_type_args)
-                            {
-                                if !crate::type_match::class_type_arg_matches(
-                                    self,
-                                    template,
-                                    frame_type_args,
-                                    actual.as_ty(),
-                                )? {
-                                    return Ok(false);
-                                }
-                            }
-                            Ok(true)
                         }
-                        _ => Ok(false),
-                    },
-                    None => Ok(false),
+                        Ok(true)
+                    }
+                    Some(_) | None => Ok(false),
                 }
             }
             _ => {
@@ -4111,11 +4109,16 @@ impl BexVm {
                     // because the shared `ENUM` type tag cannot tell `Color`
                     // from `Status`.
                     Ok(match value.as_object_ptr() {
-                        Some(val_ptr) => match self.get_object(val_ptr) {
-                            Object::Instance(instance) => instance.class == expected_ptr,
-                            Object::Variant(variant) => variant.enm == expected_ptr,
-                            _ => false,
-                        },
+                        Some(val_ptr) => {
+                            let object = self.get_object(val_ptr);
+                            match object.class_instance() {
+                                Some((class, _)) => class == expected_ptr,
+                                None => matches!(
+                                    object,
+                                    Object::Variant(variant) if variant.enm == expected_ptr
+                                ),
+                            }
+                        }
                         None => false,
                     })
                 } else if let Some(tag) = resolved_const.as_int() {
@@ -4713,6 +4716,10 @@ impl BexVm {
         };
         let owner = match self.get_object(ptr) {
             Object::Instance(instance) => match self.get_object(instance.class) {
+                Object::Class(class) => class.owner.package(),
+                _ => None,
+            },
+            Object::RustInstance(instance) => match self.get_object(instance.class) {
                 Object::Class(class) => class.owner.package(),
                 _ => None,
             },
@@ -5953,6 +5960,40 @@ impl BexVm {
     /// Extract an `&Instance` from a `Value` carrying a heap-object pointer.
     ///
     /// Used by generated glue code to construct `view::` structs.
+    /// The `@@rust_type` instance `value` holds.
+    pub fn as_rust_instance(
+        &self,
+        value: &Value,
+    ) -> Result<&bex_vm_types::RustInstance, VmInternalError> {
+        let mismatch = || VmInternalError::TypeError {
+            expected: Type::Object(ObjectType::RustInstance),
+            got: self.type_of(value),
+        };
+        let ptr = value.as_object_ptr().ok_or_else(mismatch)?;
+        match self.get_object(ptr) {
+            Object::RustInstance(instance) => Ok(instance),
+            _ => Err(mismatch()),
+        }
+    }
+
+    /// Allocate an instance of the `@@rust_type` class `class` at
+    /// `class_type_args`, holding `payload`.
+    pub fn alloc_rust_instance(
+        &mut self,
+        class: HeapPtr,
+        class_type_args: Box<[bex_vm_types::RealizedTy]>,
+        payload: bex_vm_types::RustPayload,
+    ) -> Value {
+        Value::object(
+            self.tlab
+                .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
+                    class,
+                    class_type_args,
+                    payload,
+                ))),
+        )
+    }
+
     pub fn as_instance(&self, value: &Value) -> Result<&Instance, VmInternalError> {
         let Some(ptr) = value.as_object_ptr() else {
             return Err(VmInternalError::TypeError {
@@ -7907,7 +7948,7 @@ impl BexVm {
     ) -> Result<Value, VmError> {
         let class_ptr = self.idx_to_ptr(plan.class_obj);
         let class_field_count = match self.get_object(class_ptr) {
-            Object::Class(class) => class.fields.len(),
+            Object::Class(class) => class.instance_fields().len(),
             other => {
                 return Err(VmInternalError::TypeError {
                     expected: ObjectType::Class.into(),
@@ -9782,8 +9823,8 @@ impl BexVm {
                             }
                             .into());
                         };
-                        let mut fields = Vec::with_capacity(class.fields.len());
-                        fields.resize(class.fields.len(), Value::NULL);
+                        let mut fields = Vec::with_capacity(class.instance_fields().len());
+                        fields.resize(class.instance_fields().len(), Value::NULL);
                         let instance_ptr =
                             self.tlab
                                 .alloc(Object::Instance(bex_vm_types::types::Instance::new(

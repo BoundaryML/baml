@@ -45,6 +45,20 @@ impl ClassCrossing {
             .map_or(Self::Fields, BoundaryClass::crossing)
     }
 
+    /// Whether the class's state is the runtime's own: a `@@rust_type` class
+    /// (which crosses by reference or by a form of its own) or a capability
+    /// such as `reflect.Package`. Such a class has no JSON form, hashes only
+    /// through an explicit implementation, and no structural builder (a
+    /// decoder, a parser, reflection) makes one. A stream and a function spec
+    /// keep the structural reading their fields give them.
+    #[must_use]
+    pub const fn runtime_owned(self) -> bool {
+        match self {
+            Self::Opaque | Self::Media(_) | Self::Prompt => true,
+            Self::Fields | Self::Stream | Self::FunctionSpec => false,
+        }
+    }
+
     /// Whether a host may build an instance from its fields.
     pub const fn host_builds(self) -> bool {
         match self {

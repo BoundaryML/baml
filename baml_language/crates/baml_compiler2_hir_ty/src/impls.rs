@@ -1645,7 +1645,12 @@ fn hash_eligible_within_depth(
             InferTy::Class(name, args) => {
                 if let Some(class) = crate::layout::class_ref_of(db, name) {
                     let params = crate::layout::class_generic_params(db, class);
-                    if params.len() != args.len() {
+                    // A `@@rust_type` class or a capability holds state the
+                    // runtime owns, which hashes only through an explicit
+                    // implementation.
+                    if crate::layout::class_crossing(db, class).runtime_owned()
+                        || params.len() != args.len()
+                    {
                         false
                     } else {
                         let bindings: FxHashMap<_, _> =

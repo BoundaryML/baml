@@ -56,7 +56,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: class_name.clone(),
-            fields: Vec::new(),
+            body: bex_vm_types::ClassBody::Fields(Vec::new()),
             description: None,
             alias: None,
             docstring: None,
@@ -572,7 +572,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
     let field_ty = RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, enum_tag));
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
         path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("FieldOwner")),
-        fields: vec![ClassField {
+        body: bex_vm_types::ClassBody::Fields(vec![ClassField {
             name: "value".to_string(),
             field_type: bex_vm_types::RuntimeTy::from(field_ty.clone()),
             field_template: bex_vm_types::TyTemplate::from(field_ty.clone()),
@@ -584,7 +584,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
             stream_done: false,
             must_exist: false,
             runtime_type: Some(TypeValue::new(field_ty)),
-        }],
+        }]),
         description: None,
         alias: None,
         docstring: None,
@@ -613,7 +613,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
     let Object::Class(class) = (unsafe { roots[0].get() }) else {
         panic!("root was not the class")
     };
-    let exact = class.fields[0]
+    let exact = class.instance_fields()[0]
         .runtime_type
         .as_ref()
         .expect("field runtime type was lost");
@@ -639,10 +639,15 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
 }
 
 /// A class with no fields, as a `@@rust_type` class is, allocated at run time.
-fn alloc_tagged_class(tlab: &mut Tlab, name: &str) -> HeapPtr {
+fn alloc_tagged_class(
+    tlab: &mut Tlab,
+    name: &str,
+    kind: baml_base::RustPayloadKind,
+    generic_param_count: usize,
+) -> HeapPtr {
     tlab.alloc(Object::Class(Box::new(Class {
         path: LocalName::new(Vec::new(), Name::new(name)),
-        fields: Vec::new(),
+        body: bex_vm_types::ClassBody::RustType(kind),
         description: None,
         alias: None,
         docstring: None,
@@ -652,7 +657,7 @@ fn alloc_tagged_class(tlab: &mut Tlab, name: &str) -> HeapPtr {
         type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
         cleanup: None,
         methods: IndexMap::new(),
-        generic_param_count: 1,
+        generic_param_count,
         owner: bex_vm_types::types::Owner::anonymous(),
         telemetry_definition: bex_vm_types::DefinitionCell::default(),
     })))
@@ -666,10 +671,10 @@ fn rust_instance_keeps_and_follows_its_class() {
     let heap = BexHeap::new(vec![]);
     let mut tlab = Tlab::new(Arc::clone(&heap));
 
-    let class = alloc_tagged_class(&mut tlab, "Tagged");
+    let class = alloc_tagged_class(&mut tlab, "Tagged", baml_base::RustPayloadKind::Foreign, 1);
     // Reached by nothing: the control for "the class survives through the
     // instance", not through anything else.
-    let orphan = alloc_tagged_class(&mut tlab, "Orphan");
+    let orphan = alloc_tagged_class(&mut tlab, "Orphan", baml_base::RustPayloadKind::Foreign, 1);
     let instance = tlab.alloc(Object::RustInstance(RustInstance::new(
         class,
         Box::new([RealizedTy::int()]),
@@ -863,7 +868,7 @@ fn class_method_bodies_are_traced_and_forwarded() {
     );
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
         path: class_name.clone(),
-        fields: Vec::new(),
+        body: bex_vm_types::ClassBody::Fields(Vec::new()),
         description: None,
         alias: None,
         docstring: None,
@@ -951,7 +956,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
     let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
         path: class_name,
-        fields: Vec::new(),
+        body: bex_vm_types::ClassBody::Fields(Vec::new()),
         description: None,
         alias: None,
         docstring: None,
@@ -1128,7 +1133,7 @@ fn class_with_cleanup(name: &str, cleanup: bex_vm_types::HeapPtr) -> Class {
     );
     Class {
         path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new(name)),
-        fields: Vec::new(),
+        body: bex_vm_types::ClassBody::Fields(Vec::new()),
         description: None,
         alias: None,
         docstring: None,

@@ -216,7 +216,7 @@ impl<'p> ProgramIndex<'p> {
         let Object::Class(class) = &self.program.objects[ObjectIndex::from_raw(object)] else {
             return None;
         };
-        Some((object, class.fields.len()))
+        Some((object, class.declared_fields().len()))
     }
 
     /// Find a pooled generic function with the program's anchored type arguments.

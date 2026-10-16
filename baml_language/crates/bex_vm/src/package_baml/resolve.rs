@@ -561,14 +561,20 @@ impl<'vm> ImplResolver<'vm> {
                 .iter()
                 .all(|member| self.hash_eligible(member, interface, active, obligations)),
             RealizedTy::Class(head, args) => match self.vm.get_object(head.ptr()) {
-                bex_vm_types::Object::Class(class) => class.fields.iter().all(|field| {
-                    field
-                        .field_template
-                        .substitute(args, self.vm)
-                        .is_ok_and(|field_ty| {
-                            self.hash_eligible(&field_ty, interface, active, obligations)
+                // Only a class built from its fields hashes by them; the
+                // runtime's own state hashes only through an explicit impl.
+                bex_vm_types::Object::Class(class) => {
+                    class.buildable_fields().is_ok_and(|fields| {
+                        fields.iter().all(|field| {
+                            field
+                                .field_template
+                                .substitute(args, self.vm)
+                                .is_ok_and(|field_ty| {
+                                    self.hash_eligible(&field_ty, interface, active, obligations)
+                                })
                         })
-                }),
+                    })
+                }
                 _ => false,
             },
             RealizedTy::TypeAlias(head) => match self.vm.get_object(head.ptr()) {

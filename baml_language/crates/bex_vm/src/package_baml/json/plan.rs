@@ -57,7 +57,7 @@ impl ClassPlan {
     /// The declared name of field `index`, for messages.
     pub(super) fn field_name(&self, vm: &BexVm, index: usize) -> String {
         match vm.get_object(self.class) {
-            Object::Class(class) => class.fields[index].name.clone(),
+            Object::Class(class) => class.instance_fields()[index].name.clone(),
             _ => self.fields[index].key.clone(),
         }
     }
@@ -74,8 +74,12 @@ impl ClassPlan {
         let Object::Class(declaration) = vm.get_object(class) else {
             return Err(baml_type::HeadDisplay::head_display_name(&head));
         };
-        let fields: Vec<FieldPlan> = declaration
-            .fields
+        // A class only the runtime builds has no JSON form, which the
+        // analysis reports before any plan is made.
+        let Ok(declared) = declaration.buildable_fields() else {
+            return Err(baml_type::HeadDisplay::head_display_name(&head));
+        };
+        let fields: Vec<FieldPlan> = declared
             .iter()
             .map(|field| {
                 // Substitute class-level type-args into the field's template so

@@ -191,7 +191,7 @@ impl Scratch {
                             b.described_instance(
                                 declaration,
                                 type_arguments,
-                                (0..instance.field_len()).zip(&class.fields),
+                                (0..instance.field_len()).zip(class.instance_fields()),
                                 |leaves, (at, field)| {
                                     let value =
                                         self.add(leaves, instance.load_field(at), depth + 1);
@@ -859,7 +859,7 @@ mod tests {
                 Vec::new(),
                 baml_type::Name::new("TestClass"),
             ),
-            fields: vec![
+            body: bex_vm_types::ClassBody::Fields(vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
                     field_type: baml_type::RuntimeTy::Int,
@@ -886,7 +886,7 @@ mod tests {
                     skip: false,
                     runtime_type: None,
                 },
-            ],
+            ]),
             description: None,
             alias: None,
             docstring: None,

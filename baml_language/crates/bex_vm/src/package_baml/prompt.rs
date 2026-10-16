@@ -207,9 +207,12 @@ fn prompt_role(vm: &BexVm, value: Value) -> Option<PromptRole> {
                 .is_class(StdlibClass::PromptRole, class.type_tag) =>
         {
             (
-                class.fields.iter().position(|field| field.name == "name")?,
                 class
-                    .fields
+                    .instance_fields()
+                    .iter()
+                    .position(|field| field.name == "name")?,
+                class
+                    .instance_fields()
                     .iter()
                     .position(|field| field.name == "metadata")?,
             )

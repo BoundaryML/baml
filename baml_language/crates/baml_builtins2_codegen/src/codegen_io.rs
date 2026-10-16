@@ -202,10 +202,20 @@ fn filter_io_class_defs<'a>(
     class_defs: &'a [NativeClassDef],
 ) -> Vec<&'a NativeClassDef> {
     let ns_prefixes = io_namespace_prefixes(io_builtins);
-    class_defs
+    let io_class_defs: Vec<&NativeClassDef> = class_defs
         .iter()
         .filter(|cd| ns_prefixes.contains(&cd.namespace_prefix))
-        .collect()
+        .collect();
+    for cd in &io_class_defs {
+        assert!(
+            !matches!(cd.body, crate::types::NativeClassBody::RustType(_)),
+            "`@@rust_type` class `{}.{}` is in a sys-op namespace, and a `@@rust_type` class has \
+             no sys-op form yet",
+            cd.namespace_prefix,
+            cd.name
+        );
+    }
+    io_class_defs
 }
 
 /// Build a map from class name → namespace segment (e.g., "File" → "fs").
@@ -1060,7 +1070,7 @@ fn emit_view_struct(
 
     // Field accessors
     let accessors: Vec<TokenStream> = cd
-        .fields
+        .fields()
         .iter()
         .map(|field| {
             let mut needs_heap = false;
@@ -1094,7 +1104,7 @@ fn emit_view_struct(
     let owned_path = quote! { #owned::#ns_ident::#name_ident };
 
     let into_owned_fields: Vec<TokenStream> = cd
-        .fields
+        .fields()
         .iter()
         .map(|field| {
             let field_ident = rust_field_ident(&field.name);
@@ -1184,7 +1194,7 @@ fn compute_non_defaultable_classes(
     // defaultable — `Vec`/`Option` are `Default` — so only direct fields seed.)
     let mut non_defaultable: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (cd, full_name) in &all_classes {
-        if cd.fields.iter().any(|f| {
+        if cd.fields().iter().any(|f| {
             matches!(f.field_type, BamlType::RustType)
                 || matches!(&f.field_type, BamlType::Named(name) if name == "type")
         }) {
@@ -1201,7 +1211,7 @@ fn compute_non_defaultable_classes(
                 continue;
             }
             if cd
-                .fields
+                .fields()
                 .iter()
                 .any(|f| references_non_defaultable(&f.field_type, &non_defaultable))
             {
@@ -1270,7 +1280,7 @@ fn emit_owned_struct(
 
     // Struct fields
     let struct_fields: Vec<TokenStream> = cd
-        .fields
+        .fields()
         .iter()
         .map(|field| {
             let field_ident = rust_field_ident(&field.name);
@@ -1281,7 +1291,7 @@ fn emit_owned_struct(
 
     // AsBexExternalValue impl — indexmap entries
     let as_bex_entries: Vec<TokenStream> = cd
-        .fields
+        .fields()
         .iter()
         .map(|field| {
             let field_name_str = &field.name;
@@ -1297,7 +1307,7 @@ fn emit_owned_struct(
 
     // from_external — field extraction
     let from_external_fields: Vec<TokenStream> = cd
-        .fields
+        .fields()
         .iter()
         .map(|field| {
             let field_ident = rust_field_ident(&field.name);
@@ -2402,7 +2412,7 @@ fn emit_runtime_io_handles(
             let mut pub_fields = Vec::new();
             let mut from_raw_fields = Vec::new();
             if let Some(cd) = class_def {
-                for field in &cd.fields {
+                for field in cd.fields() {
                     if field.field_type == BamlType::RustType {
                         continue;
                     }
@@ -2938,7 +2948,7 @@ mod tests {
     use super::{CodegenPaths, emit_owned_struct, emit_view_struct};
     use crate::{
         rust_ident::rust_field_ident,
-        types::{BamlType, NativeClassDef, NativeClassField},
+        types::{BamlType, NativeClassBody, NativeClassDef, NativeClassField},
     };
 
     #[test]
@@ -2961,16 +2971,18 @@ mod tests {
             name: "KeywordFields".to_string(),
             namespace_prefix: "baml.test".to_string(),
             generic_params: Vec::new(),
-            fields: BAML_FIELD_NAMES
-                .iter()
-                .copied()
-                .enumerate()
-                .map(|(index, name)| NativeClassField {
-                    name: name.to_string(),
-                    field_type: BamlType::Bool,
-                    index,
-                })
-                .collect(),
+            body: NativeClassBody::Fields(
+                BAML_FIELD_NAMES
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .map(|(index, name)| NativeClassField {
+                        name: name.to_string(),
+                        field_type: BamlType::Bool,
+                        index,
+                    })
+                    .collect(),
+            ),
             source_file: "<test>/keywords.baml".to_string(),
         };
         let class_ns_map = BTreeMap::new();

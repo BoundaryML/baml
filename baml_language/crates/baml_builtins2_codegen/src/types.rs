@@ -105,12 +105,15 @@ pub struct Receiver {
     /// (e.g. `"time"`, `"media"`, `""` for a root-level class). Used to build
     /// the `view::<ns>::<Class>` path when the receiver is passed as a view.
     pub namespace: String,
-    /// Whether the class is backed by `Object::Instance` with declared fields
-    /// (i.e. it has a generated `view::` struct). True for classes like
-    /// `time.Instant` / media classes; false for dedicated-variant types
-    /// (`Array`/`Map`/`String`/`Uint8Array`), opaque classes (`Future`), and
-    /// primitives — those keep a type-erased `&Value` receiver.
+    /// Whether the class has a generated `view::` struct: it is backed by
+    /// `Object::Instance` with declared fields (`time.Instant`, the media
+    /// classes) or by `Object::RustInstance` (a `@@rust_type` class). False for
+    /// dedicated-variant types (`Array`/`Map`/`String`/`Uint8Array`), opaque
+    /// classes (`Future`), and primitives — those keep a type-erased `&Value`
+    /// receiver.
     pub instance_backed: bool,
+    /// `@@rust_type`: the receiver is an `Object::RustInstance` of this kind.
+    pub rust_type: Option<baml_base::RustPayloadKind>,
     /// Generic type parameters of the class (e.g. `["T"]` for `Array<T>`).
     pub class_generics: Vec<String>,
     pub receiver_type: ReceiverType,
@@ -195,10 +198,28 @@ pub struct NativeClassDef {
     pub namespace_prefix: String,
     /// Generic type parameters (e.g. `["T"]` for `Array<T>`).
     pub generic_params: Vec<String>,
-    /// Fields in declaration order.
-    pub fields: Vec<NativeClassField>,
+    pub body: NativeClassBody,
     /// Virtual path of the `.baml` source file (e.g. `"<builtin>/baml/ns_fs/fs.baml"`).
     pub source_file: String,
+}
+
+/// What a builtin class holds: fields, or Rust-owned state in their place.
+#[derive(Debug, Clone)]
+pub enum NativeClassBody {
+    /// Fields in declaration order.
+    Fields(Vec<NativeClassField>),
+    /// `@@rust_type`: an `Object::RustInstance` whose payload is of this kind.
+    RustType(baml_base::RustPayloadKind),
+}
+
+impl NativeClassDef {
+    /// The fields, of which a `@@rust_type` class has none.
+    pub fn fields(&self) -> &[NativeClassField] {
+        match &self.body {
+            NativeClassBody::Fields(fields) => fields,
+            NativeClassBody::RustType(_) => &[],
+        }
+    }
 }
 
 #[cfg(test)]

@@ -323,7 +323,7 @@ fn children(vm: &BexVm, ptr: HeapPtr, options: WriteOptions) -> Vec<Value> {
             {
                 instance
                     .field_values()
-                    .zip(&class.fields)
+                    .zip(class.instance_fields())
                     .filter(|(value, field)| options.writes_field(field, *value))
                     .map(|(value, _)| value)
                     .collect()
@@ -685,6 +685,11 @@ impl Walker<'_, '_> {
             Object::Future(_) => {
                 Shape::Unserializable("a future has no JSON form (await it first)", "future")
             }
+            // Its state lives in the runtime, which gives it no form outside.
+            Object::RustInstance(_) => Shape::Unserializable(
+                "a value whose state lives in the runtime has no JSON form",
+                "unserializable",
+            ),
             _ => Shape::Unserializable("value has no json representation", "unserializable"),
         };
         match shape {
@@ -868,7 +873,7 @@ impl Walker<'_, '_> {
                 TypeHead::new(class, declaration.type_tag),
                 (!self.plans.contains_key(&class)).then(|| {
                     let keys: Vec<String> = declaration
-                        .fields
+                        .instance_fields()
                         .iter()
                         .map(|field| {
                             self.options
@@ -877,15 +882,20 @@ impl Walker<'_, '_> {
                                 .to_owned()
                         })
                         .collect();
-                    let shared_keys = declaration.fields.iter().enumerate().any(|(i, field)| {
-                        self.options.naming.shows(field.skip)
-                            && declaration.fields[..i]
-                                .iter()
-                                .enumerate()
-                                .any(|(j, other)| {
-                                    self.options.naming.shows(other.skip) && keys[i] == keys[j]
-                                })
-                    });
+                    let shared_keys =
+                        declaration
+                            .instance_fields()
+                            .iter()
+                            .enumerate()
+                            .any(|(i, field)| {
+                                self.options.naming.shows(field.skip)
+                                    && declaration.instance_fields()[..i].iter().enumerate().any(
+                                        |(j, other)| {
+                                            self.options.naming.shows(other.skip)
+                                                && keys[i] == keys[j]
+                                        },
+                                    )
+                            });
                     WritePlan { keys, shared_keys }
                 }),
             ),
@@ -907,7 +917,7 @@ impl Walker<'_, '_> {
         };
         let mut children: Vec<(Option<Slot>, Value)> = instance
             .field_values()
-            .zip(&declaration.fields)
+            .zip(declaration.instance_fields())
             .enumerate()
             .filter(|(_, (value, field))| self.options.writes_field(field, *value))
             .map(|(index, (value, _))| (Some(Slot::Field(class, index)), value))

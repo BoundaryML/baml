@@ -67,15 +67,19 @@ macro_rules! walk_object_heads {
         /// Call `f` on every head `object` reaches.
         pub fn $name(object: &$($mut)? Object, f: &mut impl FnMut(&$($mut)? TypeHead)) {
             match object {
-                Object::Class(class) => {
-                    for field in &$($mut)? class.fields {
-                        field.field_type.$visit(f);
-                        field.field_template.$visit(f);
-                        if let Some(exact) = &$($mut)? field.runtime_type {
-                            exact.ty.$visit(f);
+                Object::Class(class) => match &$($mut)? class.body {
+                    crate::ClassBody::Fields(fields) => {
+                        for field in fields {
+                            field.field_type.$visit(f);
+                            field.field_template.$visit(f);
+                            if let Some(exact) = &$($mut)? field.runtime_type {
+                                exact.ty.$visit(f);
+                            }
                         }
                     }
-                }
+                    // A kind names no type.
+                    crate::ClassBody::RustType(_) => {}
+                },
                 Object::Interface(iface) => {
                     for (_, bounds) in &$($mut)? iface.args {
                         for bound in bounds {

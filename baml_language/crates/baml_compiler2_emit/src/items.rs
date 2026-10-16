@@ -145,10 +145,19 @@ pub(crate) fn build_class_object<'db>(
                 runtime_type: None,
             }
         })
-        .collect();
+        .collect::<Vec<_>>();
+    // A tagged class declares no fields (the checker refuses any), so its
+    // body is its kind alone.
+    let body = match class.attrs.rust_type {
+        Some(kind) => {
+            debug_assert!(fields.is_empty(), "a `@@rust_type` class declared fields");
+            bex_vm_types::ClassBody::RustType(kind)
+        }
+        None => bex_vm_types::ClassBody::Fields(fields),
+    };
     Class {
         path: crate::refs::item_path(&head),
-        fields,
+        body,
         description: class.attrs.schema.description.clone(),
         alias: class.attrs.schema.alias.clone(),
         docstring: class.docstring.clone(),

@@ -619,7 +619,7 @@ mod tests {
         )));
         let mut declaration = crate::Object::Class(Box::new(crate::types::Class {
             path: crate::types::LocalName::new(vec![], baml_base::Name::new("Person")),
-            fields: vec![],
+            body: crate::ClassBody::Fields(vec![]),
             description: None,
             alias: None,
             docstring: None,
@@ -660,7 +660,7 @@ mod tests {
         let type_tag = TypeTag::fresh_dynamic();
         let mut declaration = crate::Object::Class(Box::new(crate::types::Class {
             path: crate::types::LocalName::new(vec![], baml_base::Name::new("Widget")),
-            fields: vec![],
+            body: crate::ClassBody::Fields(vec![]),
             description: None,
             alias: None,
             docstring: None,

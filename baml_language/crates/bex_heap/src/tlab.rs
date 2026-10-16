@@ -169,10 +169,12 @@ impl Tlab {
             self.refill();
         }
 
-        // BEP-042: an instance of a class with a finalizer joins the
-        // collector's finalizable list. Checked before the write moves `obj`.
         // SAFETY: the allocating VM holds a heap permit, so an instance's
         // class object is live.
+        unsafe { debug_assert_rust_instance_fits(&obj) };
+        // BEP-042: an instance of a class with a finalizer joins the
+        // collector's finalizable list. Checked before the write moves `obj`.
+        // SAFETY: as above.
         let finalizable = unsafe { BexHeap::needs_finalizer_registration(&obj) };
 
         let global_idx = self.alloc_ptr;
@@ -232,6 +234,8 @@ impl Tlab {
         self.charge(&mut obj);
         // SAFETY: the publishing VM holds a heap permit, so an instance's
         // class object is live.
+        unsafe { debug_assert_rust_instance_fits(&obj) };
+        // SAFETY: as above.
         let finalizable = unsafe { crate::Finalizable::of(&obj) };
         let ptr = reservation.ptr;
         // SAFETY: the caller guarantees the slot is still the one reserved. It
@@ -553,6 +557,32 @@ pub trait TlabHolder {
     }
 }
 
+/// Asserts that a `@@rust_type` instance entering the heap fits its class
+/// ([`RustInstance::fits`](bex_vm_types::RustInstance::fits)).
+///
+/// # Safety
+///
+/// If `object` is a `RustInstance`, its class pointer names a live object.
+#[inline]
+unsafe fn debug_assert_rust_instance_fits(object: &Object) {
+    if cfg!(debug_assertions)
+        && let Object::RustInstance(instance) = object
+    {
+        // SAFETY: the caller guarantees the class object is live.
+        let Object::Class(class) = (unsafe { instance.class.get() }) else {
+            panic!("a `@@rust_type` instance's class pointer names no class")
+        };
+        assert!(
+            instance.fits(class),
+            "a `{}` instance holds a {:?} payload at {} type argument(s), which its class \
+             does not declare",
+            class.path,
+            instance.payload.kind(),
+            instance.class_type_args.len(),
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -751,7 +781,7 @@ mod tests {
                 Vec::new(),
                 baml_type::Name::new("TestClass"),
             ),
-            fields: vec![
+            body: bex_vm_types::ClassBody::Fields(vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
                     field_type: baml_type::RuntimeTy::Int,
@@ -778,7 +808,7 @@ mod tests {
                     must_exist: false,
                     runtime_type: None,
                 },
-            ],
+            ]),
             description: None,
             alias: None,
             docstring: None,

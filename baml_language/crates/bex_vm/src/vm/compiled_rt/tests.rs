@@ -1507,7 +1507,7 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
                 Vec::new(),
                 baml_type::Name::new("PendingNativeArg"),
             ),
-            fields: Vec::new(),
+            body: bex_vm_types::ClassBody::Fields(Vec::new()),
             description: None,
             alias: None,
             docstring: None,

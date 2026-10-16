@@ -269,6 +269,9 @@ fn instance_field(vm: &BexVm, value: Value, name: &str) -> Option<Value> {
     let Object::Class(class) = vm.get_object(instance.class) else {
         return None;
     };
-    let index = class.fields.iter().position(|field| field.name == name)?;
+    let index = class
+        .declared_fields()
+        .iter()
+        .position(|field| field.name == name)?;
     instance.try_load_field(index)
 }

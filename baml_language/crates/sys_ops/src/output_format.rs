@@ -1565,13 +1565,16 @@ fn walk_ty(
                 }
             }
 
-            if let Some(class_def) = find_class_definition(ctx, type_name) {
+            // A class only the runtime builds has no JSON form: the analysis
+            // keeps it out of every format, so it has no definition to show.
+            if let Some(class_def) = find_class_definition(ctx, type_name)
+                && let sys_types::ClassDefinitionBody::Fields(class_fields) = &class_def.body
+            {
                 // `field_type` is the erased/runtime shape used by older
                 // callers. Emitted classes also carry a symbolic template so
                 // a generic class visited as `Outer<Choice>` can substitute
                 // `T` through nested positions such as `Inner<T>.values`.
-                let field_types: Vec<SapTy> = class_def
-                    .fields
+                let field_types: Vec<SapTy> = class_fields
                     .iter()
                     .filter(|f| !f.skip)
                     .map(|f| {
@@ -1581,8 +1584,7 @@ fn walk_ty(
                             .unwrap_or_else(|| f.field_type.clone())
                     })
                     .collect();
-                let fields: Vec<self::ClassField> = class_def
-                    .fields
+                let fields: Vec<self::ClassField> = class_fields
                     .iter()
                     .filter(|f| !f.skip)
                     .zip(field_types.iter())
@@ -1614,8 +1616,7 @@ fn walk_ty(
                     arity: type_args.len(),
                     shaped: false,
                 });
-                for (field, field_type) in class_def
-                    .fields
+                for (field, field_type) in class_fields
                     .iter()
                     .filter(|field| !field.skip)
                     .zip(&field_types)
@@ -2729,7 +2730,7 @@ mod tests {
             description: None,
             docstring: None,
             alias: None,
-            fields,
+            body: sys_types::ClassDefinitionBody::Fields(fields),
             stream_done: false,
         }
     }

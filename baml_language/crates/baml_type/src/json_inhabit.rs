@@ -80,10 +80,14 @@ pub enum JsonStatus {
 /// A class as a reader's definitions describe it, at the type arguments it
 /// was asked for.
 #[derive(Clone, Debug)]
-pub struct JsonClass<H: Head> {
-    /// Every field the class declares, `@skip` ones included, in declaration
-    /// order.
-    pub fields: Vec<JsonField<H>>,
+pub enum JsonClass<H: Head> {
+    /// A class built from its fields: every field it declares, `@skip` ones
+    /// included, in declaration order.
+    Fields(Vec<JsonField<H>>),
+    /// A class whose state is the runtime's own (a `@@rust_type` class, a
+    /// capability such as `reflect.Package`): it has values, and none of them
+    /// has a JSON form.
+    RuntimeOwned,
 }
 
 /// One field of a [`JsonClass`].
@@ -194,6 +198,8 @@ struct ClassBody<H: Head> {
 #[derive(Clone, Debug)]
 enum DefBody<H: Head> {
     Class(ClassBody<H>),
+    /// A [`JsonClass::RuntimeOwned`] class.
+    RuntimeOwned,
     Alias(RuntimeTy<H>),
     /// A class or enum JSON holds as this type instead
     /// ([`JsonDefs::shape`]): it has the status of that type.
@@ -392,6 +398,7 @@ impl<H: Head> JsonInhabitance<H> {
                     DefBody::Alias(target) | DefBody::Shaped(target) => {
                         self.witness_walk(target, path, seen)
                     }
+                    DefBody::RuntimeOwned => WitnessCause::Leaf(ty),
                 }
             }
         }
@@ -458,10 +465,16 @@ impl<H: Head> JsonInhabitance<H> {
                     self.insert(id, DefBody::Shaped(shape.clone()));
                     return self.discover(&shape, defs, path);
                 }
-                let class = defs.class(head, &id_args(&id)).map_err(located(path))?;
+                let class_fields = match defs.class(head, &id_args(&id)).map_err(located(path))? {
+                    JsonClass::Fields(fields) => fields,
+                    JsonClass::RuntimeOwned => {
+                        self.insert(id, DefBody::RuntimeOwned);
+                        return Ok(());
+                    }
+                };
                 let mut fields = Vec::new();
                 let mut unfillable = None;
-                for field in class.fields {
+                for field in class_fields {
                     if self.naming.shows(field.skip) {
                         fields.push((field.name, field.ty));
                     } else if unfillable.is_none() {
@@ -678,6 +691,7 @@ impl<H: Head> JsonInhabitance<H> {
                 .iter()
                 .all(|(_, field_ty)| self.inhabited(field_ty)),
             DefBody::Alias(target) | DefBody::Shaped(target) => self.inhabited(target),
+            DefBody::RuntimeOwned => true,
         }
     }
 
@@ -700,6 +714,7 @@ impl<H: Head> JsonInhabitance<H> {
                 JsonStatus::Json
             }
             DefBody::Alias(target) | DefBody::Shaped(target) => self.status(target),
+            DefBody::RuntimeOwned => JsonStatus::NoJson,
         }
     }
 
@@ -726,6 +741,7 @@ impl<H: Head> JsonInhabitance<H> {
                         .all(|(_, field_ty)| self.finite(field_ty, finite))
             }
             DefBody::Alias(target) | DefBody::Shaped(target) => self.finite(target, finite),
+            DefBody::RuntimeOwned => false,
         }
     }
 }
@@ -843,10 +859,12 @@ fn has_empty_value_within<H: Head, D: JsonDefs<H>>(
             if within.contains(&id) {
                 return Ok(false);
             }
-            let class = defs.class(head, &id_args(&id))?;
+            let JsonClass::Fields(fields) = defs.class(head, &id_args(&id))? else {
+                return Ok(false);
+            };
             within.push(id);
             let mut all = true;
-            for field in &class.fields {
+            for field in &fields {
                 if !has_empty_value_within(defs, &field.ty, within)? {
                     all = false;
                     break;
@@ -909,12 +927,18 @@ mod tests {
     #[derive(Default)]
     struct Defs {
         classes: FxHashMap<TypeName, Vec<(&'static str, bool, RuntimeTy)>>,
+        runtime_owned: FxHashSet<TypeName>,
         enums: FxHashMap<TypeName, Vec<(&'static str, bool)>>,
     }
 
     impl Defs {
         fn class(mut self, name: &str, fields: Vec<(&'static str, bool, RuntimeTy)>) -> Self {
             self.classes.insert(head(name), fields);
+            self
+        }
+
+        fn runtime_owned(mut self, name: &str) -> Self {
+            self.runtime_owned.insert(head(name));
             self
         }
 
@@ -928,9 +952,12 @@ mod tests {
         type Error = String;
 
         fn class(&self, head: &TypeName, _: &[RuntimeTy]) -> Result<JsonClass<TypeName>, String> {
+            if self.runtime_owned.contains(head) {
+                return Ok(JsonClass::RuntimeOwned);
+            }
             let fields = self.classes.get(head).ok_or("unknown class")?;
-            Ok(JsonClass {
-                fields: fields
+            Ok(JsonClass::Fields(
+                fields
                     .iter()
                     .map(|(name, skip, ty)| JsonField {
                         name: (*name).to_string(),
@@ -939,7 +966,7 @@ mod tests {
                         ty: ty.clone(),
                     })
                     .collect(),
-            })
+            ))
         }
 
         fn variants(&self, head: &TypeName) -> Result<Vec<JsonVariant>, String> {
@@ -1017,6 +1044,33 @@ mod tests {
         ] {
             assert_eq!(status(&defs, &ty, JsonNaming::Aliased), expected, "{ty}");
         }
+    }
+
+    #[test]
+    fn a_runtime_owned_class_has_values_but_no_json_form() {
+        let defs = Defs::default()
+            .runtime_owned("Regex")
+            .class("Holds", vec![("pattern", false, class("Regex"))])
+            .class("Skips", vec![("pattern", true, class("Regex"))]);
+        for (ty, expected) in [
+            (class("Regex"), JsonStatus::NoJson),
+            (class("Holds"), JsonStatus::NoJson),
+            (RuntimeTy::list(class("Regex")), JsonStatus::NoJson),
+            (
+                RuntimeTy::union([class("Regex"), RuntimeTy::string()]),
+                JsonStatus::Json,
+            ),
+            (RuntimeTy::optional(class("Regex")), JsonStatus::Json),
+        ] {
+            assert_eq!(status(&defs, &ty, JsonNaming::Aliased), expected, "{ty}");
+        }
+        // A `@skip` field JSON leaves out needs an empty value, and a
+        // runtime-owned class has none.
+        assert_eq!(
+            status(&defs, &class("Skips"), JsonNaming::Aliased),
+            JsonStatus::NoJson
+        );
+        assert_eq!(reason(&defs, &class("Regex")), "`Regex` has no JSON form");
     }
 
     #[test]

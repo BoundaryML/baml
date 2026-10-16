@@ -945,7 +945,7 @@ fn build_group(
                 Vec::new(),
                 baml_type::Name::new(node.name.as_str()),
             ),
-            fields: Vec::new(),
+            body: bex_vm_types::ClassBody::Fields(Vec::new()),
             description: None,
             alias: None,
             docstring: None,
@@ -1043,7 +1043,7 @@ fn build_group(
         let Object::Class(class) = &mut *metered else {
             unreachable!("builder class placeholder changed variant")
         };
-        class.fields = class_fields;
+        class.body = bex_vm_types::ClassBody::Fields(class_fields);
     }
 
     register_class_witnesses(vm, plans[&start_id].ptr, rules);

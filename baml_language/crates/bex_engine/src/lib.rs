@@ -2257,11 +2257,12 @@ impl BexEngine {
                     identity.name().to_string(),
                     btel_snapshot::host::HostDeclaration {
                         identity: identity.clone(),
-                        fields: definition
-                            .fields
-                            .iter()
-                            .map(|field| field.name.clone())
-                            .collect(),
+                        fields: match &definition.body {
+                            sys_types::ClassDefinitionBody::Fields(fields) => {
+                                fields.iter().map(|field| field.name.clone()).collect()
+                            }
+                            sys_types::ClassDefinitionBody::RuntimeOwned => Vec::new(),
+                        },
                         variants: None,
                     },
                 )
@@ -7226,7 +7227,7 @@ impl BexEngine {
                     name: name.name.clone(),
                     docstring: class.docstring.clone(),
                     fields: class
-                        .fields
+                        .declared_fields()
                         .iter()
                         .map(|field| {
                             Ok((
@@ -7315,9 +7316,10 @@ impl BexEngine {
                 .iter()
                 .zip(rule.field_links.iter())
                 .map(|(field, slot)| {
-                    let class_field = class.fields.get(*slot as usize).ok_or_else(|| {
-                        internal("a witness rule has an out-of-range field link".to_string())
-                    })?;
+                    let class_field =
+                        class.declared_fields().get(*slot as usize).ok_or_else(|| {
+                            internal("a witness rule has an out-of-range field link".to_string())
+                        })?;
                     Ok((field.name.clone(), baml_type::Name::new(&class_field.name)))
                 })
                 .collect::<Result<Vec<_>, EngineError>>()?;
@@ -8179,7 +8181,7 @@ mod type_identity_tests {
             .alloc(Object::Class(Box::new(bex_vm_types::types::Class {
                 declared_crossing: baml_type::ClassCrossing::Fields,
                 path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Foo")),
-                fields: Vec::new(),
+                body: bex_vm_types::ClassBody::Fields(Vec::new()),
                 description: None,
                 alias: None,
                 docstring: None,
@@ -8304,7 +8306,7 @@ mod type_identity_tests {
                         Vec::new(),
                         baml_type::Name::new("Foo"),
                     ),
-                    fields: Vec::new(),
+                    body: bex_vm_types::ClassBody::Fields(Vec::new()),
                     description: None,
                     alias: None,
                     docstring: None,

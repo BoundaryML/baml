@@ -116,6 +116,10 @@ impl JsonDefs<DeclName> for CompilerDefs<'_> {
         let DeclRef::Source(class) = crate::layout::class_ref_of(self.db, head).ok_or(())? else {
             return Err(());
         };
+        // A `@@rust_type` class or a capability is built only by the runtime.
+        if crate::layout::class_crossing(self.db, DeclRef::Source(class)).runtime_owned() {
+            return Ok(JsonClass::RuntimeOwned);
+        }
         let bindings: FxHashMap<_, Ty> = crate::lower::class_generic_frame(self.db, class)
             .into_iter()
             .zip(args.iter().map(Ty::from))
@@ -132,7 +136,7 @@ impl JsonDefs<DeclName> for CompilerDefs<'_> {
                 })
             })
             .collect::<Result<_, ()>>()?;
-        Ok(JsonClass { fields })
+        Ok(JsonClass::Fields(fields))
     }
 
     fn variants(&self, head: &DeclName) -> Result<Vec<JsonVariant>, ()> {
@@ -252,10 +256,10 @@ impl Walk<'_, '_> {
                 if !seen.insert(ty.clone()) {
                     return;
                 }
-                let Ok(class) = self.defs.class(head, args) else {
+                let Ok(JsonClass::Fields(fields)) = self.defs.class(head, args) else {
                     return;
                 };
-                for field in class.fields.iter().filter(|field| !field.skip) {
+                for field in fields.iter().filter(|field| !field.skip) {
                     if args.is_empty() && self.only_null(&field.ty, &mut FxHashSet::default()) {
                         out.push((head.clone(), Name::new(&field.name)));
                     }

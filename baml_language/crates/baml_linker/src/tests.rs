@@ -90,7 +90,7 @@ fn func_with_constants(name: &str, refs: &[usize]) -> Object {
 fn class(name: &str) -> Object {
     Object::Class(Box::new(Class {
         path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new(name)),
-        fields: Vec::new(),
+        body: bex_vm_types::ClassBody::Fields(Vec::new()),
         description: None,
         alias: None,
         docstring: None,
