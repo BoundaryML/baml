@@ -26,18 +26,8 @@ interface Concrete {
     /// interfaces, and generic type parameters keep the `reflect.Type.of<T>()`
     /// form. A type that declares its own `type` member keeps resolving to it.
     function type() -> reflect.Type throws never {
-        root._type_of<Self>()
+        reflect.Type.of<Self>()
     }
-}
-
-/// (internal) The runtime type value of `T`, the same value as
-/// `reflect.Type.of<T>()`. `baml` cannot call into the `reflect` package,
-/// which depends on `baml`, so `Concrete.type()` reifies its type argument
-/// natively.
-//baml:mut_vm
-//baml:fallible
-function _type_of<T>() -> reflect.Type throws never {
-    $rust_function
 }
 
 implement<T> Concrete for T {

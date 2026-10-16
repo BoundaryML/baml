@@ -6,7 +6,7 @@ use std::{
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     HeapPtr, ObjectType, ValueKind,
-    types::{Array, AtomicValueSlot, Instance, Map, Object, TypeValue, Value},
+    types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
 };
 
 use super::{
@@ -26,21 +26,6 @@ impl BamlPackageBaml for PackageBamlImpl {
     fn deep_copy(vm: &mut BexVm, value: &Value) -> Result<Value, VmRustFnError> {
         let mut copied_objects = HashMap::new();
         Ok(deep_copy_value_recursive(vm, *value, &mut copied_objects)?)
-    }
-
-    /// `baml._type_of<T>()` — `Concrete.type()`'s body: `T` as a runtime type
-    /// value, read from the call's type arguments like `json.from_string<T>`.
-    fn _type_of(vm: &mut BexVm) -> Result<Value, VmRustFnError> {
-        let ty = vm
-            .current_call_type_args()
-            .first()
-            .cloned()
-            .ok_or_else(|| {
-                VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
-                    name: "baml._type_of: missing type argument".to_string(),
-                })
-            })?;
-        Ok(Value::object(vm.tlab.alloc_type(TypeValue::new(ty))))
     }
 
     /// `baml._is_primitive_array(arr)` — `Sortable.sort`'s dispatch guard:
