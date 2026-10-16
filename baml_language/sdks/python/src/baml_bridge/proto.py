@@ -503,6 +503,9 @@ def _set_inbound_value(
                 return
 
         cv = inbound_value.class_value
+        # Mark the oneof present even when no field entry follows (every
+        # field unset): an unset oneof is `null` on the wire.
+        cv.SetInParent()
         # Bind the class via sparse node-level `value_type`. A parameterized
         # Pydantic generic (`Box[int]`) carries its exact concrete args. An
         # unparameterized generic carries only nominal class identity (no
@@ -521,7 +524,17 @@ def _set_inbound_value(
         # then see them as `Map` instead of `Instance`, so a
         # `Box<Box<int>>` round-trip collapses into bare dicts at the
         # second level.
+        #
+        # A field the caller never set (not in `model_fields_set`) that still
+        # holds its `None` default is left out, so BAML sees it absent rather
+        # than `null`: `Patch(name="x")` omits `expires_in`, while
+        # `Patch(name="x", expires_in=None)` sends an explicit `null`. Both
+        # read as `null` in BAML; only presence-aware code (JSON encoding with
+        # `omit_absent`, `reflect.class.is_field_set`) tells them apart.
+        fields_set = getattr(value, "model_fields_set", None) or frozenset()
         for k, v in field_values.items():
+            if v is None and k not in fields_set:
+                continue
             field = model_fields.get(k)
             wire_name = (field.serialization_alias or field.alias or k) if field else k
             _set_inbound_map_entry(
