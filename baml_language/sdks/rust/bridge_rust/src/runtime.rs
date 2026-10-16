@@ -322,7 +322,9 @@ pub(crate) fn dispatch_controlled(
     let mut allocation = CallAllocation::new(api)?;
     let call_id = allocation.id;
     let prepared = options.prepare(call_id)?;
-    let (kwargs, type_args) = encode()?;
+    // A `Json` argument with no exact BAML form (see `crate::json`) fails the
+    // call here, before anything reaches the engine.
+    let (kwargs, type_args) = crate::json::encode_scope(encode).map_err(SdkError::new)??;
     let args = wire::CallFunctionArgs {
         kwargs,
         type_args,

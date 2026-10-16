@@ -1,7 +1,6 @@
 //! Type-alias emission: a plain `pub type` item.
 //!
-//! Alias *references* are inlined by the pool builder (in-package,
-//! non-recursive) or resolved as paths to these items, and Rust aliases
+//! Alias references resolve as paths to these items, and Rust aliases
 //! are transparent — so no conversion impls are needed; the item exists
 //! to keep the user's named types on the SDK surface.
 
@@ -25,6 +24,19 @@ pub(crate) fn emit(
     ctx: &TyCtx<'_>,
 ) -> Result<TokenStream, SkipWarning> {
     let ident = idents::ident(name.name().as_str());
+    // The recursive stdlib `json` alias has no Rust `type` of its own
+    // expansion; its item names the bridge's JSON value instead.
+    if translate_ty::is_canonical_json(name) {
+        return Ok(quote! {
+            /// An untyped JSON value: BAML's `json`, as `serde_json::Value`.
+            ///
+            /// Covers null, bool, `int` (BAML's 63-bit integer), finite `float`,
+            /// string, arrays and objects. BAML `bigint` is not carried inside
+            /// json: decoding one fails, and so does encoding an integer outside
+            /// the `int` range.
+            pub type #ident = ::baml_bridge::Json;
+        });
+    }
     let rhs = translate_ty::translate(&alias.resolves_to, ctx).map_err(|u| SkipWarning {
         fqn: name.to_string(),
         reason: format!(

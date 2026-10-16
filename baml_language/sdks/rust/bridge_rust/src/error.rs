@@ -51,10 +51,12 @@ pub enum Error<E = Infallible> {
         trace: Vec<String>,
     },
     /// The engine returned a value the declared Rust type cannot represent
-    /// — engine/codegen drift, never a user-input condition.
+    /// — engine/codegen drift, or a json value outside what
+    /// [`Json`](crate::Json) carries (a BAML `bigint` or a non-finite float).
     Decode(DecodeError),
     /// SDK-boundary failure: runtime not initialized, tokio setup, task
-    /// join, envelope decode.
+    /// join, envelope decode, or an argument with no BAML form (a
+    /// [`Json`](crate::Json) number outside BAML's `int`/`float`).
     Sdk(SdkError),
     /// A blocking (sync) generated function was called from inside an
     /// async runtime, where `block_on` would deadlock or panic. Call the
@@ -165,6 +167,13 @@ pub enum DecodeError {
         /// Length of the offending wire string.
         len: usize,
     },
+    /// A `baml.json.json` value held something outside the JSON value
+    /// algebra [`Json`](crate::Json) maps: a BAML `bigint`, a non-finite
+    /// float, or a value that is not JSON at all.
+    NotJson {
+        /// What arrived instead (a wire variant kind or a short reason).
+        got: &'static str,
+    },
     /// A union envelope selected an arm outside the generated union's range.
     InvalidUnionOptionIndex {
         /// Generated union type being decoded.
@@ -193,6 +202,9 @@ impl fmt::Display for DecodeError {
             }
             DecodeError::InvalidBigint { len } => {
                 write!(f, "invalid bigint wire string ({len} bytes)")
+            }
+            DecodeError::NotJson { got } => {
+                write!(f, "expected a baml.json.json value, got {got}")
             }
             DecodeError::InvalidUnionOptionIndex {
                 union,
