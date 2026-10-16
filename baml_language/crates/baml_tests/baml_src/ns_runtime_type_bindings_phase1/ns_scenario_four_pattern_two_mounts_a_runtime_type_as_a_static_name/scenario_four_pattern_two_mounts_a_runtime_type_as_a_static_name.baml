@@ -19,7 +19,7 @@ function TenantPersonType() -> reflect.Class {
 function main() -> string {
     let person_t = TenantPersonType();
     let app = reflect.Package.compile({ "empty.baml": "" }).with_types({ "AcmePerson": person_t });
-    let exported = app.get_class("root.AcmePerson") ?? throw "missing mounted class";
+    let exported = app.get_class("root.AcmePerson");
     if (exported.as_type() != person_t.as_type()) {
         throw "with_types changed the exported type"
     }
@@ -39,7 +39,7 @@ function main() -> string {
         packages = { "app": app },
     );
 
-    let extract = pkg.get_function<(string) -> PersonAnchor>("root.Run") ?? throw "missing root.Run";
+    let extract = pkg.get_function<(string) -> PersonAnchor>("root.Run");
     let person = extract(`{"name":"Ada","email":"ada@example.com","favorite_editor":"vim"}`);
     if (reflect.Type.of_value(person) != person_t.as_type()) {
         throw "compiled wrapper did not return the mounted type"

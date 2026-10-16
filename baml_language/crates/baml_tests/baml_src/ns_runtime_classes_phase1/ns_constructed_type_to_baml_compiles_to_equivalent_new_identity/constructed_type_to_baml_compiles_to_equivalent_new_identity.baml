@@ -24,7 +24,7 @@ function main() -> bool {
     );
     let source = original.as_type().to_baml();
     let package = reflect.Package.compile({ "round_trip.baml": source });
-    let compiled = package.get_class("root.RoundTripRecord") ?? throw "missing compiled RoundTripRecord";
+    let compiled = package.get_class("root.RoundTripRecord");
     let document = `
         {
                         "wire_kind": "visit",

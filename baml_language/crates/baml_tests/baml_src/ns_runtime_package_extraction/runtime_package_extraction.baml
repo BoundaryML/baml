@@ -12,7 +12,7 @@ test "p7_omitted_throws_contract_infers_a_wildcard" {
             `,
         },
     );
-    let risky = pkg.get_function<(string) -> string>("root.Risky") ?? throw "missing root.Risky";
+    let risky = pkg.get_function<(string) -> string>("root.Risky");
     assert.equal(risky("accepted"), "accepted")
 }
 
@@ -29,10 +29,9 @@ test "extraction_uses_function_subtyping_and_throw_wildcard" {
 
     // The target accepts a wider input and returns a narrower output. Its
     // declared throw remains admissible because this contract omits `throws`.
-    let inferred = pkg.get_function<(string) -> (string | int)>("root.Flexible")
-        ?? throw "omitted throws rejected ordinary function subtyping";
+    let inferred = pkg.get_function<(string) -> (string | int)>("root.Flexible");
 
-    let explicit_never = pkg.get_function<RpeNeverThrowContract>("root.Flexible") catch (e) {
+    let explicit_never = pkg.find_function<RpeNeverThrowContract>("root.Flexible") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code
     };
     if (explicit_never is string) {

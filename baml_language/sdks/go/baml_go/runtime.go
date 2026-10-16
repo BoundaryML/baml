@@ -717,6 +717,11 @@ type SessionBusy struct{ BamlError }
 
 func (failure *SessionBusy) Error() string { return renderBamlError(&failure.BamlError) }
 
+// NotFound is a reflection lookup by name that found nothing.
+type NotFound struct{ BamlError }
+
+func (failure *NotFound) Error() string { return renderBamlError(&failure.BamlError) }
+
 func outboundFailure(kind string, value *cffi.BamlOutboundValue, trace []string) error {
 	className, message := outboundFailureIdentity(value)
 	if className == "" {
@@ -734,6 +739,8 @@ func outboundFailure(kind string, value *cffi.BamlOutboundValue, trace []string)
 		return &EvaluationError{BamlError: base}
 	case "reflect.errors.SessionBusy":
 		return &SessionBusy{BamlError: base}
+	case "reflect.errors.NotFound":
+		return &NotFound{BamlError: base}
 	default:
 		return &base
 	}

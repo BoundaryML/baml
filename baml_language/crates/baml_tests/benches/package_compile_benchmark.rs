@@ -46,7 +46,7 @@ function compare_hot<T extends baml.ops.Compare>(value: T, n: int) -> int throws
 }
 function run(n: int) -> int throws never { compare_hot<int>(7, n) }
 ` })
-  let run = package.get_function<(int) -> int>("root.run") ?? throw "missing run"
+  let run = package.get_function<(int) -> int>("root.run")
   run(n)
 }
 "####;

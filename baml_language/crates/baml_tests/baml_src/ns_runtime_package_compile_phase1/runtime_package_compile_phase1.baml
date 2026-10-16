@@ -128,7 +128,7 @@ function rpc_compile_method_plugin() -> reflect.Package {
 
 test "method-bearing interface crosses a runtime package mount" {
     let pkg = rpc_compile_method_plugin();
-    let exercise = pkg.get_function<() -> string>("root.exercise") ?? throw "missing exercise";
+    let exercise = pkg.get_function<() -> string>("root.exercise");
     assert.equal(
         exercise(),
         "widget<w1>|WIDGET<W1>|widget<w1>;host<h>;other#7;|hi h!|hi s?|host<h>|HOST<H>|other#3|widget<w1>|widget<w1>;host<h>;",
@@ -203,9 +203,8 @@ test "mounted associated bindings resolve earlier Self witnesses before emit" {
     if (consumer.diagnostics().length() != 0) {
         throw consumer.diagnostics()[0].message
     }
-    let exercise = consumer.get_function<() -> int>("root.exercise") ?? throw "missing exercise";
-    let exercise_qualified = consumer.get_function<() -> int>("root.exercise_qualified")
-        ?? throw "missing qualified exercise";
+    let exercise = consumer.get_function<() -> int>("root.exercise");
+    let exercise_qualified = consumer.get_function<() -> int>("root.exercise_qualified");
     assert.equal(exercise(), 10);
     assert.equal(exercise_qualified(), 18)
 }
@@ -257,7 +256,7 @@ test "runtime-compiled ToString on a reflected type dispatches" {
             `,
         },
     );
-    let render = pkg.get_function<() -> string>("root.render") ?? throw "missing render";
+    let render = pkg.get_function<() -> string>("root.render");
     assert.equal(render(), "C")
 }
 
@@ -289,7 +288,7 @@ function rpc_schema_package() -> reflect.Package {
 
 test "runtime schema compiles parses and encodes" {
     let pkg = rpc_schema_package();
-    let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing class";
+    let record_t = pkg.get_class("root.ExtractedRecord");
     let type Record = record_t.as_type();
     let record = rpc_extract@parse<Record>(`{"account":"AC-1","amount":42}`);
     assert.equal(baml.json.from(record), { "account": "AC-1", "amount": 42 })
@@ -327,7 +326,7 @@ test "runtime-compiled code dispatches through static stdlib impls" {
             `,
         },
     );
-    let run = package.get_function<(int) -> int>("root.run") ?? throw "missing run";
+    let run = package.get_function<(int) -> int>("root.run");
     let before_gc = run(100);
     baml.sys.collect_garbage();
     assert.equal(before_gc, 100);
@@ -346,7 +345,7 @@ test "exact runtime types preserve static generic JSON calls" {
 }
 
 test "render prompt uses the runtime package schema" {
-    let record_t = rpc_schema_package().get_class("root.ExtractedRecord") ?? throw "missing class";
+    let record_t = rpc_schema_package().get_class("root.ExtractedRecord");
     let type Record = record_t.as_type();
     let prompt = rpc_extract@render_prompt<Record>("sample document").text();
     assert.contains(prompt, "account");
@@ -357,18 +356,18 @@ test "runtime package declarations are stable per package and generative per com
     let files = { "schema.baml": `class ExtractedRecord { account string amount int }` };
     let first = reflect.Package.compile(files);
     let second = reflect.Package.compile(files);
-    let a = first.get_class("root.ExtractedRecord") ?? throw "missing first";
-    let a_again = first.get_class("root.ExtractedRecord") ?? throw "missing first again";
-    let b = second.get_class("root.ExtractedRecord") ?? throw "missing second";
+    let a = first.get_class("root.ExtractedRecord");
+    let a_again = first.get_class("root.ExtractedRecord");
+    let b = second.get_class("root.ExtractedRecord");
     assert.equal(a.as_type(), a_again.as_type());
     assert.is_true(a.as_type() != b.as_type())
 }
 
 test "runtime package and declarations survive major collection" {
     let pkg = rpc_schema_package();
-    let before = pkg.get_class("root.ExtractedRecord") ?? throw "missing before GC";
+    let before = pkg.get_class("root.ExtractedRecord");
     baml.sys.collect_garbage();
-    let after = pkg.get_class("root.ExtractedRecord") ?? throw "missing after GC";
+    let after = pkg.get_class("root.ExtractedRecord");
     assert.equal(before.as_type(), after.as_type())
 }
 
@@ -378,8 +377,8 @@ test "runtime compile honors namespaces and mounted dependencies" {
         { "child.baml": `class Child { base dep.models.Base }` },
         packages = { "dep": base },
     );
-    assert.is_true(base.get_class("root.models.Base") != null);
-    assert.is_true(child.get_class("root.Child") != null);
+    assert.is_true(base.find_class("root.models.Base") != null);
+    assert.is_true(child.find_class("root.Child") != null);
     assert.equal(child.diagnostics().length(), 0)
 }
 
@@ -412,14 +411,14 @@ function rpc_simple_function_package() -> reflect.Package {
     reflect.Package.compile({ "main.baml": `function Present(value: string) -> string { value }` })
 }
 
-test "get_function absence is null" {
+test "find_function absence is null" {
     assert.is_true(
-        rpc_simple_function_package().get_function<(string) -> string>("root.Missing") == null,
+        rpc_simple_function_package().find_function<(string) -> string>("root.Missing") == null,
     )
 }
 
 test "get_function mismatch throws compiler subtyping diagnostic" {
-    let result = rpc_simple_function_package().get_function<(int) -> string>("root.Present") catch (e) {
+    let result = rpc_simple_function_package().find_function<(int) -> string>("root.Present") catch (e) {
         reflect.errors.CompilationError => e.diagnostics,
     };
     if (result is reflect.Diagnostic[]) {
@@ -454,7 +453,7 @@ function rpc_generic_package() -> reflect.Package {
 }
 
 test "unspecialized generic get_function reports the reflection limit" {
-    let result = rpc_generic_package().get_function<(string) -> string>("root.Extract") catch (e) {
+    let result = rpc_generic_package().find_function<(string) -> string>("root.Extract") catch (e) {
         reflect.errors.CompilationError => e.diagnostics,
     };
     if (result is reflect.Diagnostic[]) {
@@ -489,7 +488,7 @@ test "function listing omits unspecialized generics" {
 }
 
 test "generic function companion extraction reports the reflection limit" {
-    let result = rpc_generic_package().get_function<(string) -> ai.Prompt>("root.Extract@render_prompt") catch (e) {
+    let result = rpc_generic_package().find_function<(string) -> ai.Prompt>("root.Extract@render_prompt") catch (e) {
         reflect.errors.CompilationError => e.diagnostics,
     };
     if (result is reflect.Diagnostic[]) {
@@ -536,7 +535,7 @@ test "alias maps are order-independent and cannot shadow stdlib" {
         },
         packages = { "z_last": root_package, "app": root_package },
     );
-    let main = generated.get_function<() -> string>("root.main") ?? throw "missing root.main";
+    let main = generated.get_function<() -> string>("root.main");
     assert.equal(main(), "planned ordered:2");
 
     let rejected = false;
@@ -588,7 +587,7 @@ test "one package under two aliases is one package" {
     if (generated.diagnostics().length() != 0) {
         throw generated.diagnostics()[0].message
     }
-    let main = generated.get_function<() -> int>("root.main") ?? throw "missing root.main";
+    let main = generated.get_function<() -> int>("root.main");
     assert.equal(main(), 7)
 }
 

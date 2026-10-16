@@ -7,7 +7,7 @@ function source_1() -> string {
                 class Item { value string }
                 function Items() -> Item[] { [Item { value: "bound" }] }
             \` })
-            let item_ct = pkg.get_class("root.Item") ?? throw "missing Item"
+            let item_ct = pkg.get_class("root.Item")
             let binding_evaluations: int = 0
             let operand = () -> {
                 binding_evaluations += 1
@@ -20,7 +20,6 @@ function source_1() -> string {
                     throw "reflect.Type.of<T>() did not preserve the bound value"
                 }
                 let get_items = pkg.get_function<() -> T[]>("root.Items")
-                    ?? throw "missing root.Items"
                 let items: T[] = get_items()
                 let item: T = items[0]
                 if (reflect.Type.of_value(item) != reflect.Type.of<T>()) {
@@ -229,8 +228,7 @@ function source_5() -> string {
             let package = reflect.Package.compile({ "compiled.baml": \`
                 class CompiledRecord { compiled_field string }
             \` })
-            let compiled = (package.get_class("root.CompiledRecord")
-                ?? throw "missing CompiledRecord").as_type()
+            let compiled = package.get_class("root.CompiledRecord").as_type()
             let type CompiledRecord = compiled;
             let compiled_client = ProbeClient { reply: \`{"compiled_field":"ok"}\`, requests: [] }
             let _ = ai.Agent.new(
@@ -408,7 +406,7 @@ function source_9() -> string {
             let pkg = reflect.Package.compile({ "items.baml": \`
                 class Item { value string }
             \` })
-            let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+            let item_type = pkg.get_class("root.Item").as_type()
             let type Item = item_type;
 
             let holder = Holder<Item>.new()
@@ -443,7 +441,7 @@ function source_10() -> string {
             let pkg = reflect.Package.compile({ "items.baml": \`
                 class Item { value string }
             \` })
-            let runtime_item = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+            let runtime_item = pkg.get_class("root.Item").as_type()
             // Binding it merges \`user.Item\` into this frame's overlay, which is
             // what every type materialized here from now on carries.
             let type Shadow = runtime_item;
@@ -480,8 +478,8 @@ function source_11() -> string {
             let second = reflect.Package.compile({ "b.baml": \`
                 class Item { value string }
             \` })
-            let first_item = (first.get_class("root.Item") ?? throw "missing A").as_type()
-            let second_item = (second.get_class("root.Item") ?? throw "missing B").as_type()
+            let first_item = first.get_class("root.Item").as_type()
+            let second_item = second.get_class("root.Item").as_type()
             let type First = first_item;
             let type Second = second_item;
 
@@ -577,7 +575,7 @@ function source_14() -> string {
                 class Item { value string, next Item? }
                 function Items() -> Item[] { [Item { value: "bound", next: null }] }
             \` })
-            let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+            let item_type = pkg.get_class("root.Item").as_type()
             let type Item = item_type;
 
             // A diagnostic that has to name the type it rejected.
@@ -606,10 +604,10 @@ function source_15() -> string {
             let second = reflect.Package.compile({ "b.baml": \`
                 class Item { value string }
             \` })
-            let type First = (first.get_class("root.Item") ?? throw "missing A").as_type();
-            let type Second = (second.get_class("root.Item") ?? throw "missing B").as_type();
+            let type First = first.get_class("root.Item").as_type();
+            let type Second = second.get_class("root.Item").as_type();
 
-            let make = first.get_function<() -> First>("root.Make") ?? throw "missing root.Make"
+            let make = first.get_function<() -> First>("root.Make")
             let value: unknown = make()
             let own = if value is First { "yes" } else { "no" }
             let foreign = if value is Second { "yes" } else { "no" }
@@ -640,8 +638,8 @@ function source_16() -> string {
             let second = reflect.Package.compile({ "b.baml": \`
                 class Item { beta int, next Item? }
             \` })
-            let type First = (first.get_class("root.Item") ?? throw "missing A").as_type();
-            let type Second = (second.get_class("root.Item") ?? throw "missing B").as_type();
+            let type First = first.get_class("root.Item").as_type();
+            let type Second = second.get_class("root.Item").as_type();
 
             \`\${Render@render_prompt<First[]>()}~\${Render@render_prompt<Second[]>()}\`
         }

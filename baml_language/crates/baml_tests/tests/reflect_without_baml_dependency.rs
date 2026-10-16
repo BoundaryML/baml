@@ -11,8 +11,9 @@
 //!   instead of the `reflect.Type` override and crashes the VM.
 //!
 //! This program compiles the stdlib and calls each `AnyClass` body (which
-//! iterate lists and render a `reflect.Type` inside `reflect`), `Concrete.type()`,
-//! and the error path of `Enum.get_value`, so either hazard fails here.
+//! iterate lists and render a `reflect.Type` inside `reflect`, including the
+//! `NotFound` messages of `get` and `get_field`), `Concrete.type()`, and the
+//! error path of `Enum.get_value`, so either hazard fails here.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -37,6 +38,13 @@ const PROGRAM: &str = r#"
         let label = p.get<string>("label") catch (e) {
             _ => "type mismatch",
         };
+        let missing = p.get<string>("z") catch (e) {
+            reflect.errors.NotFound { message } => message,
+            reflect.errors.TypeMismatch => "type mismatch",
+        };
+        let missing_field = p.get_field("z").name catch (e) {
+            reflect.errors.NotFound { message } => message,
+        };
         let invalid = reflect.Enum.get_value(1) catch (e) {
             reflect.errors.InvalidArgument => e.message,
         };
@@ -45,8 +53,11 @@ const PROGRAM: &str = r#"
             p.name(),
             `${p.has_field("x")}`,
             `${p.has_field("z")}`,
-            p.get_field("x")?.name ?? "missing",
-            label ?? "null",
+            p.get_field("x").name,
+            p.find_field("z")?.name ?? "missing",
+            label,
+            missing,
+            missing_field,
             p.type().to_string(),
             Point.type().to_string(),
             `${int.type() == reflect.Type.of<int>()}`,
@@ -68,7 +79,10 @@ async fn reflect_bodies_compile_and_run_without_a_baml_dependency() {
                 "true",
                 "false",
                 "x",
+                "missing",
                 "a",
+                "no field named z on Point",
+                "no field named z on Point",
                 "Point",
                 "Point",
                 "true",

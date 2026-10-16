@@ -86,7 +86,7 @@ async fn a_runtime_compiled_class_instance_crosses_as_an_opaque_handle() {
             let pkg = reflect.Package.compile({
                 "schema.baml": "class ExtractedRecord { account string }"
             })
-            let record_t = pkg.get_class("root.ExtractedRecord") ?? throw "missing ExtractedRecord"
+            let record_t = pkg.get_class("root.ExtractedRecord")
             let type Record = record_t.as_type();
             Extract@parse<Record>(`{"account":"AC-1"}`)
         }

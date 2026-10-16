@@ -242,7 +242,7 @@ test "runtime_package_enum_literal_values_keep_their_declaration" {
     );
     let fn_view = package.functions().get("root.pick") ?? throw "missing function";
     let literal = fn_view.return_type().as_literal() ?? throw "literal";
-    let en = package.get_enum("root.Choice") ?? throw "missing enum";
+    let en = package.get_enum("root.Choice");
     let value = literal.value();
     assert.equal(reflect.Type.of_value(value), en.as_type());
     assert.equal(reflect.Enum.get_value(value), "FIRST")
@@ -372,7 +372,7 @@ test "nested_class_of_a_runtime_package_type_reads_back" {
     let package = reflect.Package.compile(
         { "schema.baml": `class Leaf { name string } class Root { leaf Leaf }` },
     );
-    let root_decl = package.get_class("root.Root") ?? throw "missing Root";
+    let root_decl = package.get_class("root.Root");
     let field = root_decl.fields().at(0) ?? throw "missing field";
     let field_type = field.type ?? throw "missing field type";
     let leaf = field_type.as_class() ?? throw "expected a class view";
@@ -392,8 +392,7 @@ test "function_views_of_a_runtime_package_keep_its_definitions" {
     let param_enum = param.type.as_enum() ?? throw "expected a param enum";
     let param_row = param_enum.values().at(1) ?? throw "no param rows";
 
-    let callable = package.get_function<reflect.AnyFunction<Returns = unknown, Throws = unknown>>("root.pick")
-        ?? throw "missing callable";
+    let callable = package.get_function<reflect.AnyFunction<Returns = unknown, Throws = unknown>>("root.pick");
     let sig = reflect.signature(callable);
     let sig_returns = sig.returns.as_enum() ?? throw "expected a signature return enum";
     let sig_return_row = sig_returns.values().at(0) ?? throw "no signature return rows";

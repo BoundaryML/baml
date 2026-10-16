@@ -339,7 +339,7 @@ function rule_shaped_functions() -> string[] throws never {
 /// The rule generator called `name`, or `null` when this package does not
 /// declare one.
 function rule_generator(package: reflect.Package, name: string) -> RuleFn? throws never {
-    package.get_function<RuleFn>(name) catch (e) {
+    package.find_function<RuleFn>(name) catch (e) {
         reflect.errors.CompilationError => null,
     }
 }

@@ -134,9 +134,9 @@ pub enum TypePosition {
     Existential,
     ConstraintHead,
     /// The outer function contract supplied to the exact
-    /// `reflect.Package.get_function<F>` method. It is otherwise an
-    /// existential; only an omitted OUTER `throws` differs, becoming the
-    /// runtime wildcard instead of E0151 + `never` recovery.
+    /// `reflect.Package.get_function<F>` or `find_function<F>` method. It is
+    /// otherwise an existential; only an omitted OUTER `throws` differs,
+    /// becoming the runtime wildcard instead of E0151 + `never` recovery.
     ExtractionContract,
 }
 

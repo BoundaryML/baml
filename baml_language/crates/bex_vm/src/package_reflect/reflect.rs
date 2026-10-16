@@ -638,9 +638,9 @@ fn function_type(vm: &mut BexVm, package: HeapPtr, name: &LocalName) -> Option<V
     ))
 }
 
-/// The `F` contract check `Package.get_function` runs: the callable's
-/// reconstructed function type must be a subtype of the contract the caller
-/// asked for.
+/// The `F` contract check `Package.get_function` and `find_function` run: the
+/// callable's reconstructed function type must be a subtype of the contract
+/// the caller asked for.
 ///
 /// A runtime package roots the subtype context at itself so its own impls are
 /// visible; a statically compiled callable has no such root and uses the VM's
@@ -680,6 +680,100 @@ fn check_function_contract(
             "function `{name}` has type `{actual}`, which is not a subtype of requested contract `{expected}`"
         ),
     ))
+}
+
+/// The exported class `Package.find_class` answers with, or `None` for a miss.
+fn find_class(vm: &mut BexVm, ptr: HeapPtr, name: &str) -> Option<Value> {
+    let local = local_name(name)?;
+    let class_ptr = find_export(vm, ptr, |_, _, package| {
+        package.classes.get(&local).copied()
+    })?;
+    Some(package_class_type(vm, class_ptr))
+}
+
+/// The exported enum `Package.find_enum` answers with, or `None` for a miss.
+fn find_enum(vm: &mut BexVm, ptr: HeapPtr, name: &str) -> Option<Value> {
+    let local = local_name(name)?;
+    let enum_ptr = find_export(vm, ptr, |_, _, package| package.enums.get(&local).copied())?;
+    Some(package_enum_type(vm, enum_ptr))
+}
+
+/// The exported interface `Package.find_interface` answers with, or `None`
+/// for a miss.
+fn find_interface(vm: &mut BexVm, ptr: HeapPtr, name: &str) -> Option<Value> {
+    let local = local_name(name)?;
+    let interface_ptr = find_export(vm, ptr, |_, _, package| {
+        package.interfaces.get(&local).copied()
+    })?;
+    Some(package_interface_type(vm, interface_ptr))
+}
+
+/// The exported function `Package.find_function<F>` answers with, or `None`
+/// for a miss. A function that exists but does not satisfy the caller's `F`
+/// is an error, not a miss.
+fn find_function(
+    vm: &mut BexVm,
+    package: Value,
+    name: &bex_str::BexStr,
+) -> Result<Option<Value>, VmRustFnError> {
+    let package_ptr = package_ptr(vm, package)?;
+    let Some(local) = local_name(name.as_str()) else {
+        return Ok(None);
+    };
+    // The package the function lives in: a view answers with its base's.
+    let path = DeclPath::Function(FnPath::Free(local.clone()));
+    let Some((package_ptr, function)) = find_export(vm, package_ptr, |vm, ptr, package| {
+        let cell = *package.globals.get(&path)?;
+        let function = super::graft::cell_value(vm, package, cell)?.as_object_ptr()?;
+        Some((ptr, function))
+    }) else {
+        return Ok(None);
+    };
+    if matches!(
+        vm.get_object(function),
+        Object::Function(function)
+            if function.origin == bex_vm_types::FunctionOrigin::Internal
+    ) {
+        return Ok(None);
+    }
+    let Some(function_value) = package_function_value(vm, package_ptr, &local) else {
+        return Ok(None);
+    };
+    let Some(signature) = vm.callable_signature(function_value) else {
+        if vm
+            .unspecialized_generic_callable_name(function_value)
+            .is_some()
+        {
+            let diagnostic =
+                runtime_type::unspecialized_reflected_generic(&display_local_name(&local));
+            return Err(VmRustFnError::thrown_fresh(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
+        return Ok(None);
+    };
+    // Signature reconstruction only sees the declared surface. A companion
+    // whose surface is free of its parent's `T` gets this far and would be
+    // handed out as an ordinary function value — and calling one directly
+    // fails inside its body as a VM internal error no `catch` can see. Refuse
+    // it here, where the caller still has a diagnostic channel.
+    if let Some(name) = vm.generic_callable_body_needs_type_args(function_value) {
+        let diagnostic = runtime_type::unspecialized_reflected_generic_call(&name);
+        return Err(VmRustFnError::thrown_fresh(
+            super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+        ));
+    }
+    check_function_contract(vm, package_ptr, name.as_str(), &signature)?;
+    Ok(Some(function_value))
+}
+
+/// The `reflect.errors.NotFound` a `get_*` lookup throws where its `find_*`
+/// counterpart returns `null`.
+fn not_found(vm: &mut BexVm, kind: &str, name: &bex_str::BexStr) -> VmRustFnError {
+    let message = Value::object(
+        vm.alloc_string(format!("no {kind} named {} in this package", name.as_str())),
+    );
+    VmRustFnError::thrown_fresh(copy::errors::NotFound { message }.to_value(vm))
 }
 
 fn reflected_class_ty(vm: &BexVm, class: baml_base::LangItem) -> RealizedTy {
@@ -1071,29 +1165,46 @@ impl BamlClassPackage for PackageReflectImpl {
         }
     }
 
-    fn get_class(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
-        let ptr = package_ptr(vm, *package).ok()?;
-        let local = local_name(name.as_str())?;
-        let class_ptr = find_export(vm, ptr, |_, _, package| {
-            package.classes.get(&local).copied()
-        })?;
-        Some(package_class_type(vm, class_ptr))
+    fn get_class(
+        vm: &mut BexVm,
+        package: &Value,
+        name: &bex_str::BexStr,
+    ) -> Result<Value, VmRustFnError> {
+        let ptr = package_ptr(vm, *package)?;
+        find_class(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "class", name))
     }
 
-    fn get_enum(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+    fn find_class(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
         let ptr = package_ptr(vm, *package).ok()?;
-        let local = local_name(name.as_str())?;
-        let enum_ptr = find_export(vm, ptr, |_, _, package| package.enums.get(&local).copied())?;
-        Some(package_enum_type(vm, enum_ptr))
+        find_class(vm, ptr, name.as_str())
     }
 
-    fn get_interface(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+    fn get_enum(
+        vm: &mut BexVm,
+        package: &Value,
+        name: &bex_str::BexStr,
+    ) -> Result<Value, VmRustFnError> {
+        let ptr = package_ptr(vm, *package)?;
+        find_enum(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "enum", name))
+    }
+
+    fn find_enum(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
         let ptr = package_ptr(vm, *package).ok()?;
-        let local = local_name(name.as_str())?;
-        let interface_ptr = find_export(vm, ptr, |_, _, package| {
-            package.interfaces.get(&local).copied()
-        })?;
-        Some(package_interface_type(vm, interface_ptr))
+        find_enum(vm, ptr, name.as_str())
+    }
+
+    fn get_interface(
+        vm: &mut BexVm,
+        package: &Value,
+        name: &bex_str::BexStr,
+    ) -> Result<Value, VmRustFnError> {
+        let ptr = package_ptr(vm, *package)?;
+        find_interface(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "interface", name))
+    }
+
+    fn find_interface(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+        let ptr = package_ptr(vm, *package).ok()?;
+        find_interface(vm, ptr, name.as_str())
     }
 
     fn with_types(
@@ -1233,56 +1344,16 @@ impl BamlClassPackage for PackageReflectImpl {
         vm: &mut BexVm,
         package: &Value,
         name: &bex_str::BexStr,
+    ) -> Result<Value, VmRustFnError> {
+        find_function(vm, *package, name)?.ok_or_else(|| not_found(vm, "function", name))
+    }
+
+    fn find_function(
+        vm: &mut BexVm,
+        package: &Value,
+        name: &bex_str::BexStr,
     ) -> Result<Option<Value>, VmRustFnError> {
-        let package_ptr = package_ptr(vm, *package)?;
-        let Some(local) = local_name(name.as_str()) else {
-            return Ok(None);
-        };
-        // The package the function lives in: a view answers with its base's.
-        let path = DeclPath::Function(FnPath::Free(local.clone()));
-        let Some((package_ptr, function)) = find_export(vm, package_ptr, |vm, ptr, package| {
-            let cell = *package.globals.get(&path)?;
-            let function = super::graft::cell_value(vm, package, cell)?.as_object_ptr()?;
-            Some((ptr, function))
-        }) else {
-            return Ok(None);
-        };
-        if matches!(
-            vm.get_object(function),
-            Object::Function(function)
-                if function.origin == bex_vm_types::FunctionOrigin::Internal
-        ) {
-            return Ok(None);
-        }
-        let Some(function_value) = package_function_value(vm, package_ptr, &local) else {
-            return Ok(None);
-        };
-        let Some(signature) = vm.callable_signature(function_value) else {
-            if vm
-                .unspecialized_generic_callable_name(function_value)
-                .is_some()
-            {
-                let diagnostic =
-                    runtime_type::unspecialized_reflected_generic(&display_local_name(&local));
-                return Err(VmRustFnError::thrown_fresh(
-                    super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
-                ));
-            }
-            return Ok(None);
-        };
-        // Signature reconstruction only sees the declared surface. A companion
-        // whose surface is free of its parent's `T` gets this far and would be
-        // handed out as an ordinary function value — and calling one directly
-        // fails inside its body as a VM internal error no `catch` can see. Refuse
-        // it here, where the caller still has a diagnostic channel.
-        if let Some(name) = vm.generic_callable_body_needs_type_args(function_value) {
-            let diagnostic = runtime_type::unspecialized_reflected_generic_call(&name);
-            return Err(VmRustFnError::thrown_fresh(
-                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
-            ));
-        }
-        check_function_contract(vm, package_ptr, name.as_str(), &signature)?;
-        Ok(Some(function_value))
+        find_function(vm, *package, name)
     }
 
     fn classes(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {

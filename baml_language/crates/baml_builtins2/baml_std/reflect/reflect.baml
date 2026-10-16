@@ -130,22 +130,68 @@ interface AnyFunction {
 /// runtime-minted classes. Of the sealed reflection-kind views, only
 /// `reflect.Class` implements it.
 interface AnyClass {
-    /// Read a field as `T`. A missing field returns `null`; use `has_field` to
-    /// distinguish that case from a present field whose value is null.
-    function get<T>(self, name: string) -> T? throws root.errors.TypeMismatch {
+    /// Read the field called `name` as `T`. Read a nullable field with a
+    /// nullable `T` (`get<int?>`). `find` returns `null` for a missing field
+    /// instead of throwing.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.NotFound` if this value's class declares no field
+    ///   called `name`.
+    /// - `reflect.errors.TypeMismatch` if the field's value is not a `T`.
+    function get<T>(
+        self,
+        name: string,
+    ) -> T throws root.errors.NotFound | root.errors.TypeMismatch {
+        if (!self.has_field(name)) {
+            // NOTE: `_to_string_impl()`, not `to_string()`; see `name`.
+            throw root.errors.NotFound {
+                message: "no field named " + name + " on " + root.Type.of_value(self)._to_string_impl(),
+            };
+        }
+        root.Class.get_field<T>(self, name) catch (e) {
+            root.errors.CompilationError { message } => {
+                throw root.errors.TypeMismatch { message: message }
+            }
+        }
+    }
+
+    /// Read the field called `name` as `T`, or `null` if this value's class
+    /// declares no such field. A present field holding null also reads as
+    /// `null`; use `has_field` or `get<T?>` to tell the two apart.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.TypeMismatch` if the field's value is not a `T`.
+    function find<T>(self, name: string) -> T? throws root.errors.TypeMismatch {
         if (!self.has_field(name)) {
             return null;
         }
-        // NOTE: spelled with `let … else` rather than `self.get_field(name)?.value<T>()`
-        // because an optional-chained call does not thread `T` to the callee.
-        let field: root.class.Field = self.get_field(name) else {
-            return null;
-        };
-        field.value<T>()
+        self.get<T>(name) catch (e) {
+            root.errors.NotFound => null
+        }
     }
 
-    /// Return a value-bound field handle, or `null` when no such field exists.
-    function get_field(self, name: string) -> root.class.Field? throws never {
+    /// A value-bound handle to the field called `name`. `find_field` returns
+    /// `null` instead of throwing.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.NotFound` if this value's class declares no field
+    ///   called `name`.
+    function get_field(self, name: string) -> root.class.Field throws root.errors.NotFound {
+        let field: root.class.Field = self.find_field(name) else {
+            // NOTE: `_to_string_impl()`, not `to_string()`; see `name`.
+            throw root.errors.NotFound {
+                message: "no field named " + name + " on " + root.Type.of_value(self)._to_string_impl(),
+            };
+        };
+        field
+    }
+
+    /// A value-bound handle to the field called `name`, or `null` if this
+    /// value's class declares no such field.
+    function find_field(self, name: string) -> root.class.Field? throws never {
         let class_type: root.Class = root.Type.of_value(self).as_class() else {
             return null;
         };
@@ -320,22 +366,62 @@ class Package {
         $rust_function
     }
 
-    /// The exported class called `name`, or `null` if the package exports none.
+    /// The exported class called `name`. A name the package exports as some
+    /// other kind of declaration is a miss. `find_class` returns `null`
+    /// instead of throwing.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.NotFound` if the package exports no class called
+    ///   `name`.
     //baml:mut_vm
-    function get_class(self, name: string) -> root.Class? throws never {
+    function get_class(self, name: string) -> root.Class throws root.errors.NotFound {
+        $rust_function
+    }
+
+    /// The exported class called `name`, or `null` if the package exports
+    /// none.
+    //baml:mut_vm
+    function find_class(self, name: string) -> root.Class? throws never {
+        $rust_function
+    }
+
+    /// The exported enum called `name`. A name the package exports as some
+    /// other kind of declaration is a miss. `find_enum` returns `null` instead
+    /// of throwing.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.NotFound` if the package exports no enum called
+    ///   `name`.
+    //baml:mut_vm
+    function get_enum(self, name: string) -> root.Enum throws root.errors.NotFound {
         $rust_function
     }
 
     /// The exported enum called `name`, or `null` if the package exports none.
     //baml:mut_vm
-    function get_enum(self, name: string) -> root.Enum? throws never {
+    function find_enum(self, name: string) -> root.Enum? throws never {
+        $rust_function
+    }
+
+    /// The exported interface called `name`. A name the package exports as
+    /// some other kind of declaration is a miss. `find_interface` returns
+    /// `null` instead of throwing.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.NotFound` if the package exports no interface called
+    ///   `name`.
+    //baml:mut_vm
+    function get_interface(self, name: string) -> root.Interface throws root.errors.NotFound {
         $rust_function
     }
 
     /// The exported interface called `name`, or `null` if the package exports
     /// none.
     //baml:mut_vm
-    function get_interface(self, name: string) -> root.Interface? throws never {
+    function find_interface(self, name: string) -> root.Interface? throws never {
         $rust_function
     }
 
@@ -355,10 +441,33 @@ class Package {
     }
     //baml:mut_vm
     /// Extract an exported function through an ordinary function-type contract.
+    /// `find_function` returns `null` for a missing name instead of throwing.
     ///
     /// A lookup by name has nowhere to put type arguments, so an unspecialized
     /// generic function is refused here.
-    function get_function<F>(self, name: string) -> F? throws root.errors.CompilationError {
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.NotFound` if the package exports no function called
+    ///   `name`.
+    /// - `reflect.errors.CompilationError` if the function exists but is not
+    ///   an `F`, or is an unspecialized generic.
+    function get_function<F>(
+        self,
+        name: string,
+    ) -> F throws root.errors.NotFound | root.errors.CompilationError {
+        $rust_function
+    }
+
+    //baml:mut_vm
+    /// Extract an exported function through an ordinary function-type
+    /// contract, or `null` if the package exports no function called `name`.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.CompilationError` if the function exists but is not
+    ///   an `F`, or is an unspecialized generic.
+    function find_function<F>(self, name: string) -> F? throws root.errors.CompilationError {
         $rust_function
     }
 

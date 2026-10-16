@@ -33,7 +33,7 @@ test "a key may name a declaration an earlier key reached" {
     let types = person_and_address();
     let view = empty_base().with_types({ "Person": types[0], "Address": types[1] });
     assert.equal(view.classes().keys().join("|"), "root.Person|root.Address");
-    let same = consumer_of(view).get_function<() -> bool>("root.same") ?? throw "missing same";
+    let same = consumer_of(view).get_function<() -> bool>("root.same");
     assert.is_true(same())
 }
 
@@ -41,7 +41,7 @@ test "a key may name a declaration a later key reaches" {
     let types = person_and_address();
     let view = empty_base().with_types({ "Address": types[1], "Person": types[0] });
     assert.equal(view.classes().keys().join("|"), "root.Address|root.Person");
-    let same = consumer_of(view).get_function<() -> bool>("root.same") ?? throw "missing same";
+    let same = consumer_of(view).get_function<() -> bool>("root.same");
     assert.is_true(same())
 }
 
@@ -49,7 +49,7 @@ test "the reaching key alone exports both" {
     let types = person_and_address();
     let view = empty_base().with_types({ "Person": types[0] });
     assert.equal(view.classes().keys().join("|"), "root.Person|root.Address");
-    let same = consumer_of(view).get_function<() -> bool>("root.same") ?? throw "missing same";
+    let same = consumer_of(view).get_function<() -> bool>("root.same");
     assert.is_true(same())
 }
 
