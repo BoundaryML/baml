@@ -896,9 +896,10 @@ pub struct EngineConfig {
     pub artifact_telemetry: Option<btel_settings::artifact::ArtifactTelemetry>,
     #[cfg(not(target_arch = "wasm32"))]
     pub recording: Option<TelemetryRecording>,
-    /// Natively compiled bodies for this program's functions, keyed by
-    /// function name, as emitted by the BAML-to-Rust compiler alongside the
-    /// program they were compiled from. Attached at load; absent for ordinary
+    /// Natively compiled bodies for this program's functions, keyed by the
+    /// object index of each function (its name and arity are checked at
+    /// load), as emitted by the BAML-to-Rust compiler alongside the program
+    /// they were compiled from. Attached at load; absent for ordinary
     /// bytecode execution.
     pub native_bodies: Option<&'static bex_vm::NativeBodyTable>,
 }

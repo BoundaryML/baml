@@ -216,8 +216,9 @@ collection, and an allocating one grows Gen0 until it returns.
 
 Stack: compiled-to-compiled calls recurse on the Rust stack, whose size the
 VM does not choose (a 2 MiB tokio worker, an 8 MiB main thread, a host's own
-thread). call_compiled checks what remains every sixteenth frame and raises
-StackOverflow under a 256 KiB red zone, so deep compiled recursion is a
+thread). call_compiled compares the stack address on every call against a
+floor the VM reads once per exec (the thread's limit plus a 256 KiB red
+zone) and raises StackOverflow below it, so deep compiled recursion is a
 catchable panic on any thread, never a crash. The pack host gives its
 workers the main thread's 8 MiB, so a spawned task recurses as deep as the
 root call before that.
@@ -267,7 +268,11 @@ checks on statically typed scalars. Remaining, the same price bytecode pays:
 
 These are VM decisions made for spawn and GC; they speed up both backends
 when changed (lock elision when no spawn is live, unboxed int/float arrays).
-Measured with locks on aarch64: fib(30) 2.26x, array loops ~1.8x.
+
+Measured native/VM, telemetry off, on aarch64 (the Freestyle run of
+2026-10-16 at commit 80d8310504): sorts 3.2-4.2x, array-indexed loops 3.3x,
+array-build 11.6x, array-iterator 31x, allocation 3.4-4.0x; calls and json
+1.0x, where the time is in the bytecode stdlib.
 
 
 10. Resumable bodies
