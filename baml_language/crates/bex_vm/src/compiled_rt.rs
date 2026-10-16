@@ -174,31 +174,38 @@ pub(crate) mod stub {
 /// Rust stack; see [`stub`].
 pub(crate) const RUNNING: usize = usize::MAX;
 
-/// How often, in frames, a compiled call checks the Rust stack: every frame
-/// it adds is a native one, a few hundred bytes to a few KiB, so checking
-/// every sixteenth keeps the check off the call path while staying far inside
-/// [`STACK_RED_ZONE`].
-const STACK_CHECK_EVERY: usize = 16;
-
-/// The Rust stack a compiled call leaves for what runs above it (sixteen
-/// compiled frames, the builtins they call, the unwinder). Less than this and
-/// the call raises `StackOverflow` instead of overflowing the thread's stack,
-/// whose size (a 2 MiB tokio worker, an 8 MiB main thread, a host's own
-/// thread) the VM does not choose.
+/// The Rust stack a compiled call leaves for what runs above it: the
+/// callee's own frame (a body with thousands of locals takes tens of KiB),
+/// the builtins it calls, the unwinder. Less than this and the call raises
+/// `StackOverflow` instead of overflowing the thread's stack, whose size (a
+/// 2 MiB tokio worker, an 8 MiB main thread, a host's own thread) the VM does
+/// not choose.
 const STACK_RED_ZONE: usize = 256 << 10;
 
-/// Whether less than [`STACK_RED_ZONE`] of this thread's stack remains.
-#[cold]
-#[inline(never)]
-fn stack_low() -> bool {
+/// The lowest stack address compiled code on this thread may reach before a
+/// call raises `StackOverflow`: the thread's stack limit plus
+/// [`STACK_RED_ZONE`]. Read once per `exec`, so a compiled call compares one
+/// address instead of looking the thread's stack up. 0 when unknown.
+pub(crate) fn stack_floor() -> usize {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        stacker::remaining_stack().is_some_and(|left| left < STACK_RED_ZONE)
+        stacker::remaining_stack().map_or(0, |left| {
+            stack_address()
+                .saturating_sub(left)
+                .saturating_add(STACK_RED_ZONE)
+        })
     }
     #[cfg(target_arch = "wasm32")]
     {
-        false
+        0
     }
+}
+
+/// An address in the caller's stack frame: where the stack is now.
+#[inline]
+fn stack_address() -> usize {
+    let marker = 0u8;
+    std::ptr::from_ref(&marker) as usize
 }
 
 /// Where `function`'s [`stub::CODE`] starts, for a function with a compiled
@@ -1027,8 +1034,7 @@ impl BexVm {
         body: CompiledBody,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
-        let depth = self.frames.len();
-        if depth >= crate::vm::MAX_FRAMES || (depth % STACK_CHECK_EVERY == 0 && stack_low()) {
+        if self.frames.len() >= crate::vm::MAX_FRAMES || stack_address() < self.stack_floor {
             return Err(Box::new(VmError::thrown_fresh(
                 self.panic_to_exception_value(VmPanic::StackOverflow),
             )));

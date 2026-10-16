@@ -504,6 +504,7 @@ pub(crate) mod tests {
             pending_call_type_args: Vec::new(),
             compiled_type_args: Vec::new(),
             compiled_delivery: None,
+            stack_floor: 0,
             pending_call_type_values: Vec::new(),
             pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
@@ -1276,7 +1277,7 @@ pub(crate) mod tests {
                         Err(error)
                     }
                 }
-                _ => unreachable!(),
+                Resume::Yielded => unreachable!("Twice never yields"),
             }
         }
         const SOURCE: &str = r#"
@@ -2285,6 +2286,10 @@ pub struct BexVm {
     /// An error the unwinder delivered to a suspended compiled body, which the
     /// run loop hands it when resuming it.
     compiled_delivery: Option<Box<VmError>>,
+    /// The lowest stack address compiled code may grow down to on the thread
+    /// running this `exec`, or 0 when unknown; see
+    /// `compiled_rt::stack_floor`.
+    pub(crate) stack_floor: usize,
     pending_call_type_values: Vec<Option<TypeValue>>,
     /// Set by a call that passes type arguments, for its callee's entry
     /// only: telemetry records the frame's type arguments before the call's
@@ -3066,6 +3071,7 @@ impl BexVm {
             pending_call_type_args: Vec::new(),
             compiled_type_args: Vec::new(),
             compiled_delivery: None,
+            stack_floor: 0,
             pending_call_type_values: Vec::new(),
             pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
@@ -9171,6 +9177,9 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
+        // A VM may run on a different thread each time; compiled calls check
+        // against this thread's stack.
+        self.stack_floor = crate::compiled_rt::stack_floor();
         #[cfg(not(target_arch = "wasm32"))]
         self.stop_disabled_telemetry();
         #[cfg(not(target_arch = "wasm32"))]
