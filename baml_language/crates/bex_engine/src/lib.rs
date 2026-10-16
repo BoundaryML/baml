@@ -92,6 +92,9 @@ pub use bcs_api::diagnostics::Diagnostic as CloudAuthorizationFailure;
 mod thread;
 #[cfg(not(target_arch = "wasm32"))]
 pub use btel_types::ProcessStatus;
+/// Natively compiled bodies an engine runs in place of bytecode
+/// ([`EngineConfig::native_bodies`]).
+pub use bex_vm::NativeBodyTable;
 #[cfg(not(target_arch = "wasm32"))]
 pub use telemetry::TelemetryRecording;
 mod telemetry_network;

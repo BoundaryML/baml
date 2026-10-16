@@ -211,9 +211,14 @@ impl BexThread {
     /// A callee is shielded through its caller, so unwinding needs no
     /// bookkeeping.
     pub fn vm_thread_is_shielded(&self) -> bool {
-        let innermost = self.vm.frames.iter().rposition(
-            |frame| matches!(frame, bex_vm::Frame::Bytecode(frame) if !frame.is_compiled()),
-        );
+        // A compiled frame on top has no live `cur_pc` of its own; every
+        // frame below it is at its call instruction.
+        let innermost = self
+            .vm
+            .frames
+            .iter()
+            .rposition(|frame| matches!(frame, bex_vm::Frame::Bytecode(_)))
+            .filter(|&index| !self.vm.frame_is_compiled(index));
         self.vm
             .frames
             .iter()
@@ -225,7 +230,7 @@ impl BexThread {
                 };
                 // A compiled body has no bytecode position and no shielded
                 // (`defer`) regions.
-                if frame.is_compiled() {
+                if self.vm.frame_is_compiled(index) {
                     return false;
                 }
                 let pc = if Some(index) == innermost {

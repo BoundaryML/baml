@@ -71,17 +71,66 @@ unsafe impl Sync for FunctionKind {}
 /// [`FunctionKind::Native`]: this crate cannot name the VM's body types.
 /// Runtime-only; never serialized.
 ///
-/// # Safety
-///
-/// `ptr` must be cast from the `bex_vm::compiled_rt` body type `resumable`
-/// names (`ResumableBody` when set, `CompiledBody` otherwise) and only cast
-/// back to that same type when calling.
+/// Built only through the `unsafe` [`NativeBody::new`], whose contract is what
+/// makes calling the pointer sound.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NativeBody {
-    pub ptr: *const (),
+    ptr: *const (),
+    resumable: bool,
+    slots: u32,
+    cause_slot: Option<u32>,
+}
+
+impl NativeBody {
+    /// # Safety
+    ///
+    /// `ptr` must be cast from the `bex_vm::compiled_rt` body type `resumable`
+    /// names (`ResumableBody` when set, `CompiledBody` otherwise); the VM casts
+    /// it back to that type to call it.
+    #[must_use]
+    #[allow(unsafe_code)]
+    pub const unsafe fn new(
+        ptr: *const (),
+        resumable: bool,
+        slots: u32,
+        cause_slot: Option<u32>,
+    ) -> Self {
+        Self {
+            ptr,
+            resumable,
+            slots,
+            cause_slot,
+        }
+    }
+
+    /// The erased body.
+    #[must_use]
+    pub const fn ptr(self) -> *const () {
+        self.ptr
+    }
+
     /// Whether the body can suspend: it then runs as a resumable state
     /// machine driven by the VM instead of to completion inside a call.
-    pub resumable: bool,
+    #[must_use]
+    pub const fn resumable(self) -> bool {
+        self.resumable
+    }
+
+    /// The stack slots the body keeps in its frame, from the frame's locals
+    /// offset: a resumable body's arguments, the locals it keeps across a
+    /// suspension and its resume point, then the cause slot.
+    #[must_use]
+    pub const fn slots(self) -> u32 {
+        self.slots
+    }
+
+    /// The slot holding the `baml.errors.Context` of the error the body is
+    /// handling (null outside a handler), which the cause chain reads; `None`
+    /// for a body with no `catch`.
+    #[must_use]
+    pub const fn cause_slot(self) -> Option<u32> {
+        self.cause_slot
+    }
 }
 
 // SAFETY: a `NativeBody` points at immutable code (a function pointer), so

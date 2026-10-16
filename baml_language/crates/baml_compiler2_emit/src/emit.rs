@@ -947,14 +947,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         self.bytecode.instructions.len()
     }
 
-    /// Convert a byte offset to a 1-indexed line number.
-    fn offset_to_line(&self, offset: u32) -> usize {
-        match self.line_starts.binary_search(&offset) {
-            Ok(idx) => idx + 1,
-            Err(idx) => idx,
-        }
-    }
-
     /// Convert a source span to a display line number.
     ///
     /// Sequence points (statement/terminator boundaries) use normalized start
@@ -962,23 +954,12 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     /// when a span crosses lines, which avoids collapsing multiline operand
     /// spans to the previous line.
     fn span_to_line(&self, span: Span, sequence_point: bool) -> usize {
-        let start_line = crate::statement_line(self.line_starts, span.range.start().into());
-
-        if sequence_point {
-            return start_line;
-        }
-
-        let start_u32: u32 = span.range.start().into();
-        let end_u32: u32 = span.range.end().into();
-        if end_u32 > start_u32 {
-            let end_minus_one = end_u32 - 1;
-            let end_line = self.offset_to_line(end_minus_one);
-            if end_line > start_line && end_line - start_line <= 1 {
-                return end_line;
-            }
-        }
-
-        start_line
+        crate::span_line(
+            self.line_starts,
+            span.range.start().into(),
+            span.range.end().into(),
+            sequence_point,
+        )
     }
 
     /// Set the current debug span used for subsequent emitted instructions.

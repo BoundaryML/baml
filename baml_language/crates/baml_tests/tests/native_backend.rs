@@ -169,7 +169,8 @@ fn generated_module_is_well_formed_rust() {
     for function in &module.functions {
         assert!(
             compact.contains(&format!(
-                "CompiledEntry{{object:{},name:{:?},arity:{},body:CompiledFn::{}({}),}}",
+                "CompiledEntry{{object:{},name:{:?},arity:{},body:CompiledFn::{}({}),\
+                 slots:{},cause_slot:{:?},}}",
                 function.object,
                 function.name,
                 function.arity,
@@ -178,7 +179,9 @@ fn generated_module_is_well_formed_rust() {
                 } else {
                     "Inline"
                 },
-                function.symbol
+                function.symbol,
+                function.slots,
+                function.cause_slot,
             )),
             "{} is registered under its object index",
             function.name

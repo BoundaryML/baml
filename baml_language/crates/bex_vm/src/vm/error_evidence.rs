@@ -308,7 +308,9 @@ impl BexVm {
                 Frame::Bytecode(frame) => ErrorFrame {
                     function: self.frame_registered_function(idx),
                     // A compiled body has no bytecode position.
-                    pc: (!frame.is_compiled())
+                    pc: self
+                        .compiled_at(idx)
+                        .is_none()
                         .then(|| {
                             if Some(idx) == raise_frame {
                                 self.cur_pc
@@ -386,9 +388,7 @@ impl BexVm {
             (Some(frame), _) => unsafe { self.load_function(frame) }.ok(),
             (None, _) => None,
         };
-        let raise_compiled = raise_frame.is_some_and(
-            |idx| matches!(&self.frames[idx], Frame::Bytecode(frame) if frame.is_compiled()),
-        );
+        let raise_compiled = raise_frame.is_some_and(|idx| self.compiled_at(idx).is_some());
         let kind = if raise_compiled {
             self.compiled_raise_kind(thrown)
         } else {

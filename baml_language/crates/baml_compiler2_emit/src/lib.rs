@@ -764,6 +764,28 @@ pub fn statement_line(line_starts: &[u32], start: u32) -> usize {
     }
 }
 
+/// The line bytecode attributes to an instruction emitted under `start..end`.
+///
+/// A sequence point (a statement or terminator boundary) takes the
+/// normalized start line ([`statement_line`]). Any other entry takes the end
+/// line when the span crosses exactly one line break, which keeps a multiline
+/// operand from collapsing onto the line before it.
+pub fn span_line(line_starts: &[u32], start: u32, end: u32, sequence_point: bool) -> usize {
+    let start_line = statement_line(line_starts, start);
+    if sequence_point || end <= start {
+        return start_line;
+    }
+    let end_line = match line_starts.binary_search(&(end - 1)) {
+        Ok(idx) => idx + 1,
+        Err(idx) => idx,
+    };
+    if end_line > start_line && end_line - start_line <= 1 {
+        end_line
+    } else {
+        start_line
+    }
+}
+
 // ─── Let-binding helpers ─────────────────────────────────────────────────────
 
 /// Topologically sort let bindings by their dependencies.

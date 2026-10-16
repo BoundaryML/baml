@@ -43,63 +43,49 @@ pub type CompiledBody = fn(&mut BexVm, &[Value]) -> Result<Value, Box<VmError>>;
 
 /// A natively compiled body that can suspend: a state machine the VM drives.
 ///
-/// It keeps its arguments and every local live across a suspension in its
-/// frame's stack slots (`slot`/`set_slot`), which the GC scans and moves, and
-/// returns a [`Step`]: finished, or a request the VM carries out before calling
-/// the body again with the outcome and the point to resume at.
+/// It keeps its arguments, every local live across a suspension and the point
+/// it suspended at in its frame's stack slots (`slot`/`set_slot`), which the GC
+/// scans and moves, and returns a [`Step`]: finished, or a request the VM
+/// carries out before calling the body again with the outcome.
 pub type ResumableBody = fn(&mut BexVm, Resume) -> Result<Step, Box<VmError>>;
 
-/// How a [`ResumableBody`] is entered.
-pub struct Resume {
-    /// 0 to start; otherwise the `point` of the [`Step`] being resumed after.
-    pub point: u32,
-    /// What that step produced.
-    pub input: ResumeInput,
-}
-
-/// The outcome of the request a [`ResumableBody`] suspended on.
-pub enum ResumeInput {
+/// How a [`ResumableBody`] is entered. A resumed body reads the point it
+/// suspended at from its own slot; this says what the request produced.
+pub enum Resume {
     /// The body starts.
     Start,
-    /// The call or pause returned this value.
+    /// The call or await returned this value.
     Value(Value),
-    /// The call or pause raised this error; the body lands it in its catch
+    /// The call or await raised this error; the body lands it in its catch
     /// or returns it.
     Thrown(Box<VmError>),
+    /// The body yielded at a loop back edge and continues.
+    Yielded,
 }
 
-/// What a [`ResumableBody`] asks of the VM.
+/// What a [`ResumableBody`] asks of the VM. The body records its resume point
+/// in its frame before returning a request.
 pub enum Step {
     /// The body finished with this value.
     Return(Value),
     /// Call `callee` through the VM's call path (bytecode, an LLM function, a
     /// sys op, a builtin that runs callbacks, a closure, a compiled function
-    /// that can suspend) and resume at `point` with its result.
+    /// that can suspend) with the `argc` arguments the body pushed
+    /// ([`BexVm::push_arg`]).
     Call {
         callee: HeapPtr,
-        args: Vec<Value>,
+        argc: u32,
         /// Type arguments, for a generic builtin.
         type_args: Vec<RealizedTy>,
-        point: u32,
     },
-    /// Run `op` on `operand` exactly as its bytecode instruction does, and
-    /// resume at `point` with the result.
-    Pause {
-        op: PauseOp,
-        operand: Value,
-        point: u32,
-    },
-}
-
-/// The suspending instructions a compiled body delegates to the VM.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PauseOp {
-    /// `await future`.
-    Await,
+    /// `await future`, run by the interpreter's own `Await` on this frame.
+    Await(Value),
     /// `baml.future.__await_any(futures)`: the index of the first settled one.
-    AwaitAny,
+    AwaitAny(Value),
     /// `spawn plan`: the spawned task's future.
-    Spawn,
+    Spawn(Value),
+    /// Let the scheduler run (a GC, another task) and continue.
+    Yield,
 }
 
 /// A compiled body, by whether it can suspend.
@@ -123,20 +109,125 @@ pub struct CompiledEntry {
     pub arity: usize,
     /// The body.
     pub body: CompiledFn,
+    /// The stack slots the body keeps in its frame; see
+    /// [`bex_vm_types::types::NativeBody::slots`].
+    pub slots: u32,
+    /// The body's cause slot, when it has a `catch`; see
+    /// [`bex_vm_types::types::NativeBody::cause_slot`].
+    pub cause_slot: Option<u32>,
 }
 
-impl CompiledFn {
+impl CompiledEntry {
     pub(crate) fn erase(self) -> bex_vm_types::types::NativeBody {
-        match self {
-            Self::Inline(body) => bex_vm_types::types::NativeBody {
-                ptr: body as *const (),
-                resumable: false,
-            },
-            Self::Resumable(body) => bex_vm_types::types::NativeBody {
-                ptr: body as *const (),
-                resumable: true,
-            },
+        let (ptr, resumable) = match self.body {
+            CompiledFn::Inline(body) => (body as *const (), false),
+            CompiledFn::Resumable(body) => (body as *const (), true),
+        };
+        // SAFETY: `ptr` is cast from the body type `resumable` names.
+        #[allow(unsafe_code)]
+        unsafe {
+            bex_vm_types::types::NativeBody::new(ptr, resumable, self.slots, self.cause_slot)
         }
+    }
+}
+
+/// Where a compiled frame stands, read off its `instruction_ptr`.
+///
+/// A compiled frame keeps the bytecode frame's layout and adds nothing to it.
+/// Its position is one of two things: [`RUNNING`], while its body is on the
+/// Rust stack, or an offset into [`STUB`], the code appended to its function's
+/// bytecode at load (`prepare_compact_code`): where the interpreter resumes it.
+/// Its `faulting_pc`, which only bytecode reads as a position, holds the
+/// source line the body last reported.
+pub(crate) mod stub {
+    use bex_vm_types::bytecode::OpCode;
+
+    /// The code appended to every compiled function. `ResumeCompiled` hands
+    /// the frame back to its body; the suspending instructions before three
+    /// of them are the interpreter's own, so `await`, `await_any` and `spawn`
+    /// in compiled code keep their exact semantics, telemetry and
+    /// cancellation by running as bytecode on the compiled frame.
+    pub(crate) const CODE: [OpCode; 9] = [
+        OpCode::ResumeCompiled, // START
+        OpCode::ResumeCompiled, // AFTER_CALL
+        OpCode::ResumeCompiled, // AFTER_YIELD
+        OpCode::Await,          // AWAIT
+        OpCode::ResumeCompiled,
+        OpCode::AwaitAny, // AWAIT_ANY
+        OpCode::ResumeCompiled,
+        OpCode::Spawn, // SPAWN
+        OpCode::ResumeCompiled,
+    ];
+    /// Not started: the body begins here (an entry point or a resumable call).
+    pub(crate) const START: usize = 0;
+    /// Suspended on a call; its result is on the stack when it resumes (or an
+    /// error is delivered).
+    pub(crate) const AFTER_CALL: usize = 1;
+    /// Suspended on a yield.
+    pub(crate) const AFTER_YIELD: usize = 2;
+    pub(crate) const AWAIT: usize = 3;
+    pub(crate) const AWAIT_ANY: usize = 5;
+    pub(crate) const SPAWN: usize = 7;
+}
+
+/// The `instruction_ptr` of a compiled frame whose body is running on the
+/// Rust stack; see [`stub`].
+pub(crate) const RUNNING: usize = usize::MAX;
+
+/// How often, in frames, a compiled call checks the Rust stack: every frame
+/// it adds is a native one, a few hundred bytes to a few KiB, so checking
+/// every sixteenth keeps the check off the call path while staying far inside
+/// [`STACK_RED_ZONE`].
+const STACK_CHECK_EVERY: usize = 16;
+
+/// The Rust stack a compiled call leaves for what runs above it (sixteen
+/// compiled frames, the builtins they call, the unwinder). Less than this and
+/// the call raises `StackOverflow` instead of overflowing the thread's stack,
+/// whose size (a 2 MiB tokio worker, an 8 MiB main thread, a host's own
+/// thread) the VM does not choose.
+const STACK_RED_ZONE: usize = 256 << 10;
+
+/// Whether less than [`STACK_RED_ZONE`] of this thread's stack remains.
+#[cold]
+#[inline(never)]
+fn stack_low() -> bool {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        stacker::remaining_stack().is_some_and(|left| left < STACK_RED_ZONE)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        false
+    }
+}
+
+/// Where `function`'s [`stub::CODE`] starts, for a function with a compiled
+/// body.
+#[inline]
+pub(crate) fn stub_start(function: &Function) -> Option<usize> {
+    function.native_body?;
+    Some(function.bytecode.compact.as_ref()?.code.len() - stub::CODE.len())
+}
+
+/// Where the body of a compiled frame stands; see [`stub`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CompiledAt {
+    /// Running on the Rust stack, or not yet started: an error leaves it.
+    Running,
+    /// Suspended on a request: an error is delivered to it.
+    Suspended,
+}
+
+/// Where the compiled body of a frame at `instruction_ptr` running `function`
+/// stands; `None` when the frame runs bytecode.
+#[inline]
+pub(crate) fn compiled_at(instruction_ptr: usize, function: &Function) -> Option<CompiledAt> {
+    if instruction_ptr == RUNNING {
+        return Some(CompiledAt::Running);
+    }
+    match instruction_ptr.checked_sub(stub_start(function)?)? {
+        stub::START => Some(CompiledAt::Running),
+        _ => Some(CompiledAt::Suspended),
     }
 }
 
@@ -218,14 +309,15 @@ pub fn callee_ptr(value: Value) -> Result<HeapPtr, Box<VmError>> {
 #[allow(unsafe_code)]
 pub(crate) fn native_body_fn(function: &Function) -> Option<CompiledFn> {
     let body = function.native_body?;
-    // SAFETY: a `NativeBody` is only built by `CompiledFn::erase`, whose
-    // `resumable` flag names the type the pointer was cast from. `transmute`
-    // because Rust has no `as` cast from `*const ()` to a fn pointer.
+    // SAFETY: a `NativeBody` is built only through its `unsafe` constructor,
+    // whose contract is that `resumable` names the type the pointer was cast
+    // from. `transmute` because Rust has no `as` cast from `*const ()` to a fn
+    // pointer.
     Some(unsafe {
-        if body.resumable {
-            CompiledFn::Resumable(std::mem::transmute::<*const (), ResumableBody>(body.ptr))
+        if body.resumable() {
+            CompiledFn::Resumable(std::mem::transmute::<*const (), ResumableBody>(body.ptr()))
         } else {
-            CompiledFn::Inline(std::mem::transmute::<*const (), CompiledBody>(body.ptr))
+            CompiledFn::Inline(std::mem::transmute::<*const (), CompiledBody>(body.ptr()))
         }
     })
 }
@@ -649,13 +741,17 @@ impl BexVm {
     /// `l << r` on raw ints with the i63 semantics constant folding uses.
     #[inline]
     pub fn shl_i64(&mut self, l: i64, r: i64) -> Result<i64, VmError> {
-        Ok(Self::int_of(self.int_shl(l, r)?))
+        self.int_shl(l, r)?
+            .as_int()
+            .ok_or_else(|| checker_hole("int"))
     }
 
     /// `l >> r` on raw ints with the i63 semantics constant folding uses.
     #[inline]
     pub fn shr_i64(&mut self, l: i64, r: i64) -> Result<i64, VmError> {
-        Ok(Self::int_of(self.int_shr(l, r)?))
+        self.int_shr(l, r)?
+            .as_int()
+            .ok_or_else(|| checker_hole("int"))
     }
 
     /// `-n` on a raw int: `IntegerOverflow` for `INT_MIN`.
@@ -667,37 +763,6 @@ impl BexVm {
         } else {
             Err(self.integer_overflow(format!("-({n}) overflows int")))
         }
-    }
-
-    /// The raw int inside an `Int`-tagged value. The type checker proved the
-    /// tag; a mismatch is a compiler bug, reported in debug builds.
-    #[inline]
-    #[must_use]
-    pub fn int_of(value: Value) -> i64 {
-        debug_assert!(value.is_int(), "compiled code read a non-int as int");
-        value.as_int().unwrap_or(0)
-    }
-
-    /// The raw bool inside a `Bool` value; see [`Self::int_of`].
-    #[inline]
-    #[must_use]
-    pub fn bool_of(value: Value) -> bool {
-        debug_assert!(
-            value.as_bool().is_some(),
-            "compiled code read a non-bool as bool"
-        );
-        value.as_bool().unwrap_or(false)
-    }
-
-    /// The raw float inside a heap float; see [`Self::int_of`].
-    #[inline]
-    #[must_use]
-    pub fn f64_of(value: Value) -> f64 {
-        debug_assert!(
-            value_as_float(value).is_some(),
-            "compiled code read a non-float as float"
-        );
-        value_as_float(value).unwrap_or(0.0)
     }
 
     /// `!value` with BAML truthiness.
@@ -827,21 +892,15 @@ impl BexVm {
         result
     }
 
-    /// Size the slot region of the resumable function whose frame count is
-    /// `depth` to `slots` (at least its arguments, which arrive in the first
-    /// slots). Called once, on start; the region then sits at the top of the
-    /// stack whenever the body suspends.
+    /// Size the slot region of the compiled function whose frame count is
+    /// `depth` to `slots` (a resumable body's arguments arrive in the first
+    /// ones). Called once, on start; a resumable body's region then sits at
+    /// the top of the stack whenever it suspends.
     pub fn reserve_slots(&mut self, depth: usize, slots: usize) {
-        let Some(crate::vm::Frame::Bytecode(frame)) = self.frames.get_mut(depth - 1) else {
+        let crate::vm::Frame::Bytecode(frame) = &self.frames[depth - 1] else {
             unreachable!("a compiled body reserves slots in its own frame");
         };
         let end = frame.locals_offset.raw() + slots;
-        if let crate::vm::FrameBody::Compiled {
-            slots: reserved, ..
-        } = &mut frame.body
-        {
-            *reserved = u32::try_from(slots).unwrap_or(u32::MAX);
-        }
         self.stack.resize(end, Value::NULL);
     }
 
@@ -867,6 +926,41 @@ impl BexVm {
         self.stack.0[at] = value;
     }
 
+    /// Push an argument of the call a resumable body is about to request
+    /// ([`Step::Call`]); arguments sit above the body's slots, rooted.
+    #[inline]
+    pub fn push_arg(&mut self, value: Value) {
+        self.stack.push(value);
+    }
+
+    /// The value of `future` when it has settled with one and awaiting it
+    /// would not poll for a yield: `await`'s fast path, with no suspension.
+    /// `None` sends the body through the interpreter's own `Await`
+    /// ([`Step::Await`]), which raises, parks or yields exactly as bytecode
+    /// does. Counts the `Await`'s control-flow check, as bytecode does.
+    #[inline]
+    pub fn ready(&mut self, future: Value) -> Option<Value> {
+        if self.early_yield.is_due() {
+            return None;
+        }
+        let value = match self.get_object(future.as_object_ptr()?) {
+            Object::Future(future) => match future.read() {
+                bex_vm_types::FutureRead::Ready(value) => value,
+                _ => return None,
+            },
+            _ => return None,
+        };
+        self.early_yield.tick();
+        Some(value)
+    }
+
+    /// Whether a resumable body should yield ([`Step::Yield`]) at a loop back
+    /// edge: the interpreter's control-flow check.
+    #[inline]
+    pub fn should_yield(&mut self) -> bool {
+        self.should_early_yield()
+    }
+
     /// The frame count with the running compiled function's frame on top.
     /// A compiled body reads it on entry and hands it to [`Self::catch`].
     #[inline]
@@ -877,21 +971,22 @@ impl BexVm {
 
     /// Record `line` as the source position of the compiled function whose
     /// frame count is `depth` (see [`Self::frame_depth`]). Compiled code calls
-    /// this only when an error leaves the function or lands in its `catch`,
-    /// so stack traces name the statement that raised, at no cost otherwise.
+    /// this only when an error leaves the function, lands in its `catch`, or
+    /// it suspends, so stack traces name the statement that raised, at no
+    /// cost otherwise. A compiled frame keeps its line in `faulting_pc`; see
+    /// `stub`.
     #[cold]
     pub fn note_line(&mut self, depth: usize, line: u32) {
         if let Some(crate::vm::Frame::Bytecode(frame)) = depth
             .checked_sub(1)
             .and_then(|top| self.frames.get_mut(top))
-            && let crate::vm::FrameBody::Compiled { line: at, .. } = &mut frame.body
         {
-            *at = line;
+            frame.faulting_pc = line as usize;
         }
     }
 
     /// Land a thrown error in a compiled `catch`; see
-    /// [`BexVm::land_compiled_catch`]. Returns the caught value and its
+    /// `BexVm::land_compiled_catch`. Returns the caught value and its
     /// `baml.errors.Context`; an internal error keeps propagating.
     #[inline]
     pub fn catch(
@@ -900,6 +995,16 @@ impl BexVm {
         depth: usize,
     ) -> Result<(Value, Value), Box<VmError>> {
         self.land_compiled_catch(error, depth)
+    }
+
+    /// `unreachable` reached in compiled code: the catchable
+    /// `baml.panics.Unreachable` bytecode's `Unreachable` throws.
+    #[cold]
+    #[inline(never)]
+    pub fn unreachable_panic(&mut self) -> Box<VmError> {
+        Box::new(VmError::thrown_fresh(
+            self.panic_to_exception_value(VmPanic::Unreachable),
+        ))
     }
 
     /// Call a compiled function from compiled code.
@@ -922,13 +1027,14 @@ impl BexVm {
         body: CompiledBody,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
-        if self.telemetry.is_some() {
-            return self.call_compiled_observed(callee, args);
-        }
-        if self.frames.len() >= crate::vm::MAX_FRAMES {
+        let depth = self.frames.len();
+        if depth >= crate::vm::MAX_FRAMES || (depth % STACK_CHECK_EVERY == 0 && stack_low()) {
             return Err(Box::new(VmError::thrown_fresh(
                 self.panic_to_exception_value(VmPanic::StackOverflow),
             )));
+        }
+        if self.telemetry.is_some() {
+            return self.call_compiled_observed(callee, args);
         }
         let context = self.current_context().clone();
         let locals_offset = StackIndex::from_raw(self.stack.len());
@@ -938,6 +1044,7 @@ impl BexVm {
         let result = body(self, args);
         if result.is_ok() {
             self.frames.pop();
+            self.stack.truncate(locals_offset.raw());
         }
         result
     }
@@ -961,13 +1068,15 @@ impl BexVm {
             self.load_function(top)
                 .map_err(|error| Box::new(VmError::InternalError(error)))?
         };
-        match self.execute_call_from_locals_offset(
+        let outcome = self.compiled_caller_call(
             callee,
             locals_offset,
             args.len(),
+            &[],
             &mut frame_idx,
             &mut function,
-        ) {
+        );
+        match outcome {
             // The callee ran to completion inside the call path (its body is
             // compiled), so its result is on the stack. An `EarlyYield`
             // request is left armed for the enclosing loop.
