@@ -8607,6 +8607,10 @@ impl BexVm {
             }
         }
 
+        // The current function's runtime package, derived once per function
+        // switch rather than on every instruction that addresses an operand.
+        let mut runtime_package = self.runtime_package_of(function);
+
         loop {
             // Read opcode byte and advance PC past it.
             // SAFETY: PC is always in bounds (bytecode invariant).
@@ -8776,8 +8780,7 @@ impl BexVm {
                     OpCode::LoadGlobal => {
                         let raw = { read_u32_unchecked(code, pc) };
                         let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                        let value =
-                            self.load_global_in(self.runtime_package_of(function), global_idx);
+                        let value = self.load_global_in(runtime_package, global_idx);
                         self.stack.push(value);
                     }
 
@@ -8787,7 +8790,7 @@ impl BexVm {
                         let value = self.stack.ensure_pop();
                         // Only valid during `$init`; post-init globals are frozen in `Arc<[Value]>`
                         // and a write here is a VM internal error.
-                        self.store_global_in(self.runtime_package_of(function), global_idx, value)?;
+                        self.store_global_in(runtime_package, global_idx, value)?;
                     }
 
                     // ── LoadField / StoreField / InitField ────────────────────────
@@ -9098,8 +9101,7 @@ impl BexVm {
                         let raw = { read_u32_unchecked(code, pc) };
 
                         let callee = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                        let callee_value =
-                            self.load_global_in(self.runtime_package_of(function), callee);
+                        let callee_value = self.load_global_in(runtime_package, callee);
                         // `as_object_ptr` only unwraps the value to a heap pointer
                         // (the `FunctionType` argument is error-message metadata, not
                         // an assertion). `dispatch_sysop_yield`'s own kind check is
@@ -9227,8 +9229,7 @@ impl BexVm {
                         let ntypeargs = usize::from(read_u16_unchecked(code, pc));
 
                         let callee_global = bex_vm_types::GlobalIndex::from_raw(raw as usize);
-                        let callee_value =
-                            self.load_global_in(self.runtime_package_of(function), callee_global);
+                        let callee_value = self.load_global_in(runtime_package, callee_global);
 
                         if op == OpCode::CallExactArgs
                             && self.pending_call_trace.is_none()
@@ -9317,6 +9318,7 @@ impl BexVm {
                                 }
                                 *frame_idx = self.frames.len() - 1;
                                 *function = callee;
+                                runtime_package = self.runtime_package_of(function);
                                 if self.should_early_yield() {
                                     return Ok(Some(VmExecState::EarlyYield));
                                 }
@@ -9432,7 +9434,7 @@ impl BexVm {
                         // lane. The rule borrows `self`; scope it so the borrow ends
                         // before the `&mut self` call below.
                         let receiver = self.stack[StackIndex::from_raw(args_offset + self_arg)];
-                        let cache_key = if self.runtime_package_of(function).is_null() {
+                        let cache_key = if runtime_package.is_null() {
                             let iface_ptr = self.as_object_ptr(iface_value, ObjectType::Type)?;
                             let Object::Type(type_value) = self.get_object(iface_ptr) else {
                                 unreachable!("as_object_ptr(Type) guarantees a Type object")
@@ -9755,6 +9757,7 @@ impl BexVm {
                         if let Frame::Bytecode(caller) = &self.frames[*frame_idx] {
                             *pc = caller.instruction_ptr;
                             *function = self.load_function(*frame_idx)?;
+                            runtime_package = self.runtime_package_of(function);
                             *code = &function.bytecode.compact.as_ref().unwrap().code;
                             *dispatch_frame_idx = *frame_idx;
                             continue;
@@ -10152,7 +10155,7 @@ impl BexVm {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let static_cache_key = match &function.bytecode.constants[idx] {
                             ConstValue::Type(template)
-                                if self.runtime_package_of(function).is_null()
+                                if runtime_package.is_null()
                                     && <&bex_vm_types::RealizedTy>::try_from(template).is_ok()
                                     && matches!(&self.frames[*frame_idx],
                                     Frame::Bytecode(frame)
@@ -10161,9 +10164,7 @@ impl BexVm {
                             {
                                 Some((std::ptr::from_ref(*function) as usize, idx))
                             }
-                            ConstValue::Type(template)
-                                if !self.runtime_package_of(function).is_null() =>
-                            {
+                            ConstValue::Type(template) if !runtime_package.is_null() => {
                                 self.runtime_load_type_cache_key(*frame_idx, template, idx)
                             }
                             _ => None,
@@ -10266,8 +10267,7 @@ impl BexVm {
                         let raw = { read_u32_unchecked(code, pc) };
                         let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
                         let receiver = self.stack.ensure_pop();
-                        let callee_value =
-                            self.load_global_in(self.runtime_package_of(function), global_idx);
+                        let callee_value = self.load_global_in(runtime_package, global_idx);
                         let function_ptr =
                             self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
                         // Curry the receiver's class type args (→ `Self`) into the
@@ -10380,7 +10380,7 @@ impl BexVm {
                         let gf = Object::GenericFunction(bex_vm_types::GenericFunction {
                             function: function_global,
                             type_args: type_args.tys.into_boxed_slice(),
-                            runtime_package: self.runtime_package_of(function),
+                            runtime_package,
                         });
                         let ptr = self.tlab.alloc(gf);
                         self.stack.push(Value::object(ptr));
