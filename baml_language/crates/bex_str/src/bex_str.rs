@@ -4,7 +4,7 @@ use std::{
     hash::{Hash, Hasher},
     ops::{Deref, Range},
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, OnceLock, PoisonError,
         atomic::{AtomicU64, Ordering},
     },
 };
@@ -124,12 +124,13 @@ pub struct ConcatNode {
     /// Exact ASCII prefix, derived from the children's at construction (each
     /// O(1)) for the same reason.
     pub(crate) total_ascii_prefix_len: u64,
-    pub(crate) state: Mutex<ConcatState>,
-}
-
-pub(crate) enum ConcatState {
-    Deferred { left: BexStr, right: BexStr },
-    Flattened(Arc<FlatStr>),
+    /// The children, until the first flatten takes them. The flatten holds
+    /// this lock while it builds, so whoever finds the children gone finds
+    /// `flat` set.
+    pub(crate) children: Mutex<Option<(BexStr, BexStr)>>,
+    /// The flattened text, published once. Readers borrow it without locking,
+    /// for as long as the node lives.
+    pub(crate) flat: OnceLock<Arc<FlatStr>>,
 }
 
 /// Bytes of an `Arc<FlatStr>` allocation beyond the text itself: the two
@@ -318,18 +319,7 @@ impl BexStr {
                 let l = *byte_len as usize;
                 &parent.data[o..o + l]
             }
-            BexStr::Concat(c) => {
-                let flat = c.flatten();
-                // SAFETY: The Arc<FlatStr> inside the Mutex outlives &self
-                // because self holds Arc<ConcatNode> which holds the Mutex.
-                // The flattened Arc is never replaced once set.
-                #[allow(unsafe_code)]
-                unsafe {
-                    let ptr = flat.data.as_ptr();
-                    let len = flat.data.len();
-                    std::slice::from_raw_parts(ptr, len)
-                }
-            }
+            BexStr::Concat(c) => &c.flatten().data,
         }
     }
 
@@ -407,7 +397,7 @@ impl BexStr {
             // Re-slice: point at SAME parent, adjust offset. Depth stays 1.
             BexStr::Slice { parent, offset, .. } => (parent.clone(), *offset + start as u64),
             // `as_bytes` above already flattened; this returns the cached result.
-            BexStr::Concat(c) => (c.flatten(), start as u64),
+            BexStr::Concat(c) => (c.flatten().clone(), start as u64),
         };
         BexStr::Slice {
             parent,
@@ -625,7 +615,8 @@ impl BexStr {
             total_byte_len: total_byte_len as u64,
             total_char_len,
             total_ascii_prefix_len,
-            state: Mutex::new(ConcatState::Deferred { left, right }),
+            children: Mutex::new(Some((left, right))),
+            flat: OnceLock::new(),
         }))
     }
 
@@ -658,14 +649,7 @@ impl BexStr {
             BexStr::Inline { .. } => None, // No cache for Inline
             BexStr::Flat(f) => read_hash(&f.hash),
             BexStr::Slice { hash, .. } => read_hash(hash),
-            BexStr::Concat(c) => {
-                // If flattened, check the FlatStr's hash
-                let guard = c.state.lock().unwrap();
-                match &*guard {
-                    ConcatState::Flattened(f) => read_hash(&f.hash),
-                    ConcatState::Deferred { .. } => None,
-                }
-            }
+            BexStr::Concat(c) => c.flat.get().and_then(|f| read_hash(&f.hash)),
         }
     }
 }
@@ -692,34 +676,39 @@ impl FlatStr {
             data,
         }
     }
-
-    /// The empty string, left behind in a `ConcatNode` whose children were taken.
-    fn placeholder() -> FlatStr {
-        FlatStr::from_parts(Box::new([]), 0, 0)
-    }
 }
 
 // ── ConcatNode ─────────────────────────────────────────────────────
 
 impl ConcatNode {
-    /// Iterative flatten. Materializes bytes into Arc<FlatStr>.
-    /// Stores result back so subsequent calls return O(1).
-    pub(crate) fn flatten(&self) -> Arc<FlatStr> {
-        let mut guard = self.state.lock().unwrap();
-        match &*guard {
-            ConcatState::Flattened(f) => return f.clone(),
-            ConcatState::Deferred { .. } => {}
+    /// The flattened text, built on the first call. Later calls, on any
+    /// thread, borrow the published result without locking.
+    #[inline]
+    pub(crate) fn flatten(&self) -> &Arc<FlatStr> {
+        match self.flat.get() {
+            Some(flat) => flat,
+            None => self.flatten_slow(),
         }
+    }
 
-        // Take ownership of the deferred state
-        let old = std::mem::replace(
-            &mut *guard,
-            ConcatState::Flattened(Arc::new(FlatStr::placeholder())),
-        );
-        let (left, right) = match old {
-            ConcatState::Deferred { left, right } => (left, right),
-            ConcatState::Flattened(_) => unreachable!(),
-        };
+    /// Whether this node has been flattened.
+    #[cfg(test)]
+    pub(crate) fn is_flattened(&self) -> bool {
+        self.flat.get().is_some()
+    }
+
+    /// Iterative flatten. Takes the children and builds the text while holding
+    /// the children lock, then publishes it before releasing the lock.
+    #[cold]
+    fn flatten_slow(&self) -> &Arc<FlatStr> {
+        let mut children = self.children.lock().unwrap();
+        // Another thread may have flattened this node while we waited.
+        if let Some(flat) = self.flat.get() {
+            return flat;
+        }
+        let (left, right) = children
+            .take()
+            .expect("an unflattened concat node keeps its children");
 
         // Iterative tree walk — heap-allocated work-stack
         let mut buf = Vec::with_capacity(self.total_byte_len as usize);
@@ -747,23 +736,34 @@ impl ConcatNode {
                     buf.extend_from_slice(&parent.data[o..o + l]);
                 }
                 BexStr::Concat(c) => {
-                    let inner_guard = c.state.lock().unwrap();
-                    match &*inner_guard {
-                        ConcatState::Flattened(f) => {
-                            buf.extend_from_slice(&f.data);
-                        }
-                        ConcatState::Deferred { left, right } => {
+                    if let Some(f) = c.flat.get() {
+                        buf.extend_from_slice(&f.data);
+                        continue;
+                    }
+                    let inner = c.children.lock().unwrap();
+                    match &*inner {
+                        Some((left, right)) => {
                             // Clone the child handles (O(1): Arc bump or inline
-                            // memcpy) and leave this node's `Deferred` state
-                            // intact. The node may be shared (Arc refcount > 1,
-                            // e.g. `let n = a + b; let p = n + c`); destructively
+                            // memcpy) and leave this node's children intact.
+                            // The node may be shared (Arc refcount > 1, e.g.
+                            // `let n = a + b; let p = n + c`); destructively
                             // emptying it here would corrupt every *other*
                             // reference to it. (B-262 / B-233)
                             let left = left.clone();
                             let right = right.clone();
-                            drop(inner_guard);
+                            drop(inner);
                             stack.push(right);
                             stack.push(left);
+                        }
+                        // Flattened by another thread between the `flat`
+                        // check and the lock; it published before unlocking.
+                        None => {
+                            drop(inner);
+                            let f = c
+                                .flat
+                                .get()
+                                .expect("a concat node without children is flat");
+                            buf.extend_from_slice(&f.data);
                         }
                     }
                 }
@@ -775,7 +775,9 @@ impl ConcatNode {
             self.total_char_len,
             self.total_ascii_prefix_len,
         ));
-        *guard = ConcatState::Flattened(flat.clone());
+        // Publish while still holding the children lock (see `children`).
+        let flat = self.flat.get_or_init(|| flat);
+        drop(children);
         flat
     }
 }
@@ -783,13 +785,13 @@ impl ConcatNode {
 /// Iterative Drop to avoid stack overflow on deep left-leaning trees.
 impl Drop for ConcatNode {
     fn drop(&mut self) {
-        let state = match self.state.get_mut() {
-            Ok(s) => std::mem::replace(s, ConcatState::Flattened(Arc::new(FlatStr::placeholder()))),
-            Err(_) => return, // Mutex poisoned — leak rather than risk UB
-        };
-        let (left, right) = match state {
-            ConcatState::Deferred { left, right } => (left, right),
-            ConcatState::Flattened(_) => return,
+        // A poisoned lock still holds a valid `Option`: take what is there.
+        let children = self
+            .children
+            .get_mut()
+            .unwrap_or_else(PoisonError::into_inner);
+        let Some((left, right)) = children.take() else {
+            return;
         };
 
         let mut stack: Vec<BexStr> = Vec::new();
@@ -800,17 +802,15 @@ impl Drop for ConcatNode {
             if let BexStr::Concat(arc) = node
                 && let Ok(mut owned) = Arc::try_unwrap(arc)
             {
-                let inner = match owned.state.get_mut() {
-                    Ok(s) => std::mem::replace(
-                        s,
-                        ConcatState::Flattened(Arc::new(FlatStr::placeholder())),
-                    ),
-                    Err(_) => continue,
-                };
-                if let ConcatState::Deferred { left, right } = inner {
+                let inner = owned
+                    .children
+                    .get_mut()
+                    .unwrap_or_else(PoisonError::into_inner);
+                if let Some((left, right)) = inner.take() {
                     stack.push(left);
                     stack.push(right);
                 }
+                // `owned` now drops with no children: O(1).
             }
             // Inline/Flat/Slice drop in O(1)
         }
