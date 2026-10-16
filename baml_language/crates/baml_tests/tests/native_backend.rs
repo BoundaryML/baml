@@ -225,3 +225,25 @@ fn body_of(module: &NativeModule, name: &str) -> String {
         .map_or(module.source.len(), |end| start + end);
     module.source[start..end].to_string()
 }
+
+/// A resumable body's arguments arrive in slots `0..arity` while local `i`
+/// keeps slot `i`: its start reads every argument before it writes any slot,
+/// or writing local 1 would overwrite argument 2 before it is read.
+#[test]
+fn resumable_start_reads_every_argument_before_writing_a_slot() {
+    let module = compile(
+        r#"
+function dur() -> baml.time.Duration { baml.time.Duration.from_milliseconds(1) }
+function two(a: int, b: int) -> int { baml.sys.sleep(dur()); a * 10 + b }
+"#,
+    );
+    let body = body_of(&module, "user.two");
+    let start = body
+        .split("Resume::Start =>")
+        .nth(1)
+        .and_then(|rest| rest.split("bb =").next())
+        .expect("a resumable body starts");
+    let last_read = start.rfind("vm.slot(").expect("arguments are read");
+    let first_write = start.find("vm.set_slot(").unwrap_or(usize::MAX);
+    assert!(last_read < first_write, "{start}");
+}
