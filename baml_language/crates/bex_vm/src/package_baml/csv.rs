@@ -293,7 +293,7 @@ fn field_by_name(vm: &BexVm, inst_val: Value, name: &str) -> Result<Value, VmRus
     let inst = vm.as_instance(&inst_val)?;
     let class_ptr = inst.class;
     let idx = match vm.get_object(class_ptr) {
-        Object::Class(c) => c.fields.iter().position(|f| f.name == name),
+        Object::Class(c) => c.instance_fields().iter().position(|f| f.name == name),
         _ => None,
     }
     .ok_or_else(|| VmInternalError::MissingNativeFunction {
@@ -1556,6 +1556,11 @@ fn record_arc(vm: &BexVm, rec: Value) -> Result<Arc<RecordData>, VmRustFnError> 
     Ok(vm.rust_data_field::<RecordData>(&rec, 0)?)
 }
 
+/// The error for a decode target only the runtime builds.
+fn runtime_owned_target(key: &str) -> String {
+    format!("`{key}` is built only by the runtime; CSV decodes into flat classes")
+}
+
 /// Decode a whole record into an instance of class `ty`.
 fn decode_record_to_instance(
     vm: &mut BexVm,
@@ -1571,21 +1576,16 @@ fn decode_record_to_instance(
     };
     let key = head_key(head);
     let class_ptr = head.ptr();
-    let Object::Class(_) = vm.get_object(class_ptr) else {
+    let Object::Class(class) = vm.get_object(class_ptr) else {
         return Err(DecodeFail::Info(ErrInfo::new(
             Kind::Options,
             format!("class `{key}` not found"),
         )));
     };
-    let class_fields = match vm.get_object(class_ptr) {
-        Object::Class(c) => c.fields.clone(),
-        _ => {
-            return Err(DecodeFail::Info(ErrInfo::new(
-                Kind::Options,
-                format!("`{key}` is not a class"),
-            )));
-        }
-    };
+    let class_fields = class
+        .buildable_fields()
+        .map_err(|_| DecodeFail::Info(ErrInfo::new(Kind::Options, runtime_owned_target(&key))))?
+        .to_vec();
 
     let mut field_values = Vec::with_capacity(class_fields.len());
     for (fi, cf) in class_fields.iter().enumerate() {
@@ -2032,7 +2032,11 @@ fn row_fields(vm: &BexVm, row: Value) -> Result<(Vec<String>, Vec<Value>), ErrIn
         )
     })?;
     let names = match vm.get_object(inst.class) {
-        Object::Class(c) => c.fields.iter().map(|f| f.name.clone()).collect::<Vec<_>>(),
+        Object::Class(c) => c
+            .instance_fields()
+            .iter()
+            .map(|f| f.name.clone())
+            .collect::<Vec<_>>(),
         _ => {
             return Err(ErrInfo::new(
                 Kind::Options,
@@ -2492,7 +2496,13 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         };
         let key = head_key(head);
         let class_fields = match vm.get_object(head.ptr()) {
-            Object::Class(c) => c.fields.clone(),
+            Object::Class(c) => match c.buildable_fields() {
+                Ok(fields) => fields.to_vec(),
+                Err(_) => {
+                    let info = ErrInfo::new(Kind::Options, runtime_owned_target(&key));
+                    return Err(throw_err(vm, &info));
+                }
+            },
             _ => {
                 let info = ErrInfo::new(Kind::Options, format!("`{key}` is not a class"));
                 return Err(throw_err(vm, &info));
@@ -2684,9 +2694,12 @@ impl BamlNamespaceCsv for PackageBamlImpl {
         // Header names from T's fields.
         let class_info = match &ty {
             Some(RealizedTy::Class(head, _)) => match vm.get_object(head.ptr()) {
-                Object::Class(c) => {
-                    Some(c.fields.iter().map(|f| f.name.clone()).collect::<Vec<_>>())
-                }
+                Object::Class(c) => Some(
+                    c.declared_fields()
+                        .iter()
+                        .map(|f| f.name.clone())
+                        .collect::<Vec<_>>(),
+                ),
                 _ => None,
             },
             _ => None,

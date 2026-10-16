@@ -327,7 +327,7 @@ impl RenderDefinitionValidator<'_> {
                     display_name,
                     arity: args.len(),
                 });
-                for field in &class.fields {
+                for field in class.declared_fields() {
                     if field.skip {
                         continue;
                     }
@@ -644,11 +644,25 @@ impl RenderDefinitionEquivalence<'_> {
                 if left.description != right.description
                     || left.alias != right.alias
                     || left.generic_param_count != right.generic_param_count
-                    || left.fields.len() != right.fields.len()
                 {
                     return false;
                 }
-                for (left, right) in left.fields.iter().zip(&right.fields) {
+                let (left_fields, right_fields) = match (&left.body, &right.body) {
+                    (
+                        bex_vm_types::ClassBody::RustType(left),
+                        bex_vm_types::ClassBody::RustType(right),
+                    ) => return left == right,
+                    (bex_vm_types::ClassBody::RustType(_), _) => return false,
+                    (
+                        bex_vm_types::ClassBody::Fields(left),
+                        bex_vm_types::ClassBody::Fields(right),
+                    ) => (left, right),
+                    (bex_vm_types::ClassBody::Fields(_), _) => return false,
+                };
+                if left_fields.len() != right_fields.len() {
+                    return false;
+                }
+                for (left, right) in left_fields.iter().zip(right_fields) {
                     if left.name != right.name
                         || left.description != right.description
                         || left.alias != right.alias
@@ -867,7 +881,7 @@ fn first_open_interface(
             let Object::Class(class) = vm.get_object(head.ptr()) else {
                 return None;
             };
-            for field in class.fields.iter().filter(|field| !field.skip) {
+            for field in class.declared_fields().iter().filter(|field| !field.skip) {
                 let child_path = format!("{path}.{}", field.name);
                 if let Some(runtime) = &field.runtime_type {
                     if let Some(found) = first_open_interface(vm, &runtime.ty, &child_path, visited)
@@ -1155,7 +1169,7 @@ fn render_witness_sources(
             source.push_str(&render_ty_source(&ty, spellings));
         }
         for (declared, slot) in interface.fields.iter().zip(&*rule.field_links) {
-            let Some(field) = class.fields.get(*slot as usize) else {
+            let Some(field) = class.declared_fields().get(*slot as usize) else {
                 continue;
             };
             source.push_str("\n    ");
@@ -1211,7 +1225,7 @@ fn expanded_type_value_nominals(
         let Object::Class(class) = vm.get_object(ptr) else {
             continue;
         };
-        for field in &class.fields {
+        for field in class.declared_fields() {
             let field_ty = field
                 .runtime_type
                 .as_ref()
@@ -1308,7 +1322,7 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
         source.push_str("class ");
         source.push_str(&name);
         source.push_str(" {");
-        for field in &class.fields {
+        for field in class.declared_fields() {
             source.push('\n');
             push_docstring(&mut source, field.docstring.as_deref(), "  ");
             source.push_str("  ");
@@ -1419,7 +1433,7 @@ mod renderability_tests {
         let ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name)),
-            fields: Vec::new(),
+            body: bex_vm_types::ClassBody::Fields(Vec::new()),
             description: description.map(str::to_string),
             alias: None,
             docstring: None,

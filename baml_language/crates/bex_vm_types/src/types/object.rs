@@ -183,6 +183,43 @@ impl Object {
         }
     }
 
+    /// The class an instance belongs to and the type arguments it was built
+    /// at, for a plain or a `@@rust_type` instance alike: what every class
+    /// test (`is`, `match`, a typed `catch`) and every class-keyed dispatch
+    /// asks of a value.
+    #[must_use]
+    pub fn class_instance(&self) -> Option<(crate::HeapPtr, &[crate::RealizedTy])> {
+        match self {
+            Object::Instance(instance) => Some((instance.class, &instance.class_type_args)),
+            Object::RustInstance(instance) => Some((instance.class, &instance.class_type_args)),
+            Object::Package(_)
+            | Object::Function(_)
+            | Object::Interface(_)
+            | Object::ImplRule(_)
+            | Object::Class(_)
+            | Object::Enum(_)
+            | Object::TypeAlias(_)
+            | Object::Variant(_)
+            | Object::Closure(_)
+            | Object::BoundMethod(_)
+            | Object::GenericFunction(_)
+            | Object::HostClosure(_)
+            | Object::Cell(_)
+            | Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::Array(_)
+            | Object::Map(_)
+            | Object::Float(_)
+            | Object::Future(_)
+            | Object::RustData(_)
+            | Object::Type(_)
+            | Object::Tombstone => None,
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => None,
+        }
+    }
+
     /// The failure for code that followed a reference and found an
     /// [`Object::Tombstone`]. Code that walks slots by position never calls
     /// this: a tombstone there is expected and simply has no contents.

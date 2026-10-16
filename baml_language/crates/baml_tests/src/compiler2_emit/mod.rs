@@ -447,7 +447,7 @@ function main() -> int { 0 }
         .expect("Book class object should be emitted");
     let slot = |name: &str| {
         class
-            .fields
+            .declared_fields()
             .iter()
             .position(|f| f.name == name)
             .unwrap_or_else(|| panic!("Book should have a `{name}` field"))

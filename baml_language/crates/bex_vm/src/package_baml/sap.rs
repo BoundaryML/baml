@@ -419,8 +419,9 @@ struct ReachedClass {
     head: TypeHead,
     /// The instantiation's arguments, each union spelled flat.
     args: Box<[RealizedTy]>,
-    /// The type of every field, `@skip` ones included, realized at `args`.
-    fields: Vec<RealizedTy>,
+    /// The type of every field, `@skip` ones included, realized at `args`;
+    /// `None` for a class only the runtime builds, which no parse builds.
+    fields: Option<Vec<RealizedTy>>,
 }
 
 /// Why a target has no parse model.
@@ -631,14 +632,25 @@ impl ReachWalk<'_> {
                 });
             }
         }
-        let fields: Vec<RealizedTy> = class
-            .fields
+        // A class only the runtime builds is reached, but nothing past it:
+        // the JSON analysis gives it no JSON form.
+        let Ok(class_fields) = class.buildable_fields() else {
+            self.seen_classes.insert(identity.clone());
+            let (head, args) = identity;
+            self.reach.classes.push(ReachedClass {
+                head,
+                args,
+                fields: None,
+            });
+            return Ok(());
+        };
+        let fields: Vec<RealizedTy> = class_fields
             .iter()
             .map(|field| self.vm.realize_field_ty(&field.field_template, &identity.1))
             .collect();
         self.seen_classes.insert(identity.clone());
         self.ancestry.push(identity);
-        for (field, field_ty) in class.fields.iter().zip(&fields) {
+        for (field, field_ty) in class_fields.iter().zip(&fields) {
             if field.skip {
                 continue;
             }
@@ -659,7 +671,11 @@ impl ReachWalk<'_> {
             .ancestry
             .pop()
             .unwrap_or_else(|| unreachable!("this visit pushed its own frame"));
-        self.reach.classes.push(ReachedClass { head, args, fields });
+        self.reach.classes.push(ReachedClass {
+            head,
+            args,
+            fields: Some(fields),
+        });
         Ok(())
     }
 }
@@ -748,10 +764,16 @@ fn build_model(vm: &BexVm, target: &RealizedTy) -> Result<(CompiledSapModel, boo
     let defs = crate::json_defs::HeapDefs::output(vm);
     let classes = reach.classes.iter().map(|reached| {
         let class = reached_class(vm, reached.head);
+        let Some(fields) = &reached.fields else {
+            return (
+                model_name(class, &reached.args),
+                bex_sap::sap_model::ParseClass::RuntimeOwned,
+            );
+        };
         let unfillable = class
-            .fields
+            .instance_fields()
             .iter()
-            .zip(&reached.fields)
+            .zip(fields)
             .find(|(field, field_type)| {
                 field.skip
                     && !baml_type::json_inhabit::has_empty_value(&defs, field_type.as_runtime_ty())
@@ -760,7 +782,7 @@ fn build_model(vm: &BexVm, target: &RealizedTy) -> Result<(CompiledSapModel, boo
             .map(|(field, _)| field.name.clone());
         (
             model_name(class, &reached.args),
-            definitions::parse_class(class, &reached.fields, unfillable),
+            definitions::parse_class(class, fields, unfillable),
         )
     });
     let mut enums = IndexMap::new();
@@ -1280,8 +1302,11 @@ fn heap_instance(
     let Object::Class(declaration) = vm.get_object(class) else {
         return Err(invariant(format!("`{name}` is not a class")));
     };
-    let fields: Vec<(String, bool, TyTemplate)> = declaration
-        .fields
+    // A parse builds only a class the JSON analysis gave a JSON form.
+    let declared = declaration.buildable_fields().map_err(|unbuildable| {
+        invariant(format!("a parse built `{name}`, which is {unbuildable:?}"))
+    })?;
+    let fields: Vec<(String, bool, TyTemplate)> = declared
         .iter()
         .map(|field| (field.name.clone(), field.skip, field.field_template.clone()))
         .collect();
@@ -1624,8 +1649,11 @@ pub(super) fn empty_value(
             let Object::Class(declaration) = vm.get_object(class) else {
                 return Ok(None);
             };
-            let templates: Vec<_> = declaration
-                .fields
+            // A class only the runtime builds has no empty value.
+            let Ok(declared) = declaration.buildable_fields() else {
+                return Ok(None);
+            };
+            let templates: Vec<_> = declared
                 .iter()
                 .map(|field| field.field_template.clone())
                 .collect();

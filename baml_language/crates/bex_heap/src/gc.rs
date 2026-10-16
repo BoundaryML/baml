@@ -845,7 +845,7 @@ mod tests {
         let compile_time = vec![Object::Class(Box::new(bex_vm_types::Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("C")),
-            fields: vec![bex_vm_types::ClassField {
+            body: bex_vm_types::ClassBody::Fields(vec![bex_vm_types::ClassField {
                 name: "x".to_string(),
                 field_type: baml_type::RuntimeTy::Int,
                 field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int),
@@ -862,7 +862,7 @@ mod tests {
                 json_fallback: false,
                 json_omit_null: false,
                 redact: false,
-            }],
+            }]),
             description: None,
             alias: None,
             docstring: None,
@@ -1517,7 +1517,7 @@ mod tests {
         // Allocate a class (leaf), a string (leaf), then an instance referencing both
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("TestClass")),
-            fields: vec![],
+            body: bex_vm_types::ClassBody::Fields(vec![]),
             description: None,
             alias: None,
             docstring: None,
@@ -1769,7 +1769,7 @@ mod tests {
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("MyClass")),
-            fields: vec![],
+            body: bex_vm_types::ClassBody::Fields(vec![]),
             description: None,
             alias: None,
             docstring: None,
@@ -1903,7 +1903,7 @@ mod tests {
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: type_name.clone(),
-            fields: vec![ClassField {
+            body: bex_vm_types::ClassBody::Fields(vec![ClassField {
                 name: "height_cm".to_string(),
                 field_type: bex_vm_types::RuntimeTy::Int,
                 field_template: bex_vm_types::TyTemplate::from(RealizedTy::int()),
@@ -1920,7 +1920,7 @@ mod tests {
                 json_rename: None,
                 json_omit_null: false,
                 redact: false,
-            }],
+            }]),
             description: None,
             alias: None,
             docstring: None,
@@ -1961,9 +1961,9 @@ mod tests {
             panic!("the head did not land on a class")
         };
         assert_eq!(class.path, type_name);
-        assert_eq!(class.fields[0].name, "height_cm");
+        assert_eq!(class.instance_fields()[0].name, "height_cm");
         assert_eq!(
-            class.fields[0].description.as_deref(),
+            class.instance_fields()[0].description.as_deref(),
             Some("height in centimeters")
         );
     }
@@ -2323,7 +2323,7 @@ mod tests {
         // Instance requires a class pointer.
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("T")),
-            fields: vec![],
+            body: bex_vm_types::ClassBody::Fields(vec![]),
             description: None,
             alias: None,
             docstring: None,
@@ -2581,7 +2581,7 @@ mod tests {
         Object::Class(Box::new(Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Resource")),
-            fields: vec![],
+            body: bex_vm_types::ClassBody::Fields(vec![]),
             description: None,
             alias: None,
             docstring: None,

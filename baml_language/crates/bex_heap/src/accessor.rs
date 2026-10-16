@@ -120,7 +120,7 @@ impl<'a> BexClass<'a> {
             },
             BexClass::Value(class, instance) => {
                 let field_idx = class
-                    .fields
+                    .instance_fields()
                     .iter()
                     .position(|field| field.name == name)
                     .ok_or_else(|| AccessError::FieldNotFound {
@@ -702,7 +702,7 @@ fn convert_object(
                 });
             };
             let fields = class
-                .fields
+                .instance_fields()
                 .iter()
                 .zip(instance.fields.iter())
                 .map(|(field, slot)| {

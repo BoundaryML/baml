@@ -345,8 +345,10 @@ mod schema {
                         return false;
                     }
                     find_class_definition(ctx, head).is_some_and(|class_def| {
-                        class_def
-                            .fields
+                        let sys_types::ClassDefinitionBody::Fields(fields) = &class_def.body else {
+                            return false;
+                        };
+                        fields
                             .iter()
                             .filter(|field| !field.skip)
                             .any(|field| walk(&field.field_type, ctx, analysis, seen))
@@ -658,14 +660,20 @@ mod schema {
             let class_def = find_class_definition(self.ctx, head)
                 .ok_or_else(|| format!("json_schema: unknown class `{}`", head.display_name()))?;
 
+            let sys_types::ClassDefinitionBody::Fields(class_fields) = &class_def.body else {
+                return Err(format!(
+                    "json_schema: `{}` has no JSON form",
+                    head.display_name()
+                ));
+            };
             let naming = self.naming;
             // A `@json.fallback` class is any object it does not recognize,
             // and a `@json.flatten` field is the keys no field names.
-            let fallback = class_def.fields.iter().any(|field| field.json_fallback);
-            let flatten = class_def.fields.iter().any(|field| field.json_flatten);
+            let fallback = class_fields.iter().any(|field| field.json_fallback);
+            let flatten = class_fields.iter().any(|field| field.json_flatten);
             let mut properties = serde_json::Map::new();
             let mut required = Vec::new();
-            for field in class_def.fields.iter().filter(|field| {
+            for field in class_fields.iter().filter(|field| {
                 naming.shows(field.skip) && !field.json_flatten && !field.json_fallback
             }) {
                 let key = naming.key(
@@ -895,7 +903,7 @@ mod schema {
                 description: None,
                 docstring: None,
                 alias: None,
-                fields,
+                body: sys_types::ClassDefinitionBody::Fields(fields),
                 stream_done: false,
             }
         }

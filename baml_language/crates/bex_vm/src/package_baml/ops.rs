@@ -764,6 +764,13 @@ impl Continuation for EqualsDriver {
 /// `None` for any other object kind (only instances/enums implement `Equals`).
 fn value_concrete_ty(vm: &BexVm, ptr: HeapPtr) -> Option<RealizedTy> {
     match vm.get_object(ptr) {
+        Object::RustInstance(inst) => match vm.get_object(inst.class) {
+            Object::Class(class) => Some(RealizedTy::Class(
+                bex_vm_types::TypeHead::new(inst.class, class.type_tag),
+                inst.class_type_args.clone(),
+            )),
+            _ => None,
+        },
         Object::Instance(inst) => {
             let (class_ptr, type_args) = (inst.class, inst.class_type_args.to_vec());
             match vm.get_object(class_ptr) {

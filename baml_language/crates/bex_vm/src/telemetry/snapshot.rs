@@ -198,7 +198,7 @@ impl Scratch {
                             b.described_instance(
                                 declaration,
                                 type_arguments,
-                                (0..instance.field_len()).zip(&class.fields),
+                                (0..instance.field_len()).zip(class.instance_fields()),
                                 |leaves, (at, field)| {
                                     // A field declared redacted is withheld,
                                     // its value never visited.
@@ -871,7 +871,7 @@ mod tests {
                 Vec::new(),
                 baml_type::Name::new("TestClass"),
             ),
-            fields: vec![
+            body: bex_vm_types::ClassBody::Fields(vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
                     field_type: baml_type::RuntimeTy::Int,
@@ -908,7 +908,7 @@ mod tests {
                     json_omit_null: false,
                     redact: false,
                 },
-            ],
+            ]),
             description: None,
             alias: None,
             docstring: None,
@@ -1075,7 +1075,7 @@ mod tests {
         vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
             declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name)),
-            fields,
+            body: bex_vm_types::ClassBody::Fields(fields),
             description: None,
             alias: None,
             docstring: None,

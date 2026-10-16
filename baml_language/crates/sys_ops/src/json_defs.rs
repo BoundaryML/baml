@@ -40,8 +40,10 @@ impl JsonDefs<DefKey> for ContextDefs<'_> {
             .class_definitions
             .get(head)
             .ok_or_else(|| format!("json_schema: unknown class `{}`", head.display_name()))?;
-        let fields = class_def
-            .fields
+        let sys_types::ClassDefinitionBody::Fields(fields) = &class_def.body else {
+            return Ok(JsonClass::RuntimeOwned);
+        };
+        let fields = fields
             .iter()
             .map(|field| {
                 // The renderer walks a field through its template, so a
@@ -62,7 +64,7 @@ impl JsonDefs<DefKey> for ContextDefs<'_> {
                 }
             })
             .collect();
-        Ok(JsonClass { fields })
+        Ok(JsonClass::Fields(fields))
     }
 
     fn variants(&self, head: &DefKey) -> Result<Vec<JsonVariant>, String> {

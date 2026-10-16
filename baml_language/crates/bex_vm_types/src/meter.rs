@@ -205,7 +205,10 @@ impl Object {
             }
             Object::Class(class) => {
                 meter.bytes(size_of::<Class>());
-                meter.bytes(class.fields.footprint());
+                match &class.body {
+                    crate::ClassBody::Fields(fields) => meter.bytes(fields.footprint()),
+                    crate::ClassBody::RustType(_) => {}
+                }
                 meter.bytes(index_map_bytes(&class.methods));
             }
             Object::Enum(enm) => {

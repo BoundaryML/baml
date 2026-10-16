@@ -418,8 +418,9 @@ impl TraceSnapshotBuilder {
             Object::Instance(instance) => {
                 let class_object = unsafe { instance.class.get() };
                 if let Object::Class(class) = class_object {
-                    let mut fields = Self::vec_with_capacity(class.fields.len())?;
-                    for (field, slot) in class.fields.iter().zip(instance.fields.iter()) {
+                    let mut fields = Self::vec_with_capacity(class.instance_fields().len())?;
+                    for (field, slot) in class.instance_fields().iter().zip(instance.fields.iter())
+                    {
                         let name = Self::copy_str(&field.name)?;
                         let value = self.copy_value(heap, permit, slot.load())?;
                         fields.push((name, value));

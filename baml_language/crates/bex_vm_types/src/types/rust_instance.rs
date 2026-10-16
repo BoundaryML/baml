@@ -44,6 +44,15 @@ pub enum RustPayload {
     Foreign(Arc<dyn BexRustData>),
 }
 
+impl RustPayload {
+    /// The kind of state this payload holds.
+    pub fn kind(&self) -> baml_base::RustPayloadKind {
+        match self {
+            Self::Foreign(_) => baml_base::RustPayloadKind::Foreign,
+        }
+    }
+}
+
 impl RustInstance {
     pub fn new(
         class: HeapPtr,
@@ -55,6 +64,18 @@ impl RustInstance {
             class_type_args,
             payload,
         }
+    }
+}
+
+impl RustInstance {
+    /// Whether `class` (the declaration at [`Self::class`]) can have this
+    /// instance: the class is tagged with the payload's own kind, and the
+    /// instance is built at as many type arguments as the class declares.
+    /// Checked wherever an instance enters the heap.
+    #[must_use]
+    pub fn fits(&self, class: &crate::Class) -> bool {
+        matches!(class.body, crate::ClassBody::RustType(kind) if kind == self.payload.kind())
+            && self.class_type_args.len() == class.generic_param_count
     }
 }
 
