@@ -144,10 +144,11 @@ interface TypeView {
 
     /// True iff this type nominally implements the interface `other`. Any
     /// concrete type can: a class, an enum, a primitive, a list, a map, ...
-    /// `other` pins the interface's associated types (an omitted one takes
-    /// its default), and only an implementation with exactly those matches:
-    /// see `reflect.Type.implements`. `false` when `other` is not an
-    /// interface, or when this type is not a concrete type.
+    /// An interface looked up by name matches any implementation of it; one
+    /// built with `reflect.Type.of<I<...>>()` matches only an implementation
+    /// with exactly its associated types: see `reflect.Type.implements`.
+    /// `false` when `other` is not an interface, or when this type is not a
+    /// concrete type.
     function implements(self, other: root.TypeView) -> bool throws never {
         self.as_type().implements(other)
     }
@@ -502,6 +503,9 @@ class Package {
     /// The exported interface called `name`. A name the package exports as
     /// some other kind of declaration is a miss. `find_interface` returns
     /// `null` instead of throwing.
+    ///
+    /// The interface leaves its associated types and type arguments open, so
+    /// `reflect.Type.implements` matches any implementation of it.
     ///
     /// # Throws
     ///

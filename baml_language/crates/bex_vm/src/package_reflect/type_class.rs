@@ -211,10 +211,11 @@ impl BamlClassType for PackageReflectImpl {
     /// to implement every interface in its `requires` closure, "direct impl"
     /// already covers transitive satisfaction.
     ///
-    /// `iface_t` is an interface-existential type value, which carries every
-    /// associated binding (the compiler fills the defaults), so the selected
-    /// impl must bind exactly those: unlike a generic bound, the request cannot
-    /// leave an associated type open.
+    /// An `iface_t` from `reflect.Type.of<I<...>>()` carries every type
+    /// argument and associated binding (the compiler fills the defaults), so
+    /// the selected impl must bind exactly those. One looked up by name
+    /// (`Package.get_interface`) carries none, and an empty request matches
+    /// any instantiation: any implementation of the interface.
     ///
     /// Both sides are `type` values: `implements` and `implemented_by` call
     /// `as_type()` on their `reflect.TypeView` argument in BAML, and

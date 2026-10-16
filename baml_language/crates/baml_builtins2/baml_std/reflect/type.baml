@@ -144,13 +144,20 @@ class Type {
     /// to it with its bounds satisfied. The receiver can be any concrete type:
     /// a class, an enum, a primitive, a list, a map, ...
     ///
-    /// `other` is an interface type, so it names every associated type the
-    /// interface declares without a default, and an omitted one takes its
-    /// default: `baml.iter.Iterator<Item = int>` is
-    /// `baml.iter.Iterator<Item = int, Error = never>`. Only an
-    /// implementation with exactly those associated types matches, so an int
-    /// iterator that throws does not implement `Iterator<Item = int>`, and
-    /// there is no way to ask "is this any iterator".
+    /// What matches depends on where `other` came from:
+    ///
+    /// - An interface looked up by name (`Package.get_interface`,
+    ///   `find_interface`, `interfaces`) leaves its associated types and type
+    ///   arguments open. Any implementation of the interface matches.
+    /// - One built with `reflect.Type.of<I<...>>()` names every associated
+    ///   type, and one you omit takes its default:
+    ///   `baml.iter.Iterator<Item = int>` is
+    ///   `baml.iter.Iterator<Item = int, Error = never>`. Only an
+    ///   implementation with exactly those types matches, so an int iterator
+    ///   that throws does not implement `Iterator<Item = int>`.
+    ///
+    /// Interfaces of the standard library cannot be looked up by name, so for
+    /// those you name the associated types.
     ///
     /// Returns `false` when `other` is not an interface, or when the receiver
     /// is not a concrete type (an interface does not implement itself).
