@@ -870,7 +870,6 @@ mod tests {
                     entered_at: ClockInstant::from_ticks(1),
                     captured_inputs: None,
                     captured_type_args: None,
-                    captured_receiver: None,
                 },
             ));
             if detached {

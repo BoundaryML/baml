@@ -97,11 +97,11 @@ compares direct BAML execution, not SDK adapter tracing.
 ## BTEL and backend rollout
 
 BTEL minor 12 uses ordinary function announcements/completions for owned spans,
-with named input maps, type arguments, optional bound receiver captures, and
-general neutral closure. Local `baml query` exposes these as ordinary function
+with named input maps, type arguments, and general neutral closure. Local `baml query` exposes these as ordinary function
 rows with status `closed` when appropriate. The input map remains exactly as
-supplied; the bound receiver has its own `receiver` column. The local index
-schema is version 19, so older indexes rebuild. Legacy manual records remain
+supplied. Function operations are queried using `span_type = 'function'` and
+`span_name`; bound receivers are not captured separately. The local index
+schema is version 20, so older indexes rebuild. Legacy manual records remain
 readable.
 
 The BCS publisher rejects owned-span records before encoding or retaining their

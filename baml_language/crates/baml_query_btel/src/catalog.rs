@@ -236,7 +236,6 @@ pub const SPANS: Relation = Relation {
     columns: &[
         col("span_id", "text", "<recording_id>:<n>"),
         col("span_type", "text", "function, future or network_span"),
-        col("function_name", "text", "qualified target function name; NULL for futures and network spans"),
         col(
             "span_name",
             "text",
@@ -272,7 +271,6 @@ pub const SPANS: Relation = Relation {
         col("end_time", "text", "RFC 3339 UTC"),
         col("duration", "integer", "nanoseconds, start_time to end_time"),
         value("type_args", TYPE_ARGS_DOC),
-        value("receiver", "the bound receiver of a function-associated owned span, captured independently of input_args under the same capture setting; NULL for an unbound target or uncaptured receiver"),
         value(
             "input_args",
             "captured arguments by name or position: input_args['customer'], input_args[0]; for a network span the request, {request: {method, url, headers, body}}; NULL for futures",
@@ -347,7 +345,6 @@ network_provider (provider, envelope, model, url_model, input, input_has_cache, 
     '$.usage.output_tokens', NULL))
 SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
   'function' AS span_type,
-  f.fqn AS function_name,
   f.fqn AS span_name,
   lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
   __btel_pubid(r.recording_id, c.thread_id) AS future_id,
@@ -364,8 +361,6 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
     IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
   __btel_ref(2, c.type_args_cas, NULL,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS type_args,
-  __btel_ref(2, c.receiver_cas, NULL,
-    c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS receiver,
   -- Host adapters capture a named map (Python) or positional list (Node) as
   -- a value root. BAML functions capture FunctionArgs with a slot layout.
   __btel_ref(IIF(c.manual = 1 OR f.definition_key LIKE 'host:%', 2, 1), c.inputs_cas, f.argument_names,
@@ -404,7 +399,6 @@ WHERE c.outcome IS NOT NULL
 UNION ALL
 SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   'future' AS span_type,
-  NULL AS function_name,
   COALESCE(t.name, sf.fqn, (SELECT ef.fqn FROM main.call_path ep
      JOIN main.function_def ef ON ef.rec = ep.rec AND ef.function_id = ep.callee_function_id
      WHERE ep.rec = t.rec AND ep.call_path_id = t.entry_call_path_id)) AS span_name,
@@ -427,7 +421,6 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   __btel_duration(COALESCE(t.ran_ticks, t.started_ticks), t.completed_ticks, e.multiplier,
     e.shift, s.status, IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
   NULL AS type_args,
-  NULL AS receiver,
   NULL AS input_args,
   NULL AS output_value,
   NULL AS network_event_values,
@@ -461,7 +454,6 @@ WHERE t.outcome IS NOT NULL
 UNION ALL
 SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
   'network_span' AS span_type,
-  NULL AS function_name,
   n.method || ' ' || n.url AS span_name,
   lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
   __btel_pubid(r.recording_id, n.thread_id) AS future_id,
@@ -477,7 +469,6 @@ SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
   __btel_duration(n.started_ticks, n.completed_ticks, e.multiplier, e.shift, s.status,
     IIF(e.rec IS NULL, 0, 1 + e.conflict)) AS duration,
   NULL AS type_args,
-  NULL AS receiver,
   -- The request is due while only the completion is indexed.
   __btel_ref(2, n.request_cas, NULL, n.defined = 0) AS input_args,
   NULL AS output_value,
@@ -547,7 +538,6 @@ pub const SPAN_ANNOUNCEMENTS: Relation = Relation {
     columns: &[
         col("span_id", "text", "<recording_id>:<n>"),
         col("span_type", "text", "function, future or network_span"),
-        col("function_name", "text", "qualified target function name; NULL for futures and network spans"),
         col("span_name", "text", "as in spans"),
         col("process_id", "text", ""),
         col("future_id", "text", "as in spans"),
@@ -555,7 +545,6 @@ pub const SPAN_ANNOUNCEMENTS: Relation = Relation {
         col("parent_span_id", "text", "as in spans"),
         col("start_time", "text", "RFC 3339 UTC"),
         value("type_args", "as in spans"),
-        value("receiver", "as in spans"),
         value("input_args", "as in spans"),
         value(
             "network_event_values",
@@ -580,7 +569,6 @@ pub const SPAN_ANNOUNCEMENTS: Relation = Relation {
 CREATE TEMP VIEW span_announcements AS
 SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
   'function' AS span_type,
-  f.fqn AS function_name,
   f.fqn AS span_name,
   lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
   __btel_pubid(r.recording_id, c.thread_id) AS future_id,
@@ -590,8 +578,6 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
     e.multiplier, e.shift) AS start_time,
   __btel_ref(2, c.type_args_cas, NULL,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS type_args,
-  __btel_ref(2, c.receiver_cas, NULL,
-    c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS receiver,
   __btel_ref(IIF(c.manual = 1 OR f.definition_key LIKE 'host:%', 2, 1), c.inputs_cas, f.argument_names,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
   NULL AS network_event_values,
@@ -612,7 +598,6 @@ LEFT JOIN main.epoch e ON e.rec = c.rec AND e.epoch_id = t.epoch_id AND e.define
 UNION ALL
 SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   'future' AS span_type,
-  NULL AS function_name,
   COALESCE(t.name, sf.fqn, (SELECT ef.fqn FROM main.call_path ep
      JOIN main.function_def ef ON ef.rec = ep.rec AND ef.function_id = ep.callee_function_id
      WHERE ep.rec = t.rec AND ep.call_path_id = t.entry_call_path_id)) AS span_name,
@@ -624,7 +609,6 @@ SELECT __btel_pubid(r.recording_id, t.thread_id) AS span_id,
   __btel_utc(COALESCE(t.ran_ticks, t.started_ticks), IIF(e.conflict = 0, e.utc_ticks, NULL),
     e.utc_unix_ns, e.multiplier, e.shift) AS start_time,
   NULL AS type_args,
-  NULL AS receiver,
   NULL AS input_args,
   NULL AS network_event_values,
   cx.distinct_id AS context_distinct_id,
@@ -646,7 +630,6 @@ WHERE t.defined = 1 OR t.announced = 1 OR t.outcome IS NOT NULL
 UNION ALL
 SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
   'network_span' AS span_type,
-  NULL AS function_name,
   n.method || ' ' || n.url AS span_name,
   lower(hex(COALESCE(r.process_id, r.recording_id))) AS process_id,
   __btel_pubid(r.recording_id, n.thread_id) AS future_id,
@@ -655,7 +638,6 @@ SELECT __btel_pubid(r.recording_id, n.span_id) AS span_id,
   __btel_utc(n.started_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS start_time,
   NULL AS type_args,
-  NULL AS receiver,
   __btel_ref(2, n.request_cas, NULL, n.defined = 0) AS input_args,
   (SELECT __btel_events(v.at_ticks, v.seq, v.name, __btel_utc(v.at_ticks,
        IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns, e.multiplier, e.shift),

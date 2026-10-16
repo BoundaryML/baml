@@ -206,7 +206,6 @@ fn largest_owned_announcement_and_context_fit_admitted_capacity() {
             entered_at_ticks: u64::MAX,
             inputs_cas_id: capture,
             type_args_cas_id: capture,
-            receiver_cas_id: capture,
             manual: true,
         }),
     );

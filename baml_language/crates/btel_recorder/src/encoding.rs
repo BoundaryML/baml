@@ -105,9 +105,6 @@ impl EncodedSpans {
                         leaf(&mut self.bytes, 7, &m);
                     }
                     Event::FunctionAnnouncement(m) => {
-                        if m.receiver_cas_id.is_some() {
-                            self.require(btel_settings::encoding::OWNED_SPAN_FORMAT_MINOR);
-                        }
                         if m.manual {
                             self.require(btel_settings::encoding::MANUAL_SPAN_FORMAT_MINOR);
                         }
@@ -352,10 +349,6 @@ mod tests {
                 call_path_id: u32::MAX,
                 entered_at_ticks: u64::MAX,
                 inputs_cas_id: Some(proto::CasId {
-                    low: u64::MAX,
-                    high: u64::MAX,
-                }),
-                receiver_cas_id: Some(proto::CasId {
                     low: u64::MAX,
                     high: u64::MAX,
                 }),

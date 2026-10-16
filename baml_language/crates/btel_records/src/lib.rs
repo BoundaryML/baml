@@ -493,7 +493,6 @@ pub struct ManualSpanAnnouncement<I> {
     pub entered_at: ClockInstant,
     pub captured_inputs: Option<I>,
     pub captured_type_args: Option<I>,
-    pub captured_receiver: Option<I>,
 }
 
 #[derive(Debug)]
@@ -743,7 +742,7 @@ mod layout_tests {
     }
 
     #[test]
-    fn owned_announcement_transfers_receiver_capture_after_inputs_and_types() {
+    fn owned_announcement_transfers_inputs_and_types() {
         let id = btel_types::allocate_telemetry_id();
         let mut record =
             SpanRecord::<u8, u8>::ManualSpanAnnouncement(Box::new(ManualSpanAnnouncement {
@@ -753,15 +752,10 @@ mod layout_tests {
                 entered_at: ClockInstant::from_ticks(1),
                 captured_inputs: Some(1),
                 captured_type_args: Some(2),
-                captured_receiver: Some(3),
             }));
-        assert_eq!(
-            record.captures().copied().collect::<Vec<_>>(),
-            vec![1, 2, 3]
-        );
+        assert_eq!(record.captures().copied().collect::<Vec<_>>(), vec![1, 2]);
         assert_eq!(record.take_capture(), Some(1));
         assert_eq!(record.take_capture(), Some(2));
-        assert_eq!(record.take_capture(), Some(3));
         assert_eq!(record.take_capture(), None);
         assert_eq!(record.captures().count(), 0);
     }
@@ -1311,25 +1305,25 @@ impl<I, V> SpanRecord<I, V> {
 /// The slots holding the captures a record owns, in the order
 /// `take_capture` hands them over, borrowed as `$record` is: `$borrow`
 /// repeats that borrow for a slot behind a box. Every variant is listed, so
-/// a new one must say what it carries. Announcements hold inputs, type arguments, and (for owned spans) the
-/// bound receiver, in that order.
+/// a new one must say what it carries. Announcements hold inputs and type arguments,
+/// in that order.
 macro_rules! capture_slots {
     ($record:expr, $($borrow:tt)+) => {
         match $record {
-            Self::ManualSpanAnnouncement(entry) => [Some($($borrow)+ entry.captured_inputs), Some($($borrow)+ entry.captured_type_args), Some($($borrow)+ entry.captured_receiver)],
-            Self::ManualSpanCompletion(done) => [Some($($borrow)+ done.captured_value), None, None],
-            Self::Log { captured_data, .. } => [Some(captured_data), None, None],
-            Self::ContextSelected { captured_context } => [Some(captured_context), None, None],
+            Self::ManualSpanAnnouncement(entry) => [Some($($borrow)+ entry.captured_inputs), Some($($borrow)+ entry.captured_type_args)],
+            Self::ManualSpanCompletion(done) => [Some($($borrow)+ done.captured_value), None],
+            Self::Log { captured_data, .. } => [Some(captured_data), None],
+            Self::ContextSelected { captured_context } => [Some(captured_context), None],
             Self::FunctionSpanAnnouncement {
                 captured_inputs,
                 captured_type_args,
                 ..
-            } => [Some(captured_inputs), Some(captured_type_args), None],
+            } => [Some(captured_inputs), Some(captured_type_args)],
             Self::NetworkSpanAnnouncement(announcement) => {
-                [Some($($borrow)+ announcement.request), None, None]
+                [Some($($borrow)+ announcement.request), None]
             }
-            Self::NetworkEvent(event) => [Some($($borrow)+ event.payload), None, None],
-            Self::NetworkSpanCompletion(completion) => [Some($($borrow)+ completion.error), None, None],
+            Self::NetworkEvent(event) => [Some($($borrow)+ event.payload), None],
+            Self::NetworkSpanCompletion(completion) => [Some($($borrow)+ completion.error), None],
             Self::FunctionSpanCompletionOk { captured_value, .. }
             | Self::FunctionSpanCompletionOkNeedsAnnouncement { captured_value, .. }
             | Self::FunctionSpanCompletionOkReentry { captured_value, .. }
@@ -1361,7 +1355,7 @@ macro_rules! capture_slots {
             }
             | Self::LateFunctionSpanCompletionPanicked { captured_value, .. }
             | Self::LateFunctionSpanCompletionPanickedReentry { captured_value, .. } => {
-                [Some(captured_value), None, None]
+                [Some(captured_value), None]
             }
             Self::HostFunctionDefined(_)
             | Self::ThreadSelected { .. }
@@ -1376,7 +1370,7 @@ macro_rules! capture_slots {
             | Self::ErrorRaised { .. }
             | Self::ErrorRaisedAndEnded { .. }
             | Self::ErrorRaiseFrameCompleted { .. }
-            | Self::ErrorUnwindEnded { .. } => [None, None, None],
+            | Self::ErrorUnwindEnded { .. } => [None, None],
         }
     };
 }

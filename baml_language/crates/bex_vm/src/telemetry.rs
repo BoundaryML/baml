@@ -2905,7 +2905,6 @@ mod tests {
                     None,
                     options,
                     None,
-                    None,
                 )
             };
             drop(creator);

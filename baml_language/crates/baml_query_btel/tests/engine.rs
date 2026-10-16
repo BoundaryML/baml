@@ -700,7 +700,7 @@ async fn streamed_usage_keeps_the_cache_split() {
             &mut index,
             "SELECT request.future_id = owner.future_id FROM spans request
          JOIN spans owner ON request.parent_span_id = owner.span_id
-         WHERE request.span_type = 'network_span' AND owner.function_name = 'user.Summarize'"
+         WHERE request.span_type = 'network_span' AND owner.span_type = 'function' AND owner.span_name = 'user.Summarize'"
         )
         .rows,
         vec![vec![json!(1)]]
@@ -717,7 +717,7 @@ async fn streamed_usage_keeps_the_cache_split() {
          )
          SELECT count(*) FROM spans child JOIN ancestry a ON a.child = child.span_id
          JOIN spans owner ON a.ancestor = owner.span_id
-         WHERE child.span_type = 'future' AND owner.function_name = 'user.Summarize'"
+         WHERE child.span_type = 'future' AND owner.span_type = 'function' AND owner.span_name = 'user.Summarize'"
         )
         .rows,
         vec![vec![json!(0)]]
@@ -804,7 +804,7 @@ async fn a_streamed_llm_function_is_its_own_span() {
     assert_eq!(
         sql(
             &mut index,
-            "SELECT output_value, status FROM spans WHERE function_name = 'user.Summarize'",
+            "SELECT output_value, status FROM spans WHERE span_type = 'function' AND span_name = 'user.Summarize'",
         )
         .rows,
         vec![vec![json!("short"), json!("return")]],
@@ -812,7 +812,7 @@ async fn a_streamed_llm_function_is_its_own_span() {
     assert_eq!(
         sql(
             &mut index,
-            "SELECT count(*) FROM spans WHERE function_name = 'user.Summarize@stream'",
+            "SELECT count(*) FROM spans WHERE span_type = 'function' AND span_name = 'user.Summarize@stream'",
         )
         .rows,
         vec![vec![json!(0)]],
@@ -1494,7 +1494,7 @@ async fn manual_span_lifetime_values_and_population() {
     let result = sql(
         &mut index,
         "SELECT span_name, status, input_args['value'], output_value FROM spans
-         WHERE function_name IN ('abandoned', 'dropped', 'failed', 'user.Associated') ORDER BY span_name",
+         WHERE span_type = 'function' AND span_name IN ('abandoned', 'dropped', 'failed', 'user.Associated') ORDER BY span_name",
     );
     assert_eq!(
         result.rows,
@@ -1620,7 +1620,7 @@ async fn manual_span_can_resume_in_another_root_call_and_close_during_gc() {
     let result = sql(
         &mut index,
         "SELECT input_args['n'], status, output_value FROM spans
-        WHERE function_name = 'retained' ORDER BY start_time",
+        WHERE span_type = 'function' AND span_name = 'retained' ORDER BY start_time",
     );
     assert_eq!(
         result.rows,
@@ -1663,7 +1663,7 @@ async fn manual_span_can_resume_in_another_root_call_and_close_during_gc() {
              SELECT child.future_id = resumed.span_id, owner.future_id != child.future_id,
                 child.start_time >= resumed.start_time, child.end_time <= resumed.end_time
          FROM spans child JOIN ancestry a ON a.child = child.span_id
-         JOIN spans owner ON a.ancestor = owner.span_id AND owner.function_name = 'retained'
+         JOIN spans owner ON a.ancestor = owner.span_id AND owner.span_type = 'function' AND owner.span_name = 'retained'
          JOIN spans resumed ON resumed.span_name = 'user.resume' AND resumed.span_type = 'future'
          WHERE child.span_name = 'user.child' AND child.span_type = 'function'"
         )
@@ -1682,7 +1682,7 @@ async fn manual_span_can_resume_in_another_root_call_and_close_during_gc() {
         &mut index,
         "SELECT owner.end_time <= marker.start_time FROM spans owner JOIN spans marker
          ON marker.span_name = 'user.after_gc' AND marker.span_type = 'future'
-         WHERE owner.function_name = 'retained' AND owner.input_args['n'] = 2",
+         WHERE owner.span_type = 'function' AND owner.span_name = 'retained' AND owner.input_args['n'] = 2",
     );
     assert_eq!(collected_before_shutdown.rows, vec![vec![json!(1)]]);
     assert!(!result.outcome.unsealed);
@@ -1743,7 +1743,7 @@ async fn manual_scopes_preserve_execution_spawn_and_unwind_ancestry() {
         SELECT a.child, s.parent_span_id FROM owner_of a
           JOIN spans s ON s.span_id = a.ancestor
         WHERE s.parent_span_id IS NOT NULL AND
-          (s.function_name IS NULL OR s.function_name NOT IN ('inner', 'outer'))
+          (s.span_type != 'function' OR s.span_name NOT IN ('inner', 'outer'))
     )";
     let result = sql(
         &mut index,
@@ -1753,7 +1753,7 @@ async fn manual_scopes_preserve_execution_spawn_and_unwind_ancestry() {
          FROM spans child JOIN owner_of a ON a.child = child.span_id
          JOIN spans parent ON a.ancestor = parent.span_id
          WHERE child.span_name = 'user.Leaf' AND child.span_type = 'function'
-           AND parent.function_name IN ('inner', 'outer')
+           AND parent.span_type = 'function' AND parent.span_name IN ('inner', 'outer')
          GROUP BY parent.span_name, child.future_id = parent.future_id
          ORDER BY parent.span_name, child.future_id = parent.future_id"
         ),
@@ -1783,7 +1783,7 @@ async fn manual_scopes_preserve_execution_spawn_and_unwind_ancestry() {
          JOIN owner_of a ON a.child = child.span_id
          JOIN spans parent ON a.ancestor = parent.span_id
          WHERE child.span_name = 'user.Boom' AND child.span_type = 'function'
-           AND parent.function_name IN ('inner', 'outer')"
+           AND parent.span_type = 'function' AND parent.span_name IN ('inner', 'outer')"
             )
         )
         .rows,
@@ -1813,7 +1813,7 @@ async fn owned_operation_rows_match_across_execution_paths() {
     let rows = sql(
         &mut index,
         "SELECT input_args, output_value, error_value, span_reason FROM spans
-         WHERE function_name = 'user.Extract' AND status = 'return' ORDER BY start_time",
+         WHERE span_type = 'function' AND span_name = 'user.Extract' AND status = 'return' ORDER BY start_time",
     );
     assert_eq!(
         rows.rows.len(),
@@ -1829,7 +1829,7 @@ async fn owned_operation_rows_match_across_execution_paths() {
     }
     assert_eq!(sql(&mut index,
         "SELECT context_metadata['hook'], context_metadata['hook_only'], context_metadata['caller']
-         FROM spans WHERE function_name = 'user.Extract' AND status = 'return' ORDER BY start_time").rows,
+         FROM spans WHERE span_type = 'function' AND span_name = 'user.Extract' AND status = 'return' ORDER BY start_time").rows,
         vec![
             vec![json!("reserved"), json!("yes"), json!("held")],
             vec![json!("hook"), json!("yes"), Json::Null],
@@ -1839,7 +1839,7 @@ async fn owned_operation_rows_match_across_execution_paths() {
         ]);
     let errors = sql(
         &mut index,
-        "SELECT error_value FROM spans WHERE function_name = 'user.Extract' AND status = 'user_error'",
+        "SELECT error_value FROM spans WHERE span_type = 'function' AND span_name = 'user.Extract' AND status = 'user_error'",
     );
     assert_eq!(errors.rows.len(), 1);
     assert_eq!(errors.rows[0][0]["$class"], json!("baml.errors.Context"));
@@ -1853,10 +1853,10 @@ async fn owned_operation_rows_match_across_execution_paths() {
             .is_some_and(|frames| !frames.is_empty())
     );
     assert_eq!(sql(&mut index,
-        "SELECT count(*) FROM spans WHERE function_name = 'user.Extract' AND status = 'closed' AND output_value IS NULL AND error_value IS NULL").rows,
+        "SELECT count(*) FROM spans WHERE span_type = 'function' AND span_name = 'user.Extract' AND status = 'closed' AND output_value IS NULL AND error_value IS NULL").rows,
         vec![vec![json!(1)]]);
     assert_eq!(sql(&mut index,
-        "SELECT count(*) FROM spans WHERE function_name IN ('user.Extract@spec', 'user.Extract@stream', 'ai.Agent.run', 'ai.FunctionSpec.call', 'ai.stream.from_spec')").rows,
+        "SELECT count(*) FROM spans WHERE span_type = 'function' AND span_name IN ('user.Extract@spec', 'user.Extract@stream', 'ai.Agent.run', 'ai.FunctionSpec.call', 'ai.stream.from_spec')").rows,
         vec![vec![json!(0)]]);
     assert_eq!(
         sql(
@@ -1926,7 +1926,7 @@ async fn concurrent_spec_executions_keep_separate_claims_and_bind_defaults_once(
         &mut index,
         "SELECT context_metadata['execution'], input_args['input'],
                 input_args['counts']['defaults'], output_value['value'], status
-         FROM spans WHERE function_name = 'user.Defaulted'
+         FROM spans WHERE span_type = 'function' AND span_name = 'user.Defaulted'
          ORDER BY output_value['value']",
     );
     assert_eq!(
@@ -1954,7 +1954,7 @@ async fn concurrent_spec_executions_keep_separate_claims_and_bind_defaults_once(
             "SELECT a.span_id != b.span_id, a.future_id != b.future_id,
                     a.start_time < b.end_time AND b.start_time < a.end_time
              FROM spans a JOIN spans b
-             WHERE a.function_name = 'user.Defaulted' AND b.function_name = 'user.Defaulted'
+             WHERE a.span_type = 'function' AND a.span_name = 'user.Defaulted' AND b.span_type = 'function' AND b.span_name = 'user.Defaulted'
                AND a.output_value['value'] = 42 AND b.output_value['value'] = 43"
         )
         .rows,
@@ -1993,8 +1993,8 @@ async fn owned_spans_preserve_callable_type_arguments_and_exact_input_maps() {
     let mut index = index(project.path());
     let result = sql(
         &mut index,
-        "SELECT function_name, type_args, input_args, receiver FROM spans
-        WHERE span_type = 'function' AND output_value IS NOT NULL ORDER BY function_name",
+        "SELECT span_name, type_args, input_args FROM spans
+        WHERE span_type = 'function' AND output_value IS NOT NULL ORDER BY span_name",
     );
     let int = json!({"$type": {"type": "int"}});
     let string = json!({"$type": {"type": "string"}});
@@ -2004,20 +2004,17 @@ async fn owned_spans_preserve_callable_type_arguments_and_exact_input_maps() {
             vec![
                 json!(".<lambda(closure, 0)>"),
                 json!({"T": string}),
-                json!({}),
-                Json::Null
+                json!({})
             ],
             vec![
                 json!("user.Holder.target"),
                 json!({"T": int, "U": string}),
-                json!({}),
-                json!({"$class": "user.Holder", "item": 3})
+                json!({})
             ],
             vec![
                 json!("user.Target"),
                 json!({"T": int}),
-                json!({"misspelled": 3, "extra": true}),
-                Json::Null
+                json!({"misspelled": 3, "extra": true})
             ],
         ]
     );
@@ -2070,8 +2067,8 @@ async fn generic_and_method_operations_preserve_bindings_across_execution_paths(
         let result = sql(
             &mut index,
             &format!(
-                "SELECT type_args, receiver, input_args, output_value, status
-            FROM spans WHERE function_name = '{target}' ORDER BY start_time"
+                "SELECT type_args, input_args, output_value, status
+            FROM spans WHERE span_type = 'function' AND span_name = '{target}' ORDER BY start_time"
             ),
         );
         assert_eq!(
@@ -2084,15 +2081,14 @@ async fn generic_and_method_operations_preserve_bindings_across_execution_paths(
                 row, &result.rows[0],
                 "{target}: bindings and values agree across paths"
             );
-            assert_eq!(row[3]["value"], json!(42));
-            assert_eq!(row[4], json!("return"));
+            assert_eq!(row[2]["value"], json!(42));
+            assert_eq!(row[3], json!("return"));
         }
         if target == "user.Generic" {
             assert_eq!(
                 result.rows[0][0],
                 json!({"T": {"$type": {"type": "class", "name": "user.Answer"}}})
             );
-            assert_eq!(result.rows[0][1], Json::Null);
         } else {
             assert_eq!(
                 result.rows[0][0],
@@ -2101,7 +2097,6 @@ async fn generic_and_method_operations_preserve_bindings_across_execution_paths(
                     "U": {"$type": {"type": "class", "name": "user.Answer"}},
                 })
             );
-            assert_eq!(result.rows[0][1]["label"], json!("target"));
         }
         assert!(result.outcome.diagnostics.is_empty());
     }

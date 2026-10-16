@@ -1001,7 +1001,6 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
             entered_at_ticks: 1,
             inputs_cas_id: Some(inputs_id),
             type_args_cas_id: Some(type_args_id),
-            receiver_cas_id: None,
         }))
     );
 
@@ -1682,7 +1681,6 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
             entered_at: ClockInstant::from_ticks(1),
             captured_inputs: None,
             captured_type_args: Some(snapshot()),
-            captured_receiver: Some(snapshot()),
         })),
     );
     p.flush_recording().unwrap();
@@ -1704,7 +1702,6 @@ fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
     };
     assert!(!entry.manual);
     assert!(entry.type_args_cas_id.is_some());
-    assert!(entry.receiver_cas_id.is_some());
     p.span(
         thread,
         &mut SpanRecord::ManualSpanCompletion(Box::new(btel_records::ManualSpanCompletion {

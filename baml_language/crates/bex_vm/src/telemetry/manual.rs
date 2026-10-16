@@ -111,7 +111,6 @@ impl ManualSpan {
         parent: Option<&Self>,
         options: OperationOptions,
         captured_type_args: Option<btel_snapshot::Snapshot>,
-        receiver: Option<Value>,
     ) -> Self {
         let mut template = None;
         let recording = state
@@ -142,14 +141,8 @@ impl ManualSpan {
                         })
                         .flatten()
                 };
-                let captured_receiver = (options.mode == InvocationMode::Span && options.inputs)
-                    .then(|| {
-                        receiver.and_then(|value| state.capture(snapshot::Input::Value(value)))
-                    })
-                    .flatten();
-                let requires_announcement = captured_inputs.is_some()
-                    || captured_type_args.is_some()
-                    || captured_receiver.is_some();
+                let requires_announcement =
+                    captured_inputs.is_some() || captured_type_args.is_some();
                 let old_context = state.context.clone();
                 state.set_context(context.clone());
                 if options.mode == InvocationMode::Span {
@@ -161,7 +154,6 @@ impl ManualSpan {
                             entered_at,
                             captured_inputs,
                             captured_type_args,
-                            captured_receiver,
                         },
                     )));
                 }

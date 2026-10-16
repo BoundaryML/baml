@@ -508,7 +508,6 @@ fn start_span_impl(
         let invalid = |message: &str| message.to_owned();
         let mut options = crate::telemetry::manual::OperationOptions::default();
         let mut captured_type_args = None;
-        let mut receiver = None;
         let definition = if let Ok(name) = vm.as_string(&target) {
             if name.is_empty() {
                 return Err(invalid("span name must not be empty"));
@@ -557,11 +556,6 @@ fn start_span_impl(
                 );
             }
             if options.mode == btel_types::InvocationMode::Span && options.inputs {
-                if let Some(ptr) = target.as_object_ptr()
-                    && let Object::BoundMethod(method) = vm.get_object(ptr)
-                {
-                    receiver = Some(method.receiver);
-                }
                 let type_args = vm
                     .callable_function_and_type_args(target)
                     .map(|(_, args)| args.to_vec())
@@ -620,7 +614,6 @@ fn start_span_impl(
                 parent.as_deref(),
                 options,
                 captured_type_args,
-                receiver,
             )
         };
         Ok(copy::Span {

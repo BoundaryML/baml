@@ -394,7 +394,6 @@ impl ConversionBuffer {
                         entered_at_ticks: entered_at.get(),
                         inputs_cas_id: captured_inputs.as_ref().map(cas_id),
                         type_args_cas_id: captured_type_args.as_ref().map(cas_id),
-                        receiver_cas_id: None,
                     }),
                 );
             }
@@ -445,7 +444,6 @@ impl ConversionBuffer {
                         entered_at_ticks: entry.entered_at.get(),
                         inputs_cas_id: entry.captured_inputs.as_ref().map(cas_id),
                         type_args_cas_id: entry.captured_type_args.as_ref().map(cas_id),
-                        receiver_cas_id: entry.captured_receiver.as_ref().map(cas_id),
                     }),
                 );
             }

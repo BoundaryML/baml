@@ -264,7 +264,6 @@ fn call() -> Event {
         entered_at_ticks: 5_000,
         inputs_cas_id: None,
         type_args_cas_id: None,
-        receiver_cas_id: None,
     })
 }
 
@@ -1527,7 +1526,6 @@ fn hand_recorded_usage_is_dropped_only_where_a_request_prices_it() {
                 entered_at_ticks: 5_000,
                 inputs_cas_id: None,
                 type_args_cas_id: None,
-                receiver_cas_id: None,
             }),
             Event::FunctionCompletion(proto::FunctionCompletion {
                 id,

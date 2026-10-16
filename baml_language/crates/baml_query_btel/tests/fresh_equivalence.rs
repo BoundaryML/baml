@@ -486,7 +486,6 @@ mod crafted {
                                 entered_at_ticks: 21,
                                 inputs_cas_id: None,
                                 type_args_cas_id: Some(proto::CasId { low: 3, high: 4 }),
-                                receiver_cas_id: Some(proto::CasId { low: 5, high: 6 }),
                             }),
                         ],
                     ),
