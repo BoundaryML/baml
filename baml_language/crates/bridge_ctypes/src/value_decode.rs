@@ -484,13 +484,18 @@ fn convert_enum(e: InboundEnumValue) -> BexExternalValue {
     }
 }
 
+/// The key of a map entry, class field or keyword argument. The boundary
+/// carries string keys only for now: a key of another kind is refused, never
+/// spelled as a string (which would merge `1` with `"1"`). A typed key
+/// (`map<Color, V>`, `map<int, V>`) is a new arm here when the engine takes
+/// one.
 fn extract_string_key(entry: &InboundMapEntry) -> Result<String, CtypesError> {
     use crate::baml_bridge::cffi::inbound_map_entry::Key;
     match &entry.key {
         Some(Key::StringKey(s)) => Ok(s.clone()),
-        Some(Key::IntKey(i)) => Ok(i.to_string()),
-        Some(Key::BoolKey(b)) => Ok(b.to_string()),
-        Some(Key::EnumKey(e)) => Ok(format!("{}::{}", e.name, e.value)),
+        Some(Key::IntKey(_)) => Err(CtypesError::MapKeyNotString("int")),
+        Some(Key::BoolKey(_)) => Err(CtypesError::MapKeyNotString("bool")),
+        Some(Key::EnumKey(_)) => Err(CtypesError::MapKeyNotString("enum")),
         None => Err(CtypesError::MapEntryMissingKey),
     }
 }

@@ -6,6 +6,10 @@
 
 mod error;
 mod handle_table;
+mod wire_depth;
+pub use wire_depth::{
+    ARGUMENT_DEPTH, RESULT_DEPTH, WIRE_NESTING_LIMIT, baml_ty_depth, inbound_value_depth,
+};
 mod host_value_registry;
 mod invocation;
 pub use host_value_registry::HostValueRegistry;
