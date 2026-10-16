@@ -12,6 +12,8 @@ pub(crate) mod method;
 pub(crate) mod type_alias;
 pub(crate) mod typemap_file;
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use baml_sdkgen_types::{FunctionArgument, Name, Symbol, SymbolPool, Ty};
 
 use crate::{
@@ -42,6 +44,14 @@ pub(crate) type SortKey = (String, u32);
 /// Function symbols fan out into sync + async bindings; all other
 /// variants are 1:1.
 pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, SortKey)> {
+    let aliases: BTreeMap<Name, Ty> = pool
+        .iter()
+        .filter_map(|(name, symbol)| match symbol {
+            Symbol::TypeAlias(alias) => Some((name.clone(), alias.resolves_to.clone())),
+            _ => None,
+        })
+        .collect();
+
     // Determinism: SymbolPool is a HashMap, so iteration order is
     // nondeterministic. Sort pool entries by Name before the walk.
     let mut entries: Vec<(&Name, &Symbol)> = pool.iter().collect();
@@ -63,6 +73,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                     .map(|p| TypeScriptClassProperty {
                         name: p.name.as_str().to_string(),
                         ty: p.ty.clone(),
+                        nullable: is_nullable(&p.ty, &aliases, &mut BTreeSet::new()),
                         docstring: p.docstring.clone(),
                     })
                     .collect();
@@ -133,6 +144,29 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
     }
 
     out
+}
+
+/// Whether `null` inhabits `ty`, following aliases. Same rule as the Python
+/// generator's `is_nullable`, which defaults these fields to `None`.
+fn is_nullable(ty: &Ty, aliases: &BTreeMap<Name, Ty>, visiting: &mut BTreeSet<Name>) -> bool {
+    match ty {
+        Ty::Null => true,
+        Ty::Union(items) => items
+            .iter()
+            .any(|item| is_nullable(item, aliases, visiting)),
+        Ty::TypeAlias(name) => {
+            let Some(resolved) = aliases.get(name) else {
+                return false;
+            };
+            if !visiting.insert(name.clone()) {
+                return false;
+            }
+            let nullable = is_nullable(resolved, aliases, visiting);
+            visiting.remove(name);
+            nullable
+        }
+        _ => false,
+    }
 }
 
 /// Fan out a `Symbol::Function` into its sync and async bindings.
