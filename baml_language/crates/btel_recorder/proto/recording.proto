@@ -370,8 +370,6 @@ message FunctionAnnouncement {
   CasId type_args_cas_id = 6;
   // Minor 11: explicit operation; inputs are a named value map.
   bool manual = 7;
-  reserved 8; // Previously used for a separately captured bound receiver.
-  reserved "receiver_cas_id";
 }
 
 message FunctionCompletion {
