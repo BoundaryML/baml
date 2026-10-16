@@ -40,6 +40,15 @@ class UvBox {
     }
 }
 
+/// Views `UvBox`, which implements `UvSized`.
+class UvBoxView {
+    implements reflect.TypeView {
+        function as_type(self) -> reflect.Type throws never {
+            UvBox.type()
+        }
+    }
+}
+
 function uv_shown(ty: reflect.Type) -> UvShown {
     UvShown { ty: ty }
 }
@@ -140,4 +149,69 @@ test "a user view of int behaves like reflect.Type.of<int>()" {
         reflect.Class.new("UvSame", { "x": view }).to_baml(),
         reflect.Class.new("UvSame", { "x": int_type }).to_baml(),
     )
+}
+
+// `let type` takes any `reflect.TypeView` too, and binds the type the view's
+// own `as_type()` returns.
+
+function uv_bound(view: reflect.TypeView) -> string {
+    let type T extends UvSized = view else {
+        return "missed";
+    };
+    "bound"
+}
+
+function uv_bound_size(view: reflect.TypeView, json: string) -> int {
+    let type T extends UvSized = view;
+    baml.json.from_string<T>(json).size()
+}
+
+function uv_type_name<V extends reflect.TypeView>(view: V) -> string {
+    let type T = view;
+    reflect.Type.of<T>().to_string()
+}
+
+test "let type binds a user view" {
+    let type T = UvInt {};
+    assert.equal(reflect.Type.of<T>(), int.type());
+    let parsed: unknown = baml.json.to<T>(baml.json.parse("7"));
+    assert.equal(parsed, 7)
+}
+
+test "let type binds a value typed reflect.TypeView" {
+    let view: reflect.TypeView = uv_shown(string.type());
+    let type T = view;
+    assert.equal(reflect.Type.of<T>(), string.type())
+}
+
+test "let type binds a type parameter bounded by reflect.TypeView" {
+    assert.equal(uv_type_name(UvInt {}), "int");
+    assert.equal(uv_type_name(string.type()), "string")
+}
+
+test "let type binds a union of a user view and a type" {
+    let views: (UvInt | reflect.Type)[] = [UvInt {}, string.type()];
+    let names: string[] = [];
+    for (let view in views) {
+        let type T = view;
+        names.push(reflect.Type.of<T>().to_string());
+    }
+    assert.equal(names.join(","), "int,string")
+}
+
+test "a bounded let type takes a user view" {
+    let type T extends UvSized = UvBoxView {};
+    let boxed = baml.json.from_string<T>(`{"n": 4}`);
+    assert.equal(boxed.size(), 4);
+    assert.equal(uv_bound_size(UvBoxView {}, `{"n": 5}`), 5)
+}
+
+test "a bounded let type checks the type a user view returns" {
+    assert.equal(uv_bound(UvBoxView {}), "bound");
+    assert.equal(uv_bound(UvInt {}), "missed");
+    let thrown = uv_bound_size(UvInt {}, "1") catch (e) {
+        reflect.errors.TypeMismatch => "TypeMismatch",
+        _ => "other",
+    };
+    assert.equal(thrown, "TypeMismatch")
 }

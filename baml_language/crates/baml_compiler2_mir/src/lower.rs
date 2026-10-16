@@ -9585,6 +9585,7 @@ impl<'db> LoweringContext<'db> {
         else_branch: Option<AstExprId>,
     ) -> Lowered<()> {
         let value = self.lower_to_operand(binding.operand)?;
+        let value = self.type_operand_as_type(binding.operand, value)?;
         let generic_params = self.enclosing_generic_params();
         let slot = RuntimeGenericLayout::new(&generic_params)
             .slot(&binding.parameter)
@@ -9649,6 +9650,74 @@ impl<'db> LoweringContext<'db> {
             self.builder.set_current_block(bound);
         }
         Ok(())
+    }
+
+    /// Whether a `let type` operand of static type `ty` needs its own
+    /// `as_type()` before the VM binds it. The VM's type-operand boundary
+    /// unwraps `reflect.Type`, the nine kind views and a builder's pending
+    /// type itself; every other `reflect.TypeView` (a class of the user's
+    /// own, the interface, a type parameter bounded by it) does not reach it
+    /// as a `type` value otherwise. The checker admits a pending type only on
+    /// its own, never in a union with a view, so an operand that needs the
+    /// call holds a `reflect.TypeView` whatever its value.
+    fn type_operand_needs_as_type(&self, ty: &Tir2Ty) -> bool {
+        let lang = self.lang();
+        let is_lang_class = |name: &DeclName, item: baml_base::LangItem| {
+            DeclName::of_lang_item(lang, item).is_some_and(|decl| decl == *name)
+        };
+        let unwrapped_by_vm = |member: &Tir2Ty| match member {
+            Tir2Ty::Type | Tir2Ty::Never => true,
+            Tir2Ty::Class(name, _) => {
+                is_lang_class(name, baml_base::lang_item!(Reflect: class.PendingType))
+                    || baml_type::type_kind::TypeKind::ALL
+                        .iter()
+                        .any(|kind| is_lang_class(name, kind.class()))
+            }
+            _ => false,
+        };
+        match ty {
+            Tir2Ty::Union(members) => !members.iter().all(unwrapped_by_vm),
+            other => !unwrapped_by_vm(other),
+        }
+    }
+
+    /// The `let type` operand `value` as the VM's type-operand boundary takes
+    /// it: a `reflect.TypeView` the VM does not unwrap itself goes through its
+    /// own `as_type()` ([`Self::type_operand_needs_as_type`]).
+    fn type_operand_as_type(
+        &mut self,
+        operand: AstExprId,
+        value: Operand<'db>,
+    ) -> Lowered<Operand<'db>> {
+        if !self
+            .tir_expr_type(operand)
+            .is_some_and(|ty| self.type_operand_needs_as_type(ty))
+        {
+            return Ok(value);
+        }
+        let type_view =
+            DeclName::of_lang_item(self.lang(), baml_base::lang_item!(Reflect: TypeView))
+                .ok_or_else(|| {
+                    self.internal_error(
+                        "`let type` takes a `reflect.TypeView`, but the `reflect` language \
+                         package is not installed",
+                        operand,
+                    )
+                })?;
+        // `TypeView` is non-generic and declares no associated types.
+        let iface = tir2_interface_to_template(&type_view, &[], &[], &self.runtime(), &[]);
+        let converted = self.builder.temp(RuntimeTy::type_type());
+        self.emit_virtual_call_with_operands(
+            iface,
+            "as_type",
+            vec![value],
+            /* ntypeargs */ 0,
+            /* self_arg */ 0,
+            /* argument_layout */ None,
+            RuntimeTy::type_type(),
+            Place::local(converted),
+        );
+        Ok(Operand::Copy(Place::local(converted)))
     }
 
     /// `reflect.errors.TypeMismatch`, the error a missed `let type` bound
