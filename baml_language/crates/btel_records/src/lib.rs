@@ -81,6 +81,7 @@ impl<I, V> SpanRecord<I, V> {
             | Self::ThreadSelected { .. }
             | Self::ContextSelected { .. }
             | Self::ContextReferenced { .. }
+            | Self::SpanUsage(_)
             | Self::ContextCleared
             | Self::ThreadSpanRunning { .. }
             | Self::NetworkEvent(_)
