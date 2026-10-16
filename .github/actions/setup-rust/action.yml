@@ -7,13 +7,9 @@ inputs:
     required: false
     default: "1.98.0"
   enable-wasm:
-    description: "Enable WASM support (adds wasm32-unknown-unknown target and wasm-pack)"
+    description: "Enable WASM support (adds the wasm32-unknown-unknown target and a prebuilt wasm-pack)"
     required: false
     default: "false"
-  wasm-pack-version:
-    description: "wasm-pack version to install (only used when enable-wasm is true)"
-    required: false
-    default: "0.14.0"
   enable-cross:
     description: "Enable cross-rs for cross-compilation"
     required: false
@@ -105,10 +101,13 @@ runs:
       run: rustup target add wasm32-unknown-unknown
       shell: bash
 
+    # Prebuilt, at the version mise.toml pins. Building it with `cargo install`
+    # resolves its dependencies fresh, which breaks whenever one is yanked.
     - name: Install wasm-pack
       if: inputs.enable-wasm == 'true'
-      run: cargo install wasm-pack --version ${{ inputs.wasm-pack-version }}
-      shell: bash
+      uses: ./.github/actions/setup-mise
+      with:
+        install_args: "github:rustwasm/wasm-pack"
 
     - name: Install cross-rs
       if: inputs.enable-cross == 'true'
