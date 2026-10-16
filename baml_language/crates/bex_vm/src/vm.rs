@@ -8142,16 +8142,15 @@ impl BexVm {
         Ok(None)
     }
 
-    /// `ResumeCompiled`: hand the frame on top to its compiled body, as the
-    /// stub offset it is parked at says (see [`crate::compiled_rt::stub`]),
-    /// and carry out what the body returns. `pc` is the run loop's: past the
-    /// opcode on entry and, when the frame stays on top, where it is parked
-    /// on return. On `Err` the frame stays pushed for the unwinder.
+    /// `ResumeCompiled` (at `cur_pc`): hand the frame on top to its compiled
+    /// body, as the stub offset it is parked at says (see
+    /// `crate::compiled_rt::stub`), and carry out what the body returns,
+    /// parking the frame again when it stays on top. On `Err` the frame stays
+    /// pushed for the unwinder.
     #[cold]
     #[inline(never)]
     fn resume_compiled(
         &mut self,
-        pc: &mut usize,
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
@@ -8165,7 +8164,7 @@ impl BexVm {
             }
             .into());
         };
-        let offset = *pc - 1 - start;
+        let offset = self.cur_pc - start;
         if let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] {
             frame.instruction_ptr = crate::compiled_rt::RUNNING;
         }
@@ -8197,13 +8196,7 @@ impl BexVm {
                 };
                 let step = body(self, resume);
                 self.settle();
-                self.carry_out(
-                    step.map_err(|error| *error)?,
-                    start,
-                    pc,
-                    frame_idx,
-                    function,
-                )
+                self.carry_out(step.map_err(|error| *error)?, start, frame_idx, function)
             }
         }
     }
@@ -8214,15 +8207,13 @@ impl BexVm {
         &mut self,
         step: Step,
         start: usize,
-        pc: &mut usize,
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
         use crate::compiled_rt::stub;
-        let mut park = |vm: &mut Self, offset: usize| {
-            *pc = start + offset;
-            if let Frame::Bytecode(frame) = &mut vm.frames[*frame_idx] {
-                frame.instruction_ptr = *pc;
+        let park = |vm: &mut Self, frame_idx: usize, offset: usize| {
+            if let Frame::Bytecode(frame) = &mut vm.frames[frame_idx] {
+                frame.instruction_ptr = start + offset;
             }
         };
         match step {
@@ -8232,7 +8223,7 @@ impl BexVm {
                 argc,
                 type_args,
             } => {
-                park(self, stub::AFTER_CALL);
+                park(self, *frame_idx, stub::AFTER_CALL);
                 let argc = argc as usize;
                 let locals_offset = StackIndex::from_raw(self.stack.len() - argc);
                 self.compiled_caller_call(
@@ -8253,11 +8244,11 @@ impl BexVm {
                     _ => stub::SPAWN,
                 };
                 self.stack.push(operand);
-                park(self, offset);
+                park(self, *frame_idx, offset);
                 Ok(None)
             }
             Step::Yield => {
-                park(self, stub::AFTER_YIELD);
+                park(self, *frame_idx, stub::AFTER_YIELD);
                 Ok(Some(VmExecState::EarlyYield))
             }
         }
@@ -10400,8 +10391,15 @@ impl BexVm {
                         self.finish_trace_hook(*frame_idx, result)?;
                     }
                     // A compiled frame's stub: hand the frame to its body.
+                    // `pc` never leaves this loop (handing it to an outlined
+                    // call costs every opcode its register): the body parks
+                    // its frame, and `pc` follows the frame.
                     OpCode::ResumeCompiled => {
-                        return self.resume_compiled(pc, frame_idx, function);
+                        let outcome = self.resume_compiled(frame_idx, function);
+                        if let Some(Frame::Bytecode(frame)) = self.frames.get(*frame_idx) {
+                            *pc = frame.instruction_ptr;
+                        }
+                        return outcome;
                     }
                     OpCode::SetCallTrace => {
                         debug_assert!(
