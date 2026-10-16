@@ -399,7 +399,7 @@ fn user.fixtures.llm_quoted_prompt.QuotedPrompt@stream(topic: string, client: nu
     let _5: bool
     let _6: ai.FunctionSpec<string>
     let _7: null | ai.stream.StreamingClient
-    let _8: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> null throws unknown)
+    let _8: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.ModelCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.UserMessage) -> null throws unknown)
     let _9: trace.Options | trace.ReservedSpan
     let _10: reflect.Type
 
@@ -893,7 +893,7 @@ fn user.fixtures.llm_quoted_prompt.BacktickPrompt@stream(topic: string, client: 
     let _5: bool
     let _6: ai.FunctionSpec<string>
     let _7: null | ai.stream.StreamingClient
-    let _8: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.LLMCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.Usage | ai.events.UserMessage) -> null throws unknown)
+    let _8: null | ((ai.events.AssistantMessage | ai.events.FinalProduced | ai.events.ModelCall | ai.events.RunStarted | ai.events.ToolCompleted | ai.events.ToolFailed | ai.events.ToolRequested | ai.events.UserMessage) -> null throws unknown)
     let _9: trace.Options | trace.ReservedSpan
     let _10: reflect.Type
 
