@@ -16,7 +16,8 @@ const BOUNDARY_API_KEY: &str = "BOUNDARY_API_KEY";
 
 /// One recording per engine, delivered to local files or BCS. Cloud payload
 /// failures discard that payload and allow later delivery. Initial cloud authorization
-/// rejection cancels execution; later revocation only disables recording. Local storage
+/// failure warns and disables recording by default; artifacts can explicitly opt into
+/// aborting execution. Later revocation only disables recording. Local storage
 /// and fatal worker failures disable recording. Delivery errors remain available through
 /// `BexEngine::telemetry_result` and initial refusal through
 /// `BexEngine::initial_cloud_authorization_error`.
@@ -617,6 +618,7 @@ impl TelemetryRecording {
         Ok((runtime, delivery.map(RecordingDelivery::Local)))
     }
 
+    /// Start bounded cloud recording; only an explicit abort policy may cancel application work.
     #[expect(clippy::too_many_arguments)]
     fn start_cloud(
         id: RecordingId,
@@ -640,13 +642,9 @@ impl TelemetryRecording {
         delivery_config.initial_recording_id = Some(id);
         // Apply the resolved policy to every initial connection failure.
         delivery_config.terminal_initial_connection = true;
-        // Caller-configured cloud aborts by default; artifacts supply their own policy.
-        let initial_failure = initial_failure
-            .cloned()
-            .unwrap_or_else(|| InitialFailurePolicy {
-                action: InitialFailureAction::Abort,
-                ..Default::default()
-            });
+        // Telemetry observes execution. Reuse the artifact fail-open policy unless
+        // the publisher explicitly selected a different initial-failure action.
+        let initial_failure = initial_failure.cloned().unwrap_or_default();
         let initial_auth_cancel = crate::CancellationToken::new();
         let mut delivery = None;
         let runtime =
@@ -879,7 +877,7 @@ impl BexEngine {
             .and_then(super::telemetry_state::EngineTelemetry::result)
     }
 
-    /// Initial ingestion refusal is fatal to the host execution, unlike later revocation.
+    /// Initial ingestion failure is fatal only under an explicit abort policy.
     /// Shutdown joins the initial request even when the program produces no recordings.
     pub fn initial_cloud_authorization_error(&self) -> Option<EngineError> {
         self.telemetry
@@ -889,7 +887,7 @@ impl BexEngine {
             .initial_auth_error()
     }
 
-    /// The artifact already warned or deliberately ignored an initial failure.
+    /// The recording policy already warned or deliberately ignored an initial failure.
     /// Delivery errors remain inspectable through `telemetry_result`.
     pub fn initial_telemetry_failure_handled(&self) -> bool {
         self.telemetry

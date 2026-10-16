@@ -16,23 +16,30 @@ mod cloud_protocol;
 const KEY: &str = "bml_cli_test_key";
 const RECORDINGS: &str = ".baml/btel/recordings";
 
-// Compare the complete error block; unrelated command progress precedes/follows it.
+/// Extract one complete Boundary diagnostic, excluding unrelated command progress.
 fn diagnostic(output: &std::process::Output) -> String {
     let stderr = String::from_utf8_lossy(&output.stderr);
     let lines: Vec<_> = stderr.lines().collect();
     let start = lines
         .iter()
-        .position(|line| line.starts_with("error: "))
-        .unwrap_or_else(|| panic!("missing error diagnostic: {stderr}"));
+        .position(|line| {
+            line.starts_with("error: ")
+                || line.starts_with("warning: Boundary")
+                || line.starts_with("warning: Could not communicate with Boundary")
+        })
+        .unwrap_or_else(|| panic!("missing Boundary diagnostic: {stderr}"));
     let end = lines[start..]
         .iter()
         .position(|line| {
             matches!(
                 *line,
-                "  Execution cancelled." | "  Query failed." | "  Authentication command failed."
+                "  Execution cancelled."
+                    | "  Query failed."
+                    | "  Authentication command failed."
+                    | "  Cloud telemetry disabled. Program execution continues."
             )
         })
-        .unwrap_or_else(|| panic!("missing error outcome: {stderr}"));
+        .unwrap_or_else(|| panic!("missing Boundary outcome: {stderr}"));
     assert_eq!(
         lines.iter().filter(|line| **line == lines[start]).count(),
         1,
@@ -41,6 +48,7 @@ fn diagnostic(output: &std::process::Output) -> String {
     lines[start..=start + end].join("\n")
 }
 
+/// Pin credential recovery text for fail-open CLI warnings and fatal query/artifact errors.
 fn assert_api_key_rejection(
     output: &std::process::Output,
     endpoint: &str,
@@ -48,6 +56,11 @@ fn assert_api_key_rejection(
     recording_off_allowed: bool,
 ) {
     let actual = diagnostic(output);
+    let prefix = if !query && recording_off_allowed {
+        "warning"
+    } else {
+        "error"
+    };
     let local_and_outcome = if query {
         r#"    • Query local recordings: rerun with BOUNDARY_API_KEY=local or --local.
 
@@ -56,7 +69,7 @@ fn assert_api_key_rejection(
         r#"    • Record locally: rerun with BOUNDARY_API_KEY=local.
     • Disable recording: rerun with BAML_TELEMETRY=off.
 
-  Execution cancelled."#
+  Cloud telemetry disabled. Program execution continues."#
     } else {
         r#"    • Record locally: rerun with BOUNDARY_API_KEY=local.
 
@@ -68,7 +81,7 @@ fn assert_api_key_rejection(
         "Unset BOUNDARY_API_KEY to use your saved Boundary login.",
         "Unset BOUNDARY_API_KEY, then run `baml auth login`.",
         "Your saved login could not be read. Unset BOUNDARY_API_KEY, then run `baml auth login` to restore user authentication.",
-    ].map(|login_recovery| format!(r#"error: Boundary rejected BOUNDARY_API_KEY (401).
+    ].map(|login_recovery| format!(r#"{prefix}: Boundary rejected BOUNDARY_API_KEY (401).
   Endpoint: {endpoint}
 
   To continue, choose one:
@@ -82,11 +95,12 @@ fn assert_api_key_rejection(
     );
 }
 
+/// Pin the permission warning and its nonfatal execution outcome.
 fn assert_ingest_forbidden(output: &std::process::Output, endpoint: &str) {
     assert_eq!(
         diagnostic(output),
         format!(
-            r#"error: Boundary denied cloud telemetry ingestion (HTTP 403).
+            r#"warning: Boundary denied cloud telemetry ingestion (HTTP 403).
   Endpoint: {endpoint}
 
   To continue, choose one:
@@ -94,7 +108,7 @@ fn assert_ingest_forbidden(output: &std::process::Output, endpoint: &str) {
     • Record locally: rerun with BOUNDARY_API_KEY=local.
     • Disable recording: rerun with BAML_TELEMETRY=off.
 
-  Execution cancelled."#
+  Cloud telemetry disabled. Program execution continues."#
         )
     );
 }
@@ -276,8 +290,9 @@ fn fixture(source: &str) -> tempfile::TempDir {
     temp
 }
 
+/// A late initial refusal must preserve a result already printed by the command.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn initial_rejection_fails_even_if_execution_finishes_before_authorization() {
+async fn initial_rejection_warns_even_if_execution_finishes_before_authorization() {
     let temp = fixture("function main() -> int { 7 }\n");
     for status in [401, 403] {
         let server = MockServer::start().await;
@@ -290,7 +305,8 @@ async fn initial_rejection_fails_even_if_execution_finishes_before_authorization
             .mount(&server)
             .await;
         let output = execute_case(temp.path(), &server.uri(), KEY, &["run", "main"]);
-        assert!(!output.status.success());
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
         let stderr = String::from_utf8_lossy(&output.stderr);
         if status == 401 {
             assert_api_key_rejection(&output, &server.uri(), false, true);
@@ -314,8 +330,9 @@ async fn initial_rejection_fails_even_if_execution_finishes_before_authorization
     }
 }
 
+/// HTTP and transport failures disable recording while preserving stdout and exit status.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn initial_connection_failures_cancel_execution() {
+async fn initial_connection_failures_warn_without_changing_execution() {
     let temp = fixture("function main() -> int { 7 }\n");
     for status in [404, 503] {
         let server = MockServer::start().await;
@@ -332,21 +349,28 @@ async fn initial_connection_failures_cancel_execution() {
             .mount(&server)
             .await;
         let output = execute_case(temp.path(), &server.uri(), KEY, &["run", "main"]);
-        assert!(!output.status.success(), "{output:?}");
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
         let error = diagnostic(&output);
         assert!(
             error.contains("Cloud telemetry is unavailable for this project."),
             "{error}"
         );
-        assert!(error.ends_with("Execution cancelled."), "{error}");
+        assert!(
+            error.ends_with("Cloud telemetry disabled. Program execution continues."),
+            "{error}"
+        );
     }
 
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
     drop(listener);
     let output = execute_case(temp.path(), &endpoint, KEY, &["run", "main"]);
-    assert!(!output.status.success(), "{output:?}");
-    assert!(diagnostic(&output).ends_with("Execution cancelled."));
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
+    assert!(
+        diagnostic(&output).ends_with("Cloud telemetry disabled. Program execution continues.")
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -582,6 +606,7 @@ async fn cloud_query_displays_structured_error_codes_and_optional_messages() {
     }
 }
 
+/// Nonfatal ingestion diagnostics retain the server's public explanation.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn initial_telemetry_rejection_preserves_the_public_api_message() {
     let temp = fixture("function main() -> int { 7 }\n");
@@ -597,12 +622,12 @@ async fn initial_telemetry_rejection_preserves_the_public_api_message() {
         .mount(&server)
         .await;
     let output = execute_case(temp.path(), &server.uri(), KEY, &["run", "main"]);
-    assert!(!output.status.success());
+    assert!(output.status.success(), "{output:?}");
     let endpoint = server.uri();
     assert_eq!(
         diagnostic(&output),
         format!(
-            r#"error: Boundary denied cloud telemetry ingestion (HTTP 403).
+            r#"warning: Boundary denied cloud telemetry ingestion (HTTP 403).
   Endpoint: {endpoint}
   Code: ACCESS_REQUIRED
   This credential cannot ingest into the selected environment.
@@ -612,7 +637,7 @@ async fn initial_telemetry_rejection_preserves_the_public_api_message() {
     • Record locally: rerun with BOUNDARY_API_KEY=local.
     • Disable recording: rerun with BAML_TELEMETRY=off.
 
-  Execution cancelled."#
+  Cloud telemetry disabled. Program execution continues."#
         )
     );
 }
@@ -651,31 +676,27 @@ fn cloud_configuration_errors_share_diagnostics_without_exposing_invalid_url_cre
     }
 }
 
+/// Initial refusal must leave both running main work and rooted children free to complete.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn initial_session_rejection_cancels_execution_without_waiting_to_start() {
+async fn initial_session_rejection_allows_running_and_rooted_work_to_finish() {
     let temp = fixture(
         r#"
 function main() -> int {
     baml.io.println("execution-started");
     let child = spawn with baml.spawn.Root.new() {
-        baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(600n));
         1
     };
-    baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(600n));
     await child;
     7
 }
 "#,
     );
     let server = MockServer::start().await;
-    let requested_at = std::sync::Arc::new(std::sync::Mutex::new(None));
-    let responding = requested_at.clone();
     Mock::given(method("POST"))
         .and(path_regex(r"/heartbeat$"))
-        .respond_with(move |_: &Request| {
-            *responding.lock().unwrap() = Some(std::time::Instant::now());
-            ResponseTemplate::new(401).set_delay(std::time::Duration::from_millis(500))
-        })
+        .respond_with(ResponseTemplate::new(401).set_delay(std::time::Duration::from_millis(50)))
         .expect(1)
         .mount(&server)
         .await;
@@ -685,22 +706,14 @@ function main() -> int {
         "bdry_session_invalid",
         &["run", "main"],
     );
-    let requested = requested_at
-        .lock()
-        .unwrap()
-        .unwrap_or_else(|| panic!("heartbeat was never requested: {output:?}"));
-    assert!(
-        requested.elapsed() < std::time::Duration::from_secs(5),
-        "initial refusal must interrupt the 60-second call: {output:?}"
-    );
     assert!(
         !String::from_utf8_lossy(&output.stderr).contains("abandoned"),
-        "rooted work must cancel too: {output:?}"
+        "rooted work must finish too: {output:?}"
     );
-    assert!(!output.status.success());
-    assert!(
-        String::from_utf8_lossy(&output.stdout).contains("execution-started"),
-        "execution must start before authorization finishes: {output:?}"
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "execution-started\n7\n"
     );
     assert_api_key_rejection(&output, &server.uri(), false, true);
 }
@@ -734,8 +747,9 @@ async fn authorization_rejection_after_initial_success_does_not_fail_execution()
     }
 }
 
+/// Expression evaluation and test execution use the same fail-open recording policy.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn initial_rejection_fails_expressions_and_test_runs() {
+async fn initial_rejection_preserves_expressions_and_test_runs() {
     let temp = fixture(
         "function main() -> int { 7 }\ntestset \"smoke\" { test \"ok\" { assert.is_true(true) } }\n",
     );
@@ -750,7 +764,7 @@ async fn initial_rejection_fails_expressions_and_test_runs() {
             .mount(&server)
             .await;
         let output = execute_case(temp.path(), &server.uri(), KEY, args);
-        assert!(!output.status.success(), "{args:?}: {output:?}");
+        assert!(output.status.success(), "{args:?}: {output:?}");
         assert_ingest_forbidden(&output, &server.uri());
     }
 }
