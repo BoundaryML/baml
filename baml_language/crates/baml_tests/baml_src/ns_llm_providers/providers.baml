@@ -15,7 +15,7 @@ function check_hello_world(client: ai.Client) -> void {
     let streaming: ai.stream.StreamingClient = match (client) {
         let s: ai.stream.StreamingClient => s,
         _ => {
-            throw ai.errors.StreamingUnsupported { client_id: client.id() }
+            throw ai.errors.StreamingUnsupported { requested_model: client.requested_model() }
         },
     };
     assert.equal(
@@ -72,13 +72,21 @@ function cache_round_trip(name: string, client: ai.Client) -> ai.events.Usage[] 
     let agent = ai.Agent.new(client = client);
 
     let first = agent.run(CachedReference@spec(nonce, reference, "Reply with exactly: one"));
-    log.info(`${name} first call: ${baml.json.stringify(baml.json.to_json(first.usage))}`);
+    let first_usage = only_usage(first.usage);
+    log.info(`${name} first call: ${baml.json.stringify(baml.json.to_json(first_usage))}`);
     assert.equal(first.value, "one");
 
     let second = agent.run(CachedReference@spec(nonce, reference, "Reply with exactly: two"));
-    log.info(`${name} second call: ${baml.json.stringify(baml.json.to_json(second.usage))}`);
+    let second_usage = only_usage(second.usage);
+    log.info(`${name} second call: ${baml.json.stringify(baml.json.to_json(second_usage))}`);
     assert.equal(second.value, "two");
-    [first.usage, second.usage]
+    [first_usage, second_usage]
+}
+
+/// The usage of a run that called one model.
+function only_usage(usage: ai.events.ModelUsage[]) -> ai.events.Usage {
+    assert.equal(usage.length(), 1);
+    usage.at(0)?.usage ?? baml.sys.panic("one usage entry")
 }
 
 // Claude caches only where it is marked, so the default marker is what makes

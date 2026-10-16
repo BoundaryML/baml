@@ -33,8 +33,8 @@ class Client {
     }
 
     implements ai.Client {
-        function id(self) -> string {
-            `typesafeai/${self.model}`
+        function requested_model(self) -> string {
+            self.model
         }
 
         /// Preview the request without resolving credentials or performing IO.

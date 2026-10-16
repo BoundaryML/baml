@@ -107,7 +107,7 @@ class Client {
     // Extra URL query parameters, appended verbatim (no percent-encoding —
     // there is no encoder in the stdlib yet; keep values URL-safe).
     query_params: map<string, string>?,
-    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // Record request/response bodies (and raw SSE events) on the ModelCall wire
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
@@ -178,8 +178,8 @@ class Client {
     }
 
     implements ai.Client {
-        function id(self) -> string {
-            `anthropic/${self.model}`
+        function requested_model(self) -> string {
+            self.model
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

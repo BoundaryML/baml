@@ -63,7 +63,7 @@ class ResponsesClient {
     headers: map<string, string>?,
     /// Extra URL query parameters, percent-encoded onto the endpoint.
     query_params: map<string, string>?,
-    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // Record request/response bodies (and raw SSE events) on the ModelCall wire
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
@@ -135,8 +135,8 @@ class ResponsesClient {
     }
 
     implements ai.Client {
-        function id(self) -> string {
-            `openai/${self.model}`
+        function requested_model(self) -> string {
+            self.model
         }
 
         /// What a `${cache()}` sends as `prompt_cache_breakpoint` on the part

@@ -1088,7 +1088,7 @@ function converse_request(
     let messages = prompt.messages;
     let journal_messages = _lower_journal(
         ai.wire.degrade_tool_media(
-            ai.wire.sanitize_for_client(input.journal, client.id()),
+            ai.wire.sanitize_for_client(input.journal, "aws-bedrock", client.model),
             ["image", "pdf", "video"],
         ),
         _supports_tool_result_status(client.model),
@@ -1455,7 +1455,12 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
         let raw: string => stop_reason(raw),
     };
 
-    let usage: ai.events.Usage? = match (response.usage) {
+    ai.ModelTurn { calls: [], child_turns: [], content: content, stop_reason: stop }
+}
+
+/// A response's or stream metadata event's usage, null when it reported none.
+function converse_usage(usage: ConverseUsage?) -> ai.events.Usage? {
+    match (usage) {
         null => null,
         let reported: ConverseUsage => {
             ai.events.Usage {
@@ -1464,9 +1469,8 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
                     reported.inputTokens,
                     reported.cacheReadInputTokens,
                     reported.cacheWriteInputTokens,
-                )
-                    ?? 0,
-                output_tokens: reported.outputTokens ?? 0,
+                ),
+                output_tokens: reported.outputTokens,
                 cached_input_tokens: reported.cacheReadInputTokens,
                 // Converse reports no separate reasoning-token count; the
                 // thinking tokens are already inside outputTokens.
@@ -1476,9 +1480,7 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
                 uncached_input_tokens: reported.inputTokens,
             }
         },
-    };
-
-    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1491,12 +1493,16 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
     );
     let sent = ai.wire.send_as_with_wire<ConverseResponse>(
         request,
-        "aws-bedrock",
-        client.id(),
+        ai.events.ModelKey { provider: "aws-bedrock", model: client.model },
         capture_wire = client.capture_wire,
     );
-    let turn = parse_response(sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call], model: client.model }
+    ai.internal.with_own_call(
+        parse_response(sent.value),
+        sent.call,
+        converse_usage(sent.value.usage),
+        client.model,
+        null,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -1765,31 +1771,13 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
                             status_code: null,
                         }
                     }
-                    out.push(
-                        ai.stream.TurnMeta {
-                            stop_reason: stop_reason(raw_stop),
-                            input_tokens: null,
-                            output_tokens: null,
-                        },
-                    );
+                    out.push(ai.stream.TurnMeta { stop_reason: stop_reason(raw_stop), usage: null });
                 }
                 null
             },
             let event: ConverseStreamMetadataEvent => {
                 out.push(
-                    ai.stream.TurnMeta {
-                        stop_reason: null,
-                        input_tokens: ai.internal.total_input_tokens(
-                            event.usage?.inputTokens,
-                            event.usage?.cacheReadInputTokens,
-                            event.usage?.cacheWriteInputTokens,
-                        ),
-                        output_tokens: event.usage?.outputTokens,
-                        cached_input_tokens: event.usage?.cacheReadInputTokens,
-                        cache_write_input_tokens: event.usage?.cacheWriteInputTokens,
-                        // inputTokens excludes both cache counts.
-                        uncached_input_tokens: event.usage?.inputTokens,
-                    },
+                    ai.stream.TurnMeta { stop_reason: null, usage: converse_usage(event.usage) },
                 );
                 out.push(ai.stream.TurnDone {});
                 null
@@ -1863,9 +1851,9 @@ function invoke_stream(
         timeout_options = limits,
         dispatched = started,
     );
-    let call = ai.events.LLMCall {
-        client_name: client.id(),
-        provider: "aws-bedrock",
+    let call = ai.events.ModelCall {
+        resolved_model: ai.events.ModelKey { provider: "aws-bedrock", model: client.model },
+        usage: null,
         timing: ai.events.Timing {
             start_time_utc_ms: started.to_timestamp_milliseconds(),
             duration_ms: null,
@@ -1882,16 +1870,14 @@ function invoke_stream(
             null
         },
         http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
-        usage: null,
-        selected: true,
         sse_responses: if (client.capture_wire) {
             []
         } else {
             null
         },
     };
-    stream._calls = [call];
     stream._wire_call = call;
+    stream._requested_model = client.model;
     stream._call_started = started;
     stream._ttft_from = baml.time.Instant.now();
     stream._capture_sse = client.capture_wire;

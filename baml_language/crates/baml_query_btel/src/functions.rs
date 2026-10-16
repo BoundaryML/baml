@@ -21,7 +21,7 @@ use btel_reader::{
     evidence::ArgumentNames,
     timing::{Clock, Conversion, EpochStatus, TimingState, UtcAnchor, format_unix_ns},
     value::{
-        self, BlobSource, CmpOp, Found, Kind, Nav, Operand, RenderLimits, Root, Scalar, Segment,
+        self, BlobSource, CmpOp, Kind, Nav, Operand, RenderLimits, Root, Scalar, Segment,
         Unavailable, equality,
     },
 };
@@ -335,60 +335,6 @@ impl QueryContext {
                 names: parsed.names.as_ref(),
             })
         }))
-    }
-
-    /// `__btel_body_text`: the text of a recorded body, which is a whole
-    /// body (a string), one server-sent event's `data`, or a request
-    /// snapshot's `request.body`. NULL for anything else, such as bytes or a
-    /// cut body. A blob that cannot be read is reported.
-    fn body_text(&self, cas: [u8; 16]) -> rusqlite::Result<Option<String>> {
-        self.check_deadline()?;
-        self.evaluation();
-        let report = |code: &str| {
-            let mut key = cas.to_vec();
-            key.extend_from_slice(b"\xffbody");
-            self.note(&key, code);
-        };
-        let snapshot = match BlobSource::load(self, CasId::from_bytes(cas)) {
-            Ok(snapshot) => snapshot,
-            Err(unavailable) => {
-                report(unavailable.code());
-                return Ok(None);
-            }
-        };
-        let key = |key: &str| Segment::Key(key.to_owned());
-        for path in [vec![], vec![key("data")], vec![key("request"), key("body")]] {
-            let nav = value::navigate(
-                self,
-                &snapshot,
-                Root::Value,
-                None,
-                &path,
-                self.limits.render.max_blobs,
-            );
-            match nav {
-                Nav::Value(found) => {
-                    if let Found::String(text) = found.value() {
-                        return Ok(Some(text.to_string()));
-                    }
-                }
-                // A long body is a blob of its own.
-                Nav::Unavailable(reason @ (Unavailable::Blob(_) | Unavailable::BlobBudget)) => {
-                    report(reason.code());
-                    return Ok(None);
-                }
-                Nav::Unavailable(
-                    Unavailable::Truncated(_)
-                    | Unavailable::ArgumentNamesUnknown
-                    | Unavailable::ArgumentLayoutMismatch
-                    | Unavailable::WrongRoot
-                    | Unavailable::CellCycle,
-                )
-                | Nav::Arguments(_)
-                | Nav::Missing => {}
-            }
-        }
-        Ok(None)
     }
 
     /// `baml_value_state`: what the path finds, without reporting it as
@@ -1263,14 +1209,6 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
         };
         current(&s)?.state(handle)
     })?;
-    let s = slot.clone();
-    conn.create_scalar_function("__btel_body_text", 1, io, move |ctx| {
-        let Some(cas) = opt_blob(ctx, 0)? else {
-            return Ok(None);
-        };
-        let cas = <[u8; 16]>::try_from(cas).map_err(|_| user_error("invalid CAS id"))?;
-        current(&s)?.body_text(cas)
-    })?;
     register_identity_and_time(conn)?;
     register_final_tables(conn)?;
     let _ = Null;
@@ -1295,12 +1233,47 @@ pub(crate) fn node_hash(parent: Option<i64>, name: &str, edge: i64) -> i64 {
     hasher.digest().cast_signed()
 }
 
+/// One model's usage in a stored usage list (`call.usage`, `thread.usage`).
+/// A count no call reported is null, not zero.
+#[derive(Clone, Debug, serde::Deserialize)]
+struct ModelUsage {
+    model: Option<String>,
+    calls: i64,
+    input_tokens: Option<i64>,
+    output_tokens: Option<i64>,
+    cache_read_tokens: Option<i64>,
+    cache_write_tokens: Option<i64>,
+    reasoning_tokens: Option<i64>,
+}
+
+impl ModelUsage {
+    /// The column value's map.
+    fn to_inline(&self) -> Inline {
+        let int = |n: Option<i64>| n.map_or(Inline::Null, Inline::Int);
+        Inline::Map(vec![
+            (
+                "model".into(),
+                self.model.clone().map_or(Inline::Null, Inline::Text),
+            ),
+            ("calls".into(), Inline::Int(self.calls)),
+            ("input_tokens".into(), int(self.input_tokens)),
+            ("output_tokens".into(), int(self.output_tokens)),
+            ("cache_read_tokens".into(), int(self.cache_read_tokens)),
+            ("cache_write_tokens".into(), int(self.cache_write_tokens)),
+            ("reasoning_tokens".into(), int(self.reasoning_tokens)),
+        ])
+    }
+}
+
+fn parse_usage(text: &str) -> rusqlite::Result<Vec<ModelUsage>> {
+    serde_json::from_str(text).map_err(|e| user_error(&format!("invalid stored usage: {e}")))
+}
+
 /// A value the index builds rather than reads from the CAS.
 #[derive(Clone, Debug)]
 pub(crate) enum Inline {
     Null,
     Int(i64),
-    Float(f64),
     Text(String),
     Map(Vec<(String, Inline)>),
     List(Vec<Inline>),
@@ -1336,7 +1309,6 @@ fn build_inline(b: &mut btel_snapshot::Builder, value: &Inline) -> btel_snapshot
     let object = match value {
         Inline::Null => return SnapshotValue::Null,
         Inline::Int(n) => return SnapshotValue::Int(*n),
-        Inline::Float(f) => return SnapshotValue::Float(*f),
         Inline::Text(text) => return b.leaves().string_value(&BexStr::from(text.as_str())),
         Inline::Map(entries) => {
             let values: Vec<SnapshotValue> =
@@ -1362,107 +1334,6 @@ fn build_inline(b: &mut btel_snapshot::Builder, value: &Inline) -> btel_snapshot
         SnapshotValue::Truncated(Limit::Objects),
         SnapshotValue::Object,
     )
-}
-
-/// Model usage summed per span: `(model, input, output, cache_read,
-/// cache_write, reasoning)` rows in, one `temporary_projections` map out.
-#[derive(Default)]
-struct Usage {
-    /// Model turns recorded against the span.
-    calls: i64,
-    models: Vec<String>,
-    unnamed: bool,
-    input: i64,
-    output: i64,
-    cache_read: Option<i64>,
-    cache_write: Option<i64>,
-    reasoning: Option<i64>,
-    /// `None` once any turn's model has no price or the amount overflows.
-    cost: Option<btel_pricing::Usd>,
-}
-
-struct UsageSum;
-impl Aggregate<Option<Usage>, Option<Vec<u8>>> for UsageSum {
-    fn init(&self, _: &mut Context<'_>) -> rusqlite::Result<Option<Usage>> {
-        Ok(None)
-    }
-    fn step(&self, ctx: &mut Context<'_>, acc: &mut Option<Usage>) -> rusqlite::Result<()> {
-        let model: Option<String> = ctx.get(0)?;
-        let input = opt_i64(ctx, 1)?.unwrap_or(0);
-        let output = opt_i64(ctx, 2)?.unwrap_or(0);
-        let (cache_read, cache_write, reasoning) =
-            (opt_i64(ctx, 3)?, opt_i64(ctx, 4)?, opt_i64(ctx, 5)?);
-        let usage = acc.get_or_insert_with(|| Usage {
-            cost: Some(btel_pricing::Usd::default()),
-            ..Usage::default()
-        });
-        let add = |sum: Option<i64>, n: Option<i64>| match (sum, n) {
-            (sum, None) => sum,
-            (sum, Some(n)) => Some(sum.unwrap_or(0).saturating_add(n)),
-        };
-        usage.cost = usage
-            .cost
-            .zip(btel_pricing::cost_nano_usd(
-                model.as_deref(),
-                input,
-                output,
-                cache_read,
-                cache_write,
-            ))
-            .and_then(|(a, b)| a.checked_add(b));
-        match model {
-            Some(model) if !usage.models.contains(&model) => usage.models.push(model),
-            Some(_) => {}
-            None => usage.unnamed = true,
-        }
-        usage.calls += 1;
-        usage.input = usage.input.saturating_add(input);
-        usage.output = usage.output.saturating_add(output);
-        usage.cache_read = add(usage.cache_read, cache_read);
-        usage.cache_write = add(usage.cache_write, cache_write);
-        usage.reasoning = add(usage.reasoning, reasoning);
-        Ok(())
-    }
-    fn finalize(
-        &self,
-        _: &mut Context<'_>,
-        acc: Option<Option<Usage>>,
-    ) -> rusqlite::Result<Option<Vec<u8>>> {
-        let Some(usage) = acc.flatten() else {
-            return Ok(None);
-        };
-        let int = |n: Option<i64>| n.map_or(Inline::Null, Inline::Int);
-        // The local-query cost column remains dollars; convert only at presentation.
-        let dollars = |cost: btel_pricing::Usd| {
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "local queries expose dollar floats after integer estimation and aggregation"
-            )]
-            let nano_usd = cost.as_nano_usd() as f64;
-            Inline::Float(nano_usd / 1_000_000_000.0)
-        };
-        let model = if usage.models.is_empty() {
-            Inline::Null
-        } else {
-            Inline::Text(usage.models.join(", "))
-        };
-        Ok(Some(inline_handle(&Inline::Map(vec![
-            ("model_name".into(), model),
-            ("model_calls".into(), Inline::Int(usage.calls)),
-            ("input_tokens".into(), Inline::Int(usage.input)),
-            ("output_tokens".into(), Inline::Int(usage.output)),
-            ("cache_read_tokens".into(), int(usage.cache_read)),
-            ("cache_write_tokens".into(), int(usage.cache_write)),
-            ("reasoning_tokens".into(), int(usage.reasoning)),
-            (
-                "cost".into(),
-                usage
-                    .cost
-                    .filter(|_| !usage.unnamed)
-                    .map_or(Inline::Null, dollars),
-            ),
-        ]))))
-    }
 }
 
 /// A network span's events, `(at_ticks, seq, name, timestamp, payload_cas)`
@@ -1513,31 +1384,6 @@ impl Aggregate<Vec<(Option<i64>, i64, Event)>, Vec<u8>> for EventList {
     }
 }
 
-/// `%XX` escapes decoded; a malformed one is kept as it is.
-fn percent_decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut at = 0;
-    while at < bytes.len() {
-        let escaped = (bytes[at] == b'%')
-            .then(|| bytes.get(at + 1..at + 3))
-            .flatten()
-            .filter(|hex| hex.iter().all(u8::is_ascii_hexdigit))
-            .and_then(|hex| u8::from_str_radix(std::str::from_utf8(hex).ok()?, 16).ok());
-        match escaped {
-            Some(byte) => {
-                out.push(byte);
-                at += 3;
-            }
-            None => {
-                out.push(bytes[at]);
-                at += 1;
-            }
-        }
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
 fn utc_text(ns: Option<i64>) -> Option<String> {
     ns.and_then(|ns| format_unix_ns(i128::from(ns)))
 }
@@ -1555,6 +1401,18 @@ fn register_final_tables(conn: &Connection) -> rusqlite::Result<()> {
     conn.create_scalar_function("__btel_empty_map", 0, pure, |_| {
         Ok(inline_handle(&Inline::Map(Vec::new())))
     })?;
+    // A stored usage list as a column value: one map per model, by model
+    // name. NULL is the empty list.
+    conn.create_scalar_function("__btel_usage_value", 1, pure, |ctx| {
+        let mut usage = match ctx.get::<Option<String>>(0)? {
+            Some(text) => parse_usage(&text)?,
+            None => Vec::new(),
+        };
+        usage.sort_by(|a, b| a.model.cmp(&b.model));
+        Ok(inline_handle(&Inline::List(
+            usage.iter().map(ModelUsage::to_inline).collect(),
+        )))
+    })?;
     // `(started_ns, final status or NULL, ended_ns)`: running, then the end.
     conn.create_scalar_function("__btel_status_history", 3, pure, |ctx| {
         let entry = |status: &str, ns: Option<i64>| {
@@ -1571,22 +1429,6 @@ fn register_final_tables(conn: &Connection) -> rusqlite::Result<()> {
             history.push(entry(&status, opt_i64(ctx, 2)?));
         }
         Ok(inline_handle(&Inline::List(history)))
-    })?;
-    conn.create_aggregate_function("__btel_usage", 6, pure, UsageSum)?;
-    // `(url, marker)`: the path segment right after the first `marker`, up
-    // to the next '/', ':', '?' or '#', percent-decoded. The model in
-    // `.../models/gemini-2.5-pro:generateContent` or `/model/<id>/converse`.
-    conn.create_scalar_function("__btel_path_segment", 2, pure, |ctx| {
-        let (Some(url), Some(marker)) =
-            (ctx.get::<Option<String>>(0)?, ctx.get::<Option<String>>(1)?)
-        else {
-            return Ok(None);
-        };
-        let Some((_, rest)) = url.split_once(marker.as_str()) else {
-            return Ok(None);
-        };
-        let segment = rest.split(['/', ':', '?', '#']).next().unwrap_or_default();
-        Ok((!segment.is_empty()).then(|| percent_decode(segment)))
     })?;
     conn.create_aggregate_function("__btel_events", 5, pure, EventList)
 }

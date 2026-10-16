@@ -317,8 +317,10 @@ function predicate(n: float, ty: reflect.Type) -> unknown {
     ) -> {
         let cl = openai.DecisionsClient.new(api_key = "test-key", base_url = mock.base_url());
         let turn = cl.invoke(input(ty));
+        assert.equal(turn.calls.length(), 1);
+        assert.equal(turn.calls[0].resolved_model.to_json(), { "provider": "openai-decisions", "model": "gpt-6-luna" });
         assert.equal(
-            turn.usage.to_json(),
+            turn.calls[0].usage.to_json(),
             {
                 "input_tokens": 142,
                 "output_tokens": 0,
@@ -328,7 +330,7 @@ function predicate(n: float, ty: reflect.Type) -> unknown {
                 "uncached_input_tokens": 142,
             },
         );
-        assert.equal(turn.model, "gpt-6-luna");
+        assert.equal(turn.resolved_model?.model, "gpt-6-luna");
         let sent = mock.last_request();
         assert.equal(sent.path(), "/decisions");
         assert.equal(sent.header("authorization"), "Bearer test-key");
@@ -395,10 +397,10 @@ test "defaults, lazy credentials, preview and both shorthand paths" {
             "capture_wire": true,
         },
     );
-    assert.equal(cl.id(), "openai-decisions/gpt-6-luna");
-    assert.equal(Urgent@spec("x").client_id(), cl.id());
+    assert.equal(cl.requested_model(), "gpt-6-luna");
+    assert.equal(Urgent@spec("x").requested_model(), cl.requested_model());
     let provider = "openai-decisions";
-    assert.equal(ai.clients.resolve(`${provider}/gpt-6-luna`).id(), cl.id());
+    assert.equal(ai.clients.resolve(`${provider}/gpt-6-luna`).requested_model(), cl.requested_model());
     let req = cl.render(input(Override.type(), instructions = false));
     assert.equal(
         req.to_json(),
@@ -821,7 +823,8 @@ test "journal evidence preserves prompt, user and assistant order" {
             ai.events.UserMessage.new("follow-up"),
             ai.events.AssistantMessage {
                 content: [ai.content.Text { text: "earlier answer" }],
-                client_id: "previous",
+                resolved_model: ai.events.ModelKey { provider: "openai-decisions", model: "previous" },
+                requested_model: "previous",
             },
         ],
     };
@@ -940,8 +943,10 @@ function usage_breakdown() -> bool {
         let turn = openai.DecisionsClient.new(api_key = "k", base_url = mock.base_url()).invoke(
             input(bool.type()),
         );
+        assert.equal(turn.calls.length(), 1);
+        assert.equal(turn.calls[0].resolved_model.to_json(), { "provider": "openai-decisions", "model": "gpt-6-luna" });
         assert.equal(
-            turn.usage.to_json(),
+            turn.calls[0].usage.to_json(),
             {
                 "input_tokens": 100,
                 "output_tokens": 10,

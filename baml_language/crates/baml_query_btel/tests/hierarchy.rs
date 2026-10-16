@@ -195,7 +195,7 @@ async fn value_sql_through_unions_states_and_unsupported_comparisons() {
         "SELECT baml_value_state(input_args['threshold']),
            baml_value_state(input_args['customer']['age']),
            baml_value_state(input_args['customer']['nope']), baml_value_state(error_value),
-           baml_kind(output_value), baml_kind(context_metadata), temporary_projections IS NULL
+           baml_kind(output_value), baml_kind(context_metadata), total_usage[0] IS NULL
          FROM spans WHERE span_name = 'user.Classify' AND input_args['customer']['name'] = 'bob'",
     );
     assert_eq!(

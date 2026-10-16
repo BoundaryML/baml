@@ -264,11 +264,17 @@ function anthropic_request_shape() -> string {
                 `has_stream=${baml.json.to<map<string, json>>(body).has("stream")}`,
                 `has_tools=${baml.json.to<map<string, json>>(body).has("tools")}`,
                 `has_null=${_anth_json_any(body, (k, v) -> { v == null })}`,
-                `cached=${result.usage.cached_input_tokens ?? -1}`,
-                `input=${result.usage.input_tokens}`,
+                `cached=${_anth_usage(result.usage)?.cached_input_tokens ?? -1}`,
+                `input=${_anth_usage(result.usage)?.input_tokens ?? -1}`,
             ].join("|")
         },
     )
+}
+
+/// The usage a run billed to the mocked Anthropic model, the only model these
+/// tests call.
+function _anth_usage(usage: ai.events.ModelUsage[]) -> ai.events.Usage? {
+    ai.events.usage_for(usage, ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" })
 }
 
 test "anthropic_request_shape" {
@@ -566,7 +572,8 @@ function anthropic_reasoning_only_turn_is_dropped() -> json {
         log: [
             ai.events.AssistantMessage {
                 content: [ai.content.Reasoning { summary: "quietly thinking" }],
-                client_id: "anthropic/claude-haiku-4-5",
+                resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" },
+                requested_model: "claude-haiku-4-5",
             },
         ],
     };
@@ -592,12 +599,14 @@ function anthropic_reasoning_only_turn_mid_conversation() -> string {
         log: [
             ai.events.AssistantMessage {
                 content: [ai.content.Text { text: "4" }],
-                client_id: "anthropic/claude-haiku-4-5",
+                resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" },
+                requested_model: "claude-haiku-4-5",
             },
             ai.events.UserMessage.new("And 3+3?"),
             ai.events.AssistantMessage {
                 content: [ai.content.Reasoning { summary: "quietly thinking" }],
-                client_id: "anthropic/claude-haiku-4-5",
+                resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" },
+                requested_model: "claude-haiku-4-5",
             },
             ai.events.UserMessage.new("And 4+4?"),
         ],
@@ -636,7 +645,8 @@ function anthropic_orphaned_tool_call_is_closed() -> string {
                 content: [
                     ai.content.ToolUse { id: "t1", name: "anth_weather", args: { "city": "SF" } },
                 ],
-                client_id: "anthropic/claude-haiku-4-5",
+                resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" },
+                requested_model: "claude-haiku-4-5",
             },
             ai.events.UserMessage.new("never mind"),
         ],
@@ -877,7 +887,7 @@ function anthropic_stream_usage_splits_the_cache() -> string {
                 base_url = mock.base_url(),
             );
             let spec = AnthMockAsk@spec("Say pong.");
-            let u = cl
+            let turn = cl
                 .invoke_stream(
                 ai.ModelTurnInput {
                     prompt: spec.prompt_template,
@@ -886,8 +896,8 @@ function anthropic_stream_usage_splits_the_cache() -> string {
                     output_type: spec.output_type(),
                 },
                 )
-                .final_turn()
-                .usage;
+                .final_turn();
+            let u = ai.events.usage_for(ai.events.call_usage(turn.calls), ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" });
             `${u?.input_tokens ?? -1}/${u?.cached_input_tokens ?? -1}/${u?.cache_write_input_tokens ?? -1}/${u?.uncached_input_tokens ?? -1}/${u?.output_tokens ?? -1}/${u?.reasoning_tokens ?? -1}`
         },
     )
@@ -1090,7 +1100,7 @@ function anthropic_decode_tool_stream() -> json {
             },
             let m: ai.stream.TurnMeta => {
                 seen.push(
-                    `meta:${m.stop_reason ?? "-"}/${m.input_tokens ?? -1}/${m.output_tokens ?? -1}/${m.cached_input_tokens ?? -1}/${m.cache_write_input_tokens ?? -1}/${m.uncached_input_tokens ?? -1}/${m.reasoning_tokens ?? -1}`,
+                    `meta:${m.stop_reason ?? "-"}/${m.usage?.input_tokens ?? -1}/${m.usage?.output_tokens ?? -1}/${m.usage?.cached_input_tokens ?? -1}/${m.usage?.cache_write_input_tokens ?? -1}/${m.usage?.uncached_input_tokens ?? -1}/${m.usage?.reasoning_tokens ?? -1}`,
                 );
                 null
             },
@@ -1302,7 +1312,8 @@ function anthropic_replayed_tool_args_keep_nulls() -> json {
         log: [
             ai.events.AssistantMessage {
                 content: [ai.content.ToolUse { id: "t1", name: "anth_weather", args: args }],
-                client_id: "anthropic/claude-haiku-4-5",
+                resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" },
+                requested_model: "claude-haiku-4-5",
             },
             ai.events.ToolCompleted.new("t1", "sunny in SF"),
         ],
@@ -1337,8 +1348,8 @@ function anthropic_reasoning_tokens() -> string {
             let result = ai.Agent.new(client = cl).run(AnthMockAsk@spec("hi"));
             [
                 `value=${result.value}`,
-                `output=${result.usage.output_tokens}`,
-                `reasoning=${result.usage.reasoning_tokens ?? -1}`,
+                `output=${_anth_usage(result.usage)?.output_tokens ?? -1}`,
+                `reasoning=${_anth_usage(result.usage)?.reasoning_tokens ?? -1}`,
             ].join("|")
         },
     )
@@ -1477,7 +1488,8 @@ function anthropic_orphaned_tool_call_closed_before_user_turn() -> string {
         log: [
             ai.events.AssistantMessage {
                 content: [ai.content.ToolUse { id: "t1", name: "anth_weather", args: args }],
-                client_id: "anthropic/claude-haiku-4-5",
+                resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" },
+                requested_model: "claude-haiku-4-5",
             },
             ai.events.UserMessage.of(["never mind, look at this instead", root.llm_mock.media_png()]),
         ],

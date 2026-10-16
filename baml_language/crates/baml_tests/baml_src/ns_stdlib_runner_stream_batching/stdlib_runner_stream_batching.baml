@@ -16,12 +16,7 @@ class CannedRunner {
             ai.RunResult {
                 value: baml.sap.parse<Out>(self.payload),
                 journal: ai.Journal.new(spec),
-                usage: ai.events.Usage {
-                    input_tokens: 0,
-                    output_tokens: 0,
-                    cached_input_tokens: null,
-                    reasoning_tokens: null,
-                },
+                usage: [],
             }
         }
     }
@@ -52,13 +47,13 @@ function make_backlog(n: int) -> ai.stream.TurnStream {
         _pcursor: 0,
         _text: "",
         _stop_reason: null,
-        _input_tokens: null,
-        _output_tokens: null,
+        _usage: null,
         _done: false,
         _require_terminal: null,
         _saw_terminal: false,
-        _calls: [],
         _wire_call: null,
+        _requested_model: null,
+        _child_turns: [],
         _call_started: null,
         _ttft_from: null,
         _first_token_timeout: null,

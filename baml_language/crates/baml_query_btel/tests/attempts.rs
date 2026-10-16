@@ -89,24 +89,21 @@ async fn record(project: &std::path::Path, main: &str) {
     assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(5))]);
 }
 
-/// The cost summed over every span, and over network spans alone.
-fn cost(index: &mut baml_query_btel::Index) -> (Json, Json) {
-    let total = |index: &mut baml_query_btel::Index, filter: &str| {
-        sql(
-            index,
-            &format!("SELECT round(sum(temporary_projections['cost']), 6) FROM spans {filter}"),
-        )
-        .rows[0][0]
-            .clone()
-    };
-    (
-        total(index, ""),
-        total(index, "WHERE span_type = 'network_span'"),
+/// The span of `ai.clients.Retry`'s invoke, which each attempt sits under.
+const RETRY_INVOKE: &str = "ai.<(ai.clients.Retry as ai.Client)>.invoke";
+
+/// Input tokens summed over every span's own usage (one model each here).
+fn input_tokens(index: &mut baml_query_btel::Index) -> Json {
+    sql(
+        index,
+        "SELECT sum(self_usage[0]['input_tokens']) FROM spans",
     )
+    .rows[0][0]
+        .clone()
 }
 
 /// A 429 then a 200: two sibling attempt spans, each with its own request,
-/// and the cost priced once, on the request that succeeded.
+/// and the usage counted once, on the request that succeeded.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn each_retry_attempt_is_a_span_with_its_own_request() {
     let project = tempfile::tempdir().unwrap();
@@ -133,14 +130,14 @@ async fn each_retry_attempt_is_a_span_with_its_own_request() {
     // Only the attempt number and the client's id are captured; the body
     // runs the attempt and is recorded as an opaque closure.
     let inputs = |attempt: i64| {
-        json!({"attempt": attempt, "client": "anthropic/claude-opus-5-5",
+        json!({"attempt": attempt, "client": "claude-opus-5-5",
             "body": {"$opaque": "closure"}})
     };
     assert_eq!(
         attempts.rows,
         vec![
-            vec![json!("user_error"), inputs(1), json!("user.Summarize")],
-            vec![json!("return"), inputs(2), json!("user.Summarize")],
+            vec![json!("user_error"), inputs(1), json!(RETRY_INVOKE)],
+            vec![json!("return"), inputs(2), json!(RETRY_INVOKE)],
         ]
     );
     assert_eq!(
@@ -153,15 +150,15 @@ async fn each_retry_attempt_is_a_span_with_its_own_request() {
         vec![vec![json!(1)]],
         "the attempts are siblings"
     );
-    // Each request under its own attempt: a 429, then a 200 that carries
-    // the cost.
+    // Each request under its own attempt: a 429, then a 200 whose invoke
+    // carries the usage.
     let requests = sql(
         &mut index,
         &format!(
             "{NEAREST_ATTEMPT}
              SELECT a.input_args['attempt'], n.network_event_values[0]['event_name'],
                n.network_event_values[0]['payload']['status'],
-               round(n.temporary_projections['cost'], 6)
+               a.total_usage[0]['input_tokens']
              FROM nearest x JOIN spans n ON n.span_id = x.network
              JOIN spans a ON a.span_id = x.attempt ORDER BY n.start_time"
         ),
@@ -170,7 +167,7 @@ async fn each_retry_attempt_is_a_span_with_its_own_request() {
         requests.rows,
         vec![
             vec![json!(1), json!("connection"), json!(429), Json::Null],
-            vec![json!(2), json!("connection"), json!(200), json!(0.00474)],
+            vec![json!(2), json!("connection"), json!(200), json!(900)],
         ]
     );
     assert_eq!(
@@ -181,7 +178,7 @@ async fn each_retry_attempt_is_a_span_with_its_own_request() {
         .rows,
         vec![vec![json!(2)]]
     );
-    assert_eq!(cost(&mut index), (json!(0.00474), json!(0.00474)));
+    assert_eq!(input_tokens(&mut index), json!(900));
 }
 
 /// Fallback's members, tried in order: member 0 answers 500, member 1 200.
@@ -224,13 +221,13 @@ async fn each_fallback_member_try_is_a_span() {
             vec![
                 json!("user_error"),
                 json!(0),
-                json!("anthropic/claude-opus-5"),
+                json!("claude-opus-5"),
                 json!(500)
             ],
             vec![
                 json!("return"),
                 json!(1),
-                json!("anthropic/claude-opus-5-5"),
+                json!("claude-opus-5-5"),
                 json!(200)
             ],
         ]
@@ -277,7 +274,7 @@ async fn a_streamed_retry_has_an_attempt_span_for_each_open() {
             "{NEAREST_ATTEMPT}
              SELECT a.input_args['attempt'], a.status,
                n.network_event_values[0]['payload']['status'], n.end_time > a.end_time,
-               round(n.temporary_projections['cost'], 6)
+               a.total_usage[0]['input_tokens']
              FROM nearest x JOIN spans n ON n.span_id = x.network
              JOIN spans a ON a.span_id = x.attempt ORDER BY a.start_time"
         ),
@@ -292,16 +289,12 @@ async fn a_streamed_retry_has_an_attempt_span_for_each_open() {
                 json!(0),
                 Json::Null
             ],
-            vec![
-                json!(2),
-                json!("return"),
-                json!(200),
-                json!(1),
-                json!(0.00474)
-            ],
+            // The stream settles after its open's span ended, so its usage
+            // is on the settle span, not the attempt.
+            vec![json!(2), json!("return"), json!(200), json!(1), Json::Null],
         ]
     );
-    assert_eq!(cost(&mut index), (json!(0.00474), json!(0.00474)));
+    assert_eq!(input_tokens(&mut index), json!(900));
 }
 
 /// Two Retry calls in parallel futures: each future's attempts, and the

@@ -220,7 +220,7 @@ class ToolArgScriptedClient {
     turns: int,
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "tool-arguments-client"
         }
 
@@ -244,7 +244,7 @@ class ToolArgScriptedClient {
             } else {
                 content.push(ai.content.Text { text: "saved" });
             }
-            ai.ModelTurn { calls: [], content: content, stop_reason: ai.content.StopReason.Complete, usage: null }
+            ai.ModelTurn { child_turns: [], calls: [], content: content, stop_reason: ai.content.StopReason.Complete }
         }
     }
 }

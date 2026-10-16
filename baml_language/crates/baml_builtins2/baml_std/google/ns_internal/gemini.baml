@@ -705,7 +705,8 @@ function lower_journal(j: ai.Journal, fetch_url: bool, preview: bool = false) ->
 /// Developer API inlines http(s) media, Vertex passes the URL through.
 function gemini_build_body(
     input: ai.ModelTurnInput,
-    client_id: string,
+    provider: string,
+    requested_model: string,
     generation_config: GmGenerationConfig?,
     safety_settings: root.SafetySetting[]?,
     request_body: baml.json.json?,
@@ -715,7 +716,7 @@ function gemini_build_body(
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
     let lowered = lower_prompt(prompt, fetch_url = fetch_url, preview = preview);
     let contents = lowered.contents;
-    let journal = ai.wire.sanitize_for_client(input.journal, client_id);
+    let journal = ai.wire.sanitize_for_client(input.journal, provider, requested_model);
     for (let item in lower_journal(journal, fetch_url, preview = preview)) {
         contents.push(item);
     }
@@ -825,11 +826,11 @@ function _gm_is_blocked(finish: string) -> bool {
 function _gm_usage(usage: GmUsageMetadata?) -> ai.events.Usage? {
     if let um: GmUsageMetadata = usage {
         ai.events.Usage {
-            input_tokens: um.promptTokenCount ?? 0,
+            input_tokens: um.promptTokenCount,
             // Gemini reports thinking tokens separately from candidate tokens,
             // so output_tokens is the answer's cost and reasoning_tokens the
             // thinking on top of it.
-            output_tokens: um.candidatesTokenCount ?? 0,
+            output_tokens: um.candidatesTokenCount,
             cached_input_tokens: um.cachedContentTokenCount,
             reasoning_tokens: um.thoughtsTokenCount,
             // promptTokenCount counts the cached share too.
@@ -926,12 +927,7 @@ function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.Mo
     } else {
         ai.content.StopReason.Complete
     };
-    ai.ModelTurn {
-        calls: [],
-        content: content,
-        stop_reason: stop,
-        usage: _gm_usage(resp.usageMetadata),
-    }
+    ai.ModelTurn { calls: [], child_turns: [], content: content, stop_reason: stop }
 }
 
 // ---------------------------------------------------------------------------
@@ -1082,15 +1078,8 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.Event[] 
                 out.push(
                     ai.stream.TurnMeta {
                         stop_reason: stop,
-                        input_tokens: usage?.promptTokenCount,
-                        output_tokens: usage?.candidatesTokenCount,
-                        cached_input_tokens: usage?.cachedContentTokenCount,
-                        // promptTokenCount counts the cached share too.
-                        uncached_input_tokens: ai.internal.uncached_input_tokens(
-                            usage?.promptTokenCount,
-                            usage?.cachedContentTokenCount,
-                        ),
-                        reasoning_tokens: usage?.thoughtsTokenCount,
+                        usage: _gm_usage(usage),
+                        resolved_model: resp.modelVersion,
                     },
                 );
                 null
@@ -1136,7 +1125,8 @@ function _request(
 ) -> baml.http.Request {
     let body = gemini_build_body(
         input,
-        c.id(),
+        "google",
+        c.model,
         _gm_generation_config(
             c.temperature,
             c.max_output_tokens,
@@ -1171,9 +1161,18 @@ function gemini_invoke(c: root.GeminiClient, input: ai.ModelTurnInput) -> ai.Mod
     // from it are stable across re-renders.
     let seq = input.journal.entries().length();
     let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(render(c, input));
-    let sent = ai.wire.send_as_with_wire<GmResponse>(req, "google", c.id(), capture_wire = c.capture_wire);
-    let turn = parse(sent.value, seq);
-    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
+    let sent = ai.wire.send_as_with_wire<GmResponse>(
+        req,
+        ai.events.ModelKey { provider: "google", model: c.model },
+        capture_wire = c.capture_wire,
+    );
+    ai.internal.with_own_call(
+        parse(sent.value, seq),
+        sent.call,
+        _gm_usage(sent.value.usageMetadata),
+        c.model,
+        sent.value.modelVersion,
+    )
 }
 
 function _decode_batch(batch: string) -> ai.stream.Event[] {
@@ -1203,9 +1202,9 @@ function gemini_invoke_stream(
         timeout_options = limits,
         dispatched = started,
     );
-    let call = ai.events.LLMCall {
-        client_name: c.id(),
-        provider: "google",
+    let call = ai.events.ModelCall {
+        resolved_model: ai.events.ModelKey { provider: "google", model: c.model },
+        usage: null,
         timing: ai.events.Timing {
             start_time_utc_ms: started.to_timestamp_milliseconds(),
             duration_ms: null,
@@ -1222,16 +1221,14 @@ function gemini_invoke_stream(
             null
         },
         http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
-        usage: null,
-        selected: true,
         sse_responses: if (c.capture_wire) {
             []
         } else {
             null
         },
     };
-    stream._calls = [call];
     stream._wire_call = call;
+    stream._requested_model = c.model;
     stream._call_started = started;
     stream._ttft_from = baml.time.Instant.now();
     stream._capture_sse = c.capture_wire;

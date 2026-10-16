@@ -26,7 +26,7 @@ class OllamaClient {
     top_p: float?,
     stop: string[]?,
     seed: int?,
-    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // Record request/response bodies (and raw SSE events) on the ModelCall wire
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
@@ -120,8 +120,8 @@ class OllamaClient {
     }
 
     implements ai.Client {
-        function id(self) -> string {
-            `ollama/${self.model}`
+        function requested_model(self) -> string {
+            self.model
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

@@ -14,7 +14,7 @@ class InvalidSchemaClient {
     probe: InvocationProbe,
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "invalid-schema-client"
         }
 
@@ -32,9 +32,9 @@ class InvalidSchemaClient {
             let _ = input;
             self.probe.count += 1;
             ai.ModelTurn { calls: [],
+                child_turns: [],
                 content: [ai.content.Text { text: "schema-mismatch" }],
                 stop_reason: ai.content.StopReason.Complete,
-                usage: null,
             }
         }
     }

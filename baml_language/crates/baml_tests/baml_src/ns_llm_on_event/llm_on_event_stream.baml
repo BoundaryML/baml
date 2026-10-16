@@ -8,7 +8,7 @@ class StreamScript {
     cursor: int,
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "scripted-stream"
         }
 
@@ -19,22 +19,25 @@ class StreamScript {
 
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
-            ai.ModelTurn { calls: [], content: [], stop_reason: ai.content.StopReason.Complete, usage: null }
+            ai.ModelTurn { child_turns: [], calls: [], content: [], stop_reason: ai.content.StopReason.Complete }
         }
     }
 
     implements ai.stream.StreamingClient {
         function invoke_stream(self, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
             let _ = input;
-            ai.stream.TurnStream.from_event_source(() -> {
-                let e = self.events.at(self.cursor);
-                self.cursor += 1;
-                match (e) {
-                    let ev: ai.stream.Event => ev,
-                    let d: ai.stream.Done => d,
-                    null => ai.stream.Done {  },
-                }
-            })
+            ai.stream.TurnStream.from_event_source(
+                () -> {
+                    let e = self.events.at(self.cursor);
+                    self.cursor += 1;
+                    match (e) {
+                        let ev: ai.stream.Event => ev,
+                        let d: ai.stream.Done => d,
+                        null => ai.stream.Done {  },
+                    }
+                },
+                call = scripted_call(),
+            )
         }
     }
 }
@@ -44,7 +47,10 @@ function make_script() -> StreamScript {
         events: [
             ai.stream.TextDelta { text: "{\"message\":" },
             ai.stream.TextDelta { text: " \"hi\"}" },
-            ai.stream.TurnMeta { stop_reason: ai.content.StopReason.Complete, input_tokens: 7, output_tokens: 11 },
+            ai.stream.TurnMeta {
+                stop_reason: ai.content.StopReason.Complete,
+                usage: ai.events.Usage { input_tokens: 7, output_tokens: 11 },
+            },
             ai.stream.TurnDone {  },
         ],
         cursor: 0,
@@ -69,15 +75,17 @@ test "stream drained via next delivers settle events exactly once" {
     let _ = s.next();
     let f = s.final();
     assert.equal(f.message, "hi");
-    assert.equal(probe.labels, ["RunStarted", "AssistantMessage", "Usage"])
+    assert.equal(probe.labels, ["RunStarted", "AssistantMessage", "ModelCall"])
 }
 
 test "stream drained via final recovers streamed usage" {
     let probe = Probe { labels: [] };
     let cb = (e: ai.events.Event) -> void {
         match (e) {
-            let u: ai.events.Usage => {
-                probe.labels.push(`Usage:${u.input_tokens}/${u.output_tokens}`);
+            let c: ai.events.ModelCall => {
+                probe.labels.push(
+                    `ModelCall:${c.resolved_model?.provider ?? "-"}/${c.resolved_model?.model ?? "-"}:${c.usage?.input_tokens ?? -1}/${c.usage?.output_tokens ?? -1}`,
+                );
             },
             _ => {
                 probe.labels.push(label_of(e));
@@ -87,7 +95,7 @@ test "stream drained via final recovers streamed usage" {
     let s = Greet@stream("world", client = make_script(), on_event = cb);
     let f = s.final();
     assert.equal(f.message, "hi");
-    assert.equal(probe.labels, ["RunStarted", "AssistantMessage", "Usage:7/11"])
+    assert.equal(probe.labels, ["RunStarted", "AssistantMessage", "ModelCall:scripted/scripted-model:7/11"])
 }
 
 test "throwing listener does not alter the stream result" {

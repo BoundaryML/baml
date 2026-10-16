@@ -50,3 +50,8 @@ pub const MANUAL_SPAN_FORMAT_MINOR: u32 = 11;
 /// Owned operations use ordinary function rows, named inputs, bound receivers, and
 /// neutral closure without the legacy manual-only marker. Local-only for now.
 pub const OWNED_SPAN_FORMAT_MINOR: u32 = 12;
+
+/// Completions carry the model usage charged to their span
+/// (`FunctionCompletion.usage`, `ThreadCompletion.usage`), and function
+/// metadata marks model invoke functions (`FunctionMetadata.model_invoke`).
+pub const MODEL_USAGE_FORMAT_MINOR: u32 = 13;

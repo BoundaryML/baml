@@ -268,12 +268,6 @@ class ChatParams {
     }
 }
 
-/// `provider/model` — the client identity used for `ai.Client.id()`, journal
-/// attribution, and `ai.wire.sanitize_for_client`.
-function chat_client_id(compat: ChatCompat, params: ChatParams) -> string {
-    `${compat.provider}/${params.model}`
-}
-
 // ---------------------------------------------------------------------------
 // Typed request wire classes.
 
@@ -895,7 +889,7 @@ function chat_lower_prompt(
 /// `ai.Journal` -> chat-completions messages. Assistant turns carry their text
 /// in `content` and their calls in `tool_calls`; each result comes back as its
 /// own `role: "tool"` message keyed by `tool_call_id`. Journal-only events
-/// (`RunStarted`, `ToolRequested`, `Usage`, `FinalProduced`) and reasoning
+/// (`RunStarted`, `ToolRequested`, `FinalProduced`) and reasoning
 /// blocks lower to nothing.
 ///
 /// Callers pass the journal through `ai.wire.sanitize_for_client` first, so
@@ -1215,7 +1209,7 @@ function chat_build_request(
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
     let messages = chat_lower_prompt(prompt, compat, preview = preview);
     let journal = ai.wire.degrade_tool_media(
-        ai.wire.sanitize_for_client(input.journal, chat_client_id(compat, params)),
+        ai.wire.sanitize_for_client(input.journal, compat.provider, params.model),
         [],
     );
     for (let message in chat_lower_journal(journal, compat, preview = preview)) {
@@ -1389,7 +1383,7 @@ function _chat_push_tool_uses(
     }
 }
 
-/// One decoded response -> canonical content blocks, stop reason and usage.
+/// One decoded response -> canonical content blocks and stop reason.
 ///
 /// `raw` is the response text, used to populate `ai.errors.InvalidResponse`
 /// when the envelope carries no usable choice.
@@ -1504,11 +1498,16 @@ function chat_parse(
         }
     };
 
-    let usage: ai.events.Usage? = match (response.usage) {
+    ai.ModelTurn { calls: [], child_turns: [], content: content, stop_reason: stop }
+}
+
+/// A chat response's or stream chunk's usage, null when it reported none.
+function chat_usage(usage: CcUsage?) -> ai.events.Usage? {
+    match (usage) {
         let u: CcUsage => {
             ai.events.Usage {
-                input_tokens: u.prompt_tokens ?? 0,
-                output_tokens: u.completion_tokens ?? 0,
+                input_tokens: u.prompt_tokens,
+                output_tokens: u.completion_tokens,
                 cached_input_tokens: u.prompt_tokens_details?.cached_tokens,
                 reasoning_tokens: u.completion_tokens_details?.reasoning_tokens,
                 cache_write_input_tokens: u.prompt_tokens_details?.cache_write_tokens,
@@ -1521,20 +1520,18 @@ function chat_parse(
             }
         },
         null => null,
-    };
-
-    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
+    }
 }
 
 /// (internal) Transport + classification for the non-streaming path. This mirrors
 /// `ai.wire.send_as_with_wire` but decodes through `baml.json.to`, which honours
 /// the `baml.FromJson` override that maps the `function` wire key onto
-/// `CcToolCall.fn` — so the LLMCall wire record is built inline here with the
+/// `CcToolCall.fn` — so the ModelCall wire record is built inline here with the
 /// same shape `send_as_with_wire` produces.
 function _chat_send(
     request: baml.http.Request,
     provider: string,
-    client_name: string,
+    requested_model: string,
     capture_wire: bool = true,
     audio_mime: string = "audio/wav",
 ) -> ai.ModelTurn {
@@ -1581,9 +1578,9 @@ function _chat_send(
         },
     };
     let turn = chat_parse(decoded, provider, text, audio_mime = audio_mime);
-    let call = ai.events.LLMCall {
-        client_name: client_name,
-        provider: provider,
+    let call = ai.events.ModelCall {
+        resolved_model: ai.events.ModelKey { provider: provider, model: requested_model },
+        usage: null,
         timing: ai.events.Timing {
             start_time_utc_ms: started.to_timestamp_milliseconds(),
             duration_ms: started.elapsed().to_milliseconds(),
@@ -1608,11 +1605,9 @@ function _chat_send(
                 null
             },
         },
-        usage: null,
-        selected: true,
         sse_responses: null,
     };
-    ai.ModelTurn { ...turn, calls: [call], model: decoded.model }
+    ai.internal.with_own_call(turn, call, chat_usage(decoded.usage), requested_model, decoded.model)
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
@@ -1628,7 +1623,7 @@ function chat_invoke(
     _chat_send(
         request,
         compat.provider,
-        chat_client_id(compat, params),
+        params.model,
         capture_wire = capture_wire,
         audio_mime = _chat_audio_output_mime(params.request_body),
     )
@@ -1777,8 +1772,8 @@ class ChatStreamDecoder {
                                 out.push(
                                     ai.stream.TurnMeta {
                                         stop_reason: chat_stop_reason(reason),
-                                        input_tokens: null,
-                                        output_tokens: null,
+                                        usage: null,
+                                        resolved_model: chunk.model,
                                     },
                                 );
                             }
@@ -1787,17 +1782,8 @@ class ChatStreamDecoder {
                             out.push(
                                 ai.stream.TurnMeta {
                                     stop_reason: null,
-                                    input_tokens: usage.prompt_tokens,
-                                    output_tokens: usage.completion_tokens,
-                                    cached_input_tokens: usage.prompt_tokens_details?.cached_tokens,
-                                    cache_write_input_tokens: usage.prompt_tokens_details?.cache_write_tokens,
-                                    // prompt_tokens counts the cached share and the cache writes too.
-                                    uncached_input_tokens: ai.internal.uncached_input_tokens(
-                                        usage.prompt_tokens,
-                                        usage.prompt_tokens_details?.cached_tokens,
-                                        cache_write = usage.prompt_tokens_details?.cache_write_tokens,
-                                    ),
-                                    reasoning_tokens: usage.completion_tokens_details?.reasoning_tokens,
+                                    usage: chat_usage(usage),
+                                    resolved_model: chunk.model,
                                 },
                             );
                         }
@@ -1890,9 +1876,9 @@ function chat_invoke_stream(
         timeout_options = limits,
         dispatched = started,
     );
-    let call = ai.events.LLMCall {
-        client_name: chat_client_id(compat, params),
-        provider: compat.provider,
+    let call = ai.events.ModelCall {
+        resolved_model: ai.events.ModelKey { provider: compat.provider, model: params.model },
+        usage: null,
         timing: ai.events.Timing {
             start_time_utc_ms: started.to_timestamp_milliseconds(),
             duration_ms: null,
@@ -1909,16 +1895,14 @@ function chat_invoke_stream(
             null
         },
         http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
-        usage: null,
-        selected: true,
         sse_responses: if (capture_wire) {
             []
         } else {
             null
         },
     };
-    stream._calls = [call];
     stream._wire_call = call;
+    stream._requested_model = params.model;
     stream._call_started = started;
     stream._ttft_from = baml.time.Instant.now();
     stream._capture_sse = capture_wire;

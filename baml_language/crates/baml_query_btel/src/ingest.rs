@@ -692,6 +692,7 @@ fn reconcile(
             }
         }
         applier.finish()?;
+        rebuild_usage_totals(&tx, rec_key)?;
         if group
             .iter()
             .any(|c| matches!(c, Candidate::Read(_, read) if read.file.end.is_some()))
@@ -895,6 +896,7 @@ fn apply_fresh<'p>(
         }
         metrics.files_applied += 1;
     }
+    rebuild_usage_totals(&tx, rec)?;
     if rebuild || !applied.is_empty() {
         mark_profile_pending(&tx, rec)?;
     }
@@ -1128,27 +1130,6 @@ impl<'t> Applier<'t> {
                 entry.1 = entry.1.saturating_add(u128::from(time.total_ticks));
             }
         }
-        if let Some(usage) = &file.usage {
-            let mut insert = self.tx.prepare_cached(
-                "INSERT INTO model_usage (rec, sequence, position, node_id, model, input_tokens,
-                   output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            )?;
-            for (position, entry) in usage.entries.iter().enumerate() {
-                insert.execute(params![
-                    self.rec,
-                    sequence_i64(sequence)?,
-                    saturating(position as u64),
-                    id(entry.node_id),
-                    entry.model,
-                    saturating(entry.input_tokens),
-                    saturating(entry.output_tokens),
-                    entry.cache_read_tokens.map(saturating),
-                    entry.cache_write_tokens.map(saturating),
-                    entry.reasoning_tokens.map(saturating)
-                ])?;
-            }
-        }
         if let Some(spans) = &file.spans {
             // Each network event's position among the file's.
             let mut network_events = 0_u32;
@@ -1201,7 +1182,8 @@ impl<'t> Applier<'t> {
                             let changed = self
                                 .tx
                                 .prepare_cached(
-                                    "UPDATE thread SET completed_ticks = ?3, outcome = ?4, panicked = ?5
+                                    "UPDATE thread SET completed_ticks = ?3, outcome = ?4, panicked = ?5,
+                                       usage = ?6
                                      WHERE rec = ?1 AND thread_id = ?2 AND outcome IS NULL",
                                 )?
                                 .execute(params![
@@ -1209,7 +1191,8 @@ impl<'t> Applier<'t> {
                                     id(section.thread_id),
                                     completed,
                                     done.outcome,
-                                    done.panicked
+                                    done.panicked,
+                                    usage_json(&done.usage)
                                 ])?;
                             if changed == 0 {
                                 let existing: Option<(Option<i64>, Option<i64>)> = self
@@ -1346,8 +1329,8 @@ impl<'t> Applier<'t> {
             .prepare_cached(
                 "INSERT INTO call (rec, call_id, thread_id, parent_id, call_path_id, reentry,
                    completed_sequence, late, entered_ticks, exited_ticks, self_await_ticks,
-                   outcome, needs_announcement, value_cas, panicked, manual)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+                   outcome, needs_announcement, value_cas, panicked, manual, usage)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
                  ON CONFLICT (rec, call_id) DO UPDATE SET
                    conflict = CASE WHEN conflict > 0 THEN conflict
                      WHEN completed_sequence IS NOT NULL
@@ -1367,7 +1350,8 @@ impl<'t> Applier<'t> {
                    outcome = excluded.outcome,
                    needs_announcement = excluded.needs_announcement,
                    value_cas = excluded.value_cas,
-                   panicked = excluded.panicked",
+                   panicked = excluded.panicked,
+                   usage = excluded.usage",
             )?
             .execute(params![
                 self.rec,
@@ -1385,7 +1369,8 @@ impl<'t> Applier<'t> {
                 needs_announcement,
                 done.value_cas_id.as_ref().map(cas_id),
                 done.panicked,
-                done.completion_flags & 32 != 0
+                done.completion_flags & 32 != 0,
+                usage_json(&done.usage)
             ])?;
         Ok(())
     }
@@ -1582,9 +1567,9 @@ impl<'t> Applier<'t> {
                            definition_key, kind, kind_detail, origin, source_file, source_file_id,
                            source_start, source_end, package, namespace, namespace_json,
                            owner_type_key, parent_function_key, lambda_path, argument_names,
-                           parameter_count, metadata, source_map, source_map_state)
+                           parameter_count, metadata, source_map, source_map_state, model_invoke)
                          VALUES (?1, ?2, 2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-                           ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
+                           ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
                          ON CONFLICT (rec, function_id) DO UPDATE SET
                            state = 2, fqn = excluded.fqn, display_name = excluded.display_name,
                            definition_key = excluded.definition_key, kind = excluded.kind,
@@ -1601,7 +1586,8 @@ impl<'t> Applier<'t> {
                            parameter_count = excluded.parameter_count,
                            metadata = excluded.metadata,
                            source_map = excluded.source_map,
-                           source_map_state = excluded.source_map_state",
+                           source_map_state = excluded.source_map_state,
+                           model_invoke = excluded.model_invoke",
                     )?
                     .execute(params![
                         self.rec,
@@ -1626,7 +1612,8 @@ impl<'t> Applier<'t> {
                         layout.map(|l| i64::try_from(l.slots.len()).unwrap_or(i64::MAX)),
                         encoded,
                         map_blob,
-                        map_state
+                        map_state,
+                        metadata.model_invoke
                     ])?;
                 if let Some(layout) = layout {
                     let mut insert = self.tx.prepare_cached(
@@ -2192,4 +2179,94 @@ mod fault {
     }
     #[cfg(not(feature = "fault-injection"))]
     pub(super) fn point(_: &str) {}
+}
+
+/// A completion's model usage as stored on its row: a JSON list, one object
+/// per model; `None` without usage. A count no call reported stays null.
+pub(crate) fn usage_json(usage: &[proto::ModelUsage]) -> Option<String> {
+    #[derive(Serialize)]
+    struct Entry<'a> {
+        model: Option<&'a str>,
+        calls: i64,
+        input_tokens: Option<i64>,
+        output_tokens: Option<i64>,
+        cache_read_tokens: Option<i64>,
+        cache_write_tokens: Option<i64>,
+        reasoning_tokens: Option<i64>,
+    }
+    if usage.is_empty() {
+        return None;
+    }
+    let count = |value: u64| i64::try_from(value).unwrap_or(i64::MAX);
+    let entries: Vec<Entry<'_>> = usage
+        .iter()
+        .map(|entry| Entry {
+            model: entry.model.as_deref(),
+            calls: count(entry.calls),
+            input_tokens: entry.input_tokens.map(count),
+            output_tokens: entry.output_tokens.map(count),
+            cache_read_tokens: entry.cache_read_tokens.map(count),
+            cache_write_tokens: entry.cache_write_tokens.map(count),
+            reasoning_tokens: entry.reasoning_tokens.map(count),
+        })
+        .collect();
+    Some(serde_json::to_string(&entries).expect("usage serializes"))
+}
+
+/// Rebuild one recording's `total_usage` on its calls and threads: the usage
+/// charged to each node and its descendants, carried up from every charged
+/// node through its ancestors. Only charged nodes and their ancestors get one.
+/// A count stays null when no entry reported it, as SQL `sum` over nulls does.
+fn rebuild_usage_totals(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
+    tx.execute(
+        "UPDATE call SET total_usage = NULL WHERE rec = ?1 AND total_usage IS NOT NULL",
+        [rec],
+    )?;
+    tx.execute(
+        "UPDATE thread SET total_usage = NULL WHERE rec = ?1 AND total_usage IS NOT NULL",
+        [rec],
+    )?;
+    for table in ["call", "thread"] {
+        let key = if table == "call" {
+            "call_id"
+        } else {
+            "thread_id"
+        };
+        tx.execute(
+            &format!(
+                "WITH RECURSIVE up (node, usage) AS (
+                   SELECT call_id, usage FROM call WHERE rec = ?1 AND usage IS NOT NULL
+                   UNION ALL
+                   SELECT thread_id, usage FROM thread WHERE rec = ?1 AND usage IS NOT NULL
+                   UNION ALL
+                   SELECT COALESCE(c.parent_id, t.parent_id), up.usage
+                   FROM up
+                   LEFT JOIN call c ON c.rec = ?1 AND c.call_id = up.node
+                   LEFT JOIN thread t ON c.call_id IS NULL AND t.rec = ?1 AND t.thread_id = up.node
+                   WHERE COALESCE(c.parent_id, t.parent_id) IS NOT NULL),
+                 per_model AS (
+                   SELECT up.node AS node, json_extract(e.value, '$.model') AS model,
+                     sum(json_extract(e.value, '$.calls')) AS calls,
+                     sum(json_extract(e.value, '$.input_tokens')) AS input_tokens,
+                     sum(json_extract(e.value, '$.output_tokens')) AS output_tokens,
+                     sum(json_extract(e.value, '$.cache_read_tokens')) AS cache_read_tokens,
+                     sum(json_extract(e.value, '$.cache_write_tokens')) AS cache_write_tokens,
+                     sum(json_extract(e.value, '$.reasoning_tokens')) AS reasoning_tokens
+                   FROM up, json_each(up.usage) e
+                   GROUP BY up.node, model
+                   ORDER BY up.node, model),
+                 totals AS (
+                   SELECT node, json_group_array(json_object('model', model, 'calls', calls,
+                       'input_tokens', input_tokens, 'output_tokens', output_tokens,
+                       'cache_read_tokens', cache_read_tokens,
+                       'cache_write_tokens', cache_write_tokens,
+                       'reasoning_tokens', reasoning_tokens)) AS usage
+                   FROM per_model GROUP BY node)
+                 UPDATE {table} SET total_usage = totals.usage FROM totals
+                 WHERE {table}.rec = ?1 AND {table}.{key} = totals.node"
+            ),
+            [rec],
+        )?;
+    }
+    Ok(())
 }

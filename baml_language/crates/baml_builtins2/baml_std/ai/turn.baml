@@ -18,16 +18,36 @@ class ParsedOutput {
     value: unknown,
 }
 
+/// One attempt at a turn. A client returns one that succeeded; a wrapper's
+/// `child_turns` also hold the attempts that failed (`error` set, no content,
+/// `stop_reason` Failed).
 class ModelTurn {
     parsed_output: ParsedOutput?,
     content: root.content.ModelBlock[],
     stop_reason: root.content.StopReason,
-    usage: root.events.Usage?,
-    // The model that answered, as the client named it; null when unknown.
-    model: string?,
-    // Every HTTP exchange behind this turn, oldest first: failed legs from
-    // retry/fallback wrappers, then the selected call (selected: true).
-    calls: root.events.LLMCall[],
+    // The model that answered, as its response named it; null when unknown.
+    resolved_model: root.events.ModelKey?,
+    // The answering client's `requested_model()`; null when unknown.
+    requested_model: string?,
+    // The calls this client made itself, oldest first. A wrapper makes none.
+    calls: root.events.ModelCall[],
+    // The attempts of the clients this one wraps, oldest first.
+    child_turns: ModelTurn[],
+    error: (root.errors.Failure | baml.errors.Timeout)?,
+
+    /// Every call behind this turn: its own, then each child's, oldest first.
+    function all_calls(self) -> root.events.ModelCall[] {
+        let out: root.events.ModelCall[] = [];
+        for (let call in self.calls) {
+            out.push(call);
+        }
+        for (let child in self.child_turns) {
+            for (let call in child.all_calls()) {
+                out.push(call);
+            }
+        }
+        out
+    }
 
     /// The terminal Text block — the final candidate the runner parses.
     function terminal_text(self) -> string? {
@@ -65,7 +85,9 @@ class ModelTurn {
 }
 
 interface Client {
-    function id(self) -> string throws never;
+    /// The model this client asks for, as configured (`"claude-sonnet-4-5"`).
+    /// A wrapper reports a member's.
+    function requested_model(self) -> string throws never;
     /// Render the provider request shape without performing I/O. Reliability
     /// wrappers use this as a stable request-shape preview: they do not sleep,
     /// rotate, or try fallback members while rendering.

@@ -16,7 +16,7 @@ class ChunkedStreamClient {
     chunks: string[],
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "chunked"
         }
 
@@ -33,10 +33,10 @@ class ChunkedStreamClient {
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             ai.ModelTurn {
+                child_turns: [],
                 calls: [],
                 content: [ai.content.Text { text: self.chunks.join("") }],
                 stop_reason: ai.content.StopReason.Complete,
-                usage: null,
             }
         }
     }
@@ -243,7 +243,7 @@ test "stream panic closes its operation and rethrows the cached panic" {
 
 class NonStreamingClient {
     implements ai.Client {
-        function id(self) -> string { "non-streaming" }
+        function requested_model(self) -> string { "non-streaming" }
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             baml.sys.panic("client resolution must fail before render")
         }

@@ -68,7 +68,7 @@ class ImageClient {
     request_body: baml.json.json?,
     headers: map<string, string>?,
     query_params: map<string, string>?,
-    // Record request/response bodies on the LLMCall wire records delivered
+    // Record request/response bodies on the ModelCall wire records delivered
     // through on_event. Status, headers, and timing are always recorded; this
     // flag only gates the bodies.
     capture_wire: bool,
@@ -145,8 +145,8 @@ class ImageClient {
     }
 
     implements ai.Client {
-        function id(self) -> string {
-            root.internal._oai_images_client_id(self)
+        function requested_model(self) -> string {
+            self.model
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

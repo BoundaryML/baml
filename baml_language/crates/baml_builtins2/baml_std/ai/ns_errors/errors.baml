@@ -316,7 +316,7 @@ class ToolFailedError {
 /// client lacks the capability (an explicit override is caught at the call
 /// site by its StreamingClient type).
 class StreamingUnsupported {
-    client_id: string,
+    requested_model: string,
     implements Failure {
         function retry_safety(self) -> RetrySafety {
             RetrySafety.Safe

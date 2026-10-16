@@ -89,11 +89,6 @@ class GwImagesResponse {
 // Request construction.
 
 /// (internal) The client's canonical id, shared by `ai.Client.id` and the error paths.
-function _gw_images_client_id(c: root.AiGatewayImageClient) -> string {
-    let id = `ai-gateway-images/${c.model}`;
-    id
-}
-
 /// (internal) Drop every null-valued key, recursively: a typed request class serializes its
 /// unset options as explicit nulls, and the wire wants them absent.
 function _gw_images_drop_nulls(value: baml.json.json) -> baml.json.json {
@@ -301,7 +296,7 @@ function gateway_images_render(
             raw_body: null,
         }
     }
-    let journal = ai.wire.sanitize_for_client(input.journal, _gw_images_client_id(c));
+    let journal = ai.wire.sanitize_for_client(input.journal, "ai-gateway-images", c.model);
     // No schema block: the only thing this endpoint can return is an image.
     let lowered = _gw_images_input(input.prompt(ai.internal.build_output_format(input.output_type)), journal, preview = preview);
     let files: GwImagesFile[]? = if (lowered.files.length() == 0) {
@@ -442,21 +437,25 @@ function gateway_images_parse(
             status_code: null,
         }
     }
-    let usage: ai.events.Usage? = if let reported: GwImagesUsage = resp.usage {
+    ai.ModelTurn {
+        calls: [],
+        child_turns: [],
+        content: content,
+        stop_reason: ai.content.StopReason.Complete,
+    }
+}
+
+/// One decoded response's usage, null when it reported none.
+function gateway_images_usage(resp: GwImagesResponse) -> ai.events.Usage? {
+    if let reported: GwImagesUsage = resp.usage {
         ai.events.Usage {
-            input_tokens: reported.inputTokens ?? 0,
-            output_tokens: reported.outputTokens ?? 0,
+            input_tokens: reported.inputTokens,
+            output_tokens: reported.outputTokens,
             cached_input_tokens: null,
             reasoning_tokens: null,
         }
     } else {
         null
-    };
-    ai.ModelTurn {
-        calls: [],
-        content: content,
-        stop_reason: ai.content.StopReason.Complete,
-        usage: usage,
     }
 }
 
@@ -472,10 +471,14 @@ function gateway_images_invoke(
     );
     let sent = ai.wire.send_as_with_wire<GwImagesResponse>(
         req,
-        "ai-gateway-images",
-        _gw_images_client_id(c),
+        ai.events.ModelKey { provider: "ai-gateway-images", model: c.model },
         capture_wire = c.capture_wire,
     );
-    let turn = gateway_images_parse(c, sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call] }
+    ai.internal.with_own_call(
+        gateway_images_parse(c, sent.value),
+        sent.call,
+        gateway_images_usage(sent.value),
+        c.model,
+        null,
+    )
 }

@@ -64,8 +64,8 @@ Require(
     mediaSpec.Name().Contains("InspectMedia", StringComparison.Ordinal),
     "FunctionSpec.name did not preserve the authored function identity");
 Require(
-    mediaSpec.ClientId().Length != 0,
-    "FunctionSpec.client_id returned an empty client identity");
+    mediaSpec.RequestedModel().Length != 0,
+    "FunctionSpec.requested_model returned an empty model");
 Require(
     mediaSpec.OutputType().Descriptor.Kind == BamlTypeDescriptorKind.String,
     "FunctionSpec reflected output type changed");

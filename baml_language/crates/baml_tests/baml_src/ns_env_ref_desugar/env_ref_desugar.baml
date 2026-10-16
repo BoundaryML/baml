@@ -77,11 +77,11 @@ client EnvRefDesugarClient = openai.ResponsesClient.new(
 
 // Reaching the client value at all proves `$init` completed. (Member access
 // straight off a top-level `client`/`let` binding does not resolve today —
-// `EnvRefDesugarClient.id()` reports `unresolved name: id` — so bind it to an
+// `EnvRefDesugarClient.requested_model()` reports `unresolved name: requested_model` — so bind it to an
 // `ai.Client` local first and dispatch through the interface.)
 function EnvRefClientId() -> string {
     let c: ai.Client = EnvRefDesugarClient;
-    c.id()
+    c.requested_model()
 }
 
 // An LLM function declared against the env-reading client. Never called — the
@@ -94,7 +94,7 @@ function EnvRefDesugarFn() -> string {
 // The client expression is resolved when the FUNCTION is called (at `@spec`
 // construction), not at `$init` — reading it back exercises that path.
 function EnvRefDesugarFnClientId() -> string {
-    EnvRefDesugarFn@spec().default_client.id()
+    EnvRefDesugarFn@spec().default_client.requested_model()
 }
 
 // ─── dynamic client selection ────────────────────────────────────────────────
@@ -111,7 +111,7 @@ function EnvRefDynClientFn() -> string {
 }
 
 function EnvRefDynClientId() -> string {
-    EnvRefDynClientFn@spec().default_client.id()
+    EnvRefDynClientFn@spec().default_client.requested_model()
 }
 
 // ─── evaluation timing: call time, not `$init` ───────────────────────────────
@@ -168,15 +168,15 @@ test "env_ref_explicit_ref_matches_sugar" {
 }
 
 test "env_ref_client_declaration_initializes" {
-    assert.equal(EnvRefClientId(), "openai/gpt-4o-mini")
+    assert.equal(EnvRefClientId(), "gpt-4o-mini")
 }
 
 test "env_ref_client_declaration_reaches_spec" {
-    assert.equal(EnvRefDesugarFnClientId(), "openai/gpt-4o-mini")
+    assert.equal(EnvRefDesugarFnClientId(), "gpt-4o-mini")
 }
 
 test "env_ref_dynamic_string_selector_resolves" {
-    assert.equal(EnvRefDynClientId(), "openai/gpt-4o-mini")
+    assert.equal(EnvRefDynClientId(), "gpt-4o-mini")
 }
 
 // This test passing at all — alongside the eight above, in the same namespace

@@ -504,11 +504,10 @@ async fn concurrent_first_queries_share_one_index_without_duplicates() {
     assert_eq!(stats(&mut index(&path)), expected_stats(3, 0));
 }
 
-/// Each model request is a network span of its own, priced from its
-/// response, so two calls made on one thread from different steps are two
-/// rows, each under the step that made it.
+/// Each `ai.Client.invoke` is a span carrying the usage of the calls it made,
+/// and every span above it totals them.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn each_model_request_is_its_own_span() {
+async fn each_invoke_is_a_span_with_its_own_usage() {
     let project = tempfile::tempdir().unwrap();
     let source = r##"
         class Canned {
@@ -559,54 +558,34 @@ async fn each_model_request_is_its_own_span() {
     let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
     assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(10))]);
     let mut index = index(project.path());
-    // Each HTTP request belongs to its Summarize operation. Cost remains on
-    // the network span and is not counted again on its operation parent.
-    let requests = sql(
+    // Each invoke sits under the Summarize operation it ran for; the root
+    // call has no usage of its own but totals both.
+    let invokes = sql(
         &mut index,
-        "SELECT s.span_type, s.span_name LIKE 'POST http://127.0.0.1:%/v1/messages',
-           parent.span_name, parent.temporary_projections,
-           s.temporary_projections['model_calls'], round(s.temporary_projections['cost'], 6)
+        "SELECT s.span_name, parent.span_name, s.self_usage[0]['model'],
+           s.self_usage[0]['calls'], s.self_usage[0]['input_tokens'],
+           s.total_usage = s.self_usage
          FROM spans s JOIN spans parent ON parent.span_id = s.parent_span_id
-         WHERE s.temporary_projections IS NOT NULL",
+         WHERE s.self_usage[0] IS NOT NULL",
     );
-    let request = vec![
-        json!("network_span"),
-        json!(1),
+    let invoke = vec![
+        json!("anthropic.<(anthropic.Client as ai.Client)>.invoke"),
         json!("user.Summarize"),
-        Json::Null,
+        json!("claude-opus-5-5"),
         json!(1),
-        json!(0.00474),
+        json!(900),
+        json!(1),
     ];
-    assert_eq!(requests.rows, vec![request.clone(), request]);
-    assert_eq!(cost(&mut index), (json!(0.00948), json!(0.00948)));
-    // Each request's call path leads up to the step that made it: a step's
-    // cost is the sum over the requests below it.
-    let steps = sql(
-        &mut index,
-        "WITH RECURSIVE up(span, cost, node) AS (
-           SELECT span_id, temporary_projections['cost'], profiler_node_id
-           FROM spans WHERE temporary_projections IS NOT NULL
-           UNION ALL
-           SELECT u.span, u.cost, p.parent_profiler_node_id
-           FROM up u JOIN profiler p ON p.profiler_node_id = u.node
-         )
-         SELECT p.function_name, count(*), round(sum(u.cost), 6)
-         FROM up u JOIN profiler p ON p.profiler_node_id = u.node
-         WHERE p.function_name IN ('user.Group', 'user.Draft')
-         GROUP BY p.function_name ORDER BY p.function_name",
-    );
+    assert_eq!(invokes.rows, vec![invoke.clone(), invoke]);
     assert_eq!(
-        steps.rows,
-        vec![
-            vec![json!("user.Draft"), json!(1), json!(0.00474)],
-            vec![json!("user.Group"), json!(1), json!(0.00474)],
-        ]
+        usage(&mut index, "user.main"),
+        vec![json!([]), json!(2), json!(1800)]
     );
+    assert_eq!(input_tokens(&mut index), json!(1800));
 }
 
-/// A streamed turn is priced like a non-streamed one with the same tokens:
-/// its cache reads and writes reach the network span's
-/// `temporary_projections`.
+/// A streamed turn's usage lands on its settle span when the stream ends,
+/// cache reads and writes included, as for a non-streamed turn.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn streamed_usage_keeps_the_cache_split() {
     let project = tempfile::tempdir().unwrap();
@@ -667,32 +646,26 @@ async fn streamed_usage_keeps_the_cache_split() {
     let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
     assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(5))]);
     let mut index = index(project.path());
-    let usage = sql(
+    let settled = sql(
         &mut index,
-        "SELECT s.span_type, parent.span_name, grandparent.span_name,
-           s.temporary_projections['model_name'], s.temporary_projections['model_calls'],
-           s.temporary_projections['input_tokens'], s.temporary_projections['output_tokens'],
-           s.temporary_projections['cache_read_tokens'],
-           s.temporary_projections['cache_write_tokens'], round(s.temporary_projections['cost'], 6)
+        "SELECT s.span_name, parent.span_name, s.self_usage[0]['model'],
+           s.self_usage[0]['calls'], s.self_usage[0]['input_tokens'],
+           s.self_usage[0]['output_tokens'], s.self_usage[0]['cache_read_tokens'],
+           s.self_usage[0]['cache_write_tokens']
          FROM spans s JOIN spans parent ON parent.span_id = s.parent_span_id
-         JOIN spans grandparent ON grandparent.span_id = parent.parent_span_id
-         WHERE s.temporary_projections IS NOT NULL",
+         WHERE s.self_usage[0] IS NOT NULL",
     );
-    // The request belongs to the stream operation, which belongs to the caller.
-    // Its tokens and price are unchanged, with no duplicate manual-span charge.
     assert_eq!(
-        usage.rows,
+        settled.rows,
         vec![vec![
-            json!("network_span"),
+            json!("ai.stream.TurnStream._settle"),
             json!("user.Summarize"),
-            json!("user.Stream"),
             json!("claude-opus-5-5"),
             json!(1),
             json!(900),
             json!(30),
             json!(200),
-            json!(100),
-            json!(0.00474)
+            json!(100)
         ]]
     );
     assert_eq!(
@@ -722,7 +695,11 @@ async fn streamed_usage_keeps_the_cache_split() {
         .rows,
         vec![vec![json!(0)]]
     );
-    assert_eq!(cost(&mut index), (json!(0.00474), json!(0.00474)));
+    assert_eq!(
+        usage(&mut index, "user.Stream"),
+        vec![json!([]), json!(1), json!(900)]
+    );
+    assert_eq!(input_tokens(&mut index), json!(900));
 }
 
 /// A streamed LLM function owns one `Summarize` operation through final parsing.
@@ -820,10 +797,10 @@ async fn a_streamed_llm_function_is_its_own_span() {
 }
 
 /// `OpenAI` chat (a whole body, and a stream with `include_usage`) and a
-/// responses stream, through the stdlib clients: each request's network
-/// span is priced from the usage its response reported.
+/// responses stream, through the stdlib clients: each invoke or settle span
+/// carries the usage its response reported.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn openai_requests_are_priced_on_their_network_spans() {
+async fn openai_usage_reaches_its_invoke_and_settle_spans() {
     let project = tempfile::tempdir().unwrap();
     let source = r##"
         class OpenAi {
@@ -900,70 +877,78 @@ async fn openai_requests_are_priced_on_their_network_spans() {
     let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
     assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(15))]);
     let mut index = index(project.path());
-    let usage = sql(
+    let spans = sql(
         &mut index,
-        "SELECT s.span_name, parent.span_name, s.temporary_projections['model_name'],
-           s.temporary_projections['model_calls'], s.temporary_projections['input_tokens'],
-           s.temporary_projections['output_tokens'], s.temporary_projections['cache_read_tokens'],
-           s.temporary_projections['cache_write_tokens'],
-           s.temporary_projections['reasoning_tokens'], round(s.temporary_projections['cost'], 6)
-         FROM spans s JOIN spans parent ON parent.span_id = s.parent_span_id
-         WHERE s.span_type = 'network_span' ORDER BY s.start_time",
+        "SELECT s.span_name, s.self_usage[0]['model'], s.self_usage[0]['calls'],
+           s.self_usage[0]['input_tokens'], s.self_usage[0]['output_tokens'],
+           s.self_usage[0]['cache_read_tokens'], s.self_usage[0]['cache_write_tokens'],
+           s.self_usage[0]['reasoning_tokens']
+         FROM spans s WHERE s.self_usage[0] IS NOT NULL ORDER BY s.start_time",
     );
-    // 1000 fresh input at $2/M, 200 cached at $0.20/M, 300 output at $10/M.
-    // Every request belongs to its Extract operation, whether called directly
-    // or through the stream companion.
-    let priced = |path: &str, parent: &str| {
-        let host = usage.rows[0][0]
-            .as_str()
-            .unwrap()
-            .split("/v1/")
-            .next()
-            .unwrap();
+    // 1000 fresh input, 200 cached, 300 output, 100 of them reasoning, each
+    // under the model the response named.
+    let entry = |name: &str, model: &str| {
         vec![
-            json!(format!("{host}/v1/{path}")),
-            json!(parent),
-            json!("gpt-6-sol-2026-08-01"),
+            json!(name),
+            json!(model),
             json!(1),
             json!(1000),
             json!(300),
             json!(200),
             Json::Null,
             json!(100),
-            json!(0.00504),
         ]
     };
     assert_eq!(
-        usage.rows,
+        spans.rows,
         vec![
-            priced("chat/completions", "user.Echo"),
-            priced("chat/completions", "user.Echo"),
-            priced("responses", "user.Echo"),
+            entry(
+                "openai.<(openai.ChatClient as ai.Client)>.invoke",
+                "gpt-6-sol-2026-08-01"
+            ),
+            entry("ai.stream.TurnStream._settle", "gpt-6-sol-2026-08-01"),
+            entry("ai.stream.TurnStream._settle", "gpt-6-sol-2026-08-01"),
         ]
     );
-    assert_eq!(cost(&mut index), (json!(0.01512), json!(0.01512)));
+    // The root totals all three under the one model.
+    let main = sql(
+        &mut index,
+        "SELECT total_usage[0]['model'], total_usage[0]['calls'], total_usage[1]
+         FROM spans WHERE span_name = 'user.main'",
+    );
+    assert_eq!(
+        main.rows,
+        vec![vec![json!("gpt-6-sol-2026-08-01"), json!(3), Json::Null]]
+    );
 }
 
-/// The cost summed over every span, and over network spans alone: equal
-/// when nothing is counted twice.
-fn cost(index: &mut baml_query_btel::Index) -> (Json, Json) {
-    let total = |index: &mut baml_query_btel::Index, filter: &str| {
-        sql(
-            index,
-            &format!("SELECT round(sum(temporary_projections['cost']), 6) FROM spans {filter}"),
-        )
-        .rows[0][0]
-            .clone()
-    };
-    (
-        total(index, ""),
-        total(index, "WHERE span_type = 'network_span'"),
+/// `[self_usage, calls, input_tokens]` of the span named `name`, the last two
+/// from its total's first model.
+fn usage(index: &mut baml_query_btel::Index, name: &str) -> Vec<Json> {
+    sql(
+        index,
+        &format!(
+            "SELECT self_usage, total_usage[0]['calls'], total_usage[0]['input_tokens']
+             FROM spans WHERE span_name = '{name}'"
+        ),
     )
+    .rows
+    .remove(0)
+}
+
+/// Input tokens summed over every span's own usage (one model each here):
+/// what a whole run used, with nothing counted twice.
+fn input_tokens(index: &mut baml_query_btel::Index) -> Json {
+    sql(
+        index,
+        "SELECT sum(self_usage[0]['input_tokens']) FROM spans",
+    )
+    .rows[0][0]
+        .clone()
 }
 
 /// Panics, future names and sysop time, as the engine records them. A model
-/// client that makes no HTTP request has no cost: cost comes only from the
-/// network spans of the requests it sends.
+/// client that makes no HTTP request still has its usage on its invoke span.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn panics_names_and_sysop_time_reach_the_tables() {
     let project = tempfile::tempdir().unwrap();
@@ -976,8 +961,8 @@ async fn panics_names_and_sysop_time_reach_the_tables() {
 
         class Probe {
             implements ai.Client {
-                function id(self) -> string {
-                    "probe"
+                function requested_model(self) -> string {
+                    "claude-opus-5-5"
                 }
 
                 function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -985,11 +970,22 @@ async fn panics_names_and_sysop_time_reach_the_tables() {
                 }
 
                 function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-                    ai.ModelTurn {
-                        calls: [],
-                        content: [ai.content.Text { text: "\"short\"" }],
-                        stop_reason: ai.content.StopReason.Complete,
-                        usage: ai.events.Usage {
+                    ai.internal.with_own_call(
+                        ai.ModelTurn {
+                            calls: [],
+                            child_turns: [],
+                            content: [ai.content.Text { text: "\"short\"" }],
+                            stop_reason: ai.content.StopReason.Complete,
+                        },
+                        ai.events.ModelCall {
+                            resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-opus-5-5" },
+                            usage: null,
+                            timing: ai.events.Timing { start_time_utc_ms: null, duration_ms: null, ttft_ms: null },
+                            http_request: null,
+                            http_response: null,
+                            sse_responses: null,
+                        },
+                        ai.events.Usage {
                             input_tokens: 1200,
                             output_tokens: 30,
                             cached_input_tokens: 200,
@@ -997,8 +993,9 @@ async fn panics_names_and_sysop_time_reach_the_tables() {
                             cache_write_input_tokens: 100,
                             uncached_input_tokens: 900,
                         },
-                        model: "claude-opus-5-5",
-                    }
+                        "claude-opus-5-5",
+                        null,
+                    )
                 }
             }
         }
@@ -1037,12 +1034,11 @@ async fn panics_names_and_sysop_time_reach_the_tables() {
     let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
     assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(5))]);
     let mut index = index(project.path());
-    let usage = sql(
-        &mut index,
-        "SELECT (SELECT count(*) FROM spans WHERE span_name = 'user.Step'),
-           (SELECT count(temporary_projections) FROM spans)",
+    assert_eq!(
+        usage(&mut index, "user.Step"),
+        vec![json!([]), json!(1), json!(900)]
     );
-    assert_eq!(usage.rows, vec![vec![json!(1), json!(0)]]);
+    assert_eq!(input_tokens(&mut index), json!(900));
     let statuses = sql(
         &mut index,
         "SELECT span_name, status FROM spans WHERE span_name IN ('user.Boom', 'reader')

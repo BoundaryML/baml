@@ -81,6 +81,19 @@ impl EncodedSpans {
             self.select(thread, context);
         }
         match event {
+            // Usage has strings, so its rare completions leave the fixed-size path.
+            Event::FunctionCompletion(m) if !m.usage.is_empty() => {
+                self.require(btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR);
+                self.variable(4, &m);
+            }
+            Event::LateFunctionCompletion(m) if !m.usage.is_empty() => {
+                self.require(btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR);
+                self.variable(5, &m);
+            }
+            Event::ThreadCompletion(m) if !m.usage.is_empty() => {
+                self.require(btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR);
+                self.variable(2, &m);
+            }
             Event::FunctionCompletion(m) => self.completion(4, &m),
             Event::LateFunctionCompletion(m) => self.completion(5, &m),
             Event::Log(message) => {
@@ -334,6 +347,7 @@ mod tests {
                 high: u64::MAX,
             }),
             panicked: true,
+            usage: Vec::new(),
         };
         let events = vec![
             Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
@@ -341,6 +355,7 @@ mod tests {
                 completed_at_ticks: u64::MAX,
                 outcome: proto::InvocationOutcome::Errored as i32,
                 panicked: true,
+                usage: Vec::new(),
             }),
             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
                 manual: false,
@@ -359,7 +374,7 @@ mod tests {
             }),
             Event::FunctionCompletion(proto::FunctionCompletion {
                 completion_flags: 11,
-                ..completion
+                ..completion.clone()
             }),
             Event::LateFunctionCompletion(completion),
             // Network events' strings reserve their own bytes; the rest fits.
@@ -471,7 +486,7 @@ mod equivalence_tests {
                     }
                 }
                 for event in [
-                    Event::FunctionCompletion(message),
+                    Event::FunctionCompletion(message.clone()),
                     Event::LateFunctionCompletion(message),
                 ] {
                     let expected = crate::proto::ThreadSection {

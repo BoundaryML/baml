@@ -580,8 +580,9 @@ function case_1_1_full_response() -> bool {
         let cl = typesafeai.Client.new(api_key = "test-key", base_url = mock.base_url());
         let result = ai.Agent.new(client = cl).run(IsUrgent@spec(tier(), message()));
         assert.is_true(result.value);
-        assert.equal(result.usage.input_tokens, 142);
-        assert.equal(result.usage.output_tokens, 9);
+        let usage = ai.events.usage_for(result.usage, ai.events.ModelKey { provider: "typesafeai", model: "jev-latest" });
+        assert.equal(usage?.input_tokens, 142);
+        assert.equal(usage?.output_tokens, 9);
         assert.equal(mock.last_request().header("authorization"), "Bearer test-key");
         true
     })
@@ -1268,7 +1269,7 @@ function case_3_1_envelope() -> bool {
         let seen: string[] = [];
         let _ = AssessTicket@spec(tier(), message()).call(client = cl, on_event = (event: ai.events.Event) -> {
             match (event) {
-                let call: ai.events.LLMCall => {
+                let call: ai.events.ModelCall => {
                     seen.push(call.http_response?.body ?? "<none>");
                     null
                 },

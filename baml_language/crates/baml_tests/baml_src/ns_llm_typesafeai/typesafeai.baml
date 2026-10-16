@@ -211,8 +211,9 @@ function noun_thresholds() -> bool {
         let cl = typesafeai.Client.new(api_key = "test-key", base_url = mock.base_url());
         let result = ai.Agent.new(client = cl).run(Urgent@spec("Production is down."));
         assert.is_true(result.value);
-        assert.equal(result.usage.input_tokens, 142);
-        assert.equal(result.usage.output_tokens, 9);
+        let usage = ai.events.usage_for(result.usage, ai.events.ModelKey { provider: "typesafeai", model: "jev-latest" });
+        assert.equal(usage?.input_tokens, 142);
+        assert.equal(usage?.output_tokens, 9);
         let sent = mock.last_request();
         assert.equal(sent.path(), "/systemone");
         assert.equal(sent.header("authorization"), "Bearer test-key");
@@ -508,11 +509,11 @@ test "http rate limit preserves retry delay" {
 
 function runtime_shorthand() -> string {
     let provider = "typesafeai";
-    ai.clients.resolve(`${provider}/jev-latest`).id()
+    ai.clients.resolve(`${provider}/jev-latest`).requested_model()
 }
 
 test "runtime shorthand" {
-    assert.equal(runtime_shorthand(), "typesafeai/jev-latest")
+    assert.equal(runtime_shorthand(), "jev-latest")
 }
 
 function nested_report() -> bool {
@@ -776,7 +777,7 @@ function preview_metadata() -> bool {
         baml.json.path<string>(baml.json.parse(req.body), ".questions.route.instructions"),
         "Who owns the escalation?",
     );
-    assert.equal(Urgent@spec("x").client_id(), "typesafeai/jev-latest");
+    assert.equal(Urgent@spec("x").requested_model(), "jev-latest");
     true
 }
 

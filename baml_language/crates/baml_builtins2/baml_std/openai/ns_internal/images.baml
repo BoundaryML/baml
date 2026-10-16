@@ -84,11 +84,6 @@ class OaImagesResponse {
 // Request construction.
 
 /// (internal) The client's canonical id, shared by `ai.Client.id` and the error paths.
-function _oai_images_client_id(c: root.ImageClient) -> string {
-    let id = `openai-images/${c.model}`;
-    id
-}
-
 /// (internal) Drop every null-valued key, recursively. A typed request class serializes
 /// its unset options as explicit nulls; the Images API wants them absent (and
 /// `merge_request_body`'s null-deletes-a-key contract only makes sense against a
@@ -264,7 +259,7 @@ function images_render(
             raw_body: null,
         }
     }
-    let journal = ai.wire.sanitize_for_client(input.journal, _oai_images_client_id(c));
+    let journal = ai.wire.sanitize_for_client(input.journal, "openai-images", c.model);
     // The schema block an ordinary client injects is noise for an image
     // endpoint (`Return an image output.` is the only shape it can produce),
     // so the rendered prompt carries the authored text alone.
@@ -383,21 +378,25 @@ function images_parse(c: root.ImageClient, resp: OaImagesResponse) -> ai.ModelTu
             status_code: null,
         }
     }
-    let usage: ai.events.Usage? = if let reported: OaImagesUsage = resp.usage {
+    ai.ModelTurn {
+        calls: [],
+        child_turns: [],
+        content: content,
+        stop_reason: ai.content.StopReason.Complete,
+    }
+}
+
+/// One decoded response's usage, null when it reported none.
+function images_usage(resp: OaImagesResponse) -> ai.events.Usage? {
+    if let reported: OaImagesUsage = resp.usage {
         ai.events.Usage {
-            input_tokens: reported.input_tokens ?? 0,
-            output_tokens: reported.output_tokens ?? 0,
+            input_tokens: reported.input_tokens,
+            output_tokens: reported.output_tokens,
             cached_input_tokens: null,
             reasoning_tokens: null,
         }
     } else {
         null
-    };
-    ai.ModelTurn {
-        calls: [],
-        content: content,
-        stop_reason: ai.content.StopReason.Complete,
-        usage: usage,
     }
 }
 
@@ -411,10 +410,14 @@ function images_invoke(c: root.ImageClient, input: ai.ModelTurnInput) -> ai.Mode
     let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(images_render(c, input));
     let sent = ai.wire.send_as_with_wire<OaImagesResponse>(
         req,
-        "openai-images",
-        c.id(),
+        ai.events.ModelKey { provider: "openai-images", model: c.model },
         capture_wire = c.capture_wire,
     );
-    let turn = images_parse(c, sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call] }
+    ai.internal.with_own_call(
+        images_parse(c, sent.value),
+        sent.call,
+        images_usage(sent.value),
+        c.model,
+        null,
+    )
 }

@@ -276,7 +276,7 @@ function _vertex_anthropic_body(
         // The caller's request_body merges over the Vertex constants, so an
         // explicit anthropic_version wins.
         request_body: ai.wire.merge_request_body(vertex_fields, c.request_body),
-        client_id: c.id(),
+        provider: "vertex",
         default_cache_args: c.default_cache_args(),
     };
     anthropic.internal.messages_body(params, input, stream, preview = preview)
@@ -306,7 +306,8 @@ function _vertex_request(
     } else {
         root.internal.gemini_build_body(
             input,
-            c.id(),
+            "vertex",
+            c.model,
             root.internal._gm_generation_config(
                 c.temperature,
                 c.max_output_tokens,
@@ -369,22 +370,30 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
     if (_vertex_publisher(c) == "anthropic") {
         let sent = ai.wire.send_as_with_wire<anthropic.internal.Response>(
             req,
-            "vertex",
-            c.id(),
+            ai.events.ModelKey { provider: "vertex", model: c.model },
             capture_wire = c.capture_wire,
         );
-        let turn = anthropic.internal.parse(sent.value);
-        return ai.ModelTurn { ...turn, calls: [sent.call], model: c.model };
+        return ai.internal.with_own_call(
+            anthropic.internal.parse(sent.value),
+            sent.call,
+            anthropic.internal.usage(sent.value),
+            c.model,
+            sent.value.model,
+        );
     }
     let seq = input.journal.entries().length();
     let sent = ai.wire.send_as_with_wire<root.internal.GmResponse>(
         req,
-        "vertex",
-        c.id(),
+        ai.events.ModelKey { provider: "vertex", model: c.model },
         capture_wire = c.capture_wire,
     );
-    let turn = root.internal.parse(sent.value, seq, provider = "vertex");
-    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
+    ai.internal.with_own_call(
+        root.internal.parse(sent.value, seq, provider = "vertex"),
+        sent.call,
+        root.internal._gm_usage(sent.value.usageMetadata),
+        c.model,
+        sent.value.modelVersion,
+    )
 }
 
 function _vertex_decode_batch(batch: string) -> ai.stream.Event[] {
@@ -433,9 +442,9 @@ function vertex_invoke_stream(
             dispatched = started,
         )
     };
-    let call = ai.events.LLMCall {
-        client_name: c.id(),
-        provider: "vertex",
+    let call = ai.events.ModelCall {
+        resolved_model: ai.events.ModelKey { provider: "vertex", model: c.model },
+        usage: null,
         timing: ai.events.Timing {
             start_time_utc_ms: started.to_timestamp_milliseconds(),
             duration_ms: null,
@@ -453,16 +462,14 @@ function vertex_invoke_stream(
             null
         },
         http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
-        usage: null,
-        selected: true,
         sse_responses: if (c.capture_wire) {
             []
         } else {
             null
         },
     };
-    stream._calls = [call];
     stream._wire_call = call;
+    stream._requested_model = c.model;
     stream._call_started = started;
     stream._ttft_from = baml.time.Instant.now();
     stream._capture_sse = c.capture_wire;

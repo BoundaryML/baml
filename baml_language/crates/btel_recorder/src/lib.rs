@@ -69,6 +69,9 @@ struct ConversionBuffer {
     // Unwinds in progress, at most one per telemetry thread. Empty unless an
     // exception is being unwound, so ordinary completions pay one length check.
     unwinds: errors::ActiveUnwinds,
+    // Model usage awaiting its node's completion, which the VM writes right
+    // after it; kept across files like `unwinds`. Empty without model calls.
+    usage: BTreeMap<u64, Vec<proto::ModelUsage>>,
 }
 // Count each newly constructed metadata message once; never rescan the file.
 fn push_message<M: prost::Message>(output: &mut Vec<M>, bytes: &mut usize, tag: u32, value: M) {
@@ -76,7 +79,24 @@ fn push_message<M: prost::Message>(output: &mut Vec<M>, bytes: &mut usize, tag: 
     output.push(value);
 }
 impl ConversionBuffer {
-    fn event(&mut self, thread: TelemetryId, event: proto::span_event::Event) {
+    fn event(&mut self, thread: TelemetryId, mut event: proto::span_event::Event) {
+        use proto::span_event::Event;
+        if !self.usage.is_empty() {
+            match &mut event {
+                Event::FunctionCompletion(completion)
+                | Event::LateFunctionCompletion(completion) => {
+                    if let Some(usage) = self.usage.remove(&completion.id) {
+                        completion.usage = usage;
+                    }
+                }
+                Event::ThreadCompletion(completion) => {
+                    if let Some(usage) = self.usage.remove(&thread.get()) {
+                        completion.usage = usage;
+                    }
+                }
+                _ => {}
+            }
+        }
         self.spans.event(thread, event);
     }
 
@@ -249,6 +269,24 @@ impl ConversionBuffer {
                     ))),
                 );
             }
+            SpanRecord::SpanUsage(usage) => {
+                self.usage.insert(
+                    usage.node.get(),
+                    usage
+                        .entries
+                        .iter()
+                        .map(|entry| proto::ModelUsage {
+                            model: entry.model.as_deref().map(str::to_owned),
+                            calls: entry.calls,
+                            input_tokens: entry.input_tokens,
+                            output_tokens: entry.output_tokens,
+                            cache_read_tokens: entry.cache_read_tokens,
+                            cache_write_tokens: entry.cache_write_tokens,
+                            reasoning_tokens: entry.reasoning_tokens,
+                        })
+                        .collect(),
+                );
+            }
             SpanRecord::ThreadSpanAnnouncement {
                 id,
                 parent_id,
@@ -296,6 +334,7 @@ impl ConversionBuffer {
                         completed_at_ticks: completed_at.get(),
                         outcome: flags::outcome(*outcome) as i32,
                         panicked: *outcome == btel_types::InvocationOutcome::Panicked,
+                        usage: Vec::new(),
                     }),
                 );
                 // A raise that never ended cannot claim anything after its thread.
@@ -471,6 +510,7 @@ impl ConversionBuffer {
                         completion_flags: outcome | if done.requires_announcement { 8 } else { 0 },
                         value_cas_id: done.captured_value.as_ref().map(cas_id),
                         panicked: done.outcome == Some(btel_types::InvocationOutcome::Panicked),
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -495,6 +535,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(1).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -519,6 +560,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(9).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -543,6 +585,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(1).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -567,6 +610,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(9).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -591,6 +635,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(2).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -615,6 +660,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(10).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -639,6 +685,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(2).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -663,6 +710,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(10).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -687,6 +735,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(3).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -712,6 +761,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(2).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: true,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -736,6 +786,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(11).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -760,6 +811,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(10).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: true,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -784,6 +836,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(3).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -809,6 +862,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(2).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: true,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -833,6 +887,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(11).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -857,6 +912,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(10).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: true,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -881,6 +937,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(1).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -905,6 +962,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(1).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -929,6 +987,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(2).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -953,6 +1012,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(2).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -977,6 +1037,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(3).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -1002,6 +1063,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(2).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: true,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -1026,6 +1088,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(3).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: false,
+                        usage: Vec::new(),
                     }),
                 );
             }
@@ -1050,6 +1113,7 @@ impl ConversionBuffer {
                         completion_flags: CompletionFlags::from_variant(2).bits(),
                         value_cas_id: captured_value.as_ref().map(cas_id),
                         panicked: true,
+                        usage: Vec::new(),
                     }),
                 );
             }
