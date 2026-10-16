@@ -139,6 +139,52 @@ fn parse_argument(
             });
             None
         }
+        SchemaAttributeArguments::OptionalChoice { choices, .. } => {
+            let arg = match attr.args.as_slice() {
+                [] => return Some(AttributeValue::Flag),
+                [arg] => arg,
+                _ => {
+                    diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
+                        diagnostic_id: DiagnosticId::InvalidAttributeArg,
+                        message: format!("`{spelled}` takes at most one string argument"),
+                        span: attr.span,
+                    });
+                    return None;
+                }
+            };
+            let Some(text) = parse_string_attr_value(&arg.value) else {
+                diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
+                    diagnostic_id: DiagnosticId::InvalidAttributeArg,
+                    message: format!(
+                        "`{spelled}` argument must be a string literal, got `{}`",
+                        arg.value
+                    ),
+                    span: arg.span,
+                });
+                return None;
+            };
+            if !choices.contains(&text.as_str()) {
+                let listed = if choices.is_empty() {
+                    "it takes no argument yet".to_string()
+                } else {
+                    format!(
+                        "one of {}",
+                        choices
+                            .iter()
+                            .map(|choice| format!("`\"{choice}\"`"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
+                diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
+                    diagnostic_id: DiagnosticId::InvalidAttributeArg,
+                    message: format!("`{spelled}` does not accept `\"{text}\"`: {listed}"),
+                    span: arg.span,
+                });
+                return None;
+            }
+            Some(AttributeValue::Text(text))
+        }
         SchemaAttributeArguments::String { .. } => {
             let [arg] = attr.args.as_slice() else {
                 diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
@@ -233,6 +279,16 @@ impl AttributeCarrier for ClassAttrs {
         };
         match (spec.name, value) {
             ("stream.done", AttributeValue::Flag) => self.stream_done = true,
+            ("rust_type", AttributeValue::Flag) => {
+                self.rust_type = Some(baml_base::RustPayloadKind::Foreign);
+            }
+            ("rust_type", AttributeValue::Text(spelling)) => {
+                self.rust_type = Some(
+                    baml_base::RustPayloadKind::from_spelling(&spelling).unwrap_or_else(|| {
+                        unreachable!("`@@rust_type` arguments are checked against the kind table")
+                    }),
+                );
+            }
             _ => drift(spec, Self::POSITION),
         }
     }
@@ -311,6 +367,11 @@ mod tests {
         match spec.arguments {
             SchemaAttributeArguments::None => AttributeValue::Flag,
             SchemaAttributeArguments::String { .. } => AttributeValue::Text("x".to_string()),
+            SchemaAttributeArguments::OptionalChoice { choices, .. } => {
+                choices.first().map_or(AttributeValue::Flag, |choice| {
+                    AttributeValue::Text((*choice).to_string())
+                })
+            }
         }
     }
 

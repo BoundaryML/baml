@@ -124,7 +124,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 ///
 /// Version 26: a `Class` carries its `declared_crossing`, how an instance
 /// crosses the host boundary.
-pub const FORMAT_VERSION: u32 = 26;
+///
+/// Version 27: an interface's exported class row holds a body that is either
+/// the class's fields or the `@@rust_type` kind of the Rust-owned state in
+/// their place, so a dependent refuses a literal of such a class.
+pub const FORMAT_VERSION: u32 = 27;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

@@ -359,7 +359,8 @@ fn rename_group<'db>(
             field_index,
         } => Err(RenameError::NotInWorkspace {
             name: extern_class_row(db, class)
-                .fields
+                .body
+                .fields()
                 .get(field_index)
                 .map(|(name, ..)| name.to_string())
                 .ok_or(RenameError::NotASymbol)?,

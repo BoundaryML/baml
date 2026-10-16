@@ -604,7 +604,8 @@ pub fn render_witness_pat(
                 _ => crate::extern_loc::mounted_class_loc(db, qtn)
                     .map(|class| {
                         crate::extern_loc::extern_class_row(db, class)
-                            .fields
+                            .body
+                            .fields()
                             .iter()
                             .map(|(name, ..)| name.clone())
                             .collect()

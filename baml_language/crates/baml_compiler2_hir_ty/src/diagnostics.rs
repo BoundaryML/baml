@@ -240,6 +240,15 @@ impl fmt::Display for ShadowedParamOwner {
 ///
 /// `TirTypeError` is intentionally span-free for Salsa cacheability.
 /// Each error is paired with a primary `ExprId` in `TirDiagnostic`.
+/// Where a class keeps the state that makes a literal of it impossible.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum OpaqueState {
+    /// A `$rust_type` field, the first such.
+    Field(Name),
+    /// The class is `@@rust_type`.
+    Tagged,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TirTypeError {
     /// A declaration trace hook is invalid.
@@ -334,13 +343,12 @@ pub enum TirTypeError {
         class_name: baml_type::DeclName,
         companion: baml_type::type_kind::BuiltinCompanion,
     },
-    /// A class literal for a class with a `$rust_type` field. Only the
+    /// A class literal for a class whose state lives in Rust. Only the
     /// class's own native functions create that state, so the literal could
     /// only relabel a handle taken from another value.
     CannotConstructOpaqueClass {
         class_name: baml_type::DeclName,
-        /// The first field that holds native state.
-        field: Name,
+        state: OpaqueState,
     },
     /// A constructor head that is an alias of a type no object literal can
     /// construct (anything but a class).
@@ -1380,12 +1388,20 @@ impl TirTypeError {
                         );
                     f.write_str(diagnostic.message.as_str())
                 }
-                TirTypeError::CannotConstructOpaqueClass { class_name, field } => write!(
-                    f,
-                    "class `{}` cannot be built with a class literal: its field `{field}` holds \
-                 state that only the class's own functions create",
-                    class_name.spell(vp)
-                ),
+                TirTypeError::CannotConstructOpaqueClass { class_name, state } => match state {
+                    OpaqueState::Field(field) => write!(
+                        f,
+                        "class `{}` cannot be built with a class literal: its field `{field}` \
+                         holds state that only the class's own functions create",
+                        class_name.spell(vp)
+                    ),
+                    OpaqueState::Tagged => write!(
+                        f,
+                        "class `{}` cannot be built with a class literal: it is a `@@rust_type` \
+                         class, whose state only its own functions create",
+                        class_name.spell(vp)
+                    ),
+                },
                 TirTypeError::CallSiteBuiltinValue { reference } => write!(
                     f,
                     "`{reference}` can only be called directly, not used as a value; to pass \

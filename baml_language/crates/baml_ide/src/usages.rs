@@ -502,7 +502,8 @@ fn member_target_name(db: &dyn baml_compiler2_hir::Db, target: SymbolTarget<'_>)
                 .get(field_index)
                 .map(|f| f.name.clone()),
             DeclRef::External(class) => extern_class_row(db, class)
-                .fields
+                .body
+                .fields()
                 .get(field_index)
                 .map(|(name, ..)| name.clone()),
         },

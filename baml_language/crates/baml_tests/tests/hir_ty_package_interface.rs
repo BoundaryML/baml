@@ -14,10 +14,10 @@ use baml_compiler2_hir_ty::{
     },
     impls::{ResolvedImplFacts, impl_facts, package_impl_locs},
     package_interface::{
-        ExportedFunction, ExportedImpl, ExportedImplOrigin, ExportedType, PackageInterface,
-        ReExport, ResolvedValue, WireInterface, export_interface, exported_takes_self,
-        import_interface, interface_digest, package_interface, package_resolution_context,
-        reduce_ground_projections,
+        ExportedClassBody, ExportedFunction, ExportedImpl, ExportedImplOrigin, ExportedType,
+        PackageInterface, ReExport, ResolvedValue, WireInterface, export_interface,
+        exported_takes_self, import_interface, interface_digest, package_interface,
+        package_resolution_context, reduce_ground_projections,
     },
 };
 use baml_db::{
@@ -478,8 +478,12 @@ fn a_callable_row_with_unpaired_bounds_is_refused() {
 #[test]
 fn a_row_repeating_a_member_name_is_refused() {
     let field = forged_library_blob(|interface| {
-        let ExportedType::Class { fields, .. } = type_row_mut(interface, "Entry") else {
-            unreachable!("Entry is a class")
+        let ExportedType::Class {
+            body: ExportedClassBody::Fields(fields),
+            ..
+        } = type_row_mut(interface, "Entry")
+        else {
+            unreachable!("Entry is a class with fields")
         };
         let repeated = fields[0].clone();
         fields.push(repeated);
@@ -907,7 +911,8 @@ fn enriched_interface_is_symbolic_loc_free_and_borsh_stable() {
 
     // A class field's lowered attributes export as they were written.
     let ExportedType::Class {
-        fields: box_fields, ..
+        body: ExportedClassBody::Fields(box_fields),
+        ..
     } = interface
         .rows
         .lookup_type(&[], &Name::new("Box"))

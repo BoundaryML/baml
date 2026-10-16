@@ -89,7 +89,7 @@ pub(super) fn member(
             class: DeclRef::External(class),
             index,
         } => {
-            let field = extern_class_row(db, *class).fields.get(*index);
+            let field = extern_class_row(db, *class).body.fields().get(*index);
             (
                 field.map(|(_, ty, _)| crate::render::display_ty_canonical_for_file(db, file, ty)),
                 field.and_then(|(_, _, attrs)| attrs.docstring.clone()),

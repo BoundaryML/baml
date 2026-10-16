@@ -23,7 +23,7 @@ use baml_compiler2_hir::{
 use baml_type::{DeclName, Interface, ParamTy, Ty};
 
 use crate::extern_loc::{
-    AliasRef, ClassRef, EnumRef, InterfaceRef, extern_alias_loc, extern_alias_row,
+    AliasRef, ClassRef, ClassRowBody, EnumRef, InterfaceRef, extern_alias_loc, extern_alias_row,
     extern_class_loc, extern_class_row, extern_enum_loc, extern_enum_row, extern_interface_loc,
     extern_interface_row, mounted_alias_loc, mounted_class_loc, mounted_enum_loc,
     mounted_interface_loc,
@@ -302,7 +302,8 @@ pub fn class_fields<'db>(
             .map(|(name, ty, _attrs)| (name.clone(), ty.clone()))
             .collect(),
         DeclRef::External(class) => extern_class_row(db, class)
-            .fields
+            .body
+            .fields()
             .iter()
             .map(|(name, ty, _attrs)| (name.clone(), ty.clone()))
             .collect(),
@@ -310,22 +311,46 @@ pub fn class_fields<'db>(
 }
 
 /// How an instance of `class` crosses the host boundary: decided here once
-/// for the engine, the code generators and the host-side walker.
+/// for the engine, the code generators and the host-side walker. A
+/// `@@rust_type` class keeps its state in Rust, where no host can read or
+/// build it, so it crosses as a reference to the engine's instance.
 pub fn class_crossing<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     class: ClassRef<'db>,
 ) -> baml_type::ClassCrossing {
-    baml_type::ClassCrossing::of_declaration(
+    let declared = baml_type::ClassCrossing::of_declaration(
         baml_compiler2_hir::package::lang_roots(db),
         &class_head(db, class),
-    )
+    );
+    let rust_type = match class {
+        DeclRef::Source(class) => {
+            baml_compiler2_hir::item_data::class_data(db, class)
+                .attrs
+                .rust_type
+        }
+        DeclRef::External(class) => match extern_class_row(db, class).body {
+            ClassRowBody::RustType(kind) => Some(kind),
+            ClassRowBody::Fields(_) => None,
+        },
+    };
+    match rust_type {
+        Some(_) => {
+            debug_assert_eq!(
+                declared,
+                baml_type::ClassCrossing::Fields,
+                "a `@@rust_type` class has a boundary rule of its own"
+            );
+            baml_type::ClassCrossing::Opaque
+        }
+        None => declared,
+    }
 }
 
 /// How many slots an instance of `class` has.
 pub fn class_field_count<'db>(db: &'db dyn baml_compiler2_hir::Db, class: ClassRef<'db>) -> usize {
     match class {
         DeclRef::Source(class) => crate::lower::resolve_class_fields(db, class).len(),
-        DeclRef::External(class) => extern_class_row(db, class).fields.len(),
+        DeclRef::External(class) => extern_class_row(db, class).body.fields().len(),
     }
 }
 
@@ -340,7 +365,8 @@ pub fn class_field_index<'db>(
             .iter()
             .position(|(name, ..)| name == field)?,
         DeclRef::External(class) => extern_class_row(db, class)
-            .fields
+            .body
+            .fields()
             .iter()
             .position(|(name, ..)| name == field)?,
     };
@@ -360,7 +386,8 @@ pub fn class_field_ty<'db>(
             .find(|(name, ..)| name == field)
             .map(|(_, ty, _)| ty.clone()),
         DeclRef::External(class) => extern_class_row(db, class)
-            .fields
+            .body
+            .fields()
             .iter()
             .find(|(name, ..)| name == field)
             .map(|(_, ty, _)| ty.clone()),

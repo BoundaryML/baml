@@ -595,7 +595,7 @@ fn target_type_info(
             field_index,
         } => {
             let row = extern_class_row(db, class);
-            let (name, ty, _) = row.fields.get(field_index)?;
+            let (name, ty, _) = row.body.fields().get(field_index)?;
             Some(TypeInfo::LocalVar {
                 name: name.as_str().to_string(),
                 ty: render::display_ty_canonical_for_file(db, cursor_file, ty),
@@ -1460,7 +1460,8 @@ fn type_info_for_served_definition(
                     .map(|param| param.name().to_string())
                     .collect(),
                 fields: row
-                    .fields
+                    .body
+                    .fields()
                     .iter()
                     .map(|(name, ty, _attrs)| (name.as_str().to_string(), display(ty)))
                     .collect(),
