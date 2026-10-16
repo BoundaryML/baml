@@ -1743,6 +1743,7 @@ dependencies = [
  "baml_artifact",
  "baml_env",
  "baml_test_support",
+ "baml_type",
  "baml_version",
  "bex_events",
  "bex_project",
@@ -1754,6 +1755,7 @@ dependencies = [
  "btel_types",
  "cbindgen",
  "cc",
+ "codspeed-divan-compat",
  "futures",
  "indexmap",
  "libc",
@@ -1798,6 +1800,7 @@ dependencies = [
  "baml_type",
  "bridge_ctypes",
  "num-bigint",
+ "num-traits",
  "thiserror 2.0.18",
 ]
 
@@ -1887,6 +1890,7 @@ dependencies = [
  "bridge_encode",
  "futures",
  "js-sys",
+ "log",
  "num-bigint",
  "prost",
  "serde-wasm-bindgen",

@@ -1,5 +1,5 @@
-//! The panic a host raises when its callable breaks the contract it was bound
-//! to.
+//! The panics a bridge completes a host call with: one for a callable that
+//! broke the contract it was bound to, one for a failure of the bridge's own.
 
 use baml_type::{RuntimeTy, TypeName};
 use bridge_ctypes::{
@@ -41,6 +41,31 @@ pub fn host_contract_violation(message: &str, language: &str) -> InboundValue {
                 field("class_name", InboundValue::default()),
                 field("language", string(language.to_string())),
             ],
+        })),
+    }
+}
+
+/// A `baml.panics.SdkPanic` as the wire carries it: what a bridge completes a
+/// host call with when it could not encode a result the callable produced in
+/// good faith (a value too deep for the wire, a declaration the facts do not
+/// reach). Neither the callable's contract nor the program is at fault.
+pub fn sdk_panic(message: &str) -> InboundValue {
+    let class = TypeName::from_dotted_path("baml.panics.SdkPanic");
+    InboundValue {
+        value_type: Some(runtime_ty_to_proto_ty(&RuntimeTy::Class(
+            class,
+            Box::new([]),
+        ))),
+        value: Some(Value::ClassValue(InboundClassValue {
+            fields: vec![InboundMapEntry {
+                key: Some(Key::StringKey("message".to_string())),
+                value: Some(InboundValue {
+                    value_type: None,
+                    value: Some(Value::StringValue(format!(
+                        "the bridge could not encode the host callable's result: {message}"
+                    ))),
+                }),
+            }],
         })),
     }
 }

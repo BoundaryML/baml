@@ -1,23 +1,33 @@
-//! The declared types a walk reads, built once from a program descriptor.
+//! The declared types a walk reads, compiled once from a program descriptor.
+//!
+//! Every type here is in *stated form*: the form a node states on the wire.
+//! Type aliases are transparent, and only a recursive one exists as a
+//! declaration at run time, so a non-recursive alias is spelled by its body
+//! everywhere and a recursive one by its name. Nested unions are flattened
+//! and duplicate members dropped once, here, so the walk never re-derives a
+//! slot's shape per value.
 
 use std::collections::{HashMap, HashSet};
 
 use baml_sdkgen_types::ProgramDescriptor;
-use baml_type::{Name, ParamTy, RuntimeTy, TypeName};
+use baml_type::{Name, ParamTy, RuntimeTy};
 
-use crate::error::EncodeErrorKind;
+use crate::{error::FactsError, host::Head};
 
-/// Every signature and declaration of one program, in the runtime type family.
+/// Every signature and declaration of one program, in the runtime type family
+/// and in stated form.
 #[derive(Debug, Default)]
 pub struct Facts {
     functions: HashMap<String, FunctionSig>,
-    classes: HashMap<TypeName, ClassFacts>,
-    enums: HashMap<TypeName, EnumFacts>,
-    aliases: HashMap<TypeName, RuntimeTy>,
-    /// The aliases that survive to run time as declarations: a recursive alias
-    /// is a name the engine resolves, a non-recursive one was expanded away at
-    /// lowering and is spelled by its body in a stated type.
-    recursive_aliases: HashSet<TypeName>,
+    classes: HashMap<Head, ClassFacts>,
+    enums: HashMap<Head, EnumFacts>,
+    /// The recursive aliases: the names the engine resolves at run time, with
+    /// their bodies.
+    recursive: HashMap<Head, RuntimeTy>,
+    /// The non-recursive aliases, by body, for a type that arrives from the
+    /// host spelling one (an explicit type argument, an instance's own
+    /// arguments).
+    expanded: HashMap<Head, RuntimeTy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,7 +50,7 @@ pub struct Param {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassFacts {
-    pub name: TypeName,
+    pub name: Head,
     pub generic_params: Vec<Name>,
     /// Field types mention the class's parameters as `TypeVar`s indexed by
     /// position in `generic_params`.
@@ -49,100 +59,115 @@ pub struct ClassFacts {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnumFacts {
-    pub name: TypeName,
+    pub name: Head,
     pub variants: Vec<String>,
 }
 
 impl Facts {
-    pub fn from_descriptor(descriptor: &ProgramDescriptor) -> Self {
-        Self {
-            functions: descriptor
-                .functions
+    pub fn from_descriptor(descriptor: &ProgramDescriptor) -> Result<Self, FactsError> {
+        let raw: HashMap<Head, (RuntimeTy, bool)> = descriptor
+            .type_aliases
+            .iter()
+            .map(|alias| {
+                (
+                    alias.name.clone(),
+                    (RuntimeTy::from(&alias.resolves_to), alias.recursive),
+                )
+            })
+            .collect();
+        let state = |ty: RuntimeTy| stated(ty, &raw, &mut Vec::new());
+        let mut facts = Facts::default();
+        for function in &descriptor.functions {
+            let params = function
+                .params
                 .iter()
-                .map(|function| {
-                    (
-                        function.fqn.clone(),
-                        FunctionSig {
-                            class_generic_params: function.class_generic_params.clone(),
-                            generic_params: function.generic_params.clone(),
-                            params: function
-                                .params
-                                .iter()
-                                .map(|param| Param {
-                                    name: param.name.as_str().to_string(),
-                                    ty: RuntimeTy::from(&param.ty),
-                                    has_default: param.has_default,
-                                })
-                                .collect(),
-                            ret: RuntimeTy::from(&function.ret),
-                            throws: RuntimeTy::from(&function.throws),
-                        },
-                    )
+                .map(|param| {
+                    Ok(Param {
+                        name: param.name.as_str().to_string(),
+                        ty: state(RuntimeTy::from(&param.ty))?,
+                        has_default: param.has_default,
+                    })
                 })
-                .collect(),
-            classes: descriptor
-                .classes
-                .iter()
-                .map(|class| {
-                    (
-                        class.name.clone(),
-                        ClassFacts {
-                            name: class.name.clone(),
-                            generic_params: class.generic_params.clone(),
-                            fields: class
-                                .fields
-                                .iter()
-                                .map(|field| {
-                                    (field.name.as_str().to_string(), RuntimeTy::from(&field.ty))
-                                })
-                                .collect(),
-                        },
-                    )
-                })
-                .collect(),
-            enums: descriptor
-                .enums
-                .iter()
-                .map(|enumeration| {
-                    (
-                        enumeration.name.clone(),
-                        EnumFacts {
-                            name: enumeration.name.clone(),
-                            variants: enumeration
-                                .variants
-                                .iter()
-                                .map(|variant| variant.as_str().to_string())
-                                .collect(),
-                        },
-                    )
-                })
-                .collect(),
-            aliases: descriptor
-                .type_aliases
-                .iter()
-                .map(|alias| (alias.name.clone(), RuntimeTy::from(&alias.resolves_to)))
-                .collect(),
-            recursive_aliases: descriptor
-                .type_aliases
-                .iter()
-                .filter(|alias| alias.recursive)
-                .map(|alias| alias.name.clone())
-                .collect(),
+                .collect::<Result<_, FactsError>>()?;
+            facts.functions.insert(
+                function.fqn.clone(),
+                FunctionSig {
+                    class_generic_params: function.class_generic_params.clone(),
+                    generic_params: function.generic_params.clone(),
+                    params,
+                    ret: state(RuntimeTy::from(&function.ret))?,
+                    throws: state(RuntimeTy::from(&function.throws))?,
+                },
+            );
         }
+        for class in &descriptor.classes {
+            let fields = class
+                .fields
+                .iter()
+                .map(|field| {
+                    Ok((
+                        field.name.as_str().to_string(),
+                        state(RuntimeTy::from(&field.ty))?,
+                    ))
+                })
+                .collect::<Result<_, FactsError>>()?;
+            facts.classes.insert(
+                class.name.clone(),
+                ClassFacts {
+                    name: class.name.clone(),
+                    generic_params: class.generic_params.clone(),
+                    fields,
+                },
+            );
+        }
+        for enumeration in &descriptor.enums {
+            facts.enums.insert(
+                enumeration.name.clone(),
+                EnumFacts {
+                    name: enumeration.name.clone(),
+                    variants: enumeration
+                        .variants
+                        .iter()
+                        .map(|variant| variant.as_str().to_string())
+                        .collect(),
+                },
+            );
+        }
+        for (name, (body, recursive)) in &raw {
+            let body = state(body.clone())?;
+            if *recursive {
+                facts.recursive.insert(name.clone(), body);
+            } else {
+                facts.expanded.insert(name.clone(), body);
+            }
+        }
+        Ok(facts)
     }
 
-    /// `ty` as a node states it on the wire: every non-recursive alias spelled
-    /// by its body, at every depth. Type aliases are transparent, and only a
-    /// recursive one exists as a declaration at run time, so only a recursive
-    /// one is a name the engine can resolve. An alias the descriptor does not
-    /// know is left as it is, for the engine to refuse by name.
+    /// `ty` in stated form, for a type that arrives from the host spelling
+    /// an alias. An alias the facts do not know is left as it is, for the
+    /// engine to refuse by name.
     pub fn stated_form(&self, ty: RuntimeTy) -> RuntimeTy {
         match ty {
-            RuntimeTy::TypeAlias(name) if !self.recursive_aliases.contains(&name) => {
-                match self.aliases.get(&name) {
-                    Some(body) => self.stated_form(body.clone()),
+            RuntimeTy::TypeAlias(name) if !self.recursive.contains_key(&name) => {
+                match self.expanded.get(&name) {
+                    Some(body) => body.clone(),
                     None => RuntimeTy::TypeAlias(name),
                 }
+            }
+            RuntimeTy::Union(members) => {
+                let mut out: Vec<RuntimeTy> = Vec::with_capacity(members.len());
+                for member in &members {
+                    match self.stated_form(member.clone()) {
+                        RuntimeTy::Union(nested) => {
+                            for member in &nested {
+                                push_distinct(&mut out, member.clone());
+                            }
+                        }
+                        member => push_distinct(&mut out, member),
+                    }
+                }
+                union_of(out)
             }
             other => other.map_children(&mut |child| self.stated_form(child.clone())),
         }
@@ -152,37 +177,150 @@ impl Facts {
         self.functions.get(fqn)
     }
 
-    pub fn class(&self, name: &TypeName) -> Result<&ClassFacts, Box<EncodeErrorKind>> {
-        self.classes
-            .get(name)
-            .ok_or_else(|| Box::new(EncodeErrorKind::UnknownClass(name.clone())))
+    /// The class `name` declares; `None` for a name the descriptor does not
+    /// reach (a declaration the program made at run time), which the host
+    /// names as it has it and the engine judges.
+    pub fn class(&self, name: &Head) -> Option<&ClassFacts> {
+        self.classes.get(name)
     }
 
-    pub fn enumeration(&self, name: &TypeName) -> Result<&EnumFacts, Box<EncodeErrorKind>> {
-        self.enums
-            .get(name)
-            .ok_or_else(|| Box::new(EncodeErrorKind::UnknownEnum(name.clone())))
+    pub fn enumeration(&self, name: &Head) -> Option<&EnumFacts> {
+        self.enums.get(name)
     }
 
-    /// `ty` with alias names expanded until the head is not an alias. One
-    /// layer of a recursive alias is expanded per call, so a walk over a finite
-    /// value terminates; a chain of aliases that returns to itself is an error.
-    pub fn expand<'a>(
-        &'a self,
-        mut ty: &'a RuntimeTy,
-    ) -> Result<&'a RuntimeTy, Box<EncodeErrorKind>> {
-        let mut seen: Vec<&TypeName> = Vec::new();
+    /// `ty` with a recursive alias at its head unfolded one layer: the body
+    /// a value under the alias is judged against. Every other type is itself.
+    pub(crate) fn unfold<'a>(&'a self, mut ty: &'a RuntimeTy) -> &'a RuntimeTy {
+        let mut seen: Vec<&Head> = Vec::new();
         while let RuntimeTy::TypeAlias(name) = ty {
+            // An unguarded cycle of aliases (`type A = B; type B = A`) denotes
+            // `never`; the body is left at the first name seen twice, which
+            // no value inhabits.
             if seen.contains(&name) {
-                return Err(Box::new(EncodeErrorKind::AliasCycle(name.clone())));
+                break;
             }
             seen.push(name);
-            ty = self
-                .aliases
-                .get(name)
-                .ok_or_else(|| Box::new(EncodeErrorKind::UnknownAlias(name.clone())))?;
+            match self.recursive.get(name) {
+                Some(body) => ty = body,
+                None => break,
+            }
         }
-        Ok(ty)
+        ty
+    }
+
+    /// The members of a union, with every recursive alias member unfolded and
+    /// nested unions flattened, in declared order. A recursive member reached
+    /// again on the same path contributes nothing: a self-supporting cycle
+    /// proves no membership (`type A = A | A[]` is the type of `A[]`).
+    pub(crate) fn flatten<'a>(&'a self, members: &'a [RuntimeTy]) -> Vec<&'a RuntimeTy> {
+        let mut out = Vec::with_capacity(members.len());
+        let mut seen = HashSet::new();
+        self.flatten_into(members, &mut seen, &mut out);
+        out
+    }
+
+    fn flatten_into<'a>(
+        &'a self,
+        members: &'a [RuntimeTy],
+        seen: &mut HashSet<&'a Head>,
+        out: &mut Vec<&'a RuntimeTy>,
+    ) {
+        for member in members {
+            match member {
+                RuntimeTy::TypeAlias(name) => {
+                    if !seen.insert(name) {
+                        continue;
+                    }
+                    match self.recursive.get(name) {
+                        Some(RuntimeTy::Union(nested)) => self.flatten_into(nested, seen, out),
+                        Some(body) => {
+                            if !out.contains(&body) {
+                                out.push(body);
+                            }
+                        }
+                        None => {
+                            if !out.contains(&member) {
+                                out.push(member);
+                            }
+                        }
+                    }
+                    seen.remove(name);
+                }
+                RuntimeTy::Union(nested) => self.flatten_into(nested, seen, out),
+                other => {
+                    if !out.contains(&other) {
+                        out.push(other);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// `ty` with every non-recursive alias spelled by its body and every union
+/// flat and duplicate-free.
+fn stated(
+    ty: RuntimeTy,
+    aliases: &HashMap<Head, (RuntimeTy, bool)>,
+    path: &mut Vec<Head>,
+) -> Result<RuntimeTy, FactsError> {
+    match ty {
+        RuntimeTy::TypeAlias(name) => match aliases.get(&name) {
+            Some((_, true)) => Ok(RuntimeTy::TypeAlias(name)),
+            Some((body, false)) => {
+                if path.contains(&name) {
+                    return Err(FactsError::AliasCycle(name));
+                }
+                path.push(name.clone());
+                let body = stated(body.clone(), aliases, path)?;
+                path.pop();
+                Ok(body)
+            }
+            None => Err(FactsError::UnknownAlias(name)),
+        },
+        RuntimeTy::Union(members) => {
+            let mut out: Vec<RuntimeTy> = Vec::with_capacity(members.len());
+            for member in &members {
+                match stated(member.clone(), aliases, path)? {
+                    RuntimeTy::Union(nested) => {
+                        for member in &nested {
+                            push_distinct(&mut out, member.clone());
+                        }
+                    }
+                    member => push_distinct(&mut out, member),
+                }
+            }
+            Ok(union_of(out))
+        }
+        other => {
+            let mut failure = None;
+            let mapped =
+                other.map_children(&mut |child| match stated(child.clone(), aliases, path) {
+                    Ok(child) => child,
+                    Err(error) => {
+                        failure.get_or_insert(error);
+                        child.clone()
+                    }
+                });
+            match failure {
+                Some(error) => Err(error),
+                None => Ok(mapped),
+            }
+        }
+    }
+}
+
+fn push_distinct(members: &mut Vec<RuntimeTy>, member: RuntimeTy) {
+    if !members.contains(&member) {
+        members.push(member);
+    }
+}
+
+/// A union of `members`, or the one member alone.
+fn union_of(mut members: Vec<RuntimeTy>) -> RuntimeTy {
+    match members.len() {
+        1 => members.pop().expect("one member"),
+        _ => RuntimeTy::Union(members.into()),
     }
 }
 
@@ -198,119 +336,6 @@ pub(crate) fn substitute(
     }
 }
 
-/// Solve the class parameters `template` mentions (by De Bruijn index into
-/// `solved`) from the concrete type `ty` a value turned out to have. Where the
-/// shapes differ nothing is learned; a parameter two fields determine
-/// differently is a conflict, reported as its index.
-pub(crate) fn unify(
-    template: &RuntimeTy,
-    ty: &RuntimeTy,
-    solved: &mut [Option<RuntimeTy>],
-) -> Result<(), usize> {
-    match template {
-        RuntimeTy::TypeVar(param) => {
-            let Some(index) = usize::try_from(param.index())
-                .ok()
-                .filter(|index| *index < solved.len())
-            else {
-                return Ok(());
-            };
-            match &solved[index] {
-                None => {
-                    solved[index] = Some(ty.clone());
-                    Ok(())
-                }
-                Some(bound) if bound == ty => Ok(()),
-                Some(_) => Err(index),
-            }
-        }
-        RuntimeTy::List(inner) => match ty {
-            RuntimeTy::List(found) => unify(inner, found, solved),
-            _ => Ok(()),
-        },
-        RuntimeTy::Map { key, value } => match ty {
-            RuntimeTy::Map {
-                key: found_key,
-                value: found_value,
-            } => {
-                unify(key, found_key, solved)?;
-                unify(value, found_value, solved)
-            }
-            _ => Ok(()),
-        },
-        RuntimeTy::Class(name, args) => match ty {
-            RuntimeTy::Class(found_name, found_args)
-                if found_name == name && found_args.len() == args.len() =>
-            {
-                args.iter()
-                    .zip(found_args.iter())
-                    .try_for_each(|(arg, found)| unify(arg, found, solved))
-            }
-            _ => Ok(()),
-        },
-        RuntimeTy::Function {
-            params,
-            ret,
-            throws,
-        } => match ty {
-            RuntimeTy::Function {
-                params: found_params,
-                ret: found_ret,
-                throws: found_throws,
-            } if found_params.len() == params.len() => {
-                params
-                    .iter()
-                    .zip(found_params.iter())
-                    .try_for_each(|(param, found)| unify(&param.ty, &found.ty, solved))?;
-                unify(ret, found_ret, solved)?;
-                unify(throws, found_throws, solved)
-            }
-            _ => Ok(()),
-        },
-        RuntimeTy::Future(value, error) => match ty {
-            RuntimeTy::Future(found_value, found_error) => {
-                unify(value, found_value, solved)?;
-                unify(error, found_error, solved)
-            }
-            _ => Ok(()),
-        },
-        // `T?` learns nothing from a null and binds `T` from anything else;
-        // a union with several variables is left to the engine.
-        RuntimeTy::Union(members) => {
-            if members.iter().any(|member| member == ty) {
-                return Ok(());
-            }
-            let mut vars = members
-                .iter()
-                .filter(|member| matches!(member, RuntimeTy::TypeVar(_)));
-            match (vars.next(), vars.next()) {
-                (Some(var), None) => unify(var, ty, solved),
-                (Some(_), Some(_)) | (None, _) => Ok(()),
-            }
-        }
-        RuntimeTy::Int
-        | RuntimeTy::Bigint
-        | RuntimeTy::Float
-        | RuntimeTy::String
-        | RuntimeTy::Bool
-        | RuntimeTy::Null
-        | RuntimeTy::Uint8Array
-        | RuntimeTy::Media(_)
-        | RuntimeTy::Literal(..)
-        | RuntimeTy::Enum(_)
-        | RuntimeTy::EnumVariant(..)
-        | RuntimeTy::TypeAlias(_)
-        | RuntimeTy::Interface(..)
-        | RuntimeTy::AssociatedTypeProjection { .. }
-        | RuntimeTy::RustType
-        | RuntimeTy::Type
-        | RuntimeTy::Resource
-        | RuntimeTy::PromptAst
-        | RuntimeTy::Unknown
-        | RuntimeTy::Never => Ok(()),
-    }
-}
-
 /// Does `ty` mention a type variable anywhere?
 pub(crate) fn mentions_type_var(ty: &RuntimeTy) -> bool {
     if matches!(ty, RuntimeTy::TypeVar(_)) {
@@ -318,5 +343,19 @@ pub(crate) fn mentions_type_var(ty: &RuntimeTy) -> bool {
     }
     let mut found = false;
     ty.visit_children(&mut |child| found = found || mentions_type_var(child));
+    found
+}
+
+/// The first type variable `ty` mentions, if any.
+pub(crate) fn first_type_var(ty: &RuntimeTy) -> Option<ParamTy> {
+    if let RuntimeTy::TypeVar(param) = ty {
+        return Some(param.clone());
+    }
+    let mut found = None;
+    ty.visit_children(&mut |child| {
+        if found.is_none() {
+            found = first_type_var(child);
+        }
+    });
     found
 }

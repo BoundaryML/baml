@@ -1,73 +1,104 @@
-//! The questions the walker asks a host value, and a language's answers.
+//! What a host value is, and what a host does for a value it ships.
 //!
-//! A bridge implements [`HostValue`] for its language's value type. The
-//! walker never looks inside a host value itself: it asks, slot by slot, and
-//! the answers carry the language's rules. A Python `int` asked for a `float`
-//! answers [`Answer::Converted`]; a JavaScript `number` asked for an `int`
-//! answers [`Answer::AsIs`] when it is integral and [`Answer::No`] otherwise.
-//! The walker only needs to know that a value fits as it is, fits after the
-//! language converted it, or does not fit.
+//! A bridge implements [`HostValue`] for its language's value type and
+//! [`Host`] for its encode context. The walker never looks inside a host
+//! value itself: it asks [`HostValue::shape`] once per value, which is the
+//! only moment host code runs, and the host's language-specific judgments
+//! live in one table, [`Rules`]. Everything a host *does* for the wire
+//! (registering a callable, cloning a handle, copying a media payload)
+//! happens through [`Host`], and only once the walk has decided what ships.
 
-use baml_type::{MediaKind, RuntimeTy, TypeName};
-use bridge_ctypes::baml_bridge::cffi::InboundValue;
+use std::borrow::Cow;
+
+use baml_type::{Int63, MediaKind, RuntimeTy, TypeName};
+use bridge_ctypes::baml_bridge::cffi::{BamlHandle, BamlTyDef, BamlValueMedia, BamlValuePromptAst};
 use num_bigint::BigInt;
 
-use crate::facts::EnumFacts;
+use crate::rules::Rules;
 
-/// How a value relates to the slot it was asked about.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Answer<T> {
-    /// The value is a member of the slot's type as it is.
-    AsIs(T),
-    /// The language turned the value into a member of the slot's type.
-    Converted(T),
-    /// The value is not a member and the language does not convert it.
-    No,
+/// A reference to a declaration (class, enum, interface, alias). A name for
+/// now; the identity work replaces this one type with the declaration's index
+/// or handle, so nothing else in the crate spells a head as text.
+pub type Head = TypeName;
+
+/// A language's value, as the walker sees it.
+pub trait HostValue: Sized {
+    /// The host's own exception type (`PyErr`, `napi::Error`, `JsValue`),
+    /// raised to the caller as it is.
+    type Error;
+
+    /// The language whose conversions apply to this value.
+    const RULES: Rules;
+
+    /// What the value is, one level deep, in the language's terms. Asked
+    /// exactly once per value: this is where host code runs (iteration,
+    /// attribute access, getters).
+    fn shape(&self) -> Result<Shape<Self>, Self::Error>;
+
+    /// The text of a [`Scalar::String`] value. Borrowed where the host object
+    /// is immutable UTF-8 (a Python `str`), owned where the API or the
+    /// boundary forces a copy. Asked only to compare, and once to write the
+    /// wire.
+    fn text(&self) -> Result<Cow<'_, str>, Self::Error>;
+
+    /// The bytes of a [`Scalar::Bytes`] value, likewise.
+    fn bytes(&self) -> Result<Cow<'_, [u8]>, Self::Error>;
+
+    /// A short rendering for an error message: the host type and at most a
+    /// few dozen characters of the value. Bounded in work as well as length,
+    /// and asked only when an error is rendered.
+    fn describe(&self) -> String;
 }
 
-impl<T> Answer<T> {
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Answer<U> {
-        match self {
-            Answer::AsIs(value) => Answer::AsIs(f(value)),
-            Answer::Converted(value) => Answer::Converted(f(value)),
-            Answer::No => Answer::No,
-        }
-    }
+/// What a host value is. Exactly one answer per value; `C` is the type of
+/// its children (the host's own value type when the host answers, the read
+/// snapshot once the walker holds it).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Shape<C> {
+    Null,
+    Scalar(Scalar),
+    /// A member of an enum the language represents as a value of its own (a
+    /// Python `Enum` member). JavaScript has none: a generated enum member is
+    /// a plain string.
+    EnumMember {
+        enumeration: Head,
+        variant: String,
+    },
+    List(Vec<C>),
+    /// Entries in the host's order; keys are host values too.
+    Map(Vec<(C, C)>),
+    /// An instance of a named class. `type_args` are the arguments the value
+    /// knows (a pydantic `Box[int]`, a `$types` record); `None` when it knows
+    /// only its head.
+    Instance {
+        class: Head,
+        type_args: Option<Vec<RuntimeTy>>,
+        /// Fields under their declared (wire) names.
+        fields: Vec<(String, C)>,
+    },
+    /// A function the engine could invoke.
+    Callable,
+    /// A value the host already knows how to put on the wire exactly.
+    Leaf(LeafKind),
+    /// No BAML counterpart: a symbol, a set, an arbitrary object.
+    Other,
 }
 
-/// The scalar type a slot asks for. [`ScalarSlot::Open`] asks for the
-/// scalar the value naturally is, when the slot fixes nothing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ScalarSlot {
-    Int,
-    Bigint,
-    Float,
-    Bool,
-    String,
-    Bytes,
-    Open,
-}
-
-/// A scalar as the wire carries it.
+/// A scalar value. The host classifies by the VM's integer range: an integer
+/// beyond `Int63` is a `BigInt`. String and byte payloads stay in the host
+/// object until the wire is written ([`HostValue::text`], [`HostValue::bytes`]).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Scalar {
-    Int(i64),
-    Bigint(BigInt),
-    Float(f64),
     Bool(bool),
-    String(String),
-    Bytes(Vec<u8>),
+    Int(Int63),
+    BigInt(BigInt),
+    Float(f64),
+    String,
+    Bytes,
 }
 
-/// A host object the host already knows how to put on the wire exactly: a
-/// handle to an engine object, media, a prompt, a type value. The walker only
-/// checks that the slot can hold that kind.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Leaf {
-    pub value: InboundValue,
-    pub kind: LeafKind,
-}
-
+/// A host object the host serializes itself; the walker only checks that the
+/// slot can hold that kind, and the payload is fetched at commit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LeafKind {
     /// A rooted engine object; the engine checks it live against the slot.
@@ -77,78 +108,36 @@ pub enum LeafKind {
     TypeValue,
 }
 
-/// A host object that is an instance of a named class.
-#[derive(Debug)]
-pub struct Instance<V> {
-    pub class: TypeName,
-    /// The instance's concrete type arguments when the host knows them;
-    /// `None` for a non-generic class or an instance that carries none.
-    pub type_args: Option<Vec<RuntimeTy>>,
-    /// Fields under their declared (wire) names.
-    pub fields: Vec<(String, V)>,
+/// What a host creates for the wire and still holds until the engine takes
+/// it over. Released if the request never reaches the engine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Owner {
+    /// A host callable registered under this key.
+    Callable(u64),
+    /// An engine handle cloned under this key.
+    Handle(u64),
 }
 
-/// A failure the host hit while answering (registering a callable, reading an
-/// attribute). Rendered as given; keep it short.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HostError(pub String);
+/// A leaf as the wire carries it.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LeafWire {
+    Handle(BamlHandle),
+    Media(BamlValueMedia),
+    Prompt(BamlValuePromptAst),
+    TypeValue(BamlTyDef),
+}
 
-/// A language's value, as the walker sees it.
-///
-/// Answers are per slot: the same value may answer [`Answer::AsIs`] for one
-/// slot and [`Answer::Converted`] for another. Containers and instances are
-/// not slot-directed; the walker descends into them with the slot's
-/// structure.
-pub trait HostValue: Sized {
-    /// The value is the language's null.
-    fn is_null(&self) -> bool;
+/// The effects of shipping a value. Only the commit of a decided plan calls
+/// these, each exactly once per shipped node.
+pub trait Host<V: HostValue> {
+    /// Register `callable` as a host callable bound to `signature` (always a
+    /// `RuntimeTy::Function`) and return its registry key.
+    fn register(&self, callable: &V, signature: &RuntimeTy) -> Result<u64, V::Error>;
 
-    /// The value as the scalar `slot` asks for.
-    fn scalar(&self, slot: ScalarSlot) -> Answer<Scalar>;
+    /// The wire form of a leaf, and the owner created for it if any (a
+    /// handle clone).
+    fn leaf(&self, leaf: &V, kind: LeafKind) -> Result<(LeafWire, Option<Owner>), V::Error>;
 
-    /// The enum and variant this value is, when the language represents enum
-    /// members as values of their own (a Python `Enum` member). Asked under
-    /// an open slot, where no enum is expected in particular.
-    fn enum_member(&self) -> Option<(TypeName, String)>;
-
-    /// The variant of `enumeration` this value denotes, by variant name.
-    /// [`Answer::AsIs`] for the language's own representation of that enum,
-    /// [`Answer::Converted`] when the language lets another value (a string)
-    /// name a variant. The default accepts only the value's own
-    /// [`enum_member`](Self::enum_member).
-    fn enum_variant(&self, enumeration: &EnumFacts) -> Answer<String> {
-        match self.enum_member() {
-            Some((name, variant)) if name == enumeration.name => Answer::AsIs(variant),
-            Some(_) | None => Answer::No,
-        }
-    }
-
-    /// The elements, when the value is a sequence.
-    fn list(&self) -> Option<Vec<Self>>;
-
-    /// The entries, when the value is a mapping. Keys are host values; the
-    /// walker encodes them against the slot's key type. A mapping with string
-    /// keys can also stand in for a class.
-    fn map(&self) -> Option<Vec<(Self, Self)>>;
-
-    /// The value as an instance of a named class, when it is one.
-    fn instance(&self) -> Option<Instance<Self>>;
-
-    /// The value is a function the engine could invoke. Asked under a slot
-    /// that is no function type, where a callable has no type to take.
-    fn is_callable(&self) -> bool;
-
-    /// Register the value as a callable the engine may invoke, bound to the
-    /// slot's function type `signature` (always a [`RuntimeTy::Function`]),
-    /// and return its wire handle. `None` when the value is not callable. The
-    /// host records `signature` so the callable's result can later be encoded
-    /// against its return type.
-    fn callable(&self, signature: &RuntimeTy) -> Option<Result<InboundValue, HostError>>;
-
-    /// The value as a wire leaf the host owns outright, when it is one.
-    fn leaf(&self) -> Option<Result<Leaf, HostError>>;
-
-    /// A short, bounded rendering for error messages: the host type and at
-    /// most a few dozen characters of the value.
-    fn describe(&self) -> String;
+    /// Let go of an owner the engine will never take over.
+    fn release(&self, owner: Owner);
 }
