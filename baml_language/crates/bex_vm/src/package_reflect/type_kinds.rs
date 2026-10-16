@@ -910,23 +910,11 @@ impl BamlClassClass for PackageReflectImpl {
     }
 
     fn fields(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
-        let (class, args) = reflected_class(vm, *r#type)?;
-        Ok(class
-            .fields
-            .iter()
-            .map(|field| {
+        Ok(reflected_class_fields(vm, *r#type)?
+            .into_iter()
+            .map(|(field, type_value)| {
                 let name = Value::object(vm.alloc_string(field.name.as_str()));
-                let r#type = if let Some(type_value) = &field.runtime_type {
-                    Value::object(vm.tlab.alloc_type(type_value.clone()))
-                } else {
-                    let ty = field
-                        .field_template
-                        .substitute(&args, vm)
-                        .unwrap_or_else(|err| {
-                            unreachable!("emitted class field template must realize: {err}")
-                        });
-                    Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(ty)))
-                };
+                let r#type = Value::object(vm.tlab.alloc_type(type_value));
                 let meta = alloc_meta(
                     vm,
                     field.alias.as_deref(),
@@ -2077,6 +2065,33 @@ macro_rules! impl_as_type {
             check_kind_invariant(vm, r#type._ty(), baml_type::type_kind::TypeKind::$kind)
         }
     };
+}
+
+/// A reflected class's fields in declaration order, each paired with its type
+/// realized against the view's type arguments.
+pub(super) fn reflected_class_fields(
+    vm: &BexVm,
+    view: Value,
+) -> Result<Vec<(ClassField, TypeValue)>, crate::errors::VmRustFnError> {
+    let (class, args) = reflected_class(vm, view)?;
+    Ok(class
+        .fields
+        .into_iter()
+        .map(|field| {
+            let type_value = if let Some(type_value) = &field.runtime_type {
+                type_value.clone()
+            } else {
+                let ty = field
+                    .field_template
+                    .substitute(&args, vm)
+                    .unwrap_or_else(|err| {
+                        unreachable!("emitted class field template must realize: {err}")
+                    });
+                TypeValue::new(ty)
+            };
+            (field, type_value)
+        })
+        .collect())
 }
 
 impl BamlClassArray for PackageReflectImpl {
