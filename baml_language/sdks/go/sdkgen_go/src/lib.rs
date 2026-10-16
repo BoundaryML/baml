@@ -523,7 +523,7 @@ func Class(ctx context.Context, name string, fields []Field) (Type, error) {
 		if hasMetadata(field.Metadata) { value = withMetadataInput(field.Metadata) }
 		rows[index] = baml_go.NamedInput{Name: field.Name, Value: value}
 	}
-	result, err := baml_go.Call(ctx, "reflect.class.new", map[string]baml_go.Input{
+	result, err := baml_go.Call(ctx, "reflect.Class.new", map[string]baml_go.Input{
 		"name": baml_go.String(name),
 		"fields": baml_go.OrderedMap(rows),
 	})
@@ -541,7 +541,7 @@ func Enum(ctx context.Context, name string, values []EnumValue) (Type, error) {
 			"meta": metadataInput(value.Metadata),
 		})
 	}
-	result, err := baml_go.Call(ctx, "reflect.enum.new", map[string]baml_go.Input{
+	result, err := baml_go.Call(ctx, "reflect.Enum.new", map[string]baml_go.Input{
 		"name": baml_go.String(name),
 		"values": baml_go.List(rows, func(value baml_go.Input) baml_go.Input { return value }),
 	})

@@ -12,7 +12,7 @@ const TyPrimitiveKind = baml_bridge.cffi.v1.BamlTyPrimitiveKind;
 const BamlTyDefMessage = baml_bridge.cffi.v1.BamlTyDef;
 /** The bottom type (BAML `never`). */
 export const Never = Symbol('baml.Never');
-/** Internal row consumed by the generated `reflect.class.new` binding. */
+/** Internal row consumed by the generated `reflect.Class.new` binding. */
 export class BamlTypeMetadataRow {
     ty;
     alias;

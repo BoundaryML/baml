@@ -480,8 +480,8 @@ function sc_session(session: reflect.Session) -> null {
     let value = session.eval("1");
     null
 }
-function sc_sealed() -> reflect.class.Type throws never {
-    reflect.class.Type {}
+function sc_sealed() -> reflect.Class throws never {
+    reflect.Class {}
 }
 function sc_companion() -> baml.Map<string, int> throws never {
     baml.Map {}
@@ -536,7 +536,7 @@ function sc_companion() -> baml.Map<string, int> throws never {
     assert!(errors.iter().any(|error| matches!(
         error,
         TirTypeError::CannotConstructReflectionKind { class_name }
-            if Viewpoint::canonical(&db).path(class_name) == "reflect.class.Type"
+            if Viewpoint::canonical(&db).path(class_name) == "reflect.Class"
     )));
     assert!(errors.iter().any(|error| matches!(
         error,

@@ -1004,7 +1004,7 @@ function _accepts_any_text(t: reflect.Type) -> bool {
     if (t == text) {
         return true;
     }
-    if let union: reflect.union.Type = t.as_union() {
+    if let union: reflect.Union = t.as_union() {
         return union.member_types().some((member) -> {
             member == text
         });

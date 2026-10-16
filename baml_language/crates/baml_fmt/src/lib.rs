@@ -204,7 +204,7 @@ mod redundant_paren_tests {
 
     /// The verbatim staircase from the B-1562 screenshot: the old formatter's
     /// own output for a generated medical-document test, six nested parens
-    /// deep with backtick strings and a `reflect.class.get_field` binding.
+    /// deep with backtick strings and a `reflect.Class.get_field` binding.
     /// Feeding it back in must collapse to the flat chain.
     #[test]
     fn test_b1562_original_example() {
@@ -216,8 +216,8 @@ mod redundant_paren_tests {
             "\n",
             "test \"medical_doc\" {\n",
             "    let result = MedicalDoc { document: `Shadow`, follow_up: null };\n",
-            "    let output_document = reflect.class.get_field<string?>(result, \"document\");\n",
-            "    let output_follow_up = reflect.class.get_field<string?>(result, \"follow_up\");\n",
+            "    let output_document = reflect.Class.get_field<string?>(result, \"document\");\n",
+            "    let output_follow_up = reflect.Class.get_field<string?>(result, \"follow_up\");\n",
             "\n",
             "    assert.is_true(\n",
             "        (\n",

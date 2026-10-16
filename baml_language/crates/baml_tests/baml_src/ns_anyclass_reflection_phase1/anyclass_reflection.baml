@@ -108,15 +108,15 @@ test "reflected_membership_and_static_field_handles_agree_with_narrowing" {
                 let field: reflect.class.Field = narrowed.get_field("x") else {
                     throw "Expected x"
                 }
-                let point_type: reflect.class.Type = reflect.Type.of<Point>().as_class() else {
+                let point_type: reflect.Class = reflect.Type.of<Point>().as_class() else {
                     throw "Point type"
                 }
                 let type_side_field = point_type.fields()[0]
 
                 reflect.Type.of<Point>().implements(any_class_t)
                     && any_class_view.implemented_by(reflect.Type.of<Point>())
-                    && reflect.Type.of<reflect.class.Type>().implements(any_class_t)
-                    && reflect.Type.of<reflect.enum.Type>().implements(any_class_t)
+                    && reflect.Type.of<reflect.Class>().implements(any_class_t)
+                    && reflect.Type.of<reflect.Enum>().implements(any_class_t)
                     && !reflect.Type.of<int>().implements(any_class_t)
                     && narrowed.name() == "Point"
                     && narrowed.attributes().alias == "point"

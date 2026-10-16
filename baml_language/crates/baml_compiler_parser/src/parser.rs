@@ -14052,26 +14052,26 @@ function iterate(items: int[]) -> int {
     fn reflection_keyword_segments_parse_in_types_and_expressions() {
         let source = r#"
 class KeywordKinds {
-    class_kind reflect.class.Type
-    enum_kind reflect.enum.Type
-    interface_kind reflect.interface.Type
-    function_kind reflect.function.Type
+    class_field reflect.class.Field
+    enum_value reflect.enum.Value
+    interface_implementation reflect.interface.Implementation
+    function_parameter reflect.function.Parameter
 }
 
-function class_kind_value() -> reflect.class.Type {
-    reflect.class.Type
+function class_field_value() -> reflect.class.Field {
+    reflect.class.Field
 }
 
-function enum_kind_value() -> reflect.enum.Type {
-    reflect.enum.Type
+function enum_value_value() -> reflect.enum.Value {
+    reflect.enum.Value
 }
 
-function interface_kind_value() -> reflect.interface.Type {
-    reflect.interface.Type
+function interface_implementation_value() -> reflect.interface.Implementation {
+    reflect.interface.Implementation
 }
 
-function function_kind_value() -> reflect.function.Type {
-    reflect.function.Type
+function function_parameter_value() -> reflect.function.Parameter {
+    reflect.function.Parameter
 }
 "#;
         let (_, errors) = parse_source(source);

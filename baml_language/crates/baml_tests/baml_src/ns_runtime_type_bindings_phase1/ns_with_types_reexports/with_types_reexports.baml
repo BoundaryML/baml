@@ -21,7 +21,7 @@ function base_package() -> reflect.Package throws unknown {
 
 test "a base and its view are one package to a consumer" {
     let base = base_package();
-    let extra = reflect.class.new("Extra", { "tag": reflect.Type.of<string>() });
+    let extra = reflect.Class.new("Extra", { "tag": reflect.Type.of<string>() });
     let view = base.with_types({ "Extra": extra });
     let consumer = reflect.Package.compile(
         {
@@ -50,7 +50,7 @@ test "a base and its view are one package to a consumer" {
 
 test "a view alone reaches its base, and the base's functions run in the base" {
     let base = base_package();
-    let view = base.with_types({ "Extra": reflect.class.new("Extra", { "tag": reflect.Type.of<string>() }) });
+    let view = base.with_types({ "Extra": reflect.Class.new("Extra", { "tag": reflect.Type.of<string>() }) });
     let consumer = reflect.Package.compile(
         {
             "consumer.baml": `
@@ -78,8 +78,8 @@ test "a view alone reaches its base, and the base's functions run in the base" {
 
 test "a view of a view re-exports every layer" {
     let base = base_package();
-    let first = base.with_types({ "First": reflect.class.new("First", { "a": reflect.Type.of<int>() }) });
-    let second = first.with_types({ "Second": reflect.class.new("Second", { "b": reflect.Type.of<int>() }) });
+    let first = base.with_types({ "First": reflect.Class.new("First", { "a": reflect.Type.of<int>() }) });
+    let second = first.with_types({ "Second": reflect.Class.new("Second", { "b": reflect.Type.of<int>() }) });
     let consumer = reflect.Package.compile(
         {
             "consumer.baml": `
@@ -98,7 +98,7 @@ test "a view of a view re-exports every layer" {
 }
 
 test "a minted class reached through two views is one type" {
-    let minted = reflect.class.new("Minted", { "n": reflect.Type.of<int>() });
+    let minted = reflect.Class.new("Minted", { "n": reflect.Type.of<int>() });
     let one = reflect.Package.compile({ "one.baml": "" }).with_types({ "Minted": minted });
     let two = reflect.Package.compile({ "two.baml": "" }).with_types({ "Minted": minted });
     let consumer = reflect.Package.compile(

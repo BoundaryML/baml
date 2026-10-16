@@ -4,9 +4,9 @@
 // states one export twice, and that is one export whichever the call met
 // first. A name given to two DIFFERENT declarations is refused either way.
 
-function person_and_address() -> reflect.class.Type[] {
-    let address = reflect.class.new("Address", { "city": reflect.Type.of<string>() });
-    let person = reflect.class.new("Person", { "home": address.as_type() });
+function person_and_address() -> reflect.Class[] {
+    let address = reflect.Class.new("Address", { "city": reflect.Type.of<string>() });
+    let person = reflect.Class.new("Person", { "home": address.as_type() });
     [person, address]
 }
 
@@ -72,7 +72,7 @@ function refused_on(
 // both the one `Person` reaches and this one.
 test "a name given to two declarations is refused in either order" {
     let types = person_and_address();
-    let other = reflect.class.new("Address", { "street": reflect.Type.of<string>() });
+    let other = reflect.Class.new("Address", { "street": reflect.Type.of<string>() });
     assert.equal(
         refused_on(empty_base(), { "Person": types[0], "Address": other }),
         "E0011 duplicate exported type name `Address`",

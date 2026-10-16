@@ -1,5 +1,5 @@
 function main() -> string {
-    let node = reflect.class.builder("Node");
+    let node = reflect.Class.builder("Node");
     let next = node.type().optional();
     node.field("label", reflect.Type.of<string>());
     node.field("next", next.meta(alias = "child", description = "Recursive child"));

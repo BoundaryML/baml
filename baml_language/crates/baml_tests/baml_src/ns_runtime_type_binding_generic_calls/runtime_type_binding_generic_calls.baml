@@ -7,7 +7,7 @@ function EmptyOf<T>() -> T[] {
 }
 
 test "non-closure generic list ops over a runtime-bound element type" {
-    let item_t = reflect.class
+    let item_t = reflect.Class
         .new("BoundItem", { "value": reflect.Type.of<string>() })
         .as_type();
     type Bound = unreflect(item_t);
@@ -21,7 +21,7 @@ test "non-closure generic list ops over a runtime-bound element type" {
 // The shape that ICEd. Inferring the stored lambda parameter also lets the
 // callback's `never` effect reach `Array.filter`'s `E` slot.
 function ClosureOverRuntimeBoundElement() -> int {
-    let item_t = reflect.class
+    let item_t = reflect.Class
         .new("BoundPredicate", { "value": reflect.Type.of<string>() })
         .as_type();
     type Bound = unreflect(item_t);
@@ -64,7 +64,7 @@ class Holder<T> {
 }
 
 test "method calls on a generic class receiver with a runtime-bound argument" {
-    let item_t = reflect.class
+    let item_t = reflect.Class
         .new("BoundHeld", { "value": reflect.Type.of<string>() })
         .as_type();
     type Bound = unreflect(item_t);

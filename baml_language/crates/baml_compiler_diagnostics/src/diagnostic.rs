@@ -387,7 +387,7 @@ pub enum DiagnosticId {
     /// the one spelling that lifts a runtime type; every other position names
     /// the bound `T`.
     RuntimeTypeMustBeNamed,
-    /// `reflect.function.Type.specialize` was given type arguments the
+    /// `reflect.Function.specialize` was given type arguments the
     /// callable cannot accept: the wrong number of them, one that fails a
     /// declared interface bound, or any at all for a callable with nothing
     /// left to bind.

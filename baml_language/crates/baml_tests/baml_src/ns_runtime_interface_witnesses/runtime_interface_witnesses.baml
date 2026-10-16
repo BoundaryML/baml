@@ -44,8 +44,8 @@ interface RiwNamedWithRequiredMethod {
 }
 
 test "witnessed_runtime_class_implements_static_interface" {
-    let witness = reflect.interface.implementation<RiwPersonAnchor>().field("name").field("email");
-    let person_t = reflect.class.new(
+    let witness = reflect.Interface.implementation<RiwPersonAnchor>().field("name").field("email");
+    let person_t = reflect.Class.new(
         "WitnessedPerson",
         {
             "name": reflect.Type.of<string>(),
@@ -58,11 +58,11 @@ test "witnessed_runtime_class_implements_static_interface" {
 }
 
 test "witness_realizes_associated_field_binding_before_exact_type_check" {
-    let witness = reflect.interface.implementation<RiwPublicIdentity<Key = string>>().field(
+    let witness = reflect.Interface.implementation<RiwPublicIdentity<Key = string>>().field(
         "key",
         class_field = "public_key",
     );
-    let account_t = reflect.class.new(
+    let account_t = reflect.Class.new(
         "WitnessedAccount",
         { "public_key": reflect.Type.of<string>() },
         implementations = [witness],
@@ -73,11 +73,11 @@ test "witness_realizes_associated_field_binding_before_exact_type_check" {
 }
 
 test "scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves" {
-    let anchor_impl = reflect.interface.implementation<RiwPersonAnchor>().field("name").field(
+    let anchor_impl = reflect.Interface.implementation<RiwPersonAnchor>().field("name").field(
         "email",
         class_field = "contact_email",
     );
-    let person_t = reflect.class.new(
+    let person_t = reflect.Class.new(
         "ScenarioPerson",
         {
             "name": reflect.Type.of<string>(),
@@ -92,23 +92,23 @@ test "scenario_four_pattern_one_uses_typed_anchor_and_runtime_leaves" {
     let person: RiwPersonAnchor = riw_extract_person@parse<ScenarioPerson>(`{"name":"Ada","contact_email":"ada@example.com","favorite_editor":"vim"}`) else {
         throw "the runtime class does not implement RiwPersonAnchor"
     };
-    let runtime_leaf = reflect.class.get_field<string>(person, "favorite_editor");
+    let runtime_leaf = reflect.Class.get_field<string>(person, "favorite_editor");
     let result = prompt + "\n<RESULT>" + person.name + "|" + person.email + "|" + runtime_leaf;
     assert.contains(result, "favorite_editor");
     assert.is_true(result.ends_with("<RESULT>Ada|ada@example.com|vim"))
 }
 
 test "incomplete_witness_fails_before_type_and_chain_is_immutable" {
-    let base = reflect.interface.implementation<RiwPersonAnchor>().field("name");
+    let base = reflect.Interface.implementation<RiwPersonAnchor>().field("name");
     let complete = base.field("email", class_field = "contact_email");
-    let bad = reflect.class.new(
+    let bad = reflect.Class.new(
         "IncompletePerson",
         { "name": reflect.Type.of<string>(), "contact_email": reflect.Type.of<string>() },
         implementations = [base],
     ) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message
     };
-    let good = reflect.class.new(
+    let good = reflect.Class.new(
         "CompletePerson",
         { "name": reflect.Type.of<string>(), "contact_email": reflect.Type.of<string>() },
         implementations = [complete],
@@ -123,13 +123,13 @@ test "incomplete_witness_fails_before_type_and_chain_is_immutable" {
 }
 
 test "equivalent_witnessed_definitions_render_and_parse_identically" {
-    let witness = reflect.interface.implementation<RiwPersonAnchor>().field("name").field("email");
-    let left = reflect.class.new(
+    let witness = reflect.Interface.implementation<RiwPersonAnchor>().field("name").field("email");
+    let left = reflect.Class.new(
         "EquivalentPerson",
         { "name": reflect.Type.of<string>(), "email": reflect.Type.of<string>() },
         implementations = [witness],
     );
-    let right = reflect.class.new(
+    let right = reflect.Class.new(
         "EquivalentPerson",
         { "name": reflect.Type.of<string>(), "email": reflect.Type.of<string>() },
         implementations = [witness],
@@ -154,8 +154,8 @@ test "equivalent_witnessed_definitions_render_and_parse_identically" {
 }
 
 test "witness_inherits_interface_default_methods" {
-    let witness = reflect.interface.implementation<RiwGreeter>().field("name");
-    let person_t = reflect.class.new(
+    let witness = reflect.Interface.implementation<RiwGreeter>().field("name");
+    let person_t = reflect.Class.new(
         "GreeterPerson",
         { "name": reflect.Type.of<string>() },
         implementations = [witness],
@@ -170,7 +170,7 @@ test "witness_inherits_interface_default_methods" {
 }
 
 test "witness_still_rejects_interfaces_with_required_methods" {
-    let result = reflect.interface.implementation<RiwNamedWithRequiredMethod>().field("name") catch (e) {
+    let result = reflect.Interface.implementation<RiwNamedWithRequiredMethod>().field("name") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].message
     };
     if (result is string) {
@@ -191,8 +191,8 @@ test "session_interface_default_methods_are_bound_and_inherited" {
     s.eval(
         `
             function build() -> reflect.Type {
-                let witness = reflect.interface.implementation<Greeter>().field("who")
-                let person_t = reflect.class.new(
+                let witness = reflect.Interface.implementation<Greeter>().field("who")
+                let person_t = reflect.Class.new(
                     "SessionPerson",
                     { "who": reflect.Type.of<string>() },
                     implementations = [witness],

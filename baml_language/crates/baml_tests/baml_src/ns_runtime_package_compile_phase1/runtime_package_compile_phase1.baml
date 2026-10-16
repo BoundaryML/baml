@@ -384,7 +384,7 @@ test "runtime compile honors namespaces and mounted dependencies" {
 }
 
 test "mounted runtime types do not leak into phantom stub diagnostics" {
-    let runtime_minted = reflect.class.new("RpcRuntimeMinted", { "value": reflect.Type.of<string>() });
+    let runtime_minted = reflect.Class.new("RpcRuntimeMinted", { "value": reflect.Type.of<string>() });
     let app = reflect.Package.compile({ "app.baml": `function ready() -> bool { true }` }).with_types(
         { "RpcRuntimeMinted": runtime_minted },
     );

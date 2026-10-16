@@ -7,8 +7,8 @@ function main() -> bool {
     let base = reflect.Package.compile({ "base.baml": `interface Labelled { label string }` });
     let labelled = base.get_interface("root.Labelled") ?? throw "missing Labelled";
     type MountedLabelled = unreflect(labelled.as_type())
-    let witness = reflect.interface.implementation<MountedLabelled>().field("label", class_field = "display_name");
-    let person = reflect.class.new(
+    let witness = reflect.Interface.implementation<MountedLabelled>().field("label", class_field = "display_name");
+    let person = reflect.Class.new(
         "InternalPerson",
         { "display_name": reflect.Type.of<string>() },
         implementations = [witness],

@@ -1,18 +1,18 @@
 function main() -> string {
-    let left = reflect.class.new(
+    let left = reflect.Class.new(
         "Ordered",
         { "a": reflect.Type.of<int>(), "b": reflect.Type.of<string>().meta(description = "second") },
     );
-    let right = reflect.class.new(
+    let right = reflect.Class.new(
         "Ordered",
         { "b": reflect.Type.of<string>().meta(description = "second"), "a": reflect.Type.of<int>() },
     );
-    let literal = reflect.literal.new("fixed");
-    let union = reflect.union.new([literal.as_type(), reflect.Type.of<int>()]);
-    let map_t = reflect.map.new(reflect.Type.of<string>(), union.as_type());
+    let literal = reflect.Literal.new("fixed");
+    let union = reflect.Union.new([literal.as_type(), reflect.Type.of<int>()]);
+    let map_t = reflect.Map.new(reflect.Type.of<string>(), union.as_type());
     let array_t = map_t.as_type().array();
     let optional_t = array_t.as_type().optional();
-    let empty = reflect.class.new("Empty", {});
+    let empty = reflect.Class.new("Empty", {});
     let source = left.as_type().to_baml();
     return source
         + "\n<RIGHT>\n"

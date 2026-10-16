@@ -10,7 +10,7 @@ function Classify<T>(input: string) -> T {
 }
 
 function main() -> string throws never {
-    let t = reflect.enum.new("Category", []) catch (e) {
+    let t = reflect.Enum.new("Category", []) catch (e) {
         _ => {
             return "constructor threw";
         }

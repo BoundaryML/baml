@@ -14,8 +14,8 @@ interface DocAnchor {
 }
 
 function main() -> string {
-    let anchor = reflect.interface.implementation<DocAnchor>().field("value");
-    let minted = reflect.class.new(
+    let anchor = reflect.Interface.implementation<DocAnchor>().field("value");
+    let minted = reflect.Class.new(
         "Minted",
         {
             "value": reflect.Type.of<string>().meta(

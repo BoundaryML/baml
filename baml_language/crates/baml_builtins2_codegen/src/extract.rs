@@ -369,9 +369,10 @@ fn extract_from_class(
                 .split_once('.')
                 .map_or("", |(_, namespaces)| namespaces)
                 .to_string(),
-            instance_backed: class_is_instance_backed(class_def),
+            instance_backed: class_is_instance_backed(class_def, namespace_prefix),
             class_generics: class_generics.clone(),
             receiver_type,
+            builtin: package_of(namespace_prefix) == baml_builtins2::PACKAGE_BAML,
         });
         let params = if has_self {
             extract_params_skip_self(method, &all_generics)
@@ -422,16 +423,18 @@ fn extract_from_class(
 }
 
 /// Whether `class_def`'s values are `Object::Instance`s with a generated `view::`
-/// struct. Classes that keep dedicated `Object` variants (Array, Map, String,
-/// `Uint8Array`) are not, and neither are field-less classes (pure namespace
-/// markers, method-only and opaque classes). The ONE rule behind
-/// [`extract_class_fields`] and every receiver built for the class, so a
-/// receiver can never promise a view struct that was not generated.
-fn class_is_instance_backed(class_def: &ClassDef) -> bool {
-    !matches!(
-        class_def.name.as_str(),
-        "Array" | "Map" | "String" | "Uint8Array"
-    ) && !class_def.fields.is_empty()
+/// struct. The `baml` package's classes that keep dedicated `Object` variants
+/// (Array, Map, String, `Uint8Array`) are not, and neither are field-less
+/// classes (pure namespace markers, method-only and opaque classes). The ONE
+/// rule behind [`extract_class_fields`] and every receiver built for the class,
+/// so a receiver can never promise a view struct that was not generated.
+fn class_is_instance_backed(class_def: &ClassDef, namespace_prefix: &str) -> bool {
+    let dedicated_variant = package_of(namespace_prefix) == baml_builtins2::PACKAGE_BAML
+        && matches!(
+            class_def.name.as_str(),
+            "Array" | "Map" | "String" | "Uint8Array"
+        );
+    !dedicated_variant && !class_def.fields.is_empty()
 }
 
 /// Extract field definitions from a class, producing a `NativeClassDef`.
@@ -445,7 +448,7 @@ fn extract_class_fields(
 ) -> Option<NativeClassDef> {
     let class_name = class_def.name.as_str();
 
-    if !class_is_instance_backed(class_def) {
+    if !class_is_instance_backed(class_def, namespace_prefix) {
         return None;
     }
 
@@ -702,9 +705,15 @@ fn extract_from_implements_for(
                 .split_once('.')
                 .map_or("", |(_, namespaces)| namespaces)
                 .to_string(),
-            instance_backed: impl_receiver.is_instance_backed(),
+            instance_backed: impl_receiver.is_instance_backed(namespace_prefix),
             class_generics: impl_generics.clone(),
             receiver_type: ReceiverType::RefSelf,
+            builtin: match impl_receiver {
+                ImplReceiver::Builtin(_) => true,
+                ImplReceiver::Class(_) => {
+                    package_of(namespace_prefix) == baml_builtins2::PACKAGE_BAML
+                }
+            },
         });
 
         let params: Vec<Param> = method
@@ -801,10 +810,10 @@ impl<'a> ImplReceiver<'a> {
         }
     }
 
-    fn is_instance_backed(self) -> bool {
+    fn is_instance_backed(self, namespace_prefix: &str) -> bool {
         match self {
             Self::Builtin(_) => false,
-            Self::Class(class_def) => class_is_instance_backed(class_def),
+            Self::Class(class_def) => class_is_instance_backed(class_def, namespace_prefix),
         }
     }
 }

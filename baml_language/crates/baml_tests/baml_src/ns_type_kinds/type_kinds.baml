@@ -42,48 +42,48 @@ type Callback = (x: int, label: string) -> bool throws string;
 
 function classify(t: reflect.Type) -> string {
     match (t.kind()) {
-        reflect.class.Type => "class",
-        reflect.enum.Type => "enum",
-        reflect.union.Type => "union",
-        reflect.literal.Type => "literal",
-        reflect.array.Type => "array",
-        reflect.map.Type => "map",
-        reflect.interface.Type => "interface",
-        reflect.primitive.Type => "primitive",
-        reflect.function.Type => "function",
+        reflect.Class => "class",
+        reflect.Enum => "enum",
+        reflect.Union => "union",
+        reflect.Literal => "literal",
+        reflect.Array => "array",
+        reflect.Map => "map",
+        reflect.Interface => "interface",
+        reflect.Primitive => "primitive",
+        reflect.Function => "function",
     }
 }
 
 function walk(t: reflect.Type) -> int {
     match (t.kind()) {
-        let class_view: reflect.class.Type => 1,
-        let enum_view: reflect.enum.Type => 1,
-        let union_view: reflect.union.Type => {
+        let class_view: reflect.Class => 1,
+        let enum_view: reflect.Enum => 1,
+        let union_view: reflect.Union => {
             let count = 1;
             for (let member in union_view.member_types()) {
                 count += walk(member);
             }
             count
         },
-        let literal_view: reflect.literal.Type => 1,
-        let array_view: reflect.array.Type => 1 + walk(array_view.element_type()),
-        let map_view: reflect.map.Type => 1,
-        let interface_view: reflect.interface.Type => 1,
-        let primitive_view: reflect.primitive.Type => 1,
-        let function_view: reflect.function.Type => 1,
+        let literal_view: reflect.Literal => 1,
+        let array_view: reflect.Array => 1 + walk(array_view.element_type()),
+        let map_view: reflect.Map => 1,
+        let interface_view: reflect.Interface => 1,
+        let primitive_view: reflect.Primitive => 1,
+        let function_view: reflect.Function => 1,
     }
 }
 
 function read_views(
-    union_view: reflect.union.Type,
-    array_view: reflect.array.Type,
-    map_view: reflect.map.Type,
-    interface_view: reflect.interface.Type,
-    function_view: reflect.function.Type,
+    union_view: reflect.Union,
+    array_view: reflect.Array,
+    map_view: reflect.Map,
+    interface_view: reflect.Interface,
+    function_view: reflect.Function,
 ) -> bool throws reflect.errors.CompilationError {
     let params = function_view.params();
-    let function_schema = match (reflect.Type.of<reflect.function.Type>().kind()) {
-        let class_view: reflect.class.Type => class_view,
+    let function_schema = match (reflect.Type.of<reflect.Function>().kind()) {
+        let class_view: reflect.Class => class_view,
         _ => {
             return false;
         },
@@ -187,7 +187,7 @@ test "kind_casts_are_nullable_identity_preserving_views" {
 
 type EscapedLiteral = "a\"b\\c\n";
 
-function literal_value(t: reflect.literal.Type) -> unknown throws never {
+function literal_value(t: reflect.Literal) -> unknown throws never {
     t.value()
 }
 
@@ -215,16 +215,16 @@ test "literal_values_preserve_enum_identity_not_alias_or_name_strings" {
     let hidden = reflect.Type.of<WithSkippedVariant.Hidden>().as_literal() ?? throw "literal";
     assert.equal(red.value(), Color.Red);
     assert.equal(reflect.Type.of_value(red.value()), reflect.Type.of<Color>());
-    assert.equal(reflect.enum.get_value(red.value()), "Red");
+    assert.equal(reflect.Enum.get_value(red.value()), "Red");
     assert.equal(hidden.value(), WithSkippedVariant.Hidden)
 }
 
 test "runtime_literal_constructors_roundtrip_values" {
-    assert.equal(reflect.literal.new("hello").value(), "hello");
-    assert.equal(reflect.literal.new(0).value(), 0);
-    assert.equal(reflect.literal.new(-42).value(), -42);
-    assert.equal(reflect.literal.new(true).value(), true);
-    assert.equal(reflect.literal.new(false).value(), false)
+    assert.equal(reflect.Literal.new("hello").value(), "hello");
+    assert.equal(reflect.Literal.new(0).value(), 0);
+    assert.equal(reflect.Literal.new(-42).value(), -42);
+    assert.equal(reflect.Literal.new(true).value(), true);
+    assert.equal(reflect.Literal.new(false).value(), false)
 }
 
 test "runtime_package_enum_literal_values_keep_their_declaration" {
@@ -238,7 +238,7 @@ test "runtime_package_enum_literal_values_keep_their_declaration" {
     let en = package.get_enum("root.Choice") ?? throw "missing enum";
     let value = literal.value();
     assert.equal(reflect.Type.of_value(value), en.as_type());
-    assert.equal(reflect.enum.get_value(value), "FIRST")
+    assert.equal(reflect.Enum.get_value(value), "FIRST")
 }
 
 test "class_and_enum_readback_preserves_schema_metadata" {
@@ -288,7 +288,7 @@ test "skip_flag_reads_back_on_fields_and_variants_only" {
     assert.equal(class_view.meta().skip, false);
     assert.equal(enum_view.meta().skip, false);
     // Rows built without the flag default to not skipped.
-    assert.equal(reflect.enum.value("Fresh").meta.skip, false)
+    assert.equal(reflect.Enum.value("Fresh").meta.skip, false)
 }
 
 test "enum_rebuilt_from_reflected_rows_keeps_skip" {
@@ -297,7 +297,7 @@ test "enum_rebuilt_from_reflected_rows_keeps_skip" {
     for (let row in enum_view.values()) {
         rows.push(row);
     }
-    let rebuilt = reflect.enum.new("Rebuilt", rows).as_type().as_enum() ?? throw "rebuilt";
+    let rebuilt = reflect.Enum.new("Rebuilt", rows).as_type().as_enum() ?? throw "rebuilt";
     assert.equal(rebuilt.values()[0].meta.skip, false);
     assert.is_true(rebuilt.values()[1].meta.skip)
 }
@@ -318,19 +318,19 @@ test "nested_type_walker_and_kind_specific_readback_work_end_to_end" {
 }
 
 test "nested_views_of_a_runtime_type_keep_its_definitions" {
-    let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type();
+    let choice = reflect.Enum.new("Choice", ["FIRST", "SECOND"]).as_type();
 
-    let root_type = reflect.class.new("Root", { "choices": choice.array().as_type() }).as_type();
+    let root_type = reflect.Class.new("Root", { "choices": choice.array().as_type() }).as_type();
     let root_class = root_type.as_class() ?? throw "expected class";
     let field = root_class.fields().at(0) ?? throw "expected field";
     let field_type = field.type ?? throw "expected field type";
     let array = field_type.as_array() ?? throw "expected array";
     let from_array = array.element_type().as_enum() ?? throw "expected array enum";
 
-    let map_view = reflect.map.new(reflect.Type.of<string>(), choice).as_type().as_map() ?? throw "expected map";
+    let map_view = reflect.Map.new(reflect.Type.of<string>(), choice).as_type().as_map() ?? throw "expected map";
     let from_map_value = map_view.value_type().as_enum() ?? throw "expected map enum";
 
-    let union_view = reflect.union.new([choice, reflect.Type.of<int>()]).as_type().as_union()
+    let union_view = reflect.Union.new([choice, reflect.Type.of<int>()]).as_type().as_union()
         ?? throw "expected union";
     let member = union_view.member_types().at(0) ?? throw "expected member";
     let from_union = member.as_enum() ?? throw "expected union enum";
@@ -341,14 +341,14 @@ test "nested_views_of_a_runtime_type_keep_its_definitions" {
 }
 
 test "map_key_type_view_keeps_runtime_definitions" {
-    let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type();
-    let map_view = reflect.map.new(choice, reflect.Type.of<int>()).as_type().as_map() ?? throw "expected map";
+    let choice = reflect.Enum.new("Choice", ["FIRST", "SECOND"]).as_type();
+    let map_view = reflect.Map.new(choice, reflect.Type.of<int>()).as_type().as_map() ?? throw "expected map";
     let key_enum = map_view.key_type().as_enum() ?? throw "expected key enum";
     assert.equal((key_enum.values().at(1) ?? throw "key rows").name, "SECOND")
 }
 
 test "literal_views_return_values_for_all_public_literal_kinds" {
-    let string_view = reflect.literal.new("line\nquoted \"text\"");
+    let string_view = reflect.Literal.new("line\nquoted \"text\"");
     let int_view = reflect.Type.of<-42>().as_literal() ?? throw "int literal";
     let bigint_view = reflect.Type.of<123456789012345678901234567890n>().as_literal() ?? throw "bigint literal";
     let bool_view = reflect.Type.of<true>().as_literal() ?? throw "bool literal";
@@ -358,7 +358,7 @@ test "literal_views_return_values_for_all_public_literal_kinds" {
     assert.equal(int_view.value(), -42);
     assert.equal(bigint_view.value(), 123456789012345678901234567890n);
     assert.equal(bool_view.value(), true);
-    assert.equal(reflect.literal.new(123456789012345678901234567890n).value(), bigint_view.value())
+    assert.equal(reflect.Literal.new(123456789012345678901234567890n).value(), bigint_view.value())
 }
 
 test "nested_class_of_a_runtime_package_type_reads_back" {

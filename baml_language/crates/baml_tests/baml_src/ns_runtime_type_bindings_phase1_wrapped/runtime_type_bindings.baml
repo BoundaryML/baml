@@ -79,14 +79,14 @@ function source_3() -> string {
         }
 
         function main() -> string {
-            let output_type = reflect.class.new("RuntimeOutput", {
+            let output_type = reflect.Class.new("RuntimeOutput", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
             type Out = unreflect(output_type)
 
             let holder = Holder<Out>.new()
             let parsed = holder.parse_it(\`{"name":"Pixel"}\`)
-            \`\${holder.describe()}|\${reflect.class.get_field<string>(parsed, "name")}\`
+            \`\${holder.describe()}|\${reflect.Class.get_field<string>(parsed, "name")}\`
         }
     `
 }
@@ -132,7 +132,7 @@ function source_4() -> string {
         }
 
         function main() -> string {
-            let output_type = reflect.class.new("RuntimeOutput", {
+            let output_type = reflect.Class.new("RuntimeOutput", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
             type Out = unreflect(output_type)
@@ -144,8 +144,8 @@ function source_4() -> string {
                 client = ProbeClient { reply: \`{"name":"Pixel"}\`, requests: [] },
             ).run(DynamicOutput@spec<Out>())
 
-            let direct_name = reflect.class.get_field<string>(direct, "name")
-            let agent_name = reflect.class.get_field<string>(run.value, "name")
+            let direct_name = reflect.Class.get_field<string>(direct, "name")
+            let agent_name = reflect.Class.get_field<string>(run.value, "name")
             \`\${direct_name}|\${agent_name}\`
         }
     `
@@ -192,7 +192,7 @@ function source_5() -> string {
         }
 
         function main() -> string {
-            let minted_class = reflect.class.new("MintedRecord", {
+            let minted_class = reflect.Class.new("MintedRecord", {
                 "minted_field": reflect.Type.of<string>().meta(
                     docstring = "Minted runner field docs",
                 ),
@@ -203,7 +203,7 @@ function source_5() -> string {
                 client = class_client,
             ).run(DynamicOutput@spec<MintedRecord>())
 
-            let minted_enum = reflect.enum.new(
+            let minted_enum = reflect.Enum.new(
                 "MintedChoice",
                 ["PENDING", "RUNNING"],
             ).as_type()
@@ -213,13 +213,13 @@ function source_5() -> string {
                 client = enum_client,
             ).run(DynamicOutput@spec<MintedChoice>())
 
-            let alpha = reflect.class.new("AlphaShape", {
+            let alpha = reflect.Class.new("AlphaShape", {
                 "alpha_only": reflect.Type.of<string>(),
             }).as_type()
-            let beta = reflect.class.new("BetaShape", {
+            let beta = reflect.Class.new("BetaShape", {
                 "beta_only": reflect.Type.of<int>(),
             }).as_type()
-            let union = reflect.union.new([alpha, beta]).as_type()
+            let union = reflect.Union.new([alpha, beta]).as_type()
             type MintedUnion = unreflect(union)
             let union_client = ProbeClient { reply: \`{"alpha_only":"ok"}\`, requests: [] }
             let _ = ai.Agent.new(
@@ -280,7 +280,7 @@ function source_6() -> string {
         }
 
         function main() -> string {
-            let output_type = reflect.class.new("RuntimeOutput", {
+            let output_type = reflect.Class.new("RuntimeOutput", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
             type Out = unreflect(output_type)
@@ -325,10 +325,10 @@ function source_7() -> string {
         }
 
         function main() -> string {
-            let first_type = reflect.class.new("Shape", {
+            let first_type = reflect.Class.new("Shape", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
-            let second_type = reflect.class.new("Shape", {
+            let second_type = reflect.Class.new("Shape", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
             type First = unreflect(first_type)
@@ -363,10 +363,10 @@ function source_8() -> string {
         }
 
         function main() -> string {
-            let mine = reflect.class.new("Shape", {
+            let mine = reflect.Class.new("Shape", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
-            let other = reflect.class.new("Shape", {
+            let other = reflect.Class.new("Shape", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
             type Mine = unreflect(mine)
@@ -514,10 +514,10 @@ function source_12() -> string {
         }
 
         function main() -> string {
-            let owner_type = reflect.class.new("Owner", {
+            let owner_type = reflect.Class.new("Owner", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
-            let method_type = reflect.class.new("Method", {
+            let method_type = reflect.Class.new("Method", {
                 "name": reflect.Type.of<string>(),
             }).as_type()
             type Owner = unreflect(owner_type)
@@ -547,8 +547,8 @@ function source_13() -> string {
         }
 
         function main() -> string {
-            let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type()
-            let other = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type()
+            let choice = reflect.Enum.new("Choice", ["FIRST", "SECOND"]).as_type()
+            let other = reflect.Enum.new("Choice", ["FIRST", "SECOND"]).as_type()
             type Choice = unreflect(choice)
 
             let holder = Holder<Choice>.new()

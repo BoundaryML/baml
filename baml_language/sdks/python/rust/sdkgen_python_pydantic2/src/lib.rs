@@ -1029,15 +1029,16 @@ mod tests {
     #[test]
     fn reflect_kind_namespaces_are_routed_legally_across_the_generated_surface() {
         let mut pool: SymbolPool = HashMap::new();
+        // The helper types left in the keyword-named kind namespaces.
         let kind_namespaces = [
-            ("class", "class_"),
-            ("enum", "enum"),
-            ("interface", "interface"),
-            ("function", "function"),
+            ("class", "class_", "Field"),
+            ("enum", "enum", "Value"),
+            ("interface", "interface", "Implementation"),
+            ("function", "function", "Parameter"),
         ];
 
-        for (source, _) in kind_namespaces {
-            let type_name = cg_name("reflect", &[source], "Type");
+        for (source, _, helper) in kind_namespaces {
+            let type_name = cg_name("reflect", &[source], helper);
             pool.insert(type_name.clone(), class(type_name));
         }
 
@@ -1050,10 +1051,10 @@ mod tests {
                 docstring: None,
                 properties: kind_namespaces
                     .iter()
-                    .map(|(source, _)| ClassProperty {
+                    .map(|(source, _, helper)| ClassProperty {
                         name: BaseName::new(format!("{source}_type")),
                         docstring: None,
-                        ty: class_ty(cg_name("reflect", &[source], "Type"), vec![]),
+                        ty: class_ty(cg_name("reflect", &[source], helper), vec![]),
                     })
                     .collect(),
                 static_methods: vec![],
@@ -1068,23 +1069,23 @@ mod tests {
         let consumer_pyi = &out[&PathBuf::from("consumer/__init__.pyi")];
         let typemap = &out[&PathBuf::from("_typemap.py")];
 
-        for (source, routed) in kind_namespaces {
+        for (source, routed, helper) in kind_namespaces {
             assert!(out.contains_key(&PathBuf::from(format!("reflect/{routed}/__init__.py"))));
             if source != routed {
                 assert!(!out.contains_key(&PathBuf::from(format!("reflect/{source}/__init__.py"))));
             }
             assert!(reflect_pyi.contains(&format!("from . import {routed}\n")));
 
-            let reference = format!("reflect.{routed}.Type");
+            let reference = format!("reflect.{routed}.{helper}");
             assert!(consumer_py.contains(&reference));
             assert!(consumer_pyi.contains(&reference));
             assert!(typemap.contains(&format!(
-                "\"reflect.{source}.Type\": (\"baml_sdk.reflect.{routed}\", \"Type\")"
+                "\"reflect.{source}.{helper}\": (\"baml_sdk.reflect.{routed}\", \"{helper}\")"
             )));
         }
 
-        assert!(!consumer_py.contains("reflect.class.Type"));
-        assert!(!consumer_pyi.contains("reflect.class.Type"));
+        assert!(!consumer_py.contains("reflect.class.Field"));
+        assert!(!consumer_pyi.contains("reflect.class.Field"));
     }
 
     #[test]

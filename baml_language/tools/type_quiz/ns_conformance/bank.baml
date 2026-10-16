@@ -251,7 +251,7 @@ function fact_shaped_functions() -> string[] throws never {
     let functions = reflect.Package.current().functions();
     functions.keys().filter((name) -> {
         match (functions.get(name)) {
-            let f: reflect.function.Type => {
+            let f: reflect.Function => {
                 let params = f.params();
                 f.return_type() == derived && params.length() == 1 && params[0].type == seed
             },
@@ -328,7 +328,7 @@ function rule_shaped_functions() -> string[] throws never {
     let functions = reflect.Package.current().functions();
     functions.keys().filter((name) -> {
         match (functions.get(name)) {
-            let f: reflect.function.Type => {
+            let f: reflect.Function => {
                 f.return_type() == produces && f.params().length() == 0
             },
             null => false,

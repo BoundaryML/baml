@@ -271,9 +271,9 @@ mod tests {
         let cases = [
             (mismatched_types(), "E0001", "mismatched types"),
             (
-                expected_class_instance("reflect.class.get_field", "int"),
+                expected_class_instance("reflect.Class.get_field", "int"),
                 "E0001",
-                "reflect.class.get_field expected a class instance, got int",
+                "reflect.Class.get_field expected a class instance, got int",
             ),
             (
                 unspecialized_reflected_generic("root.Extract"),
@@ -301,9 +301,9 @@ mod tests {
                 "duplicate field `Collision.wire`",
             ),
             (
-                cannot_construct_reflection_kind("reflect.class.Type"),
+                cannot_construct_reflection_kind("reflect.Class"),
                 "E0001",
-                "reflection kind `reflect.class.Type` cannot be constructed; obtain it from a type value",
+                "reflection kind `reflect.Class` cannot be constructed; obtain it from a type value",
             ),
             (
                 cannot_construct_builtin_companion("baml.Int", "int", "literals", true),

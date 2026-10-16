@@ -189,14 +189,10 @@ pub const ALL: &[BuiltinFile] = &[
     // --- reflect package ---
     builtin!("reflect", "reflect.baml"),
     builtin!("reflect", "type.baml"),
+    builtin!("reflect", "kinds.baml"),
     builtin!("reflect", "ns_class/class.baml"),
     builtin!("reflect", "ns_enum/enum.baml"),
-    builtin!("reflect", "ns_union/union.baml"),
-    builtin!("reflect", "ns_literal/literal.baml"),
-    builtin!("reflect", "ns_array/array.baml"),
-    builtin!("reflect", "ns_map/map.baml"),
     builtin!("reflect", "ns_interface/interface.baml"),
-    builtin!("reflect", "ns_primitive/primitive.baml"),
     builtin!("reflect", "ns_function/function.baml"),
     builtin!("reflect", "ns_errors/errors.baml"),
     // --- trace package ---

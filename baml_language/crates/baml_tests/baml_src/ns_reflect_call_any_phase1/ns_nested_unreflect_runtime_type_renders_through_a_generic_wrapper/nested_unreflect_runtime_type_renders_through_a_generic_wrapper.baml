@@ -14,7 +14,7 @@ function Extract<T>(input: string) -> T {
 }
 
 function main() -> string {
-    let runtime_class = reflect.class.new(
+    let runtime_class = reflect.Class.new(
         "RuntimeTranscript",
         { "speaker": reflect.Type.of<string>(), "words": reflect.Type.of<string[]>() },
     );

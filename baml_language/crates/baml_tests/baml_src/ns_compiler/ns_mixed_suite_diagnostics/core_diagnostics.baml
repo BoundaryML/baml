@@ -60,7 +60,7 @@ test "pending runtime type is not a static reflect Type" {
             "main.baml": `
                 function accepts_type(value: reflect.Type) -> bool { true }
                 function main() -> bool {
-                    let builder = reflect.class.builder("StillPending")
+                    let builder = reflect.Class.builder("StillPending")
                     accepts_type(builder.type())
                 }
             `,
@@ -131,7 +131,7 @@ test "runtime duplicate serialized key matches the static diagnostic" {
     assert.equal(static_matches.length(), 1);
     let expected = static_matches[0];
 
-    let result = reflect.class.new(
+    let result = reflect.Class.new(
         "Collision",
         {
             "wire": reflect.Type.of<string>(),

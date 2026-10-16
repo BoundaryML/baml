@@ -8,8 +8,8 @@ source: crates/baml_tests/src/corpus.rs
      ╭─[type_kinds.baml:83:50]
   83 │ ╭─▶ ) -> bool throws reflect.errors.CompilationError {
   84 │ │       let params = function_view.params();
-  85 │ │       let function_schema = match (reflect.Type.of<reflect.function.Type>().kind()) {
-  86 │ │           let class_view: reflect.class.Type => class_view,
+  85 │ │       let function_schema = match (reflect.Type.of<reflect.Function>().kind()) {
+  86 │ │           let class_view: reflect.Class => class_view,
   87 │ │           _ => {
   88 │ │               return false;
   89 │ │           },
