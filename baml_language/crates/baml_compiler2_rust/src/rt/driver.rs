@@ -3,6 +3,7 @@ use super::{
     ProgramEmission, ProgramIndex, SourceRoot, admission, builtins, host, json, layout, no,
     recursive, telemetry,
 };
+use std::fmt::Write as _;
 
 /// Emit a single parameterless integer entry, including a compatible benchmark host.
 /// Layouts and direct call bodies come exclusively from MIR and linked metadata.
@@ -13,9 +14,36 @@ pub fn compile_rt(
     opt: OptLevel,
     entry: usize,
 ) -> Gen<String> {
+    compile_entry(db, root, program, opt, entry, false, None)
+}
+
+/// Compile one zero-argument test body and its reachable closure, without a VM.
+/// Unrelated test registrations and top-level initializers are not roots.
+pub fn compile_rt_test(
+    db: &dyn Db,
+    root: SourceRoot,
+    program: &Program,
+    opt: OptLevel,
+    entry: usize,
+) -> Gen<String> {
+    RtTestCompiler::new(db, root, program, opt).compile(entry)
+}
+
+fn compile_entry(
+    db: &dyn Db,
+    root: SourceRoot,
+    program: &Program,
+    opt: OptLevel,
+    entry: usize,
+    test_entry: bool,
+    prepared: Option<&RtTestCompiler<'_, '_>>,
+) -> Gen<String> {
     let mut plan = Plan {
         lang: baml_compiler2_hir::package::lang_roots(db),
-        index: ProgramIndex::new(db, root, program),
+        index: prepared.map_or_else(
+            || std::rc::Rc::new(ProgramIndex::new(db, root, program)),
+            |p| p.index.clone(),
+        ),
         program,
         layouts: BTreeMap::new(),
         lists: BTreeSet::new(),
@@ -27,7 +55,17 @@ pub fn compile_rt(
         calls,
         builtins,
         json_decode,
-    } = admission::collect(db, root, opt, entry, &mut plan)?;
+    } = admission::collect(
+        db,
+        root,
+        opt,
+        entry,
+        test_entry,
+        &mut plan,
+        prepared
+            .map(|p| p.all.as_ref().map_err(Clone::clone))
+            .transpose()?,
+    )?;
     let mut out = String::from(
         "#![allow(unused_mut,unused_variables,unused_assignments,unused_labels,dead_code,non_snake_case)]\nuse baml_rt::{self as rt, R};\nuse baml_rt_gc::{Descriptor,Kind,Field,SlotKind};\n",
     );
@@ -108,6 +146,51 @@ pub fn compile_rt(
         (stringify, aliased),
         &telemetry_sites,
     )?;
-    host::emit(&mut out, entry, &builtins, format_site);
+    if test_entry {
+        write!(&mut out, "fn entry()->R<i64>{{unsafe{{f{entry}(0)?;Ok(0)}}}}\npub fn run(name:&str)->std::process::ExitCode{{{}rt::test_host::run(DESCRIPTORS,entry,TELEMETRY_FUNCTIONS,TELEMETRY_SITES,name)}}\n", if builtins.is_empty() { "" } else { "init_builtin_observation();" }).unwrap();
+    } else {
+        host::emit(&mut out, entry, &builtins, format_site);
+    }
     Ok(out)
+}
+
+/// Shared immutable lookup/lowering work; each leaf still has its own admission
+/// walk, layouts and emitted program. No admission result is shared across roots.
+pub struct RtTestCompiler<'db, 'program> {
+    db: &'db dyn Db,
+    root: SourceRoot,
+    program: &'program Program,
+    opt: OptLevel,
+    index: std::rc::Rc<ProgramIndex<'program>>,
+    all: admission::Prepared<'db>,
+}
+impl<'db, 'program> RtTestCompiler<'db, 'program> {
+    pub fn new(
+        db: &'db dyn Db,
+        root: SourceRoot,
+        program: &'program Program,
+        opt: OptLevel,
+    ) -> Self {
+        let index = std::rc::Rc::new(ProgramIndex::new(db, root, program));
+        let all = admission::prepare_tests(db, root, opt, &index);
+        Self {
+            db,
+            root,
+            program,
+            opt,
+            index,
+            all,
+        }
+    }
+    pub fn compile(&self, entry: usize) -> Gen<String> {
+        compile_entry(
+            self.db,
+            self.root,
+            self.program,
+            self.opt,
+            entry,
+            true,
+            Some(self),
+        )
+    }
 }

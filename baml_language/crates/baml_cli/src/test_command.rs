@@ -9,9 +9,12 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
+use baml_exec::test_report::{
+    self, TestSelection, consume_flat_report, parse_flat_report, pluralize,
+};
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, FunctionCallContext,
-    FunctionCallContextBuilder, WireTy, logger::TraceLogger,
+    FunctionCallContextBuilder, logger::TraceLogger,
 };
 use clap::{Args, FromArgMatches};
 use sys_native::CallId;
@@ -88,6 +91,14 @@ pub struct TestArgs {
     )]
     no_profile: bool,
 
+    /// Emit a duration-free machine report instead of the human test report.
+    #[arg(long, hide = true)]
+    corpus_report: bool,
+
+    /// Internal corpus gate entry: one exact canonical ID, including literal '*'.
+    #[arg(long, hide = true, requires = "corpus_report")]
+    corpus_exact: Option<String>,
+
     /// List selected test IDs instead of running them.
     ///
     /// Each canonical ID is valid as an `--include` or `--exclude` selector.
@@ -156,11 +167,9 @@ pub struct TestArgs {
 
 #[derive(Debug, Default)]
 struct TestInvocation {
+    corpus_exact: Option<String>,
     list: bool,
-    profile_include: Vec<String>,
-    profile_exclude: Vec<String>,
-    cli_include: Vec<String>,
-    cli_exclude: Vec<String>,
+    selection: TestSelection,
     output: crate::output::OutputArgs,
     logs: TestLogLevel,
 }
@@ -241,15 +250,13 @@ impl TestOutputOverrides {
 
 impl TestInvocation {
     fn includes_id(&self, id: &str) -> bool {
-        TestFilter::includes_patterns(id, &self.profile_include, &self.profile_exclude)
-            && TestFilter::includes_patterns(id, &self.cli_include, &self.cli_exclude)
+        let selection = &self.selection;
+        TestFilter::includes_patterns(id, &selection.profile_include, &selection.profile_exclude)
+            && TestFilter::includes_patterns(id, &selection.cli_include, &selection.cli_exclude)
     }
 
     fn has_filters(&self) -> bool {
-        !self.profile_include.is_empty()
-            || !self.profile_exclude.is_empty()
-            || !self.cli_include.is_empty()
-            || !self.cli_exclude.is_empty()
+        self.selection.has_filters()
     }
 }
 
@@ -570,14 +577,32 @@ impl TestArgs {
         if let Some(reg) = &registry {
             match run_filtered_report(&run_ctx, reg, &invocation) {
                 Ok(value) => match parse_flat_report(&value) {
-                    Some(flat) => consume_flat_report(
-                        &flat,
-                        &mut passed,
-                        &mut failed,
-                        &mut tolerated,
-                        &mut total,
-                        &mut command_failed,
-                    ),
+                    Some(flat) => {
+                        if self.corpus_report {
+                            println!(
+                                "BAML_CORPUS_REPORT\t{}",
+                                serde_json::json!({
+                                    "outcome":flat.outcome, "passed":flat.passed_names,
+                                    "failed":flat.failed_names, "tolerated":flat.tolerated_names,
+                                    "messages":flat.messages, "total":flat.total,
+                                })
+                            );
+                            passed += flat.passed;
+                            failed += flat.failed;
+                            tolerated += flat.tolerated;
+                            total += flat.total;
+                            command_failed |= !flat.passed();
+                        } else {
+                            consume_flat_report(
+                                &flat,
+                                &mut passed,
+                                &mut failed,
+                                &mut tolerated,
+                                &mut total,
+                                &mut command_failed,
+                            )
+                        }
+                    }
                     None => {
                         eprintln!("AGGREGATE FAIL - could not read test report");
                         failed += 1;
@@ -641,57 +666,12 @@ impl TestArgs {
         manifest_text: Option<&str>,
         project_root: &std::path::Path,
     ) -> Result<TestInvocation> {
-        let manifest = manifest_text
-            .map(baml_db::manifest::parse)
-            .transpose()
-            .with_context(|| {
-                format!(
-                    "failed to read test profiles from {}",
-                    project_root.join("baml.toml").display()
-                )
-            })?;
-
-        let selected_name = if self.no_profile {
-            None
-        } else if let Some(name) = &self.profile {
-            Some(name.as_str())
-        } else {
-            manifest.as_ref().and_then(|m| m.test.default.as_deref())
-        };
-
-        let profile_args = if let Some(name) = selected_name {
-            let manifest = manifest.as_ref().ok_or_else(|| {
-                anyhow!(
-                    "test profile `{name}` was requested, but {} does not exist",
-                    project_root.join("baml.toml").display()
-                )
-            })?;
-            let profile = manifest.test.profiles.get(name).ok_or_else(|| {
-                let available = if manifest.test.profiles.is_empty() {
-                    "none configured".to_string()
-                } else {
-                    manifest
-                        .test
-                        .profiles
-                        .keys()
-                        .map(String::as_str)
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                };
-                anyhow!(
-                    "test profile `{name}` is not defined in {} (available: {available})",
-                    project_root.join("baml.toml").display()
-                )
-            })?;
-            Self::parse_profile_args(name, &profile.args).with_context(|| {
-                format!(
-                    "{}: invalid [test.profiles.{name}].args",
-                    project_root.join("baml.toml").display()
-                )
-            })?
-        } else {
-            None
-        };
+        let profile_args = resolve_profile(
+            self.no_profile,
+            self.profile.as_deref(),
+            manifest_text,
+            project_root,
+        )?;
 
         let mut output = crate::output::OutputArgs::default();
         if let Some(profile) = &profile_args {
@@ -700,33 +680,37 @@ impl TestArgs {
         self.cli_output.apply_to(&mut output);
 
         let invocation = TestInvocation {
+            corpus_exact: self.corpus_exact.clone(),
             // Boolean flags compose naturally. Future value-taking scalar test
             // options should use clap value-source tracking so an explicit CLI
             // value overrides the profile value.
             list: self.list || profile_args.as_ref().is_some_and(|p| p.test.list),
-            profile_include: profile_args
-                .as_ref()
-                .map(|p| p.test.include.clone())
-                .unwrap_or_default(),
-            profile_exclude: profile_args
-                .as_ref()
-                .map(|p| p.test.exclude.clone())
-                .unwrap_or_default(),
-            cli_include: self.include.clone(),
-            cli_exclude: self.exclude.clone(),
+            selection: TestSelection {
+                profile_include: profile_args
+                    .as_ref()
+                    .map(|p| p.test.include.clone())
+                    .unwrap_or_default(),
+                profile_exclude: profile_args
+                    .as_ref()
+                    .map(|p| p.test.exclude.clone())
+                    .unwrap_or_default(),
+                cli_include: self.include.clone(),
+                cli_exclude: self.exclude.clone(),
+            },
             output,
             logs: self
                 .cli_log
                 .or_else(|| profile_args.as_ref().and_then(|p| p.logs))
                 .unwrap_or(self.log),
         };
+        let selection = &invocation.selection;
         validate_selectors(
-            invocation
+            selection
                 .profile_include
                 .iter()
-                .chain(&invocation.profile_exclude)
-                .chain(&invocation.cli_include)
-                .chain(&invocation.cli_exclude),
+                .chain(&selection.profile_exclude)
+                .chain(&selection.cli_include)
+                .chain(&selection.cli_exclude),
         )?;
         Ok(invocation)
     }
@@ -810,6 +794,80 @@ impl TestArgs {
     }
 }
 
+/// The profile a `baml test` invocation applies — `profile` when named, else
+/// the manifest's default unless `no_profile` — parsed through the real test
+/// CLI grammar. `None` when no profile applies or the profile has no args.
+fn resolve_profile(
+    no_profile: bool,
+    profile: Option<&str>,
+    manifest_text: Option<&str>,
+    project_root: &std::path::Path,
+) -> Result<Option<ParsedProfileArgs>> {
+    let manifest = manifest_text
+        .map(baml_db::manifest::parse)
+        .transpose()
+        .with_context(|| {
+            format!(
+                "failed to read test profiles from {}",
+                project_root.join("baml.toml").display()
+            )
+        })?;
+
+    let selected_name = if no_profile {
+        None
+    } else if let Some(name) = profile {
+        Some(name)
+    } else {
+        manifest.as_ref().and_then(|m| m.test.default.as_deref())
+    };
+
+    let Some(name) = selected_name else {
+        return Ok(None);
+    };
+    let manifest = manifest.as_ref().ok_or_else(|| {
+        anyhow!(
+            "test profile `{name}` was requested, but {} does not exist",
+            project_root.join("baml.toml").display()
+        )
+    })?;
+    let profile = manifest.test.profiles.get(name).ok_or_else(|| {
+        let available = if manifest.test.profiles.is_empty() {
+            "none configured".to_string()
+        } else {
+            manifest
+                .test
+                .profiles
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        anyhow!(
+            "test profile `{name}` is not defined in {} (available: {available})",
+            project_root.join("baml.toml").display()
+        )
+    })?;
+    TestArgs::parse_profile_args(name, &profile.args).with_context(|| {
+        format!(
+            "{}: invalid [test.profiles.{name}].args",
+            project_root.join("baml.toml").display()
+        )
+    })
+}
+
+/// The selectors a bare `baml test` applies from the project's default
+/// profile, as `(include, exclude)` — what `baml pack --tests` bakes into a
+/// test binary so it selects the same tests.
+pub(crate) fn default_profile_selectors(
+    manifest_text: Option<&str>,
+    project_root: &std::path::Path,
+) -> Result<(Vec<String>, Vec<String>)> {
+    let profile = resolve_profile(false, None, manifest_text, project_root)?;
+    Ok(profile
+        .map(|profile| (profile.test.include, profile.test.exclude))
+        .unwrap_or_default())
+}
+
 /// Render the selected `--list` output to stdout and return the exit code.
 /// Shared by the honest path and the warm discovery-cache path so both produce
 /// byte-identical stdout. Status/`Selected` lines go to stderr (via the
@@ -834,12 +892,9 @@ fn render_test_list(reporter: &Reporter, testset_names: &[String]) -> crate::Exi
 
 // ---------------------------------------------------------------------------
 // Testset entry points: a single BAML call does discovery + filtering +
-// concurrent execution + aggregation, returning a flat report.
-//
-// `testing.TestRegistry.run_filtered(registry, profile filters, CLI filters)` and
-// `testing.TestRegistry.list_filtered(...)` are defined in
-// baml_std/testing/registry.baml. `self` is passed as the first positional
-// argument (the live registry handle).
+// concurrent execution + aggregation, returning a flat report. The calls and
+// the report live in `baml_exec::test_report`, shared with packed test
+// binaries.
 // ---------------------------------------------------------------------------
 
 fn run_filtered_report(
@@ -849,41 +904,30 @@ fn run_filtered_report(
 ) -> Result<BexExternalValue> {
     let (call_ctx, logs) = ctx.call_context(CallId::next());
     // Cap concurrently RUNNING test bodies, by default at twice the core
-    // count. The runner admits a leaf only when a slot is free, so a
-    // five-thousand-test corpus holds ~2N live VM threads instead of five
-    // thousand, which keeps per-thread GC costs bounded and keeps wall-clock
-    // timing assertions meaningful under full-corpus load.
-    let max_concurrency = ctx.max_concurrency.map_or_else(
-        || {
-            i64::try_from(
-                std::thread::available_parallelism().map_or(8, std::num::NonZero::get) * 2,
-            )
-            .unwrap_or(16)
+    // count (see `default_max_concurrency`).
+    let max_concurrency = ctx
+        .max_concurrency
+        .map_or_else(test_report::default_max_concurrency, i64::from);
+    let test_timeout_ms = test_report::test_timeout_ms(ctx.test_timeout.0);
+    ctx.block_on_with_logs(
+        async {
+            if let Some(name) = &invocation.corpus_exact {
+                test_report::run_exact(ctx.engine, registry, &invocation.selection, name, call_ctx)
+                    .await
+            } else {
+                test_report::run_filtered(
+                    ctx.engine,
+                    registry,
+                    &invocation.selection,
+                    max_concurrency,
+                    test_timeout_ms,
+                    call_ctx,
+                )
+                .await
+            }
         },
-        i64::from,
-    );
-    // The stdlib treats a non-positive timeout as "no deadline".
-    let test_timeout_ms = ctx.test_timeout.0.map_or(0, |limit| {
-        i64::try_from(limit.as_millis()).unwrap_or(i64::MAX).max(1)
-    });
-    let result = ctx.block_on_with_logs(
-        ctx.engine.call_function(
-            "testing.TestRegistry.run_filtered",
-            vec![
-                registry.clone(),
-                string_array(&invocation.profile_include),
-                string_array(&invocation.profile_exclude),
-                string_array(&invocation.cli_include),
-                string_array(&invocation.cli_exclude),
-                BexExternalValue::Int(max_concurrency),
-                BexExternalValue::Int(test_timeout_ms),
-            ],
-            call_ctx,
-            true,
-        ),
         logs.as_ref(),
-    );
-    result.map_err(|e| anyhow!("run_filtered failed: {e}"))
+    )
 }
 
 fn list_selected_testset_names(
@@ -894,436 +938,17 @@ fn list_selected_testset_names(
     let call_ctx = FunctionCallContextBuilder::new(CallId::next())
         .with_cancel_token(ctx.cancel.clone())
         .build();
-    let value = ctx
-        .rt
-        .block_on(ctx.engine.call_function(
-            "testing.TestRegistry.list_filtered",
-            vec![
-                registry.clone(),
-                string_array(&invocation.profile_include),
-                string_array(&invocation.profile_exclude),
-                string_array(&invocation.cli_include),
-                string_array(&invocation.cli_exclude),
-            ],
-            call_ctx,
-            true,
-        ))
-        .map_err(|e| anyhow!("list_filtered failed: {e}"))?;
-    Ok(string_array_values(&value))
-}
-
-/// Print a flat report and fold its counts into the running totals.
-///
-/// Print the aggregate testset result and fold its counts into the running
-/// totals. Both filtered and unfiltered runs go through the same aggregate path
-/// (filtered selections still run under their testset runners), so a failing
-/// leaf whose runner still passes the suite is reported as a *tolerated* failure
-/// — kept out of the hard `failed` count and not failing the command. Every
-/// leaf line uses the same canonical ID emitted by `baml test --list`; aggregate
-/// runner verdicts are labeled as aggregates rather than presented as test IDs.
-fn consume_flat_report(
-    flat: &FlatReport,
-    passed: &mut usize,
-    failed: &mut usize,
-    tolerated: &mut usize,
-    total: &mut usize,
-    command_failed: &mut bool,
-) {
-    *passed += flat.passed;
-    *failed += flat.failed;
-    *tolerated += flat.tolerated;
-    *total += flat.total;
-
-    // An empty selection (a filter that matched no testset tests) aggregates
-    // to a vacuous `pass` over zero tests. Printing a green aggregate pass
-    // for that contradicts the `NoTestsRun` exit the caller then returns and
-    // reads as success to anything parsing stdout, so skip the aggregate line
-    // entirely and let the caller's "no tests selected" guard speak.
-    //
-    // Guard *only* the vacuous-pass case: a zero-test report with a non-pass
-    // outcome must still fall through to the FAIL branch so it prints, sets
-    // `command_failed`, and synthesizes a displayed failure — a real failure
-    // is never silently dropped just because it carried no leaves.
-    if flat.total == 0 && flat.outcome == "pass" {
-        return;
-    }
-
-    // Duration suffixes come from the parallel `*_ms` arrays; a missing or
-    // negative entry (fallback-correlated identities, expansion sentinels)
-    // prints the bare line the output always had.
-    let with_ms = |ms: &[i64], i: usize| -> String {
-        match ms.get(i) {
-            Some(ms) if *ms >= 0 => format!(" ({ms}ms)"),
-            _ => String::new(),
-        }
-    };
-    for (i, name) in flat.passed_names.iter().enumerate() {
-        println!("PASS {name}{}", with_ms(&flat.passed_ms, i));
-    }
-    for (i, name) in flat.tolerated_names.iter().enumerate() {
-        println!("TOLERATED {name}{}", with_ms(&flat.tolerated_ms, i));
-    }
-    for (i, name) in flat.failed_names.iter().enumerate() {
-        println!("FAIL {name}{}", with_ms(&flat.failed_ms, i));
-    }
-
-    if flat.outcome == "pass" {
-        if flat.tolerated > 0 {
-            println!(
-                "AGGREGATE PASS [outcome=pass; {} tolerated {}]",
-                flat.tolerated,
-                pluralize(flat.tolerated, "failure", "failures")
-            );
-        }
-    } else {
-        println!("AGGREGATE FAIL [outcome={}]", flat.outcome);
-        for message in &flat.messages {
-            eprintln!("  => {message}");
-        }
-        // A testset runner can fail the aggregate without marking any child
-        // failed. Count that verdict as one displayed failure so the summary
-        // does not read "0 failed" when the aggregate itself failed.
-        if flat.failed == 0 {
-            *failed += 1;
-            *total += 1;
-        }
-        *command_failed = true;
-    }
-}
-
-fn pluralize(n: usize, singular: &str, plural: &str) -> String {
-    if n == 1 {
-        singular.to_string()
-    } else {
-        plural.to_string()
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Flat report parsing
-//
-// `FlatTestReport` (baml_std/testing/types.baml) is intentionally shallow:
-// primitive fields only, already aggregated (including the tolerated-failure
-// split), so the driver reads it directly instead of walking a nested,
-// union-wrapped `TestReport | TestSetReport` tree.
-// ---------------------------------------------------------------------------
-
-struct FlatReport {
-    outcome: String,
-    passed: usize,
-    failed: usize,
-    tolerated: usize,
-    total: usize,
-    passed_names: Vec<String>,
-    failed_names: Vec<String>,
-    tolerated_names: Vec<String>,
-    /// Per-leaf durations parallel to the matching name arrays; may be
-    /// shorter (or empty) when identities came from the registry's fallback
-    /// correlation, and `-1` marks a leaf with no measured run — print the
-    /// duration only when a non-negative entry exists at the name's index.
-    passed_ms: Vec<i64>,
-    failed_ms: Vec<i64>,
-    tolerated_ms: Vec<i64>,
-    messages: Vec<String>,
-}
-
-fn parse_flat_report(value: &BexExternalValue) -> Option<FlatReport> {
-    let BexExternalValue::Instance { fields, .. } = unwrap_union(value) else {
-        return None;
-    };
-    let outcome = fields
-        .get("outcome")
-        .and_then(|v| as_string(unwrap_union(v)))?
-        .to_string();
-    // Counts are always present in a well-formed FlatTestReport; treat a missing
-    // one as an FFI contract break (parse fails -> reported, not silently zeroed).
-    let passed = fields.get("passed").and_then(as_usize)?;
-    let failed = fields.get("failed").and_then(as_usize)?;
-    let tolerated = fields.get("tolerated").and_then(as_usize)?;
-    let total = fields.get("total").and_then(as_usize)?;
-    let passed_names = fields
-        .get("passed_names")
-        .map(string_array_values)
-        .unwrap_or_default();
-    let failed_names = fields
-        .get("failed_names")
-        .map(string_array_values)
-        .unwrap_or_default();
-    let tolerated_names = fields
-        .get("tolerated_names")
-        .map(string_array_values)
-        .unwrap_or_default();
-    let passed_ms = fields
-        .get("passed_ms")
-        .map(int_array_values)
-        .unwrap_or_default();
-    let failed_ms = fields
-        .get("failed_ms")
-        .map(int_array_values)
-        .unwrap_or_default();
-    let tolerated_ms = fields
-        .get("tolerated_ms")
-        .map(int_array_values)
-        .unwrap_or_default();
-    let messages = fields
-        .get("messages")
-        .map(string_array_values)
-        .unwrap_or_default();
-    Some(FlatReport {
-        outcome,
-        passed,
-        failed,
-        tolerated,
-        total,
-        passed_names,
-        failed_names,
-        tolerated_names,
-        passed_ms,
-        failed_ms,
-        tolerated_ms,
-        messages,
-    })
-}
-
-// ---------------------------------------------------------------------------
-// FFI value helpers
-// ---------------------------------------------------------------------------
-
-fn string_array(items: &[String]) -> BexExternalValue {
-    BexExternalValue::Array {
-        element_type: WireTy::string(),
-        items: items
-            .iter()
-            .map(|s| BexExternalValue::String(s.as_str().into()))
-            .collect(),
-    }
-}
-
-fn int_array_values(value: &BexExternalValue) -> Vec<i64> {
-    match unwrap_union(value) {
-        BexExternalValue::Array { items, .. } => items
-            .iter()
-            .filter_map(|item| match unwrap_union(item) {
-                BexExternalValue::Int(i) => Some(*i),
-                _ => None,
-            })
-            .collect(),
-        _ => Vec::new(),
-    }
-}
-
-fn string_array_values(value: &BexExternalValue) -> Vec<String> {
-    match unwrap_union(value) {
-        BexExternalValue::Array { items, .. } => items
-            .iter()
-            .filter_map(|item| as_string(unwrap_union(item)).map(str::to_string))
-            .collect(),
-        _ => Vec::new(),
-    }
-}
-
-/// Strip a leading `Union { value, … }` wrapper. Union-typed values (e.g. the
-/// `Outcome = "pass" | "fail" | "error"` field) come back wrapped when
-/// deep-copied across the FFI boundary.
-fn unwrap_union(value: &BexExternalValue) -> &BexExternalValue {
-    match value {
-        BexExternalValue::Union { value, .. } => unwrap_union(value),
-        other => other,
-    }
-}
-
-fn as_string(value: &BexExternalValue) -> Option<&str> {
-    match value {
-        BexExternalValue::String(s) => Some(s.as_str()),
-        BexExternalValue::Union { value, .. } => as_string(value),
-        _ => None,
-    }
-}
-
-fn as_usize(value: &BexExternalValue) -> Option<usize> {
-    match unwrap_union(value) {
-        BexExternalValue::Int(i) => usize::try_from(*i).ok(),
-        _ => None,
-    }
+    ctx.rt.block_on(test_report::list_filtered(
+        ctx.engine,
+        registry,
+        &invocation.selection,
+        call_ctx,
+    ))
 }
 
 #[cfg(test)]
 mod tests {
-    use bex_engine::WireTy;
-
     use super::*;
-
-    fn string(value: &str) -> BexExternalValue {
-        BexExternalValue::String(value.into())
-    }
-
-    fn int(value: i64) -> BexExternalValue {
-        BexExternalValue::Int(value)
-    }
-
-    fn array(items: Vec<BexExternalValue>) -> BexExternalValue {
-        BexExternalValue::Array {
-            element_type: WireTy::unknown(),
-            items,
-        }
-    }
-
-    fn instance(class_name: &str, fields: Vec<(&str, BexExternalValue)>) -> BexExternalValue {
-        BexExternalValue::Instance {
-            class_name: class_name.to_string(),
-            type_args: Vec::new(),
-            fields: fields
-                .into_iter()
-                .map(|(name, value)| (name.to_string(), value))
-                .collect(),
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn flat_report(
-        outcome: &str,
-        passed: i64,
-        failed: i64,
-        tolerated: i64,
-        total: i64,
-        failed_names: Vec<BexExternalValue>,
-        messages: Vec<BexExternalValue>,
-    ) -> BexExternalValue {
-        instance(
-            "testing.FlatTestReport",
-            vec![
-                ("outcome", string(outcome)),
-                ("passed", int(passed)),
-                ("failed", int(failed)),
-                ("tolerated", int(tolerated)),
-                ("total", int(total)),
-                ("passed_names", array(Vec::new())),
-                ("failed_names", array(failed_names)),
-                ("tolerated_names", array(Vec::new())),
-                ("messages", array(messages)),
-            ],
-        )
-    }
-
-    #[test]
-    fn parses_flat_report_fields() {
-        let value = flat_report(
-            "fail",
-            1,
-            1,
-            1,
-            3,
-            vec![string("hard/fails")],
-            vec![string("assertion failed")],
-        );
-
-        let parsed = parse_flat_report(&value).expect("should parse");
-        assert_eq!(parsed.outcome, "fail");
-        assert_eq!(
-            (parsed.passed, parsed.failed, parsed.tolerated, parsed.total),
-            (1, 1, 1, 3)
-        );
-        assert_eq!(parsed.failed_names, vec!["hard/fails".to_string()]);
-        assert_eq!(parsed.messages, vec!["assertion failed".to_string()]);
-    }
-
-    #[test]
-    fn parse_flat_report_unwraps_union_wrapped_outcome() {
-        // Union-typed fields (Outcome) arrive wrapped across the FFI boundary.
-        let wrapped_outcome = BexExternalValue::union(
-            string("pass"),
-            [WireTy::string(), WireTy::int()],
-            WireTy::string(),
-        );
-        let value = instance(
-            "testing.FlatTestReport",
-            vec![
-                ("outcome", wrapped_outcome),
-                ("passed", int(1)),
-                ("failed", int(0)),
-                ("tolerated", int(0)),
-                ("total", int(1)),
-                ("passed_names", array(vec![string("root::passes")])),
-                ("failed_names", array(Vec::new())),
-                ("tolerated_names", array(Vec::new())),
-                ("messages", array(Vec::new())),
-            ],
-        );
-
-        let parsed = parse_flat_report(&value).expect("should parse");
-        assert_eq!(parsed.outcome, "pass");
-        assert_eq!(parsed.total, 1);
-        assert_eq!(parsed.passed_names, ["root::passes"]);
-    }
-
-    fn consume(report: &FlatReport) -> (usize, usize, usize, usize, bool) {
-        let (mut passed, mut failed, mut tolerated, mut total, mut command_failed) =
-            (0, 0, 0, 0, false);
-        consume_flat_report(
-            report,
-            &mut passed,
-            &mut failed,
-            &mut tolerated,
-            &mut total,
-            &mut command_failed,
-        );
-        (passed, failed, tolerated, total, command_failed)
-    }
-
-    #[test]
-    fn consume_empty_report_folds_zero_counts_without_printing_pass() {
-        // A no-match selector aggregates to a vacuous `pass` over zero tests.
-        // Folding it must leave every counter at zero (so the caller's
-        // `total == 0` guard fires "no tests selected") and must NOT print a
-        // green aggregate pass line contradicting the non-zero exit (B-628).
-        let parsed =
-            parse_flat_report(&flat_report("pass", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(&parsed), (0, 0, 0, 0, false));
-    }
-
-    #[test]
-    fn consume_empty_report_with_fail_outcome_still_propagates_failure() {
-        // The vacuous-pass skip must NOT swallow a zero-test report that
-        // reports a failure. A `total == 0 && outcome == "fail"` report has to
-        // fall through to the FAIL branch: it sets `command_failed` and
-        // synthesizes one displayed failure (so the summary isn't "0 failed"
-        // while the aggregate failed). Regression guard for the narrowed guard.
-        let parsed =
-            parse_flat_report(&flat_report("fail", 0, 0, 0, 0, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(&parsed), (0, 1, 0, 1, true));
-    }
-
-    #[test]
-    fn consume_aggregate_pass_with_tolerated_failure() {
-        // PassRate-style: aggregate passes; the failing leaf is tolerated, not hard.
-        let parsed =
-            parse_flat_report(&flat_report("pass", 2, 0, 1, 3, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(&parsed), (2, 0, 1, 3, false));
-    }
-
-    #[test]
-    fn consume_aggregate_fail_keeps_tolerated_out_of_failed() {
-        // A hard sibling fails the command; tolerated stays separate from failed.
-        let parsed = parse_flat_report(&flat_report(
-            "fail",
-            1,
-            1,
-            1,
-            3,
-            vec![string("hard/fails")],
-            Vec::new(),
-        ))
-        .unwrap();
-        assert_eq!(consume(&parsed), (1, 1, 1, 3, true));
-    }
-
-    #[test]
-    fn consume_fail_with_zero_hard_failed_synthesizes_one() {
-        // Runner fails the aggregate without marking any child failed.
-        let parsed =
-            parse_flat_report(&flat_report("fail", 1, 0, 0, 1, Vec::new(), Vec::new())).unwrap();
-        assert_eq!(consume(&parsed), (1, 1, 0, 2, true));
-    }
 
     #[test]
     fn profile_args_use_real_test_cli_grammar_and_reject_bootstrap_flags() {

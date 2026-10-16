@@ -26,7 +26,7 @@ struct Layout {
 }
 struct Plan<'a> {
     lang: baml_base::LangRoots,
-    index: ProgramIndex<'a>,
+    index: std::rc::Rc<ProgramIndex<'a>>,
     program: &'a Program,
     layouts: BTreeMap<usize, Layout>,
     lists: BTreeSet<Repr>,
@@ -82,7 +82,7 @@ use body::recursive;
 use diagnostics::no;
 use repr::Repr;
 
-pub use driver::compile_rt;
+pub use driver::{RtTestCompiler, compile_rt, compile_rt_test};
 
 mod calls;
 mod globals;

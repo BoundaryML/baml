@@ -151,3 +151,52 @@ its body starts; initializer/capture assertions and exact telemetry checks remai
 `Async` passes settled inputs to `future.any`, keeping its result and task
 outcomes deterministic. `AnyWithFailure` still exercises pending inputs and
 error handling. No task cancellation outcome is normalized away.
+
+## Production corpus gate
+
+From `baml_language`, with `CARGO_BUILD_JOBS=6` and `CARGO_TARGET_DIR` inside
+this worktree:
+
+```sh
+cargo test -p baml_tests --test rt_corpus -- --ignored --nocapture
+# Equivalent direct entry; avoids compiling the other Rust test dependencies:
+uv run --no-project crates/baml_tests/rust_diff/rt_corpus.py
+```
+
+The reference is the existing `baml-cli test --from crates/baml_tests/baml_src`
+registry, including the manifest's offline profile and testset runners.
+`pack --tests --rust --rt` discovers the same canonical leaves at pack time,
+admits each body's reachable closure separately, and packs native entries
+without an interpreter. Captured test environments and custom runners are
+explicitly unsupported until the native test host can reproduce them. An
+unsupported sibling or unrelated initializer does not reject admitted leaves.
+
+Each admitted leaf runs in a separate process on VM, RT and `BAML_GC_STRESS=1`.
+Outcomes, failure messages and printed output are compared; durations are not.
+The gate prints category totals, grouped admission/failure signatures and every
+correctness bug. Raw process evidence and the complete per-test JSON report
+remain under `$CARGO_TARGET_DIR/rt-corpus/`. Infrastructure failures never count
+as unsupported. `BAML_RT_CORPUS_TIMEOUT_SECS` bounds each leaf (default 120).
+
+`rt-corpus-baseline.json` records category counts **and each canonical test's
+category**, so unchanged aggregate counts cannot hide a match regressing. A
+missing test, new mismatch/crash, lost match or newly excluded test fails the
+gate. After reviewing a complete run, use the direct entry's
+`--update-baseline` to record the accepted state. `--select TEXT` is diagnostic
+only and cannot update the full baseline. `--workspace PATH --report-only`
+audits a source snapshot without altering or accepting its baseline.
+
+The runner uses the workspace's pinned Rust toolchain, six Cargo jobs and no dev
+debug information. A source hash lets audits reuse an existing VM observation
+only when its frontend, interpreter, stdlib, corpus, dependencies and toolchain
+are identical. The RT emitter/runtime and RT-only builtin generators are excluded
+from that hash because the bytecode oracle never executes them. Native artifacts
+are built once per source snapshot and shared by the two RT modes.
+
+The initial CI-profile baseline has 6,054 selected leaves: **2 match, 6,052
+unsupported, 0 mismatch, 0 crash/timeout** (both native modes). The VM reference
+runs at CI's `medium` telemetry setting: 6,052 pass and two runner-tolerated
+failures. The corpus gate compares outcomes/messages/output at that same setting;
+it does not replace the differential suite's recording comparison. Admission
+is currently the limiting factor, including unknown/type arguments, closures,
+container representations and builtin exception classes.
