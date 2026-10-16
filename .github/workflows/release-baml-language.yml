@@ -2105,6 +2105,46 @@ jobs:
             cd ..
           done
 
+  # Not part of release-prerequisites-complete: winget-pkgs is a moderated
+  # third-party repo, so a failed submission is reported via notify-slack
+  # instead of blocking the release.
+  publish-winget:
+    name: Submit winget manifest update
+    needs: [plan, all-builds, publish-wrapper-release]
+    if: ${{ needs.plan.outputs.wrapper_changed == 'true' && needs.plan.outputs.dry_run == 'false' && needs.plan.outputs.source_branch == 'canary' }}
+    runs-on: ubuntu-latest
+    environment: infisical-github-baml-language-release
+    env:
+      KOMAC_VERSION: 2.16.0
+    steps:
+      - name: Install komac
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          archive="komac-${KOMAC_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          gh release download "v${KOMAC_VERSION}" --repo russellbanks/Komac \
+            --pattern "$archive" --pattern SHA256SUMS --dir "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP"
+          grep " \*${archive}\$" SHA256SUMS | sed 's/ \*/  /' | sha256sum --check --strict
+          mkdir -p komac
+          tar -xzf "$archive" -C komac
+          echo "$RUNNER_TEMP/komac" >> "$GITHUB_PATH"
+      - name: Submit BoundaryML.BAML update
+        env:
+          GITHUB_TOKEN: ${{ secrets.WINGET_AUTOMATION_TOKEN }}
+          WRAPPER_VERSION: ${{ needs.plan.outputs.wrapper_version }}
+        run: |
+          set -euo pipefail
+          test -n "$GITHUB_TOKEN"
+          base="https://github.com/BoundaryML/baml/releases/download/baml-wrapper-${WRAPPER_VERSION}"
+          komac update BoundaryML.BAML \
+            --version "$WRAPPER_VERSION" \
+            --urls \
+              "${base}/baml-wrapper-no-self-update-${WRAPPER_VERSION}-x86_64-pc-windows-msvc.zip" \
+              "${base}/baml-wrapper-no-self-update-${WRAPPER_VERSION}-aarch64-pc-windows-msvc.zip" \
+            --submit
+
   dry-run-artifacts:
     name: Generate dry-run manifests and package files
     needs: [plan, all-builds]
@@ -2285,6 +2325,7 @@ jobs:
       - smoke-go-release
       - publish-homebrew
       - publish-aur
+      - publish-winget
       - dry-run-artifacts
       - dry-run-summary
       - build-swift-sdk
