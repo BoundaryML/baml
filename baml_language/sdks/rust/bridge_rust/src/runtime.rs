@@ -7,7 +7,11 @@
 //! results delivered through the registered callback and correlated by
 //! the completion registry in [`crate::completion`].
 
-use std::{collections::HashMap, ffi::CString};
+use std::{
+    collections::HashMap,
+    ffi::CString,
+    sync::atomic::{AtomicU32, Ordering},
+};
 
 use prost::Message as _;
 
@@ -50,9 +54,14 @@ pub fn initialize_from_bytecode_with_metadata(
 
 /// Shut down the process-global runtime: wait for in-flight calls and
 /// spawned work to finish (with no timeout), complete telemetry delivery
-/// (sealing the recording), and release the runtime. Call it as the last
-/// BAML operation before the process exits: Rust runs no exit hook that
-/// would do it, so without it the tail of the telemetry recording is lost.
+/// (sealing the recording), and release the runtime.
+///
+/// The bridge already runs this when the process exits normally (`main`
+/// returns, `std::process::exit` on Unix, a test binary finishes), so a call
+/// still running at exit keeps the process alive until it finishes. Call it
+/// yourself where exit handlers do not run (a signal, `std::process::abort`,
+/// `panic = "abort"`, `std::process::exit` on Windows) or to flush before
+/// exiting.
 ///
 /// Blocks the calling thread until shutdown completes; from async code, run
 /// it with `tokio::task::spawn_blocking` rather than stalling an executor
@@ -69,6 +78,40 @@ pub fn shutdown() -> Result<(), SdkError> {
     #[expect(unsafe_code)]
     let status = unsafe { (api.shutdown_runtime)() };
     api.take_status(status).map_err(SdkError::new)
+}
+
+/// The process that registered the exit hook.
+static EXIT_HOOK_PID: AtomicU32 = AtomicU32::new(0);
+
+/// Run [`shutdown`] when the process exits normally, as the Python, C++ and
+/// Swift bridges do with `atexit`. Like theirs, it waits for in-flight calls
+/// and spawned work without a time limit. Called once, when the engine
+/// library loads.
+pub(crate) fn shutdown_at_exit() {
+    EXIT_HOOK_PID.store(std::process::id(), Ordering::Relaxed);
+    // SAFETY: `atexit` only records the function pointer, and
+    // `shutdown_on_exit` lives as long as the process.
+    #[expect(unsafe_code)]
+    let status = unsafe { libc::atexit(shutdown_on_exit) };
+    if status != 0 {
+        crate::loader::log::warn(
+            "could not register the BAML runtime shutdown for process exit; \
+             call baml_bridge::runtime::shutdown() before exiting",
+        );
+    }
+}
+
+extern "C" fn shutdown_on_exit() {
+    // A forked child inherits the hook, but neither the engine's threads
+    // nor the parent's recording.
+    if std::process::id() != EXIT_HOOK_PID.load(Ordering::Relaxed) {
+        return;
+    }
+    if let Err(error) = shutdown() {
+        crate::loader::log::warn(&format!(
+            "BAML runtime shutdown at process exit failed: {error}"
+        ));
+    }
 }
 
 /// Initialize (or replace) the process-global runtime by compiling BAML
