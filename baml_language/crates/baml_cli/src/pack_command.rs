@@ -131,6 +131,22 @@ pub struct PackArgs {
     )]
     pub native_build_dir: Option<PathBuf>,
 
+    /// With `--native`, how hard cargo optimizes the generated crate.
+    ///
+    /// `release` is the shipping build (fat LTO, one codegen unit, symbols
+    /// stripped). `fast` trades that for build time (opt-level 1, no LTO, line
+    /// tables kept) and is for correctness runs only: its output is not what
+    /// a release pack ships and its speed says nothing about one.
+    #[arg(
+        long,
+        value_enum,
+        value_name = "PROFILE",
+        default_value_t = NativeProfile::Release,
+        requires = "native",
+        help_heading = "Build options"
+    )]
+    pub native_profile: NativeProfile,
+
     /// Target triple for the packaged executable.
     ///
     /// Defaults to the host platform. Cross-compilation downloads the matching
@@ -156,6 +172,34 @@ pub struct PackArgs {
 
     #[arg(short = 'e', long = "expression", value_name = "EXPR", hide = true)]
     pub expression: Option<String>,
+}
+
+/// The cargo profile a `--native` build compiles the generated crate under.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
+pub enum NativeProfile {
+    /// The shipping build: slow to compile, fast to run.
+    #[default]
+    Release,
+    /// A quick compile for correctness runs; not representative of release
+    /// speed or size.
+    Fast,
+}
+
+impl NativeProfile {
+    /// The `[profile.release]` settings of the generated crate's manifest —
+    /// the build always runs as `cargo build --release`, and the profile
+    /// decides what that means.
+    fn cargo_profile_settings(self) -> &'static str {
+        match self {
+            Self::Release => {
+                "lto = \"fat\"\ncodegen-units = 1\nopt-level = 3\nstrip = \"symbols\"\npanic = \"unwind\"\n"
+            }
+            Self::Fast => {
+                "lto = false\ncodegen-units = 16\nopt-level = 1\nstrip = \"none\"\n\
+                 debug = \"line-tables-only\"\npanic = \"unwind\"\n"
+            }
+        }
+    }
 }
 
 /// One resolved entry point baked into a packed binary.
@@ -426,25 +470,11 @@ impl PackArgs {
              Some(baml_native_program::NATIVE_BODIES),\n    )\n}\n",
         )
         .context("failed to write the host shim")?;
-        let dep = |name: &str| {
-            format!(
-                "{name} = {{ path = {:?} }}\n",
-                workspace.join("crates").join(name)
-            )
-        };
-        let manifest = format!(
-            "[package]\nname = \"baml_native_program\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\
-             publish = false\n\n[workspace]\n\n[lib]\npath = \"src/lib.rs\"\n\n\
-             [[bin]]\nname = \"baml_native_program\"\npath = \"src/main.rs\"\n\n\
-             [dependencies]\n{}{}{}\n\
-             [profile.release]\nlto = \"fat\"\ncodegen-units = 1\nopt-level = 3\nstrip = \"symbols\"\n\
-             panic = \"unwind\"\n",
-            dep("bex_vm"),
-            dep("bex_vm_types"),
-            dep("baml_pack_host"),
-        );
-        std::fs::write(build_dir.join("Cargo.toml"), manifest)
-            .context("failed to write the generated manifest")?;
+        std::fs::write(
+            build_dir.join("Cargo.toml"),
+            native_manifest(&workspace, self.native_profile),
+        )
+        .context("failed to write the generated manifest")?;
 
         reporter.spin(
             "Building",
@@ -798,6 +828,29 @@ fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
         .unwrap_or_else(|| name.to_string())
 }
 
+/// The generated native crate's `Cargo.toml`: a standalone package with path
+/// dependencies into `workspace` and the `[profile.release]` that `profile`
+/// stands for.
+fn native_manifest(workspace: &Path, profile: NativeProfile) -> String {
+    let dep = |name: &str| {
+        format!(
+            "{name} = {{ path = {:?} }}\n",
+            workspace.join("crates").join(name)
+        )
+    };
+    format!(
+        "[package]\nname = \"baml_native_program\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\
+         publish = false\n\n[workspace]\n\n[lib]\npath = \"src/lib.rs\"\n\n\
+         [[bin]]\nname = \"baml_native_program\"\npath = \"src/main.rs\"\n\n\
+         [dependencies]\n{}{}{}\n\
+         [profile.release]\n{}",
+        dep("bex_vm"),
+        dep("bex_vm_types"),
+        dep("baml_pack_host"),
+        profile.cargo_profile_settings(),
+    )
+}
+
 /// Print which functions compiled natively and why the others did not.
 fn report_native(module: &baml_db::native::NativeModule) {
     let mut out = String::new();
@@ -966,6 +1019,7 @@ mod tests {
             native_workspace: None,
             native_report: false,
             native_build_dir: None,
+            native_profile: NativeProfile::Release,
             target_triple: None,
             output_format: OutputFormat::Json,
             from: None,
@@ -1409,6 +1463,68 @@ mod tests {
         let msg = format!("{err}");
         assert!(msg.contains("unsupported pack target"), "got: {msg}");
         assert!(msg.contains("x86_64-unknown-linux-gnu"), "got: {msg}");
+    }
+
+    // ── Native crate manifest ─────────────────────────────────────────
+
+    /// `release` is the shipping profile: the generated crate links the three
+    /// workspace crates by path and optimizes as hard as cargo allows.
+    #[test]
+    fn test_native_manifest_release_profile() {
+        let manifest = native_manifest(Path::new("/ws"), NativeProfile::Release);
+        assert_eq!(
+            manifest,
+            "[package]\nname = \"baml_native_program\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\
+             publish = false\n\n[workspace]\n\n[lib]\npath = \"src/lib.rs\"\n\n\
+             [[bin]]\nname = \"baml_native_program\"\npath = \"src/main.rs\"\n\n\
+             [dependencies]\n\
+             bex_vm = { path = \"/ws/crates/bex_vm\" }\n\
+             bex_vm_types = { path = \"/ws/crates/bex_vm_types\" }\n\
+             baml_pack_host = { path = \"/ws/crates/baml_pack_host\" }\n\n\
+             [profile.release]\nlto = \"fat\"\ncodegen-units = 1\nopt-level = 3\n\
+             strip = \"symbols\"\npanic = \"unwind\"\n"
+        );
+        toml::from_str::<toml::Value>(&manifest).expect("valid TOML");
+    }
+
+    /// `fast` keeps the same package and dependencies and swaps only the
+    /// profile: cheap codegen, no LTO, line tables for a readable backtrace.
+    #[test]
+    fn test_native_manifest_fast_profile() {
+        let manifest = native_manifest(Path::new("/ws"), NativeProfile::Fast);
+        let release = native_manifest(Path::new("/ws"), NativeProfile::Release);
+        let (head, profile) = manifest.split_once("[profile.release]\n").unwrap();
+        assert_eq!(
+            Some(head),
+            release.split_once("[profile.release]\n").map(|(h, _)| h)
+        );
+        assert_eq!(
+            profile,
+            "lto = false\ncodegen-units = 16\nopt-level = 1\nstrip = \"none\"\n\
+             debug = \"line-tables-only\"\npanic = \"unwind\"\n"
+        );
+        let parsed: toml::Value = toml::from_str(&manifest).expect("valid TOML");
+        assert_eq!(
+            parsed["profile"]["release"]["opt-level"],
+            toml::Value::Integer(1)
+        );
+    }
+
+    /// `--native-profile` defaults to `release` and needs `--native`.
+    #[test]
+    fn test_native_profile_flag_parses_and_requires_native() {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct Wrapper {
+            #[command(flatten)]
+            args: PackArgs,
+        }
+        let parsed = Wrapper::try_parse_from(["baml-pack", "--native"]).unwrap();
+        assert_eq!(parsed.args.native_profile, NativeProfile::Release);
+        let parsed =
+            Wrapper::try_parse_from(["baml-pack", "--native", "--native-profile", "fast"]).unwrap();
+        assert_eq!(parsed.args.native_profile, NativeProfile::Fast);
+        assert!(Wrapper::try_parse_from(["baml-pack", "--native-profile", "fast"]).is_err());
     }
 
     #[test]
