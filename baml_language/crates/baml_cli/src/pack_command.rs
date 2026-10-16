@@ -569,13 +569,26 @@ impl PackArgs {
     /// target-independent (the `--target` triple only selects the host binary
     /// bytes), and emit determinism guarantees a reused image is byte-identical
     /// to a fresh compile, so serving from cache never changes the artifact.
+    ///
+    /// Under `--native` the cache stores but never serves. The native bodies
+    /// are compiled from the MIR this command lowers out of its own database,
+    /// and they replace the bytecode of the same functions at run time; a
+    /// served `Program` (or served package output, or a seeded database) was
+    /// lowered by an earlier process. Emit determinism says the two agree,
+    /// but the point of a native pack is that bodies and bytecode are one
+    /// lowering's two outputs, and that is only true by construction when
+    /// nothing in the build was served.
     fn load_and_compile_project(
         &self,
         reporter: &Reporter,
     ) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool)> {
         let mut session = crate::project_session::ProjectSession::open(
             self.from.as_deref(),
-            crate::project_session::CacheUse::ReadWrite,
+            if self.native {
+                crate::project_session::CacheUse::StoreOnly
+            } else {
+                crate::project_session::CacheUse::ReadWrite
+            },
         )?;
         if session.is_empty() {
             anyhow::bail!("no `.baml` files found in {}", session.root().display());
