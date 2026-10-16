@@ -12,7 +12,7 @@ use bex_vm_types::FunctionKind;
 
 use crate::{
     admit::{ProgramIndex, Rejection},
-    structure::{Cfg, Flow, Structured, structurize},
+    structure::{Cfg, Flow},
 };
 
 /// How a local is held in generated code.
@@ -57,7 +57,10 @@ impl Repr {
 pub(crate) struct Analysis {
     pub(crate) arity: usize,
     pub(crate) reprs: Vec<Repr>,
-    pub(crate) structured: Structured,
+    /// The shape of the body's graph. Only an inline body structures it
+    /// (`Generator::function`); a resumable body runs its blocks as a state
+    /// machine and needs no structure.
+    pub(crate) cfg: Cfg,
     /// Link names of the user functions this function calls directly.
     pub(crate) user_callees: BTreeSet<String>,
     /// Locals assigned a statically known type (`LoadType` of a template that
@@ -167,12 +170,10 @@ impl Analysis {
             flows,
             unwinds,
         };
-        let structured =
-            structurize(&cfg).map_err(|error| Rejection::Invalid(error.to_string()))?;
         Ok(Self {
             arity: mir.arity,
             reprs,
-            structured,
+            cfg,
             user_callees,
             static_types,
             suspends,

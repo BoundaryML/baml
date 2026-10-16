@@ -32,6 +32,7 @@ use crate::{
     admit::{ProgramIndex, Rejection},
     analysis::{Analysis, Repr, loops, suspends_directly, user_callee_name},
     render::{coerce, is_atom},
+    structure::{Structured, structurize},
 };
 
 /// A generated expression and how it is held.
@@ -98,6 +99,9 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) write_through: BTreeSet<usize>,
     /// The type arguments of the call `pause` is emitting.
     pub(crate) call_types: Vec<String>,
+    /// An inline body's structured control flow, built when it is emitted;
+    /// a resumable body has none.
+    pub(crate) structured: Option<Structured>,
 }
 
 type Gen<T> = Result<T, Rejection>;
@@ -124,6 +128,10 @@ impl<'db> Generator<'_, 'db> {
         if self.suspends {
             return self.resumable_function(symbol);
         }
+        // Only an inline body needs structured control flow; a graph the
+        // structurer refuses keeps just this body bytecode.
+        let structured = structurize(&self.analysis.cfg)
+            .map_err(|error| Rejection::Invalid(error.to_string()))?;
         let arity = self.body.locals.len().min(self.arity());
         let mut out = String::new();
         // The body runs in a closure so every way out, `?` included, passes
@@ -177,7 +185,8 @@ impl<'db> Generator<'_, 'db> {
                 self.slots
             );
         }
-        let stmts = self.analysis.structured.stmts.clone();
+        let stmts = structured.stmts.clone();
+        self.structured = Some(structured);
         self.out.clear();
         self.stmts(&stmts, 1)?;
         out.push_str(&self.out);

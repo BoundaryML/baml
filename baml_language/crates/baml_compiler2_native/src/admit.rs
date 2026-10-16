@@ -194,6 +194,7 @@ pub fn compile_program<'db>(
                 loop_headers: BTreeSet::new(),
                 write_through: BTreeSet::new(),
                 call_types: Vec::new(),
+                structured: None,
             };
             match generator.function(&symbols[name]) {
                 Ok(code) => {

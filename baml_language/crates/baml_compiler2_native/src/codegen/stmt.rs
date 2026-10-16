@@ -382,7 +382,11 @@ impl Generator<'_, '_> {
             let jump = self.jump_to(handler.0);
             self.line(depth, &jump);
         } else {
-            let jumps = self.analysis.structured.unwind_jumps[block.0].clone();
+            let structured = self
+                .structured
+                .as_ref()
+                .expect("an inline body is structured before its leaves are emitted");
+            let jumps = structured.unwind_jumps[block.0].clone();
             self.stmts(&jumps, depth)?;
         }
         out.push_str(&self.out);
