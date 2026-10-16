@@ -433,8 +433,11 @@ fn to_source_code_with_optional_metadata(
         let (file_path, tokens) = if path.is_empty() {
             (
                 PathBuf::from("src/lib.rs"),
+                // BAML names keep their spelling, and docstrings are copied
+                // verbatim from BAML sources: their prose need not follow
+                // rustdoc's Markdown list-continuation rules.
                 quote! {
-                    #![allow(non_camel_case_types, non_snake_case)]
+                    #![allow(non_camel_case_types, non_snake_case, clippy::doc_lazy_continuation)]
 
                     // BUG: `_inlinedbaml`/`_runtime` are not reserved against
                     // user symbols. A root-level BAML class/enum named
