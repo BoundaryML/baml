@@ -180,6 +180,14 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             });
             continue;
         }
+        // The stdlib's recursive `json` alias maps onto `baml_bridge::Json`
+        // rather than a Rust `type` of its expansion, so it is always
+        // representable and depends on nothing.
+        if crate::translate_ty::is_canonical_json(name) {
+            deps.insert(name, Vec::new());
+            alive.insert((*name).clone());
+            continue;
+        }
         if alias.recursive {
             warnings.push(SkipWarning {
                 fqn: name.to_string(),
@@ -361,6 +369,9 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
             deps.push(name.clone());
             Ok(())
         }
+        // `baml.json.json` is `baml_bridge::Json`, with or without its
+        // alias item in the pool.
+        Ty::TypeAlias(name) if crate::translate_ty::is_canonical_json(name) => Ok(()),
         // Alias references: representable iff the alias item itself is
         // emitted.
         Ty::TypeAlias(name) => {

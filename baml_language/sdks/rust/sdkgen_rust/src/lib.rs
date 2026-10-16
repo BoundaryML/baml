@@ -1603,4 +1603,227 @@ mod tests {
         let manifest = render_manifest(&opts);
         assert!(manifest.ends_with("[dev-dependencies]\ntokio = \"1\"\n"));
     }
+
+    fn json_ref() -> Ty {
+        Ty::TypeAlias(Name::from_dotted_path(
+            baml_base::qualified_name::BAML_JSON_JSON,
+        ))
+    }
+
+    /// A recursive alias symbol `name = null | bool | … | name[] | map<string, name>`,
+    /// the shape of the stdlib's `json`.
+    fn json_shaped_alias(name: &Name) -> Symbol {
+        let this = Ty::TypeAlias(name.clone());
+        Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
+            name: name.clone(),
+            resolves_to: Ty::Union(Box::new([
+                Ty::Null,
+                Ty::Bool,
+                Ty::Int,
+                Ty::Bigint,
+                Ty::Float,
+                Ty::String,
+                Ty::List(Box::new(this.clone())),
+                Ty::Map {
+                    key: Box::new(Ty::String),
+                    value: Box::new(this),
+                },
+            ])),
+            recursive: true,
+            origin: Origin {
+                source_file_path: "json.baml".to_string(),
+                span_start: 0,
+            },
+        })
+    }
+
+    fn property(field: &str, ty: Ty) -> baml_sdkgen_types::ClassProperty {
+        baml_sdkgen_types::ClassProperty {
+            name: baml_base::Name::new(field),
+            docstring: None,
+            ty,
+        }
+    }
+
+    #[test]
+    fn canonical_json_emits_as_bridge_json_in_fields_and_signatures() {
+        let json_alias = Name::from_dotted_path(baml_base::qualified_name::BAML_JSON_JSON);
+        let event = name("user", &[], "Event");
+        let echo = name("user", &[], "echo");
+        let rt = name("user", &[], "rt");
+        let count = name("user", &[], "count");
+        let event_ty = Ty::Class(event.clone(), Box::new([]));
+        let pool = SymbolPool::from([
+            (json_alias.clone(), json_shaped_alias(&json_alias)),
+            (
+                event.clone(),
+                class_symbol(
+                    &event,
+                    vec![
+                        property("payload", json_ref()),
+                        property("items", Ty::List(Box::new(json_ref()))),
+                        property(
+                            "attrs",
+                            Ty::Map {
+                                key: Box::new(Ty::String),
+                                value: Box::new(json_ref()),
+                            },
+                        ),
+                        property("maybe", Ty::Union(Box::new([json_ref(), Ty::Null]))),
+                    ],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (
+                echo.clone(),
+                Symbol::Function(unary_fn(&echo, event_ty.clone(), event_ty)),
+            ),
+            (
+                rt.clone(),
+                Symbol::Function(unary_fn(&rt, json_ref(), json_ref())),
+            ),
+            (
+                count.clone(),
+                Symbol::Function(unary_fn(&count, Ty::List(Box::new(json_ref())), Ty::Int)),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated.warnings.is_empty(),
+            "nothing may be skipped: {:?}",
+            generated.warnings
+        );
+
+        let lib = flat(text(&generated, "src/lib.rs"));
+        for expected in [
+            "pubpayload:::baml_bridge::Json,",
+            "pubitems:::std::vec::Vec<::baml_bridge::Json>,",
+            "pubattrs:::baml_bridge::Map<::std::string::String,::baml_bridge::Json>,",
+            "pubmaybe:::std::option::Option<::baml_bridge::Json>,",
+            "pubfnecho(u:crate::Event,)->::std::result::Result<crate::Event,",
+            "pubfnrt(u:::baml_bridge::Json,)->::std::result::Result<::baml_bridge::Json,",
+            "pubfncount(u:::std::vec::Vec<::baml_bridge::Json>,)->::std::result::Result<::core::primitive::i64,",
+        ] {
+            assert!(lib.contains(expected), "missing `{expected}` in:\n{lib}");
+        }
+        let json_mod = text(&generated, "src/baml/json/mod.rs");
+        assert!(
+            flat(json_mod).contains("pubtypejson=::baml_bridge::Json;"),
+            "{json_mod}"
+        );
+    }
+
+    #[test]
+    fn canonical_json_needs_no_alias_item_in_the_pool() {
+        let rt = name("user", &[], "rt");
+        let pool = SymbolPool::from([(
+            rt.clone(),
+            Symbol::Function(unary_fn(&rt, json_ref(), json_ref())),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        assert!(
+            flat(text(&generated, "src/lib.rs")).contains("pubfnrt(u:::baml_bridge::Json,)"),
+            "{}",
+            text(&generated, "src/lib.rs")
+        );
+    }
+
+    #[test]
+    fn user_aliases_of_canonical_json_resolve_to_bridge_json() {
+        let alias = name("user", &[], "Payload");
+        let pool = SymbolPool::from([(
+            alias.clone(),
+            Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
+                name: alias,
+                resolves_to: json_ref(),
+                recursive: false,
+                origin: Origin {
+                    source_file_path: "main.baml".to_string(),
+                    span_start: 0,
+                },
+            }),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        assert!(
+            flat(text(&generated, "src/lib.rs")).contains("pubtypePayload=::baml_bridge::Json;"),
+            "{}",
+            text(&generated, "src/lib.rs")
+        );
+    }
+
+    #[test]
+    fn json_shaped_user_aliases_keep_the_recursive_alias_skip() {
+        // Only the stdlib FQN is special: a user alias with the same name
+        // and expansion is an ordinary recursive alias.
+        let look_alike = name("user", &["json"], "json");
+        let holder = name("user", &[], "Holder");
+        let pool = SymbolPool::from([
+            (look_alike.clone(), json_shaped_alias(&look_alike)),
+            (
+                holder.clone(),
+                class_symbol(
+                    &holder,
+                    vec![property("value", Ty::TypeAlias(look_alike.clone()))],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        let reasons: Vec<_> = generated
+            .warnings
+            .iter()
+            .map(|warning| (warning.fqn.as_str(), warning.reason.as_str()))
+            .collect();
+        assert_eq!(
+            reasons,
+            [
+                (
+                    "user.json.json",
+                    "recursive type aliases are not representable as a plain Rust `type` yet"
+                ),
+                (
+                    "user.Holder",
+                    "references skipped or unknown type `user.json.json`"
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn bare_json_beside_other_union_arms_skips_fail_closed() {
+        let f = name("user", &[], "f");
+        let union = Ty::Union(Box::new([json_ref(), Ty::Int]));
+        let pool = SymbolPool::from([(f.clone(), Symbol::Function(unary_fn(&f, union, Ty::Int)))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert_eq!(generated.warnings.len(), 1, "{:?}", generated.warnings);
+        assert_eq!(generated.warnings[0].fqn, "user.f");
+        assert!(
+            generated.warnings[0]
+                .reason
+                .contains("overlaps them on the wire"),
+            "{}",
+            generated.warnings[0].reason
+        );
+    }
+
+    #[test]
+    fn json_container_arms_stay_discriminable_union_arms() {
+        let f = name("user", &[], "f");
+        let union = Ty::Union(Box::new([Ty::List(Box::new(json_ref())), Ty::String]));
+        let pool = SymbolPool::from([(
+            f.clone(),
+            Symbol::Function(unary_fn(&f, union.clone(), union)),
+        )]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        assert!(
+            lib.contains("pubenumjsonListOrString{jsonList(::std::vec::Vec<::baml_bridge::Json>),String(::std::string::String),}"),
+            "{lib}"
+        );
+    }
 }

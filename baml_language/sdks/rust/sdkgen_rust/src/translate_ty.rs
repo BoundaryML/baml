@@ -8,6 +8,7 @@
 //! caller skips the enclosing symbol and reports it — never erasing to a
 //! catch-all type.
 
+use baml_base::qualified_name::BAML_JSON_JSON;
 use baml_sdkgen_types::{CodegenFunctionParamMode, Name, Ty};
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -68,6 +69,17 @@ pub(crate) fn translate_throws(ty: &Ty, ctx: &TyCtx<'_>) -> Result<TokenStream, 
         return Ok(quote! { ::core::convert::Infallible });
     };
     translate(&filtered, ctx)
+}
+
+/// Whether `name` is the stdlib's recursive `baml.json.json` alias. A
+/// recursive alias cannot be a plain Rust `type`, so this one alias is
+/// special-cased: it translates to `baml_bridge::Json` (`serde_json::Value`)
+/// wherever it is referenced, whether or not its alias item is in the pool.
+/// Matched by its exact compiler-owned FQN, never by the shape of its
+/// expansion, so a look-alike user alias keeps the ordinary recursive-alias
+/// treatment.
+pub(crate) fn is_canonical_json(name: &Name) -> bool {
+    name == &Name::from_dotted_path(BAML_JSON_JSON)
 }
 
 /// The absolute `crate::…` path of an emitted nominal type.
@@ -246,6 +258,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
         // conversions — and holds its target inline, so a field whose alias
         // target contains a same-SCC class (`type Part = Text | Extra` with
         // `class Extra { part Part }`) is boxed like a direct reference.
+        Ty::TypeAlias(name) if is_canonical_json(name) => Ok(quote! { ::baml_bridge::Json }),
         Ty::TypeAlias(name) => {
             if !ctx.analysis.is_emitted(name) {
                 return Err(Unsupported {
