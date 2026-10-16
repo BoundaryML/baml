@@ -374,7 +374,7 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
     // No streaming here: only the two transport deadlines apply.
     let sent = ai.wire.send_as_with_wire<Response>(
         ai.LlmTimeoutOptions._resolve(c.timeout)._apply(request(c, input, p, false)),
-        ai.events.ModelKey { provider: "typesafeai", model: c.model },
+        ai.events.ModelKey { provider: c.provider(), model: c.model },
         capture_wire = c.capture_wire,
     );
     let values: map<string, unknown> = {};

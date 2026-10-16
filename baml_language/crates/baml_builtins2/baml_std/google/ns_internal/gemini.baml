@@ -1163,7 +1163,7 @@ function gemini_invoke(c: root.GeminiClient, input: ai.ModelTurnInput) -> ai.Mod
     let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(render(c, input));
     let sent = ai.wire.send_as_with_wire<GmResponse>(
         req,
-        ai.events.ModelKey { provider: "google", model: c.model },
+        ai.events.ModelKey { provider: c.provider(), model: c.model },
         capture_wire = c.capture_wire,
     );
     ai.internal.with_own_call(
@@ -1203,7 +1203,7 @@ function gemini_invoke_stream(
         dispatched = started,
     );
     let call = ai.events.ModelCall {
-        resolved_model: ai.events.ModelKey { provider: "google", model: c.model },
+        resolved_model: ai.events.ModelKey { provider: c.provider(), model: c.model },
         usage: null,
         timing: ai.events.Timing {
             start_time_utc_ms: started.to_timestamp_milliseconds(),

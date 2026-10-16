@@ -910,15 +910,26 @@ async fn openai_usage_reaches_its_invoke_and_settle_spans() {
             entry("ai.stream.TurnStream._settle", "gpt-6-sol-2026-08-01"),
         ]
     );
-    // The root totals all three under the one model.
+    // The root totals all three, the Responses call apart from the two Chat
+    // calls: one model name, two providers.
     let main = sql(
         &mut index,
-        "SELECT total_usage[0]['model'], total_usage[0]['calls'], total_usage[1]
+        "SELECT total_usage[0]['provider'], total_usage[0]['model'], total_usage[0]['calls'],
+           total_usage[1]['provider'], total_usage[1]['model'], total_usage[1]['calls'],
+           total_usage[2]
          FROM spans WHERE span_name = 'user.main'",
     );
     assert_eq!(
         main.rows,
-        vec![vec![json!("gpt-6-sol-2026-08-01"), json!(3), Json::Null]]
+        vec![vec![
+            json!("openai"),
+            json!("gpt-6-sol-2026-08-01"),
+            json!(1),
+            json!("openai-chat"),
+            json!("gpt-6-sol-2026-08-01"),
+            json!(2),
+            Json::Null
+        ]]
     );
 }
 
@@ -957,6 +968,9 @@ async fn a_hidden_invokes_usage_reaches_its_owned_operation() {
             implements ai.Client {
                 function requested_model(self) -> string {
                     "claude-opus-5-5"
+                }
+                function provider(self) -> string {
+                    "test"
                 }
 
                 function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -1046,6 +1060,9 @@ async fn panics_names_and_sysop_time_reach_the_tables() {
             implements ai.Client {
                 function requested_model(self) -> string {
                     "claude-opus-5-5"
+                }
+                function provider(self) -> string {
+                    "test"
                 }
 
                 function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

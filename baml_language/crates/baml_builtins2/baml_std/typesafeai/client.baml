@@ -37,6 +37,10 @@ class Client {
             self.model
         }
 
+        function provider(self) -> string {
+            "typesafeai"
+        }
+
         /// Preview the request without resolving credentials or performing IO.
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             root.internal.request(self, input, root.internal.plan(input), true) catch_all (e) {

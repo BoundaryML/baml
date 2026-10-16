@@ -28,6 +28,9 @@ class TimeoutInvokeClient {
         function requested_model(self) -> string {
             "timeout-provider"
         }
+        function provider(self) -> string {
+            "test"
+        }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             let _ = input;
@@ -185,6 +188,9 @@ class FlakyTimeoutClient {
     implements ai.Client {
         function requested_model(self) -> string {
             self.client_id
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

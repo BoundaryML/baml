@@ -404,9 +404,9 @@ pub(super) struct Bulk {
     thread_names: FxHashMap<u64, String>,
     /// Sysop count and ticks per call path.
     sysops: BTreeMap<u32, (u128, u128)>,
-    /// The model usage a call's or thread's completion carried, stored on its
-    /// row. Kept apart from the rows: almost none have any.
-    usage: BTreeMap<u64, String>,
+    /// The model usage a call's or thread's first completion carried, stored
+    /// on its row. Kept apart from the rows: almost none have any.
+    usage: BTreeMap<u64, Vec<crate::usage::ModelUsage>>,
     network_spans: FxHashMap<u64, NetworkRow>,
     network_events: Vec<EventRow>,
     /// The first header that names the process, and how it ended.
@@ -662,7 +662,8 @@ impl Bulk {
                             match row.completion() {
                                 None => {
                                     row.complete(completed, outcome, done.panicked);
-                                    if let Some(usage) = super::usage_json(&done.usage) {
+                                    let usage = crate::usage::from_proto(&done.usage);
+                                    if !usage.is_empty() {
                                         self.usage.insert(section.thread_id, usage);
                                     }
                                 }
@@ -829,14 +830,11 @@ impl Bulk {
         let self_await = tick(done.self_await_ticks);
         let value_cas = done.value_cas_id.as_ref().map(cas_id);
         let completed_sequence = Some(saturating_sequence(sequence));
-        // A later completion of the same call replaces the row's evidence.
-        match super::usage_json(&done.usage) {
-            Some(usage) => {
-                self.usage.insert(done.id, usage);
-            }
-            None => {
-                self.usage.remove(&done.id);
-            }
+        // The first usage stored wins, as on the incremental path: a second
+        // completion is a conflict.
+        let usage = crate::usage::from_proto(&done.usage);
+        if !usage.is_empty() {
+            self.usage.entry(done.id).or_insert(usage);
         }
         match self.calls.get_mut(&done.id) {
             None => {
@@ -1046,6 +1044,14 @@ impl Bulk {
     /// Write every row. A `complete` recording (its end applied) gets no
     /// more facts, so it is written folded, like `profile::fold` leaves it:
     /// its paths summed by node, and only the paths spans read.
+    /// The nodes whose usage `write` stores, for the totals.
+    pub(super) fn charged(&self) -> Vec<([u8; 8], Vec<crate::usage::ModelUsage>)> {
+        self.usage
+            .iter()
+            .map(|(node, usage)| (id(*node), usage.clone()))
+            .collect()
+    }
+
     pub(super) fn write(
         mut self,
         tx: &Transaction<'_>,
@@ -1520,7 +1526,11 @@ impl Bulk {
                 b.bind(row.has(THREAD_COMPLETION_CONFLICT))?;
                 b.bind(row.has(THREAD_CONFLICT))?;
                 b.bind((row.entry_path != 0).then(|| i64::from(row.entry_path)))?;
-                b.bind(self.usage.get(&thread))
+                b.bind(
+                    self.usage
+                        .get(&thread)
+                        .and_then(|u| crate::usage::to_json(u)),
+                )
             },
         )
     }
@@ -1643,7 +1653,7 @@ impl Bulk {
                 b.bind(row.panicked)?;
                 b.bind(row.needs_announcement)?;
                 b.bind(row.value_cas.as_ref().map(<[u8; 16]>::as_slice))?;
-                b.bind(self.usage.get(&call))?;
+                b.bind(self.usage.get(&call).and_then(|u| crate::usage::to_json(u)))?;
                 b.bind(row.conflict)
             },
         )

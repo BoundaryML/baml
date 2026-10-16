@@ -471,7 +471,7 @@ function gateway_images_invoke(
     );
     let sent = ai.wire.send_as_with_wire<GwImagesResponse>(
         req,
-        ai.events.ModelKey { provider: "ai-gateway-images", model: c.model },
+        ai.events.ModelKey { provider: c.provider(), model: c.model },
         capture_wire = c.capture_wire,
     );
     ai.internal.with_own_call(

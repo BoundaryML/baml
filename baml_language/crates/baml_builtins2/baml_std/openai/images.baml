@@ -149,6 +149,10 @@ class ImageClient {
             self.model
         }
 
+        function provider(self) -> string {
+            "openai-images"
+        }
+
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             root.internal.images_render(self, input, preview = true) catch_all (e) {
                 _ => throw ai.errors.normalize(e),

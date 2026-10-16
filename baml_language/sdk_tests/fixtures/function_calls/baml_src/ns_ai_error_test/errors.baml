@@ -35,6 +35,9 @@ class SchemaFailureClient {
         function requested_model(self) -> string {
             "test-model"
         }
+        function provider(self) -> string {
+            "test"
+        }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             let _ = input;

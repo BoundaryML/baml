@@ -1493,7 +1493,7 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
     );
     let sent = ai.wire.send_as_with_wire<ConverseResponse>(
         request,
-        ai.events.ModelKey { provider: "aws-bedrock", model: client.model },
+        ai.events.ModelKey { provider: client.provider(), model: client.model },
         capture_wire = client.capture_wire,
     );
     ai.internal.with_own_call(
@@ -1852,7 +1852,7 @@ function invoke_stream(
         dispatched = started,
     );
     let call = ai.events.ModelCall {
-        resolved_model: ai.events.ModelKey { provider: "aws-bedrock", model: client.model },
+        resolved_model: ai.events.ModelKey { provider: client.provider(), model: client.model },
         usage: null,
         timing: ai.events.Timing {
             start_time_utc_ms: started.to_timestamp_milliseconds(),

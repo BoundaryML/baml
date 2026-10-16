@@ -48,6 +48,10 @@ class ClaudeCodeClient {
             self.model
         }
 
+        function provider(self) -> string {
+            "claude-code"
+        }
+
         /// Claude Code is a process-backed client rather than an HTTP client;
         /// there is no wire Request to preview. Keep this explicit so adding
         /// render to ai.Client cannot accidentally invoke the CLI.

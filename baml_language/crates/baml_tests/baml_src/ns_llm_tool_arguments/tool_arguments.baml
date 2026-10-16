@@ -223,6 +223,9 @@ class ToolArgScriptedClient {
         function requested_model(self) -> string {
             "tool-arguments-client"
         }
+        function provider(self) -> string {
+            "test"
+        }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             let _ = input;

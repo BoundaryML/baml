@@ -36,6 +36,9 @@ class AeeScriptedClient {
         function requested_model(self) -> string {
             "agent-error-events-client"
         }
+        function provider(self) -> string {
+            "test"
+        }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             let _ = input;

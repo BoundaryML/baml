@@ -139,6 +139,10 @@ class ResponsesClient {
             self.model
         }
 
+        function provider(self) -> string {
+            "openai"
+        }
+
         /// What a `${cache()}` sends as `prompt_cache_breakpoint` on the part
         /// before it: `{"mode": "explicit"}`. Null for GPT-5.5 and earlier,
         /// which reject the field; a `${cache()}` sends nothing there.

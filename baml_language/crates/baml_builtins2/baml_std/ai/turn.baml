@@ -88,6 +88,9 @@ interface Client {
     /// The model this client asks for, as configured (`"claude-sonnet-4-5"`).
     /// A wrapper reports a member's.
     function requested_model(self) -> string throws never;
+    /// The provider this client's calls bill (`"anthropic"`), as its
+    /// `ModelKey`s name it. A wrapper reports a member's.
+    function provider(self) -> string throws never;
     /// Render the provider request shape without performing I/O. Reliability
     /// wrappers use this as a stable request-shape preview: they do not sleep,
     /// rotate, or try fallback members while rendering.

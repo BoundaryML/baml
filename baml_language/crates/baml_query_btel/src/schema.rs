@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 21;
+pub const SCHEMA_VERSION: i64 = 22;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -307,11 +307,11 @@ CREATE TABLE call (
   panicked INTEGER,
   needs_announcement INTEGER,
   value_cas BLOB,
-  -- The model usage its completion carried (format minor 13): a JSON list,
-  -- one object per model; NULL without usage.
+  -- The model usage its first completion carried (format minor 13): a JSON
+  -- list, one object per provider and model, sorted; NULL without usage.
   usage TEXT,
-  -- Derived after each ingest: the usage charged to it and every node under
-  -- it, in the same shape; NULL when none was.
+  -- The usage charged to it and every node under it ingested so far, in the
+  -- same shape; NULL when none was. Maintained incrementally.
   total_usage TEXT,
   conflict INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (rec, call_id)
@@ -429,6 +429,17 @@ CREATE TABLE issue (
   detail TEXT NOT NULL
 ) STRICT;
 CREATE INDEX issue_by_rec ON issue (rec);
+
+-- Usage on its way into `total_usage` that stopped at a node not ingested yet
+-- (waiting 0), or above a thread whose parent is not known yet (waiting 1).
+-- Resumes when a later ingest brings it; normally a few rows at most.
+CREATE TABLE usage_pending (
+  rec INTEGER NOT NULL,
+  node BLOB NOT NULL,
+  waiting INTEGER NOT NULL,
+  usage TEXT NOT NULL,
+  PRIMARY KEY (rec, node, waiting)
+) STRICT, WITHOUT ROWID;
 ";
 
 /// Every fact table keyed by `rec`, for per-recording rebuilds.
@@ -449,6 +460,7 @@ pub const FACT_TABLES: &[&str] = &[
     "network_event",
     "profile_part",
     "issue",
+    "usage_pending",
 ];
 
 pub const ALL_TABLES: &[&str] = &[
@@ -473,4 +485,5 @@ pub const ALL_TABLES: &[&str] = &[
     "profile_node",
     "profile_pending",
     "issue",
+    "usage_pending",
 ];

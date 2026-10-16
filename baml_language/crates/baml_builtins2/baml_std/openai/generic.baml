@@ -101,7 +101,7 @@ class GenericClient {
     /// about this endpoint.
     function compat(self) -> root.internal.ChatCompat {
         root.internal.ChatCompat.new(
-            provider = "openai-generic",
+            provider = self.provider(),
             base_url = self.resolved_base_url(),
             collapse_text_content = true,
         )
@@ -135,6 +135,10 @@ class GenericClient {
     implements ai.Client {
         function requested_model(self) -> string {
             self.model
+        }
+
+        function provider(self) -> string {
+            "openai-generic"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

@@ -1181,6 +1181,7 @@ fn span_usage_rides_its_completion_at_minor_eleven() {
     .unwrap();
     let span = allocate_telemetry_id();
     let entry = btel_records::ModelUsage {
+        provider: "anthropic".into(),
         model: Some("claude-opus-5-5".into()),
         calls: 2,
         input_tokens: Some(900),
@@ -1233,6 +1234,7 @@ fn span_usage_rides_its_completion_at_minor_eleven() {
     assert_eq!(
         completion.usage,
         vec![proto::ModelUsage {
+            provider: "anthropic".into(),
             model: Some("claude-opus-5-5".into()),
             calls: 2,
             input_tokens: Some(900),

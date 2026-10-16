@@ -85,7 +85,7 @@ class OpenRouterClient {
     /// about this endpoint.
     function compat(self) -> root.internal.ChatCompat {
         root.internal.ChatCompat.new(
-            provider = "openrouter",
+            provider = self.provider(),
             base_url = self.resolved_base_url(),
             api_key_env = "OPENROUTER_API_KEY",
             api_key_required = true,
@@ -120,6 +120,10 @@ class OpenRouterClient {
     implements ai.Client {
         function requested_model(self) -> string {
             self.model
+        }
+
+        function provider(self) -> string {
+            "openrouter"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

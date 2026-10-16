@@ -438,7 +438,7 @@ function invoke(c: root.DecisionsClient, input: ai.ModelTurnInput) -> ai.ModelTu
     // No streaming here: only the two transport deadlines apply.
     let sent = ai.wire.send_as_with_wire<Response>(
         ai.LlmTimeoutOptions._resolve(c.timeout)._apply(request(c, input, p, false)),
-        ai.events.ModelKey { provider: "openai-decisions", model: c.model },
+        ai.events.ModelKey { provider: c.provider(), model: c.model },
         capture_wire = c.capture_wire,
     );
     if (sent.value.answers.length() != p.leaves.length()) {

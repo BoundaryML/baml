@@ -765,6 +765,9 @@ class NoCacheClient {
         function requested_model(self) -> string {
             "no-cache"
         }
+        function provider(self) -> string {
+            "test"
+        }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             PreviewGeneric.render(input)

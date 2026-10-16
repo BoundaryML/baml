@@ -191,13 +191,11 @@ function with_own_call(
     resolved_model: string?,
 ) -> root.ModelTurn {
     call.usage = usage;
-    if let key: root.events.ModelKey = call.resolved_model {
-        call.resolved_model
-            = root.events.ModelKey {
-                provider: key.provider,
-                model: resolved_model ?? requested_model ?? key.model,
-            };
-    }
+    call.resolved_model
+        = root.events.ModelKey {
+            provider: call.resolved_model.provider,
+            model: resolved_model ?? requested_model ?? call.resolved_model.model,
+        };
     root.ModelTurn {
         ...turn,
         resolved_model: call.resolved_model,

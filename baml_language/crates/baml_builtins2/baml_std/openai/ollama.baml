@@ -87,7 +87,7 @@ class OllamaClient {
     /// about this endpoint.
     function compat(self) -> root.internal.ChatCompat {
         root.internal.ChatCompat.new(
-            provider = "ollama",
+            provider = self.provider(),
             base_url = self.resolved_base_url(),
             collapse_text_content = true,
             inline_image_urls = true,
@@ -122,6 +122,10 @@ class OllamaClient {
     implements ai.Client {
         function requested_model(self) -> string {
             self.model
+        }
+
+        function provider(self) -> string {
+            "ollama"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

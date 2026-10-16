@@ -17,6 +17,9 @@ class InvalidSchemaClient {
         function requested_model(self) -> string {
             "invalid-schema-client"
         }
+        function provider(self) -> string {
+            "test"
+        }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             let _ = input;

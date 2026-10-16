@@ -295,7 +295,7 @@ pub const SPANS: Relation = Relation {
         ),
         value(
             "self_usage",
-            "model usage of the calls this span's own invocation made: a list with one map per model of model, calls, input_tokens (full-rate), output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens. A count is null when no call reported it. Empty unless the span is an ai.Client.invoke implementation or a stream's settle step",
+            "model usage of the calls this span's own invocation made: a list with one map per provider and model of provider, model (null when no response named one), calls (the calls that reported usage), input_tokens (full-rate), output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens. A count is null when no call reported it. Empty unless the span is an ai.Client.invoke implementation or a stream's settle step",
         ),
         value(
             "total_usage",

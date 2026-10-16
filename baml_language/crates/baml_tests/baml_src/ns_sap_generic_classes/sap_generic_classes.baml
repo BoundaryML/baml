@@ -131,6 +131,9 @@ class CannedClient {
         function requested_model(self) -> string {
             "canned"
         }
+        function provider(self) -> string {
+            "test"
+        }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             let _ = input;

@@ -11,6 +11,9 @@ class StreamScript {
         function requested_model(self) -> string {
             "scripted-stream"
         }
+        function provider(self) -> string {
+            "test"
+        }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             let _ = input;
@@ -84,7 +87,7 @@ test "stream drained via final recovers streamed usage" {
         match (e) {
             let c: ai.events.ModelCall => {
                 probe.labels.push(
-                    `ModelCall:${c.resolved_model?.provider ?? "-"}/${c.resolved_model?.model ?? "-"}:${c.usage?.input_tokens ?? -1}/${c.usage?.output_tokens ?? -1}`,
+                    `ModelCall:${c.resolved_model.provider}/${c.resolved_model.model ?? "-"}:${c.usage?.input_tokens ?? -1}/${c.usage?.output_tokens ?? -1}`,
                 );
             },
             _ => {

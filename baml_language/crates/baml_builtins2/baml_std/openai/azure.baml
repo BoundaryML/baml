@@ -172,7 +172,7 @@ class AzureClient {
             let _ = query.set("api-version", version);
         }
         root.internal.ChatCompat.new(
-            provider = "azure",
+            provider = self.provider(),
             base_url = self.resolved_base_url(),
             auth = root.internal.ChatAuth.ApiKeyHeader,
             api_key_env = "AZURE_OPENAI_API_KEY",
@@ -228,6 +228,10 @@ class AzureClient {
 
         function requested_model(self) -> string {
             self.model
+        }
+
+        function provider(self) -> string {
+            "azure"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

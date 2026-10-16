@@ -410,7 +410,7 @@ function images_invoke(c: root.ImageClient, input: ai.ModelTurnInput) -> ai.Mode
     let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(images_render(c, input));
     let sent = ai.wire.send_as_with_wire<OaImagesResponse>(
         req,
-        ai.events.ModelKey { provider: "openai-images", model: c.model },
+        ai.events.ModelKey { provider: c.provider(), model: c.model },
         capture_wire = c.capture_wire,
     );
     ai.internal.with_own_call(

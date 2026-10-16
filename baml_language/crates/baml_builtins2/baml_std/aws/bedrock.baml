@@ -161,6 +161,10 @@ class BedrockClient {
             self.model
         }
 
+        function provider(self) -> string {
+            "aws-bedrock"
+        }
+
         /// What a `${cache()}` sends as a `cachePoint` block: a checkpoint
         /// with the default 5-minute lifetime, for a Claude or Nova model.
         /// Null for every other model, where Converse rejects a checkpoint;

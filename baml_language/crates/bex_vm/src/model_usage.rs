@@ -45,12 +45,15 @@ impl BexVm {
                             _ => None,
                         })
                 };
-                let model = self
-                    .field(call, "resolved_model")
-                    .and_then(|key| self.field(key, "model"))
-                    .and_then(|model| self.as_string(&model).ok().map(|s| Box::from(s.as_str())));
+                let key = self.field(call, "resolved_model")?;
+                let text = |name: &str| {
+                    self.field(key, name).and_then(|value| {
+                        self.as_string(&value).ok().map(|s| Box::from(s.as_str()))
+                    })
+                };
                 Some(ModelUsage {
-                    model,
+                    provider: text("provider")?,
+                    model: text("model"),
                     calls: 1,
                     input_tokens: count("uncached_input_tokens").or_else(|| count("input_tokens")),
                     output_tokens: count("output_tokens"),

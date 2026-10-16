@@ -608,6 +608,7 @@ enum ProcessStatus {
 // Minor 13. The tokens one model's calls reported, summed. A count is absent
 // when no call reported it, which is not the same as zero.
 message ModelUsage {
+  string provider = 8; // The calling client's provider, as `ai.events.ModelKey` names it.
   optional string model = 1;
   uint64 calls = 2;
   optional uint64 input_tokens = 3; // Full-rate input: cache reads and writes excluded.

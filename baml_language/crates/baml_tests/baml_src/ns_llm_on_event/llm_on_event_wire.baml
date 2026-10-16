@@ -7,6 +7,9 @@ class WireClient {
         function requested_model(self) -> string {
             "wire-scripted"
         }
+        function provider(self) -> string {
+            "test"
+        }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             let _ = input;
@@ -41,6 +44,9 @@ class FlakyClient {
         function requested_model(self) -> string {
             "flaky"
         }
+        function provider(self) -> string {
+            "test"
+        }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             let _ = input;
@@ -68,7 +74,7 @@ test "successful wire record is delivered after AssistantMessage" {
     let cb = (e: ai.events.Event) -> void {
         match (e) {
             let c: ai.events.ModelCall => {
-                probe.labels.push(`ModelCall:${c.resolved_model?.provider ?? "-"}`);
+                probe.labels.push(`ModelCall:${c.resolved_model.provider}`);
             },
             _ => {
                 probe.labels.push(label_of(e));

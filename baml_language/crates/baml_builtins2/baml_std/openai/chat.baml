@@ -99,7 +99,7 @@ class ChatClient {
     /// about this endpoint.
     function compat(self) -> root.internal.ChatCompat {
         root.internal.ChatCompat.new(
-            provider = "openai-chat",
+            provider = self.provider(),
             base_url = self.resolved_base_url(),
             api_key_env = "OPENAI_API_KEY",
             api_key_required = true,
@@ -138,6 +138,10 @@ class ChatClient {
     implements ai.Client {
         function requested_model(self) -> string {
             self.model
+        }
+
+        function provider(self) -> string {
+            "openai-chat"
         }
 
         /// What a `${cache()}` sends as `prompt_cache_breakpoint` on the part

@@ -106,6 +106,9 @@ function source_4() -> string {
                 function requested_model(self) -> string {
                     "probe"
                 }
+                function provider(self) -> string {
+                    "test"
+                }
 
                 function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
                     let prompt = input.prompt(ai.internal.build_output_format(input.output_type)).text();
@@ -165,6 +168,9 @@ function source_5() -> string {
             implements ai.Client {
                 function requested_model(self) -> string {
                     "probe"
+                }
+                function provider(self) -> string {
+                    "test"
                 }
 
                 function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

@@ -29,6 +29,9 @@ class ScriptedStreamClient {
         function requested_model(self) -> string {
             self.client_id
         }
+        function provider(self) -> string {
+            "test"
+        }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             let _ = input;
@@ -144,6 +147,9 @@ class NonStreamingClient {
             self.probe.events.push(`id:${self.client_id}`);
             self.client_id
         }
+        function provider(self) -> string {
+            "test"
+        }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             let _ = input;
@@ -173,6 +179,9 @@ class SyntheticInvokeClient {
     implements ai.Client {
         function requested_model(self) -> string {
             "synthetic-invoke"
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

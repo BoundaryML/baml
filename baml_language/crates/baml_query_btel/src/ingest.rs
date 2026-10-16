@@ -33,6 +33,7 @@ use crate::{Error, store};
 mod bulk;
 mod context;
 mod profile;
+mod totals;
 
 #[derive(Clone, Debug)]
 pub struct RefreshOptions {
@@ -692,7 +693,6 @@ fn reconcile(
             }
         }
         applier.finish()?;
-        rebuild_usage_totals(&tx, rec_key)?;
         if group
             .iter()
             .any(|c| matches!(c, Candidate::Read(_, read) if read.file.end.is_some()))
@@ -848,6 +848,7 @@ fn apply_fresh<'p>(
             [rec],
         )?;
     }
+    let charged = merged.charged();
     merged.write(&tx, rec, applied.last().is_some_and(|file| file.end))?;
     let mut terminal = None;
     let mut source_snapshot = None;
@@ -896,7 +897,7 @@ fn apply_fresh<'p>(
         }
         metrics.files_applied += 1;
     }
-    rebuild_usage_totals(&tx, rec)?;
+    totals::apply(&tx, rec, &charged)?;
     if rebuild || !applied.is_empty() {
         mark_profile_pending(&tx, rec)?;
     }
@@ -1030,6 +1031,8 @@ struct Applier<'t> {
     /// Functions whose metadata replaced an "unavailable" observation: the
     /// profiler nodes named after them change.
     renamed_functions: HashSet<u64>,
+    /// Calls and threads whose usage this transaction stored, for the totals.
+    charged: Vec<([u8; 8], Vec<crate::usage::ModelUsage>)>,
 }
 
 impl<'t> Applier<'t> {
@@ -1043,6 +1046,7 @@ impl<'t> Applier<'t> {
             entries: Vec::new(),
             sysops: HashMap::new(),
             renamed_functions: HashSet::new(),
+            charged: Vec::new(),
         }
     }
 
@@ -1179,6 +1183,7 @@ impl<'t> Applier<'t> {
                                      VALUES (?1, ?2, 0)",
                                 )?
                                 .execute(params![self.rec, id(section.thread_id)])?;
+                            let usage = crate::usage::from_proto(&done.usage);
                             let changed = self
                                 .tx
                                 .prepare_cached(
@@ -1192,8 +1197,11 @@ impl<'t> Applier<'t> {
                                     completed,
                                     done.outcome,
                                     done.panicked,
-                                    usage_json(&done.usage)
+                                    crate::usage::to_json(&usage)
                                 ])?;
+                            if changed > 0 && !usage.is_empty() {
+                                self.charged.push((id(section.thread_id), usage));
+                            }
                             if changed == 0 {
                                 let existing: Option<(Option<i64>, Option<i64>)> = self
                                     .tx
@@ -1325,6 +1333,15 @@ impl<'t> Applier<'t> {
             evidence::completion(done, late).expect("validated completion flags");
         let (path, reentry) = evidence::split_node(done.node);
         self.references.paths.insert(path);
+        let usage = crate::usage::from_proto(&done.usage);
+        // The first usage stored wins: a second completion is a conflict.
+        let charges = !usage.is_empty()
+            && self
+                .tx
+                .prepare_cached("SELECT usage IS NULL FROM call WHERE rec = ?1 AND call_id = ?2")?
+                .query_row(params![self.rec, id(done.id)], |r| r.get::<_, bool>(0))
+                .optional()?
+                .unwrap_or(true);
         self.tx
             .prepare_cached(
                 "INSERT INTO call (rec, call_id, thread_id, parent_id, call_path_id, reentry,
@@ -1351,7 +1368,7 @@ impl<'t> Applier<'t> {
                    needs_announcement = excluded.needs_announcement,
                    value_cas = excluded.value_cas,
                    panicked = excluded.panicked,
-                   usage = excluded.usage",
+                   usage = COALESCE(usage, excluded.usage)",
             )?
             .execute(params![
                 self.rec,
@@ -1370,8 +1387,11 @@ impl<'t> Applier<'t> {
                 done.value_cas_id.as_ref().map(cas_id),
                 done.panicked,
                 done.completion_flags & 32 != 0,
-                usage_json(&done.usage)
+                crate::usage::to_json(&usage)
             ])?;
+        if charges {
+            self.charged.push((id(done.id), usage));
+        }
         Ok(())
     }
 
@@ -2019,7 +2039,7 @@ impl<'t> Applier<'t> {
             .execute([self.rec])?;
         forget_nodes(self.tx, self.rec, &self.renamed_functions)?;
         resolve_nodes(self.tx, self.rec)?;
-        Ok(())
+        totals::apply(self.tx, self.rec, &self.charged)
     }
 }
 
@@ -2179,94 +2199,4 @@ mod fault {
     }
     #[cfg(not(feature = "fault-injection"))]
     pub(super) fn point(_: &str) {}
-}
-
-/// A completion's model usage as stored on its row: a JSON list, one object
-/// per model; `None` without usage. A count no call reported stays null.
-pub(crate) fn usage_json(usage: &[proto::ModelUsage]) -> Option<String> {
-    #[derive(Serialize)]
-    struct Entry<'a> {
-        model: Option<&'a str>,
-        calls: i64,
-        input_tokens: Option<i64>,
-        output_tokens: Option<i64>,
-        cache_read_tokens: Option<i64>,
-        cache_write_tokens: Option<i64>,
-        reasoning_tokens: Option<i64>,
-    }
-    if usage.is_empty() {
-        return None;
-    }
-    let count = |value: u64| i64::try_from(value).unwrap_or(i64::MAX);
-    let entries: Vec<Entry<'_>> = usage
-        .iter()
-        .map(|entry| Entry {
-            model: entry.model.as_deref(),
-            calls: count(entry.calls),
-            input_tokens: entry.input_tokens.map(count),
-            output_tokens: entry.output_tokens.map(count),
-            cache_read_tokens: entry.cache_read_tokens.map(count),
-            cache_write_tokens: entry.cache_write_tokens.map(count),
-            reasoning_tokens: entry.reasoning_tokens.map(count),
-        })
-        .collect();
-    Some(serde_json::to_string(&entries).expect("usage serializes"))
-}
-
-/// Rebuild one recording's `total_usage` on its calls and threads: the usage
-/// charged to each node and its descendants, carried up from every charged
-/// node through its ancestors. Only charged nodes and their ancestors get one.
-/// A count stays null when no entry reported it, as SQL `sum` over nulls does.
-fn rebuild_usage_totals(tx: &Transaction<'_>, rec: i64) -> Result<(), Error> {
-    tx.execute(
-        "UPDATE call SET total_usage = NULL WHERE rec = ?1 AND total_usage IS NOT NULL",
-        [rec],
-    )?;
-    tx.execute(
-        "UPDATE thread SET total_usage = NULL WHERE rec = ?1 AND total_usage IS NOT NULL",
-        [rec],
-    )?;
-    for table in ["call", "thread"] {
-        let key = if table == "call" {
-            "call_id"
-        } else {
-            "thread_id"
-        };
-        tx.execute(
-            &format!(
-                "WITH RECURSIVE up (node, usage) AS (
-                   SELECT call_id, usage FROM call WHERE rec = ?1 AND usage IS NOT NULL
-                   UNION ALL
-                   SELECT thread_id, usage FROM thread WHERE rec = ?1 AND usage IS NOT NULL
-                   UNION ALL
-                   SELECT COALESCE(c.parent_id, t.parent_id), up.usage
-                   FROM up
-                   LEFT JOIN call c ON c.rec = ?1 AND c.call_id = up.node
-                   LEFT JOIN thread t ON c.call_id IS NULL AND t.rec = ?1 AND t.thread_id = up.node
-                   WHERE COALESCE(c.parent_id, t.parent_id) IS NOT NULL),
-                 per_model AS (
-                   SELECT up.node AS node, json_extract(e.value, '$.model') AS model,
-                     sum(json_extract(e.value, '$.calls')) AS calls,
-                     sum(json_extract(e.value, '$.input_tokens')) AS input_tokens,
-                     sum(json_extract(e.value, '$.output_tokens')) AS output_tokens,
-                     sum(json_extract(e.value, '$.cache_read_tokens')) AS cache_read_tokens,
-                     sum(json_extract(e.value, '$.cache_write_tokens')) AS cache_write_tokens,
-                     sum(json_extract(e.value, '$.reasoning_tokens')) AS reasoning_tokens
-                   FROM up, json_each(up.usage) e
-                   GROUP BY up.node, model
-                   ORDER BY up.node, model),
-                 totals AS (
-                   SELECT node, json_group_array(json_object('model', model, 'calls', calls,
-                       'input_tokens', input_tokens, 'output_tokens', output_tokens,
-                       'cache_read_tokens', cache_read_tokens,
-                       'cache_write_tokens', cache_write_tokens,
-                       'reasoning_tokens', reasoning_tokens)) AS usage
-                   FROM per_model GROUP BY node)
-                 UPDATE {table} SET total_usage = totals.usage FROM totals
-                 WHERE {table}.rec = ?1 AND {table}.{key} = totals.node"
-            ),
-            [rec],
-        )?;
-    }
-    Ok(())
 }

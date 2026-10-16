@@ -144,6 +144,10 @@ class GeminiClient {
             self.model
         }
 
+        function provider(self) -> string {
+            "google"
+        }
+
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             root.internal.preview(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),

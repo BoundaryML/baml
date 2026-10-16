@@ -370,7 +370,7 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
     if (_vertex_publisher(c) == "anthropic") {
         let sent = ai.wire.send_as_with_wire<anthropic.internal.Response>(
             req,
-            ai.events.ModelKey { provider: "vertex", model: c.model },
+            ai.events.ModelKey { provider: c.provider(), model: c.model },
             capture_wire = c.capture_wire,
         );
         return ai.internal.with_own_call(
@@ -384,7 +384,7 @@ function vertex_invoke(c: root.VertexClient, input: ai.ModelTurnInput) -> ai.Mod
     let seq = input.journal.entries().length();
     let sent = ai.wire.send_as_with_wire<root.internal.GmResponse>(
         req,
-        ai.events.ModelKey { provider: "vertex", model: c.model },
+        ai.events.ModelKey { provider: c.provider(), model: c.model },
         capture_wire = c.capture_wire,
     );
     ai.internal.with_own_call(
@@ -443,7 +443,7 @@ function vertex_invoke_stream(
         )
     };
     let call = ai.events.ModelCall {
-        resolved_model: ai.events.ModelKey { provider: "vertex", model: c.model },
+        resolved_model: ai.events.ModelKey { provider: c.provider(), model: c.model },
         usage: null,
         timing: ai.events.Timing {
             start_time_utc_ms: started.to_timestamp_milliseconds(),

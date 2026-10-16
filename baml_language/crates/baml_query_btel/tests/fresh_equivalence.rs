@@ -399,6 +399,7 @@ mod crafted {
 
     fn usage(model: &str, input: u64) -> proto::ModelUsage {
         proto::ModelUsage {
+            provider: "openai".into(),
             model: Some(model.into()),
             calls: 1,
             input_tokens: Some(input),

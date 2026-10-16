@@ -276,6 +276,7 @@ impl ConversionBuffer {
                         .entries
                         .iter()
                         .map(|entry| proto::ModelUsage {
+                            provider: entry.provider.to_string(),
                             model: entry.model.as_deref().map(str::to_owned),
                             calls: entry.calls,
                             input_tokens: entry.input_tokens,

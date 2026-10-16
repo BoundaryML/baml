@@ -99,7 +99,8 @@ class Usage {
 /// Who answered and billed: the client's provider id (`"anthropic"`,
 /// `"openrouter"`, ...) and the model the response reported, which can be
 /// more specific than the one requested (a dated snapshot, the model a router
-/// chose). Falls back to the requested model when the response names none.
+/// chose). Falls back to the requested model when the response names none;
+/// null for a call no response answered.
 class ModelKey {
     provider: string,
     model: string?,
@@ -111,8 +112,7 @@ class ModelKey {
 
 /// One model's usage: the counts its calls reported, summed.
 class ModelUsage {
-    // Null for calls whose response named no model.
-    resolved_model: ModelKey?,
+    resolved_model: ModelKey,
     usage: Usage,
 }
 
@@ -129,7 +129,7 @@ function call_usage(calls: ModelCall[]) -> ModelUsage[] {
 }
 
 /// The usage `usage` lists for `model`, or null when it lists none.
-function usage_for(usage: ModelUsage[], model: ModelKey?) -> Usage? {
+function usage_for(usage: ModelUsage[], model: ModelKey) -> Usage? {
     usage
         .find((entry: ModelUsage) -> bool {
             entry.resolved_model == model
@@ -215,9 +215,9 @@ class SseEventRecord {
 }
 
 class ModelCall {
-    // Who the call billed, when its response said; null for a failed
-    // attempt's call.
-    resolved_model: ModelKey?,
+    // Who the call billed. The model is null when no response named one,
+    // as for a failed attempt's call.
+    resolved_model: ModelKey,
     // The tokens the call reported; null when the provider reported none.
     usage: Usage?,
     timing: Timing,

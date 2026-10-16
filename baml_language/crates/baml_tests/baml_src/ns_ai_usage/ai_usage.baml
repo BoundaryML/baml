@@ -39,7 +39,7 @@ function usage_label(usage: ai.events.ModelUsage[]) -> string {
     usage
         .map((entry: ai.events.ModelUsage) -> string {
             let u = entry.usage;
-            `${entry.resolved_model?.provider ?? "-"}/${entry.resolved_model?.model ?? "-"}=${count(u.input_tokens)}/${count(u.output_tokens)}`
+            `${entry.resolved_model.provider}/${entry.resolved_model.model ?? "-"}=${count(u.input_tokens)}/${count(u.output_tokens)}`
         })
         .join(",")
 }
@@ -50,7 +50,7 @@ function call_label(call: ai.events.ModelCall) -> string {
         let u: ai.events.Usage => `${count(u.input_tokens)}/${count(u.output_tokens)}`,
         null => "none",
     };
-    `${call.resolved_model?.provider ?? "-"}/${call.resolved_model?.model ?? "-"}=${tokens}`
+    `${call.resolved_model.provider}/${call.resolved_model.model ?? "-"}=${tokens}`
 }
 
 /// A turn's total, its own calls, then its child turns, each labeled the same
@@ -92,6 +92,9 @@ class UsageClient {
     implements ai.Client {
         function requested_model(self) -> string {
             self.model
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -195,6 +198,9 @@ class ClassifyThenAnswer {
     implements ai.Client {
         function requested_model(self) -> string {
             "classify-then-answer"
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -511,7 +517,7 @@ test "a turn keeps the model it asked for and the one that answered" {
     let turn = ai.internal.with_own_call(empty_turn(), openai_call(), tokens(1, 1), "gpt-5", "gpt-5-2025-08-07");
     assert.equal(turn.requested_model, "gpt-5");
     assert.equal(turn.resolved_model?.model, "gpt-5-2025-08-07");
-    assert.equal(turn.calls[0].resolved_model?.model, "gpt-5-2025-08-07")
+    assert.equal(turn.calls[0].resolved_model.model, "gpt-5-2025-08-07")
 }
 
 test "a response that names no model resolves to the one requested" {
@@ -568,7 +574,7 @@ test "a stream resolves to the model its events name, as a whole response does" 
     let turn = stream.final_turn();
     assert.equal(turn.requested_model, "gpt-5");
     assert.equal(turn.resolved_model?.model, "gpt-5-2025-08-07");
-    assert.equal(turn.calls[0].resolved_model?.model, "gpt-5-2025-08-07");
+    assert.equal(turn.calls[0].resolved_model.model, "gpt-5-2025-08-07");
     assert.equal(turn.calls[0].usage?.output_tokens, 1)
 }
 

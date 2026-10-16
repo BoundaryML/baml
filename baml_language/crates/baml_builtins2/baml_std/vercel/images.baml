@@ -121,6 +121,10 @@ class AiGatewayImageClient {
             self.model
         }
 
+        function provider(self) -> string {
+            "ai-gateway-images"
+        }
+
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             root.internal.gateway_images_render(self, input, preview = true) catch_all (e) {
                 _ => throw ai.errors.normalize(e),

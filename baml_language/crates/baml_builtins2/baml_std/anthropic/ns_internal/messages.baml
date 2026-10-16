@@ -978,7 +978,7 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(_request(c, input, false, preview = false));
     let sent = ai.wire.send_as_with_wire<Response>(
         req,
-        ai.events.ModelKey { provider: "anthropic", model: c.model },
+        ai.events.ModelKey { provider: c.provider(), model: c.model },
         capture_wire = c.capture_wire,
     );
     ai.internal.with_own_call(
@@ -1367,7 +1367,7 @@ function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.Tu
         dispatched = started,
     );
     let call = ai.events.ModelCall {
-        resolved_model: ai.events.ModelKey { provider: "anthropic", model: c.model },
+        resolved_model: ai.events.ModelKey { provider: c.provider(), model: c.model },
         usage: null,
         timing: ai.events.Timing {
             start_time_utc_ms: started.to_timestamp_milliseconds(),

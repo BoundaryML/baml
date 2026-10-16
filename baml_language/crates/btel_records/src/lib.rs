@@ -575,6 +575,7 @@ pub struct SpanUsage {
 /// call reported it, which is not the same as zero.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelUsage {
+    pub provider: Box<str>,
     pub model: Option<Box<str>>,
     pub calls: u64,
     /// Input tokens billed at the full rate: cache reads and writes excluded.

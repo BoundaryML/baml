@@ -1273,7 +1273,7 @@ impl TelemetryState {
     }
 
     /// Charge model usage to the innermost span, or the thread when none is
-    /// open. Entries for one model are summed.
+    /// open. Entries for one provider's model are summed.
     #[cold]
     pub fn charge_model_usage(&mut self, entries: Vec<btel_records::ModelUsage>) {
         let node = self.thread.active_id;
@@ -1657,13 +1657,16 @@ pub(crate) fn test_runtime() -> Arc<btel_processor::TelemetryRuntime> {
     Arc::clone(RUNTIME.get_or_init(|| btel_processor::TelemetryRuntime::new().unwrap()))
 }
 
-/// Add `entries` into `charged`, summing the entries for one model.
+/// Add `entries` into `charged`, summing the entries for one provider's model.
 pub(crate) fn merge_usage(
     charged: &mut Vec<btel_records::ModelUsage>,
     entries: Vec<btel_records::ModelUsage>,
 ) {
     for entry in entries {
-        match charged.iter_mut().find(|known| known.model == entry.model) {
+        match charged
+            .iter_mut()
+            .find(|known| known.provider == entry.provider && known.model == entry.model)
+        {
             Some(known) => add_usage(known, &entry),
             None => charged.push(entry),
         }

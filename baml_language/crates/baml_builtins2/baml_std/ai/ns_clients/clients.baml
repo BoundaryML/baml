@@ -172,11 +172,10 @@ class Backoff {
 // Streaming retries use the same safety judgment and backoff as invoke, but a
 // new stream may be opened only before the first text delta is returned.
 /// (internal) Map a classified failure or a member timeout to a failed attempt
-/// of the member that asked for `requested_model` (null when the wrapper does
-/// not know). It holds the call only when a response arrived. No response named
-/// a model and the call's timing was never measured, so both are null, never
-/// fabricated.
-function _failed_attempt(requested_model: string?, f: Retryable) -> root.ModelTurn {
+/// of `member`. It holds the call only when a response arrived. No response
+/// named a model and the call's timing was never measured, so both are null,
+/// never fabricated.
+function _failed_attempt(member: root.Client, f: Retryable) -> root.ModelTurn {
     let status: int? = match (f) {
         let e: root.errors.RateLimited => e.status_code,
         let e: root.errors.NetworkFailure => e.status_code,
@@ -198,7 +197,7 @@ function _failed_attempt(requested_model: string?, f: Retryable) -> root.ModelTu
     if let s: int = status {
         calls.push(
             root.events.ModelCall {
-                resolved_model: null,
+                resolved_model: root.events.ModelKey { provider: member.provider(), model: null },
                 usage: null,
                 timing: root.events.Timing { start_time_utc_ms: null, duration_ms: null, ttft_ms: null },
                 http_request: null,
@@ -212,7 +211,7 @@ function _failed_attempt(requested_model: string?, f: Retryable) -> root.ModelTu
         content: [],
         stop_reason: root.content.StopReason.Failed,
         resolved_model: null,
-        requested_model: requested_model,
+        requested_model: member.requested_model(),
         calls: calls,
         child_turns: [],
         error: f,
@@ -306,7 +305,7 @@ class Retry {
                 _wrapper_turn(attempts)
             },
             let retry: RetryCause => {
-                attempts.push(_failed_attempt(self.inner.requested_model(), retry.cause));
+                attempts.push(_failed_attempt(self.inner, retry.cause));
                 baml.sys.sleep(
                     baml.time.Duration.from_milliseconds(
                         self.backoff.delay_ms(attempt, retry.cause),
@@ -330,6 +329,10 @@ class Retry {
     implements root.Client {
         function requested_model(self) -> string {
             self.inner.requested_model()
+        }
+
+        function provider(self) -> string {
+            self.inner.provider()
         }
 
         /// Rendering is a pure preview of the inner client. It deliberately
@@ -386,8 +389,8 @@ class Retry {
             let relay = StreamRelay {
                 open: open,
                 retry: retry,
-                requested_model: () -> string? {
-                    self.inner.requested_model()
+                member: () -> root.Client {
+                    self.inner
                 },
                 current: null,
                 emitted: false,
@@ -436,6 +439,18 @@ class RoundRobin {
             }
             if let c: root.Client = self.members.at(self.counter % self.members.length()) {
                 c.requested_model()
+            } else {
+                "round-robin"
+            }
+        }
+
+        /// The member the next call goes to.
+        function provider(self) -> string {
+            if (self.members.length() == 0) {
+                return "round-robin";
+            }
+            if let c: root.Client = self.members.at(self.counter % self.members.length()) {
+                c.provider()
             } else {
                 "round-robin"
             }
@@ -505,7 +520,7 @@ class RoundRobin {
                 self.counter += 1;
                 match (self.members.at(index)) {
                     let streaming: root.stream.StreamingClient => {
-                        _relayed(streaming.invoke_stream(input), streaming.requested_model())
+                        _relayed(streaming.invoke_stream(input), streaming)
                     },
                     let member: root.Client => {
                         throw root.errors.StreamingUnsupported { requested_model: member.requested_model() }
@@ -564,7 +579,7 @@ class Fallback {
                         _wrapper_turn(attempts)
                     },
                     let retry: RetryCause => {
-                        attempts.push(_failed_attempt(c.requested_model(), retry.cause));
+                        attempts.push(_failed_attempt(c, retry.cause));
                         self._try(input, index + 1, attempts)
                     },
                 }
@@ -586,6 +601,14 @@ class Fallback {
             // if-let is the reliable form.
             if let c: root.Client = self.members.at(0) {
                 c.requested_model()
+            } else {
+                "fallback"
+            }
+        }
+
+        function provider(self) -> string {
+            if let c: root.Client = self.members.at(0) {
+                c.provider()
             } else {
                 "fallback"
             }
@@ -661,12 +684,11 @@ class Fallback {
             let relay = StreamRelay {
                 open: open,
                 retry: advance,
-                // `advance` has already moved past the member that failed.
-                requested_model: () -> string? {
-                    if let member: root.Client = self.members.at(index - 1) {
-                        member.requested_model()
-                    } else {
-                        null
+                member: () -> root.Client {
+                    match (self.members.at(index)) {
+                        let member: root.Client => member,
+                        // A stream is current only once `open` found its member.
+                        null => baml.sys.panic("a fallback stream relayed without a member"),
                     }
                 },
                 current: null,
@@ -685,12 +707,12 @@ class Fallback {
     }
 }
 
-/// (internal) `stream`, from a member asking for `requested_model`, relayed
+/// (internal) `stream`, from `member`, relayed
 /// without retrying, so its turn is a child of the relay's, as a wrapper's
 /// turn has its member's.
 function _relayed(
     stream: root.stream.TurnStream,
-    requested_model: string,
+    member: root.Client,
 ) -> root.stream.TurnStream {
     let relay = StreamRelay {
         open: () -> root.stream.TurnStream {
@@ -699,8 +721,8 @@ function _relayed(
         retry: (cause: Retryable) -> bool {
             false
         },
-        requested_model: () -> string? {
-            requested_model
+        member: () -> root.Client {
+            member
         },
         current: null,
         emitted: false,
@@ -724,9 +746,8 @@ function _relayed(
 class StreamRelay {
     open: () -> root.stream.TurnStream throws root.errors.InvokeError,
     retry: (Retryable) -> bool throws root.errors.InvokeError,
-    // The model the member that just failed asks for, read once `retry` has
-    // agreed to try again.
-    requested_model: () -> string? throws never,
+    // The member whose stream is current; read before `retry` moves past it.
+    member: () -> root.Client throws never,
     current: root.stream.TurnStream?,
     emitted: bool,
     // Deltas from the current stream's last batch not yet re-emitted:
@@ -752,8 +773,9 @@ class StreamRelay {
     function recover(self, error: root.errors.RaisedInClient) -> void {
         match (root.errors.normalize_invoke(error)) {
             let cause: Retryable => {
+                let failed = self.member();
                 if (!self.emitted && self.retry(cause)) {
-                    self.child_turns.push(_failed_attempt(self.requested_model(), cause));
+                    self.child_turns.push(_failed_attempt(failed, cause));
                     self.close_current();
                     self.current = null;
                 } else {

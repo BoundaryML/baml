@@ -1233,40 +1233,22 @@ pub(crate) fn node_hash(parent: Option<i64>, name: &str, edge: i64) -> i64 {
     hasher.digest().cast_signed()
 }
 
-/// One model's usage in a stored usage list (`call.usage`, `thread.usage`).
-/// A count no call reported is null, not zero.
-#[derive(Clone, Debug, serde::Deserialize)]
-struct ModelUsage {
-    model: Option<String>,
-    calls: i64,
-    input_tokens: Option<i64>,
-    output_tokens: Option<i64>,
-    cache_read_tokens: Option<i64>,
-    cache_write_tokens: Option<i64>,
-    reasoning_tokens: Option<i64>,
-}
-
-impl ModelUsage {
-    /// The column value's map.
-    fn to_inline(&self) -> Inline {
-        let int = |n: Option<i64>| n.map_or(Inline::Null, Inline::Int);
-        Inline::Map(vec![
-            (
-                "model".into(),
-                self.model.clone().map_or(Inline::Null, Inline::Text),
-            ),
-            ("calls".into(), Inline::Int(self.calls)),
-            ("input_tokens".into(), int(self.input_tokens)),
-            ("output_tokens".into(), int(self.output_tokens)),
-            ("cache_read_tokens".into(), int(self.cache_read_tokens)),
-            ("cache_write_tokens".into(), int(self.cache_write_tokens)),
-            ("reasoning_tokens".into(), int(self.reasoning_tokens)),
-        ])
-    }
-}
-
-fn parse_usage(text: &str) -> rusqlite::Result<Vec<ModelUsage>> {
-    serde_json::from_str(text).map_err(|e| user_error(&format!("invalid stored usage: {e}")))
+/// A stored usage entry as a column value's map.
+fn usage_inline(entry: &crate::usage::ModelUsage) -> Inline {
+    let int = |n: Option<i64>| n.map_or(Inline::Null, Inline::Int);
+    Inline::Map(vec![
+        ("provider".into(), Inline::Text(entry.provider.clone())),
+        (
+            "model".into(),
+            entry.model.clone().map_or(Inline::Null, Inline::Text),
+        ),
+        ("calls".into(), Inline::Int(entry.calls)),
+        ("input_tokens".into(), int(entry.input_tokens)),
+        ("output_tokens".into(), int(entry.output_tokens)),
+        ("cache_read_tokens".into(), int(entry.cache_read_tokens)),
+        ("cache_write_tokens".into(), int(entry.cache_write_tokens)),
+        ("reasoning_tokens".into(), int(entry.reasoning_tokens)),
+    ])
 }
 
 /// A value the index builds rather than reads from the CAS.
@@ -1401,16 +1383,16 @@ fn register_final_tables(conn: &Connection) -> rusqlite::Result<()> {
     conn.create_scalar_function("__btel_empty_map", 0, pure, |_| {
         Ok(inline_handle(&Inline::Map(Vec::new())))
     })?;
-    // A stored usage list as a column value: one map per model, by model
-    // name. NULL is the empty list.
+    // A stored usage list as a column value: one map per provider and model,
+    // in the stored order. NULL is the empty list.
     conn.create_scalar_function("__btel_usage_value", 1, pure, |ctx| {
-        let mut usage = match ctx.get::<Option<String>>(0)? {
-            Some(text) => parse_usage(&text)?,
+        let usage = match ctx.get::<Option<String>>(0)? {
+            Some(text) => crate::usage::parse(&text)
+                .map_err(|e| user_error(&format!("invalid stored usage: {e}")))?,
             None => Vec::new(),
         };
-        usage.sort_by(|a, b| a.model.cmp(&b.model));
         Ok(inline_handle(&Inline::List(
-            usage.iter().map(ModelUsage::to_inline).collect(),
+            usage.iter().map(usage_inline).collect(),
         )))
     })?;
     // `(started_ns, final status or NULL, ended_ns)`: running, then the end.

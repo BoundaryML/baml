@@ -19,6 +19,9 @@ class ChunkedStreamClient {
         function requested_model(self) -> string {
             "chunked"
         }
+        function provider(self) -> string {
+            "test"
+        }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             let _ = input;
@@ -244,6 +247,9 @@ test "stream panic closes its operation and rethrows the cached panic" {
 class NonStreamingClient {
     implements ai.Client {
         function requested_model(self) -> string { "non-streaming" }
+        function provider(self) -> string {
+            "test"
+        }
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             baml.sys.panic("client resolution must fail before render")
         }

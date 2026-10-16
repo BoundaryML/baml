@@ -758,11 +758,86 @@ fn futures_are_spans_named_by_their_spawn() {
 }
 
 #[test]
+fn usage_ingested_before_its_ancestors_reaches_them_when_they_arrive() {
+    let usage = |input: u64| proto::ModelUsage {
+        provider: "anthropic".into(),
+        model: Some("claude-opus-5-5".into()),
+        calls: 1,
+        input_tokens: Some(input),
+        ..Default::default()
+    };
+    let completion = |id: u64, parent_id: u64, path: u64, usage: Vec<proto::ModelUsage>| {
+        Event::FunctionCompletion(proto::FunctionCompletion {
+            id,
+            parent_id,
+            node: path << 1,
+            entered_at_ticks: 10,
+            exited_at_ticks: 40,
+            completion_flags: 1,
+            usage,
+            ..Default::default()
+        })
+    };
+    let (outer, invoke, spawned, spawned_invoke) = (60, 61, 3, 71);
+    for incremental in [false, true] {
+        let project = tempfile::tempdir().unwrap();
+        let recording = Recording::new(project.path(), 1, Some([9; 16]));
+        // The invokes complete first: one under a call not yet ingested, one
+        // on a thread not yet defined.
+        let mut first = tree(vec![], vec![]);
+        first.spans = Some(proto::SpanBatch {
+            sections: vec![
+                section(ROOT, vec![completion(invoke, outer, 3, vec![usage(1)])]),
+                section(
+                    spawned,
+                    vec![completion(spawned_invoke, spawned, 3, vec![usage(10)])],
+                ),
+            ],
+        });
+        recording.write(1, first);
+        let mut index = Index::for_project(project.path(), IndexOptions::default()).unwrap();
+        if incremental {
+            index.refresh().unwrap();
+        }
+        // Then the outer call, and the thread's definition under it.
+        recording.write(
+            2,
+            proto::RecordingFile {
+                definitions: Some(proto::Definitions {
+                    threads: vec![thread(spawned, Some(outer), 5, 20)],
+                    ..Default::default()
+                }),
+                spans: Some(proto::SpanBatch {
+                    sections: vec![section(ROOT, vec![completion(outer, ROOT, 2, vec![])])],
+                }),
+                ..Default::default()
+            },
+        );
+        let id = |node| json!(format!("{}:{node}", "01".repeat(16)));
+        assert_eq!(
+            rows(
+                &mut index,
+                "SELECT span_id, total_usage[0]['input_tokens'], total_usage[1] FROM spans
+                 WHERE total_usage[0] IS NOT NULL ORDER BY span_id",
+            ),
+            // The spawned invoke's usage passes up through its thread.
+            vec![
+                vec![id(outer), json!(11), Json::Null],
+                vec![id(invoke), json!(1), Json::Null],
+                vec![id(spawned_invoke), json!(10), Json::Null],
+            ],
+            "incremental: {incremental}"
+        );
+    }
+}
+
+#[test]
 fn self_usage_is_an_invokes_own_and_total_usage_sums_the_tree() {
     let project = tempfile::tempdir().unwrap();
     let recording = Recording::new(project.path(), 1, Some([9; 16]));
     let (invoke, absorbed) = (50, 51);
     let usage = |model: Option<&str>, input: u64, read, write| proto::ModelUsage {
+        provider: "anthropic".into(),
         model: model.map(Into::into),
         calls: 1,
         input_tokens: Some(input),
@@ -837,7 +912,7 @@ fn self_usage_is_an_invokes_own_and_total_usage_sums_the_tree() {
         "SELECT span_name, self_usage, total_usage FROM spans ORDER BY span_type, span_name",
     );
     let entry = |model: &str, calls, input, read: Json, write: Json| {
-        json!({"model": model, "calls": calls, "input_tokens": input, "output_tokens": calls * 1_000,
+        json!({"provider": "anthropic", "model": model, "calls": calls, "input_tokens": input, "output_tokens": calls * 1_000,
             "cache_read_tokens": read, "cache_write_tokens": write, "reasoning_tokens": null})
     };
     let opus = entry(

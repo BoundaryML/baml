@@ -38,6 +38,10 @@ class DecisionsClient {
             self.model
         }
 
+        function provider(self) -> string {
+            "openai-decisions"
+        }
+
         /// Preview the request without resolving credentials or performing IO.
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             root.internal.decisions.request(self, input, root.internal.decisions.plan(input), true) catch_all (e) {

@@ -182,6 +182,10 @@ class Client {
             self.model
         }
 
+        function provider(self) -> string {
+            "anthropic"
+        }
+
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             root.internal.preview(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
