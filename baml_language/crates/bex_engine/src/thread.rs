@@ -228,17 +228,24 @@ impl BexThread {
                 let bex_vm::Frame::Bytecode(frame) = frame else {
                     return false;
                 };
-                // A compiled body has no bytecode position and no shielded
-                // (`defer`) regions.
-                if self.vm.frame_is_compiled(index) {
-                    return false;
-                }
-                let pc = if Some(index) == innermost {
-                    self.vm.cur_pc
-                } else {
-                    frame.instruction_ptr.checked_sub(1).unwrap_or_else(|| {
-                        unreachable!("an outer bytecode frame has executed its call instruction")
-                    })
+                let pc = match self.vm.frame_position(index) {
+                    // A compiled body has no bytecode position and no
+                    // shielded (`defer`) regions.
+                    None
+                    | Some(
+                        bex_vm::FramePosition::CompiledRunning
+                        | bex_vm::FramePosition::CompiledStub(_),
+                    ) => return false,
+                    Some(bex_vm::FramePosition::Bytecode(_)) if Some(index) == innermost => {
+                        self.vm.cur_pc
+                    }
+                    Some(bex_vm::FramePosition::Bytecode(next)) => {
+                        next.checked_sub(1).unwrap_or_else(|| {
+                            unreachable!(
+                                "an outer bytecode frame has executed its call instruction"
+                            )
+                        })
+                    }
                 };
                 let function = self.frame_function(frame.function);
                 match &function.bytecode.compact {

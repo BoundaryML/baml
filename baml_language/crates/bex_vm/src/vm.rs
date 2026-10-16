@@ -251,8 +251,9 @@ pub struct BytecodeFrame {
     pub function: HeapPtr,
     /// Instruction pointer (IP). Points to the next instruction. For a
     /// compiled frame, `crate::compiled_rt::RUNNING` or an offset into its
-    /// function's resume stub.
-    pub instruction_ptr: usize,
+    /// function's resume stub. Readers outside the interpreter go through
+    /// `BexVm::frame_position`, which asks `compiled_at` first.
+    pub(crate) instruction_ptr: usize,
     /// Local variables offset in the eval stack.
     pub(crate) locals_offset: StackIndex,
     /// Resolved type arguments for this call frame.
@@ -298,6 +299,20 @@ impl BytecodeFrame {
             context,
         }
     }
+}
+
+/// Where a frame stands, for a reader outside the interpreter
+/// (`BexVm::frame_position`): a bytecode position, or where its compiled
+/// body is (see `crate::compiled_rt::stub`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FramePosition {
+    /// The next bytecode instruction.
+    Bytecode(usize),
+    /// A compiled body on the Rust stack, or not yet started.
+    CompiledRunning,
+    /// A compiled body suspended on a request, at this offset into its
+    /// function's stub.
+    CompiledStub(usize),
 }
 
 struct CallTrace {
@@ -8338,6 +8353,26 @@ impl BexVm {
     #[must_use]
     pub fn frame_is_compiled(&self, idx: usize) -> bool {
         self.compiled_at(idx).is_some()
+    }
+
+    /// Where the frame at `idx` stands; `None` for a native continuation.
+    /// The one way out of the interpreter to a frame's position: it asks
+    /// `Self::compiled_at` first, so a compiled frame's stub offset is
+    /// never read as a bytecode position.
+    #[must_use]
+    pub fn frame_position(&self, idx: usize) -> Option<FramePosition> {
+        let Frame::Bytecode(frame) = &self.frames[idx] else {
+            return None;
+        };
+        Some(match self.compiled_at(idx) {
+            None => FramePosition::Bytecode(frame.instruction_ptr),
+            Some(crate::compiled_rt::CompiledAt::Running) => FramePosition::CompiledRunning,
+            Some(crate::compiled_rt::CompiledAt::Suspended) => {
+                let function = self.get_object(frame.function).as_callable().ok()?;
+                let stub = crate::compiled_rt::stub_start(function)?;
+                FramePosition::CompiledStub(frame.instruction_ptr - stub)
+            }
+        })
     }
 
     /// The context of the error the compiled frame at `idx` is handling, from
