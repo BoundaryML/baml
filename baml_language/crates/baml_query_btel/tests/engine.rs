@@ -947,6 +947,86 @@ fn input_tokens(index: &mut baml_query_btel::Index) -> Json {
         .clone()
 }
 
+/// An invoke that is not a span charges its usage to the owned operation
+/// it ran under: the operation totals it, and has none of its own.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_hidden_invokes_usage_reaches_its_owned_operation() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r#"
+        class Probe {
+            implements ai.Client {
+                function requested_model(self) -> string {
+                    "claude-opus-5-5"
+                }
+
+                function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+                    baml.http.Request { method: "POST", url: "https://probe.invalid", headers: {}, body: "" }
+                }
+
+                function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+                    ai.internal.with_own_call(
+                        ai.ModelTurn {
+                            calls: [],
+                            child_turns: [],
+                            content: [ai.content.Text { text: "\"short\"" }],
+                            stop_reason: ai.content.StopReason.Complete,
+                        },
+                        ai.events.ModelCall {
+                            resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-opus-5-5" },
+                            usage: null,
+                            timing: ai.events.Timing { start_time_utc_ms: null, duration_ms: null, ttft_ms: null },
+                            http_request: null,
+                            http_response: null,
+                            sse_responses: null,
+                        },
+                        ai.events.Usage { input_tokens: 900, output_tokens: 30 },
+                        "claude-opus-5-5",
+                        null,
+                    )
+                }
+            }
+        }
+
+        function Summarize(text: string) -> string {
+            client: "anthropic/claude-opus-5-5"
+            prompt: `Summarize ${text}`
+        }
+
+        function main(n: int) -> int {
+            let spec = Summarize@spec("hi");
+            let input = ai.ModelTurnInput {
+                prompt: spec.prompt_template,
+                journal: ai.Journal.new(spec),
+                toolbox: spec.tools(),
+                output_type: spec.output_type(),
+            };
+            let span = trace.start_span("op");
+            let turn = span.run(() -> {
+                Probe {}.invoke(input, $trace = trace.hidden())
+            });
+            span.finish(turn.content.length());
+            turn.content.length()
+        }
+    "#;
+    let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
+    assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(1))]);
+    let mut index = index(project.path());
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT count(*) FROM spans WHERE span_name LIKE '%Probe%'"
+        )
+        .rows,
+        vec![vec![json!(0)]],
+        "the invoke is hidden"
+    );
+    assert_eq!(usage(&mut index, "op"), vec![json!([]), json!(1), json!(900)]);
+    assert_eq!(
+        usage(&mut index, "user.main"),
+        vec![json!([]), json!(1), json!(900)]
+    );
+}
+
 /// Panics, future names and sysop time, as the engine records them. A model
 /// client that makes no HTTP request still has its usage on its invoke span.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -1284,13 +1284,14 @@ impl TelemetryState {
                 self.usage.len() - 1
             }
         };
-        let charged = &mut self.usage[index].1;
-        for entry in entries {
-            match charged.iter_mut().find(|known| known.model == entry.model) {
-                Some(known) => add_usage(known, &entry),
-                None => charged.push(entry),
-            }
-        }
+        merge_usage(&mut self.usage[index].1, entries);
+    }
+
+    /// Remove and return the usage charged to `node`, for a node whose
+    /// completion this thread does not write (an owned span).
+    pub(crate) fn take_model_usage(&mut self, node: TelemetryId) -> Option<Vec<btel_records::ModelUsage>> {
+        let index = self.usage.iter().position(|(id, _)| *id == node)?;
+        Some(self.usage.swap_remove(index).1)
     }
 
     /// Write the usage charged to `node`, just before its completion.
@@ -1651,6 +1652,19 @@ pub(crate) fn test_runtime() -> Arc<btel_processor::TelemetryRuntime> {
     static RUNTIME: std::sync::OnceLock<Arc<btel_processor::TelemetryRuntime>> =
         std::sync::OnceLock::new();
     Arc::clone(RUNTIME.get_or_init(|| btel_processor::TelemetryRuntime::new().unwrap()))
+}
+
+/// Add `entries` into `charged`, summing the entries for one model.
+pub(crate) fn merge_usage(
+    charged: &mut Vec<btel_records::ModelUsage>,
+    entries: Vec<btel_records::ModelUsage>,
+) {
+    for entry in entries {
+        match charged.iter_mut().find(|known| known.model == entry.model) {
+            Some(known) => add_usage(known, &entry),
+            None => charged.push(entry),
+        }
+    }
 }
 
 /// Sum `added` into `into`. A count stays `None` only when both are.
