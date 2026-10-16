@@ -14,9 +14,10 @@ pub struct NativeBuiltin {
     /// The declaring namespace (no package, no class): `"fs"` for
     /// `baml.fs.File.read`, `""` for a top-level class or item.
     /// Carried STRUCTURALLY from extraction — the `path` alone cannot be
-    /// split, because an impl-block class segment embeds the WRITTEN
-    /// interface target, which may itself be dotted
-    /// (`root.io.Read$for$File`).
+    /// split, because an impl-block class segment embeds the interface
+    /// target as the native key spells it — a written `root.` as the
+    /// package's fixed name — which may itself be dotted
+    /// (`baml.io.Read$for$File`).
     pub namespace: String,
     /// The full class segment (`Class` or `{iface}$for${Class}`) for a
     /// method; `None` for a free item. Same structural-carry rationale as
@@ -219,8 +220,8 @@ mod tests {
             "BamlRandomRngForSystemRandomRandom"
         );
         assert_eq!(
-            variant("baml.fs.root.io.Read$for$File.read"),
-            "BamlFsRootIoReadForFileRead"
+            variant("baml.fs.baml.io.Read$for$File.read"),
+            "BamlFsBamlIoReadForFileRead"
         );
     }
 }

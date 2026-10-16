@@ -546,7 +546,10 @@ mod tests {
                 "ns_shapes/shapes.baml",
                 "class Box { w int }\nfunction make(b: Box) -> int { 1 }",
             ),
-            ("main.baml", "function use_box(b: shapes.Box) -> int { 1 }"),
+            (
+                "main.baml",
+                "function use_box(b: root.shapes.Box) -> int { 1 }",
+            ),
         ]);
         let listing = list_functions_with_metadata(&db, package);
         let expected_ref = json!({ "type": "ref", "name": "user.shapes.Box" });

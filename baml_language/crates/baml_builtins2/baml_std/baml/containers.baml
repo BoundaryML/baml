@@ -238,7 +238,7 @@ class Array<T> {
     //baml:mut_vm
     //baml:may_yield
     //baml:mut_self
-    function sort_by<E>(self, compare: (T, T) -> baml.ops.Ordering throws E) -> T[] throws E {
+    function sort_by<E>(self, compare: (T, T) -> root.ops.Ordering throws E) -> T[] throws E {
         $rust_function
     }
 
@@ -258,7 +258,7 @@ class Array<T> {
     /// The key type must implement `baml.ops.Compare`, whose ordering is total
     /// and `throws never`, so the only error is the key callback's own `E`.
     //baml:mut_self
-    function sort_by_key<U extends baml.ops.Compare, E>(
+    function sort_by_key<U extends root.ops.Compare, E>(
         self,
         key: (T) -> U throws E,
     ) -> T[] throws E {
@@ -280,11 +280,11 @@ class Array<T> {
             order.push(p);
             p += 1;
         }
-        order.sort_by((i: int, j: int) -> baml.ops.Ordering throws never {
+        order.sort_by((i: int, j: int) -> root.ops.Ordering throws never {
             match (keys.at(i)) {
-                null => baml.ops.Ordering.Equal,
+                null => root.ops.Ordering.Equal,
                 let ki: U => match (keys.at(j)) {
-                    null => baml.ops.Ordering.Equal,
+                    null => root.ops.Ordering.Equal,
                     let kj: U => ki.cmp(kj),
                 },
             }

@@ -1,13 +1,19 @@
 // `reflect` is an ordinary root package (#4543), so a user-defined name
 // spelled `reflect` shadows it exactly the way it shadows any other package
-// name: ordinary resolution runs first, and the package is reached only for
-// what the user's name does not answer.
+// name: an item of this namespace claims the head of `reflect.x`, and the
+// package is unreachable by that name from here (the rejected side is
+// `diagnostic_errors/local_item_shadows_package`).
 
 class reflect {
     label string
 
     function describe(self) -> string {
         return "user-" + self.label
+    }
+
+    // Spelled like the package's free function `reflect.signature`.
+    function signature(self) -> string {
+        return "member-" + self.label
     }
 }
 
@@ -31,16 +37,11 @@ function local_shadows_package() -> int {
     return reflect + 1
 }
 
-function helper(q: string) -> string throws never {
-    return q + "!"
-}
-
-// The class answers for `describe` and nothing else, so a name it does not
-// declare still reaches the package.
-function package_still_reachable() -> string {
-    let f: reflect.AnyFunction = helper
-    let sig = reflect.signature(f)
-    return sig.returns.to_string()
+// The class shadows the package entirely: `reflect.signature` is the
+// class's method, not the package's function of that name.
+function class_member_over_package_function() -> string {
+    let s = reflect.signature
+    return s(reflect { label: "sig" })
 }
 
 test "user class shadows the package" {
@@ -55,6 +56,6 @@ test "local shadows the package" {
     assert.equal(local_shadows_package(), 2)
 }
 
-test "package name still reachable" {
-    assert.equal(package_still_reachable(), "string")
+test "class member over package function" {
+    assert.equal(class_member_over_package_function(), "member-sig")
 }

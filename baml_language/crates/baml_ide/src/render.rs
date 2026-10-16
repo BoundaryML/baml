@@ -22,252 +22,179 @@
 use baml_base::{LangRoots, Name, SourceFile, SourceRoot};
 use baml_compiler2_hir::{
     item_data::{FunctionData, GenericParamData},
-    package::{PackageItems, Spelling, lang_roots, spelling},
+    package::lang_roots,
     type_ref::{TypeRefId, TypeRefStore},
 };
 use baml_compiler2_hir_ty::render::Viewpoint;
-use baml_type::{DeclName, Ty, TyRenderStrategy, user_facing::humanize_type_string};
+use baml_type::{DeclName, Ty, TyRenderStrategy, TypeName, user_facing::humanize_type_string};
+
+// ── Package labels ────────────────────────────────────────────────────────────
+
+/// A package's display label for listings, exports, and generated SDKs, as
+/// seen from `viewer` — the package the reader is in: the package whose
+/// program a listing or a generated SDK describes, the package being
+/// exported, the file a hover is answered for
+/// ([`Viewpoint::display_package`]: its declared name, else the name
+/// `viewer`'s nearest edge reaches it by, else the stand-in). A database may
+/// hold many packages, so no output is rendered from a package the reader
+/// is not in. Display only: the SDK boundary keys its symbols on it until it
+/// refers to declarations by image identity.
+pub fn package_label(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
+    root: SourceRoot,
+) -> Name {
+    Viewpoint::user_facing(db, viewer).display_label(root)
+}
+
+/// The name `viewer`'s root namespace addresses `root` by, for a listing a
+/// reader pastes back into `baml describe`: the viewer's edge name for it
+/// where it has one — a dependency declared `foo` but depended on as `bar`
+/// resolves only as `bar` — else its display label ([`package_label`]), which
+/// is also the viewer's own.
+pub fn package_address(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
+    root: SourceRoot,
+) -> Name {
+    let viewpoint = Viewpoint::user_facing(db, viewer);
+    match viewpoint.package_prefix(root) {
+        Some(prefix) => Name::new(prefix.as_ref()),
+        None => viewpoint.display_label(root),
+    }
+}
+
+/// A compile-time head packed into a wire name for the symbol pool
+/// ([`Viewpoint::wire_head`]): the viewer's own package `Local`, by identity,
+/// every other package under [`package_label`]. Never an identity.
+pub fn wire_head(db: &dyn baml_compiler2_hir::Db, viewer: SourceRoot, decl: &DeclName) -> TypeName {
+    Viewpoint::user_facing(db, viewer).wire_head(decl)
+}
+
+/// A compile-time head with its package always spelled under
+/// [`package_label`] ([`Viewpoint::labelled_head`]), for the export, whose
+/// ids name every package. Never an identity.
+pub fn labelled_head(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
+    decl: &DeclName,
+) -> TypeName {
+    Viewpoint::user_facing(db, viewer).labelled_head(decl)
+}
+
+/// The wire package of `root` for a symbol pool keyed from `viewer`: `Local`
+/// for the viewer itself, by identity, else a dependency under
+/// [`package_label`] — the rule [`wire_head`] applies to a head.
+pub fn pool_package(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
+    root: SourceRoot,
+) -> baml_type::Package {
+    if root == viewer {
+        baml_type::Package::Local
+    } else {
+        baml_type::Package::Dep(package_label(db, viewer, root))
+    }
+}
+
+// ── Readers ──────────────────────────────────────────────────────────────────
+
+/// Who is reading an IDE answer, and the one viewpoint every path in that
+/// answer is spelled from: a file (hover — paths as source in that file
+/// writes them, bare for its own namespace) or a package as a whole
+/// (`baml describe` — the package's root namespace, where every item of the
+/// package is `root.<ns>.<Name>` or bare). Hover and describe share the code
+/// that assembles an answer; the reader is what they do not share.
+pub struct Reader<'a> {
+    db: &'a dyn baml_compiler2_hir::Db,
+    viewpoint: Viewpoint<'a>,
+    viewer: SourceRoot,
+}
+
+impl<'a> Reader<'a> {
+    /// A reader at `file`: a hover's.
+    pub fn of_file(db: &'a dyn baml_compiler2_hir::Db, file: SourceFile) -> Self {
+        Self {
+            db,
+            viewpoint: Viewpoint::for_file(db, file),
+            viewer: file.source_root(db),
+        }
+    }
+
+    /// A reader addressing `viewer`'s package as a whole: `baml describe`'s.
+    pub fn of_package(db: &'a dyn baml_compiler2_hir::Db, viewer: SourceRoot) -> Self {
+        Self {
+            db,
+            viewpoint: Viewpoint::user_facing(db, viewer),
+            viewer,
+        }
+    }
+
+    /// The reader's package.
+    pub fn viewer(&self) -> SourceRoot {
+        self.viewer
+    }
+
+    /// `ty` as the reader writes it, declarations spelled in full
+    /// (`baml.String`): the form of a diagnostic or a type line.
+    pub fn display_ty(&self, ty: &Ty) -> String {
+        ty.render_with(&IdeTyRender {
+            viewpoint: &self.viewpoint,
+            collapse_aliases: None,
+        })
+    }
+
+    /// `ty` in the paste-back spelling: builtin companion classes as their
+    /// alias (`string`, `image`, `json`), every other declaration as the
+    /// reader writes it. The form of a describe row, a signature, an owner.
+    pub fn display_addressable_ty(&self, ty: &Ty) -> String {
+        ty.render_with(&IdeTyRender {
+            viewpoint: &self.viewpoint,
+            collapse_aliases: Some(lang_roots(self.db)),
+        })
+    }
+
+    /// A declaration in the paste-back spelling ([`Self::display_addressable_ty`]
+    /// for a head).
+    pub fn addressable_path(&self, qtn: &DeclName) -> String {
+        IdeTyRender {
+            viewpoint: &self.viewpoint,
+            collapse_aliases: Some(lang_roots(self.db)),
+        }
+        .path(qtn)
+    }
+}
 
 // ── Resolved-type rendering ───────────────────────────────────────────────────
 
-/// Context for hover/completion type rendering: knows the file's current
-/// package + namespace so qualified names collapse to the shortest
-/// unambiguous form (bare when in scope, `root.path` when not, the dependency
-/// package prefix for cross-package types). Implements [`TyRenderStrategy`]
-/// so the structural walk lives once in `baml_type`.
-struct TyDisplayContext<'db> {
-    current_root: SourceRoot,
-    current_namespace: Vec<Name>,
-    package_items: &'db PackageItems<'db>,
-    spelling: &'db Spelling,
-    /// How this package spells other packages: the viewer's edge names.
-    viewpoint: Viewpoint<'db>,
-    lang: LangRoots,
-    /// When set, collapse builtin companion classes to their lowercase
-    /// primitive/keyword alias (`baml.String` → `string`, `baml.json.json` →
-    /// `json`). Only the describe + hover + signature paths opt in (via
-    /// [`display_ty_canonical_for_file`]); diagnostics/completions/inlay
-    /// hints keep the un-collapsed spelling.
-    collapse_aliases: bool,
+/// The IDE's naming policy over a [`Viewpoint`]: the viewpoint spells every
+/// declaration — bare in the viewing namespace, `root.`-qualified elsewhere
+/// in the viewer's package, the viewer's edge name for a dependency, every
+/// package spelled when canonical — and this adds the two IDE-only choices:
+/// whether a builtin companion class collapses to its lowercase alias
+/// (`baml.String` → `string`, `baml.media.Image` → `image`, `baml.json.json`
+/// → `json`), which describe, hover and signatures opt into, and `callback`
+/// for a synthetic effect parameter in every mode. Implements
+/// [`TyRenderStrategy`] so the structural walk lives once in `baml_type`.
+struct IdeTyRender<'v, 'a> {
+    viewpoint: &'v Viewpoint<'a>,
+    /// Collapse builtin companion classes to their alias through these
+    /// language roots; `None` keeps the declaration spelling.
+    collapse_aliases: Option<LangRoots>,
 }
 
-impl TyDisplayContext<'_> {
-    fn display_qtn(&self, qtn: &DeclName) -> String {
-        if self.collapse_aliases
-            && let Some(alias) = qtn.builtin_alias(self.lang)
+impl IdeTyRender<'_, '_> {
+    fn path(&self, qtn: &DeclName) -> String {
+        if let Some(lang) = self.collapse_aliases
+            && let Some(alias) = qtn.builtin_alias(lang)
         {
             return alias.to_string();
         }
-
-        if qtn.root() == self.current_root && self.can_use_bare_name(qtn) {
-            return qtn.name().to_string();
-        }
-        if qtn.root() != self.current_root {
-            // Cross-package: spelled the way this package writes it (its
-            // edge name), or by provenance when it has no edge to it.
-            return self.viewpoint.path(qtn);
-        }
-
-        // An own-package name that is not bare here spells the full canonical
-        // path — the real package name, never the `root.` source shorthand
-        // (correct only inside the defining package, and signatures are read
-        // from outside it). Runtime-minted declarations carry no spelling
-        // caveat any more: their identity is the type tag, so the written
-        // name IS the name.
-        canonical_path_in(self.spelling, qtn)
-    }
-
-    fn can_use_bare_name(&self, qtn: &DeclName) -> bool {
-        if qtn.namespace() == &self.current_namespace {
-            return true;
-        }
-
-        if qtn.namespace().is_empty() {
-            return self
-                .package_items
-                .lookup_type(&self.current_namespace, qtn.name())
-                .is_none();
-        }
-
-        false
+        self.viewpoint.path(qtn)
     }
 }
 
-impl TyRenderStrategy<DeclName> for TyDisplayContext<'_> {
-    fn qtn(&self, qtn: &DeclName) -> String {
-        self.display_qtn(qtn)
-    }
-
-    fn type_var(&self, name: &Name) -> String {
-        if baml_type::is_synthetic_effect_param(name) {
-            "callback".to_string()
-        } else {
-            name.to_string()
-        }
-    }
-}
-
-/// The canonical path of a declaration: every package spelled as the
-/// program spells it, nothing elided.
-fn canonical_path_in(spelling: &Spelling, qtn: &DeclName) -> String {
-    std::iter::once(spelling.of(qtn.root()).as_str())
-        .chain(qtn.namespace().iter().map(Name::as_str))
-        .chain(std::iter::once(qtn.name().as_str()))
-        .collect::<Vec<_>>()
-        .join(".")
-}
-
-/// `canonical_path_in` over the database's spelling.
-pub fn canonical_path(db: &dyn baml_compiler2_hir::Db, qtn: &DeclName) -> String {
-    canonical_path_in(spelling(db), qtn)
-}
-
-/// The addressable spelling of a declaration as `viewer` writes it: the
-/// shortest form that pastes back into `baml describe` (and name resolution
-/// generally) and finds it again from any scope of that package — a builtin
-/// companion's lowercase alias (`string`); the viewer's own type by its bare
-/// name at package root, `root.<ns>.<Name>` in a namespace (the viewer's
-/// package is addressed as `root`); any other package's type by the path the
-/// viewer reaches it under (`baml.json.JsonObject`).
-pub fn addressable_path(
-    db: &dyn baml_compiler2_hir::Db,
-    viewer: SourceRoot,
-    qtn: &DeclName,
-) -> String {
-    AddressableTyRender::new(db, viewer).path(qtn)
-}
-
-/// Package-context-free strategy: full canonical paths, hides `(evolving)`,
-/// and shows synthetic effect params as `callback`. Used by [`display_ty`]
-/// where no current-package context is available.
-struct PlainTyRender<'a>(&'a Spelling);
-
-impl TyRenderStrategy<DeclName> for PlainTyRender<'_> {
-    fn qtn(&self, qtn: &DeclName) -> String {
-        canonical_path_in(self.0, qtn)
-    }
-
-    fn type_var(&self, name: &Name) -> String {
-        if baml_type::is_synthetic_effect_param(name) {
-            "callback".to_string()
-        } else {
-            name.to_string()
-        }
-    }
-}
-
-/// Render `ty` in `file`'s package/namespace context — the hover/completion
-/// form.
-pub fn display_ty_for_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile, ty: &Ty) -> String {
-    display_ty_for_file_impl(db, file, ty, false)
-}
-
-/// Like [`display_ty_for_file`], but collapses builtin companion classes to
-/// their lowercase primitive/keyword alias (`baml.String` → `string`,
-/// `baml.media.Image` → `image`, `baml.json.json` → `json`). This is the
-/// canonical type printer used by the describe + hover + signature paths;
-/// other call sites (diagnostics, completions, inlay hints) keep the
-/// un-collapsed [`display_ty_for_file`].
-pub fn display_ty_canonical_for_file(
-    db: &dyn baml_compiler2_hir::Db,
-    file: SourceFile,
-    ty: &Ty,
-) -> String {
-    display_ty_for_file_impl(db, file, ty, true)
-}
-
-fn display_ty_for_file_impl(
-    db: &dyn baml_compiler2_hir::Db,
-    file: SourceFile,
-    ty: &Ty,
-    collapse_aliases: bool,
-) -> String {
-    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let package_items = baml_compiler2_hir::package::package_items(db, pkg_info.root);
-    let ctx = TyDisplayContext {
-        current_root: pkg_info.root,
-        current_namespace: pkg_info.namespace_path,
-        package_items,
-        spelling: spelling(db),
-        viewpoint: Viewpoint::user_facing(db, pkg_info.root),
-        lang: lang_roots(db),
-        collapse_aliases,
-    };
-    ty.render_with(&ctx)
-}
-
-/// Format a resolved [`Ty`] as a user-friendly string without file context.
-///
-/// Full canonical paths so same-short-name types stay distinguishable;
-/// synthetic effect params show as `callback`. With file context available,
-/// prefer [`display_ty_for_file`].
-pub fn display_ty(db: &dyn baml_compiler2_hir::Db, ty: &Ty) -> String {
-    ty.render_with(&PlainTyRender(spelling(db)))
-}
-
-/// Render `ty` for a hover owner line: full canonical paths — member owners
-/// never elide, the reader may be hovering from any package — with builtin
-/// companion classes collapsed to their reader-facing alias (`baml.String`
-/// → `string`). Combined with `class_self_ty`'s builtin bridging this
-/// spells a method's container the way the reader writes the receiver:
-/// `T[]`, `map<K, V>`, `string`, `user.util.Widget<T>`.
-pub fn display_owner_ty(db: &dyn baml_compiler2_hir::Db, ty: &Ty) -> String {
-    ty.render_with(&OwnerTyRender {
-        spelling: spelling(db),
-        lang: lang_roots(db),
-    })
-}
-
-/// Render `ty` for a `baml describe` row read from `viewer`: every named type
-/// in the paste-back spelling of [`addressable_path`] (`string`, `Foo`,
-/// `root.ns.Foo`, `baml.json.JsonObject`), so a type a row names can be fed
-/// straight back into `baml describe` from any scope of that package.
-pub fn display_addressable_ty(
-    db: &dyn baml_compiler2_hir::Db,
-    viewer: SourceRoot,
-    ty: &Ty,
-) -> String {
-    ty.render_with(&AddressableTyRender::new(db, viewer))
-}
-
-/// Strategy for [`display_addressable_ty`]: [`OwnerTyRender`] with the QTN
-/// spelling swapped for the describe addressing convention.
-struct AddressableTyRender<'a> {
-    /// How the reader's package reaches every other: its own is elided (and
-    /// addressed as `root`), a dependency carries the reader's edge name.
-    viewpoint: Viewpoint<'a>,
-    lang: LangRoots,
-}
-
-impl<'a> AddressableTyRender<'a> {
-    fn new(db: &'a dyn baml_compiler2_hir::Db, viewer: SourceRoot) -> Self {
-        Self {
-            viewpoint: Viewpoint::user_facing(db, viewer),
-            lang: lang_roots(db),
-        }
-    }
-
-    fn path(&self, qtn: &DeclName) -> String {
-        if let Some(alias) = qtn.builtin_alias(self.lang) {
-            return alias.to_string();
-        }
-        // Runtime-minted declarations no longer thread a discriminator
-        // through the namespace (their identity is the type tag), so the
-        // written namespace is the address.
-        let package = match self.viewpoint.package_prefix(qtn.root()) {
-            None if qtn.namespace().is_empty() => return qtn.name().to_string(),
-            None => baml_type::ADDRESSABLE_USER_PACKAGE,
-            Some(package) => package,
-        };
-        std::iter::once(package)
-            .chain(qtn.namespace().iter().map(Name::as_str))
-            .chain(std::iter::once(qtn.name().as_str()))
-            .collect::<Vec<_>>()
-            .join(".")
-    }
-}
-
-impl TyRenderStrategy<DeclName> for AddressableTyRender<'_> {
+impl TyRenderStrategy<DeclName> for IdeTyRender<'_, '_> {
     fn qtn(&self, qtn: &DeclName) -> String {
         self.path(qtn)
     }
@@ -281,26 +208,119 @@ impl TyRenderStrategy<DeclName> for AddressableTyRender<'_> {
     }
 }
 
-/// Strategy for [`display_owner_ty`]: [`PlainTyRender`] plus the companion
-/// alias collapse of [`display_ty_canonical_for_file`].
-struct OwnerTyRender<'a> {
-    spelling: &'a Spelling,
-    lang: LangRoots,
+/// The canonical path of a declaration: every package spelled as the
+/// program spells it, nothing elided.
+pub fn canonical_path(db: &dyn baml_compiler2_hir::Db, qtn: &DeclName) -> String {
+    Viewpoint::canonical(db).path(qtn)
 }
 
-impl TyRenderStrategy<DeclName> for OwnerTyRender<'_> {
-    fn qtn(&self, qtn: &DeclName) -> String {
-        qtn.builtin_alias(self.lang)
-            .map_or_else(|| canonical_path_in(self.spelling, qtn), str::to_string)
-    }
+/// The addressable spelling of a declaration as `viewer`'s root namespace
+/// writes it: the shortest form that pastes back into `baml describe`, which
+/// resolves from there — a builtin companion's lowercase alias (`string`);
+/// the viewer's own type by its bare name at package root, `root.<ns>.<Name>`
+/// in a namespace (the viewer's package is addressed as `root`); any other
+/// package's type by the path the viewer reaches it under
+/// (`baml.json.JsonObject`). Source in another namespace of the package
+/// writes the first form `root.`-qualified ([`addressable_path_for_file`]).
+pub fn addressable_path(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
+    qtn: &DeclName,
+) -> String {
+    Reader::of_package(db, viewer).addressable_path(qtn)
+}
 
-    fn type_var(&self, name: &Name) -> String {
-        if baml_type::is_synthetic_effect_param(name) {
-            "callback".to_string()
-        } else {
-            name.to_string()
-        }
+/// The addressable spelling of a declaration as source in `file` writes it
+/// ([`addressable_path`] from the file's namespace): bare for a declaration
+/// of that namespace, `root.<ns>.<Name>` elsewhere in its package, the
+/// file's package's edge name for any other. The hover form for an owner
+/// line, which the reader pastes back from where the cursor is.
+pub fn addressable_path_for_file(
+    db: &dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    qtn: &DeclName,
+) -> String {
+    IdeTyRender {
+        viewpoint: &Viewpoint::for_file(db, file),
+        collapse_aliases: Some(lang_roots(db)),
     }
+    .path(qtn)
+}
+
+/// Render `ty` in `file`'s package/namespace context — the hover/completion
+/// form: what source in that file writes.
+pub fn display_ty_for_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile, ty: &Ty) -> String {
+    ty.render_with(&IdeTyRender {
+        viewpoint: &Viewpoint::for_file(db, file),
+        collapse_aliases: None,
+    })
+}
+
+/// Render `ty` as a reader anywhere in `viewer`'s package writes it: the
+/// package's own declarations bare at its root namespace and `root.ns.Name`
+/// elsewhere, every other package by the viewer's edge name. The hover and
+/// describe form for a declaration READ from `viewer` but defined elsewhere
+/// (another package, another namespace), whose own file is not the reader's.
+pub fn display_ty_for_viewer(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
+    ty: &Ty,
+) -> String {
+    Reader::of_package(db, viewer).display_ty(ty)
+}
+
+/// Like [`display_ty_for_file`], but collapses builtin companion classes to
+/// their lowercase primitive/keyword alias (`baml.String` → `string`,
+/// `baml.media.Image` → `image`, `baml.json.json` → `json`). This is the
+/// canonical type printer used by the describe + hover + signature paths;
+/// other call sites (diagnostics, completions, inlay hints) keep the
+/// un-collapsed [`display_ty_for_file`].
+pub fn display_ty_canonical_for_file(
+    db: &dyn baml_compiler2_hir::Db,
+    file: SourceFile,
+    ty: &Ty,
+) -> String {
+    ty.render_with(&IdeTyRender {
+        viewpoint: &Viewpoint::for_file(db, file),
+        collapse_aliases: Some(lang_roots(db)),
+    })
+}
+
+/// Format a resolved [`Ty`] as a user-friendly string without file context.
+///
+/// Full canonical paths so same-short-name types stay distinguishable;
+/// synthetic effect params show as `callback`. With file context available,
+/// prefer [`display_ty_for_file`].
+pub fn display_ty(db: &dyn baml_compiler2_hir::Db, ty: &Ty) -> String {
+    ty.render_with(&IdeTyRender {
+        viewpoint: &Viewpoint::canonical(db),
+        collapse_aliases: None,
+    })
+}
+
+/// Render `ty` for an owner line where no reader is looking (a symbol
+/// listing): full canonical paths, with builtin companion classes collapsed
+/// to their reader-facing alias (`baml.String` → `string`). Combined with
+/// `class_self_ty`'s builtin bridging this spells a method's container the
+/// way the reader writes the receiver: `T[]`, `map<K, V>`, `string`,
+/// `user.util.Widget<T>`.
+pub fn display_owner_ty(db: &dyn baml_compiler2_hir::Db, ty: &Ty) -> String {
+    ty.render_with(&IdeTyRender {
+        viewpoint: &Viewpoint::canonical(db),
+        collapse_aliases: Some(lang_roots(db)),
+    })
+}
+
+/// Render `ty` for a `baml describe` row read from `viewer`: every named type
+/// in the paste-back spelling of [`addressable_path`] (`string`, `Foo`,
+/// `root.ns.Foo`, `baml.json.JsonObject`), so a type a row names can be fed
+/// straight back into `baml describe`.
+pub fn display_addressable_ty(
+    db: &dyn baml_compiler2_hir::Db,
+    viewer: SourceRoot,
+    ty: &Ty,
+) -> String {
+    Reader::of_package(db, viewer).display_addressable_ty(ty)
 }
 
 // ── Unresolved-type rendering (firewall type refs) ────────────────────────────
@@ -342,7 +362,7 @@ fn display_type_ref_as_function_result(store: &TypeRefStore, id: TypeRefId) -> S
 pub fn display_type_ref(store: &TypeRefStore, id: TypeRefId) -> String {
     use baml_compiler2_hir::type_ref::TypeRefKind as K;
     let rendered = match &store[id].kind {
-        K::Path { segments, .. } => segments
+        K::Path { path, .. } => path
             .last()
             .map(|n| n.as_str().to_string())
             .unwrap_or_else(|| "unknown".to_string()),
@@ -617,18 +637,34 @@ impl<'db> FnSigParts<'db> {
         self.render_with(style, |slot| slot.render(db, file, style))
     }
 
-    /// [`Self::render`] for a row with no defining file in this database — a
-    /// served package's — every resolved slot spelled addressably from
-    /// `viewer`'s package ([`display_addressable_ty`]).
+    /// [`Self::render`] for a signature READ from `viewer`'s package rather
+    /// than from the file defining it — a served package's row, or a source
+    /// item of another package or namespace shown in a hover or `describe`:
+    /// every resolved slot spelled from the viewer's package
+    /// ([`display_addressable_ty`] / [`display_ty_for_viewer`] per `style`).
     pub fn render_for_viewer(
         &self,
         db: &dyn baml_compiler2_hir::Db,
         viewer: SourceRoot,
         style: SigStyle,
     ) -> String {
+        self.render_for(&Reader::of_package(db, viewer), style)
+    }
+
+    /// [`Self::render`] for `reader`: every resolved slot spelled as the
+    /// reader writes it ([`Reader::display_addressable_ty`] /
+    /// [`Reader::display_ty`] per `style`).
+    pub fn render_for(&self, reader: &Reader<'_>, style: SigStyle) -> String {
+        let display = |ty: &Ty| {
+            if style.canonical_resolved {
+                reader.display_addressable_ty(ty)
+            } else {
+                reader.display_ty(ty)
+            }
+        };
         self.render_with(style, |slot| match slot {
-            SigSlot::Resolved(ty) => display_addressable_ty(db, viewer, ty),
-            SigSlot::ResolvedOwned(ty) => display_addressable_ty(db, viewer, ty),
+            SigSlot::Resolved(ty) => display(ty),
+            SigSlot::ResolvedOwned(ty) => display(ty),
             SigSlot::Syntax(store, id) => style.type_form.render(store, *id),
             SigSlot::Missing => MISSING_RETURN.to_string(),
             SigSlot::Inferred => PENDING_INFERENCE.to_string(),

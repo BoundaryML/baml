@@ -36,15 +36,21 @@ impl ExprMetadataKey {
     }
 }
 
-/// HIR resolution of a value path's root segment.
+/// HIR's reading of a value path's first segment, recorded for every
+/// `Path` expression while the lexical scope stack is active.
 ///
-/// Local roots are resolved to declaration identity while the lexical scope
-/// stack is active. Non-local roots are completed by TIR because package-item
-/// resolution would introduce a HIR query cycle.
+/// A binding wins over everything (`#4543`: a local named `reflect` shadows
+/// the package). Otherwise the head is a package or a plain name
+/// ([`PathHead`]); which ITEM a plain name or a package path reaches is the
+/// checker's to complete — looking a package's items up here would cycle
+/// `file_semantic_index` through `package_items`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathResolution {
+    /// A binding or parameter in scope; every later segment is a member of
+    /// its value.
     Local(BindingId),
-    Unknown,
+    /// Not a binding: an item path starting at `head`.
+    Item(PathHead),
 }
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -53,6 +59,7 @@ use crate::{
     contributions::FileSymbolContributions,
     diagnostic::Hir2Diagnostic,
     item_tree::{ItemTree, ItemTreeSourceMap},
+    package::PathHead,
     scope::{FileScopeId, ItemScopeOwner, Scope, ScopeId, ScopeKind},
 };
 

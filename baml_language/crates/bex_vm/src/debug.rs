@@ -336,9 +336,9 @@ fn display_object_from_pool(index: usize, objects: &ObjectPool) -> String {
     if let Some(obj) = objects.get(index) {
         match obj {
             Object::String(s) => format!("{s:?}"),
-            Object::Function(f) => format!("<fn {}>", f.name),
-            Object::Class(c) => format!("<class {}>", c.name),
-            Object::Enum(e) => format!("<enum {}>", e.name),
+            Object::Function(f) => format!("<fn {}>", f.name()),
+            Object::Class(c) => format!("<class {}>", c.name()),
+            Object::Enum(e) => format!("<enum {}>", e.name()),
             _ => format!("<object {index}>"),
         }
     } else {
@@ -356,7 +356,7 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
             // SAFETY: During debug display, we assume the pointer is valid
             let class = unsafe { instance.class.get() };
             match class {
-                Object::Class(class) => format!("<{} instance>", class.name),
+                Object::Class(class) => format!("<{} instance>", class.name()),
                 // This will most likely never happen, but we're trying not
                 // to panic.
                 other => format!("<{other} instance>"),
@@ -367,7 +367,7 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
             // SAFETY: During debug display, we assume the pointer is valid
             let enm = unsafe { variant.enm.get() };
             match enm {
-                Object::Enum(enm) => format!("<{} variant>", enm.name),
+                Object::Enum(enm) => format!("<{} variant>", enm.name()),
                 other => format!("<{other} variant>"),
             }
         }

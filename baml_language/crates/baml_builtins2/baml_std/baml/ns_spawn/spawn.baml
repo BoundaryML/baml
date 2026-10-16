@@ -152,7 +152,7 @@ class Limit {
     ///
     /// `InvalidArgument` if `capacity` is not positive.
     //baml:mut_vm
-    function new(capacity: int) -> Limit throws baml.errors.InvalidArgument {
+    function new(capacity: int) -> Limit throws root.errors.InvalidArgument {
         $rust_function
     }
 
@@ -210,6 +210,6 @@ implements<T, E> Modifier<T, E> for CancelToken {
 /// `spawn ... { }`.
 ///
 /// Starts `plan` and returns the new task's future. Never throws.
-function __spawn<T, E>(plan: Plan<T, E>) -> baml.future.Future<T, E> throws never {
+function __spawn<T, E>(plan: Plan<T, E>) -> root.future.Future<T, E> throws never {
     $spawn
 }

@@ -21,7 +21,7 @@ use sys_types::{
 #[must_use]
 pub fn class_definition(class: &Class) -> ClassDefinition {
     ClassDefinition {
-        name: class.name.display_name().to_string(),
+        name: class.name().display_name().to_string(),
         description: class.description.clone(),
         docstring: class.docstring.clone(),
         alias: class.alias.clone(),
@@ -53,7 +53,7 @@ pub fn parse_class(class: &Class, field_types: &[RealizedTy]) -> ParseClass {
         class.fields.len(),
         field_types.len(),
         "an instantiation of `{}` realizes every field",
-        class.name.display_name()
+        class.name().display_name()
     );
     ParseClass {
         fields: class
@@ -77,7 +77,7 @@ pub fn parse_class(class: &Class, field_types: &[RealizedTy]) -> ParseClass {
 #[must_use]
 pub fn enum_definition(enm: &Enum) -> EnumDefinition {
     EnumDefinition {
-        name: enm.name.display_name().to_string(),
+        name: enm.name().display_name().to_string(),
         description: enm.description.clone(),
         docstring: enm.docstring.clone(),
         alias: enm.alias.clone(),
@@ -127,8 +127,11 @@ pub fn lane_template(template: &TyTemplate) -> SapTyTemplate {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{DeclarationName, Name, typetag::TypeTag};
-    use bex_vm_types::{ClassField, EnumVariant, types::Owner};
+    use baml_type::{Name, typetag::TypeTag};
+    use bex_vm_types::{
+        ClassField, EnumVariant,
+        types::{LocalName, Owner},
+    };
     use indexmap::IndexMap;
 
     use super::*;
@@ -168,7 +171,7 @@ mod tests {
     #[test]
     fn class_definition_keeps_skipped_fields_flagged() {
         let class = Class {
-            name: DeclarationName::Anonymous(Name::new("Person")),
+            path: LocalName::new(Vec::new(), Name::new("Person")),
             fields: vec![
                 field("name", RuntimeTy::String, TyTemplate::String, false),
                 field("age", RuntimeTy::Int, TyTemplate::Int, true),
@@ -179,7 +182,7 @@ mod tests {
             other: IndexMap::new(),
             stream_done: false,
             type_tag: TypeTag::fresh_dynamic(),
-            has_cleanup: false,
+            cleanup: None,
             generic_param_count: 0,
             owner: Owner::anonymous(),
             methods: IndexMap::new(),
@@ -199,7 +202,7 @@ mod tests {
     #[test]
     fn enum_definition_leaves_out_skipped_variants() {
         let enm = Enum {
-            name: DeclarationName::Anonymous(Name::new("Color")),
+            path: LocalName::new(Vec::new(), Name::new("Color")),
             type_tag: TypeTag::fresh_dynamic(),
             variants: vec![variant("Red", false), variant("Hidden", true)],
             description: None,

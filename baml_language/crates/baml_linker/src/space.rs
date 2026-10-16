@@ -262,7 +262,7 @@ pub(super) fn relocate(object: &mut Object, space: &impl OperandSpace) -> Result
                 return Err(LinkError::invalid(format!(
                     "package `{}`: function `{}` states a switch by values instead of keys",
                     space.name(),
-                    function.name
+                    function.name()
                 )));
             };
             for key in keys {

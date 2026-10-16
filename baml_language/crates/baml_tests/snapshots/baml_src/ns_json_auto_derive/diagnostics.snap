@@ -146,8 +146,8 @@ source: crates/baml_tests/src/corpus.rs
      ╭─[json_auto_derive.baml:249:109]
  249 │ ╭─▶ function recursive_class_to_json_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
  250 │ │       let leaf: Tree = Tree { value: 2, children: [] };
- 251 │ │       let root: Tree = Tree { value: 1, children: [leaf] };
- 252 │ │       let j: baml.json.json = root.to_json();
+ 251 │ │       let top: Tree = Tree { value: 1, children: [leaf] };
+ 252 │ │       let j: baml.json.json = top.to_json();
  253 │ │       baml.json.stringify(j)
  254 │ ╰─▶ }
      ╰────

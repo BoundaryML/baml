@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0002
+
+  × unknown associated type `AnyFunction` for class `reflect`
+    ╭─[main.baml:10:22]
+ 10 │ function shadowed(f: reflect.AnyFunction) -> int {
+    ·                      ───────────────────
+    ╰────

@@ -79,7 +79,7 @@ class PlainTime {
         $rust_function
     }
 
-    implements baml.ToString {
+    implements root.ToString {
         /// Serializes to an ISO 8601 time-of-day: `07:32:00`.
         ///
         /// Sub-second precision is preserved, and trailing subsecond zeros are
@@ -138,7 +138,7 @@ class PlainTime {
         self._nanoseconds / 1000000 % 1000
     }
 
-    implements baml.FromJson {
+    implements root.FromJson {
         /// Decodes a `PlainTime` from a JSON string, accepting exactly what
         /// `PlainTime.parse` accepts.
         ///
@@ -146,33 +146,33 @@ class PlainTime {
         ///
         /// - `baml.json.DecodeError` if the value is not a string, or is a
         ///   string `PlainTime.parse` rejects.
-        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
+        function from_json(j: root.json.json) -> Self throws root.json.DecodeError {
             match (j) {
                 string => {
                     PlainTime.parse(j) catch (_) {
                         root.errors.ParseError { message } => {
-                            throw baml.json.DecodeError { message: message, path: "" }
+                            throw root.json.DecodeError { message: message, path: "" }
                         },
                     }
                 },
                 _ => {
-                    throw baml.json.DecodeError { message: "Expected ISO 8601 time string", path: "" }
+                    throw root.json.DecodeError { message: "Expected ISO 8601 time string", path: "" }
                 },
             }
         }
     }
-    implements baml.ToJson {
+    implements root.ToJson {
         /// Encodes `self` as the same ISO 8601 time-of-day string `to_string`
         /// produces.
         ///
         /// Declares `baml.json.SerializationError` to satisfy `baml.ToJson`,
         /// but never throws it: rendering a `PlainTime` cannot fail.
-        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
+        function to_json(self) -> root.json.json throws root.json.SerializationError {
             // Route through `baml.json.from` so the body can throw the
             // `baml.json.SerializationError` the interface declares (a `string`-returning
             // `to_string()` is `throws never`, which would trip the extraneous-throws
             // check on a BAML-bodied impl). The string flows into `json` unchanged.
-            baml.json.from(self.to_string())
+            root.json.from(self.to_string())
         }
     }
 }
@@ -258,7 +258,7 @@ function _wrap_into_day(total_ns: bigint) -> int throws never {
         wrapped.to_int()
     } catch (e) {
         root.errors.InvalidArgument => {
-            baml.sys.panic("unreachable: nanoseconds wrapped into [0, 24h) exceed int range")
+            root.sys.panic("unreachable: nanoseconds wrapped into [0, 24h) exceed int range")
         }
     }
 }

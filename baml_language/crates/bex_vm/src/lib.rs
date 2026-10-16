@@ -21,6 +21,7 @@ pub mod definitions;
 pub mod errors;
 pub mod indexable;
 pub mod kperf;
+pub mod lang_items;
 pub mod package_ai;
 pub mod package_baml;
 pub mod package_load;

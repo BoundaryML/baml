@@ -1,0 +1,12 @@
+// An item of the writer's own namespace spelled like a package shadows the
+// package entirely (#4543; `ns_reflect_shadowing` is the
+// resolving side): with a class `reflect` declared here, `reflect.AnyFunction`
+// is a member of that class, not the package's type.
+
+class reflect {
+    label string
+}
+
+function shadowed(f: reflect.AnyFunction) -> int {
+    1
+}

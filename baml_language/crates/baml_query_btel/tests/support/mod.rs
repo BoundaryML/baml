@@ -92,7 +92,7 @@ pub fn program() -> bex_vm_types::Program {
     let mut program = baml_test_support::compile_source(SOURCE);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
-            && f.name
+            && f.name()
                 .rsplit('.')
                 .next()
                 .is_some_and(|n| CAPTURED.contains(&n))
@@ -213,7 +213,7 @@ pub async fn record_program_with(
     let mut program = baml_test_support::compile_source(source);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
-            && f.name
+            && f.name()
                 .rsplit('.')
                 .next()
                 .is_some_and(|n| captured.contains(&n))

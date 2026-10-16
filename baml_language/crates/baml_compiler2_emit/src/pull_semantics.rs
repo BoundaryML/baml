@@ -83,7 +83,7 @@ pub(crate) trait PullSink<'db> {
     /// Emits `Instruction::LoadType(const_idx)` in the bytecode emitter.
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error>;
     /// Reify the package statically selected at this call site.
-    fn load_current_package(&mut self, package: &str) -> Result<(), Self::Error>;
+    fn load_current_package(&mut self) -> Result<(), Self::Error>;
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
 
     /// Same as `make_closure` but with an additional `ntypeargs` count for
@@ -519,6 +519,6 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
             sink.make_generic_function_from_value(type_arg_templates.len())
         }
         Rvalue::LoadType(template) => sink.load_type(template),
-        Rvalue::CurrentPackage(package) => sink.load_current_package(package),
+        Rvalue::CurrentPackage => sink.load_current_package(),
     }
 }

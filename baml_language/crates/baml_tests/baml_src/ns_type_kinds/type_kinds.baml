@@ -320,8 +320,8 @@ test "nested_type_walker_and_kind_specific_readback_work_end_to_end" {
 test "nested_views_of_a_runtime_type_keep_its_definitions" {
     let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type();
 
-    let root = reflect.class.new("Root", { "choices": choice.array().as_type() }).as_type();
-    let root_class = root.as_class() ?? throw "expected class";
+    let root_type = reflect.class.new("Root", { "choices": choice.array().as_type() }).as_type();
+    let root_class = root_type.as_class() ?? throw "expected class";
     let field = root_class.fields().at(0) ?? throw "expected field";
     let field_type = field.type ?? throw "expected field type";
     let array = field_type.as_array() ?? throw "expected array";
@@ -365,8 +365,8 @@ test "nested_class_of_a_runtime_package_type_reads_back" {
     let package = reflect.Package.compile(
         { "schema.baml": `class Leaf { name string } class Root { leaf Leaf }` },
     );
-    let root = package.get_class("root.Root") ?? throw "missing Root";
-    let field = root.fields().at(0) ?? throw "missing field";
+    let root_decl = package.get_class("root.Root") ?? throw "missing Root";
+    let field = root_decl.fields().at(0) ?? throw "missing field";
     let field_type = field.type ?? throw "missing field type";
     let leaf = field_type.as_class() ?? throw "expected a class view";
     let leaf_field = leaf.fields().at(0) ?? throw "expected a leaf field";

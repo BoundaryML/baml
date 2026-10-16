@@ -707,18 +707,6 @@ impl BexVm {
         !self.is_truthy(value)
     }
 
-    /// Whether `value` is a `baml.panics.*` instance: what a wildcard catch
-    /// arm raises again instead of swallowing.
-    #[must_use]
-    pub fn is_panic(&self, value: Value) -> bool {
-        value
-            .as_object_ptr()
-            .is_some_and(|ptr| match self.get_object(ptr) {
-                Object::Instance(instance) => self.panic_class_ptrs.contains(&instance.class),
-                _ => false,
-            })
-    }
-
     // ── Enums and classes ─────────────────────────────────────────────────────
 
     /// The variant index of an enum value.

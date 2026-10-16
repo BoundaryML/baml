@@ -96,7 +96,7 @@ function _cleanup_begin<T>(value: T) -> bool throws never {
 /// `implements baml.ToJson {}` with no override is valid and renders exactly
 /// like a non-implementor.
 interface ToJson {
-    function to_json(self) -> baml.json.json throws baml.json.SerializationError {
+    function to_json(self) -> root.json.json throws root.json.SerializationError {
         root._to_json_default(self)
     }
 }
@@ -111,7 +111,7 @@ interface ToJson {
 /// `baml.json.SerializationError` for non-representable values.
 //baml:mut_vm
 //baml:may_yield
-function _to_json_default<T>(value: T) -> baml.json.json throws baml.json.SerializationError {
+function _to_json_default<T>(value: T) -> root.json.json throws root.json.SerializationError {
     $rust_function
 }
 
@@ -138,13 +138,13 @@ function _to_json_default<T>(value: T) -> baml.json.json throws baml.json.Serial
 /// `from_json` is required in an explicit implementation. The compiler supplies
 /// a structural implementation when no explicit implementation applies.
 interface FromJson {
-    function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError;
+    function from_json(j: root.json.json) -> Self throws root.json.DecodeError;
 }
 
 /// Decode the root structurally while honoring nested FromJson implementations.
 //baml:mut_vm
 //baml:may_yield
-function _from_json_structural_default<T>(j: baml.json.json) -> T throws baml.json.DecodeError {
+function _from_json_structural_default<T>(j: root.json.json) -> T throws root.json.DecodeError {
     $rust_function
 }
 

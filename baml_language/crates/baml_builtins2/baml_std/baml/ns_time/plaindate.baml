@@ -54,7 +54,7 @@ class PlainDate {
     function parse(s: string) -> PlainDate throws root.errors.ParseError {
         $rust_function
     }
-    implements baml.ToString {
+    implements root.ToString {
         /// Serializes to an ISO 8601 calendar date: `1979-05-27`. A negative
         /// year carries a leading `-`.
         ///
@@ -140,7 +140,7 @@ class PlainDate {
         $rust_function
     }
 
-    implements baml.FromJson {
+    implements root.FromJson {
         /// Decodes a `PlainDate` from a JSON string, accepting exactly what
         /// `PlainDate.parse` accepts.
         ///
@@ -148,22 +148,22 @@ class PlainDate {
         ///
         /// - `baml.json.DecodeError` if the value is not a string, or is a
         ///   string `PlainDate.parse` rejects.
-        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
+        function from_json(j: root.json.json) -> Self throws root.json.DecodeError {
             match (j) {
                 string => {
                     PlainDate.parse(j) catch (_) {
                         root.errors.ParseError { message } => {
-                            throw baml.json.DecodeError { message: message, path: "" }
+                            throw root.json.DecodeError { message: message, path: "" }
                         },
                     }
                 },
                 _ => {
-                    throw baml.json.DecodeError { message: "Expected ISO 8601 date string", path: "" }
+                    throw root.json.DecodeError { message: "Expected ISO 8601 date string", path: "" }
                 },
             }
         }
     }
-    implements baml.ToJson {
+    implements root.ToJson {
         /// Encodes `self` as the same ISO 8601 date string `to_string`
         /// produces.
         ///
@@ -173,10 +173,10 @@ class PlainDate {
         ///   year range. The same failure panics in `to_string`: a serializer
         ///   is called with a caller standing by to react, so it gets the error
         ///   channel.
-        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
+        function to_json(self) -> root.json.json throws root.json.SerializationError {
             self._to_string_impl() catch (_) {
                 root.errors.InvalidArgument { message } => {
-                    throw baml.json.SerializationError {
+                    throw root.json.SerializationError {
                         message: message,
                         path: "",
                         reason: "unserializable",

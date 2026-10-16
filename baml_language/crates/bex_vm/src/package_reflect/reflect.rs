@@ -22,8 +22,8 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{
     DeclPath, FnPath, HeapPtr, Interface, Object, RealizedTy, SessionEvalLease, Ty, TyTemplate,
     types::{
-        Edge, EdgeKind, ExportSurface, LocalName, Objects, Package, SessionState, Slots,
-        TypeAliasDef, TypeValue, Value,
+        Edge, EdgeKind, ExportSurface, LocalName, Objects, Package, PackageKind, SessionState,
+        Slots, TypeAliasDef, TypeValue, Value,
     },
 };
 use indexmap::IndexMap;
@@ -53,7 +53,7 @@ fn compilation_error(vm: &mut BexVm, id: DiagnosticId, message: String) -> VmRus
 
 /// Element tag for the `Arg[]` / `map<string, Arg>` containers. The class
 /// instances themselves are built through the generated `copy::` structs.
-const ARG_FQN: &str = "reflect.Arg";
+const ARG: baml_base::LangItem = crate::lang_items::REFLECT_ARG;
 
 /// Materialize the public wrapper for the package selected by the lexical
 /// `Package.current()` instruction. Dynamic code uses its owning package;
@@ -107,12 +107,12 @@ fn runtime_edges(
                 baml_type::Name::new(alias),
                 Edge {
                     target: *ptr,
-                    kind: EdgeKind::Declared,
+                    kind: EdgeKind::Dependency,
                 },
             )
         })
         .collect();
-    add_prelude(vm, &mut edges);
+    vm.add_prelude(&mut edges);
     edges
 }
 
@@ -141,47 +141,31 @@ fn view_edges(
     );
     let mut next = 0;
     for &reached in reached {
-        let (target, kind) = match reached {
-            Reached::Package(package) => (package, EdgeKind::Declared),
-            Reached::Anonymous(declaration) => (declaration, EdgeKind::Anonymous),
+        let target = match reached {
+            Reached::Package(package) => package,
+            Reached::Anonymous(declaration) => declaration,
         };
         if target == base
-            || (kind == EdgeKind::Declared && vm.packages.is_prelude(target))
+            || vm.is_language_package(target)
             || edges.values().any(|edge| edge.target == target)
         {
             continue;
         }
         edges.insert(
             baml_type::Name::new(format!("${next}")),
-            Edge { target, kind },
+            Edge {
+                target,
+                kind: EdgeKind::Dependency,
+            },
         );
         next += 1;
     }
-    add_prelude(vm, &mut edges);
+    vm.add_prelude(&mut edges);
     edges
 }
 
 /// The edge name a view reaches its base under.
 const REEXPORTED_BASE_EDGE: &str = "$base";
-
-/// The language packages under their fixed names, as the host image's root
-/// reaches them, added to `edges` where the name is free.
-fn add_prelude(vm: &BexVm, edges: &mut IndexMap<baml_type::Name, Edge>) {
-    for name in baml_builtins2::stdlib_package_names() {
-        let name = baml_type::Name::new(name);
-        if !edges.contains_key(&name)
-            && let Some(target) = vm.packages.accessible(&name)
-        {
-            edges.insert(
-                name,
-                Edge {
-                    target,
-                    kind: EdgeKind::Prelude,
-                },
-            );
-        }
-    }
-}
 
 fn package_ptr(vm: &BexVm, value: Value) -> Result<HeapPtr, VmRustFnError> {
     let Some(wrapper_ptr) = value.as_object_ptr() else {
@@ -601,18 +585,10 @@ fn package_interface_type(vm: &mut BexVm, interface_ptr: HeapPtr) -> Value {
     super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Interface, ty_value)
 }
 
-/// `testing.TestCollector.new`, through the prelude package's tables: the
-/// stdlib package by its fixed name, the class by its item path, the
-/// constructor through the class's method table.
+/// `testing.TestCollector.new`: the class by identity in the `testing`
+/// language package, the constructor through the class's method table.
 fn test_collector_constructor(vm: &BexVm) -> Option<HeapPtr> {
-    let package_ptr = vm.packages.accessible(&baml_type::Name::new("testing"))?;
-    let Object::Package(package) = vm.get_object(package_ptr) else {
-        return None;
-    };
-    let class_ptr = *package.classes.get(&LocalName {
-        namespace: Vec::new(),
-        name: baml_type::Name::new("TestCollector"),
-    })?;
+    let class_ptr = vm.lang_declaration(crate::lang_items::TESTING_TEST_COLLECTOR)?;
     let Object::Class(class) = vm.get_object(class_ptr) else {
         return None;
     };
@@ -706,11 +682,10 @@ fn check_function_contract(
     ))
 }
 
-fn reflected_class_ty(vm: &BexVm, fqn: &str) -> RealizedTy {
-    let qtn = baml_type::QualifiedTypeName::from_dotted_path(fqn);
+fn reflected_class_ty(vm: &BexVm, class: baml_base::LangItem) -> RealizedTy {
     let head = vm
-        .declaration_head(&qtn)
-        .unwrap_or_else(|| unreachable!("`{fqn}` is declared by the stdlib"));
+        .lang_head(class)
+        .unwrap_or_else(|| unreachable!("`{class}` is declared by the stdlib"));
     RealizedTy::Class(head, Box::new([]))
 }
 
@@ -759,7 +734,7 @@ fn diagnostic_highlights_value(
         })
         .collect();
     Value::object(vm.tlab.alloc_array(
-        reflected_class_ty(vm, "reflect.DiagnosticHighlight"),
+        reflected_class_ty(vm, crate::lang_items::REFLECT_DIAGNOSTIC_HIGHLIGHT),
         values,
     ))
 }
@@ -783,8 +758,10 @@ pub(super) fn diagnostic_value(
     let (phase, headline, primary_label, message_highlights, annotations, related_info) =
         match diagnostic.details.as_ref() {
             None => {
-                let annotation_ty = reflected_class_ty(vm, "reflect.DiagnosticAnnotation");
-                let related_ty = reflected_class_ty(vm, "reflect.DiagnosticRelatedInfo");
+                let annotation_ty =
+                    reflected_class_ty(vm, crate::lang_items::REFLECT_DIAGNOSTIC_ANNOTATION);
+                let related_ty =
+                    reflected_class_ty(vm, crate::lang_items::REFLECT_DIAGNOSTIC_RELATED_INFO);
                 (
                     Value::NULL,
                     Value::object(vm.alloc_string(diagnostic.message.as_str())),
@@ -827,7 +804,8 @@ pub(super) fn diagnostic_value(
                         .to_value(vm)
                     })
                     .collect();
-                let annotation_ty = reflected_class_ty(vm, "reflect.DiagnosticAnnotation");
+                let annotation_ty =
+                    reflected_class_ty(vm, crate::lang_items::REFLECT_DIAGNOSTIC_ANNOTATION);
                 let annotations =
                     Value::object(vm.tlab.alloc_array(annotation_ty, annotation_values));
                 let related_values = details
@@ -850,7 +828,8 @@ pub(super) fn diagnostic_value(
                         .to_value(vm)
                     })
                     .collect();
-                let related_ty = reflected_class_ty(vm, "reflect.DiagnosticRelatedInfo");
+                let related_ty =
+                    reflected_class_ty(vm, crate::lang_items::REFLECT_DIAGNOSTIC_RELATED_INFO);
                 let related_info = Value::object(vm.tlab.alloc_array(related_ty, related_values));
                 (
                     phase,
@@ -1034,6 +1013,7 @@ impl BamlClassPackage for PackageReflectImpl {
         };
         let package = Package {
             name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: PackageKind::Ordinary,
             edges: runtime_edges(vm, &dependencies),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
@@ -1179,10 +1159,10 @@ impl BamlClassPackage for PackageReflectImpl {
             additions.add(vm, &chain, local, addition, Stated::ByKey)?;
             for declaration in crate::reachable::runtime_definitions(vm, &ty) {
                 let item = match vm.get_object(declaration) {
-                    Object::Class(class) => class.name.item_name().clone(),
-                    Object::Enum(enm) => enm.name.item_name().clone(),
-                    Object::Interface(interface) => interface.name.name().clone(),
-                    Object::TypeAlias(alias) => alias.name.name().clone(),
+                    Object::Class(class) => class.path.name.clone(),
+                    Object::Enum(enm) => enm.path.name.clone(),
+                    Object::Interface(interface) => interface.path.name.clone(),
+                    Object::TypeAlias(alias) => alias.path.name.clone(),
                     _ => continue,
                 };
                 additions.add(
@@ -1207,6 +1187,7 @@ impl BamlClassPackage for PackageReflectImpl {
         };
         let view = Package {
             name: base.name.clone(),
+            kind: PackageKind::Ordinary,
             edges: view_edges(vm, base_ptr, &reached),
             classes: additions.classes,
             enums: additions.enums,
@@ -1230,7 +1211,7 @@ impl BamlClassPackage for PackageReflectImpl {
         let view_ptr = vm.alloc(Object::Package(Box::new(view)));
         for (local, definition) in additions.aliases {
             let alias = vm.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
-                name: baml_type::TypeName::local(local.name.clone()),
+                path: LocalName::new(Vec::new(), local.name.clone()),
                 type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
                 definition,
                 owner: view_ptr,
@@ -1666,6 +1647,7 @@ impl BamlClassSession for PackageReflectImpl {
         }
         let package = Package {
             name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: PackageKind::Ordinary,
             edges: runtime_edges(vm, &dependencies),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
@@ -1785,15 +1767,12 @@ fn non_callable_error(what: &str) -> VmRustFnError {
     })
 }
 
-/// The `reflect.Arg` class type, for array/map element tags.
-///
-/// A stdlib FQN constant resolving to a head — one of the sanctioned name
-/// boundaries; the head comes off the declaration, never from the name's hash.
+/// The `reflect.Arg` class type, for array/map element tags: the class by
+/// identity, its head off the declaration.
 fn ty_arg(vm: &BexVm) -> RealizedTy {
-    let qtn = baml_type::QualifiedTypeName::from_dotted_path(ARG_FQN);
     let head = vm
-        .declaration_head(&qtn)
-        .unwrap_or_else(|| unreachable!("`{ARG_FQN}` is declared by the stdlib"));
+        .lang_head(ARG)
+        .unwrap_or_else(|| unreachable!("`{ARG}` is declared by the stdlib"));
     RealizedTy::Class(head, Box::new([]))
 }
 

@@ -20,6 +20,7 @@
     <Description>Managed runtime bridge for generated BAML C# clients.</Description>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
     <BamlProtocolSchemaRoot
       Condition="'$(BamlProtocolSchemaRoot)' == ''">../../../../crates/bridge_ctypes/types</BamlProtocolSchemaRoot>
@@ -66,6 +67,7 @@
       Include="$(BamlNativeAssetRoot)/runtimes/**/*"
       Condition="'$(BamlNativeAssetRoot)' != ''" />
     <None Update="README.md" Pack="true" PackagePath="/" />
+    <None Include="../../../../../LICENSE" Link="LICENSE" Pack="true" PackagePath="/" />
     <None
       Include="$(BamlGeneratedTargetsPath)"
       Pack="true"

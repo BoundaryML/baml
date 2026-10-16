@@ -4,7 +4,7 @@
 //! walks block expressions, etc. Produces `ExprBody` (semantic data) and `AstSourceMap`
 //! (parallel span storage) in one pass.
 
-use baml_base::{Name, TypePath, num_lit};
+use baml_base::{Name, Path, num_lit};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxNodeExt, SyntaxToken};
 use la_arena::Arena;
 use rowan::ast::AstNode;
@@ -220,7 +220,7 @@ fn lower_bare_token_expr(ctx: &mut LoweringContext, token: &SyntaxToken) -> Expr
             "null" => Expr::Null,
             "true" => Expr::Literal(Literal::Bool(true)),
             "false" => Expr::Literal(Literal::Bool(false)),
-            text => Expr::Path(vec![Name::new(text)]),
+            text => Expr::Path(baml_base::Path::bare(Name::new(text))),
         },
         _ => Expr::Missing,
     }
@@ -394,7 +394,7 @@ pub(crate) fn synthesize_llm_spec_body(
                 Expr::Literal(Literal::String(name.as_str().to_string())),
                 span,
             );
-            let value = ctx.alloc_expr(Expr::Path(vec![name.clone()]), span);
+            let value = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(name.clone())), span);
             MapExprEntry::explicit(key, value)
         })
         .collect();
@@ -417,10 +417,13 @@ pub(crate) fn synthesize_llm_spec_body(
     let of_param_name = Name::new(" __spec_output_format");
     let prompt_lambda_span = prompt.span_range();
     let prompt_start = TextRange::empty(prompt_lambda_span.start());
-    let of_ref = ctx.alloc_expr(Expr::Path(vec![of_param_name.clone()]), prompt_start);
+    let of_ref = ctx.alloc_expr(
+        Expr::Path(baml_base::Path::bare(of_param_name.clone())),
+        prompt_start,
+    );
     let spec_ctx_obj = ctx.alloc_expr(
         Expr::Object {
-            type_name: baml_base::TypePath::from_dotted("ai.internal.SpecCtx"),
+            type_name: baml_base::compiler_path!(ai.internal.SpecCtx),
             type_args: vec![],
             fields: vec![ObjectExprField::explicit(
                 Name::new("_output_format"),
@@ -466,7 +469,11 @@ pub(crate) fn synthesize_llm_spec_body(
     // `ai.internal.make_cache`. Its one parameter is defaulted (`cache()` asks
     // the rendering client for its default), and a defaulted parameter must be
     // passed by name, so the positional `cache(x)` is labelled `args = x`.
-    let prompt_local_callees: Vec<(ExprId, ExprId, &[&str])> = ctx
+    // BUG: both are recognized by SPELLING before resolution, so a parameter
+    // or item of the writer's named `role` or `cache` is never called from a
+    // prompt and nothing says so; they should be reserved like `ctx` and
+    // `client` (E0010), or rewritten only when no binding claims the name.
+    let prompt_local_callees: Vec<(ExprId, ExprId, baml_base::Path)> = ctx
         .exprs
         .iter()
         .filter_map(|(call, expr)| {
@@ -476,20 +483,21 @@ pub(crate) fn synthesize_llm_spec_body(
             let Expr::Path(path) = &ctx.exprs[*callee] else {
                 return None;
             };
-            let [name] = path.as_slice() else {
+            let [name] = path.segments() else {
                 return None;
             };
-            let target: &[&str] = match name.as_str() {
-                "role" => &["ai", "internal", "make_role"],
-                "cache" => &["ai", "internal", "make_cache"],
+            let target = match name.as_str() {
+                "role" => baml_base::compiler_path!(ai.internal.make_role),
+                "cache" => baml_base::compiler_path!(ai.internal.make_cache),
                 _ => return None,
             };
             Some((call, *callee, target))
         })
         .collect();
     for (call, callee, target) in prompt_local_callees {
-        ctx.exprs[callee] = Expr::Path(target.iter().map(Name::new).collect());
-        if target.last() == Some(&"make_cache")
+        let is_cache = target.leaf().as_str() == "make_cache";
+        ctx.exprs[callee] = Expr::Path(target);
+        if is_cache
             && let Expr::Call { args, .. } = &mut ctx.exprs[call]
             && let [only] = args.as_mut_slice()
             && only.label.is_none()
@@ -520,7 +528,10 @@ pub(crate) fn synthesize_llm_spec_body(
         },
         prompt_start,
     );
-    let parts_base = ctx.alloc_expr(Expr::Path(vec![tagged_name.clone()]), prompt_start);
+    let parts_base = ctx.alloc_expr(
+        Expr::Path(baml_base::Path::bare(tagged_name.clone())),
+        prompt_start,
+    );
     let parts = ctx.alloc_expr(
         Expr::MemberAccess {
             base: parts_base,
@@ -528,7 +539,7 @@ pub(crate) fn synthesize_llm_spec_body(
         },
         prompt_start,
     );
-    let values_base = ctx.alloc_expr(Expr::Path(vec![tagged_name]), prompt_start);
+    let values_base = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(tagged_name)), prompt_start);
     let values = ctx.alloc_expr(
         Expr::MemberAccess {
             base: values_base,
@@ -537,11 +548,7 @@ pub(crate) fn synthesize_llm_spec_body(
         prompt_start,
     );
     let assemble_callee = ctx.alloc_expr(
-        Expr::Path(vec![
-            Name::new("ai"),
-            Name::new("internal"),
-            Name::new("assemble_llm_prompt"),
-        ]),
+        Expr::Path(baml_base::compiler_path!(ai.internal.assemble_llm_prompt)),
         prompt_start,
     );
     let prompt_ast = ctx.alloc_expr(
@@ -578,10 +585,10 @@ pub(crate) fn synthesize_llm_spec_body(
         )),
         prompt_start,
     );
-    let cause = ctx.alloc_expr(Expr::Path(vec![err_name]), prompt_start);
+    let cause = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(err_name)), prompt_start);
     let render_error = ctx.alloc_expr(
         Expr::Object {
-            type_name: baml_base::TypePath::from_dotted("ai.errors.PromptRenderError"),
+            type_name: baml_base::compiler_path!(ai.errors.PromptRenderError),
             type_args: vec![],
             fields: vec![
                 ObjectExprField::explicit(Name::new("message"), message),
@@ -620,7 +627,7 @@ pub(crate) fn synthesize_llm_spec_body(
         name: of_param_name,
         type_expr: Some(
             (TypeExprKind::Path {
-                segments: vec![Name::new("ai"), Name::new("OutputFormat")],
+                path: baml_base::compiler_path!(ai.OutputFormat),
                 generic_args: vec![],
                 associated_type_bindings: vec![],
             })
@@ -664,14 +671,8 @@ pub(crate) fn synthesize_llm_spec_body(
                 if let Some((is_bare_ref, id)) = lowered {
                     let id = if is_bare_ref {
                         // A bare function reference: normalize through ai.tool().
-                        let tool_callee = ctx.alloc_expr(
-                            Expr::Path(vec![
-                                Name::new("ai"),
-                                Name::new("tools"),
-                                Name::new("tool"),
-                            ]),
-                            span,
-                        );
+                        let tool_callee = ctx
+                            .alloc_expr(Expr::Path(baml_base::compiler_path!(ai.tools.tool)), span);
                         ctx.alloc_expr(
                             Expr::Call {
                                 callee: tool_callee,
@@ -698,12 +699,7 @@ pub(crate) fn synthesize_llm_spec_body(
         None => ctx.alloc_expr(Expr::Array { elements: vec![] }, span),
     };
     let toolbox_callee = ctx.alloc_expr(
-        Expr::Path(vec![
-            Name::new("ai"),
-            Name::new("tools"),
-            Name::new("Toolbox"),
-            Name::new("new"),
-        ]),
+        Expr::Path(baml_base::compiler_path!(ai.tools.Toolbox.new)),
         span,
     );
     let toolbox = ctx.alloc_expr(
@@ -738,12 +734,9 @@ pub(crate) fn synthesize_llm_spec_body(
     //     (`complete_client_resolve_call`): the provider table rides along
     //     as a lambda synthesized from `SHORTHAND_PROVIDERS`.
     let default_client = match client_spec {
-        crate::lower_cst::LlmClientSpec::Provider { pkg, class, model } => {
+        crate::lower_cst::LlmClientSpec::Provider { constructor, model } => {
             let model_lit = ctx.alloc_expr(Expr::Literal(Literal::String(model.clone())), span);
-            let ctor_callee = ctx.alloc_expr(
-                Expr::Path(vec![Name::new(*pkg), Name::new(*class), Name::new("new")]),
-                span,
-            );
+            let ctor_callee = ctx.alloc_expr(Expr::Path((*constructor).clone()), span);
             ctx.alloc_expr(
                 Expr::Call {
                     callee: ctor_callee,
@@ -762,11 +755,7 @@ pub(crate) fn synthesize_llm_spec_body(
                     .unwrap_or_else(|| ctx.alloc_expr(Expr::Missing, span)),
             };
             let resolve_callee = ctx.alloc_expr(
-                Expr::Path(vec![
-                    Name::new("ai"),
-                    Name::new("clients"),
-                    Name::new("resolve"),
-                ]),
+                Expr::Path(baml_base::compiler_path!(ai.clients.resolve)),
                 span,
             );
             let args = ctx.complete_client_resolve_call(
@@ -788,7 +777,7 @@ pub(crate) fn synthesize_llm_spec_body(
     let type_args = out_type.map(|t| vec![t]).unwrap_or_default();
     let spec_obj = ctx.alloc_expr(
         Expr::Object {
-            type_name: baml_base::TypePath::from_dotted("ai.FunctionSpec"),
+            type_name: baml_base::compiler_path!(ai.FunctionSpec),
             type_args,
             fields: vec![
                 ObjectExprField::explicit(Name::new("spec_name"), name_lit),
@@ -810,7 +799,7 @@ pub(crate) fn synthesize_llm_spec_body(
 fn synthesize_shorthand_prefixes(ctx: &mut LoweringContext, span: TextRange) -> ExprId {
     let elements = crate::lower_cst::SHORTHAND_PROVIDERS
         .iter()
-        .map(|(prefix, _, _)| {
+        .map(|(prefix, _)| {
             ctx.alloc_expr(Expr::Literal(Literal::String((*prefix).to_string())), span)
         })
         .collect();
@@ -845,9 +834,9 @@ fn synthesize_shorthand_providers(ctx: &mut LoweringContext, span: TextRange) ->
         name_span: span,
     };
 
-    let scrutinee = ctx.alloc_expr(Expr::Path(vec![prefix_name.clone()]), span);
+    let scrutinee = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(prefix_name.clone())), span);
     let mut arms = Vec::with_capacity(crate::lower_cst::SHORTHAND_PROVIDERS.len() + 1);
-    for (prefix, pkg, class) in crate::lower_cst::SHORTHAND_PROVIDERS {
+    for (prefix, constructor) in crate::lower_cst::SHORTHAND_PROVIDERS {
         let pattern = ctx.alloc_pattern(
             Pattern::Type(
                 (TypeExprKind::Literal {
@@ -857,11 +846,8 @@ fn synthesize_shorthand_providers(ctx: &mut LoweringContext, span: TextRange) ->
             ),
             span,
         );
-        let ctor_callee = ctx.alloc_expr(
-            Expr::Path(vec![Name::new(*pkg), Name::new(*class), Name::new("new")]),
-            span,
-        );
-        let model = ctx.alloc_expr(Expr::Path(vec![model_name.clone()]), span);
+        let ctor_callee = ctx.alloc_expr(Expr::Path(constructor.clone()), span);
+        let model = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(model_name.clone())), span);
         let body = ctx.alloc_expr(
             Expr::Call {
                 callee: ctor_callee,
@@ -899,7 +885,7 @@ fn synthesize_shorthand_providers(ctx: &mut LoweringContext, span: TextRange) ->
     );
 
     let client_ty = (TypeExprKind::Path {
-        segments: vec![Name::new("ai"), Name::new("Client")],
+        path: baml_base::compiler_path!(ai.Client),
         generic_args: vec![],
         associated_type_bindings: vec![],
     })
@@ -1014,7 +1000,7 @@ pub(crate) fn synthesize_spec_build_request_body(
         },
         span,
     );
-    let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
+    let client_ref = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(Name::new("client"))), span);
     let call = ctx.alloc_expr(
         Expr::Call {
             callee: build_callee,
@@ -1037,15 +1023,8 @@ pub(crate) fn synthesize_spec_parse_body(
     use crate::ast::CallArg;
 
     let mut ctx = LoweringContext::new();
-    let json_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("json")]), span);
-    let callee = ctx.alloc_expr(
-        Expr::Path(vec![
-            Name::new("baml"),
-            Name::new("sap"),
-            Name::new("parse"),
-        ]),
-        span,
-    );
+    let json_ref = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(Name::new("json"))), span);
+    let callee = ctx.alloc_expr(Expr::Path(baml_base::compiler_path!(baml.sap.parse)), span);
     let call = ctx.alloc_expr(
         Expr::Call {
             callee,
@@ -1101,7 +1080,7 @@ pub(crate) fn synthesize_spec_agent_run_body(
     );
 
     // ai.Agent.new(client = client, on_event = on_event)
-    let agent_path = ctx.alloc_expr(Expr::Path(vec![Name::new("ai"), Name::new("Agent")]), span);
+    let agent_path = ctx.alloc_expr(Expr::Path(baml_base::compiler_path!(ai.Agent)), span);
     let new_callee = ctx.alloc_expr(
         Expr::MemberAccess {
             base: agent_path,
@@ -1109,8 +1088,11 @@ pub(crate) fn synthesize_spec_agent_run_body(
         },
         span,
     );
-    let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
-    let on_event_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("on_event")]), span);
+    let client_ref = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(Name::new("client"))), span);
+    let on_event_ref = ctx.alloc_expr(
+        Expr::Path(baml_base::Path::bare(Name::new("on_event"))),
+        span,
+    );
     let new_call = ctx.alloc_expr(
         Expr::Call {
             callee: new_callee,
@@ -1195,15 +1177,14 @@ pub(crate) fn synthesize_spec_stream_body(
 
     // ai.stream.from_spec<Out>(spec, client = client, on_event = on_event)
     let stream_spec_callee = ctx.alloc_expr(
-        Expr::Path(vec![
-            Name::new("ai"),
-            Name::new("stream"),
-            Name::new("from_spec"),
-        ]),
+        Expr::Path(baml_base::compiler_path!(ai.stream.from_spec)),
         span,
     );
-    let client_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("client")]), span);
-    let on_event_ref = ctx.alloc_expr(Expr::Path(vec![Name::new("on_event")]), span);
+    let client_ref = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(Name::new("client"))), span);
+    let on_event_ref = ctx.alloc_expr(
+        Expr::Path(baml_base::Path::bare(Name::new("on_event"))),
+        span,
+    );
     let call = ctx.alloc_expr(
         Expr::Call {
             callee: stream_spec_callee,
@@ -1236,7 +1217,7 @@ fn companion_type_args(
         .chain(function_names)
         .map(|name| {
             TypeExprKind::Path {
-                segments: vec![name.clone()],
+                path: baml_base::Path::bare(name.clone()),
                 generic_args: vec![],
                 associated_type_bindings: vec![],
             }
@@ -1246,8 +1227,10 @@ fn companion_type_args(
 }
 
 /// Select the sibling spec companion using the same receiver shape as a user
-/// call. Instance methods bind `self`; static methods use their owning class;
-/// free functions remain unqualified.
+/// call. Instance methods bind `self`; static methods use their owning class,
+/// named as an item of this namespace (`Path::compiler_item`) so a parameter
+/// spelled like the class cannot capture it; free functions remain
+/// unqualified.
 fn companion_callee(
     ctx: &mut LoweringContext,
     function_name: &str,
@@ -1261,7 +1244,7 @@ fn companion_callee(
             .first()
             .is_some_and(|param| param.name.as_str() == "self");
     let callee = if binds_receiver {
-        let receiver = ctx.alloc_expr(Expr::Path(vec![Name::new("self")]), span);
+        let receiver = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(Name::new("self"))), span);
         ctx.alloc_expr(
             Expr::MemberAccess {
                 base: receiver,
@@ -1270,9 +1253,15 @@ fn companion_callee(
             span,
         )
     } else if let Some(owner) = owner_class_name {
-        ctx.alloc_expr(Expr::Path(vec![owner.clone(), companion_name]), span)
+        ctx.alloc_expr(
+            Expr::Path(baml_base::Path::compiler_item(vec![
+                owner.clone(),
+                companion_name,
+            ])),
+            span,
+        )
     } else {
-        ctx.alloc_expr(Expr::Path(vec![companion_name]), span)
+        ctx.alloc_expr(Expr::Path(baml_base::Path::bare(companion_name)), span)
     };
     (callee, binds_receiver)
 }
@@ -1288,7 +1277,7 @@ fn companion_param_call_args(
     params
         .iter()
         .map(|param| {
-            let value = ctx.alloc_expr(Expr::Path(vec![param.name.clone()]), span);
+            let value = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(param.name.clone())), span);
             if param.default.is_some() {
                 CallArg::named(param.name.clone(), value)
             } else {
@@ -1526,7 +1515,7 @@ impl LoweringContext {
                     "true" => Expr::Literal(Literal::Bool(true)),
                     "false" => Expr::Literal(Literal::Bool(false)),
                     "null" => Expr::Null,
-                    _ => Expr::Path(vec![Name::new(text)]),
+                    _ => Expr::Path(baml_base::Path::bare(Name::new(text))),
                 };
                 Some(self.alloc_expr(expr, span))
             }
@@ -1688,7 +1677,7 @@ impl LoweringContext {
                                 "true" => Expr::Literal(Literal::Bool(true)),
                                 "false" => Expr::Literal(Literal::Bool(false)),
                                 "null" => Expr::Null,
-                                _ => Expr::Path(vec![Name::new(text)]),
+                                _ => Expr::Path(baml_base::Path::bare(Name::new(text))),
                             };
                             self.alloc_expr(e, span)
                         }
@@ -1881,7 +1870,7 @@ impl LoweringContext {
                             "true" => Expr::Literal(Literal::Bool(true)),
                             "false" => Expr::Literal(Literal::Bool(false)),
                             "null" => Expr::Null,
-                            other => Expr::Path(vec![Name::new(other)]),
+                            other => Expr::Path(baml_base::Path::bare(Name::new(other))),
                         }),
                         _ => None,
                     };
@@ -1933,16 +1922,10 @@ impl LoweringContext {
             return self.alloc_expr(Expr::Missing, node.span_range());
         };
         let span = node.span_range();
-        let spawn_path = |member: &[&str]| {
-            Expr::Path(
-                ["baml", "spawn"]
-                    .iter()
-                    .chain(member)
-                    .map(|segment| Name::new(*segment))
-                    .collect(),
-            )
-        };
-        let plan_new = self.alloc_expr(spawn_path(&["Plan", "new"]), span);
+        let plan_new = self.alloc_expr(
+            Expr::Path(baml_base::compiler_path!(baml.spawn.Plan.new)),
+            span,
+        );
         let mut plan_args = vec![CallArg::named("body", body)];
         plan_args.extend(name.map(|name| CallArg::named("name", name)));
         let mut plan = self.alloc_expr(
@@ -1970,7 +1953,10 @@ impl LoweringContext {
                 modifier_span,
             );
         }
-        let launch = self.alloc_expr(spawn_path(&["__spawn"]), span);
+        let launch = self.alloc_expr(
+            Expr::Path(baml_base::compiler_path!(baml.spawn.__spawn)),
+            span,
+        );
         self.alloc_expr(
             Expr::Call {
                 callee: launch,
@@ -2095,7 +2081,10 @@ impl LoweringContext {
                                     self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)
                                 }
                                 "null" => self.alloc_expr(Expr::Null, span),
-                                _ => self.alloc_expr(Expr::Path(vec![Name::new(text)]), span),
+                                _ => self.alloc_expr(
+                                    Expr::Path(baml_base::Path::bare(Name::new(text))),
+                                    span,
+                                ),
                             };
                             if lhs.is_none() {
                                 lhs = Some(expr_id);
@@ -2188,7 +2177,7 @@ impl LoweringContext {
                                     "true" => Expr::Literal(Literal::Bool(true)),
                                     "false" => Expr::Literal(Literal::Bool(false)),
                                     "null" => Expr::Null,
-                                    _ => Expr::Path(vec![Name::new(text)]),
+                                    _ => Expr::Path(baml_base::Path::bare(Name::new(text))),
                                 };
                                 scrutinee = Some(self.alloc_expr(e, span));
                             }
@@ -2324,7 +2313,10 @@ impl LoweringContext {
                                     self.alloc_expr(Expr::Literal(Literal::Bool(false)), span)
                                 }
                                 "null" => self.alloc_expr(Expr::Null, span),
-                                _ => self.alloc_expr(Expr::Path(vec![Name::new(text)]), span),
+                                _ => self.alloc_expr(
+                                    Expr::Path(baml_base::Path::bare(Name::new(text))),
+                                    span,
+                                ),
                             };
                             operand = Some(expr_id);
                         }
@@ -2606,7 +2598,7 @@ impl LoweringContext {
                                     "true" => Expr::Literal(Literal::Bool(true)),
                                     "false" => Expr::Literal(Literal::Bool(false)),
                                     "null" => Expr::Null,
-                                    _ => Expr::Path(vec![Name::new(text)]),
+                                    _ => Expr::Path(baml_base::Path::bare(Name::new(text))),
                                 };
                                 scrutinee = Some(self.alloc_expr(e, span));
                             }
@@ -2658,7 +2650,9 @@ impl LoweringContext {
                                                 "true" => Expr::Literal(Literal::Bool(true)),
                                                 "false" => Expr::Literal(Literal::Bool(false)),
                                                 "null" => Expr::Null,
-                                                _ => Expr::Path(vec![Name::new(text)]),
+                                                _ => Expr::Path(baml_base::Path::bare(Name::new(
+                                                    text,
+                                                ))),
                                             };
                                             guard = Some(self.alloc_expr(e, range));
                                             break;
@@ -2734,7 +2728,7 @@ impl LoweringContext {
                             "true" => Expr::Literal(Literal::Bool(true)),
                             "false" => Expr::Literal(Literal::Bool(false)),
                             "null" => Expr::Null,
-                            _ => Expr::Path(vec![Name::new(text)]),
+                            _ => Expr::Path(baml_base::Path::bare(Name::new(text))),
                         };
                         body = Some(self.alloc_expr(e, range));
                     }
@@ -3179,7 +3173,7 @@ impl LoweringContext {
                             "true" => Expr::Literal(Literal::Bool(true)),
                             "false" => Expr::Literal(Literal::Bool(false)),
                             "null" => Expr::Null,
-                            _ => Expr::Path(vec![Name::new(token.text())]),
+                            _ => Expr::Path(baml_base::Path::bare(Name::new(token.text()))),
                         };
                         body = Some(self.alloc_expr(expr, token.text_range()));
                     }
@@ -3304,7 +3298,7 @@ impl LoweringContext {
                         "true" => Expr::Literal(Literal::Bool(true)),
                         "false" => Expr::Literal(Literal::Bool(false)),
                         "null" => Expr::Null,
-                        _ => Expr::Path(vec![Name::new(token.text())]),
+                        _ => Expr::Path(baml_base::Path::bare(Name::new(token.text()))),
                     };
                     return Some(self.alloc_expr(expr, token.text_range()));
                 }
@@ -3363,7 +3357,7 @@ impl LoweringContext {
 
             if let Some(token) = word_token {
                 self.alloc_expr(
-                    Expr::Path(vec![Name::new(token.text())]),
+                    Expr::Path(baml_base::Path::bare(Name::new(token.text()))),
                     token.text_range(),
                 )
             } else {
@@ -3402,6 +3396,11 @@ impl LoweringContext {
     /// synthesized from `SHORTHAND_PROVIDERS`, the one table the literal
     /// `client "provider/model"` lowering reads too. A call that already
     /// passes them is left alone.
+    // BUG: a WRITTEN call is recognized by its spelling before resolution:
+    // `let ai = …; ai.clients.resolve(x)` — a local `ai` whose `clients`
+    // field has a `resolve` method — is completed with the provider table
+    // too, which breaks that call. The recognition belongs after HIR has read
+    // the path's head (`PathHead::Package` of the `ai` package).
     fn complete_client_resolve_call(
         &mut self,
         callee: ExprId,
@@ -3599,7 +3598,7 @@ impl LoweringContext {
         // Multi-segment paths stay as Path(["a", "b", "c"]).
         // Record per-segment spans for diagnostics and LSP.
         let names: Vec<Name> = segments.iter().map(|(n, _)| n.clone()).collect();
-        let id = self.alloc_expr(Expr::Path(names), node.span_range());
+        let id = self.alloc_expr(Expr::Path(baml_base::Path::new(names)), node.span_range());
         if segments.len() > 1 {
             let spans: Vec<TextRange> = segments.iter().map(|(_, r)| *r).collect();
             self.source_map.path_segment_spans.insert(id, spans);
@@ -3651,7 +3650,7 @@ impl LoweringContext {
             return self.alloc_expr(Expr::Missing, span);
         };
         segments.push(Name::new(format!("{}@{suffix}", last.as_str())));
-        self.alloc_expr(Expr::Path(segments), span)
+        self.alloc_expr(Expr::Path(baml_base::Path::new(segments)), span)
     }
 
     fn lower_field_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
@@ -3792,6 +3791,10 @@ impl LoweringContext {
         id
     }
 
+    // BUG: `env.X` is recognized by the parser, so a binding named `env` is
+    // legal but unusable (`env.name` on a parameter `env: Config` reads the
+    // environment); the same holds for a binding named `prompt` before a
+    // tagged template. Neither is refused, and nothing says so.
     fn lower_env_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
         // Desugar `env.VAR_NAME` → `baml.env.ref("VAR_NAME")`
         //
@@ -3827,10 +3830,7 @@ impl LoweringContext {
             name: var_name.clone(),
             range,
         });
-        let callee = self.alloc_expr(
-            Expr::Path(vec![Name::new("baml"), Name::new("env"), Name::new("ref")]),
-            range,
-        );
+        let callee = self.alloc_expr(Expr::Path(baml_base::compiler_path!(baml.env.ref)), range);
         let arg = self.alloc_expr(Expr::Literal(Literal::String(var_name)), range);
         self.alloc_expr(
             Expr::Call {
@@ -3979,7 +3979,7 @@ impl LoweringContext {
 
             if let Some(token) = word_token {
                 self.alloc_expr(
-                    Expr::Path(vec![Name::new(token.text())]),
+                    Expr::Path(baml_base::Path::bare(Name::new(token.text()))),
                     token.text_range(),
                 )
             } else {
@@ -4166,8 +4166,14 @@ impl LoweringContext {
         for part in parts {
             match part {
                 InterpPart::Value(value) => {
-                    let acc_lhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
-                    let acc_rhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
+                    let acc_lhs = self.alloc_expr(
+                        Expr::Path(baml_base::Path::bare(acc_name.clone())),
+                        after_span,
+                    );
+                    let acc_rhs = self.alloc_expr(
+                        Expr::Path(baml_base::Path::bare(acc_name.clone())),
+                        after_span,
+                    );
                     let concat = self.alloc_expr(
                         Expr::Binary {
                             op: BinaryOp::Add,
@@ -4188,7 +4194,7 @@ impl LoweringContext {
                 InterpPart::Stmts(stmts) => block_stmts.extend(stmts),
             }
         }
-        let acc_tail = self.alloc_expr(Expr::Path(vec![acc_name]), after_span);
+        let acc_tail = self.alloc_expr(Expr::Path(baml_base::Path::bare(acc_name)), after_span);
         self.alloc_expr(
             Expr::Block {
                 stmts: block_stmts,
@@ -4201,13 +4207,15 @@ impl LoweringContext {
     /// Elaborate a `${expr}` for the untagged path: wrap the inner block with
     /// `.to_string()` (BEP §11).
     fn elaborate_default_interp(&mut self, inner: ExprId, span: TextRange) -> ExprId {
-        // Render the value via `string.from(...)` — BAML's universal renderer
-        // (BEP-049 §11). It dispatches `to_string` on the value's runtime class
-        // when that class implements `baml.ToString`, otherwise falls back to a
-        // structural rendering, so any `${expr}` renders without the type having
-        // to opt into the interface.
+        // Render the value via `baml.String.from(...)` — BAML's universal
+        // renderer (BEP-049 §11), the primitive's companion named by identity
+        // so a binding called `string` in scope does not capture it. It
+        // dispatches `to_string` on the value's runtime class when that class
+        // implements `baml.ToString`, otherwise falls back to a structural
+        // rendering, so any `${expr}` renders without the type having to opt
+        // into the interface.
         let callee = self.alloc_expr(
-            Expr::Path(vec![Name::new("string"), Name::new("from")]),
+            Expr::Path(baml_base::compiler_path!(baml.String.from)),
             span,
         );
         self.alloc_expr(
@@ -4332,8 +4340,14 @@ impl LoweringContext {
             span,
         );
 
-        let acc_path_lhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
-        let acc_path_rhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
+        let acc_path_lhs = self.alloc_expr(
+            Expr::Path(baml_base::Path::bare(acc_name.clone())),
+            after_span,
+        );
+        let acc_path_rhs = self.alloc_expr(
+            Expr::Path(baml_base::Path::bare(acc_name.clone())),
+            after_span,
+        );
         let concat = self.alloc_expr(
             Expr::Binary {
                 op: BinaryOp::Add,
@@ -4364,7 +4378,7 @@ impl LoweringContext {
             },
             after_span,
         );
-        let acc_tail = self.alloc_expr(Expr::Path(vec![acc_name]), after_span);
+        let acc_tail = self.alloc_expr(Expr::Path(baml_base::Path::bare(acc_name)), after_span);
         self.alloc_expr(
             Expr::Block {
                 stmts: vec![let_stmt, for_stmt],
@@ -4409,8 +4423,14 @@ impl LoweringContext {
             span,
         );
 
-        let acc_path_lhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
-        let acc_path_rhs = self.alloc_expr(Expr::Path(vec![acc_name.clone()]), after_span);
+        let acc_path_lhs = self.alloc_expr(
+            Expr::Path(baml_base::Path::bare(acc_name.clone())),
+            after_span,
+        );
+        let acc_path_rhs = self.alloc_expr(
+            Expr::Path(baml_base::Path::bare(acc_name.clone())),
+            after_span,
+        );
         let concat = self.alloc_expr(
             Expr::Binary {
                 op: BinaryOp::Add,
@@ -4442,7 +4462,7 @@ impl LoweringContext {
             },
             after_span,
         );
-        let acc_tail = self.alloc_expr(Expr::Path(vec![acc_name]), after_span);
+        let acc_tail = self.alloc_expr(Expr::Path(baml_base::Path::bare(acc_name)), after_span);
         self.alloc_expr(
             Expr::Block {
                 stmts: vec![acc_let, init, while_stmt],
@@ -4520,7 +4540,7 @@ impl LoweringContext {
         // caller who needs a different `prompt` tag can write it qualified.
         if matches!(&self.exprs[tag], Expr::Path(segs) if segs.len() == 1 && segs[0].as_str() == "prompt")
         {
-            self.exprs[tag] = Expr::Path(vec![Name::new("ai"), Name::new("prompt")]);
+            self.exprs[tag] = Expr::Path(baml_base::compiler_path!(ai.prompt));
         }
 
         let segments = backtick_node
@@ -4602,7 +4622,7 @@ impl LoweringContext {
         let values_ref = self.tt_path(&values, span);
         let tail = self.alloc_expr(
             Expr::Object {
-                type_name: baml_base::TypePath::from_dotted("baml.TaggedString"),
+                type_name: baml_base::compiler_path!(baml.TaggedString),
                 type_args: Vec::new(),
                 fields: vec![
                     ObjectExprField::explicit(Name::new("parts"), parts_ref),
@@ -4813,20 +4833,20 @@ impl LoweringContext {
     /// `span.end` would be the exclusive scope boundary → out of scope.
     fn tt_path(&mut self, name: &Name, span: TextRange) -> ExprId {
         let at = TextRange::empty(span.start());
-        self.alloc_expr(Expr::Path(vec![name.clone()]), at)
+        self.alloc_expr(Expr::Path(baml_base::Path::bare(name.clone())), at)
     }
 
     /// `<name> = <value>;`
     fn tt_assign(&mut self, name: &Name, value: ExprId, span: TextRange) -> StmtId {
         let at = TextRange::empty(span.start());
-        let target = self.alloc_expr(Expr::Path(vec![name.clone()]), at);
+        let target = self.alloc_expr(Expr::Path(baml_base::Path::bare(name.clone())), at);
         self.alloc_stmt(Stmt::Assign { target, value }, at)
     }
 
     /// `<name>.push(<arg>);` as a statement.
     fn tt_push_stmt(&mut self, name: &Name, arg: ExprId, span: TextRange) -> StmtId {
         let at = TextRange::empty(span.start());
-        let recv = self.alloc_expr(Expr::Path(vec![name.clone()]), at);
+        let recv = self.alloc_expr(Expr::Path(baml_base::Path::bare(name.clone())), at);
         let callee = self.alloc_expr(
             Expr::MemberAccess {
                 base: recv,
@@ -5125,11 +5145,11 @@ impl LoweringContext {
         let mut type_path_segments: Vec<Name> = vec![];
 
         // Look for the optional type name (first WORD or path before the brace):
-        //   - A simple WORD token: `MyClass { ... }` → `TypePath::bare`.
+        //   - A simple WORD token: `MyClass { ... }` → `Path::bare`.
         //   - A qualified path node: `baml.errors.Io { ... }` (parsed as
-        //     PATH_EXPR) → `TypePath` of all the WORD segments.
+        //     PATH_EXPR) → `Path` of all the WORD segments.
         //   - A generic path: `Foo<int> { ... }` (parsed as PATH_EXPR with
-        //     GENERIC_ARGS child) → `TypePath::bare("Foo")` + `type_args = [int]`.
+        //     GENERIC_ARGS child) → `Path::bare("Foo")` + `type_args = [int]`.
         for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => {
@@ -5156,7 +5176,7 @@ impl LoweringContext {
         // Malformed parser-recovery shapes can still manufacture a PATH_EXPR
         // with no constructor identifier (for example `(1)<int> { x: 2 }`).
         // Invalid source must remain diagnostic-only: do not construct an
-        // uninhabited TypePath or panic while lowering it.
+        // uninhabited Path or panic while lowering it.
         if type_path_segments.is_empty() {
             self.diags
                 .push(LoweringDiagnostic::MissingObjectConstructor {
@@ -5164,7 +5184,7 @@ impl LoweringContext {
                 });
             return self.alloc_expr(Expr::Missing, node.span_range());
         }
-        let type_name = TypePath::new(type_path_segments);
+        let type_name = Path::new(type_path_segments);
 
         // Object fields are child nodes after L_BRACE. They come as key-value
         // pairs (`WORD COLON expr`), shorthand (`WORD`), or spreads.
@@ -5206,8 +5226,10 @@ impl LoweringContext {
                         && key_segments.len() == 1
                         && let Some(span) = key_span
                     {
-                        let val_id =
-                            self.alloc_expr(Expr::Path(vec![Name::new(&key_segments[0])]), span);
+                        let val_id = self.alloc_expr(
+                            Expr::Path(baml_base::Path::bare(Name::new(&key_segments[0]))),
+                            span,
+                        );
                         val = Some(val_id);
                     }
                     let key = if key_segments.is_empty() {
@@ -5397,7 +5419,7 @@ impl LoweringContext {
                             "true" => Expr::Literal(Literal::Bool(true)),
                             "false" => Expr::Literal(Literal::Bool(false)),
                             "null" => Expr::Null,
-                            _ => Expr::Path(vec![Name::new(text)]),
+                            _ => Expr::Path(baml_base::Path::bare(Name::new(text))),
                         };
                         return Some(self.alloc_expr(e, span));
                     }
@@ -5458,7 +5480,7 @@ impl LoweringContext {
                     "true" => Expr::Literal(Literal::Bool(true)),
                     "false" => Expr::Literal(Literal::Bool(false)),
                     "null" => Expr::Null,
-                    _ => Expr::Path(vec![Name::new(text)]),
+                    _ => Expr::Path(baml_base::Path::bare(Name::new(text))),
                 };
                 Some(self.alloc_expr(e, span))
             }
@@ -5653,7 +5675,7 @@ impl LoweringContext {
                                 "true" => Expr::Literal(Literal::Bool(true)),
                                 "false" => Expr::Literal(Literal::Bool(false)),
                                 "null" => Expr::Null,
-                                _ => Expr::Path(vec![Name::new(text)]),
+                                _ => Expr::Path(baml_base::Path::bare(Name::new(text))),
                             };
                             result = Some(self.alloc_expr(e, span));
                             break;
@@ -5965,7 +5987,8 @@ impl LoweringContext {
         };
 
         // <collector>.register_test(name_expr, lambda, runner_or_null)
-        let collector_ref = self.alloc_expr(Expr::Path(vec![collector_name]), span);
+        let collector_ref =
+            self.alloc_expr(Expr::Path(baml_base::Path::bare(collector_name)), span);
         let method_target = self.alloc_expr(
             Expr::MemberAccess {
                 base: collector_ref,
@@ -6026,7 +6049,7 @@ impl LoweringContext {
             name: Name::new("testset"),
             type_expr: Some(
                 TypeExprKind::Path {
-                    segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                    path: baml_base::compiler_path!(testing.TestCollector),
                     generic_args: vec![],
                     associated_type_bindings: vec![],
                 }
@@ -6048,7 +6071,8 @@ impl LoweringContext {
         };
 
         // <collector>.register_test_set(name_expr, sub_collector_lambda, runner_or_null)
-        let collector_ref = self.alloc_expr(Expr::Path(vec![collector_name]), span);
+        let collector_ref =
+            self.alloc_expr(Expr::Path(baml_base::Path::bare(collector_name)), span);
         let method_target = self.alloc_expr(
             Expr::MemberAccess {
                 base: collector_ref,

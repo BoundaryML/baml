@@ -198,7 +198,7 @@ mod tests {
         // ── Path ──
         (Path($name:expr)) => {
             TypeExprKind::Path {
-                segments: vec![baml_base::Name::new($name)],
+                path: baml_base::Path::bare(baml_base::Name::new($name)),
                 generic_args: vec![],
                 associated_type_bindings: vec![],
             }
@@ -248,11 +248,11 @@ mod tests {
             TypeExprKind::Never => TypeExprKind::Never,
             TypeExprKind::Rust => TypeExprKind::Rust,
             TypeExprKind::Path {
-                segments,
+                path,
                 generic_args,
                 associated_type_bindings,
             } => TypeExprKind::Path {
-                segments: segments.clone(),
+                path: path.clone(),
                 generic_args: generic_args.iter().map(strip_spans).collect(),
                 associated_type_bindings: associated_type_bindings
                     .iter()
@@ -1173,11 +1173,11 @@ class Response {
         assert_eq!(
             throws.kind,
             TypeExprKind::Path {
-                segments: vec![
+                path: baml_base::Path::new(vec![
                     baml_base::Name::new("baml"),
                     baml_base::Name::new("errors"),
                     baml_base::Name::new("Io"),
-                ],
+                ]),
                 generic_args: vec![],
                 associated_type_bindings: vec![],
             }
@@ -1280,11 +1280,11 @@ interface Response {
         assert_eq!(
             throws.kind,
             TypeExprKind::Path {
-                segments: vec![
+                path: baml_base::Path::new(vec![
                     baml_base::Name::new("baml"),
                     baml_base::Name::new("errors"),
                     baml_base::Name::new("Io"),
-                ],
+                ]),
                 generic_args: vec![],
                 associated_type_bindings: vec![],
             }
@@ -2375,13 +2375,13 @@ function build(name: string) -> unknown {
             .expect("map");
         assert_eq!(entries.len(), 6);
         assert!(
-            matches!(&body.exprs[entries[0].key], Expr::Path(path) if path == &[baml_base::Name::new("name")])
+            matches!(&body.exprs[entries[0].key], Expr::Path(path) if path.segments() == [baml_base::Name::new("name")])
         );
         assert!(
             matches!(&body.exprs[entries[1].key], Expr::Literal(baml_base::Literal::String(value)) if value == "name")
         );
         assert!(
-            matches!(&body.exprs[entries[2].key], Expr::Path(path) if path == &[baml_base::Name::new("KeyKind"), baml_base::Name::new("Foo")])
+            matches!(&body.exprs[entries[2].key], Expr::Path(path) if path.segments() == [baml_base::Name::new("KeyKind"), baml_base::Name::new("Foo")])
         );
         assert!(matches!(&body.exprs[entries[3].key], Expr::Binary { .. }));
         assert!(matches!(&body.exprs[entries[4].key], Expr::Call { .. }));

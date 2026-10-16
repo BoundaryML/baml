@@ -9,8 +9,9 @@
 //! methods) keep declaration order, which is the meaningful order for a
 //! reader.
 //!
-//! Types are exported as [`TyRef`] — a canonical display string plus a
-//! resolved head reference — rather than as structural trees. That is the
+//! Types are exported as [`TyRef`] — a display string labelling every
+//! package from the viewer, as the ids do, plus a resolved head reference —
+//! rather than as structural trees. That is the
 //! API-review hybrid (rendered text you can read and diff, references you
 //! can link), and it sidesteps tree serialization of recursive types
 //! entirely. `unresolved` is computed structurally: a type that fails the
@@ -50,14 +51,13 @@
 
 use std::fmt::{self, Write as _};
 
-use baml_base::{MediaKind, Name, SourceFile};
+use baml_base::{MediaKind, Name, SourceFile, SourceRoot};
 use baml_compiler2_ast::ast::FunctionOrigin;
 use baml_compiler2_hir::{
     contributions::Definition,
     item_data,
     loc::{ClassLoc, EnumLoc, FunctionLoc, ImplLoc, InterfaceLoc},
     namespace::NamespaceId,
-    package::{Spelling, spelling},
 };
 use baml_type::{
     DeclName, Interface as InterfaceBound, ParamTy, PrimitiveType, QualifiedTypeName, RuntimeTy, Ty,
@@ -119,7 +119,7 @@ fn container_qtn(name: &str) -> QualifiedTypeName {
 
 /// Extract a type's head constructor; `None` for un-headed types (unions,
 /// projections, sentinels), which no impl can attach to by head.
-fn ty_head(spelling: &Spelling, ty: &Ty) -> Option<TyHead> {
+fn ty_head(db: &Db, viewer: SourceRoot, ty: &Ty) -> Option<TyHead> {
     match ty {
         Ty::Int => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Int))),
         Ty::Bigint => Some(TyHead::Nominal(primitive_qtn(PrimitiveType::Bigint))),
@@ -141,16 +141,20 @@ fn ty_head(spelling: &Spelling, ty: &Ty) -> Option<TyHead> {
         )))),
         // Companion classes (`baml.Int`, `baml.Array`, …) already carry the
         // canonical name, so nominal heads pass through unchanged.
-        Ty::Class(qtn, _) | Ty::Interface(qtn, _, _) | Ty::Enum(qtn) => {
-            Some(TyHead::Nominal(spelling.wire(qtn)))
-        }
-        Ty::EnumVariant(qtn, _) => Some(TyHead::Nominal(spelling.wire(qtn))),
+        Ty::Class(qtn, _) | Ty::Interface(qtn, _, _) | Ty::Enum(qtn) => Some(TyHead::Nominal(
+            crate::render::labelled_head(db, viewer, qtn),
+        )),
+        Ty::EnumVariant(qtn, _) => Some(TyHead::Nominal(crate::render::labelled_head(
+            db, viewer, qtn,
+        ))),
         Ty::List(_) => Some(TyHead::Nominal(container_qtn("Array"))),
         Ty::Map { .. } => Some(TyHead::Nominal(container_qtn("Map"))),
         Ty::Function { .. } => Some(TyHead::Function),
         Ty::Future(_, _) => Some(TyHead::Future),
         // Lossy by design: the alias head attaches without expansion.
-        Ty::TypeAlias(qtn) => Some(TyHead::Nominal(spelling.wire(qtn))),
+        Ty::TypeAlias(qtn) => Some(TyHead::Nominal(crate::render::labelled_head(
+            db, viewer, qtn,
+        ))),
         Ty::TypeVar(_) => Some(TyHead::Blanket),
         Ty::Union(_) => None,
         Ty::AssociatedTypeProjection { .. } => None,
@@ -280,7 +284,7 @@ impl fmt::Display for SymbolId {
 impl SymbolId {
     /// The id of a top-level item. A method's id nests under its owner type
     /// (or its contributing impl block) rather than the namespace.
-    fn of_definition(db: &Db, def: Definition<'_>) -> Option<Self> {
+    fn of_definition(db: &Db, viewer: SourceRoot, def: Definition<'_>) -> Option<Self> {
         if let Definition::Function(func) = def {
             // An impl-contributed method is addressed through its block
             // (wherever the block is written): `Duration` implementing both
@@ -289,7 +293,7 @@ impl SymbolId {
             if let Some(imp) = contributing_impl(db, func) {
                 return Some(Self {
                     kind: IdKind::Method,
-                    owner: Self::impl_owner(db, imp)?,
+                    owner: Self::impl_owner(db, viewer, imp)?,
                     member: Some(function_name(db, func).to_string()),
                 });
             }
@@ -297,6 +301,7 @@ impl SymbolId {
                 Some(item_data::MethodOwner::Class(class)) => {
                     return Some(Self::member_id(
                         db,
+                        viewer,
                         class.file(db),
                         &item_data::class_data(db, class).name,
                         IdKind::Method,
@@ -306,6 +311,7 @@ impl SymbolId {
                 Some(item_data::MethodOwner::Interface(iface)) => {
                     return Some(Self::member_id(
                         db,
+                        viewer,
                         iface.file(db),
                         &item_data::interface_data(db, iface).name,
                         IdKind::Method,
@@ -329,7 +335,7 @@ impl SymbolId {
         Some(Self {
             kind,
             owner: Owner::Path {
-                package: spelling(db).of(pkg.root).to_string(),
+                package: crate::render::package_label(db, viewer, pkg.root).to_string(),
                 namespace: pkg.namespace_path.iter().map(ToString::to_string).collect(),
                 name: name.to_string(),
             },
@@ -340,20 +346,20 @@ impl SymbolId {
     /// How an impl block is written inside an id:
     /// `(int as baml.ops.Add<bigint>)`. The one renderer, shared with the
     /// block ids, so the two can never disagree about what identifies an impl.
-    fn impl_owner(db: &Db, imp: ImplLoc<'_>) -> Option<Owner> {
+    fn impl_owner(db: &Db, viewer: SourceRoot, imp: ImplLoc<'_>) -> Option<Owner> {
         let data = impl_facts(db, imp)?;
-        let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
-        let mut interface = vp.path(&interface_qtn(db, data.interface));
+        let vp = baml_compiler2_hir_ty::render::Viewpoint::user_facing(db, viewer);
+        let mut interface = vp.labelled_path(&interface_qtn(db, data.interface));
         if !data.interface_args.is_empty() {
             let args: Vec<String> = data
                 .interface_args
                 .iter()
-                .map(|ty| ty.render_with(&vp))
+                .map(|ty| vp.labelled_text(ty))
                 .collect();
             interface = format!("{interface}<{}>", args.join(", "));
         }
         Some(Owner::Impl {
-            for_ty: data.for_ty_pattern.render_with(&vp),
+            for_ty: vp.labelled_text(&data.for_ty_pattern),
             interface,
         })
     }
@@ -361,6 +367,7 @@ impl SymbolId {
     /// The id of a member of the named item declared in `owner_file`.
     fn member_id(
         db: &Db,
+        viewer: SourceRoot,
         owner_file: SourceFile,
         owner_name: &Name,
         kind: IdKind,
@@ -370,7 +377,7 @@ impl SymbolId {
         Self {
             kind,
             owner: Owner::Path {
-                package: spelling(db).of(pkg.root).to_string(),
+                package: crate::render::package_label(db, viewer, pkg.root).to_string(),
                 namespace: pkg.namespace_path.iter().map(ToString::to_string).collect(),
                 name: owner_name.to_string(),
             },
@@ -391,10 +398,11 @@ fn contributing_impl<'db>(db: &'db Db, function: FunctionLoc<'db>) -> Option<Imp
 
 // ── Leaf shapes ──────────────────────────────────────────────────────────────
 
-/// A type in the export: canonical rendering + resolved head reference.
+/// A type in the export: a display rendering + resolved head reference.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct TyRef {
-    /// Canonical, context-free rendering (`baml.errors.Io`, `T[]`).
+    /// The type with every package labelled from the viewer, as the ids are
+    /// (`baml.errors.Io`, `T[]`).
     pub display: String,
     /// The `SymbolId` of the type's nominal head, when it has one —
     /// the link target for cross-referencing.
@@ -410,8 +418,8 @@ pub struct TyRef {
 }
 
 impl TyRef {
-    fn of(db: &Db, ty: &Ty) -> Self {
-        let head = match ty_head(spelling(db), ty) {
+    fn of(db: &Db, viewer: SourceRoot, ty: &Ty) -> Self {
+        let head = match ty_head(db, viewer, ty) {
             Some(TyHead::Nominal(qtn)) => Some(
                 SymbolId {
                     kind: IdKind::Type,
@@ -427,7 +435,8 @@ impl TyRef {
             Some(TyHead::Function | TyHead::Future | TyHead::Blanket) | None => None,
         };
         Self {
-            display: ty.render_with(&baml_compiler2_hir_ty::render::Viewpoint::canonical(db)),
+            display: baml_compiler2_hir_ty::render::Viewpoint::user_facing(db, viewer)
+                .labelled_text(ty),
             head,
             // `RuntimeTy` excludes exactly the compiler-sentinel axis
             // (`Error`/`Unknown`/`Infer`) while keeping symbolic
@@ -446,17 +455,22 @@ pub struct GenericExport {
     pub bounds: Vec<String>,
 }
 
-fn generic_export(db: &Db, param: &ParamTy, bounds: &[InterfaceBound]) -> GenericExport {
-    let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
+fn generic_export(
+    db: &Db,
+    viewer: SourceRoot,
+    param: &ParamTy,
+    bounds: &[InterfaceBound],
+) -> GenericExport {
+    let vp = baml_compiler2_hir_ty::render::Viewpoint::user_facing(db, viewer);
     GenericExport {
         name: param.as_str().to_string(),
         bounds: bounds
             .iter()
             .map(|b| {
-                let mut s = vp.path(&b.name);
+                let mut s = vp.labelled_path(&b.name);
                 if !b.generics.is_empty() {
                     let args: Vec<String> =
-                        b.generics.iter().map(|ty| ty.render_with(&vp)).collect();
+                        b.generics.iter().map(|ty| vp.labelled_text(ty)).collect();
                     let _ = write!(s, "<{}>", args.join(", "));
                 }
                 s
@@ -852,8 +866,14 @@ fn plain_bounds(
 // ── Projection ───────────────────────────────────────────────────────────────
 
 /// Export one package's full surface.
-pub fn export_package<'db>(db: &'db Db, package: baml_base::SourceRoot) -> PackageExport {
-    let impl_index = ImplIndex::build(db);
+pub fn export_package<'db>(
+    db: &'db Db,
+    viewer: baml_base::SourceRoot,
+    package: baml_base::SourceRoot,
+) -> PackageExport {
+    // Every label in the export is how `viewer` — the reader asking — sees
+    // the program; exporting one's own package reads from itself.
+    let impl_index = ImplIndex::build(db, viewer);
 
     // Namespaces root-first sorted by path; items types-then-values sorted
     // by name within each namespace. (The final id sort makes the walk order
@@ -880,7 +900,7 @@ pub fn export_package<'db>(db: &'db Db, package: baml_base::SourceRoot) -> Packa
         values.sort_by_key(|(name, _)| *name);
         named.extend(values);
         for (_, def) in named {
-            if let Some(item) = export_item(db, def, &impl_index) {
+            if let Some(item) = export_item(db, viewer, def, &impl_index) {
                 items.push(item);
             }
         }
@@ -899,7 +919,7 @@ pub fn export_package<'db>(db: &'db Db, package: baml_base::SourceRoot) -> Packa
 
     PackageExport {
         format_version: FORMAT_VERSION,
-        package: spelling(db).of(package).to_string(),
+        package: crate::render::package_label(db, viewer, package).to_string(),
         items,
         impls,
     }
@@ -914,11 +934,11 @@ struct ImplIndex<'db> {
 }
 
 impl<'db> ImplIndex<'db> {
-    fn build(db: &'db Db) -> Self {
+    fn build(db: &'db Db, viewer: SourceRoot) -> Self {
         let mut exports = Vec::new();
         for file in baml_compiler2_hir::compiler2_all_files(db) {
             for &imp in item_data::file_impls(db, file) {
-                if let Some(export) = export_impl(db, imp) {
+                if let Some(export) = export_impl(db, viewer, imp) {
                     exports.push((imp, export));
                 }
             }
@@ -926,13 +946,13 @@ impl<'db> ImplIndex<'db> {
         Self { exports }
     }
 
-    fn ids_for_class_head(&self, db: &Db, head: &TyHead) -> Vec<String> {
+    fn ids_for_class_head(&self, db: &Db, viewer: SourceRoot, head: &TyHead) -> Vec<String> {
         let mut ids: Vec<String> = self
             .exports
             .iter()
             .filter(|(imp, _)| {
                 impl_facts(db, *imp)
-                    .and_then(|data| ty_head(spelling(db), &data.for_ty_pattern))
+                    .and_then(|data| ty_head(db, viewer, &data.for_ty_pattern))
                     .is_some_and(|impl_head| impl_attaches(&impl_head, head))
             })
             .map(|(_, export)| export.id.clone())
@@ -981,6 +1001,7 @@ fn is_synthetic_origin(origin: FunctionOrigin) -> bool {
 /// wants to treat one declaration as one thing.
 fn function_export(
     db: &Db,
+    viewer: SourceRoot,
     function: FunctionLoc<'_>,
     from_default: bool,
     via: Option<ImplLoc<'_>>,
@@ -988,13 +1009,13 @@ fn function_export(
     let sig = baml_compiler2_hir_ty::callable::function_signature_ty(db, function);
     let data = item_data::function_data(db, function);
     let name = data.name.clone();
-    let declared =
-        SymbolId::of_definition(db, Definition::Function(function)).map(|id| id.to_string());
+    let declared = SymbolId::of_definition(db, viewer, Definition::Function(function))
+        .map(|id| id.to_string());
     let (id, declared_by) = match via {
         // Reached through an impl block, so addressed through it, in the
         // qualified path a caller would actually write.
         Some(imp) => {
-            let qualified = SymbolId::impl_owner(db, imp)
+            let qualified = SymbolId::impl_owner(db, viewer, imp)
                 .map(|owner| {
                     SymbolId {
                         kind: IdKind::Method,
@@ -1024,7 +1045,7 @@ fn function_export(
         signature: SignatureExport {
             generics: function_generics(db, function)
                 .iter()
-                .map(|(param, bounds)| generic_export(db, param, bounds))
+                .map(|(param, bounds)| generic_export(db, viewer, param, bounds))
                 .collect(),
             params: sig
                 .params
@@ -1034,13 +1055,14 @@ fn function_export(
                         .name
                         .as_ref()
                         .map_or_else(|| "_".to_string(), ToString::to_string),
-                    ty: TyRef::of(db, &p.ty),
+                    ty: TyRef::of(db, viewer, &p.ty),
                     optional: matches!(p.mode, baml_type::FunctionParamMode::Optional),
                 })
                 .collect(),
-            returns: TyRef::of(db, &sig.return_type),
+            returns: TyRef::of(db, viewer, &sig.return_type),
             throws: TyRef::of(
                 db,
+                viewer,
                 &baml_compiler2_hir_ty::callable::callable_throws(db, function).0,
             ),
         },
@@ -1048,37 +1070,68 @@ fn function_export(
     }
 }
 
-fn class_field_export(db: &Db, class: ClassLoc<'_>, index: usize) -> FieldExport {
+fn class_field_export(
+    db: &Db,
+    viewer: SourceRoot,
+    class: ClassLoc<'_>,
+    index: usize,
+) -> FieldExport {
     let data = item_data::class_data(db, class);
     let field = &data.fields[index];
     FieldExport {
-        id: SymbolId::member_id(db, class.file(db), &data.name, IdKind::Field, &field.name)
-            .to_string(),
+        id: SymbolId::member_id(
+            db,
+            viewer,
+            class.file(db),
+            &data.name,
+            IdKind::Field,
+            &field.name,
+        )
+        .to_string(),
         name: field.name.to_string(),
         docstring: field.docstring.clone(),
         ty: TyRef::of(
             db,
+            viewer,
             &baml_compiler2_hir_ty::lower::resolve_class_fields(db, class)[index].1,
         ),
     }
 }
 
-fn interface_field_export(db: &Db, iface: InterfaceLoc<'_>, index: usize) -> FieldExport {
+fn interface_field_export(
+    db: &Db,
+    viewer: SourceRoot,
+    iface: InterfaceLoc<'_>,
+    index: usize,
+) -> FieldExport {
     let data = item_data::interface_data(db, iface);
     let field = &data.fields[index];
     FieldExport {
-        id: SymbolId::member_id(db, iface.file(db), &data.name, IdKind::Field, &field.name)
-            .to_string(),
+        id: SymbolId::member_id(
+            db,
+            viewer,
+            iface.file(db),
+            &data.name,
+            IdKind::Field,
+            &field.name,
+        )
+        .to_string(),
         name: field.name.to_string(),
         docstring: field.docstring.clone(),
         ty: TyRef::of(
             db,
+            viewer,
             &baml_compiler2_hir_ty::interfaces::resolve_interface_fields(db, iface).fields[index].1,
         ),
     }
 }
 
-fn required_method_export(db: &Db, iface: InterfaceLoc<'_>, index: usize) -> RequiredMethodExport {
+fn required_method_export(
+    db: &Db,
+    viewer: SourceRoot,
+    iface: InterfaceLoc<'_>,
+    index: usize,
+) -> RequiredMethodExport {
     let data = item_data::interface_data(db, iface);
     let declared = &data.required_methods[index];
     let resolved =
@@ -1097,6 +1150,7 @@ fn required_method_export(db: &Db, iface: InterfaceLoc<'_>, index: usize) -> Req
     RequiredMethodExport {
         id: SymbolId::member_id(
             db,
+            viewer,
             iface.file(db),
             &data.name,
             IdKind::Method,
@@ -1109,7 +1163,7 @@ fn required_method_export(db: &Db, iface: InterfaceLoc<'_>, index: usize) -> Req
             generics: resolved
                 .generic_params
                 .iter()
-                .map(|(param, bounds)| generic_export(db, param, bounds))
+                .map(|(param, bounds)| generic_export(db, viewer, param, bounds))
                 .collect(),
             params: params
                 .iter()
@@ -1118,31 +1172,33 @@ fn required_method_export(db: &Db, iface: InterfaceLoc<'_>, index: usize) -> Req
                         .name
                         .as_ref()
                         .map_or_else(|| "_".to_string(), ToString::to_string),
-                    ty: TyRef::of(db, &p.ty),
+                    ty: TyRef::of(db, viewer, &p.ty),
                     optional: matches!(p.mode, baml_type::FunctionParamMode::Optional),
                 })
                 .collect(),
-            returns: TyRef::of(db, returns),
-            throws: TyRef::of(db, throws),
+            returns: TyRef::of(db, viewer, returns),
+            throws: TyRef::of(db, viewer, throws),
         },
     }
 }
 
-fn export_impl(db: &Db, imp: ImplLoc<'_>) -> Option<ImplExport> {
+fn export_impl(db: &Db, viewer: SourceRoot, imp: ImplLoc<'_>) -> Option<ImplExport> {
     let data = impl_facts(db, imp)?;
     let iface_qtn = interface_qtn(db, data.interface);
-    let pkg = spelling(db)
-        .of(baml_compiler2_hir::file_package::file_package(db, imp.file(db)).root)
-        .clone();
+    let pkg = crate::render::package_label(
+        db,
+        viewer,
+        baml_compiler2_hir::file_package::file_package(db, imp.file(db)).root,
+    );
 
-    let for_ty = TyRef::of(db, &data.for_ty_pattern);
+    let for_ty = TyRef::of(db, viewer, &data.for_ty_pattern);
     // Destructured from the one renderer rather than rebuilt here, so a
     // block's id and the ids of the methods it contributes can never disagree
     // about what identifies it.
     let Owner::Impl {
         interface: iface_display,
         ..
-    } = SymbolId::impl_owner(db, imp)?
+    } = SymbolId::impl_owner(db, viewer, imp)?
     else {
         unreachable!("impl_owner always yields the impl form")
     };
@@ -1153,12 +1209,12 @@ fn export_impl(db: &Db, imp: ImplLoc<'_>) -> Option<ImplExport> {
     let mut methods: Vec<FunctionExport> = data
         .methods
         .iter()
-        .map(|&loc| function_export(db, loc, false, Some(imp)))
+        .map(|&loc| function_export(db, viewer, loc, false, Some(imp)))
         .collect();
     let overridden: Vec<String> = methods.iter().map(|m| m.name.clone()).collect();
     for &default_loc in &item_data::interface_data(db, data.interface).default_methods {
         if !overridden.contains(&function_name(db, default_loc).to_string()) {
-            methods.push(function_export(db, default_loc, true, Some(imp)));
+            methods.push(function_export(db, viewer, default_loc, true, Some(imp)));
         }
     }
     methods.sort_by(|a, b| a.name.cmp(&b.name));
@@ -1167,27 +1223,28 @@ fn export_impl(db: &Db, imp: ImplLoc<'_>) -> Option<ImplExport> {
     Some(ImplExport {
         id,
         docstring: block_data.docstring.clone(),
-        interface: crate::render::canonical_path(db, &iface_qtn),
-        interface_id: SymbolId::of_definition(db, Definition::Interface(data.interface))
+        interface: baml_compiler2_hir_ty::render::Viewpoint::user_facing(db, viewer)
+            .labelled_path(&iface_qtn),
+        interface_id: SymbolId::of_definition(db, viewer, Definition::Interface(data.interface))
             .map(|id| id.to_string())
             .unwrap_or_default(),
         interface_args: data
             .interface_args
             .iter()
-            .map(|ty| TyRef::of(db, ty))
+            .map(|ty| TyRef::of(db, viewer, ty))
             .collect(),
         for_ty,
         generics: data
             .generic_params
             .iter()
-            .map(|(param, bounds)| generic_export(db, param, bounds))
+            .map(|(param, bounds)| generic_export(db, viewer, param, bounds))
             .collect(),
         assoc_bindings: data
             .associated_types
             .iter()
             .map(|(name, ty)| AssocBindingExport {
                 name: name.to_string(),
-                ty: TyRef::of(db, ty),
+                ty: TyRef::of(db, viewer, ty),
             })
             .collect(),
         methods,
@@ -1201,10 +1258,11 @@ fn export_impl(db: &Db, imp: ImplLoc<'_>) -> Option<ImplExport> {
 
 fn export_item<'db>(
     db: &'db Db,
+    viewer: SourceRoot,
     def: Definition<'db>,
     impl_index: &ImplIndex<'db>,
 ) -> Option<ItemExport> {
-    let id = SymbolId::of_definition(db, def)?;
+    let id = SymbolId::of_definition(db, viewer, def)?;
     let name = definition_name(db, def);
     // An item always has a path owner; only impl-contributed methods do not,
     // and those are not exported as items.
@@ -1219,21 +1277,26 @@ fn export_item<'db>(
             let mut methods: Vec<FunctionExport> = data
                 .methods
                 .iter()
-                .map(|&loc| function_export(db, loc, false, None))
+                .map(|&loc| function_export(db, viewer, loc, false, None))
                 .collect();
             methods.sort_by(|a, b| a.name.cmp(&b.name));
             ItemDetail::Class {
                 generics: class_generics(db, class)
                     .iter()
-                    .map(|(param, bounds)| generic_export(db, param, bounds))
+                    .map(|(param, bounds)| generic_export(db, viewer, param, bounds))
                     .collect(),
                 fields: (0..data.fields.len())
-                    .map(|index| class_field_export(db, class, index))
+                    .map(|index| class_field_export(db, viewer, class, index))
                     .collect(),
                 methods,
                 impls: impl_index.ids_for_class_head(
                     db,
-                    &TyHead::Nominal(spelling(db).wire(&class_qtn(db, class))),
+                    viewer,
+                    &TyHead::Nominal(crate::render::labelled_head(
+                        db,
+                        viewer,
+                        &class_qtn(db, class),
+                    )),
                 ),
             }
         }
@@ -1246,6 +1309,7 @@ fn export_item<'db>(
                     .map(|variant| VariantExport {
                         id: SymbolId::member_id(
                             db,
+                            viewer,
                             enm.file(db),
                             &data.name,
                             IdKind::Variant,
@@ -1258,7 +1322,8 @@ fn export_item<'db>(
                     .collect(),
                 impls: impl_index.ids_for_class_head(
                     db,
-                    &TyHead::Nominal(spelling(db).wire(&enum_qtn(db, enm))),
+                    viewer,
+                    &TyHead::Nominal(crate::render::labelled_head(db, viewer, &enum_qtn(db, enm))),
                 ),
             }
         }
@@ -1267,16 +1332,16 @@ fn export_item<'db>(
             let mut defaults: Vec<FunctionExport> = data
                 .default_methods
                 .iter()
-                .map(|&loc| function_export(db, loc, false, None))
+                .map(|&loc| function_export(db, viewer, loc, false, None))
                 .collect();
             defaults.sort_by(|a, b| a.name.cmp(&b.name));
             ItemDetail::Interface {
                 generics: interface_generics(db, iface)
                     .iter()
-                    .map(|(param, bounds)| generic_export(db, param, bounds))
+                    .map(|(param, bounds)| generic_export(db, viewer, param, bounds))
                     .collect(),
                 fields: (0..data.fields.len())
-                    .map(|index| interface_field_export(db, iface, index))
+                    .map(|index| interface_field_export(db, viewer, iface, index))
                     .collect(),
                 assoc_types: data
                     .associated_types
@@ -1284,6 +1349,7 @@ fn export_item<'db>(
                     .map(|assoc| AssocTypeExport {
                         id: SymbolId::member_id(
                             db,
+                            viewer,
                             iface.file(db),
                             &data.name,
                             IdKind::AssocType,
@@ -1297,11 +1363,11 @@ fn export_item<'db>(
                                 iface,
                                 assoc.name.clone(),
                             )
-                            .map(|(ty, _diags)| TyRef::of(db, &ty)),
+                            .map(|(ty, _diags)| TyRef::of(db, viewer, &ty)),
                     })
                     .collect(),
                 required_methods: (0..data.required_methods.len())
-                    .map(|index| required_method_export(db, iface, index))
+                    .map(|index| required_method_export(db, viewer, iface, index))
                     .collect(),
                 default_methods: defaults,
                 implementors: impl_index.ids_for_interface(db, iface),
@@ -1310,11 +1376,12 @@ fn export_item<'db>(
         Definition::TypeAlias(alias) => ItemDetail::TypeAlias {
             resolved: TyRef::of(
                 db,
+                viewer,
                 &baml_compiler2_hir_ty::lower::type_alias_value(db, alias),
             ),
         },
         Definition::Function(function) => ItemDetail::Function {
-            signature: function_export(db, function, false, None).signature,
+            signature: function_export(db, viewer, function, false, None).signature,
         },
         Definition::Let(_) => ItemDetail::Plain {},
     };
@@ -1354,8 +1421,10 @@ mod tests {
     }
 
     fn package(db: &ProjectDatabase, name: &str) -> baml_base::SourceRoot {
-        spelling(db)
-            .root(&Name::new(name))
+        let package = baml_base::LangPackage::from_manifest_name(name)
+            .expect("the test names a language package");
+        baml_compiler2_hir::package::lang_roots(db)
+            .get(package)
             .expect("package is installed")
     }
 
@@ -1364,7 +1433,7 @@ mod tests {
     #[test]
     fn assert_package_exports_fully() {
         let db = make_db();
-        let export = export_package(&db, package(&db, "assert"));
+        let export = export_package(&db, package(&db, "assert"), package(&db, "assert"));
         // Without this the test still passes if `assert` stops resolving: the
         // export becomes an empty document and the snapshot is accepted as-is.
         assert!(
@@ -1392,7 +1461,12 @@ mod tests {
     #[test]
     fn every_exported_id_is_unique() {
         let db = make_db();
-        let json = serde_json::to_value(export_package(&db, package(&db, "baml"))).unwrap();
+        let json = serde_json::to_value(export_package(
+            &db,
+            package(&db, "baml"),
+            package(&db, "baml"),
+        ))
+        .unwrap();
 
         let mut ids: Vec<String> = Vec::new();
         let mut records: std::collections::HashMap<String, serde_json::Value> =
@@ -1463,18 +1537,68 @@ mod tests {
         );
     }
 
+    /// The export is asked from a viewer: an unnamed dependency's ids carry
+    /// the name the viewer reaches it by, while its own view of itself has
+    /// only the stand-in label.
+    #[test]
+    fn export_labels_an_unnamed_dependency_from_the_viewer() {
+        use baml_db::{SourceRootKind, SourceRootSpec, testing::TestDbExt};
+        let mut db = ProjectDatabase::new();
+        let workspace = db.workspace(std::path::Path::new("/viewer"));
+        let lib = db
+            .add_source_root(SourceRootSpec::new("/lib", SourceRootKind::Dependency))
+            .expect("an unnamed dependency root");
+        db.add_dependency(
+            workspace,
+            baml_base::Dependency {
+                name: Name::new("lib"),
+                root: lib,
+            },
+        )
+        .expect("the workspace depends on it as `lib`");
+        db.file("/lib/main.baml", "class Point { x int }\n");
+        let ids = |viewer: SourceRoot| -> Vec<String> {
+            serde_json::to_value(export_package(&db, viewer, lib)).unwrap()["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| item["id"].as_str().unwrap().to_string())
+                .collect()
+        };
+        let from_workspace = ids(workspace);
+        assert!(
+            from_workspace.iter().any(|id| id == "T:lib.Point"),
+            "{from_workspace:?}"
+        );
+        let from_itself = ids(lib);
+        assert!(
+            from_itself.iter().any(|id| id == "T:user.Point"),
+            "{from_itself:?}"
+        );
+    }
+
     #[test]
     fn export_is_byte_deterministic() {
         let db = make_db();
-        let a = serde_json::to_string(&export_package(&db, package(&db, "baml"))).unwrap();
-        let b = serde_json::to_string(&export_package(&db, package(&db, "baml"))).unwrap();
+        let a = serde_json::to_string(&export_package(
+            &db,
+            package(&db, "baml"),
+            package(&db, "baml"),
+        ))
+        .unwrap();
+        let b = serde_json::to_string(&export_package(
+            &db,
+            package(&db, "baml"),
+            package(&db, "baml"),
+        ))
+        .unwrap();
         assert_eq!(a, b);
     }
 
     #[test]
     fn baml_package_export_cross_links() {
         let db = make_db();
-        let export = export_package(&db, package(&db, "baml"));
+        let export = export_package(&db, package(&db, "baml"), package(&db, "baml"));
         let json = serde_json::to_value(&export).unwrap();
         let items = json["items"].as_array().unwrap();
 

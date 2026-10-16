@@ -124,12 +124,7 @@ fn library_blob_with_format(artifact_format: u32) -> Vec<u8> {
     baml_artifact::encode_with_format_for_test(
         artifact_format,
         baml_artifact::ArtifactKind::PackageInterface,
-        &export_interface(
-            &db,
-            baml_compiler2_hir::package::spelling(&db)
-                .root(&Name::new("app"))
-                .unwrap(),
-        ),
+        &export_interface(&db, db.dependency_named("app")),
     )
     .expect("package interface serializes")
 }
@@ -155,12 +150,7 @@ interface QualifiedBatch {
     assert_no_diagnostic_errors(&db);
     baml_artifact::encode(
         baml_artifact::ArtifactKind::PackageInterface,
-        &export_interface(
-            &db,
-            baml_compiler2_hir::package::spelling(&db)
-                .root(&Name::new("app"))
-                .unwrap(),
-        ),
+        &export_interface(&db, db.dependency_named("app")),
     )
     .expect("package interface serializes")
 }
@@ -216,13 +206,22 @@ fn named(wire: &WireInterface) -> PackageInterface<TypeName> {
                     name.name().clone(),
                 ),
                 Some(index) => TypeName::new(
-                    wire.dependencies[index].edge().clone(),
+                    locator_spelling(&wire.dependencies[index]),
                     name.namespace().clone(),
                     name.name().clone(),
                 ),
             })
         })
         .unwrap_or_else(|never| match never {})
+}
+
+/// The name a dependency-table entry is spelled by in these forges: its
+/// edge, or a language package's fixed name.
+fn locator_spelling(locator: &Locator) -> Name {
+    match locator {
+        Locator::Prelude(language) => Name::new(language.manifest_name()),
+        Locator::Direct { edge, .. } | Locator::Transitive { edge, .. } => edge.clone(),
+    }
 }
 
 /// Rows spelled by edge name, back onto a dependency table: `own` (and
@@ -236,11 +235,17 @@ fn slotted(own: &str, mut table: Vec<Locator>, rows: PackageInterface<TypeName>)
             }
             let index = table
                 .iter()
-                .position(|locator| locator.edge() == name.package())
+                .position(|locator| locator_spelling(locator) == *name.package())
                 .unwrap_or_else(|| {
-                    table.push(Locator::Prelude {
-                        edge: name.package().clone(),
-                    });
+                    let language =
+                        baml_base::LangPackage::from_manifest_name(name.package().as_str())
+                            .unwrap_or_else(|| {
+                                panic!(
+                                    "the forges name language packages only, not `{}`",
+                                    name.package()
+                                )
+                            });
+                    table.push(Locator::Prelude(language));
                     table.len() - 1
                 });
             Ok(WireName::qualified(
@@ -855,12 +860,7 @@ fn every_compiler_built_interface_reimports_as_a_faithful_export() {
 fn enriched_interface_is_symbolic_loc_free_and_borsh_stable() {
     let db = library_db();
     assert_no_diagnostic_errors(&db);
-    let interface = export_interface(
-        &db,
-        baml_compiler2_hir::package::spelling(&db)
-            .root(&Name::new("app"))
-            .unwrap(),
-    );
+    let interface = export_interface(&db, db.dependency_named("app"));
     let bytes = borsh::to_vec(&interface).expect("serialize");
     let decoded = borsh::from_slice(&bytes).expect("deserialize");
     assert_eq!(interface, decoded);
@@ -948,8 +948,7 @@ fn mounted_lookup_returns_owned_exported_results_without_source_locs() {
         .expect("mounted interface type resolves");
     assert!(matches!(
         ty,
-        baml_type::Ty::Interface(ref qtn, ..)
-            if baml_compiler2_hir::package::spelling(&db).of(qtn.root()).as_str() == "app"
+        baml_type::Ty::Interface(ref qtn, ..) if qtn.root() == db.dependency_named("app")
     ));
     let baml_type::Ty::Interface(qtn, args, pins) = ty else {
         unreachable!()
@@ -1210,12 +1209,8 @@ function raw_only_value_is_available() -> string throws never {
 
     let user_pkg = db.workspace_root().unwrap();
     let context = package_resolution_context(&db, user_pkg);
-    let reflect_items = baml_compiler2_hir::package::package_items(
-        &db,
-        baml_compiler2_hir::package::spelling(&db)
-            .root(&Name::new("reflect"))
-            .unwrap(),
-    );
+    let reflect_items =
+        baml_compiler2_hir::package::package_items(&db, db.dependency_named("reflect"));
     assert!(
         reflect_items
             .lookup_type(&[], &Name::new("RawOnly"))
@@ -1338,12 +1333,7 @@ function value() -> int throws never {
     assert_no_diagnostic_errors(&library);
     let blob = baml_artifact::encode(
         baml_artifact::ArtifactKind::PackageInterface,
-        &export_interface(
-            &library,
-            baml_compiler2_hir::package::spelling(&library)
-                .root(&Name::new("native"))
-                .unwrap(),
-        ),
+        &export_interface(&library, library.dependency_named("native")),
     )
     .expect("native package interface serializes");
 
@@ -1471,9 +1461,7 @@ fn dependency_db(source: &str) -> ProjectDatabase {
 }
 
 fn app_root(db: &ProjectDatabase) -> SourceRoot {
-    baml_compiler2_hir::package::spelling(db)
-        .root(&Name::new("app"))
-        .expect("app is installed")
+    db.dependency_named("app")
 }
 
 /// Every function row `root` exports, each with the loc minted from the key
@@ -1943,6 +1931,32 @@ fn view_world(reexports: &[(&str, ReExport<TypeName>)]) -> Result<ProjectDatabas
     Ok(db)
 }
 
+/// An item of the viewing namespace spelled like the edge shadows the edge
+/// (`TYPE_SYSTEM.md` § Declarations, Packages, and Names): `view.Entry` would
+/// read a member of the item, so the re-export is no source spelling either,
+/// and the declaration displays by its package's own name.
+#[test]
+fn a_re_export_through_a_shadowed_edge_is_not_a_source_spelling() {
+    use baml_compiler2_hir_ty::render::{Unspellable, Viewpoint};
+    let mut db = view_world(&[("Entry", ReExport::Type(wire_name("app", &[], "Entry")))])
+        .expect("a faithful view mounts");
+    db.file(
+        "/hir-ty-package-interface-view/main.baml",
+        "class view { x int }\n",
+    );
+    let view = db.dependency_named("view");
+    let lib = baml_compiler2_hir::package::dependency_named(&db, view, &Name::new("app"))
+        .expect("the view reaches the library as `app`");
+    let workspace = db.workspace_root().unwrap();
+    let entry = DeclName::in_root(lib, Vec::new(), Name::new("Entry"));
+    let viewpoint = Viewpoint::user_facing(&db, workspace);
+    assert_eq!(
+        viewpoint.source_path(&entry),
+        Err(Unspellable(entry.clone()))
+    );
+    assert_eq!(viewpoint.path(&entry), "app.Entry");
+}
+
 #[test]
 fn a_re_export_resolves_to_the_defining_declaration() {
     use baml_compiler2_hir_ty::{
@@ -1958,11 +1972,10 @@ fn a_re_export_resolves_to_the_defining_declaration() {
         ),
     ])
     .expect("a faithful view mounts");
-    let spelling = baml_compiler2_hir::package::spelling(&db);
-    let lib = spelling.root(&Name::new("app")).expect("app is installed");
-    let view = spelling
-        .root(&Name::new("view"))
-        .expect("view is installed");
+    let view = db.dependency_named("view");
+    // The workspace has no edge to the library: only the view reaches it.
+    let lib = baml_compiler2_hir::package::dependency_named(&db, view, &Name::new("app"))
+        .expect("the view reaches the library as `app`");
     let workspace = db.workspace_root().unwrap();
     let entry = DeclName::in_root(lib, Vec::new(), Name::new("Entry"));
 
@@ -2099,11 +2112,19 @@ fn a_blob_compiled_against_another_interface_is_refused_at_the_mount() {
         "{stale}"
     );
 
+    // Slot 1 names an edge the view does not have; the binder stops there
+    // (slot 2 carries `app`, so the rows have a slot to spell it by).
     assert_eq!(
-        refusal(vec![Locator::Direct {
-            edge: Name::new("nope"),
-            digest: [7; 32],
-        }]),
+        refusal(vec![
+            Locator::Direct {
+                edge: Name::new("nope"),
+                digest: [7; 32],
+            },
+            Locator::Direct {
+                edge: Name::new("app"),
+                digest: [7; 32],
+            },
+        ]),
         "dependency slot 1 is located by edge `nope`, which the package it is located through does \
          not have"
     );

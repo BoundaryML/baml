@@ -675,9 +675,10 @@ mod tests {
 
         // Simulate a class at index 0
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: bex_vm_types::DeclarationName::Declared(baml_type::TypeName::local(
+            path: bex_vm_types::types::LocalName::new(
+                Vec::new(),
                 baml_type::Name::new("TestClass"),
-            )),
+            ),
             fields: vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
@@ -712,7 +713,7 @@ mod tests {
             other: Default::default(),
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
-            has_cleanup: false,
+            cleanup: None,
             methods: IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -744,9 +745,7 @@ mod tests {
         // Simulate an enum at index 0
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: bex_vm_types::DeclarationName::Declared(baml_type::TypeName::local(
-                baml_type::Name::new("Color"),
-            )),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Color")),
             variants: vec![
                 bex_vm_types::EnumVariant {
                     name: "Red".to_string(),

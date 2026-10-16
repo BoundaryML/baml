@@ -107,7 +107,7 @@ fn llm_spec(parent: &FunctionDef) -> Option<FunctionDef> {
     let out = parent.return_type.clone()?;
 
     let return_type = (TypeExprKind::Path {
-        segments: vec![Name::new("ai"), Name::new("FunctionSpec")],
+        path: baml_base::compiler_path!(ai.FunctionSpec),
         generic_args: vec![out],
         associated_type_bindings: vec![],
     })
@@ -146,7 +146,7 @@ fn llm_render_prompt(
         parent.span,
     );
     let return_type = (TypeExprKind::Path {
-        segments: vec![Name::new("ai"), Name::new("Prompt")],
+        path: baml_base::compiler_path!(ai.Prompt),
         generic_args: vec![],
         associated_type_bindings: vec![],
     })
@@ -197,7 +197,7 @@ fn llm_build_request(
         params,
         Some(
             (TypeExprKind::Path {
-                segments: vec![Name::new("baml"), Name::new("http"), Name::new("Request")],
+                path: baml_base::compiler_path!(baml.http.Request),
                 generic_args: vec![],
                 associated_type_bindings: vec![],
             })
@@ -249,7 +249,7 @@ fn llm_stream(
     // stream-shaped type.
     let type_args = vec![out];
     let return_type = (TypeExprKind::Path {
-        segments: vec![Name::new("ai"), Name::new("stream"), Name::new("Stream")],
+        path: baml_base::compiler_path!(ai.stream.Stream),
         generic_args: type_args.clone(),
         associated_type_bindings: vec![],
     })
@@ -262,11 +262,7 @@ fn llm_stream(
         .map(|mut param| {
             if param.name.as_str() == "client" {
                 let streaming_client = (TypeExprKind::Path {
-                    segments: vec![
-                        Name::new("ai"),
-                        Name::new("stream"),
-                        Name::new("StreamingClient"),
-                    ],
+                    path: baml_base::compiler_path!(ai.stream.StreamingClient),
                     generic_args: vec![],
                     associated_type_bindings: vec![],
                 })

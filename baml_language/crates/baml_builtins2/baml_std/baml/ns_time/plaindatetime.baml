@@ -102,7 +102,7 @@ class PlainDateTime {
         $rust_function
     }
 
-    implements baml.ToString {
+    implements root.ToString {
         /// Serializes to ISO 8601 with no offset suffix:
         /// `1979-05-27T07:32:00`. A negative year carries a leading `-`.
         ///
@@ -343,7 +343,7 @@ class PlainDateTime {
         $rust_function
     }
 
-    implements baml.FromJson {
+    implements root.FromJson {
         /// Decodes a `PlainDateTime` from a JSON string, accepting exactly what
         /// `PlainDateTime.parse` accepts.
         ///
@@ -352,22 +352,22 @@ class PlainDateTime {
         /// - `baml.json.DecodeError` if the value is not a string, or is a
         ///   string `PlainDateTime.parse` rejects — including an offset-bearing
         ///   timestamp, which belongs to `ZonedDateTime` or `Instant`.
-        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
+        function from_json(j: root.json.json) -> Self throws root.json.DecodeError {
             match (j) {
                 string => {
                     PlainDateTime.parse(j) catch (_) {
                         root.errors.ParseError { message } => {
-                            throw baml.json.DecodeError { message: message, path: "" }
+                            throw root.json.DecodeError { message: message, path: "" }
                         },
                     }
                 },
                 _ => {
-                    throw baml.json.DecodeError { message: "Expected zoneless ISO 8601 string", path: "" }
+                    throw root.json.DecodeError { message: "Expected zoneless ISO 8601 string", path: "" }
                 },
             }
         }
     }
-    implements baml.ToJson {
+    implements root.ToJson {
         /// Encodes `self` as the same zoneless ISO 8601 string `to_string`
         /// produces.
         ///
@@ -376,10 +376,10 @@ class PlainDateTime {
         /// - `baml.json.SerializationError` if the year is outside ±9999. The
         ///   same failure panics in `to_string`: a serializer is called with a
         ///   caller standing by to react, so it gets the error channel.
-        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
+        function to_json(self) -> root.json.json throws root.json.SerializationError {
             self._to_string_impl() catch (_) {
                 root.errors.InvalidArgument { message } => {
-                    throw baml.json.SerializationError {
+                    throw root.json.SerializationError {
                         message: message,
                         path: "",
                         reason: "unserializable",

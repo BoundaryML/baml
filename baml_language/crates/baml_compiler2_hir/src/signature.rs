@@ -189,7 +189,7 @@ fn function_signature_with_source_map<'db>(
 
 fn type_expr_for_effect_param(name: Name) -> TypeExpr {
     TypeExprKind::Path {
-        segments: vec![name],
+        path: baml_base::Path::bare(name),
         generic_args: Vec::new(),
         associated_type_bindings: Vec::new(),
     }
