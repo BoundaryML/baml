@@ -219,7 +219,11 @@ class Span {
     /// Record an error with its existing baml.errors.Context and end the operation.
     //baml:mut_vm
     //baml:fallible
-    function fail_with_context<E>(self, error: E, context: baml.errors.Context) -> void throws never {
+    function fail_with_context<E>(
+        self,
+        error: E,
+        context: baml.errors.Context,
+    ) -> void throws never {
         $rust_function
     }
 
@@ -264,6 +268,10 @@ function _passthrough() -> Options | ReservedSpan throws never {
 
 /// Internal: create the operation using an already-claimed reservation, if any.
 //baml:mut_vm
-function _create_span(target: unknown, inputs: map<string, unknown>, config: Options | ReservedSpan) -> Span throws SpanError {
+function _create_span(
+    target: unknown,
+    inputs: map<string, unknown>,
+    config: Options | ReservedSpan,
+) -> Span throws SpanError {
     $rust_function
 }

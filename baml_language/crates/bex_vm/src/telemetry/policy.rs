@@ -164,12 +164,20 @@ impl TelemetryPolicies {
 
 /// A GC-independent policy subscription that may outlive the creating VM frame.
 #[derive(Clone)]
+#[cfg_attr(
+    target_arch = "wasm32",
+    expect(dead_code, reason = "wasm publishes no completions")
+)]
 pub(super) struct OwnedPolicy {
     policies: Arc<TelemetryPolicies>,
     slot: Arc<TelemetryPolicyId>,
 }
 
 impl OwnedPolicy {
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "wasm publishes no completions")
+    )]
     pub(super) fn get(&self) -> TelemetryPolicy {
         self.policies.get(self.slot.load())
     }

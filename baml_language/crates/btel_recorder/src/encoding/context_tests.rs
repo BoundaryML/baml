@@ -182,7 +182,7 @@ fn largest_completion_and_context_fit_admitted_capacity() {
     );
     assert_eq!(writer.capacity(), capacity);
     let thread_varint = prost::encoding::encoded_len_varint(thread.get());
-    assert!(writer.len() + (10 - thread_varint) <= MAX_EVENT_BYTES);
+    assert_eq!(writer.len() + (10 - thread_varint), MAX_EVENT_BYTES);
     assert_eq!(sections(&mut writer)[0].context, Some(context(u64::MAX)));
 }
 
@@ -211,7 +211,7 @@ fn largest_owned_announcement_and_context_fit_admitted_capacity() {
     );
     assert_eq!(writer.capacity(), capacity);
     let thread_varint = prost::encoding::encoded_len_varint(thread.get());
-    assert_eq!(writer.len() + (10 - thread_varint), MAX_EVENT_BYTES);
+    assert!(writer.len() + (10 - thread_varint) <= MAX_EVENT_BYTES);
     assert_eq!(sections(&mut writer)[0].context, Some(context(u64::MAX)));
 }
 

@@ -704,8 +704,14 @@ class Stream<T> {
         if (self._finished) {
             return Done {};
         }
+        let caller = trace.current_context();
         self._span.run(() -> {
-            self._next()
+            _in_context(
+                () -> {
+                    self._next()
+                },
+                $trace = _context_patch(caller),
+            )
         }) catch_all_panics (e, context) {
             _ => {
                 self._fail(e, context);
@@ -750,18 +756,24 @@ class Stream<T> {
         if (self._result != null) {
             return self._settle();
         }
+        let caller = trace.current_context();
         self._span.run(() -> {
-            while (!self._finished) {
-                match (self._next_text()) {
-                    null => {
-                        self._finished = true;
-                    },
-                    let s: string => {
-                        self._text = self._text + s;
-                    },
-                }
-            }
-            self._settle()
+            _in_context(
+                () -> {
+                    while (!self._finished) {
+                        match (self._next_text()) {
+                            null => {
+                                self._finished = true;
+                            },
+                            let s: string => {
+                                self._text = self._text + s;
+                            },
+                        }
+                    }
+                    self._settle()
+                },
+                $trace = _context_patch(caller),
+            )
         }) catch_all_panics (e, context) {
             _ => {
                 self._fail(e, context);
@@ -781,7 +793,10 @@ class Stream<T> {
             null => {},
         }
         let value = self._parse_final_value() catch_all_panics (e, context) {
-            _ => { self._fail(e, context); throw e; },
+            _ => {
+                self._fail(e, context);
+                throw e;
+            },
         };
         self._result = _StreamValue<T> { value: value };
         self._span.finish(value);
@@ -801,7 +816,11 @@ class Stream<T> {
         }
     }
 
-    function _fail(self, error: root.errors.InvokeError | trace.SpanError | baml.panics.Panic, context: baml.errors.Context) -> void {
+    function _fail(
+        self,
+        error: root.errors.InvokeError | trace.SpanError | baml.panics.Panic,
+        context: baml.errors.Context,
+    ) -> void {
         if (self._result == null) {
             self._finished = true;
             self._result = _StreamError { error: error };
@@ -822,6 +841,21 @@ class Stream<T> {
         };
         self._span.close();
     }
+}
+
+/// (internal) Run `body`; its `$trace` layers a context over the current one.
+function _in_context<T, E>(body: () -> T throws E) -> T throws E {
+    body()
+}
+
+/// (internal) A patch that layers `caller`'s context over the span's, so work a
+/// stream does for a step keeps the context that step was called in.
+function _context_patch(caller: trace.Context) -> trace.Options throws never {
+    let metadata: map<string, string | int | float | bool | null> = {};
+    for (let key in caller.metadata.keys()) {
+        metadata[key] = caller.metadata[key];
+    }
+    trace.context(metadata = metadata, distinct_id = caller.distinct_id)
 }
 
 /// One-turn streaming over a spec: render the spec's prompt exactly as the

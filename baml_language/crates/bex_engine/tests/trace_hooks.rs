@@ -603,7 +603,7 @@ function main() -> int {
     );
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(function) = object
-            && matches!(function.name().as_str(), "user.entry" | "user.creator")
+            && matches!(function.name().as_str(), "entry" | "creator")
         {
             // Test the internal strategy without allowing user source to opt in.
             function.trace_passthrough = true;

@@ -150,7 +150,9 @@ class FunctionSpec<Out> {
         client: Client? = null,
         on_event: ((root.events.Event) -> void)? = null,
     ) -> Out {
-        Agent.new(client = client, on_event = on_event).run(self, $trace = trace._passthrough()).value
+        Agent.new(client = client, on_event = on_event)
+            .run(self, $trace = trace._passthrough())
+            .value
     }
 
     /// Parses an existing model reply using this spec's realized output type.

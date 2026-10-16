@@ -4,9 +4,8 @@
 /// this does not shrink records; validate worst-case encodings first.
 /// Variable-length log names require additional reservation beyond this bound.
 /// Worst case: two six-byte containers, an eleven-byte thread selector,
-/// a twenty-byte context reference, and a 103-byte announcement envelope
-/// carrying inputs, type arguments, and a bound receiver (including length padding).
-pub const MAX_EVENT_BYTES: usize = 146;
+/// a twenty-byte context reference, and a ninety-two-byte completion.
+pub const MAX_EVENT_BYTES: usize = 135;
 /// **Correctness bound.** The specialized writer relies on this reserved region. Update only
 /// with encoder changes and worst-case/equivalence tests.
 pub const MAX_COMPLETION_BYTES: usize = 92;

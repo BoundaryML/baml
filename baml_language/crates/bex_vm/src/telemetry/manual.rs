@@ -11,6 +11,10 @@ use btel_types::{
 use super::{LAST_CALL_PATH_ID, TelemetryState, allocate_call_path_id, snapshot};
 
 #[derive(Clone)]
+#[cfg_attr(
+    target_arch = "wasm32",
+    expect(dead_code, reason = "wasm publishes no completions")
+)]
 pub(crate) struct OperationOptions {
     pub mode: InvocationMode,
     pub reserved_id: Option<TelemetryId>,
@@ -87,6 +91,10 @@ impl ManualScope {
     }
 }
 
+#[cfg_attr(
+    target_arch = "wasm32",
+    expect(dead_code, reason = "wasm publishes no completions")
+)]
 struct Recording {
     await_time: Arc<Mutex<AwaitDuration>>,
     options: OperationOptions,
@@ -230,6 +238,10 @@ impl ManualSpan {
         owner
     }
 
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "wasm publishes no completions")
+    )]
     fn close_deferred(&self) {
         if let Some(mut recording) = self
             .inner
@@ -268,6 +280,10 @@ impl ManualSpan {
 
     /// # Safety
     /// Caller holds the heap permit. Only the winning completion traverses value.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(unused_variables, reason = "wasm publishes no completions")
+    )]
     pub(crate) unsafe fn finish(&self, outcome: Option<InvocationOutcome>, value: Option<Value>) {
         let recording = self
             .inner
@@ -305,6 +321,10 @@ impl ManualSpan {
 }
 
 impl Recording {
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "wasm publishes no completions")
+    )]
     fn current_policy(&self) -> super::TelemetryPolicy {
         self.options
             .live_policy

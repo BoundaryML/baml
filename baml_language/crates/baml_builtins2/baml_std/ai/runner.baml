@@ -487,7 +487,9 @@ class Agent {
             inputs["client"] = selected;
             inputs["on_event"] = self.on_event;
             let span = trace._create_span(spec.target(), inputs = inputs, config = trace._passthrough()) catch_all (e) {
-                _ => { throw baml.errors.UnknownError.with_message<never>(e, "could not start agent span") },
+                _ => {
+                    throw baml.errors.UnknownError.with_message<never>(e, "could not start agent span")
+                },
             };
             span.run(() -> {
                 let schema_attempts = self._validated_schema_attempts();
@@ -519,7 +521,6 @@ class Agent {
                     throw e;
                 },
             }
-
         }
     }
 }

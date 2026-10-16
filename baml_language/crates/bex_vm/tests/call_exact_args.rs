@@ -81,7 +81,7 @@ fn passthrough_entries_are_not_specialized_as_ordinary_calls() {
     // callers were emitted before its pass-through strategy was known.
     leaf.trace_passthrough = true;
     let program = convert_program(program).unwrap();
-    let instructions = ops(function(&program, "user.main"));
+    let instructions = ops(function(&program, "main"));
     assert_eq!(
         instructions
             .iter()
