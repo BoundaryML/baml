@@ -166,6 +166,7 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                         && ctx.boxing_for.is_some_and(|owner| {
                             arms.iter().any(|arm| match arm {
                                 Ty::Class(name, _) => ctx.analysis.needs_box(owner, name),
+                                Ty::TypeAlias(name) => ctx.analysis.alias_needs_box(owner, name),
                                 _ => false,
                             })
                         });
@@ -240,19 +241,27 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             Ok(type_path(name, ctx.analysis))
         }
         Ty::Media(kind) => Err(unsupported(&format!("media ({kind})"))),
-        // Opaque alias references (in-package non-recursive aliases are
-        // inlined upstream, so these are recursive or cross-package ones).
-        // A Rust `type` alias is transparent, so the reference resolves to
-        // the underlying type's conversions; no boxing is needed because
-        // package dependencies are acyclic, so a cross-package alias can
-        // never sit on a containment cycle.
+        // Alias references stay nominal in the pool. A Rust `type` alias is
+        // transparent, so the reference resolves to the underlying type's
+        // conversions — and holds its target inline, so a field whose alias
+        // target contains a same-SCC class (`type Part = Text | Extra` with
+        // `class Extra { part Part }`) is boxed like a direct reference.
         Ty::TypeAlias(name) => {
             if !ctx.analysis.is_emitted(name) {
                 return Err(Unsupported {
                     reason: format!("references skipped or unknown type `{name}`"),
                 });
             }
-            Ok(type_path(name, ctx.analysis))
+            let path = type_path(name, ctx.analysis);
+            let boxed = !under_heap
+                && ctx
+                    .boxing_for
+                    .is_some_and(|owner| ctx.analysis.alias_needs_box(owner, name));
+            if boxed {
+                Ok(quote! { ::std::boxed::Box<#path> })
+            } else {
+                Ok(path)
+            }
         }
         // A TypeVar naming one of the enclosing generic function's own
         // `<...>` params translates to that Rust generic parameter. The
@@ -716,6 +725,110 @@ mod tests {
             "crate :: aliases :: StringList"
         );
         assert!(translate(&Ty::TypeAlias(recursive), &ctx).is_err());
+    }
+
+    #[test]
+    fn class_cycles_through_a_union_alias_box_the_alias_reference() {
+        // type Part = Text | Extra; class Extra { part Part, next Part? };
+        // class Holder { part Part } sits outside the cycle.
+        let part = name("user", &[], "Part");
+        let text = name("user", &[], "Text");
+        let extra = name("user", &[], "Extra");
+        let holder = name("user", &[], "Holder");
+        let part_ref = Ty::TypeAlias(part.clone());
+        let optional_part = Ty::Union(Box::new([part_ref.clone(), Ty::Null]));
+        let pool = SymbolPool::from([
+            (
+                part.clone(),
+                alias(
+                    &part,
+                    Ty::Union(Box::new([
+                        Ty::Class(text.clone(), Box::new([])),
+                        Ty::Class(extra.clone(), Box::new([])),
+                    ])),
+                    false,
+                ),
+            ),
+            (text.clone(), class(&text, vec![("t", Ty::String)])),
+            (
+                extra.clone(),
+                class(
+                    &extra,
+                    vec![("part", part_ref.clone()), ("next", optional_part.clone())],
+                ),
+            ),
+            (
+                holder.clone(),
+                class(&holder, vec![("part", part_ref.clone())]),
+            ),
+        ]);
+        let (analysis, warnings) = analyze(&pool);
+        assert!(warnings.is_empty());
+        assert!(analysis.alias_needs_box(&extra, &part));
+        assert!(!analysis.alias_needs_box(&holder, &part));
+
+        let field_ctx = |owner| TyCtx {
+            analysis: &analysis,
+            unions: &NO_UNIONS,
+            leaf: &[],
+            boxing_for: Some(owner),
+            generic_params: &[],
+        };
+        assert_eq!(
+            translate(&part_ref, &field_ctx(&extra))
+                .unwrap()
+                .to_string(),
+            ":: std :: boxed :: Box < crate :: Part >"
+        );
+        assert_eq!(
+            translate(&optional_part, &field_ctx(&extra))
+                .unwrap()
+                .to_string(),
+            ":: std :: option :: Option < :: std :: boxed :: Box < crate :: Part > >"
+        );
+        // Under a heap container, and outside the cycle, no box.
+        assert_eq!(
+            translate(&Ty::List(Box::new(part_ref.clone())), &field_ctx(&extra))
+                .unwrap()
+                .to_string(),
+            ":: std :: vec :: Vec < crate :: Part >"
+        );
+        assert_eq!(
+            translate(&part_ref, &field_ctx(&holder))
+                .unwrap()
+                .to_string(),
+            "crate :: Part"
+        );
+    }
+
+    #[test]
+    fn class_cycles_through_alias_chains_box_the_outer_alias() {
+        // type Inner = Node?; type Outer = Inner; class Node { next Outer }
+        let inner = name("user", &[], "Inner");
+        let outer = name("user", &[], "Outer");
+        let node = name("user", &[], "Node");
+        let pool = SymbolPool::from([
+            (
+                inner.clone(),
+                alias(
+                    &inner,
+                    Ty::Union(Box::new([Ty::Class(node.clone(), Box::new([])), Ty::Null])),
+                    false,
+                ),
+            ),
+            (
+                outer.clone(),
+                alias(&outer, Ty::TypeAlias(inner.clone()), false),
+            ),
+            (
+                node.clone(),
+                class(&node, vec![("next", Ty::TypeAlias(outer.clone()))]),
+            ),
+        ]);
+        let (analysis, warnings) = analyze(&pool);
+        assert!(warnings.is_empty());
+        assert!(analysis.alias_needs_box(&node, &outer));
+        assert!(analysis.needs_box(&node, &node));
     }
 
     #[test]
