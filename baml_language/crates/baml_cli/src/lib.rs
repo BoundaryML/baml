@@ -43,6 +43,7 @@ pub(crate) mod playground_command;
 pub(crate) mod project_load;
 pub(crate) mod project_session;
 pub(crate) mod query_command;
+mod query_docs;
 pub mod reporter;
 pub(crate) mod run_command;
 pub(crate) mod runtime_telemetry;

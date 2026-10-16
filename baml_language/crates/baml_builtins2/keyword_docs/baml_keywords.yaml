@@ -1125,33 +1125,152 @@ pattern:
     Full guide: `baml describe patterns`. Match-arm reference: `baml describe match`.
 
 query:
-  summary: "SQL over the project's local recordings: `baml query \"SELECT …\"`."
+  summary: "Query recorded BAML execution with SQL, locally or in Boundary Cloud."
   syntax: |
-    baml query "SELECT process_id, status, command, last_updated FROM processes"
-    baml query "SELECT span_name, status, duration FROM spans
-                WHERE span_type = 'future' AND parent_span_id IS NULL
-                ORDER BY start_time DESC LIMIT 20"
-    baml query "SELECT function_name, sum(invocation_count) calls, sum(self_time) self_ns
-                FROM profiler GROUP BY function_name ORDER BY self_ns DESC LIMIT 10"
-    baml query "SELECT span_id, input_args['customer']['age'] AS age, output_value
-                FROM spans WHERE input_args['customer']['age'] >= 30" --format jsonl
-    baml query "SELECT span_name, temporary_projections['cost'] FROM spans
-                WHERE temporary_projections IS NOT NULL"
-    baml query --schema --table spans
+    # Start with the tables and their column reference.
+    baml describe query.tables
+
+    # Always select the source explicitly when following an example.
+    baml query --local "SELECT * FROM processes LIMIT 10"
+    baml query --project acme/app "SELECT * FROM processes LIMIT 10"
   details: |
-    Every `baml run`/`baml test` records to `.baml/btel`; the first query
-    builds `.baml/btel/query.sqlite` and later queries apply only new files.
-    Relations: `processes` (one row per process, with its status),
-    `spans` (completed function calls that were retained, and futures: a
-    root call is a future without a parent; `input_args`, `output_value`,
-    `error_value` (a `baml.errors.Context`) and `temporary_projections`
-    (model usage and cost) are BAML values), `span_announcements` (every
-    started span), and `profiler` (one row per calling-context node of an
-    ended process: invocations, outcomes, total/self/I/O time). Value columns
-    support ordinary subscripts and comparisons —
-    `input_args['customer']['age'] >= 30`,
-    `input_args = baml_value_json('{"x":1}')` — decoded on demand. `WITH
-    RECURSIVE` walks span trees through `parent_span_id`. Discovery:
-    `--schema`, `--explain`. Output: `--format table|json|jsonl` (jsonl ends
-    with an outcome frame). Exit codes: 0 complete, 1 evidence-incomplete,
-    2 invalid SQL, 3 budget, 4 cancelled, 5 index/internal.
+    Use queries to investigate runs, slow calls, failures, captured values, and model usage. Queries read recorded execution; they do not run your BAML functions.
+
+    Choose a source first. --local reads this project's local recordings, even when you are logged in. BOUNDARY_API_KEY=local also selects local recordings. Otherwise an API key or your saved login selects cloud; without either credential or explicit cloud target flags, query reads locally. A failed cloud login never silently switches to local data.
+
+    Learn more:
+      baml describe query.local      Record locally, find a project, refresh the index
+      baml describe query.cloud      Authenticate and choose a project/environment
+      baml describe query.tables     Browse tables and their columns
+      baml describe query.values     Read inputs, outputs, errors, and unavailable values
+      baml describe query.sql        SQL support and local/cloud differences
+      baml describe query.examples   Investigate latency, failures, and usage
+      baml describe query.output     Formats, budgets, outcomes, and exit codes
+
+    All flags: baml help query. These guides and the bundled catalog work offline. They describe this CLI version, not a live cloud schema.
+
+query.local:
+  summary: "Record BAML execution locally and query a project's recordings."
+  syntax: |
+    # Replace main with your function; explicit local recording overrides login.
+    BOUNDARY_API_KEY=local baml run main
+    baml query --local "SELECT * FROM processes LIMIT 10"
+
+    # --from is a directory, not a cloud project name.
+    baml query --local --from /path/to/project "SELECT * FROM spans LIMIT 10"
+  details: |
+    Local query reads <project>/.baml/btel/recordings. It does not download cloud recordings. BOUNDARY_API_KEY=local also selects local querying, but cannot be combined with --project or --environment on a query. BAML_TELEMETRY=off disables recording, so executions made with it off will not appear later.
+
+    The first query builds a disposable .baml/btel/query.sqlite index beside existing recordings. Later queries index newly completed recording files before executing SQL. An empty project returns empty tables; it does not need a database server. A running program can have evidence that has not yet been sealed into a recording file.
+
+    --no-refresh queries the existing index without applying new files. --verify checks indexed file contents instead of trusting unchanged file metadata. --explain shows SQLite's plan; --internal prints translated SQL on stderr. These options apply only to local queries.
+
+    Empty results? Check --from, whether the execution recorded locally, and whether the relevant recording files have finished writing. Check the query outcome for missing evidence. Use baml describe query.tables to learn when each table contains rows, and baml describe query.output for outcomes.
+
+query.cloud:
+  summary: "Authenticate and select the cloud project and environment to query."
+  syntax: |
+    baml auth login
+    baml auth status
+
+    # Replace acme/app with your organization handle and project name.
+    # A saved user login defaults to your personal environment.
+    baml query --project acme/app "SELECT * FROM processes LIMIT 10"
+
+    # Choose a named environment you have permission to read.
+    baml query --project acme/app --environment development "SELECT * FROM spans LIMIT 10"
+  details: |
+    BOUNDARY_API_KEY takes precedence over a saved login. A key needs query/read permission; a key authorized only to upload cannot query. A key scoped to one environment can select that environment implicitly. Broader permissions may require an explicit target. Use baml auth status to inspect the credential and project selection without printing secrets.
+
+    Project precedence is --project, then BOUNDARY_PROJECT, then [boundary].project in baml.toml. Configure the service endpoint with BOUNDARY_API_URL or [boundary].api_url. With a user login, omit --environment for your personal environment. Queries address one environment; SQL cannot choose a different environment.
+
+    --local overrides credentials. BOUNDARY_API_KEY=local also selects local recordings, and rejects cloud target flags. Explicit cloud flags without credentials fail, and rejected or unreadable credentials do not fall back to a different data source.
+
+    Cloud data becomes queryable after uploads have been processed. An empty answer is not proof that a call never ran. The server's table types, SQL functions, and visibility of unfinished calls can differ from local recordings. The bundled --schema reference is local metadata, even with cloud flags; it does not contact the server. To inspect a known table's current cloud result columns, query SELECT * FROM spans LIMIT 0 with your cloud target and --format json.
+
+    See baml describe query.sql for compatibility and baml describe query.output for cloud outcomes. Flag reference: baml help query.
+
+query.tables:
+  summary: "Browse the local SQL catalog and follow a table to its columns."
+  syntax: |
+    baml describe query.tables.spans
+    baml describe query.tables.spans --json
+    baml describe query.tables.spans.input_args
+    baml query --schema --table spans --format json
+  details: |
+    This is the local catalog bundled with your CLI, generated from the same table definitions used to execute local queries. Table pages contain every public column, its SQL type, and its description. Append a column name to focus on one field; --search also finds columns by name and description. --json exposes those definitions as structured data. baml query --schema remains the compact reference for the same catalog.
+
+    These commands neither read recordings nor discover the live cloud schema. Cloud may expose different columns and types. For source selection, see baml describe query.local or baml describe query.cloud. For joins and units, see baml describe query.sql.
+
+    Tables (follow any of these commands):
+
+query.values:
+  summary: "Navigate captured inputs, outputs, errors, and network payloads."
+  syntax: |
+    baml query --local "SELECT span_name, input_args['customer']['age'] AS age FROM spans WHERE input_args['customer']['age'] >= 30 LIMIT 20"
+    baml query --local "SELECT span_name, output_value['items'][0]['name'] AS item FROM spans LIMIT 20"
+    baml query --local "SELECT span_name, baml_value_state(output_value) AS state, baml_kind(output_value) AS kind FROM spans LIMIT 20"
+  details: |
+    Use ['key'] for a named field and [index] for a zero-based list position. Paths use constant keys/indexes; computed paths and dot access inside a captured value are not supported. A SQL alias still uses a dot: s.input_args['customer'].
+
+    Use baml_value_state(v) when NULL alone cannot explain the result: it distinguishes present, null, missing, omitted, no_value, and unavailable evidence such as capture_pending or cas_missing. Private/omitted data cannot be recovered by a query. baml_kind(v) reports the value's kind rather than guessing from its rendered text. Use baml_value_json('...') as a structured JSON comparison operand, for example input_args['tags'] = baml_value_json('["vip"]') within SQL; quote the outer shell argument accordingly.
+
+    Captured values are decoded when the query needs them. Filter by process, time, or span name before examining large inputs; a predicate on an input can require decoding each remaining candidate. Missing evidence can make an answer incomplete: inspect its outcome, not just its row count.
+
+    The generated column descriptions explain which fields carry arguments, return values, errors, and network events: baml describe query.tables.spans. Examples: baml describe query.examples. Result handling: baml describe query.output.
+
+query.sql:
+  summary: "Read-only SQL, table relationships, units, and backend compatibility."
+  syntax: |
+    baml query --local "SELECT s.span_name, p.status FROM spans s JOIN processes p ON p.process_id = s.process_id LIMIT 20"
+    baml query --local --explain "SELECT span_name FROM spans WHERE span_type = 'function' LIMIT 10"
+  details: |
+    Submit one read-only SELECT, optionally with WITH/CTEs, joins, subqueries, grouping, ordering, and aggregates. INSERT, UPDATE, DELETE, arbitrary storage tables, and multiple statements are not supported. Use baml describe query.tables to discover the public catalog; SHOW TABLES and SQLite's internal schema tables are not the discovery interface.
+
+    process_id joins a span or profiler node to its process. parent_span_id links a span to its parent; WITH RECURSIVE can walk that hierarchy. Join a span to a profiler node using both process_id and profiler_node_id: a profiler node identifies a code path that can recur across processes. Profiling includes aggregate execution; spans contain retained calls, so their row counts need not equal profiler invocation counts.
+
+    Durations and profiler times are nanoseconds. Divide by 1000000.0 for milliseconds. Consult each column description for its unit and whether it can be absent. Timestamps are UTC; locally they are RFC 3339 text, while cloud result types can be timestamps.
+
+    Local SQL uses SQLite after BAML value translation. Cloud uses its own SQL engine and function registry: SQLite-specific functions and coercions are not a portability guarantee. Cloud nested fields and types may differ too; for example a local usage/cost recipe must not be assumed to work unchanged in cloud. Prefer explicit casts, inspect server result columns, and check the server's error when adapting a query.
+
+    --explain and --internal inspect the local translation and plan only. The value functions and bracket navigation are explained by baml describe query.values. baml describe query.examples supplies local recipes with an explicit source.
+
+query.examples:
+  summary: "Local recipes for slow calls, failures, profiling, and model usage."
+  syntax: |
+    # Which retained functions are slow on average?
+    baml query --local "SELECT span_name, COUNT(*) AS calls, AVG(duration) / 1000000.0 AS avg_ms FROM spans WHERE span_type = 'function' GROUP BY span_name ORDER BY avg_ms DESC LIMIT 20"
+
+    # Which calls failed, and what error was captured?
+    baml query --local "SELECT span_name, status, error_value FROM spans WHERE status IN ('user_error', 'panic_error') ORDER BY start_time DESC LIMIT 20"
+
+    # Which code paths spend the most self time?
+    baml query --local "SELECT function_name, SUM(invocation_count) AS calls, SUM(self_time) / 1000000.0 AS self_ms FROM profiler GROUP BY function_name ORDER BY self_ms DESC LIMIT 20"
+
+    # Local model usage reports estimated cost in dollars.
+    baml query --local "SELECT span_name, temporary_projections['model_name'] AS model, temporary_projections['cost'] AS cost_usd FROM spans WHERE temporary_projections IS NOT NULL LIMIT 20"
+
+    # Which spans have started without a recorded completion?
+    baml query --local "SELECT span_name, start_time FROM span_announcements WHERE is_complete = 0 LIMIT 20"
+  details: |
+    These recipes deliberately use --local. Record locally first (baml describe query.local). Replace filters with your own process IDs, function names, and time range; add --format json for machine-readable results.
+
+    Cost is an estimate, and NULL can mean an unpriced model or missing usage. Retention and capture settings determine which individual calls and values exist. A span without a completion can still be running or can have incomplete evidence; its absence from the result does not establish success. See the table descriptions for the local visibility rules.
+
+    To adapt a recipe to cloud, first select the target with baml describe query.cloud and review baml describe query.sql. Local column names inside captured values, SQL functions, and unfinished-span visibility are not a complete description of the server's capabilities.
+
+query.output:
+  summary: "Consume query results, bound work, and distinguish partial answers from success."
+  syntax: |
+    baml query --local --format json "SELECT span_name, status FROM spans LIMIT 20"
+    baml query --local --max-rows 100 --max-wall 30s "SELECT span_name FROM spans"
+    # Use - as the SQL argument to read a statement from stdin.
+    printf '%s\n' 'SELECT COUNT(*) FROM processes' | baml query --local -
+  details: |
+    --format table is for reading in a terminal. --format json writes one document with columns, rows, and outcome. Always inspect outcome: returned rows alone do not establish that the answer is complete. A row budget or deadline can truncate it. --max-rows and --max-wall bound execution; the cloud server also applies its limits. SQL LIMIT limits the requested result; a tighter execution budget can still truncate it.
+
+    JSONL differs by source. Local --format jsonl emits one object per row (column names are keys), followed by {"outcome": ...}. Cloud emits a {"columns": ...} record, {"row": [...]} records, and a terminal {"queryOutcome": ...}. Do not parse cloud output with the local row-object format. Diagnostics go to stderr.
+
+    Local query exit codes: 0 complete; 1 incomplete evidence; 2 invalid SQL; 3 budget exhausted; 5 index/query failure. Cloud query outcomes: complete exits 0; incomplete warns and also exits 0; truncated exits 3; cancelled exits 4; failed exits 5, including server-side invalid SQL. CLI argument, credential, and transport failures are nonzero and need not use those query-outcome codes.
+
+    For automation, check both exit status and the terminal outcome. Use unique column aliases for local JSONL, whose rows are objects. JSON and table output are collected before printing; cloud JSONL can deliver rows as they arrive. See baml describe query.values to investigate unavailable captures.
