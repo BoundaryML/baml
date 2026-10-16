@@ -48,11 +48,6 @@ class Class {
             $rust_function
         }
     }
-    implements baml.ToString {
-        function to_string(self) -> string throws never {
-            self.as_type()._to_string_impl()
-        }
-    }
     /// The class's fields, in declaration order. Ownerless: these describe
     /// the type, so `Field.value` on them returns `null`.
     //baml:mut_vm
@@ -121,11 +116,6 @@ class Enum {
             $rust_function
         }
     }
-    implements baml.ToString {
-        function to_string(self) -> string throws never {
-            self.as_type()._to_string_impl()
-        }
-    }
     //baml:mut_vm
     //baml:fallible
     /// The enum's variants, in declaration order.
@@ -168,11 +158,6 @@ class Union {
             $rust_function
         }
     }
-    implements baml.ToString {
-        function to_string(self) -> string throws never {
-            self.as_type()._to_string_impl()
-        }
-    }
     /// The union's members, in canonical order.
     //baml:mut_vm
     //baml:fallible
@@ -201,11 +186,6 @@ class Literal {
             $rust_function
         }
     }
-    implements baml.ToString {
-        function to_string(self) -> string throws never {
-            self.as_type()._to_string_impl()
-        }
-    }
 
     /// Returns the string, int, bigint, bool, or enum variant represented by this literal type.
     /// The return type is unknown because enum variants can belong to any enum.
@@ -229,11 +209,6 @@ class Array {
         //baml:fallible
         function as_type(self) -> root.Type throws never {
             $rust_function
-        }
-    }
-    implements baml.ToString {
-        function to_string(self) -> string throws never {
-            self.as_type()._to_string_impl()
         }
     }
     /// The type of the array's elements.
@@ -262,11 +237,6 @@ class Map {
         //baml:fallible
         function as_type(self) -> root.Type throws never {
             $rust_function
-        }
-    }
-    implements baml.ToString {
-        function to_string(self) -> string throws never {
-            self.as_type()._to_string_impl()
         }
     }
     /// The type of the map's keys.
@@ -304,11 +274,6 @@ class Interface {
             $rust_function
         }
     }
-    implements baml.ToString {
-        function to_string(self) -> string throws never {
-            self.as_type()._to_string_impl()
-        }
-    }
 }
 
 /// A primitive-kind view of a `type` value. Users never construct this class.
@@ -323,11 +288,6 @@ class Primitive {
         //baml:fallible
         function as_type(self) -> root.Type throws never {
             $rust_function
-        }
-    }
-    implements baml.ToString {
-        function to_string(self) -> string throws never {
-            self.as_type()._to_string_impl()
         }
     }
 }
@@ -345,11 +305,6 @@ class Function {
         //baml:fallible
         function as_type(self) -> root.Type throws never {
             $rust_function
-        }
-    }
-    implements baml.ToString {
-        function to_string(self) -> string throws never {
-            self.as_type()._to_string_impl()
         }
     }
     //baml:mut_vm

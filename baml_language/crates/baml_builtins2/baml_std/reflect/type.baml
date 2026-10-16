@@ -127,10 +127,12 @@ class Type {
         $rust_function
     }
 
-    /// (internal) `baml.ToString` is implemented for `reflect.Type` by an out-of-body
-    /// `implement` block beside the interface (baml/conversions.baml): `baml`
-    /// depends on `reflect`, never the reverse. Code inside `reflect` cannot see
-    /// that implementation, so it calls this method directly.
+    /// (internal) The rendering behind `baml.ToString` for every type value.
+    /// `reflect.Type` and each kind view implement `baml.ToString` by
+    /// out-of-body `implement` blocks beside the interface
+    /// (baml/conversions.baml): `baml` depends on `reflect`, never the reverse.
+    /// Code inside `reflect` cannot see those implementations, so it calls this
+    /// method directly.
     //baml:vm
     function _to_string_impl(self) -> string throws never {
         $rust_function
