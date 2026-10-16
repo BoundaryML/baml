@@ -204,6 +204,7 @@ namespace baml.json:
   type json
   function _path_field
   function _path_index
+  function _to_json
   function deserialize<T>
   function field
   function from<T>

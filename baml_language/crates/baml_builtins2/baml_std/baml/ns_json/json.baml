@@ -83,13 +83,26 @@ function stringify_pretty(j: json) -> string throws never {
 /// working with. Not to be confused with `string.from`, which renders BAML's
 /// own display form rather than JSON.
 ///
+/// `omit_absent` decides how an absent optional field is written; see
+/// `from<T>`.
+///
 /// # Throws
 ///
 /// - `baml.json.SerializationError` if any value in the graph has no JSON form
 ///   — a `uint8array` without explicit encoding, a function, a future. See
 ///   `from<T>` for the full rendering rules.
-function to_string(value: unknown) -> string throws SerializationError {
-    stringify(to_json(value))
+///
+/// # Examples
+///
+/// ```baml
+/// class Patch { name: string?, expires_in: int? }
+///
+/// let p = Patch { expires_in: null };
+/// assert.equal(baml.json.to_string(p), "{\"name\":null,\"expires_in\":null}");
+/// assert.equal(baml.json.to_string(p, omit_absent = true), "{\"expires_in\":null}");
+/// ```
+function to_string(value: unknown, omit_absent: bool = false) -> string throws SerializationError {
+    stringify(to_json(value, omit_absent = omit_absent))
 }
 
 /// Serializes any BAML value to its `json` representation, dispatching on the
@@ -106,13 +119,21 @@ function to_string(value: unknown) -> string throws SerializationError {
 /// `unknown`. This one exists so `to_string` and engine-side callers have a
 /// non-generic symbol to bind.
 ///
+/// `omit_absent` decides how an absent optional field is written; see
+/// `from<T>`.
+///
 /// # Throws
 ///
 /// - `baml.json.SerializationError` if any value in the graph has no JSON
 ///   form. See `from<T>` for the rendering rules.
+function to_json(value: unknown, omit_absent: bool = false) -> json throws SerializationError {
+    _to_json(value, omit_absent)
+}
+
+/// (internal) The walk behind `to_json`, with its default resolved.
 //baml:mut_vm
 //baml:may_yield
-function to_json(value: unknown) -> json throws SerializationError {
+function _to_json(value: unknown, omit_absent: bool) -> json throws SerializationError {
     $rust_function
 }
 
@@ -124,6 +145,17 @@ function to_json(value: unknown) -> json throws SerializationError {
 /// enum its variant name, media the tagged form. A `bigint` renders as an
 /// arbitrary-precision JSON number, and a non-finite `float` renders as `null`.
 ///
+/// An optional (`T?`) field is absent when it was never given a value: left
+/// out of the class constructor, missing from the JSON object it was decoded
+/// from, or cleared with `reflect.class.unset_field`. An absent field reads as
+/// `null` like any other, and by default it is written as `null` too. With
+/// `omit_absent = true` it is left out of its object instead, at every depth
+/// the structural walk reaches, so a decoded object encodes back with the same
+/// members.
+/// A field that holds `null` — written `name: null`, assigned, or decoded from
+/// an explicit `null` — is always written as `null`. A `baml.ToJson` override
+/// renders its own subtree, so the option does not reach inside one.
+///
 /// A value whose runtime class `implements baml.ToJson` routes through that
 /// override instead, and an override owns its whole subtree — the walk stops
 /// descending once it dispatches one. Resolution is on the value's *runtime*
@@ -133,8 +165,9 @@ function to_json(value: unknown) -> json throws SerializationError {
 /// `T` selects nothing. It is the call site's static type and no more; every
 /// dispatch decision is made on the value in hand.
 ///
-/// This is the caller-facing serializer, equivalent to `v.to_json()`.
-/// `to_json` is the same walk behind an `unknown` parameter.
+/// This is the caller-facing serializer, equivalent to `v.to_json()` when
+/// `omit_absent` is `false`. `to_json` is the same walk behind an `unknown`
+/// parameter.
 ///
 /// # Throws
 ///
@@ -142,7 +175,10 @@ function to_json(value: unknown) -> json throws SerializationError {
 ///   form: a `uint8array` (encode it explicitly with `to_base64()` or
 ///   `to_hex()`), a function, a future, or any other opaque runtime object.
 ///   `reason` names which.
-function from<T>(value: T) -> json throws SerializationError {
+function from<T>(value: T, omit_absent: bool = false) -> json throws SerializationError {
+    if (omit_absent) {
+        return to_json(value, omit_absent = true);
+    }
     value.to_json()
 }
 
@@ -166,7 +202,9 @@ function from<T>(value: T) -> json throws SerializationError {
 ///
 /// Per BEP-038, JSON interchange uses raw field names, so `@alias` and `@skip`
 /// have no effect here. Every declared field must be present, except that an
-/// optional (`T?`) field may be absent and decodes to `null`. Unrecognized
+/// optional (`T?`) field may be missing: it decodes absent, which reads as
+/// `null` but stays distinct from an explicit `null` (see
+/// `reflect.class.is_field_set`, and `omit_absent` on `from<T>`). Unrecognized
 /// keys in the object are ignored. A union tries its members in declaration
 /// order and takes the first that decodes.
 ///
@@ -230,8 +268,9 @@ function from_json<T>(j: json) -> T throws DecodeError {
 /// type.
 ///
 /// Structural decoding follows BEP-038's raw field names, so `@alias` and
-/// `@skip` have no effect. A missing optional (`T?`) field decodes to `null`,
-/// a missing required field throws, and unrecognized object keys are ignored.
+/// `@skip` have no effect. A missing optional (`T?`) field decodes absent (it
+/// reads as `null`; see `from<T>`), a missing required field throws, and
+/// unrecognized object keys are ignored.
 /// Bigint and bigint literal targets accept integral JSON numbers or strings
 /// containing an optional sign followed by ASCII decimal digits, using the
 /// same rules as `from_string<T>`.

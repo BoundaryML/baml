@@ -114,7 +114,7 @@ impl BamlPackageBaml for PackageBamlImpl {
     /// renderer, this can throw `SerializationError` for values with no json
     /// representation.
     fn _to_json_default(vm: &mut BexVm, value: &Value) -> NativeCallResult {
-        super::json::render_to_json_honoring_overrides(vm, *value)
+        super::json::render_to_json_honoring_overrides(vm, *value, super::json::AbsentFields::Null)
     }
 
     fn _from_json_structural_default(vm: &mut BexVm, j: &Value) -> NativeCallResult {

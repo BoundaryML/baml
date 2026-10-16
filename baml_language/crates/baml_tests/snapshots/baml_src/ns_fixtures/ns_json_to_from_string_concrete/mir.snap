@@ -8,7 +8,7 @@ fn user.fixtures.json_to_from_string_concrete.serialize_user(u: user.fixtures.js
     let _1: user.fixtures.json_to_from_string_concrete.User // u // param
 
     bb0: {
-        _0 = call const fn baml.json.to_string(copy _1) -> [bb1];
+        _0 = call const fn baml.json.to_string(copy _1, const <omitted>) -> [bb1];
     }
 
     bb1: {

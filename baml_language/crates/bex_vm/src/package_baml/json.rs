@@ -50,7 +50,7 @@ use std::collections::HashMap;
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, RustDataArc as _, ValueKind,
+    AtomicValueSlot, HeapPtr, RustDataArc as _, ValueKind,
     types::{Array, Instance, Map, Object, Value},
 };
 use indexmap::IndexMap;
@@ -105,17 +105,37 @@ fn string_map_entries(
 // (no GC can move `pending`/`root` mid-render), unlike a value-kind walk that
 // allocated heap arrays/maps as it descended.
 
+/// How the structural JSON walk writes an absent optional class field (one
+/// that was never given a value; see `Instance`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum AbsentFields {
+    /// As `null`, the same as a field holding `null`. The default.
+    Null,
+    /// Not at all: the field has no member in its JSON object.
+    Omit,
+}
+
+impl AbsentFields {
+    pub(super) fn from_omit(omit_absent: bool) -> Self {
+        if omit_absent { Self::Omit } else { Self::Null }
+    }
+}
+
 /// Entry point for `baml._to_json_default`. Collects the
 /// override-bearing sub-values (pass 1), dispatches `to_json` on each in order
 /// (pass 2), then renders structurally splicing in the override results (pass 3).
-pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) -> NativeCallResult {
+pub(super) fn render_to_json_honoring_overrides(
+    vm: &mut BexVm,
+    value: Value,
+    absent: AbsentFields,
+) -> NativeCallResult {
     let mut pending: Vec<HeapPtr> = Vec::new();
     if let Err(e) = collect_to_json_overrides(vm, value, &mut pending) {
         return NativeCallResult::Error(e.into());
     }
 
     let Some(&first_ptr) = pending.first() else {
-        return render_to_json_done(vm, value, &pending, &[]);
+        return render_to_json_done(vm, value, &pending, &[], absent);
     };
     match make_to_json_callee(vm, Value::object(first_ptr)) {
         Err(e) => NativeCallResult::Error(e.into()),
@@ -127,6 +147,7 @@ pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) ->
                 root: value,
                 pending,
                 results: Vec::new(),
+                absent,
             }),
         },
         // Pass 1 collected `first_ptr` as an override; pass 2 must agree.
@@ -218,10 +239,11 @@ fn render_to_json_done(
     root: Value,
     pending: &[HeapPtr],
     results: &[serde_json::Value],
+    absent: AbsentFields,
 ) -> NativeCallResult {
     let mut counter = 0;
     let mut path = String::new();
-    match render_to_serde(vm, root, pending, results, &mut counter, &mut path) {
+    match render_to_serde(vm, root, pending, results, &mut counter, absent, &mut path) {
         Ok(serde) => NativeCallResult::Done(serde_to_value(vm, &serde)),
         Err(e) => NativeCallResult::Error(e),
     }
@@ -245,6 +267,7 @@ fn render_to_serde(
     pending: &[HeapPtr],
     results: &[serde_json::Value],
     counter: &mut usize,
+    absent: AbsentFields,
     path: &mut String,
 ) -> Result<serde_json::Value, VmRustFnError> {
     let ptr = match value.kind() {
@@ -297,9 +320,15 @@ fn render_to_serde(
             ),
             Err(message) => Snap::Unserializable(message),
         },
+        // Raw slots: an absent field keeps its sentinel so the encoder can
+        // leave it out.
         Object::Instance(inst) => Snap::Instance {
             class_ptr: inst.class,
-            fields: inst.field_values().collect(),
+            fields: inst
+                .field_slots()
+                .iter()
+                .map(AtomicValueSlot::load)
+                .collect(),
         },
         Object::Variant(var) => Snap::Variant {
             enm: var.enm,
@@ -317,7 +346,7 @@ fn render_to_serde(
             let mut out = Vec::with_capacity(values.len());
             for (i, v) in values.into_iter().enumerate() {
                 let elem = with_path_segment(path, format_args!("[{i}]"), |p| {
-                    render_to_serde(vm, v, pending, results, counter, p)
+                    render_to_serde(vm, v, pending, results, counter, absent, p)
                 })?;
                 out.push(elem);
             }
@@ -327,7 +356,7 @@ fn render_to_serde(
             let mut out = serde_json::Map::with_capacity(entries.len());
             for (k, v) in entries {
                 let val = with_path_segment(path, format_args!("[{k:?}]"), |p| {
-                    render_to_serde(vm, v, pending, results, counter, p)
+                    render_to_serde(vm, v, pending, results, counter, absent, p)
                 })?;
                 out.insert(k, val);
             }
@@ -354,9 +383,15 @@ fn render_to_serde(
             }
             let mut out = serde_json::Map::with_capacity(fields.len());
             for (i, fv) in fields.into_iter().enumerate() {
+                // An absent optional field has no JSON member under
+                // `AbsentFields::Omit`, and reads as `null` otherwise. An
+                // explicit `null` is always written as `null`.
+                if fv.is_absent() && absent == AbsentFields::Omit {
+                    continue;
+                }
                 let name = field_names.get(i).cloned().unwrap_or_else(|| i.to_string());
                 let fj = with_path_segment(path, format_args!(".{name}"), |p| {
-                    render_to_serde(vm, fv, pending, results, counter, p)
+                    render_to_serde(vm, fv, pending, results, counter, absent, p)
                 })?;
                 out.insert(name, fj);
             }
@@ -396,6 +431,8 @@ struct ToJsonWalkContinuation {
     pending: Vec<HeapPtr>,
     /// Override results so far, as serde values (no heap roots to track).
     results: Vec<serde_json::Value>,
+    /// How the walk writes an absent optional field.
+    absent: AbsentFields,
 }
 
 impl Continuation for ToJsonWalkContinuation {
@@ -424,7 +461,7 @@ impl Continuation for ToJsonWalkContinuation {
                 ),
             };
         }
-        render_to_json_done(vm, self.root, &self.pending, &self.results)
+        render_to_json_done(vm, self.root, &self.pending, &self.results, self.absent)
     }
 
     fn gc_roots(&self) -> Vec<HeapPtr> {
@@ -490,12 +527,13 @@ impl BamlNamespaceJson for PackageBamlImpl {
         json_from_string_typed(vm, s.as_str(), &ty)
     }
 
-    fn to_json(vm: &mut BexVm, v: &Value) -> NativeCallResult {
-        // `baml.json.to_json` is a thin alias for the override-honoring
-        // structural walker that backs `baml.json.from<T>`. Kept as a stable named
-        // entry point for `baml.json.serialize` and host callers; the magic
+    fn _to_json(vm: &mut BexVm, v: &Value, omit_absent: bool) -> NativeCallResult {
+        // `baml.json.to_json` (this, behind its BAML wrapper that resolves
+        // `omit_absent`) is a thin alias for the override-honoring structural
+        // walker that backs `baml.json.from<T>`. Kept as a stable named entry
+        // point for `baml.json.serialize` and host callers; the magic
         // per-class `to_json` method it used to dispatch to is gone.
-        render_to_json_honoring_overrides(vm, *v)
+        render_to_json_honoring_overrides(vm, *v, AbsentFields::from_omit(omit_absent))
     }
 
     fn from_json(vm: &mut BexVm, j: &Value) -> NativeCallResult {
@@ -1502,8 +1540,9 @@ fn deserialize_class_instance(
 
     // Per BEP-038: JSON interchange uses raw field names — `@alias` /
     // `@skip` are ignored on the from_string path the same way they are on
-    // to_string.  Every declared field must be provided (or, for
-    // `Optional<T>`, may be absent).
+    // to_string.  Every declared field must be provided, except that an
+    // optional (`T?`) one may be missing: it decodes absent, which reads as
+    // `null` and is left out again by `to_json(_, omit_absent = true)`.
     let mut field_values: Vec<Value> = Vec::with_capacity(class_fields.len());
     for cf in &class_fields {
         // Substitute class-level type-args into the field's template so a
@@ -1511,21 +1550,15 @@ fn deserialize_class_instance(
         // erased runtime metadata.
         let field_ty = vm.realize_field_ty(&cf.field_template, type_args);
         let v = with_path_segment(path, format_args!(".{}", cf.name), |p| {
-            let field_json_owned;
-            let field_json: &serde_json::Value = if let Some(v) = map.get(cf.name.as_str()) {
-                v
-            } else if field_ty.is_nullable_union() {
-                // Optional (`T?` == `T | null`) fields may be absent → null.
-                field_json_owned = serde_json::Value::Null;
-                &field_json_owned
-            } else {
-                return Err(raise_decode(
+            match map.get(cf.name.as_str()) {
+                Some(field_json) => ty_serde_to_value(vm, field_json, &field_ty, p),
+                None if field_ty.is_nullable_union() => Ok(Value::ABSENT),
+                None => Err(raise_decode(
                     vm,
                     format!("missing required field `{}`", cf.name),
                     p,
-                ));
-            };
-            ty_serde_to_value(vm, field_json, &field_ty, p)
+                )),
+            }
         })?;
         field_values.push(v);
     }
@@ -2068,6 +2101,8 @@ impl Decoder {
                 .last_mut()
                 .unwrap_or_else(|| unreachable!("the walk runs inside an open container"));
             match container.next() {
+                // A missing optional field (see `open_class`) stays absent.
+                Some((json, _)) if json.is_absent() => container.push(json),
                 Some((json, ty)) => match decode_one(vm, json, &ty, Root::Dispatch, &path) {
                     Ok(Decoded::Value(value)) => container.push(value),
                     Ok(Decoded::Open(child)) => {
@@ -2236,8 +2271,8 @@ fn json_object_entries(
 
 /// The class at `head` (instantiated with `type_args`), opened over the JSON
 /// object `json`: each declared field's JSON value beside its realized type.
-/// An absent optional (`T?`) field is `null`; an absent required one is an
-/// error.
+/// A missing optional (`T?`) field stands as [`Value::ABSENT`], which the walk
+/// keeps as the field's value; a missing required one is an error.
 fn open_class(
     vm: &mut BexVm,
     json: Value,
@@ -2267,8 +2302,8 @@ fn open_class(
         let field_ty = vm.realize_field_ty(&field.field_template, type_args);
         let field_json = match object.get(field.name.as_str()) {
             Some(value) => *value,
-            // Optional (`T?` == `T | null`) fields may be absent → null.
-            None if field_ty.is_nullable_union() => Value::NULL,
+            // Optional (`T?` == `T | null`) fields may be missing: absent.
+            None if field_ty.is_nullable_union() => Value::ABSENT,
             None => {
                 return Err(raise_decode(
                     vm,
