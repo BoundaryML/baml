@@ -123,14 +123,22 @@ extern "C" fn shutdown_on_exit() {
         .spawn(move || {
             let _ = done.send(shutdown());
         });
-    if helper.is_err() {
+    if let Err(error) = helper {
+        crate::loader::log::warn(&format!(
+            "could not start the BAML runtime shutdown at process exit ({error}); \
+             exiting without it"
+        ));
         return;
     }
     match finished.recv_timeout(EXIT_SHUTDOWN_GRACE) {
-        Ok(Ok(())) | Err(mpsc::RecvTimeoutError::Disconnected) => {}
+        Ok(Ok(())) => {}
         Ok(Err(error)) => crate::loader::log::warn(&format!(
             "BAML runtime shutdown at process exit failed: {error}"
         )),
+        // The helper dropped its sender without a result: `shutdown` panicked.
+        Err(mpsc::RecvTimeoutError::Disconnected) => crate::loader::log::warn(
+            "BAML runtime shutdown panicked at process exit; exiting without it",
+        ),
         Err(mpsc::RecvTimeoutError::Timeout) => crate::loader::log::warn(&format!(
             "BAML runtime shutdown did not finish within {}s of process exit; \
              exiting without it",
