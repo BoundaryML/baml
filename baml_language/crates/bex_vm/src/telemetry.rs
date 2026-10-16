@@ -1289,7 +1289,10 @@ impl TelemetryState {
 
     /// Remove and return the usage charged to `node`, for a node whose
     /// completion this thread does not write (an owned span).
-    pub(crate) fn take_model_usage(&mut self, node: TelemetryId) -> Option<Vec<btel_records::ModelUsage>> {
+    pub(crate) fn take_model_usage(
+        &mut self,
+        node: TelemetryId,
+    ) -> Option<Vec<btel_records::ModelUsage>> {
         let index = self.usage.iter().position(|(id, _)| *id == node)?;
         Some(self.usage.swap_remove(index).1)
     }

@@ -98,7 +98,9 @@ impl ManualScope {
             && let Some(entries) = state.take_model_usage(*id)
         {
             super::merge_usage(
-                &mut usage.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+                &mut usage
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
                 entries,
             );
         }
@@ -450,7 +452,11 @@ impl Recording {
         };
         // The usage rides the completion written next.
         let entries = self.usage.as_ref().map_or_else(Vec::new, |usage| {
-            std::mem::take(&mut *usage.lock().unwrap_or_else(std::sync::PoisonError::into_inner))
+            std::mem::take(
+                &mut *usage
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            )
         });
         if !entries.is_empty() {
             let usage = SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {

@@ -1020,7 +1020,10 @@ async fn a_hidden_invokes_usage_reaches_its_owned_operation() {
         vec![vec![json!(0)]],
         "the invoke is hidden"
     );
-    assert_eq!(usage(&mut index, "op"), vec![json!([]), json!(1), json!(900)]);
+    assert_eq!(
+        usage(&mut index, "op"),
+        vec![json!([]), json!(1), json!(900)]
+    );
     assert_eq!(
         usage(&mut index, "user.main"),
         vec![json!([]), json!(1), json!(900)]
