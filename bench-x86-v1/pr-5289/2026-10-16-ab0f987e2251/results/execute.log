@@ -1,0 +1,113 @@
+== shard 1/6 on vm-9e630dbd1dee41deae4d041430b392b4: allocation-high-retention
+07:40:35 execute bench-x86-v1 tier-a -> /home/ubuntu/ship/results
+07:40:36 source ab0f987e2251176ada5dc474c4745ec7572003cc
+07:47:50 04_allocation_retention native: 430.5s, 33093392 bytes stripped
+07:48:04 verify 04_allocation_retention: 98 trials, 0 failed
+07:48:14 280 trials scheduled; load ['0.90', '1.42', '0.87']
+07:51:33 100/280
+07:55:07 200/280
+07:57:32 280/280
+07:57:32 done: 280 trials, 0 failed
+== shard 2/6 on vm-9a380e0b742f438b8ad31df4f3368208: allocation-low-retention
+07:40:33 execute bench-x86-v1 tier-a -> /home/ubuntu/ship/results
+07:40:34 source ab0f987e2251176ada5dc474c4745ec7572003cc
+07:47:49 04_allocation_retention native: 430.6s, 33093392 bytes stripped
+07:48:03 verify 04_allocation_retention: 98 trials, 0 failed
+07:48:13 280 trials scheduled; load ['0.76', '1.37', '0.84']
+07:50:32 100/280
+07:53:02 200/280
+07:54:44 280/280
+07:54:44 done: 280 trials, 0 failed
+== shard 3/6 on vm-87c6845c7c944cf1ba2225823b39a5a5: array-small, array-build, json-aggregate
+07:40:34 execute bench-x86-v1 tier-a -> /home/ubuntu/ship/results
+07:40:34 source ab0f987e2251176ada5dc474c4745ec7572003cc
+07:47:52 01_array_traversal native: 433.4s, 33074240 bytes stripped
+07:51:36 03_json_aggregate native: 223.7s, 33067664 bytes stripped
+07:52:06 verify 01_array_traversal: 224 trials, 0 failed
+07:52:57 verify 03_json_aggregate: 364 trials, 0 failed
+07:53:07 820 trials scheduled; load ['0.94', '1.17', '0.93']
+07:53:44 100/820
+07:54:18 200/820
+07:54:54 300/820
+07:55:33 400/820
+07:56:05 500/820
+07:56:39 600/820
+07:57:12 700/820
+07:57:50 800/820
+07:57:56 820/820
+07:57:56 done: 820 trials, 0 failed
+== shard 4/6 on vm-7fb02a3ed92c440a837dffd97838051d: array-empty, array-iterator, array-indexed, calls-empty, calls
+07:40:36 execute bench-x86-v1 tier-a -> /home/ubuntu/ship/results
+07:40:36 source ab0f987e2251176ada5dc474c4745ec7572003cc
+07:48:28 01_array_traversal native: 467.6s, 33074240 bytes stripped
+07:52:27 07_function_calls native: 238.7s, 33032600 bytes stripped
+07:52:59 verify 01_array_traversal: 224 trials, 0 failed
+07:53:07 verify 07_function_calls: 56 trials, 0 failed
+07:53:17 1400 trials scheduled; load ['0.92', '1.16', '0.93']
+07:53:41 100/1400
+07:54:08 200/1400
+07:54:32 300/1400
+07:54:54 400/1400
+07:55:17 500/1400
+07:55:46 600/1400
+07:56:10 700/1400
+07:56:35 800/1400
+07:57:00 900/1400
+07:57:24 1000/1400
+07:57:47 1100/1400
+07:58:15 1200/1400
+07:58:37 1300/1400
+07:58:59 1400/1400
+07:58:59 done: 1400 trials, 0 failed
+== shard 5/6 on vm-32b3344dba314f129767771e6f24ce71: startup, json-hello, generate-sort
+07:40:34 execute bench-x86-v1 tier-a -> /home/ubuntu/ship/results
+07:40:34 source ab0f987e2251176ada5dc474c4745ec7572003cc
+07:48:22 00_startup native: 463.4s, 33026096 bytes stripped
+07:52:24 09_json_hello native: 241.5s, 33023816 bytes stripped
+07:56:25 11_generate_sort native: 240.2s, 33022544 bytes stripped
+07:56:28 verify 00_startup: 14 trials, 0 failed
+07:56:36 verify 09_json_hello: 56 trials, 0 failed
+07:57:06 verify 11_generate_sort: 224 trials, 0 failed
+07:57:16 840 trials scheduled; load ['1.11', '1.12', '0.99']
+07:57:37 100/840
+07:57:58 200/840
+07:58:18 300/840
+07:58:41 400/840
+07:59:03 500/840
+07:59:23 600/840
+07:59:46 700/840
+08:00:07 800/840
+08:00:15 840/840
+08:00:15 done: 840 trials, 0 failed
+== shard 6/6 on vm-51789ffc7ad9441db7985476d2540cce: merge-random, merge-sorted, merge-reverse, merge-duplicates, quick-random, quick-sorted, quick-reverse, quick-duplicates
+07:40:34 execute bench-x86-v1 tier-a -> /home/ubuntu/ship/results
+07:40:34 source ab0f987e2251176ada5dc474c4745ec7572003cc
+07:47:52 02_merge_sort native: 433.6s, 33081416 bytes stripped
+07:51:35 10_quick_sort native: 222.6s, 33087944 bytes stripped
+07:52:14 verify 02_merge_sort: 294 trials, 0 failed
+07:52:53 verify 10_quick_sort: 294 trials, 0 failed
+07:53:03 2240 trials scheduled; load ['1.09', '1.22', '0.94']
+07:53:20 100/2240
+07:53:38 200/2240
+07:53:56 300/2240
+07:54:13 400/2240
+07:54:29 500/2240
+07:54:44 600/2240
+07:55:01 700/2240
+07:55:18 800/2240
+07:55:35 900/2240
+07:55:51 1000/2240
+07:56:10 1100/2240
+07:56:27 1200/2240
+07:56:44 1300/2240
+07:57:01 1400/2240
+07:57:18 1500/2240
+07:57:34 1600/2240
+07:57:50 1700/2240
+07:58:06 1800/2240
+07:58:24 1900/2240
+07:58:42 2000/2240
+07:59:00 2100/2240
+07:59:16 2200/2240
+07:59:22 2240/2240
+07:59:22 done: 2240 trials, 0 failed
