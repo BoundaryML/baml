@@ -144,8 +144,9 @@ interface AnyClass {
         name: string,
     ) -> T throws root.errors.NotFound | root.errors.TypeMismatch {
         if (!self.has_field(name)) {
+            // NOTE: `_to_string_impl()`, not `to_string()`; see `name`.
             throw root.errors.NotFound {
-                message: "no field named " + name + " on " + root.Type.of_value(self).to_string(),
+                message: "no field named " + name + " on " + root.Type.of_value(self)._to_string_impl(),
             };
         }
         root.Class.get_field<T>(self, name) catch (e) {
@@ -180,8 +181,9 @@ interface AnyClass {
     ///   called `name`.
     function get_field(self, name: string) -> root.class.Field throws root.errors.NotFound {
         let field: root.class.Field = self.find_field(name) else {
+            // NOTE: `_to_string_impl()`, not `to_string()`; see `name`.
             throw root.errors.NotFound {
-                message: "no field named " + name + " on " + root.Type.of_value(self).to_string(),
+                message: "no field named " + name + " on " + root.Type.of_value(self)._to_string_impl(),
             };
         };
         field
