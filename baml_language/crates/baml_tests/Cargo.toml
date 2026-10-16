@@ -47,6 +47,7 @@ walkdir = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_cli = { workspace = true }
 baml_compiler2_emit = { workspace = true }
+baml_db = { workspace = true, features = [ "native" ] }
 baml_fmt = { workspace = true }
 baml_linker = { workspace = true }
 baml_linker_types = { workspace = true }
@@ -61,6 +62,7 @@ mimalloc = { workspace = true }
 num-bigint = { workspace = true }
 rayon = { workspace = true }
 serde_json = { workspace = true }
+syn = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "net", "sync" ] }
 walkdir = { workspace = true }

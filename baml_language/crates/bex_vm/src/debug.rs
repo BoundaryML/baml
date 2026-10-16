@@ -1341,6 +1341,7 @@ pub fn display_compact_bytecode(
             | OpCode::Truthy
             | OpCode::ThrowIfPanic
             | OpCode::Unreachable
+            | OpCode::ResumeCompiled
             | OpCode::MakeCell
             | OpCode::SendEvent
             | OpCode::ContainerLen

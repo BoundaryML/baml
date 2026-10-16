@@ -1,0 +1,336 @@
+NATIVE V0: BAML -> RUST, RUNNING INSIDE BEX VM
+==============================================
+
+0. Premise
+
+The interpreter decides at runtime, on every operation, what a compiler can
+decide once: which opcode comes next, whether an operand is an int, where a
+local lives. Native code is those decisions made at compile time. That is the
+speedup. Everything else here is plumbing so compiled code is
+indistinguishable from bytecode to the things that observe a running
+function: callers, the GC, the exception unwinder, and telemetry.
+
+Rule for v0: every BAML feature keeps working. A function compiles when every
+construct in it has a lowering; anything else stays bytecode, with identical
+semantics, in the same program, and compiled and bytecode functions call each
+other freely. A compiled function that never suspends runs to completion
+inside the call that enters it; one that can suspend (await, spawn, a sys op,
+an LLM call, a call into bytecode) is a resumable state machine the VM drives
+(section 10).
+
+
+1. The unit: one Function object, two bodies
+
+    Function.native_body: Option<NativeBody>     runtime-only, borsh(skip)
+
+The native body is a field on the bytecode Function, not a new FunctionKind.
+FunctionKind::Native means "hidden builtin" (no frame, NATIVE_DEFAULT_MODE =
+Hidden, $trace rejected); reusing it would hide user functions from
+observability. The kind stays Bytecode, so everything keyed on it (telemetry
+mode, $trace, reflection) is unchanged, and the bytecode stays populated so
+one artifact runs with or without the native build.
+
+Open: the bytecode body is authoritative for every observer except
+execution. The debugger steps bytecode that does not run.
+
+
+2. Loading
+
+attach_native_bodies runs after attach_builtins and before compact code is
+prepared. The generated module's table is
+
+    CompiledEntry { object, name, arity, body, slots, cause_slot }
+
+keyed by object index: the identity the generated code already depends on (it
+bakes callee and class indices in). Name and arity are repeated and checked,
+so a table from another build is refused at load instead of running against
+the wrong objects. Bodies were first bound by Function.name, which is display
+metadata and may repeat; that was the wrong identity. The names checked are
+the loader's (Program::function_name), so they match the compile side's.
+
+NativeBody is built only through an unsafe constructor whose contract is the
+cast the VM undoes; its fields are private.
+
+
+3. Calls and frames
+
+Every call of a compiled function gets a BytecodeFrame, as in bytecode. A
+frame is the unit of five things: the MAX_FRAMES depth limit, GC rooting of
+the callee, the stack trace, the unwinder's walk, and telemetry completion.
+
+  VM -> compiled     the call funnel's Bytecode arm: telemetry entry and the
+                     frame push as for bytecode, then the body runs in place
+                     of the bytecode and finish_bytecode_frame (Return's
+                     epilogue) completes it.
+  compiled -> compiled
+                     compiled_rt::call_compiled. Telemetry off: push a frame
+                     with no telemetry (a struct push), call the body directly
+                     (LLVM can inline it), pop. Telemetry on: through the call
+                     funnel, so records, call paths and $trace are exactly the
+                     bytecode ones.
+
+An earlier version called small functions ("folded", under 64 statements, no
+loop) as plain Rust calls with no frame, for speed. That removed all five
+frame properties at once: recursion skipped the depth limit (wrong results,
+then a native stack overflow that aborts the process), traces lost frames,
+and small functions vanished from default telemetry by a size heuristic
+nobody chose. Measure first: if the frame push matters, keep it and make
+telemetry the only optional part.
+
+A compiled frame is a BytecodeFrame with nothing added: the frame is the
+interpreter's hottest structure, and every byte and check on it is paid by
+every bytecode call. Its two position fields, which a compiled body never
+needs as positions, say where the body stands:
+
+  instruction_ptr  RUNNING (usize::MAX) while the body runs on the Rust stack;
+                   otherwise an offset into its stub (section 10), code the
+                   loader appends to every compiled function.
+  faulting_pc      the source line the body last reported.
+
+So "is this frame compiled" is derived (BexVm::compiled_at: RUNNING, or a
+position inside the stub), and only cold readers ask it. Every reader of a
+position asks it first:
+
+  unwinder         a running compiled frame has no bytecode handlers; the
+                   error leaves it (its own catches land errors before the
+                   unwinder runs). A suspended one takes the error itself.
+  stack traces     a compiled frame reports its line: compiled code keeps the
+                   current statement's line in a local and writes it to its
+                   frame when an error leaves the function, lands in its
+                   catch, or it suspends. Lines follow the bytecode rule
+                   (baml_compiler2_emit::span_line), so traces match.
+  cause walk       a compiled frame's cause slot (section 5).
+  raise evidence   no pc for a compiled frame; its raise kind comes from the
+                   throw (rethrow, panic instance, or throw).
+  call paths       a call made by compiled code records COMPILED_CALLER_PC:
+                   telemetry source maps are keyed by bytecode offset, so call
+                   sites inside one compiled caller share one coordinate.
+  innermost frame  cur_pc belongs to the innermost frame only when it runs
+                   bytecode; below a compiled frame, every frame is at the
+                   call it recorded in faulting_pc.
+
+The call path writes the caller's faulting_pc on every call; a compiled
+caller's call sites (compiled_caller_call) put its line back.
+
+An earlier version added a FrameBody field (16 bytes, 112 -> 128) and checks
+on the interpreter's call and return paths. Recursive bytecode with no
+compiled code at all ran 4-15% slower. Before that, a version parked cur_pc
+and faulting_pc on a sentinel no exception range covers, and two dozen
+readers interpreted a position that did not exist; the derived check and the
+rule that every position reader asks it first are what make reuse safe.
+
+Open: a compiled site coordinate in telemetry source maps, so call paths from
+compiled callers are as precise as bytecode's.
+
+The call fast path (call_specialize) skips callees with a native body; a
+bytecode loop calling a compiled leaf pays the general funnel. Open.
+
+
+4. The runtime surface
+
+bex_vm::compiled_rt is the API generated code uses. It composes the
+interpreter's semantic primitives (Value::try_int and tagged checked
+arithmetic, resolve_index, binop/cmpop, the panic constructors), so results,
+messages and exceptions match.
+
+The interpreter's dispatch arms keep their own hand-tuned shape. Routing them
+through these helpers measurably slowed pure bytecode (A/B against the merge
+base, telemetry off: fields +28%, index_sum +14%, arith +10%), and forcing
+inlining made it worse: run_compact is one giant function whose register
+allocation depends on every arm. Any change to run_compact needs an
+interpreter benchmark, not just the corpus.
+
+
+5. Errors
+
+    CompiledBody = fn(&mut BexVm, &[Value]) -> Result<Value, Box<VmError>>
+
+Bodies return the VM's own error. A throw keeps its throw kind and context end
+to end; internal errors keep their own variant. Bodies first used the builtin
+signature (NativeCallResult), whose error type has no context: the conversion
+dropped it, and YieldToCall was a variant compiled code could never produce.
+
+catch: a block with an unwind edge matches on Err and calls compiled_rt
+catch(error, depth). That builds the error's baml.errors.Context exactly as
+the unwinder would (the BEP-042 rules, factored into in_flight_context), with
+every frame between the throw and the handler still on the stack, then pops
+the frames compiled callees left above the catching function, completing
+their telemetry with the error outcome. The handler gets the value and the
+real context, so catch (e, ctx) works and a rethrow carries the original
+context. An internal error is not catchable and propagates.
+
+cause: bytecode chains a raise inside a handler body onto the handled
+error's context by looking the frame's pc up in a handler-context table. A
+compiled body with a catch keeps that context in a cause slot in its frame
+(NativeBody::cause_slot): it sets the slot from MIR's BasicBlock::handling on
+entering or leaving a handler's body, and the cause walk reads it. So a
+throw, a panic, or a raise in a callee during handling chains as in bytecode.
+
+unreachable: bytecode's Unreachable throws a catchable
+baml.panics.Unreachable; so does compiled code, landing it in a catch around
+it. A malformed state machine (a resume at an unknown point) is an internal
+error.
+
+Open: compiled catches record no raise evidence.
+
+
+6. Generated code
+
+One Rust function per admitted BAML function. Locals typed from MIR: int is
+i64, float is f64, bool is bool, everything else Value. A parameter with a
+default stays Value until MIR's OmittedArg test. Unboxing a Value into a
+scalar is checked (compiled_rt::expect_int ...); a mismatch is a checker hole,
+reported as an internal error, never read as zero.
+
+Every operand that is not an atom is bound to a temporary before use, so no
+call's arguments contain another call. Control flow is rebuilt from the
+dominator tree (structure.rs). Open: MIR comes from structured source; if the
+builder's loop annotations survive optimization, consuming them is smaller.
+
+String literals load the program's compile-time string object, as bytecode
+does, instead of allocating per evaluation.
+
+
+7. Memory and GC
+
+HeapPtr is a raw pointer and the collector moves objects, but it runs only
+when every VM has returned its heap permit (await, sys op, spawn, the
+early-yield poll). A compiled body runs under the permit, so nothing moves
+while it holds pointers. Results are Values on the eval stack. Same contract
+as every builtin.
+
+A resumable body (section 10) suspends with nothing on the Rust stack: what it
+needs after a suspension is in its frame's stack slots, which the collector
+scans and forwards like any frame's, so a collection may run while it waits.
+
+A resumable body counts loop iterations in a register and takes the
+interpreter's control-flow check every sixteenth one at a loop header,
+yielding (Step::Yield) like any other suspension. Ticking the VM's counter
+in memory every iteration cost a loop with no calls 1 ns per iteration
+(1.69 vs 0.64); a compiled iteration is a fraction of an interpreted one, so
+this still polls about as often in time.
+
+Open: an inline body has no safepoint. Its loops run on the Rust stack, which
+a yield cannot leave; a long one delays every other thread that wants a
+collection, and an allocating one grows Gen0 until it returns.
+
+Stack: compiled-to-compiled calls recurse on the Rust stack, whose size the
+VM does not choose (a 2 MiB tokio worker, an 8 MiB main thread, a host's own
+thread). call_compiled checks what remains every sixteenth frame and raises
+StackOverflow under a 256 KiB red zone, so deep compiled recursion is a
+catchable panic on any thread, never a crash. The pack host gives its
+workers the main thread's 8 MiB, so a spawned task recurses as deep as the
+root call before that.
+
+
+8. Admission
+
+Admission is one fixpoint. A function is admitted when its body generates
+(every construct in it has a lowering); generation is the only judge, so
+nothing half-supported is emitted. Whether an admitted function suspends
+follows from its body and its callees: it suspends when it awaits, spawns,
+runs a sys op, or calls anything compiled code does not call directly
+(bytecode, a function value, a builtin that runs callbacks, a function that
+itself suspends). Calling something that is not compiled no longer keeps a
+function out; it makes the function resumable.
+
+Supported: scalars and control flow, arrays, class fields, class and enum
+literals and tests (non-generic), catch (with ctx) and rethrow, wildcard catch
+arms (ThrowIfPanic), calls with named or omitted arguments to a named callee
+(laid over the callee's slots at compile time, as the VM does at run time),
+calls to compiled functions, builtins (callback-running ones through the VM),
+sys ops and LLM functions (through the VM), function values, await,
+await_any, spawn, generic builtins when every type argument is static (a
+primitive, a non-generic class, or an array of those), string literals from
+the program's string objects, and for-in over an array (an index walk with the
+semantics baml.iter.ArrayIterator documents).
+
+Stays bytecode: closures (creating one; calling one works), user generic
+functions, interface dispatch other than array iteration, type values
+needing frame type arguments, map literals and indexes, enum variant
+literals, bigint, trace hooks, defer cleanup pads.
+
+
+9. Performance: what caps it
+
+Gone inside a compiled function: opcode dispatch, eval-stack traffic, tag
+checks on statically typed scalars. Remaining, the same price bytecode pays:
+
+  array/map access    one CAS acquire + release per access (LazyBiasedMutex).
+                      The real cost is the ordering barrier: LLVM cannot hoist
+                      a length read or bounds check out of a loop.
+  instance fields     acquire/release on AtomicValueSlot.
+  pointer stores      write barrier.
+  floats in the heap  boxed.
+  per-job floor       ~24us of engine work per host call before any BAML
+                      runs; no in-VM design removes it.
+
+These are VM decisions made for spawn and GC; they speed up both backends
+when changed (lock elision when no spawn is live, unboxed int/float arrays).
+Measured with locks on aarch64: fib(30) 2.26x, array loops ~1.8x.
+
+
+10. Resumable bodies
+
+    ResumableBody = fn(&mut BexVm, Resume) -> Result<Step, Box<VmError>>
+    Resume = Start | Value(value) | Thrown(error) | Yielded
+    Step   = Return(value)
+           | Call { callee, argc, type_args }
+           | Await(future) | AwaitAny(futures) | Spawn(plan)
+           | Yield
+
+A function that can suspend is emitted as a state machine over its MIR
+blocks (`loop { match bb }`, since a resume enters the middle). Its frame
+keeps, in stack slots the collector scans: its arguments, each local live
+across a suspension (local i in slot i, array-iterator positions after
+them), the point it suspended at, and its cause slot. At a suspension it
+saves the locals live once it resumes (MIR's backward liveness, plus every
+handler's context while it has a cause slot), records its point and line,
+pushes a call's arguments above its slots, and returns the request.
+
+A local that some suspension keeps but that is assigned only outside loops
+is written through: each assignment also writes its slot, and no
+suspension saves it. A loop that calls bytecode then saves only what the
+loop changes, where bytecode, whose locals always live in their slots,
+saves nothing; a body with forty locals set before such a loop went from
+saving forty-three slots per call to two. A call's arguments and type
+arguments are pushed (onto the stack, into a buffer the VM reuses), so a
+suspending call allocates nothing and Step stays two words: with type
+arguments inline it was 144 bytes, moved out of every step.
+
+The frame then parks at its stub, code the loader appends to every compiled
+function's bytecode (compiled_rt::stub):
+
+    START       ResumeCompiled           a resumable call or an entry starts
+    AFTER_CALL  ResumeCompiled           a call's result (or an error) is due
+    AFTER_YIELD ResumeCompiled
+    AWAIT       Await;    ResumeCompiled
+    AWAIT_ANY   AwaitAny; ResumeCompiled
+    SPAWN       Spawn;    ResumeCompiled
+
+ResumeCompiled is a load-time opcode, like CallExactArgs: the interpreter
+dispatches it to the frame's body. So:
+
+  Call    the VM calls `callee` through its call path, exactly as the Call
+          opcode would (a bytecode function, an LLM function, a sys op, a
+          builtin that runs callbacks, a closure, another resumable compiled
+          function). The callee's Return resumes the caller at AFTER_CALL as
+          it resumes any bytecode caller: no check on the return path.
+  Await   the interpreter's own Await runs on the compiled frame, so await,
+          await_any and spawn keep their exact semantics: re-execution on
+          resume, telemetry waits, cancellation. Before suspending, compiled
+          code takes an already-settled future's value inline (BexVm::ready),
+          counting the control-flow check Await would, so it yields exactly
+          where bytecode does.
+  errors  the unwinder stops at a suspended compiled frame, parks it at
+          AFTER_CALL and delivers the error with its context; the body lands
+          it in its catch or returns it.
+
+A body that cannot suspend keeps the direct, structured form; compiled-to-
+compiled calls between such bodies stay direct Rust calls.
+
+An earlier version ran each await as a pause frame: a fresh Function,
+lowered to compact code, allocated for every await (21x slower than bytecode
+on a settled future), with its own frame in the trace.
+
+Open: raise evidence for compiled landings.

@@ -101,6 +101,7 @@ baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
 baml_compiler2_hir_ty = { path = "crates/baml_compiler2_hir_ty" }
 baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
 baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
+baml_compiler2_native = { path = "crates/baml_compiler2_native" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
@@ -278,6 +279,7 @@ sha1 = "0.10"
 smallvec = { version = "1.15", features = [ "const_generics" ] }
 sqlparser = "0.62.0"
 smol_str = { version = "0.3", features = [ "serde", "borsh" ] }
+stacker = "0.1.25"
 strsim = { version = "0.11.1" }
 syn = { version = "2", features = [ "full" ] }
 tar = "0.4"

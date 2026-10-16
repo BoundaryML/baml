@@ -21,6 +21,7 @@ use btel_types::context::{Context, ContextPatch};
 use smallvec::SmallVec;
 
 use crate::{
+    compiled_rt::{CompiledFn, Step},
     telemetry::{
         CallTypeArgs, ClockDuration, ClockInstant, FrameTelemetry, InvocationOutcome,
         TelemetryState,
@@ -169,6 +170,11 @@ impl Drop for ObjectMut<'_> {
 /// Max call stack size.
 pub const MAX_FRAMES: usize = 256;
 
+/// The `caller_pc` a call path records for a call made by compiled code,
+/// which has no bytecode offset. Telemetry source maps are keyed by compact
+/// byte offset, so such call sites share this one coordinate per caller.
+const COMPILED_CALLER_PC: u32 = u32::MAX;
+
 #[derive(Clone, Copy)]
 struct CallOptions<'a> {
     type_args: &'a [bex_vm_types::RealizedTy],
@@ -234,12 +240,18 @@ struct StaticVirtualCallTarget {
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
 }
 
-/// Bytecode call frame — pushed when entering a bytecode function.
+/// The frame of a BAML call: pushed for every call of a bytecode function,
+/// whether its bytecode runs or a natively compiled body runs in its place.
+/// A compiled frame is the same frame with nothing added: its position fields
+/// say where its body stands (see `crate::compiled_rt::stub`), and every
+/// reader of a position asks `BexVm::compiled_at` first.
 #[derive(Clone, Debug)]
 pub struct BytecodeFrame {
     /// Pointer to the running function (or closure) object.
     pub function: HeapPtr,
-    /// Instruction pointer (IP). Points to the next instruction.
+    /// Instruction pointer (IP). Points to the next instruction. For a
+    /// compiled frame, `crate::compiled_rt::RUNNING` or an offset into its
+    /// function's resume stub.
     pub instruction_ptr: usize,
     /// Local variables offset in the eval stack.
     pub(crate) locals_offset: StackIndex,
@@ -262,11 +274,30 @@ pub struct BytecodeFrame {
     /// In the legacy path this mirrors `instruction_ptr - 1` and is kept
     /// up-to-date before each `step()` call.
     /// Used by `capture_stack_trace`, `try_unwind_exception`, and event
-    /// source location capture.
+    /// source location capture. For a compiled frame, the source line its body
+    /// last reported instead.
     pub(crate) faulting_pc: usize,
     /// Producer-only invocation state. `None` means the invocation is hidden.
     pub(crate) telemetry: Option<FrameTelemetry>,
     context: Context,
+}
+
+impl BytecodeFrame {
+    /// The frame of a compiled-to-compiled call made with telemetry off: no
+    /// telemetry, no type arguments, and no locals region (compiled code keeps
+    /// its locals in Rust), its body running.
+    pub(crate) fn compiled(function: HeapPtr, locals_offset: StackIndex, context: Context) -> Self {
+        Self {
+            function,
+            instruction_ptr: crate::compiled_rt::RUNNING,
+            locals_offset,
+            type_args: Vec::new(),
+            type_metadata: None,
+            faulting_pc: 0,
+            telemetry: None,
+            context,
+        }
+    }
 }
 
 struct CallTrace {
@@ -471,6 +502,10 @@ pub(crate) mod tests {
             entry_trace_context: None,
             root_context: btel_types::context::Context::default(),
             pending_call_type_args: Vec::new(),
+            compiled_type_args: Vec::new(),
+            call_type_args: Vec::new(),
+            compiled_delivery: None,
+            stack_floor: 0,
             pending_call_type_values: Vec::new(),
             pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
@@ -510,6 +545,7 @@ pub(crate) mod tests {
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
+            native_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
@@ -822,6 +858,545 @@ pub(crate) mod tests {
         );
         assert_eq!(named_paths[&timings[5].0].0.as_deref(), Some("user.Main"));
         assert!(named_paths[&timings[5].0].1.contains("<lambda"));
+    }
+
+    /// A natively compiled body attached to a bytecode function is, to every
+    /// observer, that bytecode function: same result, same telemetry records
+    /// and call paths, same exception caught by the same bytecode `catch`, and
+    /// the same innermost frame in the thrown error's stack trace.
+    ///
+    /// Rust rather than a BAML test because only Rust can install a body.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn native_body_is_indistinguishable_from_bytecode() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        use crate::telemetry::{InvocationOutcome, SpanRecord, TimingRecord};
+
+        static CALLS: AtomicUsize = AtomicUsize::new(0);
+        fn add_native(
+            vm: &mut BexVm,
+            args: &[Value],
+        ) -> Result<Value, Box<crate::errors::VmError>> {
+            CALLS.fetch_add(1, Ordering::Relaxed);
+            Ok(vm.add_int(args[0], args[1])?)
+        }
+
+        const SOURCE: &str = r#"
+            function Add(a: int, b: int) -> int { a + b }
+            function AddStr(a: int, b: int) -> string { `${Add(a, b)}` }
+            function Caller(a: int, b: int) -> string {
+                AddStr(a, b) catch (e, ctx) {
+                    baml.panics.IntegerOverflow => {
+                        let frames = ctx.stack_trace.frames;
+                        frames[frames.length() - 1].function_name
+                    }
+                }
+            }
+            function Main() -> string {
+                `${Caller(1, 2)}|${Caller(baml.Int.max_value(), 1)}`
+            }
+        "#;
+
+        type Timings = Vec<(btel_types::CallPathId, InvocationOutcome, bool)>;
+        type NamedPaths = HashMap<btel_types::CallPathId, (Option<String>, String)>;
+
+        fn named(
+            run: &(String, Timings, NamedPaths),
+        ) -> Vec<(Option<String>, String, InvocationOutcome, bool)> {
+            run.1
+                .iter()
+                .map(|(path, outcome, reentry)| {
+                    let (caller, callee) = run.2[path].clone();
+                    (caller, callee, *outcome, *reentry)
+                })
+                .collect()
+        }
+
+        fn run(native: bool) -> (String, Timings, NamedPaths) {
+            let mut program = baml_test_support::compile_source(SOURCE);
+            let entry = program.rendered_callables()["user.Main"].object.raw();
+            if native {
+                let add = program.rendered_callables()["user.Add"].object.raw();
+                let Object::Function(function) = &mut program.objects[ObjectIndex::from_raw(add)]
+                else {
+                    unreachable!()
+                };
+                assert!(matches!(function.kind, FunctionKind::Bytecode));
+                function.native_body = Some(test_body(
+                    crate::compiled_rt::CompiledFn::Inline(add_native),
+                    0,
+                ));
+            }
+            let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+            vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
+            let result = loop {
+                match vm.exec().unwrap() {
+                    VmExecState::EarlyYield => {}
+                    VmExecState::Complete(value) => {
+                        break vm.as_string(&value).unwrap().to_string();
+                    }
+                    other => panic!("unexpected execution state: {other:?}"),
+                }
+            };
+            let telemetry = vm.telemetry.as_ref().unwrap();
+            let timings = telemetry
+                .timing_records()
+                .iter()
+                .filter_map(|event| match event {
+                    TimingRecord::FunctionTimingCompletion {
+                        call_path,
+                        outcome,
+                        reentry,
+                        ..
+                    } => Some((*call_path, *outcome, *reentry)),
+                    TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
+                })
+                .collect();
+            let mut named_paths = HashMap::new();
+            for event in telemetry.span_records() {
+                if let SpanRecord::CallPathDefined {
+                    call_path,
+                    visible_caller,
+                    callee,
+                    ..
+                } = event
+                {
+                    let callee = vm.heap.function_metadata(vm.proof(), *callee).unwrap();
+                    let caller = visible_caller
+                        .map(|id| vm.heap.function_metadata(vm.proof(), id).unwrap().fqn);
+                    named_paths.insert(*call_path, (caller, callee.fqn));
+                }
+            }
+            (result, timings, named_paths)
+        }
+
+        let bytecode = run(false);
+        assert_eq!(CALLS.load(Ordering::Relaxed), 0);
+        let native = run(true);
+        assert_eq!(
+            CALLS.load(Ordering::Relaxed),
+            2,
+            "the native body must run for both calls"
+        );
+
+        // Same value: the first call adds, the second overflows, is caught by
+        // the bytecode `catch` in `Caller`, and its trace's innermost frame is
+        // the compiled function.
+        assert_eq!(bytecode.0, "3|user.Add");
+        assert_eq!(native.0, bytecode.0);
+
+        // Same telemetry: the user functions (Main, Caller x2, AddStr x2,
+        // Add x2) plus whatever stdlib bytecode the program reaches, with the
+        // second Add completing in error, on the same call paths.
+        // Call-path ids come from a process-global counter, so compare the
+        // records by the (caller, callee) names the ids resolve to.
+        let bytecode_named = named(&bytecode);
+        let native_named = named(&native);
+        assert!(bytecode_named.len() >= 7);
+        assert_eq!(native_named, bytecode_named);
+        let add_outcomes: Vec<_> = native_named
+            .iter()
+            .filter(|(caller, callee, _, _)| {
+                caller.as_deref() == Some("user.AddStr") && callee == "user.Add"
+            })
+            .map(|(_, _, outcome, _)| *outcome)
+            .collect();
+        assert_eq!(add_outcomes.len(), 2);
+        assert_eq!(add_outcomes[0], InvocationOutcome::Ok);
+        assert_ne!(add_outcomes[1], InvocationOutcome::Ok);
+    }
+
+    /// The int a hand-written compiled body reads from a value it knows is
+    /// one.
+    fn test_int(value: Value) -> i64 {
+        value.as_int().expect("an int")
+    }
+
+    /// A hand-written compiled body that keeps `slots` slots in its frame.
+    fn test_body(
+        body: crate::compiled_rt::CompiledFn,
+        slots: u32,
+    ) -> bex_vm_types::types::NativeBody {
+        crate::compiled_rt::CompiledEntry {
+            object: 0,
+            name: "",
+            arity: 0,
+            body,
+            slots,
+            cause_slot: None,
+        }
+        .erase()
+    }
+
+    /// Run `user.Main` of `source` with the named functions' bodies replaced
+    /// by hand-written compiled bodies, shaped as `baml_compiler2_native`
+    /// emits them (a resumable one keeping 3 slots: its argument, one local
+    /// and its point). `objects` receives each named function's object index
+    /// before the run, for bodies that call or name other functions.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn run_with_compiled_bodies(
+        source: &str,
+        bodies: &[(&str, crate::compiled_rt::CompiledFn)],
+        objects: &[(&str, &std::sync::atomic::AtomicU32)],
+        telemetry: bool,
+    ) -> String {
+        let mut program = baml_test_support::compile_source(source);
+        let callables = program.rendered_callables();
+        let entry = callables["user.Main"].object.raw();
+        for (name, slot) in objects {
+            let raw = callables.get(*name).map_or_else(
+                || {
+                    program
+                        .packages
+                        .iter()
+                        .find_map(|package| {
+                            package.classes.iter().find_map(|(path, object)| {
+                                (path.under(&package.name).display_name().as_str() == *name)
+                                    .then(|| object.raw())
+                            })
+                        })
+                        .unwrap_or_else(|| panic!("no callable or class `{name}`"))
+                },
+                |callable| callable.object.raw(),
+            );
+            slot.store(
+                u32::try_from(raw).unwrap(),
+                std::sync::atomic::Ordering::Relaxed,
+            );
+        }
+        let indices: Vec<usize> = bodies
+            .iter()
+            .map(|(name, _)| callables[*name].object.raw())
+            .collect();
+        for ((_, body), index) in bodies.iter().zip(indices) {
+            let Object::Function(function) = &mut program.objects[ObjectIndex::from_raw(index)]
+            else {
+                unreachable!()
+            };
+            let slots = match body {
+                crate::compiled_rt::CompiledFn::Inline(_) => 0,
+                crate::compiled_rt::CompiledFn::Resumable(_) => 3,
+            };
+            function.native_body = Some(test_body(*body, slots));
+        }
+        let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+        if !telemetry {
+            vm.telemetry = None;
+        }
+        vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
+        loop {
+            match vm.exec() {
+                Ok(VmExecState::EarlyYield) => {}
+                Ok(VmExecState::Complete(value)) => {
+                    break vm.as_string(&value).unwrap().to_string();
+                }
+                Ok(other) => panic!("unexpected execution state: {other:?}"),
+                Err(error) => break format!("error: {error:?}"),
+            }
+        }
+    }
+
+    /// Compiled recursion counts toward the frame limit: the caller sees a
+    /// catchable `StackOverflow` at the bytecode depth, never a native stack
+    /// overflow, with telemetry off (the direct-call path) and on (the VM's
+    /// call path).
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn compiled_recursion_hits_the_frame_limit() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static DEEP: AtomicU32 = AtomicU32::new(0);
+        fn deep(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let n = test_int(args[0]);
+            if n == 0 {
+                return Ok(Value::int(0));
+            }
+            let me = vm.idx_to_ptr(ObjectIndex::from_raw(DEEP.load(Ordering::Relaxed) as usize));
+            let below = vm.call_compiled(me, deep, &[Value::int(n - 1)])?;
+            Ok(Value::int(test_int(below) + 1))
+        }
+        const SOURCE: &str = r#"
+            function Deep(n: int) -> int { if (n == 0) { 0 } else { 1 + Deep(n - 1) } }
+            function Main() -> string {
+                let shallow = Deep(100);
+                let d = Deep(300) catch (e) { baml.panics.StackOverflow => -7 };
+                let huge = Deep(1000000) catch (e) { baml.panics.StackOverflow => -8 };
+                `${shallow}|${d}|${huge}`
+            }
+        "#;
+        for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[("user.Deep", crate::compiled_rt::CompiledFn::Inline(deep))],
+                &[("user.Deep", &DEEP)],
+                telemetry,
+            );
+            assert_eq!(out, "100|-7|-8", "telemetry: {telemetry}");
+        }
+    }
+
+    /// A compiled `catch` around a compiled callee that throws pops the
+    /// callee's frame: the program continues normally and calls again.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn compiled_catch_pops_the_frames_of_compiled_callees() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static WORK: AtomicU32 = AtomicU32::new(0);
+        static PANIC: AtomicU32 = AtomicU32::new(0);
+        fn work(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let n = test_int(args[0]);
+            Ok(Value::int(vm.div_i64(n, 0)?))
+        }
+        fn safe(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let depth = vm.frame_depth();
+            let work_ptr =
+                vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
+            match vm.call_compiled(work_ptr, work, &[args[0]]) {
+                Ok(v) => Ok(v),
+                Err(e) => {
+                    let (thrown, ctx) = vm.catch(e, depth)?;
+                    let class = vm
+                        .idx_to_ptr(ObjectIndex::from_raw(PANIC.load(Ordering::Relaxed) as usize));
+                    if vm.is_instance_of(thrown, class) {
+                        Ok(Value::int(-1))
+                    } else {
+                        Err(crate::compiled_rt::rethrow(thrown, ctx))
+                    }
+                }
+            }
+        }
+        const SOURCE: &str = r#"
+            function Work(n: int) -> int { n / 0 }
+            function Safe(n: int) -> int { Work(n) catch (e) { baml.panics.DivisionByZero => -1 } }
+            function Main() -> string { `${Safe(5)}|${Safe(6)}|${Safe(7)}` }
+        "#;
+        for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[
+                    ("user.Work", crate::compiled_rt::CompiledFn::Inline(work)),
+                    ("user.Safe", crate::compiled_rt::CompiledFn::Inline(safe)),
+                ],
+                &[("user.Work", &WORK), ("baml.panics.DivisionByZero", &PANIC)],
+                telemetry,
+            );
+            assert_eq!(out, "-1|-1|-1", "telemetry: {telemetry}");
+        }
+    }
+
+    /// A compiled function the host calls as the entry point runs its compiled
+    /// body (not its bytecode), and an error it raises leaves the run as it
+    /// would from bytecode.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn compiled_entry_points_run_their_bodies() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static RUNS: AtomicUsize = AtomicUsize::new(0);
+        #[allow(clippy::unnecessary_wraps)] // the compiled-body signature
+        fn main(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            RUNS.fetch_add(1, Ordering::Relaxed);
+            Ok(vm.string_value("compiled"))
+        }
+        fn failing_main(
+            vm: &mut BexVm,
+            _args: &[Value],
+        ) -> Result<Value, Box<crate::errors::VmError>> {
+            Ok(Value::int(vm.div_i64(1, 0)?))
+        }
+        const SOURCE: &str = r#"function Main() -> string { "bytecode" }"#;
+        const FAILING: &str = r#"function Main() -> string { "unused" }"#;
+        for telemetry in [false, true] {
+            let before = RUNS.load(Ordering::Relaxed);
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[("user.Main", crate::compiled_rt::CompiledFn::Inline(main))],
+                &[],
+                telemetry,
+            );
+            assert_eq!(out, "compiled", "telemetry: {telemetry}");
+            assert_eq!(RUNS.load(Ordering::Relaxed), before + 1);
+        }
+        let out = run_with_compiled_bodies(
+            FAILING,
+            &[(
+                "user.Main",
+                crate::compiled_rt::CompiledFn::Inline(failing_main),
+            )],
+            &[],
+            false,
+        );
+        assert!(
+            out.contains("ThrownUnhandled") && out.contains("user.Main"),
+            "{out}"
+        );
+    }
+
+    /// A resumable compiled body calls a bytecode function mid-body: it
+    /// saves what it needs in its frame's slots, returns `Step::Call`, and is
+    /// resumed with the result. An error from the callee is delivered to it
+    /// and lands in its catch; one it does not catch leaves its frame.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn resumable_bodies_call_bytecode_and_resume() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        use crate::compiled_rt::{CompiledFn, Resume, Step};
+        static HELPER: AtomicU32 = AtomicU32::new(0);
+        type Out = Result<Step, Box<crate::errors::VmError>>;
+
+        // fn Twice(n) { let k = n * 10; let h = Helper(n); k + h }
+        // with `Helper` left as bytecode: `k` lives in slot 1 across the call,
+        // and the one point it suspends at in slot 2.
+        fn twice(vm: &mut BexVm, resume: Resume) -> Out {
+            let depth = vm.frame_depth();
+            match resume {
+                Resume::Start => {
+                    vm.reserve_slots(depth, 3);
+                    let n = test_int(vm.slot(depth, 0));
+                    vm.set_slot(depth, 1, Value::int(n * 10));
+                    vm.set_slot(depth, 2, Value::int(1));
+                    let helper = vm.idx_to_ptr(ObjectIndex::from_raw(
+                        HELPER.load(Ordering::Relaxed) as usize,
+                    ));
+                    vm.push_arg(Value::int(n));
+                    Ok(Step::Call {
+                        callee: helper,
+                        argc: 1,
+                    })
+                }
+                Resume::Value(h) => {
+                    let k = test_int(vm.slot(depth, 1));
+                    Ok(Step::Return(Value::int(k + test_int(h))))
+                }
+                Resume::Thrown(error) => {
+                    // `catch (e) { _ => -1 }` around the call when n == 0.
+                    if test_int(vm.slot(depth, 0)) == 0 {
+                        let (_thrown, _ctx) = vm.catch(error, depth)?;
+                        Ok(Step::Return(Value::int(-1)))
+                    } else {
+                        Err(error)
+                    }
+                }
+                Resume::Yielded => unreachable!("Twice never yields"),
+            }
+        }
+        const SOURCE: &str = r#"
+            function Helper(n: int) -> int { if (n == 3) { n / 0 } else { 100 / n } }
+            function Twice(n: int) -> int { n * 10 + Helper(n) }
+            function Main() -> string {
+                let caught = Twice(3) catch (e) { baml.panics.DivisionByZero => -9 };
+                `${Twice(5)}|${Twice(0)}|${caught}`
+            }
+        "#;
+        for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[("user.Twice", CompiledFn::Resumable(twice))],
+                &[("user.Helper", &HELPER)],
+                telemetry,
+            );
+            // Twice(5) = 50 + 20; Twice(0): Helper divides by zero, the
+            // compiled catch returns -1; Twice(3): the error is not caught
+            // there and reaches Main's catch.
+            assert_eq!(out, "70|-1|-9", "telemetry: {telemetry}");
+        }
+    }
+
+    /// The unwinder never consults a compiled frame's bytecode handlers: the
+    /// body runs in place of that bytecode, so an error its body does not
+    /// catch leaves the frame even where the bytecode has a `catch`.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn errors_leave_compiled_frames_past_their_bytecode_handlers() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static WORK: AtomicU32 = AtomicU32::new(0);
+        fn work(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let n = test_int(args[0]);
+            Ok(Value::int(vm.div_i64(n, 0)?))
+        }
+        // Safe's bytecode catches; its compiled body (as if built without
+        // that catch) lets the error through.
+        fn safe(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let work_ptr =
+                vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
+            vm.call_compiled(work_ptr, work, &[args[0]])
+        }
+        const SOURCE: &str = r#"
+            function Work(n: int) -> int { n / 0 }
+            function Safe(n: int) -> int { Work(n) catch (e) { baml.panics.DivisionByZero => -1 } }
+            function Main() -> string {
+                let r = Safe(1) catch (e) { baml.panics.DivisionByZero => -9 };
+                `${r}`
+            }
+        "#;
+        for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[
+                    ("user.Work", crate::compiled_rt::CompiledFn::Inline(work)),
+                    ("user.Safe", crate::compiled_rt::CompiledFn::Inline(safe)),
+                ],
+                &[("user.Work", &WORK)],
+                telemetry,
+            );
+            assert_eq!(out, "-9", "telemetry: {telemetry}");
+        }
+    }
+
+    /// A compiled catch lands the error with its real context, and a rethrow
+    /// carries it: a bytecode `catch (e, ctx)` above sees the trace of the
+    /// original throw, whose innermost frame is the compiled thrower.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn compiled_rethrow_keeps_the_original_context() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static WORK: AtomicU32 = AtomicU32::new(0);
+        fn work(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let n = test_int(args[0]);
+            Ok(Value::int(vm.div_i64(n, 0)?))
+        }
+        fn relay(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let depth = vm.frame_depth();
+            let work_ptr =
+                vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
+            match vm.call_compiled(work_ptr, work, &[args[0]]) {
+                Ok(v) => Ok(v),
+                Err(e) => {
+                    let (thrown, ctx) = vm.catch(e, depth)?;
+                    assert!(!ctx.is_null(), "a compiled catch lands a real context");
+                    Err(crate::compiled_rt::rethrow(thrown, ctx))
+                }
+            }
+        }
+        const SOURCE: &str = r#"
+            function Work(n: int) -> int { n / 0 }
+            function Relay(n: int) -> int { Work(n) catch (e) { _ => { throw e } } }
+            function Main() -> string {
+                let name = "none";
+                let r = Relay(1) catch (e, ctx) {
+                    baml.panics.DivisionByZero => {
+                        let frames = ctx.stack_trace.frames;
+                        name = frames[frames.length() - 1].function_name;
+                        -1
+                    }
+                };
+                name
+            }
+        "#;
+        let bytecode = run_with_compiled_bodies(SOURCE, &[], &[], true);
+        assert_eq!(bytecode, "user.Work");
+        for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[
+                    ("user.Work", crate::compiled_rt::CompiledFn::Inline(work)),
+                    ("user.Relay", crate::compiled_rt::CompiledFn::Inline(relay)),
+                ],
+                &[("user.Work", &WORK)],
+                telemetry,
+            );
+            assert_eq!(out, bytecode, "telemetry: {telemetry}");
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1656,7 +2231,7 @@ pub struct BexVm {
 
     /// Pre-resolved heap pointers for `baml.panics.*` classes, indexed by
     /// `PanicClass` discriminant. Shared (`Arc`) across spawned VMs.
-    panic_class_ptrs: Arc<[HeapPtr]>,
+    pub(crate) panic_class_ptrs: Arc<[HeapPtr]>,
 
     /// The stdlib declarations the runtime recognizes structurally, resolved
     /// once from `packages` and shared across spawned VMs.
@@ -1666,7 +2241,7 @@ pub struct BexVm {
     pub thread_id: u64,
 
     /// VM-owned producer state. It deliberately has no transport or buffer.
-    telemetry: Option<TelemetryState>,
+    pub(crate) telemetry: Option<TelemetryState>,
     pub(crate) trace_scope: btel_types::RecordingId,
 
     /// Starts at VM Await suspension, or when the engine receives an async
@@ -1704,7 +2279,20 @@ pub struct BexVm {
     entry_trace: Option<crate::telemetry::TraceConfig>,
     entry_trace_context: Option<Arc<ContextPatch>>,
     root_context: Context,
-    pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
+    pub(crate) pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
+    /// Spare buffer for the type arguments compiled code passes to generic
+    /// builtins (`compiled_rt::call_builtin_typed`), kept for its capacity.
+    pub(crate) compiled_type_args: Vec<bex_vm_types::RealizedTy>,
+    /// The type arguments of the call a resumable compiled body requests
+    /// (`compiled_rt::BexVm::push_type_arg`), reused across calls.
+    pub(crate) call_type_args: Vec<bex_vm_types::RealizedTy>,
+    /// An error the unwinder delivered to a suspended compiled body, which the
+    /// run loop hands it when resuming it.
+    compiled_delivery: Option<Box<VmError>>,
+    /// The lowest stack address compiled code may grow down to on the thread
+    /// running this `exec`, or 0 when unknown; see
+    /// `compiled_rt::stack_floor`.
+    pub(crate) stack_floor: usize,
     pending_call_type_values: Vec<Option<TypeValue>>,
     /// Set by a call that passes type arguments, for its callee's entry
     /// only: telemetry records the frame's type arguments before the call's
@@ -1887,17 +2475,50 @@ pub fn convert_program_with_trace_hooks(
     program: bex_vm_types::Program,
     enabled: bool,
 ) -> Result<BytecodeProgram, VmInternalError> {
+    convert_program_with_natives(program, enabled, None)
+}
+
+/// Natively compiled bodies for one program, as the BAML-to-Rust compiler
+/// emits them; see [`crate::compiled_rt::CompiledEntry`].
+pub type NativeBodyTable = [crate::compiled_rt::CompiledEntry];
+
+/// [`convert_program_with_trace_hooks`], additionally attaching natively
+/// compiled bodies to the bytecode functions they were compiled from.
+pub fn convert_program_with_natives(
+    program: bex_vm_types::Program,
+    enabled: bool,
+    native_bodies: Option<&NativeBodyTable>,
+) -> Result<BytecodeProgram, VmInternalError> {
     // The one road from an executable into a VM: a decoded program is
     // checked against the format's laws here, and everything after — the
     // rendered views, the loader — indexes into a program that keeps them.
     program.validate()?;
     let callables = program.rendered_callables();
+    // The names compiled bodies were generated against, as the loader will
+    // render them; pooled functions have no owner until load.
+    let native_names: Vec<Option<String>> = native_bodies.map_or_else(Vec::new, |table| {
+        table
+            .iter()
+            .map(|entry| {
+                let index = entry.object as usize;
+                (index < program.objects.len())
+                    .then(|| program.function_name(ObjectIndex::from_raw(index)))
+                    .flatten()
+            })
+            .collect()
+    });
     // Convert objects, attaching native functions
     let mut objects: Vec<Object> = program
         .objects
         .into_iter()
         .map(crate::package_baml::attach_builtins)
         .collect::<Result<Vec<_>, _>>()?;
+
+    // Compiled bodies attach before compact code is prepared: call
+    // specialization reads the callee to choose a call fast path.
+    if let Some(table) = native_bodies {
+        attach_native_bodies(&mut objects, table, &native_names)?;
+    }
 
     if !enabled {
         disable_declared_trace_hooks(&mut objects);
@@ -1924,6 +2545,49 @@ pub fn convert_program_with_trace_hooks(
         packages: program.packages,
         root: program.root,
     })
+}
+
+/// Attach each compiled body to the bytecode function it was compiled from.
+///
+/// An entry names its function by object index, the identity the generated
+/// code already depends on (it bakes callee and class indices in), and
+/// repeats the function's link name and arity so a table from another build
+/// is refused here instead of running against the wrong objects. A mismatch,
+/// a non-bytecode kind, or a generic function is a build inconsistency, not a
+/// user error.
+fn attach_native_bodies(
+    objects: &mut [Object],
+    table: &NativeBodyTable,
+    names: &[Option<String>],
+) -> Result<(), VmInternalError> {
+    for (entry, name) in table.iter().zip(names) {
+        let mismatch = |why: &str| VmInternalError::CompiledBody {
+            message: format!(
+                "compiled body for `{}` (object {}) {why}",
+                entry.name, entry.object
+            ),
+        };
+        let Some(Object::Function(function)) = objects.get_mut(entry.object as usize) else {
+            return Err(mismatch("does not name a function in this program"));
+        };
+        let name = name.as_deref().unwrap_or_default();
+        if name != entry.name || function.arity != entry.arity {
+            return Err(mismatch(&format!(
+                "was compiled from another program: object is `{name}` with arity {}",
+                function.arity
+            )));
+        }
+        if !matches!(function.kind, FunctionKind::Bytecode) {
+            return Err(mismatch("targets a function that is not bytecode"));
+        }
+        if !function.generic_param_bounds.is_empty() || !function.display_type_params.is_empty() {
+            return Err(mismatch(
+                "targets a generic function; compiled bodies take no type arguments",
+            ));
+        }
+        function.native_body = Some(entry.erase());
+    }
+    Ok(())
 }
 
 /// Telemetry-off engines keep argument defaults and the authored body but
@@ -1974,7 +2638,15 @@ fn disable_declared_trace_hooks(objects: &mut [Object]) {
 pub fn prepare_compact_code(objects: &mut [Object], globals: &[bex_vm_types::ConstValue]) {
     for object in objects.iter_mut() {
         if let Object::Function(function) = object {
-            function.bytecode.compact = Some(function.bytecode.lower_to_compact());
+            let mut compact = function.bytecode.lower_to_compact();
+            // A compiled function's frame parks at this code: where the
+            // interpreter hands it back to its body (`compiled_rt::stub`).
+            if function.native_body.is_some() {
+                compact
+                    .code
+                    .extend(crate::compiled_rt::stub::CODE.map(|op| op as u8));
+            }
+            function.bytecode.compact = Some(compact);
         }
     }
     crate::call_specialize::specialize_calls(objects, globals);
@@ -2104,7 +2776,7 @@ pub fn resolve_panic_class_ptrs(
 /// behind a `HeapPtr`. Returns `None` for any other variant (including ints —
 /// callers that want int→float promotion must combine this with `as_int`).
 #[inline]
-fn value_as_float(value: Value) -> Option<f64> {
+pub(crate) fn value_as_float(value: Value) -> Option<f64> {
     let ptr = value.as_object_ptr()?;
     // SAFETY: HeapPtr from a live Value is valid for read.
     match unsafe { ptr.get() } {
@@ -2234,7 +2906,7 @@ fn function_callable_signature<C: baml_type::normalize::TypeContext<bex_vm_types
 ///
 /// This is a free function to avoid borrow checker issues when called
 /// from within the instruction dispatch loop.
-fn value_type_tag(value: Value) -> i64 {
+pub(crate) fn value_type_tag(value: Value) -> i64 {
     use bex_vm_types::{ValueKind, types::type_tags};
 
     match value.kind() {
@@ -2400,6 +3072,10 @@ impl BexVm {
             entry_trace_context: None,
             root_context: Context::default(),
             pending_call_type_args: Vec::new(),
+            compiled_type_args: Vec::new(),
+            call_type_args: Vec::new(),
+            compiled_delivery: None,
+            stack_floor: 0,
             pending_call_type_values: Vec::new(),
             pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
@@ -2998,6 +3674,11 @@ impl BexVm {
             let Frame::Bytecode(bf) = &self.frames[depth] else {
                 continue;
             };
+            if self.compiled_at(depth).is_some() {
+                innermost_bc = false;
+                contexts.extend(self.compiled_cause(depth));
+                continue;
+            }
             let pc = if innermost_bc {
                 self.cur_pc
             } else {
@@ -3375,7 +4056,7 @@ impl BexVm {
     /// check: after a native call, after a continuation resumes, at the start
     /// and end of a run, and after an operation that allocates in bulk.
     #[inline]
-    fn settle(&mut self) {
+    pub(crate) fn settle(&mut self) {
         if self.tlab.alloc_debt().balance().unsigned_abs()
             >= bex_heap::SETTLE_QUANTUM.unsigned_abs()
         {
@@ -3391,7 +4072,7 @@ impl BexVm {
     /// loop that only grows containers still has its spending seen.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    fn should_early_yield(&mut self) -> bool {
+    pub(crate) fn should_early_yield(&mut self) -> bool {
         self.early_yield.tick() && self.poll_for_yield()
     }
 
@@ -3523,7 +4204,7 @@ impl BexVm {
     }
 
     /// Helper method to get `HeapPtr` from a Value, with type checking.
-    fn as_object_ptr(
+    pub(crate) fn as_object_ptr(
         &self,
         value: Value,
         object_type: ObjectType,
@@ -3651,6 +4332,24 @@ impl BexVm {
             Frame::Bytecode(frame) => frame.type_args.as_slice(),
             Frame::Native(_) => &[],
         };
+        self.value_matches_type_constant_with_type_args(
+            frame_type_args,
+            value,
+            raw_const,
+            resolved_const,
+        )
+    }
+
+    /// [`Self::value_matches_type_constant`] with the generic type arguments
+    /// supplied directly instead of read off a frame; compiled code has its
+    /// type arguments in hand and no frame index to name.
+    pub(crate) fn value_matches_type_constant_with_type_args(
+        &self,
+        frame_type_args: &[bex_vm_types::RealizedTy],
+        value: Value,
+        raw_const: &ConstValue,
+        resolved_const: Value,
+    ) -> Result<bool, VmInternalError> {
         match raw_const {
             // Structural type test against a complete `TyTemplate` (a
             // container element type, a bare frame ref, …), matched with the
@@ -4832,6 +5531,22 @@ impl BexVm {
                 // bytecode calls now that INIT_LOCALS is gone from bytecode.
                 self.allocate_real_locals_for_frame(dispatch_ptr)
                     .expect("entry point must be a valid function frame");
+
+                // A compiled entry starts at its stub, where the run loop
+                // hands the frame to its body, as the call path does for a
+                // resumable compiled callee. The same two shapes keep the
+                // bytecode: a hooked entry and one with type arguments.
+                let stub = match self.get_object(dispatch_ptr) {
+                    Object::Function(callee) => crate::compiled_rt::stub_start(callee),
+                    _ => None,
+                };
+                if let Some(stub) = stub
+                    && !hooked
+                    && let Some(Frame::Bytecode(frame)) = self.frames.last_mut()
+                    && frame.type_args.is_empty()
+                {
+                    frame.instruction_ptr = stub + crate::compiled_rt::stub::START;
+                }
             }
             FunctionKind::Native(_) | FunctionKind::SysOp(_) => {
                 self.push_trampoline_frame(
@@ -4958,6 +5673,7 @@ impl BexVm {
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
+            native_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
@@ -5064,6 +5780,7 @@ impl BexVm {
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
+            native_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
@@ -5872,7 +6589,11 @@ impl BexVm {
         self.alloc_panic_value(class, fields)
     }
 
-    fn invalid_field_access_error(&mut self, field_index: usize, field_count: usize) -> VmError {
+    pub(crate) fn invalid_field_access_error(
+        &mut self,
+        field_index: usize,
+        field_count: usize,
+    ) -> VmError {
         VmError::thrown_fresh(self.panic_to_exception_value(VmPanic::InvalidFieldAccess {
             field_index,
             field_count,
@@ -5947,7 +6668,13 @@ impl BexVm {
     /// [`Value::try_int`]. The `l`/`op`/`r` context is formatted only on the
     /// cold overflow path, so the hot path is just one range-checked encode.
     #[inline]
-    fn finish_int(&mut self, v: i64, l: i64, op: char, r: i64) -> Result<Value, VmError> {
+    pub(crate) fn finish_int(
+        &mut self,
+        v: i64,
+        l: i64,
+        op: char,
+        r: i64,
+    ) -> Result<Value, VmError> {
         match Value::try_int(v) {
             Some(val) => Ok(val),
             None => Err(self.integer_overflow(format!("{l} {op} {r} overflows int"))),
@@ -5959,7 +6686,7 @@ impl BexVm {
     /// `INT_MAX * INT_MAX`): `checked` is `None` on i64 overflow, and
     /// [`Value::try_int`] then enforces the tighter i63 range.
     #[inline]
-    fn int_arith_result(
+    pub(crate) fn int_arith_result(
         &mut self,
         checked: Option<i64>,
         l: i64,
@@ -5975,7 +6702,7 @@ impl BexVm {
     /// Build a catchable `baml.panics.IntegerOverflow` throw. Cold path only.
     #[cold]
     #[inline(never)]
-    fn integer_overflow(&mut self, message: String) -> VmError {
+    pub(crate) fn integer_overflow(&mut self, message: String) -> VmError {
         VmError::thrown_fresh(self.panic_to_exception_value(VmPanic::IntegerOverflow { message }))
     }
 
@@ -5984,7 +6711,7 @@ impl BexVm {
     /// message. `l`/`r` are `Int`-tagged Values.
     #[cold]
     #[inline(never)]
-    fn tagged_int_overflow(&mut self, l: Value, op: char, r: Value) -> VmError {
+    pub(crate) fn tagged_int_overflow(&mut self, l: Value, op: char, r: Value) -> VmError {
         let lv = l.as_int().unwrap_or(0);
         let rv = r.as_int().unwrap_or(0);
         self.integer_overflow(format!("{lv} {op} {rv} overflows int"))
@@ -5993,7 +6720,7 @@ impl BexVm {
     /// Build a catchable `baml.panics.NegativeBitShift` throw. Cold path only.
     #[cold]
     #[inline(never)]
-    fn negative_bit_shift(&mut self, count: i64) -> VmError {
+    pub(crate) fn negative_bit_shift(&mut self, count: i64) -> VmError {
         VmError::thrown_fresh(self.panic_to_exception_value(VmPanic::NegativeBitShift {
             message: format!("bit shift count is negative: {count}"),
         }))
@@ -6002,7 +6729,7 @@ impl BexVm {
     /// Evaluate `int << r` with the shared i63 semantics used by constant
     /// folding. A negative count throws `NegativeBitShift`.
     #[inline]
-    fn int_shl(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
+    pub(crate) fn int_shl(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
         let Some(l) = Int63::new(l) else {
             verifier_unreachable!()
         };
@@ -6015,7 +6742,7 @@ impl BexVm {
     /// Evaluate `int >> r` with the shared i63 semantics used by constant
     /// folding. A negative count throws `NegativeBitShift`.
     #[inline]
-    fn int_shr(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
+    pub(crate) fn int_shr(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
         let Some(l) = Int63::new(l) else {
             verifier_unreachable!()
         };
@@ -6052,7 +6779,11 @@ impl BexVm {
         let top_bc = self
             .frames
             .iter()
-            .rposition(|f| matches!(f, Frame::Bytecode(_)));
+            .rposition(|frame| matches!(frame, Frame::Bytecode(_)))
+            // A compiled frame on top has no live `cur_pc` of its own (its
+            // body runs in Rust, or the interpreter runs its resume stub), and
+            // every frame below recorded its call site in `faulting_pc`.
+            .filter(|&idx| self.compiled_at(idx).is_none());
         self.frames
             .iter()
             .enumerate()
@@ -6066,6 +6797,11 @@ impl BexVm {
                 }
                 let func = self.get_object(frame.function()).as_callable().ok()?;
                 match frame {
+                    Frame::Bytecode(frame) if self.compiled_at(idx).is_some() => Some(StackFrame {
+                        function_name: func.name(),
+                        file_path: func.source_file.clone(),
+                        error_line: frame.faulting_pc,
+                    }),
                     Frame::Bytecode(frame) => {
                         let pc = if Some(idx) == top_bc {
                             self.cur_pc
@@ -6108,6 +6844,88 @@ impl BexVm {
             .collect()
     }
 
+    /// The context an error lands with when it is raised at the current
+    /// execution point; see the BEP-042 rules in [`Self::unwind_exception`].
+    /// Returns whether the context was converted from a handled error.
+    /// Shared with compiled code's `catch` (`compiled_rt`), which lands an
+    /// error without running the unwinder.
+    fn in_flight_context(
+        &mut self,
+        carried: Option<Value>,
+        exception_value: Value,
+    ) -> Result<(InFlightContext, bool), VmError> {
+        Ok(match carried {
+            Some(context) if self.context_error(context)? == exception_value => {
+                (InFlightContext::Carried(context), false)
+            }
+            Some(_) | None => {
+                let cause = self.find_cause_context();
+                match self.take_context_transfer(cause, exception_value) {
+                    Some(handled) => (
+                        InFlightContext::Carried(
+                            self.retargeted_context(handled, exception_value)?,
+                        ),
+                        true,
+                    ),
+                    None => (
+                        InFlightContext::Fresh {
+                            trace: Arc::from(self.capture_user_stack_trace()),
+                            cause,
+                        },
+                        false,
+                    ),
+                }
+            }
+        })
+    }
+
+    /// Land a thrown error in a compiled function's `catch`: build its
+    /// context exactly as the unwinder would (with every frame between the
+    /// throw and the handler still on the stack, so the trace is complete),
+    /// then pop the frames compiled callees left pushed above the handling
+    /// function's own frame, completing their telemetry with the error
+    /// outcome. `depth` is the frame count with the handling function's frame
+    /// on top. Returns the caught value and its `baml.errors.Context`.
+    ///
+    /// Internal errors are not catchable and come back as `Err`.
+    pub(crate) fn land_compiled_catch(
+        &mut self,
+        error: Box<VmError>,
+        depth: usize,
+    ) -> Result<(Value, Value), Box<VmError>> {
+        let VmError::Thrown(thrown) = *error else {
+            return Err(error);
+        };
+        let value = thrown.value;
+        let outcome = self.telemetry_outcome_for_exception(value);
+        let (mut context, _) = self
+            .in_flight_context(thrown.context, value)
+            .map_err(Box::new)?;
+        while self.frames.len() > depth {
+            let top = self.frames.len() - 1;
+            // SAFETY: see `load_function`; compiled frames hold functions from
+            // the compile-time heap.
+            let function = unsafe { self.load_function(top) }
+                .map_err(|error| Box::new(VmError::InternalError(error)))?;
+            let recorded = if self.frame_wants_error_capture(top, function) {
+                self.recorded_context(&mut context, value)
+            } else {
+                value
+            };
+            self.complete_unwound_frame(top, function, outcome, recorded, None);
+            if let Some(Frame::Bytecode(frame)) = self.frames.pop() {
+                self.stack.truncate(frame.locals_offset.raw());
+            }
+        }
+        let ctx = match context {
+            InFlightContext::Carried(context) => context,
+            InFlightContext::Fresh { trace, cause } => {
+                self.alloc_error_context(value, &trace, cause)
+            }
+        };
+        Ok((value, ctx))
+    }
+
     fn try_unwind_exception(
         &mut self,
         frame_idx: &mut usize,
@@ -6139,29 +6957,7 @@ impl BexVm {
         // becomes its cause, unless it throws a conversion of that error
         // (`UnknownError.from`), which takes over the error's own trace and
         // cause.
-        let (mut context, converted) = match thrown.context {
-            Some(context) if self.context_error(context)? == exception_value => {
-                (InFlightContext::Carried(context), false)
-            }
-            Some(_) | None => {
-                let cause = self.find_cause_context();
-                match self.take_context_transfer(cause, exception_value) {
-                    Some(handled) => (
-                        InFlightContext::Carried(
-                            self.retargeted_context(handled, exception_value)?,
-                        ),
-                        true,
-                    ),
-                    None => (
-                        InFlightContext::Fresh {
-                            trace: Arc::from(self.capture_user_stack_trace()),
-                            cause,
-                        },
-                        false,
-                    ),
-                }
-            }
-        };
+        let (mut context, converted) = self.in_flight_context(thrown.context, exception_value)?;
         // Exception-path telemetry; `None` unless a recording wants raises.
         let carried = match &context {
             InFlightContext::Carried(context) => Some(*context),
@@ -6212,6 +7008,43 @@ impl BexVm {
                 unreachable!("non-Native frames already handled above");
             };
             let (frame_faulting_pc, frame_locals_offset) = (frame.faulting_pc, frame.locals_offset);
+            // A compiled body has no bytecode handlers (its own catches land
+            // errors before they reach the unwinder) and no bytecode position:
+            // the error leaves it.
+            let compiled = self.compiled_at(depth);
+            // A compiled body suspended on a request takes the error itself:
+            // the run loop resumes it with the error, and it lands it in its
+            // catch or returns it (and is then popped like any frame).
+            if compiled == Some(crate::compiled_rt::CompiledAt::Suspended) {
+                // SAFETY: see `load_function`.
+                let frame_function = unsafe { self.load_function(depth)? };
+                let (slots, stub) = frame_function
+                    .native_body
+                    .zip(crate::compiled_rt::stub_start(frame_function))
+                    .map(|(body, stub)| (body.slots() as usize, stub))
+                    .expect("a suspended compiled frame has a compiled body");
+                let context = match &context {
+                    InFlightContext::Carried(context) => *context,
+                    InFlightContext::Fresh { trace, cause } => {
+                        self.alloc_error_context(exception_value, trace, *cause)
+                    }
+                };
+                self.compiled_delivery = Some(Box::new(VmError::Thrown(VmThrown::rethrow(
+                    exception_value,
+                    context,
+                ))));
+                // Resume it where a call's result would be delivered.
+                if let Frame::Bytecode(frame) = &mut self.frames[depth] {
+                    frame.instruction_ptr = stub + crate::compiled_rt::stub::AFTER_CALL;
+                }
+                self.stack.truncate(frame_locals_offset.raw() + slots);
+                // Compiled landings record no raise evidence yet.
+                let _ = evidence.take();
+                *frame_idx = depth;
+                // SAFETY: see `load_function`.
+                *function = unsafe { self.load_function(depth)? };
+                return Ok(());
+            }
 
             // Innermost bytecode frame uses the live `cur_pc`; outer frames use
             // the call-site PC recorded in `faulting_pc` when they descended.
@@ -6287,7 +7120,9 @@ impl BexVm {
             // affect the hot per-instruction loop.
             // Use compact exception table when available (byte-offset PCs),
             // otherwise fall back to the legacy instruction-index table.
-            let handler_entry = if let Some(compact) = &frame_function.bytecode.compact {
+            let handler_entry = if compiled.is_some() {
+                None
+            } else if let Some(compact) = &frame_function.bytecode.compact {
                 compact
                     .exception_handlers_for_pc(faulting_pc)
                     .max_by(|a, b| {
@@ -6415,6 +7250,16 @@ impl BexVm {
             let Frame::Bytecode(bf) = &self.frames[depth] else {
                 continue; // native frames hold no handler bodies
             };
+            // A compiled body keeps the context of the error it is handling
+            // in its cause slot; the frame below records its call site in
+            // `faulting_pc`.
+            if self.compiled_at(depth).is_some() {
+                innermost_bc = false;
+                if let Some(context) = self.compiled_cause(depth) {
+                    return context;
+                }
+                continue;
+            }
             let pc = if innermost_bc {
                 self.cur_pc
             } else {
@@ -6829,7 +7674,7 @@ impl BexVm {
         })
     }
 
-    fn execute_call_from_locals_offset(
+    pub(crate) fn execute_call_from_locals_offset(
         &mut self,
         callee_ptr: HeapPtr,
         locals_offset: StackIndex,
@@ -6845,6 +7690,8 @@ impl BexVm {
         // and stack traces. `cur_pc` holds this call instruction's start.
         let call_site = self.cur_pc;
 
+        // A compiled caller keeps its line here instead; its call sites
+        // (`compiled_caller_call`) put it back.
         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
             bf.faulting_pc = call_site;
         }
@@ -7085,14 +7932,7 @@ impl BexVm {
                     .as_ref()
                     .is_some_and(|code| code.trace_hook_finish_pc.is_some());
                 let caller_frame_idx = self.bytecode_caller_index(*frame_idx);
-                let caller_pc = if caller_frame_idx == *frame_idx {
-                    call_site
-                } else {
-                    let Frame::Bytecode(caller) = &self.frames[caller_frame_idx] else {
-                        unreachable!()
-                    };
-                    caller.faulting_pc
-                };
+                let caller_pc = self.caller_pc(caller_frame_idx, *frame_idx, call_site);
                 let inherited = self.current_context();
                 let context = (!hooked)
                     .then_some(trace.as_ref())
@@ -7138,15 +7978,7 @@ impl BexVm {
                             ..
                         }))
                     );
-                    let caller_pc = if caller_frame_idx == *frame_idx {
-                        call_site
-                    } else {
-                        let Frame::Bytecode(caller) = &self.frames[caller_frame_idx] else {
-                            unreachable!("native continuation retains its bytecode caller");
-                        };
-                        caller.faulting_pc
-                    };
-                    let caller_pc = u32::try_from(caller_pc).unwrap_or(u32::MAX);
+                    let caller_pc = self.caller_pc(caller_frame_idx, *frame_idx, call_site);
                     let args = &self.stack.0
                         [locals_offset.raw()..locals_offset.raw().saturating_add(arg_count)];
                     let type_args = CallTypeArgs {
@@ -7180,7 +8012,7 @@ impl BexVm {
                     self.pending_trace_hooks.push(PendingTraceHook {
                         frame: self.frames.len(),
                         caller: self.visible_bytecode_caller_index(*frame_idx),
-                        caller_pc: u32::try_from(caller_pc).unwrap_or(u32::MAX),
+                        caller_pc,
                         trace,
                         evaluating: false,
                     });
@@ -7199,13 +8031,72 @@ impl BexVm {
                         context,
                     })
                 }));
-                let new_len = self.stack.len() + callee.real_local_count;
-                self.stack.resize(new_len, Value::NULL);
-
                 // Update frame_idx to point to the new frame.
                 *frame_idx = self.frames.len() - 1;
 
                 *function = callee;
+
+                // A natively compiled body runs here, in place of the bytecode,
+                // with the frame already pushed and telemetry already entered:
+                // to every observer this is a bytecode call. Two shapes keep
+                // the bytecode: a `$trace`-hooked callee (its hook prologue is
+                // bytecode, and a `PendingTraceHook` is already queued for it)
+                // and a call passing explicit type arguments (they land on the
+                // frame only after this funnel returns).
+                let native = if hooked || passes_type_args {
+                    None
+                } else {
+                    crate::compiled_rt::native_body_fn(callee)
+                };
+                match native {
+                    None => {
+                        let new_len = self.stack.len() + callee.real_local_count;
+                        self.stack.resize(new_len, Value::NULL);
+                    }
+                    Some(CompiledFn::Inline(body)) => {
+                        // Copy, never drain: the frame's stack region stays
+                        // rooted and is released by `finish_bytecode_frame`.
+                        let args: SmallVec<[Value; 4]> = (0..arg_count)
+                            .map(|i| {
+                                self.stack
+                                    .get_at(StackIndex::from_raw(locals_offset.raw() + i))
+                            })
+                            .collect();
+                        if let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] {
+                            frame.instruction_ptr = crate::compiled_rt::RUNNING;
+                        }
+                        let outcome = body(self, &args);
+                        self.settle();
+                        match outcome {
+                            Ok(value) => {
+                                // The epilogue replaces the frame's region with
+                                // the result, which `Return` has on the stack;
+                                // so does this, even for a function with no
+                                // slots.
+                                self.stack.push(value);
+                                if let Some(state) =
+                                    self.finish_bytecode_frame(frame_idx, function, value)?
+                                {
+                                    return Ok(Some(state));
+                                }
+                            }
+                            // The frame stays pushed, with every compiled frame
+                            // the body pushed above it: the unwinder names them
+                            // in the trace, completes their telemetry with the
+                            // error outcome, and pops them.
+                            Err(error) => return Err(*error),
+                        }
+                    }
+                    // A body that can suspend starts at its stub, where the run
+                    // loop hands the frame to it.
+                    Some(CompiledFn::Resumable(_)) => {
+                        let start = crate::compiled_rt::stub_start(callee)
+                            .expect("a compiled function has a stub");
+                        if let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] {
+                            frame.instruction_ptr = start + crate::compiled_rt::stub::START;
+                        }
+                    }
+                }
             }
 
             FunctionKind::SysOp(_) => {
@@ -7261,8 +8152,292 @@ impl BexVm {
         Ok(None)
     }
 
+    /// `ResumeCompiled` (at `cur_pc`): hand the frame on top to its compiled
+    /// body, as the stub offset it is parked at says (see
+    /// `crate::compiled_rt::stub`), and carry out what the body returns,
+    /// parking the frame again when it stays on top. On `Err` the frame stays
+    /// pushed for the unwinder.
+    #[cold]
+    #[inline(never)]
+    fn resume_compiled(
+        &mut self,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+    ) -> Result<Option<VmExecState>, VmError> {
+        use crate::compiled_rt::{Resume, stub};
+        let (Some(start), Some(body)) = (
+            crate::compiled_rt::stub_start(function),
+            crate::compiled_rt::native_body_fn(function),
+        ) else {
+            return Err(VmInternalError::CompiledBody {
+                message: format!("`{}` resumed without a compiled body", function.name()),
+            }
+            .into());
+        };
+        let offset = self.cur_pc - start;
+        if let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] {
+            frame.instruction_ptr = crate::compiled_rt::RUNNING;
+        }
+        match body {
+            // Only an entry point starts an inline body here; a call runs it
+            // inside the call path.
+            CompiledFn::Inline(body) => {
+                let Frame::Bytecode(frame) = &self.frames[*frame_idx] else {
+                    unreachable!("a compiled frame is a bytecode frame");
+                };
+                let locals_offset = frame.locals_offset.raw();
+                let args: SmallVec<[Value; 4]> = (0..function.arity)
+                    .map(|i| self.stack.get_at(StackIndex::from_raw(locals_offset + i)))
+                    .collect();
+                let outcome = body(self, &args);
+                self.settle();
+                self.complete_compiled(frame_idx, function, outcome.map_err(|error| *error))
+            }
+            CompiledFn::Resumable(body) => {
+                // A request leaves its result on the stack; the unwinder
+                // leaves an error here instead.
+                let resume = match offset {
+                    stub::START => Resume::Start,
+                    stub::AFTER_YIELD => Resume::Yielded,
+                    _ => match self.compiled_delivery.take() {
+                        Some(error) => Resume::Thrown(error),
+                        None => Resume::Value(self.stack.ensure_pop()),
+                    },
+                };
+                let step = body(self, resume);
+                self.settle();
+                self.carry_out(step.map_err(|error| *error)?, start, frame_idx, function)
+            }
+        }
+    }
+
+    /// Carry out the request a resumable body returned, parking its frame at
+    /// the stub offset that resumes it.
+    fn carry_out(
+        &mut self,
+        step: Step,
+        start: usize,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+    ) -> Result<Option<VmExecState>, VmError> {
+        use crate::compiled_rt::stub;
+        let park = |vm: &mut Self, frame_idx: usize, offset: usize| {
+            if let Frame::Bytecode(frame) = &mut vm.frames[frame_idx] {
+                frame.instruction_ptr = start + offset;
+            }
+        };
+        match step {
+            Step::Return(value) => self.complete_compiled(frame_idx, function, Ok(value)),
+            Step::Call { callee, argc } => {
+                park(self, *frame_idx, stub::AFTER_CALL);
+                let argc = argc as usize;
+                let locals_offset = StackIndex::from_raw(self.stack.len() - argc);
+                let mut type_args = std::mem::take(&mut self.call_type_args);
+                let outcome = self.compiled_caller_call(
+                    callee,
+                    locals_offset,
+                    argc,
+                    &type_args,
+                    frame_idx,
+                    function,
+                );
+                type_args.clear();
+                self.call_type_args = type_args;
+                outcome
+            }
+            // The interpreter's own instruction, on this frame, then
+            // `ResumeCompiled` with its result.
+            Step::Await(operand) | Step::AwaitAny(operand) | Step::Spawn(operand) => {
+                let offset = match step {
+                    Step::Await(_) => stub::AWAIT,
+                    Step::AwaitAny(_) => stub::AWAIT_ANY,
+                    _ => stub::SPAWN,
+                };
+                self.stack.push(operand);
+                park(self, *frame_idx, offset);
+                Ok(None)
+            }
+            Step::Yield => {
+                park(self, *frame_idx, stub::AFTER_YIELD);
+                Ok(Some(VmExecState::EarlyYield))
+            }
+        }
+    }
+
+    /// Complete the compiled frame at `frame_idx` with a body's outcome, as
+    /// `Return` does: the result goes on the stack first, where the epilogue
+    /// expects it even for a function with no slots.
+    fn complete_compiled(
+        &mut self,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+        outcome: Result<Value, VmError>,
+    ) -> Result<Option<VmExecState>, VmError> {
+        let value = outcome?;
+        self.stack.push(value);
+        self.finish_bytecode_frame(frame_idx, function, value)
+    }
+
+    /// A call made by the compiled frame at `*frame_idx` through the VM's
+    /// call path, with its `argc` arguments at `locals_offset`. The path
+    /// records the caller's call site in its `faulting_pc`, where a compiled
+    /// frame keeps its line; this puts the line back.
+    pub(crate) fn compiled_caller_call(
+        &mut self,
+        callee: HeapPtr,
+        locals_offset: StackIndex,
+        argc: usize,
+        type_args: &[bex_vm_types::RealizedTy],
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+    ) -> Result<Option<VmExecState>, VmError> {
+        let caller = *frame_idx;
+        let line = match &self.frames[caller] {
+            Frame::Bytecode(frame) => frame.faulting_pc,
+            Frame::Native(_) => unreachable!("a compiled caller has a bytecode frame"),
+        };
+        let outcome = if type_args.is_empty() {
+            self.execute_call_from_locals_offset(callee, locals_offset, argc, frame_idx, function)
+        } else {
+            self.execute_call_from_locals_offset_with_type_args(
+                callee,
+                locals_offset,
+                argc,
+                CallOptions {
+                    type_args,
+                    type_values: &[],
+                },
+                frame_idx,
+                function,
+            )
+        };
+        if let Some(Frame::Bytecode(frame)) = self.frames.get_mut(caller) {
+            frame.faulting_pc = line;
+        }
+        outcome
+    }
+
+    /// Where the compiled body of the frame at `idx` stands; `None` for a
+    /// frame whose bytecode runs, or a native continuation. Every reader of
+    /// a frame's position asks this first: a compiled frame's position fields
+    /// hold its stub offset and line, not a bytecode position.
+    pub(crate) fn compiled_at(&self, idx: usize) -> Option<crate::compiled_rt::CompiledAt> {
+        let Frame::Bytecode(frame) = &self.frames[idx] else {
+            return None;
+        };
+        if frame.instruction_ptr == crate::compiled_rt::RUNNING {
+            return Some(crate::compiled_rt::CompiledAt::Running);
+        }
+        let function = self.get_object(frame.function).as_callable().ok()?;
+        crate::compiled_rt::compiled_at(frame.instruction_ptr, function)
+    }
+
+    /// Whether a natively compiled body runs the frame at `idx`: its
+    /// position fields then hold no bytecode position (see
+    /// `crate::compiled_rt::stub`).
+    #[must_use]
+    pub fn frame_is_compiled(&self, idx: usize) -> bool {
+        self.compiled_at(idx).is_some()
+    }
+
+    /// The context of the error the compiled frame at `idx` is handling, from
+    /// its cause slot: what a raise during that handling chains onto.
+    fn compiled_cause(&self, idx: usize) -> Option<Value> {
+        let Frame::Bytecode(frame) = &self.frames[idx] else {
+            return None;
+        };
+        let function = self.get_object(frame.function).as_callable().ok()?;
+        let slot = function.native_body?.cause_slot()?;
+        let context = *self
+            .stack
+            .0
+            .get(frame.locals_offset.raw() + slot as usize)?;
+        (!context.is_null()).then_some(context)
+    }
+
+    /// The call-site offset a call path records for a call made from the
+    /// frame at `caller_frame_idx`: the live `call_site` when that frame is
+    /// the one calling, its recorded `faulting_pc` when a native continuation
+    /// sits between, and [`COMPILED_CALLER_PC`] for a compiled caller.
+    fn caller_pc(&self, caller_frame_idx: usize, frame_idx: usize, call_site: usize) -> u32 {
+        if self.compiled_at(caller_frame_idx).is_some() {
+            return COMPILED_CALLER_PC;
+        }
+        let Frame::Bytecode(caller) = &self.frames[caller_frame_idx] else {
+            unreachable!("a native continuation retains its bytecode caller");
+        };
+        let pc = if caller_frame_idx == frame_idx {
+            call_site
+        } else {
+            caller.faulting_pc
+        };
+        u32::try_from(pc).unwrap_or(u32::MAX)
+    }
+
+    /// Complete the bytecode frame at `frame_idx` with `result`: the shared
+    /// epilogue of `OpCode::Return` and of a natively compiled body.
+    ///
+    /// Finishes the frame's telemetry record, replaces the frame's stack region
+    /// with `result`, pops the frame, restores the caller's context, and selects
+    /// the caller into `frame_idx`/`function`. Never touches the run loop's
+    /// `pc`/`code` locals; the loop-side `Return` does that itself, and the
+    /// call funnel returns to a loop that still holds the caller's. Returns
+    /// `Some(Complete)` when this was the last frame.
+    fn finish_bytecode_frame(
+        &mut self,
+        frame_idx: &mut usize,
+        function: &mut &'static Function,
+        result: Value,
+    ) -> Result<Option<VmExecState>, VmError> {
+        let Frame::Bytecode(bf) = &mut self.frames[*frame_idx] else {
+            unreachable!("finish_bytecode_frame on a native frame")
+        };
+        let locals_offset = bf.locals_offset;
+        let frame_telemetry = bf.telemetry.take();
+
+        // Completion reads the callee's `Function`; it must run before
+        // `function` is reloaded with the caller's.
+        if let Some(frame_telemetry) = frame_telemetry {
+            self.complete_bytecode_invocation_with_function(
+                *frame_idx,
+                function,
+                frame_telemetry,
+                InvocationOutcome::Ok,
+                Some(result),
+            );
+        }
+
+        // SAFETY: the compiler guarantees a result at or above the callee's
+        // locals base. That base is therefore an existing initialized slot,
+        // even for a zero-argument function with no locals. Value is Copy, so
+        // discarded slots need no drop. No allocation or GC point occurs
+        // between writing the result and shortening the stack to the caller's
+        // new top.
+        let consumed = self.stack.len() - locals_offset.raw();
+        unsafe { self.stack.replace_top_n_dynamic(consumed, result) };
+        // SAFETY: the frame accessed above is the one being completed; stack
+        // operations cannot remove it.
+        unsafe { self.frames.no_return_pop() };
+        let context = self.current_context().clone();
+        if let Some(telemetry) = &mut self.telemetry {
+            telemetry.set_context(context);
+        }
+        if self.frames.is_empty() {
+            return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
+        }
+        // Select the restored caller. Native continuations and early yields
+        // still hand this frame back to the outer loop.
+        *frame_idx = self.frames.len() - 1;
+        if matches!(self.frames[*frame_idx], Frame::Bytecode(_)) {
+            // SAFETY: the caller's function object lives in the compile-time
+            // heap, which is never collected; see `load_function`.
+            *function = unsafe { self.load_function(*frame_idx)? };
+        }
+        Ok(None)
+    }
+
     /// Convert a [`VmRustFnError`] into the corresponding [`VmError`].
-    fn native_error_to_vm_error(&mut self, err: VmRustFnError) -> VmError {
+    pub(crate) fn native_error_to_vm_error(&mut self, err: VmRustFnError) -> VmError {
         match err {
             VmRustFnError::Panic(panic) => {
                 VmError::thrown_fresh(self.panic_to_exception_value(panic))
@@ -7484,7 +8659,10 @@ impl BexVm {
     ///   2. Drop `'static` and re-deref after each GC safepoint (cheap re-deref,
     ///      still no clone).
     #[inline]
-    unsafe fn load_function(&self, frame_idx: usize) -> Result<&'static Function, VmInternalError> {
+    pub(crate) unsafe fn load_function(
+        &self,
+        frame_idx: usize,
+    ) -> Result<&'static Function, VmInternalError> {
         let ptr = self.frames[frame_idx].function();
         // SAFETY: See doc comment above.
         let obj: &'static Object = unsafe { ptr.get() };
@@ -8003,6 +9181,9 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
+        // A VM may run on a different thread each time; compiled calls check
+        // against this thread's stack.
+        self.stack_floor = crate::compiled_rt::stack_floor();
         #[cfg(not(target_arch = "wasm32"))]
         self.stop_disabled_telemetry();
         #[cfg(not(target_arch = "wasm32"))]
@@ -8131,7 +9312,20 @@ impl BexVm {
     fn exec_cmpop(&mut self, op: CmpOp) -> Result<(), VmError> {
         let right = self.stack.ensure_pop();
         let left = self.stack.ensure_pop();
+        let result = self.cmpop_values(op, left, right)?;
+        self.stack.push(result);
+        Ok(())
+    }
 
+    /// The comparison operator over two already-popped operands. This is the
+    /// single implementation the interpreter and compiled code share (see
+    /// `compiled_rt`).
+    pub(crate) fn cmpop_values(
+        &mut self,
+        op: CmpOp,
+        left: Value,
+        right: Value,
+    ) -> Result<Value, VmError> {
         #[allow(clippy::cast_precision_loss)]
         let result = if let (Some(l), Some(r)) = (left.as_int(), right.as_int()) {
             Value::bool(match op {
@@ -8266,8 +9460,7 @@ impl BexVm {
             })
         };
 
-        self.stack.push(result);
-        Ok(())
+        Ok(result)
     }
 
     /// Execute a binary arithmetic operation. Pops two values, pushes the result.
@@ -8281,7 +9474,20 @@ impl BexVm {
     fn exec_binop(&mut self, op: BinOp) -> Result<(), VmError> {
         let right = self.stack.ensure_pop();
         let left = self.stack.ensure_pop();
+        let result = self.binop_values(op, left, right)?;
+        self.stack.push(result);
+        Ok(())
+    }
 
+    /// The binary arithmetic operator over two already-popped operands. This is
+    /// the single implementation the interpreter and compiled code share (see
+    /// `compiled_rt`).
+    pub(crate) fn binop_values(
+        &mut self,
+        op: BinOp,
+        left: Value,
+        right: Value,
+    ) -> Result<Value, VmError> {
         #[allow(clippy::cast_precision_loss)]
         let result = if let (Some(l), Some(r)) = (left.as_int(), right.as_int()) {
             match op {
@@ -8289,12 +9495,7 @@ impl BexVm {
                 // matches the specialized `ModInt` opcode — without it, `l % 0`
                 // on this generic path would raw-Rust-panic).
                 BinOp::Div | BinOp::Mod if r == 0 => {
-                    return Err(VmError::thrown_fresh(self.panic_to_exception_value(
-                        VmPanic::DivisionByZero {
-                            left: Value::int(l),
-                            right: Value::int(r),
-                        },
-                    )));
+                    return Err(self.division_by_zero(l, r));
                 }
                 // Arithmetic is checked: overflow throws IntegerOverflow rather
                 // than wrapping or raw-Rust-panicking. Only `*` can overflow
@@ -8367,8 +9568,7 @@ impl BexVm {
             .into());
         };
 
-        self.stack.push(result);
-        Ok(())
+        Ok(result)
     }
 
     /// Compact bytecode dispatch loop.
@@ -9203,6 +10403,17 @@ impl BexVm {
                         let result = self.stack.ensure_pop();
                         self.finish_trace_hook(*frame_idx, result)?;
                     }
+                    // A compiled frame's stub: hand the frame to its body.
+                    // `pc` never leaves this loop (handing it to an outlined
+                    // call costs every opcode its register): the body parks
+                    // its frame, and `pc` follows the frame.
+                    OpCode::ResumeCompiled => {
+                        let outcome = self.resume_compiled(frame_idx, function);
+                        if let Some(Frame::Bytecode(frame)) = self.frames.get(*frame_idx) {
+                            *pc = frame.instruction_ptr;
+                        }
+                        return outcome;
+                    }
                     OpCode::SetCallTrace => {
                         debug_assert!(
                             matches!(
@@ -9244,6 +10455,10 @@ impl BexVm {
                             if let Object::Function(callee) = callee_object
                                 && matches!(callee.kind, FunctionKind::Bytecode)
                             {
+                                // Specialization skips compiled callees
+                                // (`call_specialize`): they take the general
+                                // path, whose Bytecode arm runs the body.
+                                debug_assert!(callee.native_body.is_none());
                                 debug_assert_eq!(ntypeargs, 0);
                                 // Eager ok_or constructs/drops VmInternalError
                                 // even on success; release assembly retains a

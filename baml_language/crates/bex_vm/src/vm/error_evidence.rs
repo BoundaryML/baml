@@ -214,6 +214,20 @@ impl BexVm {
         }
     }
 
+    /// The kind of a raise from a compiled body, which has no opcode to
+    /// decode: a rethrow says so, a panic instance is a runtime failure, and
+    /// anything else is a `throw`.
+    fn compiled_raise_kind(&self, thrown: &VmThrown) -> RaiseKind {
+        if thrown.throw_kind == ThrowKind::Rethrow {
+            return RaiseKind::Rethrow;
+        }
+        if self.is_panic(thrown.value) {
+            RaiseKind::Runtime
+        } else {
+            RaiseKind::Throw
+        }
+    }
+
     /// The raise a rethrow continues, found by the `baml.errors.Context` it
     /// carries: the landing whose context slot, in a live frame, still holds
     /// that object. `None` when the unwinder did not carry a context, which
@@ -293,12 +307,18 @@ impl BexVm {
             .map(|idx| match &self.frames[idx] {
                 Frame::Bytecode(frame) => ErrorFrame {
                     function: self.frame_registered_function(idx),
-                    pc: Some(if Some(idx) == raise_frame {
-                        self.cur_pc
-                    } else {
-                        frame.faulting_pc
-                    })
-                    .map(|pc| u32::try_from(pc).unwrap_or(u32::MAX)),
+                    // A compiled body has no bytecode position.
+                    pc: self
+                        .compiled_at(idx)
+                        .is_none()
+                        .then(|| {
+                            if Some(idx) == raise_frame {
+                                self.cur_pc
+                            } else {
+                                frame.faulting_pc
+                            }
+                        })
+                        .map(|pc| u32::try_from(pc).unwrap_or(u32::MAX)),
                     native: false,
                 },
                 Frame::Native(native) => ErrorFrame {
@@ -368,7 +388,12 @@ impl BexVm {
             (Some(frame), _) => unsafe { self.load_function(frame) }.ok(),
             (None, _) => None,
         };
-        let kind = self.raise_kind(entry, raise_function, thrown);
+        let raise_compiled = raise_frame.is_some_and(|idx| self.compiled_at(idx).is_some());
+        let kind = if raise_compiled {
+            self.compiled_raise_kind(thrown)
+        } else {
+            self.raise_kind(entry, raise_function, thrown)
+        };
         let origin = match kind {
             RaiseKind::Rethrow | RaiseKind::PanicRethrow => self.rethrow_origin(carried_context),
             RaiseKind::Await => self.await_origin(),
@@ -433,7 +458,9 @@ impl BexVm {
             && raise_function.is_some_and(|function| {
                 function.telemetry_policy_id.load() != TelemetryPolicyId::NONE
             });
-        let pc = raise_frame.map(|_| u32::try_from(self.cur_pc).unwrap_or(u32::MAX));
+        let pc = raise_frame
+            .filter(|_| !raise_compiled)
+            .map(|_| u32::try_from(self.cur_pc).unwrap_or(u32::MAX));
         let frame_count = u32::try_from(self.frames.len()).unwrap_or(u32::MAX);
         let telemetry = self.telemetry.as_mut().expect("checked above");
         if origin != RaiseOrigin::Fresh {

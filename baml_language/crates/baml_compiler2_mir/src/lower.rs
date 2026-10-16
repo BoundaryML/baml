@@ -1420,6 +1420,17 @@ pub fn class_display_name<'db>(db: &'db dyn crate::Db, class: ClassRef<'db>) -> 
     }
 }
 
+/// The display name of the declaration `name` (a class, enum, or other type
+/// head in a [`crate::TyTemplate`]): the spelling `class_display_name` gives
+/// the same declaration.
+pub fn decl_display_name(db: &dyn crate::Db, name: &baml_type::DeclName) -> String {
+    dotted_name(
+        &Viewpoint::canonical(db).display_label(name.root()),
+        name.namespace(),
+        &[name.name().as_str()],
+    )
+}
+
 /// The display name of an enum, wherever it is declared.
 pub fn enum_display_name<'db>(db: &'db dyn crate::Db, enum_ref: EnumRef<'db>) -> String {
     match enum_ref {

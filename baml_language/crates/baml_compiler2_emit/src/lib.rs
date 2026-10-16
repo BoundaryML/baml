@@ -737,7 +737,7 @@ fn relative_source_path(db: &dyn baml_compiler2_mir::Db, file: baml_base::Source
 ///
 /// Returns `[0, offset_of_line_2, offset_of_line_3, ...]`.
 #[allow(clippy::cast_possible_truncation)]
-fn build_line_starts(text: &str) -> Vec<u32> {
+pub fn build_line_starts(text: &str) -> Vec<u32> {
     let mut starts = vec![0u32];
     for (i, byte) in text.bytes().enumerate() {
         if byte == b'\n' {
@@ -745,6 +745,45 @@ fn build_line_starts(text: &str) -> Vec<u32> {
         }
     }
     starts
+}
+
+/// The 1-based source line a statement or terminator whose span starts at
+/// byte `start` is attributed to: the line of its first token. Some spans start
+/// on the newline before that token, which counts from the next line. Bytecode
+/// line tables and natively compiled frames both report lines by this rule.
+#[must_use]
+pub fn statement_line(line_starts: &[u32], start: u32) -> usize {
+    let start = if line_starts.binary_search(&(start + 1)).is_ok() {
+        start + 1
+    } else {
+        start
+    };
+    match line_starts.binary_search(&start) {
+        Ok(idx) => idx + 1,
+        Err(idx) => idx,
+    }
+}
+
+/// The line bytecode attributes to an instruction emitted under `start..end`.
+///
+/// A sequence point (a statement or terminator boundary) takes the
+/// normalized start line ([`statement_line`]). Any other entry takes the end
+/// line when the span crosses exactly one line break, which keeps a multiline
+/// operand from collapsing onto the line before it.
+pub fn span_line(line_starts: &[u32], start: u32, end: u32, sequence_point: bool) -> usize {
+    let start_line = statement_line(line_starts, start);
+    if sequence_point || end <= start {
+        return start_line;
+    }
+    let end_line = match line_starts.binary_search(&(end - 1)) {
+        Ok(idx) => idx + 1,
+        Err(idx) => idx,
+    };
+    if end_line > start_line && end_line - start_line <= 1 {
+        end_line
+    } else {
+        start_line
+    }
 }
 
 // ─── Let-binding helpers ─────────────────────────────────────────────────────
@@ -1117,6 +1156,7 @@ fn builtin_emit_function(
         telemetry_function_id: None,
         telemetry_registration: bex_vm_types::FunctionRegistration::default(),
         telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
+        native_body: None,
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: Span::fake(),

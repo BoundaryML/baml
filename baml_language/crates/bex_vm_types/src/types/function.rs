@@ -61,6 +61,85 @@ unsafe impl Send for FunctionKind {}
 #[allow(unsafe_code)]
 unsafe impl Sync for FunctionKind {}
 
+/// A natively compiled body for a [`FunctionKind::Bytecode`] function.
+///
+/// The BAML-to-Rust compiler emits one Rust function per admitted BAML
+/// function; the loader attaches it here, and the VM's call path runs it in
+/// place of the bytecode while leaving everything else about the function —
+/// its kind, its telemetry identity, its frame, its exception handling — as it
+/// is for bytecode. Type-erased for the same reason as
+/// [`FunctionKind::Native`]: this crate cannot name the VM's body types.
+/// Runtime-only; never serialized.
+///
+/// Built only through the `unsafe` [`NativeBody::new`], whose contract is what
+/// makes calling the pointer sound.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NativeBody {
+    ptr: *const (),
+    resumable: bool,
+    slots: u32,
+    cause_slot: Option<u32>,
+}
+
+impl NativeBody {
+    /// # Safety
+    ///
+    /// `ptr` must be cast from the `bex_vm::compiled_rt` body type `resumable`
+    /// names (`ResumableBody` when set, `CompiledBody` otherwise); the VM casts
+    /// it back to that type to call it.
+    #[must_use]
+    #[allow(unsafe_code)]
+    pub const unsafe fn new(
+        ptr: *const (),
+        resumable: bool,
+        slots: u32,
+        cause_slot: Option<u32>,
+    ) -> Self {
+        Self {
+            ptr,
+            resumable,
+            slots,
+            cause_slot,
+        }
+    }
+
+    /// The erased body.
+    #[must_use]
+    pub const fn ptr(self) -> *const () {
+        self.ptr
+    }
+
+    /// Whether the body can suspend: it then runs as a resumable state
+    /// machine driven by the VM instead of to completion inside a call.
+    #[must_use]
+    pub const fn resumable(self) -> bool {
+        self.resumable
+    }
+
+    /// The stack slots the body keeps in its frame, from the frame's locals
+    /// offset: a resumable body's arguments, the locals it keeps across a
+    /// suspension and its resume point, then the cause slot.
+    #[must_use]
+    pub const fn slots(self) -> u32 {
+        self.slots
+    }
+
+    /// The slot holding the `baml.errors.Context` of the error the body is
+    /// handling (null outside a handler), which the cause chain reads; `None`
+    /// for a body with no `catch`.
+    #[must_use]
+    pub const fn cause_slot(self) -> Option<u32> {
+        self.cause_slot
+    }
+}
+
+// SAFETY: a `NativeBody` points at immutable code (a function pointer), so
+// sharing it between threads is safe, exactly as for `FunctionKind::Native`.
+#[allow(unsafe_code)]
+unsafe impl Send for NativeBody {}
+#[allow(unsafe_code)]
+unsafe impl Sync for NativeBody {}
+
 // Borsh proxy mirroring the previous serde-side shape — `Native(*const ())`
 // is runtime-only and must collapse to `NativeUnresolved` on the wire.
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -399,6 +478,14 @@ pub struct Function {
 
     /// Type of function.
     pub kind: FunctionKind,
+
+    /// Natively compiled body, attached at load time to a
+    /// [`FunctionKind::Bytecode`] function the BAML-to-Rust compiler admitted.
+    /// When set, the call path runs it instead of [`Self::bytecode`]; the
+    /// bytecode stays authoritative for everything else (and for execution
+    /// when this is `None`). Runtime-only; `None` on the wire.
+    #[borsh(skip)]
+    pub native_body: Option<NativeBody>,
 
     /// Current immutable/resolved telemetry policy. This runtime-only atomic
     /// is not serialized; loaded programs begin at policy zero and the engine

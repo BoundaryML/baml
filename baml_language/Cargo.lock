@@ -840,6 +840,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_compiler2_native"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_compiler2_emit",
+ "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
+ "baml_compiler2_mir",
+ "baml_type",
+ "bex_vm_types",
+ "prettyplease",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "baml_compiler2_visualization"
 version = "0.0.0-beta"
 dependencies = [
@@ -905,6 +920,7 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
+ "baml_compiler2_native",
  "baml_compiler_diagnostics",
  "baml_compiler_lexer",
  "baml_compiler_parser",
@@ -1604,6 +1620,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "smallvec",
+ "stacker",
  "sys_regex",
  "sys_types",
  "time",

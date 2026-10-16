@@ -17,6 +17,12 @@ pub mod check;
 pub mod db;
 pub mod discovery;
 pub mod manifest;
+/// The BAML-to-Rust backend (`baml_compiler2_native`), reachable through the
+/// database crate like the rest of the compiler. Behind the `native` feature.
+#[cfg(feature = "native")]
+pub mod native {
+    pub use baml_compiler2_native::{CompiledFunction, NativeModule, Rejection, compile_program};
+}
 pub mod program;
 pub mod project_resolution;
 pub mod stdlib_prefix;

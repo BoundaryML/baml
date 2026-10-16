@@ -1301,6 +1301,11 @@ pub enum OpCode {
     // Preserve the legacy discriminant; new compilers select Span or EmptySpan.
     TraceHookRich,
     TraceHookEmptySpan,
+
+    /// Hand the frame back to its natively compiled body (load-time only,
+    /// like `CallExactArgs`: appended to a compiled function's code, never
+    /// emitted into serialized `Instruction` streams). No operands (1 byte).
+    ResumeCompiled,
 }
 
 impl OpCode {
@@ -1446,7 +1451,8 @@ impl OpCode {
             | Self::TraceHookTiming
             | Self::TraceHookSpan
             | Self::TraceHookRich
-            | Self::TraceHookEmptySpan => 1,
+            | Self::TraceHookEmptySpan
+            | Self::ResumeCompiled => 1,
             Self::AllocInstance | Self::Call | Self::CallExactArgs | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
@@ -1606,6 +1612,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::TraceHookSpan as u8 => Ok(Self::TraceHookSpan),
             x if x == Self::TraceHookRich as u8 => Ok(Self::TraceHookRich),
             x if x == Self::TraceHookEmptySpan as u8 => Ok(Self::TraceHookEmptySpan),
+            x if x == Self::ResumeCompiled as u8 => Ok(Self::ResumeCompiled),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
@@ -1625,6 +1632,7 @@ impl std::fmt::Display for OpCode {
             Self::TraceHookSpan => "TRACE_HOOK_SPAN",
             Self::TraceHookRich => "TRACE_HOOK_RICH",
             Self::TraceHookEmptySpan => "TRACE_HOOK_EMPTY_SPAN",
+            Self::ResumeCompiled => "RESUME_COMPILED",
 
             Self::Return => "RETURN",
             Self::Await => "AWAIT",

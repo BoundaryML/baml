@@ -99,6 +99,38 @@ pub struct PackArgs {
     #[arg(short, long, help_heading = "Build options")]
     pub output: Option<PathBuf>,
 
+    /// Compile the program's functions to native code where possible.
+    ///
+    /// Every function the compiler admits runs as Rust inside the VM; the rest
+    /// run as bytecode, unchanged. Builds a host binary with `cargo` from the
+    /// BAML language workspace named by `--native-workspace`.
+    #[arg(long, help_heading = "Build options")]
+    pub native: bool,
+
+    /// The `baml_language` workspace checkout the native host is built from.
+    #[arg(
+        long,
+        value_name = "DIR",
+        requires = "native",
+        help_heading = "Build options"
+    )]
+    pub native_workspace: Option<PathBuf>,
+
+    /// With `--native`, list which functions compiled natively and why the
+    /// others did not.
+    #[arg(long, requires = "native", help_heading = "Build options")]
+    pub native_report: bool,
+
+    /// With `--native`, the directory the generated crate is built in.
+    /// Defaults to `target/baml-native` under the current directory.
+    #[arg(
+        long,
+        value_name = "DIR",
+        requires = "native",
+        help_heading = "Build options"
+    )]
+    pub native_build_dir: Option<PathBuf>,
+
     /// Target triple for the packaged executable.
     ///
     /// Defaults to the host platform. Cross-compilation downloads the matching
@@ -163,8 +195,27 @@ impl PackArgs {
             .telemetry
             .prepare(&mut telemetry, default_environment, "pack")?;
 
-        let (db, program, needs_format_hint) = self.load_and_compile(reporter)?;
-        let _ = db;
+        let (db, root, program, needs_format_hint) = self.load_and_compile(reporter)?;
+        // Compile admitted functions to Rust against this exact program; the
+        // generated crate embeds the packed program below, so the two can
+        // never drift apart.
+        let native = if self.native {
+            reporter.spin("Compiling", "native bodies");
+            let module = baml_db::native::compile_program(
+                &db,
+                root,
+                &program,
+                crate::bytecode_cache::CLI_OPT_LEVEL,
+                "program.bexa",
+            );
+            if self.native_report {
+                reporter.suspend(|| report_native(&module));
+            }
+            Some(module)
+        } else {
+            None
+        };
+        drop(db);
         // Mirror `baml run`'s format advisory: if any source file
         // round-trips through `baml fmt` differently, surface a
         // non-fatal warning so users learn to keep packaged
@@ -204,7 +255,11 @@ impl PackArgs {
             telemetry,
         };
         let target_triple = self.resolved_target_triple()?;
-        let host_bytes = read_host_binary(target_triple, reporter)?;
+        let host_bytes = if native.is_some() {
+            Vec::new()
+        } else {
+            read_host_binary(target_triple, reporter)?
+        };
         if let Some(provisioning) = provisioning {
             reporter.spin("Provisioning", "embedded telemetry");
             envelope.telemetry.embedded =
@@ -220,9 +275,13 @@ impl PackArgs {
             .clone()
             .unwrap_or_else(|| default_output_path(&basename, target_triple));
 
-        let mut output_file = std::fs::File::create(&output_path)
-            .with_context(|| format!("failed to create {}", output_path.display()))?;
-        write_executable(&host_bytes, &serialized, &mut output_file, target_triple)?;
+        if let Some(module) = native {
+            self.build_native(&module, &serialized, &output_path, target_triple, reporter)?;
+        } else {
+            let mut output_file = std::fs::File::create(&output_path)
+                .with_context(|| format!("failed to create {}", output_path.display()))?;
+            write_executable(&host_bytes, &serialized, &mut output_file, target_triple)?;
+        }
 
         #[cfg(unix)]
         {
@@ -291,7 +350,10 @@ impl PackArgs {
         }
     }
 
-    fn load_and_compile(&self, reporter: &Reporter) -> Result<(ProjectDatabase, Program, bool)> {
+    fn load_and_compile(
+        &self,
+        reporter: &Reporter,
+    ) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool)> {
         if let Some(file) = self.file.as_deref() {
             // Standalone `--file` mode has no project root, so there is no
             // cache seam — always a cold compile, same as `baml run --file`.
@@ -299,9 +361,153 @@ impl PackArgs {
             check_diagnostics(&db, "cannot pack: compilation errors found", reporter)?;
             let program = crate::bytecode_cache::compile_program(&db, package, None)
                 .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
-            return Ok((db, program, needs_format_hint));
+            return Ok((db, package, program, needs_format_hint));
         }
         self.load_and_compile_project(reporter)
+    }
+
+    /// Generate the native crate for `module`, build it with cargo, and place
+    /// the resulting binary at `output_path`.
+    ///
+    /// The generated crate is a standalone cargo project (its own
+    /// `[workspace]`) with path dependencies into the `baml_language`
+    /// workspace: the VM the bodies call into and the pack host they run
+    /// under. It embeds `serialized`, the packed program, so the bodies and
+    /// the bytecode they replace always come from one build.
+    fn build_native(
+        &self,
+        module: &baml_db::native::NativeModule,
+        serialized: &[u8],
+        output_path: &Path,
+        target_triple: &str,
+        reporter: &Reporter,
+    ) -> Result<()> {
+        let Some(workspace) = self.native_workspace.as_deref() else {
+            anyhow::bail!(
+                "`--native` needs `--native-workspace <DIR>`: the `baml_language` checkout \
+                 whose `crates/bex_vm` the compiled bodies link against"
+            );
+        };
+        let workspace = workspace
+            .canonicalize()
+            .with_context(|| format!("failed to resolve {}", workspace.display()))?;
+        for crate_dir in [
+            "crates/bex_vm",
+            "crates/bex_vm_types",
+            "crates/baml_pack_host",
+        ] {
+            if !workspace.join(crate_dir).join("Cargo.toml").is_file() {
+                anyhow::bail!(
+                    "`--native-workspace` {} does not contain {crate_dir}",
+                    workspace.display()
+                );
+            }
+        }
+        if target_triple != release_host_target_triple()? {
+            anyhow::bail!("`--native` builds for this machine only; drop `--target`");
+        }
+
+        let build_dir = self
+            .native_build_dir
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("target").join("baml-native"));
+        let src_dir = build_dir.join("src");
+        std::fs::create_dir_all(&src_dir)
+            .with_context(|| format!("failed to create {}", src_dir.display()))?;
+        std::fs::write(src_dir.join("program.bexa"), serialized)
+            .context("failed to write the packed program")?;
+        std::fs::write(src_dir.join("lib.rs"), &module.source)
+            .context("failed to write the generated module")?;
+        std::fs::write(
+            src_dir.join("main.rs"),
+            "fn main() -> std::process::ExitCode {\n    \
+             baml_pack_host::run_embedded(\n        \
+             baml_native_program::PROGRAM_ARTIFACT,\n        \
+             Some(baml_native_program::NATIVE_BODIES),\n    )\n}\n",
+        )
+        .context("failed to write the host shim")?;
+        let dep = |name: &str| {
+            format!(
+                "{name} = {{ path = {:?} }}\n",
+                workspace.join("crates").join(name)
+            )
+        };
+        let manifest = format!(
+            "[package]\nname = \"baml_native_program\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\
+             publish = false\n\n[workspace]\n\n[lib]\npath = \"src/lib.rs\"\n\n\
+             [[bin]]\nname = \"baml_native_program\"\npath = \"src/main.rs\"\n\n\
+             [dependencies]\n{}{}{}\n\
+             [profile.release]\nlto = \"fat\"\ncodegen-units = 1\nopt-level = 3\nstrip = \"symbols\"\n\
+             panic = \"unwind\"\n",
+            dep("bex_vm"),
+            dep("bex_vm_types"),
+            dep("baml_pack_host"),
+        );
+        std::fs::write(build_dir.join("Cargo.toml"), manifest)
+            .context("failed to write the generated manifest")?;
+
+        reporter.spin(
+            "Building",
+            format!("{} native functions with cargo", module.functions.len()),
+        );
+        // The host must accept the envelope this CLI encodes, and the
+        // fingerprint exists to refuse a host built from other sources. So the
+        // workspace must be at the commit this CLI was built from; the host
+        // then derives the same fingerprint from its own checkout.
+        if baml_artifact::ENFORCE_BUILD_FINGERPRINT {
+            let fingerprint = baml_artifact::BUILD_FINGERPRINT;
+            let head = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&workspace)
+                .args(["rev-parse", "HEAD"])
+                .output()
+                .ok()
+                .filter(|output| output.status.success())
+                .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned());
+            if head.as_deref() != Some(fingerprint) {
+                anyhow::bail!(
+                    "`--native-workspace` {} is at {}, but this CLI was built from {fingerprint}; \
+                     check out that commit so the host and this CLI agree on the program format",
+                    workspace.display(),
+                    head.as_deref().unwrap_or("an unknown commit"),
+                );
+            }
+        }
+        // Build against the workspace's own dependency versions, the ones its
+        // tests ran with, rather than resolving fresh ones.
+        let lockfile = workspace.join("Cargo.lock");
+        if lockfile.is_file() {
+            std::fs::copy(&lockfile, build_dir.join("Cargo.lock"))
+                .context("failed to copy the workspace's Cargo.lock")?;
+        }
+        // An explicit target dir so the built binary's location is known
+        // whatever the environment says.
+        let target_dir = build_dir.join("target");
+        let status = reporter.suspend(|| {
+            let mut cargo = std::process::Command::new("cargo");
+            cargo
+                .arg("build")
+                .arg("--release")
+                .arg("--manifest-path")
+                .arg(build_dir.join("Cargo.toml"))
+                .arg("--target-dir")
+                .arg(&target_dir);
+            cargo
+                .status()
+                .context("failed to run cargo; is it on PATH?")
+        })?;
+        if !status.success() {
+            anyhow::bail!("cargo build of the native host failed ({status})");
+        }
+        let built = target_dir.join("release").join("baml_native_program");
+        std::fs::copy(&built, output_path).with_context(|| {
+            format!(
+                "failed to copy {} to {}",
+                built.display(),
+                output_path.display()
+            )
+        })?;
+        Ok(())
     }
 
     fn artifact_manifest(&self) -> Result<toml::Value> {
@@ -336,7 +542,7 @@ impl PackArgs {
     fn load_and_compile_project(
         &self,
         reporter: &Reporter,
-    ) -> Result<(ProjectDatabase, Program, bool)> {
+    ) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool)> {
         let mut session = crate::project_session::ProjectSession::open(
             self.from.as_deref(),
             crate::project_session::CacheUse::ReadWrite,
@@ -349,7 +555,8 @@ impl PackArgs {
         let needs_format_hint = session.needs_format_hint();
 
         if let Some(program) = session.try_cached_program() {
-            return Ok((session.db, program, needs_format_hint));
+            let package = session.package;
+            return Ok((session.db, package, program, needs_format_hint));
         }
 
         // Seed the stdlib typed interface and install the served check rows —
@@ -396,7 +603,7 @@ impl PackArgs {
                 stdlib_interface_hit,
             )?;
         }
-        Ok((session.db, program, needs_format_hint))
+        Ok((session.db, package, program, needs_format_hint))
     }
 
     fn load_standalone(
@@ -591,6 +798,27 @@ fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
         .unwrap_or_else(|| name.to_string())
 }
 
+/// Print which functions compiled natively and why the others did not.
+fn report_native(module: &baml_db::native::NativeModule) {
+    let mut out = String::new();
+    for function in &module.functions {
+        out.push_str(&format!("native   {}\n", function.name));
+    }
+    for (name, rejection) in &module.rejected {
+        out.push_str(&format!("bytecode {name:<48} {rejection}\n"));
+    }
+    out.push_str(&format!(
+        "{} native, {} bytecode\n",
+        module.functions.len(),
+        module.rejected.len()
+    ));
+    // Report output is the command's product here, like `--list`.
+    #[allow(clippy::print_stderr)]
+    {
+        eprint!("{out}");
+    }
+}
+
 fn read_host_binary(target_triple: &str, reporter: &Reporter) -> Result<Vec<u8>> {
     let exe = std::env::current_exe().context("failed to locate current executable")?;
     let dir = exe
@@ -734,6 +962,10 @@ mod tests {
             functions: Vec::new(),
             file: None,
             output: None,
+            native: false,
+            native_workspace: None,
+            native_report: false,
+            native_build_dir: None,
             target_triple: None,
             output_format: OutputFormat::Json,
             from: None,

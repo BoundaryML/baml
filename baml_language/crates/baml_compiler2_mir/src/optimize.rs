@@ -19,6 +19,8 @@ use crate::{
 mod effects;
 mod values;
 
+pub use values::{live_in, live_in_precise};
+
 /// Run all optimization passes on a MIR function.
 pub(crate) fn optimize_function(
     db: &dyn crate::Db,
