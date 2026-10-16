@@ -137,8 +137,12 @@ impl BamlClassString for PackageBamlImpl {
     fn at(string: &BexStr, index: i64) -> Option<BexStr> {
         // Codepoint-indexed, not byte-indexed. A negative index counts from the
         // end; an index still outside the string after that yields `null`, so a
-        // non-null result is always exactly one codepoint.
-        resolve_index(index, string.char_len()).map(|i| string.char_slice(i..i + 1))
+        // non-null result is always exactly one codepoint. A non-negative index
+        // needs no length: `char_get` checks the bounds as it reads.
+        match usize::try_from(index) {
+            Ok(i) => string.char_get(i),
+            Err(_) => resolve_index(index, string.char_len()).and_then(|i| string.char_get(i)),
+        }
     }
 
     fn code_point_at(string: &BexStr, index: i64) -> Option<i64> {
@@ -146,10 +150,12 @@ impl BamlClassString for PackageBamlImpl {
         // rules (negative counts from the end, out of range yields `null`), but
         // yields the code point's value rather than a one-character string. A
         // `char` is always in `[0, 0x10FFFF]`, so the widening to `i64` is
-        // lossless.
-        resolve_index(index, string.char_len())
-            .and_then(|i| string.char_at(i))
-            .map(|c| i64::from(u32::from(c)))
+        // lossless. As in `at`, a non-negative index needs no length.
+        let i = match usize::try_from(index) {
+            Ok(i) => i,
+            Err(_) => resolve_index(index, string.char_len())?,
+        };
+        string.char_at(i).map(|c| i64::from(u32::from(c)))
     }
 
     fn repeat(string: &BexStr, count: i64) -> BexStr {
