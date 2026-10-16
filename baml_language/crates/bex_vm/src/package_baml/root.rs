@@ -1027,6 +1027,21 @@ fn deep_copy_value_recursive(
                 Object::TypeAlias(a) => vm.tlab.alloc(Object::TypeAlias(a)),
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
                 Object::RustData(arc) => vm.tlab.alloc(Object::RustData(Arc::clone(&arc))),
+                Object::RustInstance(instance) => {
+                    let payload = match instance.payload {
+                        // Shared, not copied: a foreign payload is reached
+                        // through its `Arc` by whoever else holds it.
+                        bex_vm_types::RustPayload::Foreign(arc) => {
+                            bex_vm_types::RustPayload::Foreign(arc)
+                        }
+                    };
+                    vm.tlab
+                        .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
+                            instance.class,
+                            instance.class_type_args,
+                            payload,
+                        )))
+                }
                 // `Object::Future(_)` is short-circuited above; it can't
                 // reach this match arm.
                 Object::Future(_) => unreachable!("Future short-circuited above"),

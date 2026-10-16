@@ -7,7 +7,7 @@ use crate::{
     Uint8ArrayContainer, Value, Variant,
     types::{
         Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package,
-        RuntimeImplRule, TypeAliasDef,
+        RuntimeImplRule, RustInstance, TypeAliasDef,
     },
 };
 
@@ -118,6 +118,10 @@ pub enum Object {
     /// Used for `$rust_type` fields in builtin classes (including media classes Pdf, Audio, Video, Image).
     RustData(Arc<dyn crate::BexRustData>),
 
+    /// An instance of a `@@rust_type` class: its class, its type arguments,
+    /// and its Rust-owned state in place of fields.
+    RustInstance(RustInstance),
+
     /// A type descriptor value — wraps a [`crate::types::TypeValue`]. The
     /// described type is the whole of it: `==` is type equivalence, so a GC
     /// copy, a `baml.deep_copy`, and a wire round trip all denote the same
@@ -150,6 +154,7 @@ impl Object {
     pub fn is_first_class_value(&self) -> bool {
         match self {
             Object::Instance(_)
+            | Object::RustInstance(_)
             | Object::Variant(_)
             | Object::Function(_)
             | Object::Closure(_)
@@ -230,6 +235,7 @@ impl Object {
             | Object::Float(_)
             | Object::Future(_)
             | Object::RustData(_)
+            | Object::RustInstance(_)
             | Object::Tombstone => None,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => None,
@@ -263,6 +269,7 @@ impl Object {
             | Object::Float(_)
             | Object::Future(_)
             | Object::RustData(_)
+            | Object::RustInstance(_)
             | Object::Tombstone => return false,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => return false,
@@ -381,6 +388,12 @@ impl BorshSerialize for Object {
                     "RustData cannot be serialized",
                 ));
             }
+            Self::RustInstance(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "a `@@rust_type` instance cannot be serialized",
+                ));
+            }
             Self::HostClosure(_) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -480,6 +493,7 @@ impl std::fmt::Display for Object {
                 map.data.lock().len()
             ),
             Object::RustData(_) => write!(f, "<rust_data>"),
+            Object::RustInstance(instance) => instance.fmt(f),
             Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
             Object::Float(v) => write!(f, "{v}"),
@@ -515,6 +529,8 @@ pub enum ObjectType {
     Future(FutureType),
     Type,
     RustData,
+    /// An instance of a `@@rust_type` class.
+    RustInstance,
     Float,
     /// Not a value: the slot's object is gone. See [`Object::Tombstone`].
     Tombstone,
@@ -544,6 +560,7 @@ impl ObjectType {
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
             Object::RustData(_) => Self::RustData,
+            Object::RustInstance(_) => Self::RustInstance,
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
             Object::Float(_) => Self::Float,
@@ -590,6 +607,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Uint8Array => write!(f, "uint8array"),
             ObjectType::Type => write!(f, "type"),
             ObjectType::RustData => write!(f, "rust_data"),
+            ObjectType::RustInstance => write!(f, "rust_instance"),
             ObjectType::Float => write!(f, "float"),
             ObjectType::Tombstone => write!(f, "tombstone"),
         }

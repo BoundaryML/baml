@@ -135,6 +135,13 @@ macro_rules! walk_object_heads {
                         arg.$visit(f);
                     }
                 }
+                // The payload carries no type: its element type, where it has
+                // one, is the instance's type argument.
+                Object::RustInstance(instance) => {
+                    for arg in &$($mut)? *instance.class_type_args {
+                        arg.$visit(f);
+                    }
+                }
                 Object::Closure(closure) => {
                     for arg in &$($mut)? *closure.captured_type_args {
                         arg.$visit(f);

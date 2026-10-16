@@ -19,7 +19,7 @@
 )]
 
 use crate::{
-    HeapPtr, Object, Value,
+    HeapPtr, Object, RustPayload, Value,
     types::{AtomicValueSlot, FutureRead, Objects, Slots},
 };
 
@@ -131,6 +131,13 @@ macro_rules! walk_object_edges {
                 edge!($mode, ptr, $f, &$($mut)? instance.class);
                 for slot in &instance.fields {
                     edge!($mode, slot, $f, slot);
+                }
+            }
+            Object::RustInstance(instance) => {
+                edge!($mode, ptr, $f, &$($mut)? instance.class);
+                match &$($mut)? instance.payload {
+                    // Shared outside the heap, so it may hold no heap edges.
+                    RustPayload::Foreign(_) => {}
                 }
             }
             Object::Closure(closure) => {

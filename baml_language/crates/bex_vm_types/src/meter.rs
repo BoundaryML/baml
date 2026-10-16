@@ -185,6 +185,14 @@ impl Object {
             }),
             Object::Future(future) => future.measure(meter),
             Object::RustData(data) => meter.shared(data, |meter| data.measure(meter)),
+            Object::RustInstance(instance) => {
+                meter.bytes(size_of_val(&*instance.class_type_args));
+                match &instance.payload {
+                    crate::RustPayload::Foreign(data) => {
+                        meter.shared(data, |meter| data.measure(meter));
+                    }
+                }
+            }
             Object::Type(_) => meter.bytes(size_of::<TypeValue>()),
             Object::Function(function) => {
                 let bytecode = &function.bytecode;

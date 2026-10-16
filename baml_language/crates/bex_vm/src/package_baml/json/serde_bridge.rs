@@ -109,6 +109,10 @@ fn value_to_serde(vm: &BexVm, v: Value) -> Result<serde_json::Value, ValueToSerd
     value_to_serde_at(vm, v, &mut String::new(), &mut Vec::new())
 }
 
+/// A value the walk met that no `json` value is: the caller's `json` typing
+/// was broken before the value got here.
+const NOT_JSON: &str = "not a json value";
+
 #[derive(Debug)]
 struct ValueToSerdeError {
     message: &'static str,
@@ -201,14 +205,18 @@ fn object_to_serde_at(
         Object::Variant(var) => {
             let (enm, index) = (var.enm, var.index);
             match vm.get_object(enm) {
-                Object::Enum(e) => e
-                    .variants
-                    .get(index)
-                    .map(|v| serde_json::Value::String(v.name.clone()))
-                    .unwrap_or(serde_json::Value::Null),
-                _ => serde_json::Value::Null,
+                Object::Enum(e) => match e.variants.get(index) {
+                    Some(v) => serde_json::Value::String(v.name.clone()),
+                    None => unreachable!(
+                        "variant {index} of enum `{}` is out of range at `{path}`",
+                        e.name()
+                    ),
+                },
+                _ => unreachable!("a variant's enum is not an enum at `{path}`"),
             }
         }
+        // A capture cell stands for the value it holds, as membership reads it.
+        Object::Cell(cell) => return value_to_serde_at(vm, cell.load(), path, active),
         Object::Instance(_)
         | Object::Class(_)
         | Object::Enum(_)
@@ -221,14 +229,24 @@ fn object_to_serde_at(
         | Object::Type(_)
         | Object::Uint8Array(_)
         | Object::RustData(_)
+        | Object::RustInstance(_)
         | Object::Closure(_)
         | Object::BoundMethod(_)
         | Object::GenericFunction(_)
-        | Object::HostClosure(_)
-        | Object::Cell(_) => serde_json::Value::Null,
+        | Object::HostClosure(_) => {
+            return Err(ValueToSerdeError {
+                message: NOT_JSON,
+                path: path.clone(),
+            });
+        }
         Object::Tombstone => Object::tombstone_reached(),
         #[cfg(feature = "heap_debug")]
-        Object::Sentinel(_) => serde_json::Value::Null,
+        Object::Sentinel(_) => {
+            return Err(ValueToSerdeError {
+                message: NOT_JSON,
+                path: path.clone(),
+            });
+        }
     })
 }
 
