@@ -13,3 +13,9 @@ function cross_class_handle() -> int throws never {
 function spread_copy(limit: baml.spawn.Limit) -> baml.spawn.Limit throws never {
     baml.spawn.Limit { ...limit }
 }
+
+// A `@@rust_type` class is the same rule with no field to copy: only its own
+// functions create one.
+function tagged_literal() -> baml.hash.DefaultHasher throws never {
+    baml.hash.DefaultHasher {}
+}

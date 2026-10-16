@@ -685,6 +685,11 @@ impl Walker<'_, '_> {
             Object::Future(_) => {
                 Shape::Unserializable("a future has no JSON form (await it first)", "future")
             }
+            // Its state lives in the runtime, which gives it no form outside.
+            Object::RustInstance(_) => Shape::Unserializable(
+                "a value whose state lives in the runtime has no JSON form",
+                "unserializable",
+            ),
             _ => Shape::Unserializable("value has no json representation", "unserializable"),
         };
         match shape {

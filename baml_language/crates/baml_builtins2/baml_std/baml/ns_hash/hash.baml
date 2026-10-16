@@ -29,9 +29,8 @@ interface Hasher {
 /// "hello".hash(state)
 /// let result = state.finish();
 /// ```
+@@rust_type
 class DefaultHasher {
-    _state: $rust_type,
-
     //baml:mut_vm
     function new() -> DefaultHasher throws never {
         $rust_function

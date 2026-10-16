@@ -175,6 +175,11 @@ impl HashDriver {
                                 bytes.extend_from_slice(&(variant.index as u64).to_le_bytes());
                                 bytes
                             }
+                            Object::RustInstance(instance) => match &instance.payload {
+                                bex_vm_types::RustPayload::Foreign(_) => {
+                                    return panic("Value does not support structural hashing");
+                                }
+                            },
                             _ => return panic("Value does not support structural hashing"),
                         },
                     }

@@ -1,37 +1,57 @@
-//! What a host holds of the runtime's own: an instance that keeps runtime
-//! data (`$rust_type`) crosses by its fields with that data as a payload the
-//! host passes back as it received it, and a standard-library capability
-//! (`reflect.Package`) crosses as an opaque reference to the engine's
-//! instance, which a host holds, passes back, and never builds.
+//! What a host holds of the runtime's own. An instance that keeps runtime data
+//! in a `$rust_type` field crosses by its fields, with that data as a payload
+//! the host passes back as it received it. An instance of a `@@rust_type`
+//! class and a standard-library capability (`reflect.Package`) cross as an
+//! opaque reference to the engine's instance, which a host holds, passes back
+//! as that same instance, and never builds.
 
 mod common;
 
 use std::sync::Arc;
 
+use baml_type::TypeName;
 use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
-use bex_external_types::{BexExternalAdt, TaggedHeapHandleKind};
+use bex_external_types::{BexExternalAdt, TaggedHeapHandleKind, WireHead};
 use common::compile_for_engine;
 use indexmap::IndexMap;
 use sys_native::SysOpsExt;
 
 const SOURCE: &str = r#"
+    class Marker {
+        n int
+    }
+
+    function make_regex() -> baml.regex.Regex {
+        baml.regex.new("a+")
+    }
+
+    function regex_has_match(regex: baml.regex.Regex, haystack: string) -> bool {
+        regex.has_match(haystack)
+    }
+
     function make_hasher() -> baml.hash.DefaultHasher {
         baml.hash.DefaultHasher.new()
     }
 
-    function hasher_write(hasher: baml.hash.DefaultHasher, text: string) -> null {
+    function hash_after(hasher: baml.hash.DefaultHasher, text: string) -> int {
         hasher.write(text.to_utf8());
-        null
-    }
-
-    function hasher_finish(hasher: baml.hash.DefaultHasher) -> int {
         hasher.finish()
     }
 
     function hash_text(text: string) -> int {
-        let hasher = baml.hash.DefaultHasher.new();
-        hasher.write(text.to_utf8());
-        hasher.finish()
+        hash_after(baml.hash.DefaultHasher.new(), text)
+    }
+
+    function pick(hasher: bool) -> baml.hash.DefaultHasher | Marker {
+        if (hasher) {
+            baml.hash.DefaultHasher.new()
+        } else {
+            Marker { n: 1 }
+        }
+    }
+
+    function make_identity() -> (x: int) -> int throws never {
+        (x: int) -> int { x }
     }
 
     function current_package() -> reflect.Package {
@@ -72,45 +92,132 @@ fn string(value: &str) -> BexExternalValue {
     BexExternalValue::String(value.into())
 }
 
-/// An instance holding runtime data crosses by its fields, the data among
-/// them as a payload the engine issued.
+/// The refusal's message, or a panic with whatever else came back.
+#[track_caller]
+fn refusal(result: Result<BexExternalValue, EngineError>) -> String {
+    match result {
+        Err(EngineError::TypeMismatch { message }) => message,
+        other => panic!("expected a type mismatch, got {other:?}"),
+    }
+}
+
+/// `baml.hash.DefaultHasher` as a wire type, in either the engine's
+/// annotation form or the host's.
+fn default_hasher_ty<L: Clone>() -> baml_type::WireTy<L> {
+    baml_type::RealizedTy::Class(
+        WireHead::Static(TypeName::from_dotted_path("baml.hash.DefaultHasher")),
+        Box::new([]),
+    )
+}
+
+/// The value is a live reference to an instance of `baml.hash.DefaultHasher`.
+#[track_caller]
+fn assert_hasher_reference(value: &BexExternalValue) {
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle { kind, ty, .. }) = value else {
+        panic!("a hasher crosses as a live reference, got {value:?}");
+    };
+    assert_eq!(*kind, TaggedHeapHandleKind::RuntimeValue);
+    assert_eq!(*ty, default_hasher_ty());
+}
+
+/// An instance holding runtime data in a field crosses by its fields, the
+/// data among them as a payload the engine issued, and works when it comes
+/// back.
 #[tokio::test]
 async fn an_instance_holding_runtime_data_crosses_by_fields_with_its_payload() {
     let engine = engine();
-    let hasher = call(&engine, "make_hasher", vec![]).await.unwrap();
+    let regex = call(&engine, "make_regex", vec![]).await.unwrap();
     let BexExternalValue::Instance {
         class_name, fields, ..
-    } = &hasher
+    } = &regex
     else {
-        panic!("a DefaultHasher crosses by its fields, got {hasher:?}");
+        panic!("a Regex crosses by its fields, got {regex:?}");
     };
-    assert_eq!(class_name, "baml.hash.DefaultHasher");
+    assert_eq!(class_name, "baml.regex.Regex");
     assert!(
-        matches!(fields.get("_state"), Some(BexExternalValue::RustData(_))),
-        "its state is a payload: {fields:?}"
+        matches!(fields.get("_handle"), Some(BexExternalValue::RustData(_))),
+        "its program is a payload: {fields:?}"
+    );
+    let matched = call(&engine, "regex_has_match", vec![regex, string("baaa")])
+        .await
+        .unwrap();
+    assert_eq!(matched, BexExternalValue::Bool(true));
+}
+
+/// An instance of a `@@rust_type` class keeps all its state in the runtime,
+/// so it crosses as a reference to the engine's instance.
+#[tokio::test]
+async fn a_rust_type_instance_crosses_as_a_reference() {
+    let engine = engine();
+    let hasher = call(&engine, "make_hasher", vec![]).await.unwrap();
+    assert_hasher_reference(&hasher);
+}
+
+/// A host passes the reference back as it received it, and the engine gets
+/// the same instance: state one call leaves is the next call's.
+#[tokio::test]
+async fn a_rust_type_instance_comes_back_as_the_same_instance() {
+    let engine = engine();
+    let hasher = call(&engine, "make_hasher", vec![]).await.unwrap();
+    // The second call's hash covers both writes, as one hasher fed "ab" does.
+    call(&engine, "hash_after", vec![hasher.clone(), string("a")])
+        .await
+        .unwrap();
+    let after_both = call(&engine, "hash_after", vec![hasher, string("b")])
+        .await
+        .unwrap();
+    let fresh = call(&engine, "hash_text", vec![string("ab")])
+        .await
+        .unwrap();
+    assert_eq!(after_both, fresh);
+    // Negative control: a fresh hasher fed only "b" differs, so the equality
+    // above came from the shared state.
+    let only_b = call(&engine, "hash_text", vec![string("b")]).await.unwrap();
+    assert_ne!(after_both, only_b);
+}
+
+/// A host never builds an instance of a `@@rust_type` class: it has no
+/// fields, and its state is the runtime's own.
+#[tokio::test]
+async fn a_host_never_builds_a_rust_type_instance() {
+    let engine = engine();
+    let forged = BexExternalValue::Instance {
+        class_name: "baml.hash.DefaultHasher".to_string(),
+        type_args: Vec::new(),
+        fields: IndexMap::new(),
+    };
+    let message = refusal(call(&engine, "hash_after", vec![forged, string("a")]).await);
+    assert!(
+        message.contains("`baml.hash.DefaultHasher` is the runtime's own"),
+        "{message}"
     );
 }
 
-/// A host passes the instance back as it received it; the payload is the
-/// engine's own, so the instance the engine builds shares its state.
+/// A reference fills a slot only if the instance it names is a member: a
+/// closure is not a `DefaultHasher`.
 #[tokio::test]
-async fn a_payload_sent_back_keeps_its_state() {
+async fn a_reference_of_another_type_does_not_fill_a_rust_type_slot() {
     let engine = engine();
-    let hasher = call(&engine, "make_hasher", vec![]).await.unwrap();
-    call(&engine, "hasher_write", vec![hasher.clone(), string("ab")])
-        .await
-        .unwrap();
-    call(&engine, "hasher_write", vec![hasher.clone(), string("cd")])
-        .await
-        .unwrap();
-    let finished = call(&engine, "hasher_finish", vec![hasher]).await.unwrap();
-    let expected = call(&engine, "hash_text", vec![string("abcd")])
-        .await
-        .unwrap();
-    assert_eq!(
-        finished, expected,
-        "two calls wrote through one payload: the state the first left is the second's"
+    let closure = call(&engine, "make_identity", vec![]).await.unwrap();
+    let message = refusal(call(&engine, "hash_after", vec![closure, string("a")]).await);
+    assert!(
+        message.contains("does not match the declared type `baml.hash.DefaultHasher`"),
+        "{message}"
     );
+}
+
+/// A reference under a union return carries the arm its instance selects.
+#[tokio::test]
+async fn a_rust_type_instance_selects_its_union_arm() {
+    let engine = engine();
+    let picked = call(&engine, "pick", vec![BexExternalValue::Bool(true)])
+        .await
+        .unwrap();
+    let BexExternalValue::Union { value, metadata } = &picked else {
+        panic!("a union return carries its selected arm, got {picked:?}");
+    };
+    assert_eq!(metadata.selected_option, default_hasher_ty());
+    assert_hasher_reference(value);
 }
 
 /// A standard-library capability whose fields are the runtime's own crosses

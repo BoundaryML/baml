@@ -17,3 +17,11 @@ source: crates/baml_tests/src/generated_tests.rs
  14 │     baml.spawn.Limit { ...limit }
     ·     ─────────────────────────────
     ╰────
+
+  [type] E0173
+
+  × class `baml.hash.DefaultHasher` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
+    ╭─[opaque_class_literals.baml:20:5]
+ 20 │     baml.hash.DefaultHasher {}
+    ·     ──────────────────────────
+    ╰────

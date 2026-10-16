@@ -4113,6 +4113,7 @@ impl BexVm {
                     Ok(match value.as_object_ptr() {
                         Some(val_ptr) => match self.get_object(val_ptr) {
                             Object::Instance(instance) => instance.class == expected_ptr,
+                            Object::RustInstance(instance) => instance.class == expected_ptr,
                             Object::Variant(variant) => variant.enm == expected_ptr,
                             _ => false,
                         },
@@ -4713,6 +4714,10 @@ impl BexVm {
         };
         let owner = match self.get_object(ptr) {
             Object::Instance(instance) => match self.get_object(instance.class) {
+                Object::Class(class) => class.owner.package(),
+                _ => None,
+            },
+            Object::RustInstance(instance) => match self.get_object(instance.class) {
                 Object::Class(class) => class.owner.package(),
                 _ => None,
             },
@@ -5953,6 +5958,40 @@ impl BexVm {
     /// Extract an `&Instance` from a `Value` carrying a heap-object pointer.
     ///
     /// Used by generated glue code to construct `view::` structs.
+    /// The `@@rust_type` instance `value` holds.
+    pub fn as_rust_instance(
+        &self,
+        value: &Value,
+    ) -> Result<&bex_vm_types::RustInstance, VmInternalError> {
+        let mismatch = || VmInternalError::TypeError {
+            expected: Type::Object(ObjectType::RustInstance),
+            got: self.type_of(value),
+        };
+        let ptr = value.as_object_ptr().ok_or_else(mismatch)?;
+        match self.get_object(ptr) {
+            Object::RustInstance(instance) => Ok(instance),
+            _ => Err(mismatch()),
+        }
+    }
+
+    /// Allocate an instance of the `@@rust_type` class `class` at
+    /// `class_type_args`, holding `payload`.
+    pub fn alloc_rust_instance(
+        &mut self,
+        class: HeapPtr,
+        class_type_args: Box<[bex_vm_types::RealizedTy]>,
+        payload: bex_vm_types::RustPayload,
+    ) -> Value {
+        Value::object(
+            self.tlab
+                .alloc(Object::RustInstance(bex_vm_types::RustInstance::new(
+                    class,
+                    class_type_args,
+                    payload,
+                ))),
+        )
+    }
+
     pub fn as_instance(&self, value: &Value) -> Result<&Instance, VmInternalError> {
         let Some(ptr) = value.as_object_ptr() else {
             return Err(VmInternalError::TypeError {
