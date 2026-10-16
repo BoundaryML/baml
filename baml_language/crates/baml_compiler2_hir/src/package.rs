@@ -139,9 +139,9 @@ pub fn dependency_named(db: &dyn crate::Db, root: SourceRoot, name: &Name) -> Op
 /// A package's edge table: every package it reaches, by the name it reaches
 /// it under — its manifest edges, then the language packages under their
 /// fixed names. The language packages are reachable from every package,
-/// their own siblings included: `baml` calls the metatype's companion
-/// methods in `reflect` while `reflect` depends on `baml`, which no manifest
-/// edge could express without a cycle. A non-stdlib root already carries the
+/// their own siblings included: `reflect` calls methods of `baml`'s builtin
+/// carriers (`Array.push`, `String.length`) while `baml` depends on
+/// `reflect`, which no manifest edge could express without a cycle. A non-stdlib root already carries the
 /// prelude as explicit edges, so for it the fixed names add nothing.
 ///
 /// Tracked: a viewpoint, a binder and an edge walk each read it, and it

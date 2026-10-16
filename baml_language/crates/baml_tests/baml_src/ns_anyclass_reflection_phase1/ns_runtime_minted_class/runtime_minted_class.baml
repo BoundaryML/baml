@@ -19,7 +19,7 @@ function mismatch_is_catchable(value: reflect.AnyClass) -> bool throws never {
 }
 
 function main() -> bool {
-    let optional_string = reflect.Type.of<string>().optional().as_type();
+    let optional_string = string.type().optional().as_type();
     let runtime_t = reflect.Class.new(
         "VetrecLike",
         {

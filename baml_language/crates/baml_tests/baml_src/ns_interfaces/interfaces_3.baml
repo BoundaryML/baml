@@ -99,10 +99,10 @@ class W307StringBox {
     }
 }
 function w307_box_impls_intbox<T>() -> bool {
-    return reflect.Type.of<W307Box<T>>().implemented_by(reflect.Type.of<W307IntBox>())
+    return reflect.Type.of<W307Box<T>>().implemented_by(W307IntBox.type())
 }
 function w307_box_impls_stringbox<T>() -> bool {
-    return reflect.Type.of<W307Box<T>>().implemented_by(reflect.Type.of<W307StringBox>())
+    return reflect.Type.of<W307Box<T>>().implemented_by(W307StringBox.type())
 }
 function w307_main() -> bool {
     return w307_box_impls_intbox<int>()
@@ -166,8 +166,8 @@ implements W315Debuggable for int {
     function debugW315(self) -> string { return "int" }
 }
 function w315_main() -> int {
-    let a = reflect.Type.of<int>().implements(reflect.Type.of<W315Debuggable>())
-    let b = reflect.Type.of<W315Debuggable>().implemented_by(reflect.Type.of<int>())
+    let a = int.type().implements(reflect.Type.of<W315Debuggable>())
+    let b = reflect.Type.of<W315Debuggable>().implemented_by(int.type())
     if a && b { return 1001 }
     return 0
 }
@@ -288,8 +288,8 @@ class W3bgStringBox {
 }
 function w3bg_main() -> bool {
     let int_box = reflect.Type.of<W3bgBox<int>>()
-    return int_box.implemented_by(reflect.Type.of<W3bgIntBox>())
-        && !int_box.implemented_by(reflect.Type.of<W3bgStringBox>())
+    return int_box.implemented_by(W3bgIntBox.type())
+        && !int_box.implemented_by(W3bgStringBox.type())
 }
 test "wf3_generic_interface_reflection_is_per_instantiation" {
     assert.is_true(w3bg_main())
@@ -318,7 +318,7 @@ class Ufp2UBox {
     }
 }
 function ufp2_main() -> int {
-    let ub = reflect.Type.of<Ufp2UBox>()
+    let ub = Ufp2UBox.type()
     let fwd = reflect.Type.of<Ufp2Box<(int | string)?>>()
     let rev = reflect.Type.of<Ufp2Box<(string | int)?>>()
     let a = 0
@@ -363,7 +363,7 @@ class Ufp5UBox {
     implements Ufp5Box<int | int> { function get(self) -> int | int { return self.value } }
 }
 function ufp5_main() -> int {
-    let ub = reflect.Type.of<Ufp5UBox>()
+    let ub = Ufp5UBox.type()
     let a = 0
     // UBox implements Box<int | int>, NOT Box<int | string>.
     if ub.implements(reflect.Type.of<Ufp5Box<int | int>>()) { a = a + 1 }
@@ -445,7 +445,7 @@ class Uf06UBox {
     }
 }
 function uf06_main() -> int {
-    let ub = reflect.Type.of<Uf06UBox>()
+    let ub = Uf06UBox.type()
     let fwd = reflect.Type.of<Uf06Box<int | string>>()
     let rev = reflect.Type.of<Uf06Box<string | int>>()
     let d1 = 0

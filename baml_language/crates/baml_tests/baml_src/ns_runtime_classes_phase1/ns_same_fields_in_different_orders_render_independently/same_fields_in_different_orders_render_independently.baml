@@ -12,11 +12,11 @@ function Render<T>() -> T {
 function main() -> string {
     let left = reflect.Class.new(
         "SameName",
-        { "first": reflect.Type.of<int>(), "second": reflect.Type.of<string>() },
+        { "first": int.type(), "second": string.type() },
     );
     let right = reflect.Class.new(
         "SameName",
-        { "second": reflect.Type.of<string>(), "first": reflect.Type.of<int>() },
+        { "second": string.type(), "first": int.type() },
     );
     type Left = unreflect(left.as_type())
     type Right = unreflect(right.as_type())

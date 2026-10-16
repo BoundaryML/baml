@@ -5,4 +5,5 @@ prelude = true
 
 [dependencies]
 log = { path = "../log" }
+reflect = { path = "../reflect" }
 trace = { path = "../trace" }

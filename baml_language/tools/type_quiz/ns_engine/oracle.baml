@@ -17,7 +17,7 @@ function type_of_spelling(declarations: string, spelling: string) -> Spelled thr
         }
 
         function probe() -> reflect.Type? throws never {
-            match (reflect.Type.of<ProbeHolder>().as_class()) {
+            match (ProbeHolder.type().as_class()) {
                 let holder: reflect.Class => match (holder.fields().at(0)) {
                     let field: reflect.class.Field => field.type,
                     null => null,

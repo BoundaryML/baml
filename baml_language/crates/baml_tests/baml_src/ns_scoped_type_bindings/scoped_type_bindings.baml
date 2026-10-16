@@ -22,7 +22,7 @@ function as_t<T>(v: unknown) -> T throws string {
 }
 
 test "the bound name works in every position the inline spelling had" {
-    let t = reflect.Type.of<int>()
+    let t = int.type()
     type Out = unreflect(t)
     let literal = Holder<Out> { label: "h" }
     let wrapped = wrap<Out>(as_t<Out>(1))
@@ -34,23 +34,23 @@ test "the bound name works in every position the inline spelling had" {
 // `reflect.Type.of<Wrapper<T>>()` over a scoped `T` loads the frame slot the
 // binding filled, so it is the same type as the static spelling.
 test "type.of over a scoped binding realizes the bound type" {
-    let t = reflect.Type.of<string>()
+    let t = string.type()
     type T = unreflect(t)
-    assert.is_true(reflect.Type.of<Wrapper<T>>() == reflect.Type.of<Wrapper<string>>())
+    assert.is_true(reflect.Type.of<Wrapper<T>>() == Wrapper<string>.type())
 }
 
 // A static right-hand side binds `T` to its template in the same frame slot
 // a runtime one uses; `T` is just as opaque statically.
 test "a static right-hand side realizes its template" {
     type T = Wrapper<string>
-    assert.is_true(reflect.Type.of<T>() == reflect.Type.of<Wrapper<string>>())
+    assert.is_true(reflect.Type.of<T>() == Wrapper<string>.type())
     assert.is_true(reflect.Type.of<T[]>() == reflect.Type.of<Wrapper<string>[]>())
 }
 
 // A scoped `T` in a type pattern is a membership test against the bound type,
 // through the ordinary `is`/`match` road.
 test "a scoped binding in a pattern tests membership against the bound type" {
-    let t = reflect.Type.of<string>()
+    let t = string.type()
     type T = unreflect(t)
     let value: unknown = Wrapper<string> { inner: "ok" }
     let text: unknown = "plain"
@@ -71,7 +71,7 @@ class Source {
 // type, asking each value what class it actually carries: the tag rides on
 // the value, so all five agree.
 function transports() -> string {
-    let t = reflect.Type.of<string>()
+    let t = string.type()
     type T = unreflect(t)
     let src = Source {}
     let direct = ident<T>(as_t<T>("a"))
@@ -98,7 +98,7 @@ function risky<T>(v: T, fail: bool) -> int throws Boom<T> {
 // A test body's own `throws` clause is inferred, so a `Boom<Out>` it would
 // publish is caught inside the block instead.
 test "a scoped runtime type in the error channel runs" {
-    let t = reflect.Type.of<string>()
+    let t = string.type()
     type Out = unreflect(t)
     let outcome = risky<Out>(as_t<Out>("x"), false) catch (e) {
         Boom<Out> => -1,
@@ -124,11 +124,11 @@ function throws_list(t: reflect.Type) -> string throws unknown {
 }
 
 test "a declared throws unknown covers a scoped thrown type" {
-    let string_t = reflect.Type.of<string>()
-    let int_t = reflect.Type.of<int>()
+    let string_t = string.type()
+    let int_t = int.type()
     let boomed = throws_boom(string_t) catch (e) { _ => e }
     let listed = throws_list(int_t) catch (e) { _ => e }
-    assert.is_true(reflect.Type.of_value(boomed) == reflect.Type.of<Boom<string>>())
+    assert.is_true(reflect.Type.of_value(boomed) == Boom<string>.type())
     assert.is_true(reflect.Type.of_value(listed) == reflect.Type.of<int[]>())
 }
 
@@ -209,7 +209,7 @@ function bind_narrowed(x: unknown) -> string {
 }
 
 test "an operand is narrowed to a type before it binds" {
-    let erased: unknown = reflect.Type.of<int>()
+    let erased: unknown = int.type()
     assert.equal(bind_narrowed(erased), "int")
     assert.equal(bind_narrowed(1), "not a type")
 }
@@ -220,7 +220,7 @@ test "an operand is narrowed to a type before it binds" {
 interface KeyedStore {
     type Key;
     function probe(self) -> string throws never {
-        type Key = unreflect(reflect.Type.of<int>())
+        type Key = unreflect(int.type())
         reflect.Type.of<Key>().to_string() + "/" + reflect.Type.of<Self.Key>().to_string()
     }
 }
@@ -246,8 +246,8 @@ function discarded_by_a_wildcard(t: reflect.Type) -> int {
 }
 
 test "values and effects leave a block only through binding-free types" {
-    let int_t = reflect.Type.of<int>()
-    let string_t = reflect.Type.of<string>()
+    let int_t = int.type()
+    let string_t = string.type()
     assert.is_true(reflect.Type.of_value(leaves_as_unknown(int_t)) == int_t)
     assert.is_true(published_through_an_annotation(string_t) == string_t)
     assert.equal(caught_inside(string_t), 1)
@@ -264,7 +264,7 @@ test "values and effects leave a block only through binding-free types" {
 // Spec rules that nothing else in the corpus pins. Each behaves as
 // `TYPE_SYSTEM.md` says; these keep that from changing silently.
 function binding_in_a_parameter_default(
-    n: int = { type D = unreflect(reflect.Type.of<int>()); 4 },
+    n: int = { type D = unreflect(int.type()); 4 },
 ) -> int throws never {
     n
 }
@@ -298,8 +298,8 @@ function throws_a_union_naming_the_binding(t: reflect.Type) -> int throws unknow
 }
 
 test "spec rules with no other pin" {
-    let int_t = reflect.Type.of<int>()
-    let string_t = reflect.Type.of<string>()
+    let int_t = int.type()
+    let string_t = string.type()
     assert.equal(binding_in_a_parameter_default(), 4)
     assert.is_true(the_same_name_bound_twice(int_t, string_t) == string_t)
     assert.is_true(closure_outlives_a_sibling_rebinding(int_t, string_t) == int_t)
@@ -318,12 +318,12 @@ function advised_clause_applied(t: reflect.Type) -> int throws string | (() -> u
 }
 
 test "the clause E0097 prints compiles and keeps the thrown value" {
-    let thrown = advised_clause_applied(reflect.Type.of<int>()) catch (e) { _ => e }
+    let thrown = advised_clause_applied(int.type()) catch (e) { _ => e }
     let called = match (thrown) {
         let f: () -> unknown throws never => f(),
         _ => null,
     }
-    assert.is_true(reflect.Type.of_value(called) == reflect.Type.of<int>())
+    assert.is_true(reflect.Type.of_value(called) == int.type())
 }
 
 // A PARTIAL clause (`throws X | _`) is judged by the names it WROTE, exactly
@@ -340,12 +340,12 @@ function partial_clause_publishes_a_scoped_throw(t: reflect.Type, plain: bool) -
 }
 
 test "a partial clause publishes a scoped throw through the name it wrote" {
-    let int_t = reflect.Type.of<int>()
+    let int_t = int.type()
     let boomed = partial_clause_publishes_a_scoped_throw(int_t, false) catch (e) { _ => e }
-    assert.is_true(reflect.Type.of_value(boomed) == reflect.Type.of<Boom<int>>())
+    assert.is_true(reflect.Type.of_value(boomed) == Boom<int>.type())
     // The `_` half still carries what the body infers.
     let plain = partial_clause_publishes_a_scoped_throw(int_t, true) catch (e) { _ => e }
-    assert.is_true(reflect.Type.of_value(plain) == reflect.Type.of<string>())
+    assert.is_true(reflect.Type.of_value(plain) == string.type())
 }
 
 // `unreflect` in a DECLARATION is E0168, and the remedy the diagnostic names
@@ -358,7 +358,7 @@ function takes_a_parameterized_field<T>(v: Wrapper<T>) -> reflect.Type throws ne
 }
 
 test "the remedy a declaration-site E0168 names compiles and runs" {
-    let t = reflect.Type.of<int>()
+    let t = int.type()
     type T = unreflect(t)
     let site = ParameterizedField<T> { value: Wrapper<T> { inner: as_t<T>(1) } }
     assert.is_true(takes_a_parameterized_field<T>(site.value) == t)
@@ -379,7 +379,7 @@ function probed_union_arm_names_the_binding(t: reflect.Type) -> int throws never
 }
 
 test "a speculatively probed arm naming the binding is not an escape" {
-    assert.equal(probed_union_arm_names_the_binding(reflect.Type.of<string>()), 7)
+    assert.equal(probed_union_arm_names_the_binding(string.type()), 7)
 }
 
 // Sibling blocks reuse one frame slot for their bindings. A descriptor
@@ -404,10 +404,10 @@ function sibling_bindings(a: reflect.Type, b: reflect.Type, both: bool) -> refle
 }
 
 test "a descriptor keeps its own binding past a sibling rebinding" {
-    let int_t = reflect.Type.of<int>()
-    let string_t = reflect.Type.of<string>()
+    let int_t = int.type()
+    let string_t = string.type()
     let pair = sibling_bindings(int_t, string_t, true)
-    assert.is_true(pair[0] == reflect.Type.of<Wrapper<int>>())
+    assert.is_true(pair[0] == Wrapper<int>.type())
     assert.is_true(pair[1] == reflect.Type.of<Wrapper<string>[]>())
     let single = sibling_bindings(int_t, string_t, false)
     assert.is_true(single[0] == reflect.Type.of<Wrapper<string>[]>())
@@ -455,7 +455,7 @@ function DynamicOutput<T>() -> T {
 
 test "an agent spec takes a scoped runtime type" {
     let output_type = reflect.Class.new("RuntimeOutput", {
-        "name": reflect.Type.of<string>(),
+        "name": string.type(),
     }).as_type()
     type Out = unreflect(output_type)
     let run = ai.Agent.new(
@@ -480,6 +480,6 @@ function written_args_under_a_shadow<T>(log: string[], t: reflect.Type) -> void 
 
 test "a written type argument names the parameter visible where it is written" {
     let log: string[] = []
-    written_args_under_a_shadow<string>(log, reflect.Type.of<int>())
+    written_args_under_a_shadow<string>(log, int.type())
     assert.equal(log, ["int", "int[]", "string", "string[]"])
 }

@@ -104,7 +104,7 @@ test "computed generic argument diagnostic names unreflect" {
             "main.baml": `
                 function id<T>(value: T) -> T { value }
                 function main() -> unknown {
-                    let runtime_t = reflect.Type.of<string>()
+                    let runtime_t = string.type()
                     id<runtime_t>("x")
                 }
             `,
@@ -134,8 +134,8 @@ test "runtime duplicate serialized key matches the static diagnostic" {
     let result = reflect.Class.new(
         "Collision",
         {
-            "wire": reflect.Type.of<string>(),
-            "internal": reflect.Type.of<int>().meta(alias = "wire"),
+            "wire": string.type(),
+            "internal": int.type().meta(alias = "wire"),
         },
     ) catch (error) {
         reflect.errors.CompilationError => {
@@ -155,7 +155,7 @@ test "top-level runtime type binding is rejected" {
     root.compiler.AssertHasMessage(
         {
             "main.baml": `
-                type T = unreflect(reflect.Type.of<string>())
+                type T = unreflect(string.type())
                 function main() -> string { "unreachable" }
             `,
         },
@@ -168,7 +168,7 @@ test "block-scoped runtime type binding does not escape" {
         {
             "main.baml": `
                 function invalid() -> unknown {
-                    let t = reflect.Type.of<string>()
+                    let t = string.type()
                     let escaped: unknown = {
                         type T = unreflect(t)
                         null

@@ -1,15 +1,15 @@
 function main() -> string {
     let left = reflect.Class.new(
         "Ordered",
-        { "a": reflect.Type.of<int>(), "b": reflect.Type.of<string>().meta(description = "second") },
+        { "a": int.type(), "b": string.type().meta(description = "second") },
     );
     let right = reflect.Class.new(
         "Ordered",
-        { "b": reflect.Type.of<string>().meta(description = "second"), "a": reflect.Type.of<int>() },
+        { "b": string.type().meta(description = "second"), "a": int.type() },
     );
     let literal = reflect.Literal.new("fixed");
-    let union = reflect.Union.new([literal.as_type(), reflect.Type.of<int>()]);
-    let map_t = reflect.Map.new(reflect.Type.of<string>(), union.as_type());
+    let union = reflect.Union.new([literal.as_type(), int.type()]);
+    let map_t = reflect.Map.new(string.type(), union.as_type());
     let array_t = map_t.as_type().array();
     let optional_t = array_t.as_type().optional();
     let empty = reflect.Class.new("Empty", {});

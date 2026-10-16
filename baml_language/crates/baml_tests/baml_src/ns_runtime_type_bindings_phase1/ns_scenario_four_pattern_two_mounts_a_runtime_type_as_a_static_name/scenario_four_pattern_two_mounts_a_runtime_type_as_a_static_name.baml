@@ -8,9 +8,9 @@ function TenantPersonType() -> reflect.Class {
     reflect.Class.new(
         "AcmePerson",
         {
-            "name": reflect.Type.of<string>(),
-            "email": reflect.Type.of<string>(),
-            "favorite_editor": reflect.Type.of<string>(),
+            "name": string.type(),
+            "email": string.type(),
+            "favorite_editor": string.type(),
         },
         implementations = [anchor_impl],
     )

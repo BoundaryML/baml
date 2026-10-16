@@ -20,6 +20,15 @@ class TypeMismatch {
     message: string,
 }
 
+/// A reflection call got an argument it cannot accept: `Enum.get_value` given
+/// a value that is not an enum value.
+///
+/// The `reflect` counterpart of `baml.errors.InvalidArgument`, with the same
+/// shape: `reflect` does not depend on `baml`, so it cannot name that class.
+class InvalidArgument {
+    message: string,
+}
+
 /// A session rejected concurrent use.
 class SessionBusy {
     message: string,

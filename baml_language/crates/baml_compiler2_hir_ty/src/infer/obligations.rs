@@ -973,12 +973,12 @@ impl<'db> InferenceContext<'db> {
         if !crate::impls::is_concrete_receiver(receiver) {
             return None;
         }
+        let lang = baml_compiler2_hir::package::lang_roots(self.db);
         let mut applicable: Option<&crate::impls::ImplFacts<'_>> = None;
         for facts in crate::impls::all_impl_facts(self.db, self.viewer()) {
-            if !crate::impls::provides_concrete_members(
-                baml_compiler2_hir::package::lang_roots(self.db),
-                &facts.interface.name,
-            ) {
+            if !crate::impls::provides_concrete_members(lang, &facts.interface.name)
+                || crate::impls::is_concrete_type_member(lang, &facts.interface.name, name)
+            {
                 continue;
             }
             let probe = self.probe();

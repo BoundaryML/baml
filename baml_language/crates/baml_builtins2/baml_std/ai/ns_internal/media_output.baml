@@ -15,16 +15,16 @@
 /// shapes are enumerated. The nullable list/union forms behave exactly like
 /// their non-null counterparts once decoded, so they share a form.
 function _media_shape(t: reflect.Type) -> string {
-    if (t == reflect.Type.of<image>()) {
+    if (t == image.type()) {
         return "one:image";
     }
-    if (t == reflect.Type.of<audio>()) {
+    if (t == audio.type()) {
         return "one:audio";
     }
-    if (t == reflect.Type.of<video>()) {
+    if (t == video.type()) {
         return "one:video";
     }
-    if (t == reflect.Type.of<pdf>()) {
+    if (t == pdf.type()) {
         return "one:pdf";
     }
     if (t == reflect.Type.of<image?>()) {

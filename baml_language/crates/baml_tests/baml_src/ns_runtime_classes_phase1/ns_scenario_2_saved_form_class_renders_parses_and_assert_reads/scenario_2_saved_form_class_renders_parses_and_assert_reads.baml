@@ -31,9 +31,9 @@ function NoteType(saved: SavedField[]) -> reflect.Class {
                 }
                 reflect.Union.new(members).as_type()
             },
-            "bulleted_list" => reflect.Type.of<string>().array().as_type(),
-            "number" => reflect.Type.of<int>(),
-            "text" => reflect.Type.of<string>(),
+            "bulleted_list" => string.type().array().as_type(),
+            "number" => int.type(),
+            "text" => string.type(),
             _ => throw UnknownFieldKind { kind: field.kind },
         };
         let description = if (field.kind == "bulleted_list") {

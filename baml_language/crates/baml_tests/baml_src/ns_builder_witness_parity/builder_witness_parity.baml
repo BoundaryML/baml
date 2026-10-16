@@ -11,7 +11,7 @@ test "builder_build_with_implementations_validates_then_freezes_atomically" {
     let address = reflect.Class.builder("BuiltAddress");
     let person_pending = person.type();
     let address_pending = address.type();
-    person.field("name", reflect.Type.of<string>());
+    person.field("name", string.type());
     person.field("address", address_pending);
     address.field("owner", person_pending.optional());
 
@@ -24,14 +24,14 @@ test "builder_build_with_implementations_validates_then_freezes_atomically" {
     };
 
     // Failed witness validation must not freeze any member of the group.
-    address.field("zip", reflect.Type.of<int>());
+    address.field("zip", int.type());
 
     let complete = incomplete.field("name");
     let person_t = person.build(implementations = [complete]);
     let address_t = address.build();
     let person_again = person.build(implementations = [complete]);
     let frozen_message = {
-        address.field("late", reflect.Type.of<bool>());
+        address.field("late", bool.type());
         "connected builder did not freeze"
     } catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].message,
@@ -49,12 +49,12 @@ test "map_and_builder_witnessed_classes_are_definition_equal" {
     let witness = reflect.Interface.implementation<Named>().field("name", class_field = "display_name");
     let map_t = reflect.Class.new(
         "Person",
-        { "display_name": reflect.Type.of<string>().meta(description = "public name") },
+        { "display_name": string.type().meta(description = "public name") },
         implementations = [witness],
     );
 
     let builder = reflect.Class.builder("Person");
-    builder.field("display_name", reflect.Type.of<string>().meta(description = "public name"));
+    builder.field("display_name", string.type().meta(description = "public name"));
     let builder_t = builder.build(implementations = [witness]);
 
     assert.is_true(map_t.as_type() != builder_t.as_type());
@@ -66,7 +66,7 @@ test "map_and_builder_witnessed_classes_are_definition_equal" {
 test "resolved_pending_from_frozen_group_is_accepted_by_another_builder" {
     let child = reflect.Class.builder("ResolvedChild");
     let child_pending = child.type();
-    child.field("value", reflect.Type.of<string>());
+    child.field("value", string.type());
     let child_t = child.build();
 
     let parent = reflect.Class.builder("Parent");

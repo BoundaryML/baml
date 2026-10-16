@@ -81,7 +81,7 @@ function mpc_library() -> reflect.Package {
 
                     implements Sizing {
                         function tag_as<T>(self, tag: T) -> string throws never {
-                            if reflect.Type.of<T>() == reflect.Type.of<int>() {
+                            if reflect.Type.of<T>() == int.type() {
                                 self.label + ":int"
                             } else {
                                 self.label + ":other"

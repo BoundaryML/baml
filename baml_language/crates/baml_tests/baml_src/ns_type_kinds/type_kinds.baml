@@ -82,34 +82,34 @@ function read_views(
     function_view: reflect.Function,
 ) -> bool throws reflect.errors.CompilationError {
     let params = function_view.params();
-    let function_schema = match (reflect.Type.of<reflect.Function>().kind()) {
+    let function_schema = match (reflect.Function.type().kind()) {
         let class_view: reflect.Class => class_view,
         _ => {
             return false;
         },
     };
     union_view.member_types().length() == 2
-        && array_view.element_type() == reflect.Type.of<Foo>()
-        && map_view.key_type() == reflect.Type.of<string>()
-        && map_view.value_type() == reflect.Type.of<Foo>()
-        && interface_view.implemented_by(reflect.Type.of<Foo>())
+        && array_view.element_type() == Foo.type()
+        && map_view.key_type() == string.type()
+        && map_view.value_type() == Foo.type()
+        && interface_view.implemented_by(Foo.type())
         && params.length() == 2
         && params[0].name == "x"
-        && params[0].type == reflect.Type.of<int>()
+        && params[0].type == int.type()
         && params[0].optional == false
         && params[1].name == "label"
-        && params[1].type == reflect.Type.of<string>()
-        && function_view.return_type() == reflect.Type.of<bool>()
+        && params[1].type == string.type()
+        && function_view.return_type() == bool.type()
         && function_schema.fields().length() == 1
         && function_schema.fields()[0].name == "_ty"
 }
 
 function intrinsic_checks() -> bool throws never {
-    reflect.Type.of_value(1) == reflect.Type.of<int>()
+    reflect.Type.of_value(1) == int.type()
         && reflect.Type.of_value(1).as_primitive() != null
-        && reflect.Type.of<Foo>().to_string() == "type_kinds.Foo"
-        && reflect.Type.of<int>().to_string() == "int"
-        && reflect.Type.of<KindColor>().to_string() != ""
+        && Foo.type().to_string() == "type_kinds.Foo"
+        && int.type().to_string() == "int"
+        && KindColor.type().to_string() != ""
         && reflect.Type.of<int | string>().to_string() != ""
         && reflect.Type.of<"fixed">().to_string() != ""
         && reflect.Type.of<Foo[]>().to_string() != ""
@@ -131,14 +131,14 @@ function casts_are_never_throwing(t: reflect.Type) -> bool throws never {
 }
 
 function all_positive_kind_casts_work() -> bool throws never {
-    reflect.Type.of<Foo>().as_class() != null
-        && reflect.Type.of<KindColor>().as_enum() != null
+    Foo.type().as_class() != null
+        && KindColor.type().as_enum() != null
         && reflect.Type.of<int | string>().as_union() != null
         && reflect.Type.of<"fixed">().as_literal() != null
         && reflect.Type.of<Foo[]>().as_array() != null
         && reflect.Type.of<map<string, Foo>>().as_map() != null
         && reflect.Type.of<Marker>().as_interface() != null
-        && reflect.Type.of<int>().as_primitive() != null
+        && int.type().as_primitive() != null
         && reflect.Type.of<Callback>().as_function() != null
 }
 
@@ -147,31 +147,31 @@ function kind_identity(t: reflect.Type) -> bool throws never {
 }
 
 function every_kind_preserves_identity() -> bool throws never {
-    kind_identity(reflect.Type.of<Foo>())
-        && kind_identity(reflect.Type.of<KindColor>())
+    kind_identity(Foo.type())
+        && kind_identity(KindColor.type())
         && kind_identity(reflect.Type.of<int | string>())
         && kind_identity(reflect.Type.of<"fixed">())
         && kind_identity(reflect.Type.of<Foo[]>())
         && kind_identity(reflect.Type.of<map<string, Foo>>())
         && kind_identity(reflect.Type.of<Marker>())
-        && kind_identity(reflect.Type.of<int>())
+        && kind_identity(int.type())
         && kind_identity(reflect.Type.of<Callback>())
 }
 
 test "kind_union_is_exhaustive_and_classifies_all_nine_kinds" {
-    assert.equal(classify(reflect.Type.of<Foo>()), "class");
-    assert.equal(classify(reflect.Type.of<KindColor>()), "enum");
+    assert.equal(classify(Foo.type()), "class");
+    assert.equal(classify(KindColor.type()), "enum");
     assert.equal(classify(reflect.Type.of<int | string>()), "union");
     assert.equal(classify(reflect.Type.of<"fixed">()), "literal");
     assert.equal(classify(reflect.Type.of<int[]>()), "array");
     assert.equal(classify(reflect.Type.of<map<string, int>>()), "map");
     assert.equal(classify(reflect.Type.of<Marker>()), "interface");
-    assert.equal(classify(reflect.Type.of<int>()), "primitive");
+    assert.equal(classify(int.type()), "primitive");
     assert.equal(classify(reflect.Type.of<Callback>()), "function")
 }
 
 test "kind_casts_are_nullable_identity_preserving_views" {
-    let t = reflect.Type.of<Foo>();
+    let t = Foo.type();
     let view = t.as_class() ?? throw "expected class kind";
     let optional_count = t.as_class()?.fields()?.length();
 
@@ -180,9 +180,9 @@ test "kind_casts_are_nullable_identity_preserving_views" {
     assert.equal(view, t.as_class() ?? throw "expected the same class kind");
     assert.equal(optional_count, 1);
     assert.is_true(t.as_enum() == null);
-    assert.is_true(reflect.Type.of<int>().as_class() == null);
-    assert.equal(reflect.Type.of<int>().as_primitive()?.as_type(), reflect.Type.of<int>());
-    assert.is_true(reflect.Type.of<Foo>() is reflect.Type)
+    assert.is_true(int.type().as_class() == null);
+    assert.equal(int.type().as_primitive()?.as_type(), int.type());
+    assert.is_true(Foo.type() is reflect.Type)
 }
 
 type EscapedLiteral = "a\"b\\c\n";
@@ -205,8 +205,8 @@ test "literal_values_preserve_primitive_values_and_types" {
     assert.equal(literal_value(negative), -90071992547409931234567890n);
     assert.equal(literal_value(yes), true);
     assert.equal(literal_value(no), false);
-    assert.equal(reflect.Type.of_value(large.value()), reflect.Type.of<bigint>());
-    assert.equal(reflect.Type.of_value(integer.value()), reflect.Type.of<int>());
+    assert.equal(reflect.Type.of_value(large.value()), bigint.type());
+    assert.equal(reflect.Type.of_value(integer.value()), int.type());
     assert.is_true(reflect.Type.of<null>().as_literal() == null)
 }
 
@@ -214,9 +214,16 @@ test "literal_values_preserve_enum_identity_not_alias_or_name_strings" {
     let red = reflect.Type.of<Color.Red>().as_literal() ?? throw "literal";
     let hidden = reflect.Type.of<WithSkippedVariant.Hidden>().as_literal() ?? throw "literal";
     assert.equal(red.value(), Color.Red);
-    assert.equal(reflect.Type.of_value(red.value()), reflect.Type.of<Color>());
+    assert.equal(reflect.Type.of_value(red.value()), Color.type());
     assert.equal(reflect.Enum.get_value(red.value()), "Red");
     assert.equal(hidden.value(), WithSkippedVariant.Hidden)
+}
+
+test "enum_get_value_rejects_a_non_enum_with_reflect_invalid_argument" {
+    let message = reflect.Enum.get_value(1) catch (e) {
+        reflect.errors.InvalidArgument => e.message,
+    };
+    assert.equal(message, "reflect.Enum.get_value expects an enum value, got int")
 }
 
 test "runtime_literal_constructors_roundtrip_values" {
@@ -242,10 +249,10 @@ test "runtime_package_enum_literal_values_keep_their_declaration" {
 }
 
 test "class_and_enum_readback_preserves_schema_metadata" {
-    let class_view = reflect.Type.of<Person>().as_class() ?? throw "class";
+    let class_view = Person.type().as_class() ?? throw "class";
     let class_meta = class_view.meta();
     let field = class_view.fields()[0];
-    let enum_view = reflect.Type.of<Color>().as_enum() ?? throw "enum";
+    let enum_view = Color.type().as_enum() ?? throw "enum";
     let enum_meta = enum_view.meta();
     let red = enum_view.values()[0];
 
@@ -253,7 +260,7 @@ test "class_and_enum_readback_preserves_schema_metadata" {
     assert.equal(class_meta.description, "Person description");
     assert.equal(class_meta.docstring, "Person docs");
     assert.equal(field.name, "name");
-    assert.equal(field.type, reflect.Type.of<string>());
+    assert.equal(field.type, string.type());
     assert.equal(field.meta.alias, "full_name");
     assert.equal(field.meta.description, "Name description");
     assert.equal(field.meta.docstring, "Name docs");
@@ -277,8 +284,8 @@ enum WithSkippedVariant {
 }
 
 test "skip_flag_reads_back_on_fields_and_variants_only" {
-    let class_view = reflect.Type.of<WithSkippedField>().as_class() ?? throw "class";
-    let enum_view = reflect.Type.of<WithSkippedVariant>().as_enum() ?? throw "enum";
+    let class_view = WithSkippedField.type().as_class() ?? throw "class";
+    let enum_view = WithSkippedVariant.type().as_enum() ?? throw "enum";
 
     assert.equal(class_view.fields()[0].meta.skip, false);
     assert.is_true(class_view.fields()[1].meta.skip);
@@ -292,7 +299,7 @@ test "skip_flag_reads_back_on_fields_and_variants_only" {
 }
 
 test "enum_rebuilt_from_reflected_rows_keeps_skip" {
-    let enum_view = reflect.Type.of<WithSkippedVariant>().as_enum() ?? throw "enum";
+    let enum_view = WithSkippedVariant.type().as_enum() ?? throw "enum";
     let rows: (string | reflect.enum.Value)[] = [];
     for (let row in enum_view.values()) {
         rows.push(row);
@@ -312,7 +319,7 @@ test "nested_type_walker_and_kind_specific_readback_work_end_to_end" {
     assert.equal(walk(reflect.Type.of<(Foo | string[])[]>()), 5);
     assert.is_true(read_views(union_view, array_view, map_view, interface_view, function_view));
     assert.is_true(intrinsic_checks());
-    assert.is_true(casts_are_never_throwing(reflect.Type.of<Foo>()));
+    assert.is_true(casts_are_never_throwing(Foo.type()));
     assert.is_true(all_positive_kind_casts_work());
     assert.is_true(every_kind_preserves_identity())
 }
@@ -327,10 +334,10 @@ test "nested_views_of_a_runtime_type_keep_its_definitions" {
     let array = field_type.as_array() ?? throw "expected array";
     let from_array = array.element_type().as_enum() ?? throw "expected array enum";
 
-    let map_view = reflect.Map.new(reflect.Type.of<string>(), choice).as_type().as_map() ?? throw "expected map";
+    let map_view = reflect.Map.new(string.type(), choice).as_type().as_map() ?? throw "expected map";
     let from_map_value = map_view.value_type().as_enum() ?? throw "expected map enum";
 
-    let union_view = reflect.Union.new([choice, reflect.Type.of<int>()]).as_type().as_union()
+    let union_view = reflect.Union.new([choice, int.type()]).as_type().as_union()
         ?? throw "expected union";
     let member = union_view.member_types().at(0) ?? throw "expected member";
     let from_union = member.as_enum() ?? throw "expected union enum";
@@ -342,7 +349,7 @@ test "nested_views_of_a_runtime_type_keep_its_definitions" {
 
 test "map_key_type_view_keeps_runtime_definitions" {
     let choice = reflect.Enum.new("Choice", ["FIRST", "SECOND"]).as_type();
-    let map_view = reflect.Map.new(choice, reflect.Type.of<int>()).as_type().as_map() ?? throw "expected map";
+    let map_view = reflect.Map.new(choice, int.type()).as_type().as_map() ?? throw "expected map";
     let key_enum = map_view.key_type().as_enum() ?? throw "expected key enum";
     assert.equal((key_enum.values().at(1) ?? throw "key rows").name, "SECOND")
 }

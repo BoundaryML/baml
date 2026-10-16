@@ -5,8 +5,8 @@ function main() -> string throws never {
     let duplicate_wire_key = reflect.Class.new(
         "Collision",
         {
-            "wire": reflect.Type.of<string>(),
-            "internal": reflect.Type.of<int>().meta(alias = "wire"),
+            "wire": string.type(),
+            "internal": int.type().meta(alias = "wire"),
         },
     ) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code

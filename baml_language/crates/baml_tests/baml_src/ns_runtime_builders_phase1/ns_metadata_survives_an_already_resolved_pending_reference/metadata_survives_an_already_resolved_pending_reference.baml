@@ -1,6 +1,6 @@
 function main() -> string {
     let inner = reflect.Class.builder("Inner");
-    inner.field("value", reflect.Type.of<string>());
+    inner.field("value", string.type());
     let pending = inner.type();
     inner.build();
 

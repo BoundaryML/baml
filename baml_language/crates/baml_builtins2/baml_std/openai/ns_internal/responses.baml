@@ -1000,7 +1000,7 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
 /// Whether any text parses as `t`: `string`, or a union with a `string` member
 /// (`string?` included).
 function _accepts_any_text(t: reflect.Type) -> bool {
-    let text = reflect.Type.of<string>();
+    let text = string.type();
     if (t == text) {
         return true;
     }

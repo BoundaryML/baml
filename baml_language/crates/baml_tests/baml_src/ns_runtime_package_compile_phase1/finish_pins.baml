@@ -58,7 +58,7 @@ test "the artifact keeps its dependencies alive across a collection" {
 
 test "finish refuses the base of the view the artifact was compiled against" {
     let base = dependency();
-    let view = base.with_types({ "Answer": reflect.Type.of<int>() });
+    let view = base.with_types({ "Answer": int.type() });
     let refused = reflect.Package._compile(consumer_files(), { "dep": view });
     assert.is_true(finish_is_refused(refused, { "dep": base }));
     // A refused finish consumed its artifact, as any finish does.

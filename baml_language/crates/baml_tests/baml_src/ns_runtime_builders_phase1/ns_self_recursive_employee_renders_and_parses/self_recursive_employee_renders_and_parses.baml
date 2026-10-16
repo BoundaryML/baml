@@ -19,7 +19,7 @@ function main() -> ScenarioResult {
     let pending = employee.type();
     employee.field(
         "name",
-        reflect.Type.of<string>().meta(
+        string.type().meta(
             alias = "full_name",
             description = "the employee's display name",
         ),

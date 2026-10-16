@@ -328,9 +328,9 @@ class ToolArgSkipsImage {
 function tool_arg_coerce_unmodelled() -> string {
     [
         tool_arg_coerce_runtime_type(reflect.Type.of<unknown[]>()),
-        tool_arg_coerce_runtime_type(reflect.Type.of<uint8array>()),
+        tool_arg_coerce_runtime_type(uint8array.type()),
         tool_arg_coerce_runtime_type(reflect.Type.of<ToolArgHandler>()),
-        tool_arg_coerce_runtime_type(reflect.Type.of<ToolArgSkipsImage>()),
+        tool_arg_coerce_runtime_type(ToolArgSkipsImage.type()),
     ]
         .join(",")
 }

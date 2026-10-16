@@ -79,7 +79,7 @@ function empty_base() -> reflect.Package {
 }
 
 test "a mounted runtime class the consumer cannot name constructs a real instance" {
-    let cls = reflect.Class.new("bad-name", { "n": reflect.Type.of<int>() });
+    let cls = reflect.Class.new("bad-name", { "n": int.type() });
     let app = empty_base().with_types({ "Good": cls });
     let consumer = consumer_of(
         { "main.baml": `function go() -> int throws never { app.Good { n: 4 }.n }` },
@@ -92,7 +92,7 @@ test "a mounted runtime class the consumer cannot name constructs a real instanc
 test "a mounted runtime class with an unspellable optional field constructs a real instance" {
     let cls = reflect.Class.new(
         "Opt",
-        { "ok": reflect.Type.of<bool>(), "bad-field": reflect.Type.of<int?>() },
+        { "ok": bool.type(), "bad-field": reflect.Type.of<int?>() },
     );
     let app = empty_base().with_types({ "Opt": cls });
     let consumer = consumer_of(

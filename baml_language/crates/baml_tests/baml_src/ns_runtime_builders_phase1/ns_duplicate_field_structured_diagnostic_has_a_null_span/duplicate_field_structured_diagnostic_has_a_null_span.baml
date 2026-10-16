@@ -1,7 +1,7 @@
 function main() -> string {
     let builder = reflect.Class.builder("Duplicate");
-    builder.field("name", reflect.Type.of<string>());
-    let result = builder.field("name", reflect.Type.of<int>()) catch (e) {
+    builder.field("name", string.type());
+    let result = builder.field("name", int.type()) catch (e) {
         reflect.errors.CompilationError => {
             let span = e.diagnostics[0].span;
             return e.diagnostics[0].code + "|" + (span == null).to_string();

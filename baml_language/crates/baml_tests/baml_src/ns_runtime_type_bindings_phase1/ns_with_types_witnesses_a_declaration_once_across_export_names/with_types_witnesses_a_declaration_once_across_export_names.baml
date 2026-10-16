@@ -10,7 +10,7 @@ function main() -> bool {
     let witness = reflect.Interface.implementation<MountedLabelled>().field("label", class_field = "display_name");
     let person = reflect.Class.new(
         "InternalPerson",
-        { "display_name": reflect.Type.of<string>() },
+        { "display_name": string.type() },
         implementations = [witness],
     );
     let app = base.with_types({ "PersonAlias": person, "PersonTwin": person });

@@ -10,7 +10,7 @@ function RoundTrip<T>() -> T {
 }
 
 function main() -> bool {
-    let scores_t = reflect.Map.new(reflect.Type.of<string>(), reflect.Type.of<int>().optional().as_type());
+    let scores_t = reflect.Map.new(string.type(), int.type().optional().as_type());
     let original = reflect.Class.new(
         "RoundTripRecord",
         {
@@ -18,7 +18,7 @@ function main() -> bool {
                 alias = "wire_kind",
                 description = "dispatch key",
             ),
-            "tags": reflect.Type.of<string>().array().as_type().meta(description = "ordered labels"),
+            "tags": string.type().array().as_type().meta(description = "ordered labels"),
             "scores": scores_t.as_type(),
         },
     );

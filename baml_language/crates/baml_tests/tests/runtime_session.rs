@@ -117,7 +117,7 @@ function escape_one_session_value() -> reflect.Type {
   s.eval(`let first = Escaped { value: "first" }`)
   s.eval(`let count = 2`)
   s.eval(`let note = "history"`)
-  s.eval<reflect.Type>(`reflect.Type.of<Escaped>()`)
+  s.eval<reflect.Type>(`Escaped.type()`)
 }
 "#####;
 
@@ -262,7 +262,7 @@ function package_current_is_rejected() -> bool {
 
 function runtime_and_failed_contracts() -> bool {
   let s = reflect.Session.new()
-  let string_t = reflect.Type.of<string>()
+  let string_t = string.type()
   type StringT = unreflect(string_t)
   let value = s.eval<StringT>(`"ok"`)
   let rejected = (s.eval<string>(`
@@ -330,12 +330,12 @@ function client_declaration_is_lazy() -> bool {
 function runtime_type_binding_persists() -> bool {
   let s = reflect.Session.new()
   let first = s.eval<bool>(`
-    type T = unreflect(reflect.Type.of<string>());
-    reflect.Type.of<T>() == reflect.Type.of<string>()
+    type T = unreflect(string.type());
+    reflect.Type.of<T>() == string.type()
   `)
-  let later = s.eval<bool>(`reflect.Type.of<T>() == reflect.Type.of<string>()`)
-  s.eval(`type T = unreflect(reflect.Type.of<int>());`)
-  let rebound = s.eval<bool>(`reflect.Type.of<T>() == reflect.Type.of<int>()`)
+  let later = s.eval<bool>(`reflect.Type.of<T>() == string.type()`)
+  s.eval(`type T = unreflect(int.type());`)
+  let rebound = s.eval<bool>(`reflect.Type.of<T>() == int.type()`)
   first && later && rebound
 }
 
@@ -344,7 +344,7 @@ function runtime_type_binding_persists() -> bool {
 // read the value through a global. Narrowing recovers it.
 function binding_typed_step_value_leaves_as_unknown() -> bool {
   let s = reflect.Session.new()
-  s.eval(`type T = unreflect(reflect.Type.of<int>());`)
+  s.eval(`type T = unreflect(int.type());`)
   s.eval(`let v = match (1) { let x: T => x, _ => 0 }`)
   let narrowed = s.eval<int>(`match (v) { let n: int => n, _ => -1 }`)
   let unrelated = s.eval<string>(`"plain"`)
@@ -356,8 +356,8 @@ function session_declarations_are_generative() -> bool {
   let right = reflect.Session.new()
   left.eval(`class SameName { value string }`)
   right.eval(`class SameName { value string }`)
-  let left_type = left.eval<reflect.Type>(`reflect.Type.of<SameName>()`)
-  let right_type = right.eval<reflect.Type>(`reflect.Type.of<SameName>()`)
+  let left_type = left.eval<reflect.Type>(`SameName.type()`)
+  let right_type = right.eval<reflect.Type>(`SameName.type()`)
   left_type != right_type
 }
 

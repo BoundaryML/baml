@@ -1,7 +1,7 @@
 function main() -> string {
     let node = reflect.Class.builder("Node");
     let next = node.type().optional();
-    node.field("label", reflect.Type.of<string>());
+    node.field("label", string.type());
     node.field("next", next.meta(alias = "child", description = "Recursive child"));
 
     let built = node.build().as_type().as_class() ?? throw "expected class";

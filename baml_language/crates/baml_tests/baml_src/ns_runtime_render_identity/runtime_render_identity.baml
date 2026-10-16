@@ -17,8 +17,8 @@ function Render<T>() -> T {
 }
 
 test "non-equivalent same-name runtime classes fail before render" {
-    let left = reflect.Class.new("Collision", { "left": reflect.Type.of<int>() });
-    let right = reflect.Class.new("Collision", { "right": reflect.Type.of<string>() });
+    let left = reflect.Class.new("Collision", { "left": int.type() });
+    let right = reflect.Class.new("Collision", { "right": string.type() });
     let combined = reflect.Union.new([left.as_type(), right.as_type()]);
     type Combined = unreflect(combined.as_type());
     assert.equal(
@@ -34,15 +34,15 @@ test "non-equivalent same-name runtime classes fail before render" {
 
 test "recursive and equivalent same-name runtime classes still render" {
     let node = reflect.Class.builder("Node");
-    node.field("value", reflect.Type.of<int>());
+    node.field("value", int.type());
     node.field("next", node.type().optional());
     let node_t = node.build();
     type Node = unreflect(node_t.as_type());
     let recursive_prompt = Render@render_prompt<Node>().text();
     assert.is_true(recursive_prompt.includes("Node"));
 
-    let left = reflect.Class.new("Collision", { "value": reflect.Type.of<int>() });
-    let right = reflect.Class.new("Collision", { "value": reflect.Type.of<int>() });
+    let left = reflect.Class.new("Collision", { "value": int.type() });
+    let right = reflect.Class.new("Collision", { "value": int.type() });
     let equivalent = reflect.Union.new([left.as_type(), right.as_type()]);
     type Equivalent = unreflect(equivalent.as_type());
     let equivalent_prompt = Render@render_prompt<Equivalent>().text();
@@ -153,8 +153,8 @@ function RenderPair<T, U>() -> BoxRec<T> | BoxRec<U> {
 }
 
 test "runtime type arguments with the same display name remain distinct" {
-    let left = reflect.Class.new("Arg", { "value": reflect.Type.of<int>() });
-    let right = reflect.Class.new("Arg", { "value": reflect.Type.of<int>() });
+    let left = reflect.Class.new("Arg", { "value": int.type() });
+    let right = reflect.Class.new("Arg", { "value": int.type() });
     type Left = unreflect(left.as_type());
     type Right = unreflect(right.as_type());
     assert.equal(

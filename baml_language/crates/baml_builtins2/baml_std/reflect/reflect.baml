@@ -149,7 +149,15 @@ interface AnyClass {
         let class_type: root.Class = root.Type.of_value(self).as_class() else {
             return null;
         };
-        for (let field in class_type.fields()) {
+        // NOTE: an index loop, not `for (let field in ...)`. `reflect` must not
+        // depend on `baml`, and code generation looks up the list's `Iterable`
+        // implementation (declared in `baml`) only in the packages this one
+        // depends on: a `for ... in` over a list type-checks here but fails to
+        // compile. Methods on the list itself (`length`, indexing) need no
+        // dependency.
+        let class_fields = class_type.fields();
+        for (let i = 0; i < class_fields.length(); i += 1) {
+            let field = class_fields[i];
             if (field.name == name) {
                 return root.class.Field {
                     name: field.name,
@@ -168,7 +176,10 @@ interface AnyClass {
         let class_type: root.Class = root.Type.of_value(self).as_class() else {
             return false;
         };
-        for (let field in class_type.fields()) {
+        // NOTE: an index loop, not `for ... in`; see `get_field`.
+        let class_fields = class_type.fields();
+        for (let i = 0; i < class_fields.length(); i += 1) {
+            let field = class_fields[i];
             if (field.name == name) {
                 return true;
             }
@@ -182,7 +193,10 @@ interface AnyClass {
             return [];
         };
         let fields: root.class.Field[] = [];
-        for (let field in class_type.fields()) {
+        // NOTE: an index loop, not `for ... in`; see `get_field`.
+        let class_fields = class_type.fields();
+        for (let i = 0; i < class_fields.length(); i += 1) {
+            let field = class_fields[i];
             fields.push(
                 root.class.Field {
                     name: field.name,
@@ -197,7 +211,11 @@ interface AnyClass {
 
     /// The rendered name of this value's concrete runtime type.
     function name(self) -> string throws never {
-        root.Type.of_value(self).to_string()
+        // NOTE: `_to_string_impl()`, not `to_string()`. `reflect.Type`'s
+        // `baml.ToString` implementation is declared in `baml`, which `reflect`
+        // must not depend on, so here `to_string()` would silently bind to the
+        // interface's default body instead and crash the VM.
+        root.Type.of_value(self)._to_string_impl()
     }
 
     /// This value's concrete runtime type.

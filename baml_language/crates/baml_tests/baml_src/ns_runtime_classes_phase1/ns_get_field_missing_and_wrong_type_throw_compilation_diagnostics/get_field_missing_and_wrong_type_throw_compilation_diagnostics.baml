@@ -10,7 +10,7 @@ function Extract<T>() -> T {
 }
 
 function main() -> string {
-    let t = reflect.Class.new("OneField", { "count": reflect.Type.of<int>() });
+    let t = reflect.Class.new("OneField", { "count": int.type() });
     type OneField = unreflect(t.as_type())
     let value = Extract@parse<OneField>(`{"count": 4}`);
     let missing = reflect.Class.get_field<int>(value, "absent") catch (e) {

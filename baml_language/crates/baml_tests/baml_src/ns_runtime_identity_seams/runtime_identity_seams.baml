@@ -24,13 +24,13 @@ class StaticInner {
 }
 
 test "runtime_declarations_anchor_through_every_container_seam" {
-    let inner = reflect.Class.new("Inner", { "x": reflect.Type.of<string>() });
+    let inner = reflect.Class.new("Inner", { "x": string.type() });
     let inner_array = inner.as_type().array().as_type();
     let holder_array = reflect.Class.new("HolderArray", { "bs": inner_array }).as_type();
     let holder_map = reflect.Class
         .new(
             "HolderMap",
-            { "by_name": reflect.Map.new(reflect.Type.of<string>(), inner.as_type()).as_type() },
+            { "by_name": reflect.Map.new(string.type(), inner.as_type()).as_type() },
         )
         .as_type();
     let minted_enum = reflect.Enum.new("MintedState", ["Ready", "Done"]);
@@ -44,7 +44,7 @@ test "runtime_declarations_anchor_through_every_container_seam" {
         .new(
             "CompiledHolderMap",
             {
-                "by_name": reflect.Map.new(reflect.Type.of<string>(), compiled_inner.as_type()).as_type(),
+                "by_name": reflect.Map.new(string.type(), compiled_inner.as_type()).as_type(),
             },
         )
         .as_type();

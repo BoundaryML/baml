@@ -4144,6 +4144,7 @@ impl<'db> LoweringContext<'db> {
         recv_ty: &Tir2Ty,
         method: &Name,
     ) -> Vec<InterfaceTypeView> {
+        let lang = baml_compiler2_hir::package::lang_roots(self.db);
         let mut declarers = Vec::new();
         for view in self.member_root_views(recv_ty, method) {
             let InterfaceMember::Method { declaring } =
@@ -4151,6 +4152,11 @@ impl<'db> LoweringContext<'db> {
             else {
                 continue;
             };
+            // `baml.Concrete`'s `type` is a static: never a value receiver's
+            // member (TIR's `is_concrete_type_member` carve-out).
+            if baml_compiler2_hir_ty::impls::is_concrete_type_member(lang, &declaring.0, method) {
+                continue;
+            }
             if !declarers.contains(&declaring) {
                 declarers.push(declaring);
             }

@@ -8,7 +8,7 @@ function EmptyOf<T>() -> T[] {
 
 test "non-closure generic list ops over a runtime-bound element type" {
     let item_t = reflect.Class
-        .new("BoundItem", { "value": reflect.Type.of<string>() })
+        .new("BoundItem", { "value": string.type() })
         .as_type();
     type Bound = unreflect(item_t);
     let items = EmptyOf<Bound>();
@@ -22,7 +22,7 @@ test "non-closure generic list ops over a runtime-bound element type" {
 // callback's `never` effect reach `Array.filter`'s `E` slot.
 function ClosureOverRuntimeBoundElement() -> int {
     let item_t = reflect.Class
-        .new("BoundPredicate", { "value": reflect.Type.of<string>() })
+        .new("BoundPredicate", { "value": string.type() })
         .as_type();
     type Bound = unreflect(item_t);
     let items = EmptyOf<Bound>();
@@ -65,7 +65,7 @@ class Holder<T> {
 
 test "method calls on a generic class receiver with a runtime-bound argument" {
     let item_t = reflect.Class
-        .new("BoundHeld", { "value": reflect.Type.of<string>() })
+        .new("BoundHeld", { "value": string.type() })
         .as_type();
     type Bound = unreflect(item_t);
     // A bare `[]` argument solves its element slot from the declared `T[]`

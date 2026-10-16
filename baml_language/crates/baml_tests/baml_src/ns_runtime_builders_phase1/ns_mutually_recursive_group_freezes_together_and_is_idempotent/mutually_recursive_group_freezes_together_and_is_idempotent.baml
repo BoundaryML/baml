@@ -4,7 +4,7 @@ function main() -> string {
     let left_p = left.type();
     let right_p = right.type();
     let lefts_p = left_p.array();
-    let either_p = left_p.union([reflect.Type.of<string>()]);
+    let either_p = left_p.union([string.type()]);
     let pending_starts_null = left_p.resolved() == null;
 
     left.field("right", right_p.optional());

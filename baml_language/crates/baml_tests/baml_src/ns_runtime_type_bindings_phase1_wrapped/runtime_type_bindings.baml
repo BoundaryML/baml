@@ -38,8 +38,8 @@ function source_1() -> string {
 function source_2() -> string {
     `
         function main() -> bool {
-            let string_t = reflect.Type.of<string>()
-            let int_t = reflect.Type.of<int>()
+            let string_t = string.type()
+            let int_t = int.type()
             let check = (bound: reflect.Type) -> {
                 type T = unreflect(bound);
                 reflect.Type.of<T>() == bound
@@ -80,7 +80,7 @@ function source_3() -> string {
 
         function main() -> string {
             let output_type = reflect.Class.new("RuntimeOutput", {
-                "name": reflect.Type.of<string>(),
+                "name": string.type(),
             }).as_type()
             type Out = unreflect(output_type)
 
@@ -133,7 +133,7 @@ function source_4() -> string {
 
         function main() -> string {
             let output_type = reflect.Class.new("RuntimeOutput", {
-                "name": reflect.Type.of<string>(),
+                "name": string.type(),
             }).as_type()
             type Out = unreflect(output_type)
 
@@ -193,7 +193,7 @@ function source_5() -> string {
 
         function main() -> string {
             let minted_class = reflect.Class.new("MintedRecord", {
-                "minted_field": reflect.Type.of<string>().meta(
+                "minted_field": string.type().meta(
                     docstring = "Minted runner field docs",
                 ),
             }).as_type()
@@ -214,10 +214,10 @@ function source_5() -> string {
             ).run(DynamicOutput@spec<MintedChoice>())
 
             let alpha = reflect.Class.new("AlphaShape", {
-                "alpha_only": reflect.Type.of<string>(),
+                "alpha_only": string.type(),
             }).as_type()
             let beta = reflect.Class.new("BetaShape", {
-                "beta_only": reflect.Type.of<int>(),
+                "beta_only": int.type(),
             }).as_type()
             let union = reflect.Union.new([alpha, beta]).as_type()
             type MintedUnion = unreflect(union)
@@ -281,7 +281,7 @@ function source_6() -> string {
 
         function main() -> string {
             let output_type = reflect.Class.new("RuntimeOutput", {
-                "name": reflect.Type.of<string>(),
+                "name": string.type(),
             }).as_type()
             type Out = unreflect(output_type)
 
@@ -326,10 +326,10 @@ function source_7() -> string {
 
         function main() -> string {
             let first_type = reflect.Class.new("Shape", {
-                "name": reflect.Type.of<string>(),
+                "name": string.type(),
             }).as_type()
             let second_type = reflect.Class.new("Shape", {
-                "name": reflect.Type.of<string>(),
+                "name": string.type(),
             }).as_type()
             type First = unreflect(first_type)
             type Second = unreflect(second_type)
@@ -364,10 +364,10 @@ function source_8() -> string {
 
         function main() -> string {
             let mine = reflect.Class.new("Shape", {
-                "name": reflect.Type.of<string>(),
+                "name": string.type(),
             }).as_type()
             let other = reflect.Class.new("Shape", {
-                "name": reflect.Type.of<string>(),
+                "name": string.type(),
             }).as_type()
             type Mine = unreflect(mine)
 
@@ -376,8 +376,8 @@ function source_8() -> string {
             let foreign_mint = holder.same(other)
 
             let static_holder = Holder<string>.new()
-            let static_match = static_holder.same(reflect.Type.of<string>())
-            let static_miss = static_holder.same(reflect.Type.of<int>())
+            let static_match = static_holder.same(string.type())
+            let static_miss = static_holder.same(int.type())
             \`\${own_mint}|\${foreign_mint}|\${static_match}|\${static_miss}\`
         }
     `
@@ -515,10 +515,10 @@ function source_12() -> string {
 
         function main() -> string {
             let owner_type = reflect.Class.new("Owner", {
-                "name": reflect.Type.of<string>(),
+                "name": string.type(),
             }).as_type()
             let method_type = reflect.Class.new("Method", {
-                "name": reflect.Type.of<string>(),
+                "name": string.type(),
             }).as_type()
             type Owner = unreflect(owner_type)
             type Method = unreflect(method_type)
