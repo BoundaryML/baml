@@ -14,7 +14,7 @@ pub use lower::{
     interface_body_link_bounds_suffix, lower_function, lower_let_body, native_key_for,
     resolved_aliases_for_package, tir2_to_template,
 };
-pub use optimize::live_in;
+pub use optimize::{live_in, live_in_precise};
 
 /// Database trait for compiler2 MIR queries.
 #[salsa::db]

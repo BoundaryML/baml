@@ -42,7 +42,7 @@ use sys_native::SysOpsExt;
 /// attached to the program at load; `None` runs the bytecode alone.
 pub fn run_envelope(
     envelope: PackEnvelope,
-    native_bodies: Option<&'static bex_vm::NativeBodyTable>,
+    native_bodies: Option<&'static bex_engine::NativeBodyTable>,
 ) -> ExitCode {
     match envelope.mode {
         PackMode::Single => run_single(envelope, native_bodies),
@@ -55,7 +55,7 @@ pub fn run_envelope(
 /// bodies were compiled from.
 pub fn run_embedded(
     artifact: &[u8],
-    native_bodies: Option<&'static bex_vm::NativeBodyTable>,
+    native_bodies: Option<&'static bex_engine::NativeBodyTable>,
 ) -> ExitCode {
     let envelope: Result<PackEnvelope, String> =
         baml_artifact::decode(baml_artifact::ArtifactKind::PackedProgram, artifact)
@@ -92,6 +92,9 @@ fn build_argv(target_identifier: &str) -> Vec<String> {
     argv
 }
 
+/// The stack of a runtime worker thread: a main thread's default.
+const WORKER_STACK: usize = 8 << 20;
+
 /// Whether the target is typed — i.e. has one or more parameters whose
 /// types drive the auto-CLI. Parameterless targets own their full argv
 /// and bypass the clap layer entirely.
@@ -103,7 +106,7 @@ fn new_engine(
     program: bex_vm_types::Program,
     argv: Vec<String>,
     telemetry: btel_settings::artifact::ArtifactTelemetry,
-    native_bodies: Option<&'static bex_vm::NativeBodyTable>,
+    native_bodies: Option<&'static bex_engine::NativeBodyTable>,
 ) -> Result<BexEngine, bex_engine::EngineError> {
     let recording = bex_engine::TelemetryRecording::from_artifact(&telemetry)?.with_host("pack");
     BexEngine::new_with_config(
@@ -124,7 +127,7 @@ fn new_engine(
 /// the binary bind directly to the target's parameters.
 fn run_single(
     envelope: PackEnvelope,
-    native_bodies: Option<&'static bex_vm::NativeBodyTable>,
+    native_bodies: Option<&'static bex_engine::NativeBodyTable>,
 ) -> ExitCode {
     debug_assert_eq!(
         envelope.targets.len(),
@@ -194,7 +197,7 @@ fn run_single(
 /// one subcommand per packed function.
 fn run_subcommand(
     envelope: PackEnvelope,
-    native_bodies: Option<&'static bex_vm::NativeBodyTable>,
+    native_bodies: Option<&'static bex_engine::NativeBodyTable>,
 ) -> ExitCode {
     // `argv[1]` is the user's subcommand token after parsing; rebuild
     // os-level argv first so we can pass the trailing tokens to clap.
@@ -296,7 +299,14 @@ fn finalize_dispatch(
         None => None,
     };
 
-    let rt = match tokio::runtime::Runtime::new() {
+    // Spawned tasks run on the workers. Give them the main thread's stack, so
+    // a task's compiled code recurses as deep as the root call's before it
+    // raises `StackOverflow`; only touched pages cost memory.
+    let rt = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(WORKER_STACK)
+        .build()
+    {
         Ok(rt) => rt,
         Err(e) => {
             print_error(format_args!("failed to create runtime: {e}"));
