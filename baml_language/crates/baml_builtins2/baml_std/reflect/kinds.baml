@@ -28,6 +28,35 @@ class Class {
         $rust_function
     }
 
+    /// Construct a closed runtime class that implements the interface `I`.
+    ///
+    /// The class declares every field of `I` and of the interfaces `I`
+    /// requires, transitively, followed by `fields`. A required interface's
+    /// fields come before the fields of the interface that requires it, and
+    /// required interfaces are visited in the order their `requires` clause
+    /// lists them, so for `interface FooBar requires HasA, HasB { c: int }`
+    /// the class declares `a`, `b`, `c`, then `fields`. An interface reached
+    /// through two paths contributes its fields once, at their first position.
+    /// Each interface field keeps its doc comment.
+    ///
+    /// The class implements `I` and every interface in its `requires` closure,
+    /// each interface field satisfied by the class field of the same name.
+    /// Interface default methods apply to the class as usual.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.CompilationError` if `I` is not an interface, if an
+    ///   interface in the closure has a method without a default body, if
+    ///   `fields` names a field an interface already declares, or if two
+    ///   interfaces declare the same field with different types.
+    //baml:mut_vm
+    function extends<I>(
+        name: string,
+        fields: map<string, root.TypeView | root.WithMeta<root.Type>>,
+    ) -> root.Class throws root.errors.CompilationError {
+        $rust_function
+    }
+
     /// Start an incrementally-defined runtime class. Builders are required when
     /// one or more fields recursively refer to the class being defined.
     //baml:mut_vm

@@ -208,9 +208,25 @@ pub(super) fn validate_class_witnesses(
     implementations: &[Value],
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Vec<ValidatedClassWitness> {
-    let mut witnesses = Vec::with_capacity(implementations.len());
-    for implementation in implementations {
-        match witness_state(vm, *implementation) {
+    let witnesses = implementations
+        .iter()
+        .map(|implementation| witness_state(vm, *implementation))
+        .collect();
+    validate_witness_states(vm, class_fields, witnesses, diagnostics)
+}
+
+/// [`validate_class_witnesses`] over witnesses already read out of their
+/// `reflect.interface.Implementation` values; an `Err` is a value that was
+/// not one.
+fn validate_witness_states(
+    vm: &BexVm,
+    class_fields: &[WitnessField],
+    states: Vec<Result<InterfaceWitness, String>>,
+    diagnostics: &mut Vec<Diagnostic>,
+) -> Vec<ValidatedClassWitness> {
+    let mut witnesses = Vec::with_capacity(states.len());
+    for state in states {
+        match state {
             Ok(witness) => witnesses.push(witness),
             Err(message) => {
                 diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message));
@@ -439,6 +455,313 @@ pub(super) fn register_class_witnesses(
     }
 }
 
+/// One field of a class about to be minted, or the diagnostic that rejects it.
+type FieldRow = (String, Result<ReflectedTypeRow, Diagnostic>);
+
+/// Mint a closed runtime class from its field rows and structural witnesses,
+/// reporting every rejected field and witness together.
+fn mint_class(
+    vm: &mut BexVm,
+    class_name: &str,
+    fields: Vec<FieldRow>,
+    witnesses: Vec<Result<InterfaceWitness, String>>,
+) -> Result<Value, crate::errors::VmRustFnError> {
+    let mut diagnostics = Vec::new();
+    if !is_baml_identifier(class_name) {
+        diagnostics.push(
+            runtime_type::invalid_identifier(InvalidIdentifierKind::Class, class_name)
+                .with_phase(DiagnosticPhase::Hir),
+        );
+    }
+
+    let mut class_fields = Vec::with_capacity(fields.len());
+    let mut witness_fields = Vec::with_capacity(fields.len());
+    let mut seen_serialized_keys = std::collections::HashSet::new();
+    for (field_name, row) in fields {
+        if !is_baml_identifier(&field_name) {
+            diagnostics.push(
+                runtime_type::invalid_identifier(
+                    InvalidIdentifierKind::Field,
+                    &format!("{class_name}.{field_name}"),
+                )
+                .with_phase(DiagnosticPhase::Hir),
+            );
+        }
+        let row = match row {
+            Ok(row) => row,
+            Err(diagnostic) => {
+                diagnostics.push(diagnostic);
+                continue;
+            }
+        };
+        let serialized_key = row.alias.as_deref().unwrap_or(&field_name);
+        if !seen_serialized_keys.insert(serialized_key.to_string()) {
+            diagnostics.push(
+                runtime_type::duplicate_serialized_key(
+                    serialized_key,
+                    SerializedKeyContainer::Class,
+                )
+                .with_phase(DiagnosticPhase::Hir),
+            );
+        }
+        witness_fields.push(WitnessField {
+            name: field_name.clone(),
+            ty: row.type_value.ty.clone(),
+        });
+        class_fields.push(ClassField {
+            name: field_name,
+            field_type: row.type_value.ty.clone().into(),
+            field_template: bex_vm_types::TyTemplate::from(row.type_value.ty.clone()),
+            description: row.description,
+            alias: row.alias,
+            docstring: row.docstring,
+            other: row.other,
+            skip: false,
+            stream_done: false,
+            must_exist: false,
+            runtime_type: Some(row.type_value),
+        });
+    }
+
+    let witnesses = validate_witness_states(vm, &witness_fields, witnesses, &mut diagnostics);
+    if !diagnostics.is_empty() {
+        return Err(crate::errors::VmRustFnError::thrown_fresh(
+            alloc_compilation_error(vm, &diagnostics),
+        ));
+    }
+
+    let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
+    let class_ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
+        path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(class_name)),
+        fields: class_fields,
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+        stream_done: false,
+        type_tag,
+        cleanup: None,
+        methods: IndexMap::new(),
+        generic_param_count: 0,
+        owner: bex_vm_types::types::Owner::anonymous(),
+    })));
+    // The head is built off the declaration that was just allocated, so the
+    // type reaches it directly — there is no table to consult and no name
+    // to re-resolve.
+    let ty = bex_vm_types::RealizedTy::Class(
+        bex_vm_types::TypeHead::new(class_ptr, type_tag),
+        Box::new([]),
+    );
+    let rules = prepare_class_witnesses(vm, &ty, witnesses).map_err(|diagnostic| {
+        crate::errors::VmRustFnError::thrown_fresh(alloc_compilation_error(vm, &[diagnostic]))
+    })?;
+    register_class_witnesses(vm, class_ptr, rules);
+    let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
+    Ok(alloc_kind_view(
+        vm,
+        baml_type::type_kind::TypeKind::Class,
+        ty_value,
+    ))
+}
+
+/// Why a structural witness cannot implement `interface`, if it cannot: a
+/// witness supplies fields only, so every method needs a default body.
+fn structural_witness_blocker(interface: &InterfaceDef) -> Option<String> {
+    let required = interface
+        .methods
+        .iter()
+        .find(|method| method.default.is_none())?;
+    Some(format!(
+        "interface `{}` cannot be witnessed structurally because required method `{}` has no default body; use `reflect.Package.compile` with an `implements` block",
+        interface.name().display_name(),
+        required.name
+    ))
+}
+
+/// `interface` and every interface it requires, transitively, each realized
+/// at the instantiation its requirer names. Base-first: a required interface
+/// precedes the interface that requires it, required interfaces keep their
+/// `requires` order, and an interface reached twice appears once, at its
+/// first position.
+fn required_interface_closure(
+    vm: &BexVm,
+    interface: bex_vm_types::RealizedTy,
+) -> Result<Vec<bex_vm_types::RealizedTy>, String> {
+    fn visit(
+        vm: &BexVm,
+        interface_ty: bex_vm_types::RealizedTy,
+        seen: &mut std::collections::HashSet<bex_vm_types::RealizedTy>,
+        closure: &mut Vec<bex_vm_types::RealizedTy>,
+    ) -> Result<(), String> {
+        if !seen.insert(interface_ty.clone()) {
+            return Ok(());
+        }
+        let bex_vm_types::RealizedTy::Interface(head, args, assoc) = &interface_ty else {
+            unreachable!("the closure walk visits only interfaces")
+        };
+        let Object::Interface(interface) = vm.get_object(head.ptr()) else {
+            unreachable!("an interface type's head points at Object::Interface")
+        };
+        for required in &interface.requires {
+            let required = realize_required_interface(vm, required, interface, args, assoc)?;
+            visit(vm, required, seen, closure)?;
+        }
+        closure.push(interface_ty);
+        Ok(())
+    }
+
+    let mut closure = Vec::new();
+    visit(
+        vm,
+        interface,
+        &mut std::collections::HashSet::new(),
+        &mut closure,
+    )?;
+    Ok(closure)
+}
+
+/// Realize a `requires` target of `interface`, instantiated at `args` and
+/// `assoc`. Every associated type of the target must be pinned: a runtime
+/// class has no declaration to infer one from.
+fn realize_required_interface(
+    vm: &BexVm,
+    required: &bex_vm_types::RuntimeInterface,
+    interface: &InterfaceDef,
+    args: &[bex_vm_types::RealizedTy],
+    assoc: &[(baml_type::Name, bex_vm_types::RealizedTy)],
+) -> Result<bex_vm_types::RealizedTy, String> {
+    let Object::Interface(target) = vm.get_object(required.name.ptr()) else {
+        unreachable!("a `requires` head points at Object::Interface")
+    };
+    let describe = || {
+        format!(
+            "interface `{}` requires `{}`, which",
+            interface.name().display_name(),
+            target.name().display_name()
+        )
+    };
+    let realize = |ty: &bex_vm_types::RuntimeTy| {
+        substitute_witness_field_type(ty, interface, args, assoc)
+            .and_then(|ty| {
+                bex_vm_types::RealizedTy::try_from(ty)
+                    .map_err(|_| "depends on an unsupported open type".to_string())
+            })
+            .map_err(|message| format!("{} {message}", describe()))
+    };
+    let generics = required
+        .generics
+        .iter()
+        .map(realize)
+        .collect::<Result<Box<[_]>, _>>()?;
+    let mut bindings = required
+        .associated_types
+        .iter()
+        .map(|(name, ty)| Ok((name.clone(), realize(ty)?)))
+        .collect::<Result<Vec<_>, String>>()?;
+    if let Some((member, _)) = target
+        .assoc
+        .iter()
+        .find(|(member, _)| !bindings.iter().any(|(name, _)| name == member))
+    {
+        return Err(format!(
+            "{} leaves associated type `{member}` unbound",
+            describe()
+        ));
+    }
+    bindings.sort_by(|(left, _), (right, _)| left.cmp(right));
+    Ok(bex_vm_types::RealizedTy::Interface(
+        required.name,
+        generics,
+        bindings.into(),
+    ))
+}
+
+/// What a class implementing every interface of a `requires` closure takes
+/// from those interfaces.
+struct InterfaceMembers {
+    /// Each interface's fields in declaration order; a field two interfaces
+    /// declare at one type appears once.
+    rows: Vec<FieldRow>,
+    /// Each inherited field's name, and the interface that declares it first.
+    declared_by: IndexMap<String, String>,
+    /// One witness per interface, linking each interface field to the class
+    /// field of its name.
+    witnesses: Vec<Result<InterfaceWitness, String>>,
+}
+
+/// Collect the [`InterfaceMembers`] of `closure`. `Err` when an interface
+/// cannot be implemented structurally, one of its field types cannot be
+/// realized, or two interfaces declare one field at different types.
+fn interface_closure_members(
+    vm: &BexVm,
+    closure: Vec<bex_vm_types::RealizedTy>,
+) -> Result<InterfaceMembers, String> {
+    let mut rows = Vec::new();
+    // Each field taken so far: its type and the interface it came from.
+    let mut taken = IndexMap::<baml_type::Name, (bex_vm_types::RealizedTy, String)>::new();
+    let mut witnesses = Vec::with_capacity(closure.len());
+    for interface_ty in closure {
+        let bex_vm_types::RealizedTy::Interface(head, _, _) = &interface_ty else {
+            unreachable!("the closure holds only interfaces")
+        };
+        let interface_ptr = head.ptr();
+        let Object::Interface(interface) = vm.get_object(interface_ptr) else {
+            unreachable!("an interface type's head points at Object::Interface")
+        };
+        if let Some(message) = structural_witness_blocker(interface) {
+            return Err(message);
+        }
+        let interface_name = interface.name().display_name().to_string();
+        let mut field_links = IndexMap::with_capacity(interface.fields.len());
+        for field in &interface.fields {
+            let ty = realize_witness_field_type(&field.ty, interface, &interface_ty).map_err(
+                |message| {
+                    format!(
+                        "interface field `{interface_name}.{}` {message}",
+                        field.name
+                    )
+                },
+            )?;
+            field_links.insert(field.name.clone(), field.name.clone());
+            match taken.get(&field.name) {
+                None => {
+                    rows.push((
+                        field.name.to_string(),
+                        Ok(ReflectedTypeRow {
+                            type_value: TypeValue::new(ty.clone()),
+                            alias: None,
+                            description: None,
+                            docstring: field.docstring.clone(),
+                            other: IndexMap::new(),
+                        }),
+                    ));
+                    taken.insert(field.name.clone(), (ty, interface_name.clone()));
+                }
+                Some((first_ty, _)) if *first_ty == ty => {}
+                Some((first_ty, first_interface)) => {
+                    return Err(format!(
+                        "interfaces `{first_interface}` and `{interface_name}` both declare field `{}`, with different types `{first_ty}` and `{ty}`",
+                        field.name
+                    ));
+                }
+            }
+        }
+        witnesses.push(Ok(InterfaceWitness {
+            interface_ptr,
+            interface_ty,
+            field_links,
+        }));
+    }
+    Ok(InterfaceMembers {
+        rows,
+        declared_by: taken
+            .into_iter()
+            .map(|(field, (_, interface))| (field.to_string(), interface))
+            .collect(),
+        witnesses,
+    })
+}
+
 impl BamlClassClass for PackageReflectImpl {
     fn _new(
         vm: &mut BexVm,
@@ -446,102 +769,62 @@ impl BamlClassClass for PackageReflectImpl {
         fields: &IndexMap<bex_str::BexStr, Value>,
         implementations: &[Value],
     ) -> Result<Value, crate::errors::VmRustFnError> {
-        let class_name = name.as_str();
-        let mut diagnostics = Vec::new();
-        if !is_baml_identifier(class_name) {
-            diagnostics.push(
-                runtime_type::invalid_identifier(InvalidIdentifierKind::Class, class_name)
-                    .with_phase(DiagnosticPhase::Hir),
-            );
-        }
+        let rows = fields
+            .iter()
+            .map(|(field_name, value)| {
+                let row = reflected_type_row(vm, *value)
+                    .map_err(|message| compiler_diagnostic(DiagnosticId::TypeMismatch, message));
+                (field_name.to_string(), row)
+            })
+            .collect();
+        let witnesses = implementations
+            .iter()
+            .map(|implementation| witness_state(vm, *implementation))
+            .collect();
+        mint_class(vm, name.as_str(), rows, witnesses)
+    }
 
-        let mut class_fields = Vec::with_capacity(fields.len());
-        let mut witness_fields = Vec::with_capacity(fields.len());
-        let mut seen_serialized_keys = std::collections::HashSet::new();
-        for (field_name, value) in fields {
-            if !is_baml_identifier(field_name.as_str()) {
-                diagnostics.push(
-                    runtime_type::invalid_identifier(
-                        InvalidIdentifierKind::Field,
-                        &format!("{class_name}.{field_name}"),
-                    )
-                    .with_phase(DiagnosticPhase::Hir),
-                );
-            }
-            let row = match reflected_type_row(vm, *value) {
-                Ok(row) => row,
-                Err(message) => {
-                    diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message));
-                    continue;
-                }
-            };
-            let serialized_key = row.alias.as_deref().unwrap_or(field_name.as_str());
-            if !seen_serialized_keys.insert(serialized_key.to_string()) {
-                diagnostics.push(
-                    runtime_type::duplicate_serialized_key(
-                        serialized_key,
-                        SerializedKeyContainer::Class,
-                    )
-                    .with_phase(DiagnosticPhase::Hir),
-                );
-            }
-            witness_fields.push(WitnessField {
-                name: field_name.to_string(),
-                ty: row.type_value.ty.clone(),
-            });
-            class_fields.push(ClassField {
-                name: field_name.to_string(),
-                field_type: row.type_value.ty.clone().into(),
-                field_template: bex_vm_types::TyTemplate::from(row.type_value.ty.clone()),
-                description: row.description,
-                alias: row.alias,
-                docstring: row.docstring,
-                other: row.other,
-                skip: false,
-                stream_done: false,
-                must_exist: false,
-                runtime_type: Some(row.type_value),
-            });
-        }
-
-        let witnesses =
-            validate_class_witnesses(vm, &witness_fields, implementations, &mut diagnostics);
-        if !diagnostics.is_empty() {
-            return Err(crate::errors::VmRustFnError::thrown_fresh(
-                alloc_compilation_error(vm, &diagnostics),
-            ));
-        }
-
-        let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
-        let class_ptr = vm.tlab.alloc(Object::Class(Box::new(Class {
-            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(class_name)),
-            fields: class_fields,
-            description: None,
-            alias: None,
-            docstring: None,
-            other: IndexMap::new(),
-            stream_done: false,
-            type_tag,
-            cleanup: None,
-            methods: IndexMap::new(),
-            generic_param_count: 0,
-            owner: bex_vm_types::types::Owner::anonymous(),
-        })));
-        // The head is built off the declaration that was just allocated, so the
-        // type reaches it directly — there is no table to consult and no name
-        // to re-resolve.
-        let ty = bex_vm_types::RealizedTy::Class(
-            bex_vm_types::TypeHead::new(class_ptr, type_tag),
-            Box::new([]),
-        );
-        let rules = prepare_class_witnesses(vm, &ty, witnesses).map_err(|diagnostic| {
-            crate::errors::VmRustFnError::thrown_fresh(alloc_compilation_error(vm, &[diagnostic]))
+    fn extends(
+        vm: &mut BexVm,
+        name: &bex_str::BexStr,
+        fields: &IndexMap<bex_str::BexStr, Value>,
+    ) -> Result<Value, crate::errors::VmRustFnError> {
+        let Some(interface_ty) = vm.current_call_type_args().first().cloned() else {
+            unreachable!("extends<I> receives one runtime type argument")
+        };
+        let members = if matches!(interface_ty, bex_vm_types::RealizedTy::Interface(..)) {
+            required_interface_closure(vm, interface_ty)
+                .and_then(|closure| interface_closure_members(vm, closure))
+        } else {
+            Err(format!(
+                "reflect.Class.extends expects an interface type, got `{interface_ty}`"
+            ))
+        };
+        let InterfaceMembers {
+            mut rows,
+            declared_by,
+            witnesses,
+        } = members.map_err(|message| {
+            crate::errors::VmRustFnError::thrown_fresh(alloc_compilation_error(
+                vm,
+                &[compiler_diagnostic(DiagnosticId::TypeMismatch, message)],
+            ))
         })?;
-        register_class_witnesses(vm, class_ptr, rules);
-        Ok({
-            let ty_value = Value::object(vm.tlab.alloc_type(TypeValue::new(ty)));
-            alloc_kind_view(vm, baml_type::type_kind::TypeKind::Class, ty_value)
-        })
+        for (field_name, value) in fields {
+            let row = if let Some(interface) = declared_by.get(field_name.as_str()) {
+                Err(compiler_diagnostic(
+                    DiagnosticId::DuplicateField,
+                    format!(
+                        "duplicate field `{name}.{field_name}`: interface `{interface}` already declares it"
+                    ),
+                ))
+            } else {
+                reflected_type_row(vm, *value)
+                    .map_err(|message| compiler_diagnostic(DiagnosticId::TypeMismatch, message))
+            };
+            rows.push((field_name.to_string(), row));
+        }
+        mint_class(vm, name.as_str(), rows, witnesses)
     }
 
     fn builder(vm: &mut BexVm, name: &bex_str::BexStr) -> Value {
@@ -923,22 +1206,11 @@ impl BamlClassInterface for PackageReflectImpl {
         let Object::Interface(interface) = vm.get_object(interface_ptr) else {
             unreachable!("an interface type's head points at Object::Interface")
         };
-        if let Some(required) = interface
-            .methods
-            .iter()
-            .find(|method| method.default.is_none())
-        {
-            let interface_name = interface.name().display_name().to_string();
-            let required_name = required.name.to_string();
+        if let Some(message) = structural_witness_blocker(interface) {
             return Err(crate::errors::VmRustFnError::thrown_fresh(
                 alloc_compilation_error(
                     vm,
-                    &[compiler_diagnostic(
-                        DiagnosticId::TypeMismatch,
-                        format!(
-                            "interface `{interface_name}` cannot be witnessed structurally because required method `{required_name}` has no default body; use `reflect.Package.compile` with an `implements` block"
-                        ),
-                    )],
+                    &[compiler_diagnostic(DiagnosticId::TypeMismatch, message)],
                 ),
             ));
         }
