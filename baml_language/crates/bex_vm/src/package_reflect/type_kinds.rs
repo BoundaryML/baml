@@ -634,7 +634,114 @@ impl BamlNamespaceClass for PackageReflectImpl {
         }
         Ok(field_value)
     }
+
+    fn is_field_set(
+        vm: &mut BexVm,
+        value: &Value,
+        name: &bex_str::BexStr,
+    ) -> Result<bool, crate::errors::VmRustFnError> {
+        let field = instance_field(vm, *value, name.as_str(), "reflect.class.is_field_set")?;
+        let Object::Instance(instance) = vm.get_object(field.instance) else {
+            unreachable!("`instance_field` resolved an instance")
+        };
+        Ok(!instance.is_field_absent(field.index))
+    }
+
+    fn unset_field(
+        vm: &mut BexVm,
+        value: &Value,
+        name: &bex_str::BexStr,
+    ) -> Result<(), crate::errors::VmRustFnError> {
+        let field = instance_field(vm, *value, name.as_str(), "reflect.class.unset_field")?;
+        // Absent reads as `null`, so only a field whose type admits `null`
+        // can be absent.
+        let admits_null = crate::type_match::value_matches_template(
+            vm,
+            Value::NULL,
+            &bex_vm_types::TyTemplate::from(field.ty.clone()),
+            &[],
+        )
+        .map_err(crate::errors::VmRustFnError::InternalError)?;
+        if !admits_null {
+            return Err(field_error(
+                vm,
+                format!(
+                    "field `{}.{name}` has type `{}`, which does not admit null, so it cannot be \
+                     absent",
+                    field.class_name, field.ty
+                ),
+            ));
+        }
+        let Object::Instance(instance) = vm.get_object(field.instance) else {
+            unreachable!("`instance_field` resolved an instance")
+        };
+        // The sentinel is not a heap pointer, so no write barrier is due.
+        instance.store_field(field.index, Value::ABSENT);
+        Ok(())
+    }
 }
+
+/// A named field of a class instance, as the presence natives
+/// (`is_field_set`, `unset_field`) address it.
+struct InstanceField {
+    instance: bex_vm_types::HeapPtr,
+    index: usize,
+    class_name: String,
+    /// The field's type with the instance's class type arguments applied.
+    ty: bex_vm_types::RealizedTy,
+}
+
+/// A `CompilationError` carrying one `TypeMismatch` diagnostic, the error
+/// `get_field` and the presence natives throw.
+fn field_error(vm: &mut BexVm, message: String) -> crate::errors::VmRustFnError {
+    crate::errors::VmRustFnError::thrown_fresh(alloc_compilation_error(
+        vm,
+        &[compiler_diagnostic(DiagnosticId::TypeMismatch, message)],
+    ))
+}
+
+/// Resolve the field `name` of the class instance `value` for the native
+/// `api`, or throw what `get_field` throws for a non-instance or an
+/// undeclared field.
+fn instance_field(
+    vm: &mut BexVm,
+    value: Value,
+    name: &str,
+    api: &str,
+) -> Result<InstanceField, crate::errors::VmRustFnError> {
+    let instance = value
+        .as_object_ptr()
+        .filter(|ptr| matches!(vm.get_object(*ptr), Object::Instance(_)));
+    let Some(instance) = instance else {
+        let diagnostic =
+            runtime_type::expected_class_instance(api, &vm.type_of(&value).to_string())
+                .with_phase(DiagnosticPhase::Hir);
+        return Err(crate::errors::VmRustFnError::thrown_fresh(
+            alloc_compilation_error(vm, &[diagnostic]),
+        ));
+    };
+    let Object::Instance(inst) = vm.get_object(instance) else {
+        unreachable!("checked above")
+    };
+    let Object::Class(class) = vm.get_object(inst.class) else {
+        unreachable!("Instance.class must point to Object::Class")
+    };
+    let class_name = class.name().display_name().to_string();
+    let Some(index) = class.fields.iter().position(|field| field.name == name) else {
+        return Err(field_error(
+            vm,
+            format!("class `{class_name}` has no field `{name}`"),
+        ));
+    };
+    let ty = vm.realize_field_ty(&class.fields[index].field_template, &inst.class_type_args);
+    Ok(InstanceField {
+        instance,
+        index,
+        class_name,
+        ty,
+    })
+}
+
 impl BamlNamespaceEnum for PackageReflectImpl {
     fn value(
         vm: &mut BexVm,

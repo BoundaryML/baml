@@ -159,6 +159,55 @@ function get_field<T>(value: unknown, name: string) -> T throws root.errors.Comp
     $rust_function
 }
 
+/// Whether the field `name` of the class instance `value` has been given a
+/// value, `null` included.
+///
+/// An optional (`T?`) field has three states. It is absent when nothing gave
+/// it a value: the class constructor left it out, the JSON object it was
+/// decoded from had no such member, a host passed the object without it, or
+/// `unset_field` cleared it. It is `null` when it was given `null` — written
+/// `name: null`, assigned, or decoded from an explicit `null`. Otherwise it
+/// holds a value. Reading an absent field gives `null`, so a read alone
+/// cannot tell the first two apart; this can. `baml.json.from<T>` with
+/// `omit_absent = true` leaves absent fields out of the JSON it writes.
+///
+/// A field that is not optional is always set. `==` does not look at
+/// presence: an absent field compares equal to one holding `null`.
+///
+/// # Throws
+///
+/// - `reflect.errors.CompilationError` if `value` is not a class instance, or its
+///   class has no field `name`.
+///
+/// # Examples
+///
+/// ```baml
+/// class Patch { name: string?, expires_in: int? }
+///
+/// let p = baml.json.from_string<Patch>("{\"expires_in\": null}");
+/// assert.equal(reflect.class.is_field_set(p, "name"), false);       // absent
+/// assert.equal(reflect.class.is_field_set(p, "expires_in"), true);  // null
+/// assert.equal(p.name, null);
+/// ```
+//baml:mut_vm
+function is_field_set(value: unknown, name: string) -> bool throws root.errors.CompilationError {
+    $rust_function
+}
+
+/// Make the optional field `name` of the class instance `value` absent again,
+/// as if the constructor had left it out. It then reads as `null`, and
+/// `is_field_set` reports `false`. Assigning the field, even `null`, sets it
+/// again.
+///
+/// # Throws
+///
+/// - `reflect.errors.CompilationError` if `value` is not a class instance, its
+///   class has no field `name`, or the field's type does not admit `null`.
+//baml:mut_vm
+function unset_field(value: unknown, name: string) -> void throws root.errors.CompilationError {
+    $rust_function
+}
+
 /// A class-kind view of a `type` value. Users never construct this class.
 class Type {
     /// The wrapped `type` value. Private by invariant: reflection natives are
