@@ -773,6 +773,14 @@ enum PendingDiag<'db> {
         scrutinee: Ty,
         missing: Vec<String>,
     },
+    /// A `catch_all` / `catch_all_panics` clause leaving `missing` unhandled
+    /// out of the (widened) errors it `caught`.
+    NonExhaustiveCatchAll {
+        expr: ExprId,
+        keyword: &'static str,
+        caught: baml_type::Ty,
+        missing: Vec<String>,
+    },
     UnreachableArm {
         expr: ExprId,
         /// Catch-road unreachability is advisory (a warning); a match
@@ -10658,13 +10666,17 @@ impl<'db> InferenceContext<'db> {
         self.ingest_lowered(ty, IngestHoles::ExprPosition(at))
     }
 
-    /// `base catch (e) { arms }` / `catch_all`: narrowing on the ERROR
-    /// channel. The base's effect contributions collect into their own
-    /// channel; the clause binding takes that union; arms subtract what
-    /// they provably handle (the pattern set-subtraction machinery); the
-    /// residual propagates to the enclosing channel. The result joins the
-    /// base value with the arm values. Exhaustiveness of `catch_all` is
-    /// S17's diagnostic.
+    /// `base catch (e) { arms }` / `catch_all` / `catch_all_panics`:
+    /// narrowing on the ERROR channel, one road for every clause kind. The
+    /// base's effect contributions collect into their own channel; each
+    /// clause's binding takes the union still unhandled; arms subtract what
+    /// they provably handle (the pattern set-subtraction machinery). A clause
+    /// whose kind [`requires_error_coverage`] reports what its arms left
+    /// (E0062) and lets nothing past it; otherwise the residual propagates to
+    /// the enclosing channel. The result joins the base value with the arm
+    /// values.
+    ///
+    /// [`requires_error_coverage`]: baml_compiler2_ast::CatchClauseKind::requires_error_coverage
     fn infer_catch(
         &mut self,
         body: &ExprBody,
@@ -10730,6 +10742,11 @@ impl<'db> InferenceContext<'db> {
         let had_facts = !facts.is_empty();
         let mut arm_tys = vec![base_ty];
         for clause in clauses {
+            let clause_facts = facts.clone();
+            // The panics this clause's arms trap, for a clause that must
+            // cover them all.
+            let mut trapped_panics: Vec<Ty> = Vec::new();
+            let mut traps_every_panic = false;
             let clause_binding_ty = if facts.is_empty() {
                 Ty::never()
             } else {
@@ -10763,18 +10780,24 @@ impl<'db> InferenceContext<'db> {
                 // bind denotes `unknown` and so definitely-matches every
                 // fact below). Bindings recorded here are overwritten by
                 // the real walk against the arm's scrutinee.
-                let claim = self
-                    .lower_pattern(body, arm.pattern, &Ty::intern(InferTy::Unknown))
-                    .matched_ty;
-                // Fact-by-fact matching: a fact INSIDE the claim is
-                // definitely handled (and subtracts); a claim inside a
-                // fact MAY receive it (narrowing view, no subtraction).
+                let probe = self.lower_pattern(body, arm.pattern, &Ty::intern(InferTy::Unknown));
+                let claim = probe.matched_ty;
+                // A refutable pattern (`Foo { x: 1 }`) handles only SOME
+                // values of its claimed type, so it discharges nothing - the
+                // B-1069 rule `match` applies to its residual.
+                let claim_is_total = probe.consumes_matched;
+                // Fact-by-fact matching: a fact INSIDE a total claim is
+                // definitely handled (and subtracts); otherwise a claim
+                // overlapping a fact MAY receive it (narrowing view, no
+                // subtraction).
                 let mut may: Vec<Ty> = Vec::new();
                 let mut definite: Vec<Ty> = Vec::new();
                 for fact in &facts {
                     if self.provable_subtype(fact, &claim) {
                         may.push(fact.clone());
-                        definite.push(fact.clone());
+                        if claim_is_total {
+                            definite.push(fact.clone());
+                        }
                     } else if self.provable_subtype(&claim, fact) {
                         may.push(fact.clone());
                     }
@@ -10783,7 +10806,29 @@ impl<'db> InferenceContext<'db> {
                 // types is ALWAYS live - panics are catchable at runtime
                 // but never part of a `throws` contract, so they fold in
                 // beside the facts without consulting them.
-                if let Some(panic) = self.panic_subset(&claim) {
+                // A wildcard or bare bind in a clause whose wildcards trap
+                // panics traps every one, so it is live however many errors
+                // earlier arms drained.
+                let wildcard_traps_panics =
+                    matches!(claim.kind(), InferTy::Unknown) && clause.kind.wildcard_traps_panics();
+                if wildcard_traps_panics {
+                    // The panics no earlier arm trapped reach it beside
+                    // whatever errors remain.
+                    if !traps_every_panic {
+                        let untrapped = self.panics_not_trapped(&trapped_panics);
+                        if untrapped.is_empty() && may.is_empty() && had_facts {
+                            self.pending_diags.push(PendingDiag::UnreachableArm {
+                                expr: arm.body,
+                                warning: true,
+                            });
+                        }
+                        may.extend(untrapped);
+                    }
+                    traps_every_panic = true;
+                } else if let Some(panic) = self.panic_subset(&claim) {
+                    if claim_is_total {
+                        trapped_panics.push(panic.clone());
+                    }
                     may.push(panic);
                 } else if had_facts && may.is_empty() && !claim.has_error() {
                     // Earlier arms drained every fact this arm could
@@ -10826,6 +10871,19 @@ impl<'db> InferenceContext<'db> {
                 // are the next arm's world and, at the end, the rethrow.
                 facts.retain(|fact| !definite.contains(fact));
             }
+            if clause.kind.requires_error_coverage() {
+                self.judge_catch_coverage(
+                    catch_expr,
+                    clause.kind,
+                    &clause_facts,
+                    &facts,
+                    &trapped_panics,
+                    traps_every_panic,
+                );
+                // The clause promised to handle everything that reached it:
+                // nothing it received propagates, reported or not.
+                facts.clear();
+            }
         }
         for fact in &facts {
             self.record_throw(base, fact);
@@ -10848,6 +10906,84 @@ impl<'db> InferenceContext<'db> {
 
     /// The `baml.panics.*` component of a catch claim (alias-aware,
     /// union members collected) - the types an arm may always trap.
+    /// E0062 for a clause that must cover what reaches it: `unhandled` are
+    /// the error facts its arms left, out of `received`; a clause that must
+    /// also cover panics reports the `baml.panics.*` classes its arms do not
+    /// trap. Errors are spelled widened (a thrown `"oops"` is a missing
+    /// `string`), as the `throws` contract reports them.
+    fn judge_catch_coverage(
+        &mut self,
+        at: ExprId,
+        kind: baml_compiler2_ast::CatchClauseKind,
+        received: &[Ty],
+        unhandled: &[Ty],
+        trapped_panics: &[Ty],
+        traps_every_panic: bool,
+    ) {
+        if unhandled.iter().any(Ty::has_error) {
+            return;
+        }
+        let mut widened = |facts: &[Ty]| -> Vec<baml_type::Ty> {
+            facts
+                .iter()
+                .flat_map(|fact| {
+                    crate::throw_facts::flatten_declared_ty_to_facts(&self.plain_finalized(fact))
+                })
+                .collect()
+        };
+        let caught = throws_clause_union(widened(received)).unwrap_or(baml_type::Ty::Never);
+        let mut missing: Vec<String> = widened(unhandled)
+            .iter()
+            .map(|leaf| leaf.spell(&self.viewpoint()))
+            .collect();
+        if kind.requires_panic_coverage() && !traps_every_panic {
+            for panic in self.panics_not_trapped(trapped_panics) {
+                missing.push(self.plain_finalized(&panic).spell(&self.viewpoint()));
+            }
+        }
+        if missing.is_empty() {
+            return;
+        }
+        missing.sort();
+        missing.dedup();
+        self.pending_diags.push(PendingDiag::NonExhaustiveCatchAll {
+            expr: at,
+            keyword: kind.keyword(),
+            caught,
+            missing,
+        });
+    }
+
+    /// `baml.panics.Panic`, the alias naming every panic class.
+    fn every_panic(&self) -> Option<Ty> {
+        let alias = self.lang_decl(baml_base::LangPackage::Baml, &["panics"], "Panic")?;
+        Some(Ty::intern(InferTy::TypeAlias(alias)))
+    }
+
+    /// The `baml.panics.*` classes no type in `trapped` covers. When none
+    /// is covered, the single `baml.panics.Panic` alias stands for them all.
+    fn panics_not_trapped(&mut self, trapped: &[Ty]) -> Vec<Ty> {
+        let Some(alias) = self.every_panic() else {
+            return Vec::new();
+        };
+        let every_panic = self.expand_alias_ty(&alias);
+        let members: Vec<Ty> = match every_panic.kind() {
+            InferTy::Union(members) => members.to_vec(),
+            InferTy::Class(..) => vec![every_panic.clone()],
+            _ => return Vec::new(),
+        };
+        let trapped = if trapped.is_empty() {
+            return vec![alias];
+        } else {
+            self.union_of(trapped)
+        };
+        let missing: Vec<Ty> = members
+            .into_iter()
+            .filter(|panic| !self.provable_subtype(panic, &trapped))
+            .collect();
+        missing
+    }
+
     fn panic_subset(&mut self, claim: &Ty) -> Option<Ty> {
         let expanded = self.expand_alias_ty(claim);
         match expanded.kind() {
@@ -11210,8 +11346,8 @@ impl<'db> InferenceContext<'db> {
         // Panics are RAISED, not thrown: catchable at runtime, but never part
         // of a `throws` contract. `throw baml.panics.X` therefore contributes
         // nothing to the channel - it re-raises, exactly as `baml.sys.panic`
-        // does, and the emitted `ThrowIfPanic` guard already carries the
-        // matching runtime behaviour past wildcard arms. A throw whose type
+        // does, and a catch's wildcard arm tests for panics and lets them
+        // pass unless its clause traps them. A throw whose type
         // mixes panics with ordinary errors contributes only the ordinary
         // half. Untouched when no panic is present, so every other throw
         // records exactly the type it always did.
@@ -11786,6 +11922,19 @@ impl<'db> InferenceContext<'db> {
                     } => (
                         TirTypeError::NonExhaustiveMatch {
                             scrutinee_type: self.plain_finalized(&scrutinee),
+                            missing_cases: missing,
+                        },
+                        expr,
+                    ),
+                    PendingDiag::NonExhaustiveCatchAll {
+                        expr,
+                        keyword,
+                        caught,
+                        missing,
+                    } => (
+                        TirTypeError::NonExhaustiveCatchAll {
+                            keyword,
+                            caught_type: caught,
                             missing_cases: missing,
                         },
                         expr,

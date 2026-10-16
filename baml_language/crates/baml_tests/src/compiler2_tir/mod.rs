@@ -35,8 +35,7 @@ pub(crate) mod support {
     use std::fmt::Write;
 
     use baml_compiler2_ast::{
-        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FunctionDefaults, Literal, PatId,
-        Stmt, StmtId,
+        DefaultExprId, Expr, ExprBody, ExprId, FunctionDefaults, Literal, PatId, Stmt, StmtId,
     };
     use baml_compiler2_hir::{
         body::FunctionBody, contributions::Definition, item_tree::DefaultExprRef, scope::ScopeKind,
@@ -223,11 +222,7 @@ pub(crate) mod support {
                 let clause_descs: Vec<String> = clauses
                     .iter()
                     .map(|clause| {
-                        let kind = match clause.kind {
-                            CatchClauseKind::Catch => "catch",
-                            CatchClauseKind::CatchAll => "catch_all",
-                            CatchClauseKind::CatchAllPanics => "catch_all_panics",
-                        };
+                        let kind = clause.kind.keyword();
                         let binding = pat_desc(clause.binding, body);
                         let arms_desc = clause
                             .arms
@@ -539,11 +534,7 @@ pub(crate) mod support {
                 let base_ty = expr_ty(vp, inference, *base);
                 writeln!(output, "{pad}catch ({base_desc} : {base_ty}) : {ty}").ok();
                 for clause in clauses {
-                    let kind = match clause.kind {
-                        CatchClauseKind::Catch => "catch",
-                        CatchClauseKind::CatchAll => "catch_all",
-                        CatchClauseKind::CatchAllPanics => "catch_all_panics",
-                    };
+                    let kind = clause.kind.keyword();
                     let binding = pat_desc(clause.binding, body);
                     writeln!(output, "{pad}  {kind} ({binding})").ok();
                     for arm_id in &clause.arms {
@@ -1326,7 +1317,7 @@ pub(crate) mod support {
 
     /// Render a file's canonical item tree as readable text.
     pub fn render_hir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-        use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal};
+        use baml_compiler2_ast::{Expr, ExprBody, Literal};
         use baml_compiler2_hir::{file_package::file_package, file_semantic_index};
 
         fn qualify_type_name(
@@ -1811,11 +1802,7 @@ pub(crate) mod support {
                     let clause_descs: Vec<String> = clauses
                         .iter()
                         .map(|clause| {
-                            let kind = match clause.kind {
-                                CatchClauseKind::Catch => "catch",
-                                CatchClauseKind::CatchAll => "catch_all",
-                                CatchClauseKind::CatchAllPanics => "catch_all_panics",
-                            };
+                            let kind = clause.kind.keyword();
                             let binding =
                                 pat_desc_hir(clause.binding, body, prefix, local_type_names);
                             let arms_desc = clause

@@ -20,6 +20,15 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                  ╰── expected `string`, found `Status`
     ╰────
 
+  [type] E0062
+
+  × non-exhaustive catch_all on type string | BuildError; missing: string
+    ╭─[regressions.baml:92:5]
+ 92 │ ╭─▶     BuildWithBuildError(ok) catch_all (e) {
+ 93 │ │           BuildError => "recovered: " + e.reason,
+ 94 │ ╰─▶     }
+    ╰────
+
   [type] E0146
 
   ⚠ unreachable code: 2 statement(s) after diverging statement

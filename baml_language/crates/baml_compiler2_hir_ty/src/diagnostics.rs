@@ -498,8 +498,11 @@ pub enum TirTypeError {
         scrutinee_type: Ty,
         missing_cases: Vec<String>,
     },
-    /// `catch_all` is missing arms for one or more caught throw types.
+    /// A `catch_all` / `catch_all_panics` clause is missing arms for one or
+    /// more caught throw types (or, for `catch_all_panics`, panics).
     NonExhaustiveCatchAll {
+        /// The clause keyword: `catch_all` or `catch_all_panics`.
+        keyword: &'static str,
         caught_type: Ty,
         missing_cases: Vec<String>,
     },
@@ -1616,12 +1619,13 @@ impl TirTypeError {
                     )
                 }
                 TirTypeError::NonExhaustiveCatchAll {
+                    keyword,
                     caught_type,
                     missing_cases,
                 } => {
                     write!(
                         f,
-                        "non-exhaustive catch_all on `{}`; missing: {}",
+                        "non-exhaustive {keyword} on `{}`; missing: {}",
                         caught_type.spell(vp),
                         missing_cases.join(", ")
                     )
