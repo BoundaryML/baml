@@ -185,10 +185,11 @@ function _as_field_rows(
     let names = fields.keys();
     for (let i = 0; i < names.length(); i += 1) {
         let name = names[i];
-        rows[name] = match (fields[name]) {
-            let view: root.TypeView => view.as_type(),
-            let row => row,
-        };
+        rows[name]
+            = match (fields[name]) {
+                let view: root.TypeView => view.as_type(),
+                let row => row,
+            };
     }
     rows
 }
