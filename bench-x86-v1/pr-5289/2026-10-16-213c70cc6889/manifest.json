@@ -1,0 +1,453 @@
+{
+ "candidate_sha": "213c70cc6889cf874a75761118d632e526ec6210",
+ "candidate_dirty_files": 0,
+ "candidate_branch": "HEAD",
+ "candidate_subject": "Merge branch 'brr/native-v1-frame' into brr/native-v1-frame-bench",
+ "emitter": "/home/runner/_work/baml/baml/baml_language/target/release/baml-cli",
+ "emitter_version": "baml-cli 0.22.2",
+ "protocol": "tier-a",
+ "protocol_sha256": "7ff2097743f0099db08f91f59e0cab5c7b24606af42040aba0db1d2c494742d2",
+ "machine": "bench-x86-v1",
+ "machine_sha256": "963f1a6062538a8e399ab93589046cc24dca5c9ffedaeee627ff41df62f4a330",
+ "emitted": {
+  "00_startup": {
+   "status": "emitted",
+   "report": "2 native, 0 bytecode"
+  },
+  "01_array_traversal": {
+   "status": "emitted",
+   "report": "2 native, 0 bytecode"
+  },
+  "02_merge_sort": {
+   "status": "emitted",
+   "report": "2 native, 0 bytecode"
+  },
+  "03_json_aggregate": {
+   "status": "emitted",
+   "report": "2 native, 1 bytecode"
+  },
+  "04_allocation_retention": {
+   "status": "emitted",
+   "report": "2 native, 0 bytecode"
+  },
+  "07_function_calls": {
+   "status": "emitted",
+   "report": "3 native, 0 bytecode"
+  },
+  "09_json_hello": {
+   "status": "emitted",
+   "report": "2 native, 0 bytecode"
+  },
+  "10_quick_sort": {
+   "status": "emitted",
+   "report": "2 native, 0 bytecode"
+  },
+  "11_generate_sort": {
+   "status": "emitted",
+   "report": "1 native, 1 bytecode"
+  }
+ },
+ "staged_at": "2026-10-16T06:42:06Z",
+ "started": "2026-10-16T06:42:29Z",
+ "trials": 20,
+ "cpu": 3,
+ "workers": 1,
+ "loadavg_start": "0.05 0.01 0.00 1/148 94456",
+ "kernel": "6.1.102",
+ "cpu_model": "model name\t: 19/01",
+ "nproc": 4,
+ "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 23.1.1",
+ "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+ "glibc": "ldd (Ubuntu GLIBC 2.39-0ubuntu8.9) 2.39",
+ "go": "go version go1.27.1 linux/amd64",
+ "node": "v26.10.0",
+ "python": "Python 3.14.7",
+ "builds": {
+  "04_allocation_retention": {
+   "status": "ok",
+   "seconds": 425.953,
+   "clean": true,
+   "bytes": 38788648,
+   "stripped_bytes": 33091736,
+   "sha256": "68f29080c1ad6103102d1c1cbd02cd714e81c9dc416c9068cf5889a860e2f9ac",
+   "jobs": 4,
+   "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+   "lto": "fat",
+   "codegen_units": 1,
+   "panic": "unwind"
+  },
+  "01_array_traversal": {
+   "status": "ok",
+   "seconds": 432.45,
+   "clean": true,
+   "bytes": 38770456,
+   "stripped_bytes": 33072648,
+   "sha256": "c11d420e1a94a33d635efa5c2421a37349a508c9f30f5102a189d760114950c9",
+   "jobs": 4,
+   "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+   "lto": "fat",
+   "codegen_units": 1,
+   "panic": "unwind"
+  },
+  "03_json_aggregate": {
+   "status": "ok",
+   "seconds": 224.351,
+   "clean": false,
+   "bytes": 38761784,
+   "stripped_bytes": 33065944,
+   "sha256": "863333ca2ac8717c64fafadff973cb0aea811d8f1e870bae04ba4d896185f901",
+   "jobs": 4,
+   "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+   "lto": "fat",
+   "codegen_units": 1,
+   "panic": "unwind"
+  },
+  "07_function_calls": {
+   "status": "ok",
+   "seconds": 223.982,
+   "clean": false,
+   "bytes": 38714352,
+   "stripped_bytes": 33031960,
+   "sha256": "2dce13df04ebcf854ffe69b6602e525e24d49d42f186b7aa2ccafdfa1ca05f60",
+   "jobs": 4,
+   "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+   "lto": "fat",
+   "codegen_units": 1,
+   "panic": "unwind"
+  },
+  "00_startup": {
+   "status": "ok",
+   "seconds": 429.433,
+   "clean": true,
+   "bytes": 38706056,
+   "stripped_bytes": 33024440,
+   "sha256": "753de5b14d209750d51018c024327b8d08a523a1d5ace574b21a3ca5d6389528",
+   "jobs": 4,
+   "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+   "lto": "fat",
+   "codegen_units": 1,
+   "panic": "unwind"
+  },
+  "09_json_hello": {
+   "status": "ok",
+   "seconds": 222.731,
+   "clean": false,
+   "bytes": 38700392,
+   "stripped_bytes": 33022288,
+   "sha256": "59a38505b5e2daae7bb65629aea4cda67f58672b6fb56b82eba6e9e5ac250199",
+   "jobs": 4,
+   "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+   "lto": "fat",
+   "codegen_units": 1,
+   "panic": "unwind"
+  },
+  "11_generate_sort": {
+   "status": "ok",
+   "seconds": 224.897,
+   "clean": false,
+   "bytes": 38700952,
+   "stripped_bytes": 33020952,
+   "sha256": "913b1ab864006ae5054697322f52d0e6ec4cb3cdaacbeabad6f3bd75498f641c",
+   "jobs": 4,
+   "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+   "lto": "fat",
+   "codegen_units": 1,
+   "panic": "unwind"
+  }
+ },
+ "artifacts": {
+  "04_allocation_retention": {
+   "native": {
+    "bytes": 38788648,
+    "sha256": "68f29080c1ad6103102d1c1cbd02cd714e81c9dc416c9068cf5889a860e2f9ac"
+   },
+   "native.stripped": {
+    "bytes": 33091736,
+    "sha256": "367d4b5ed19b1db25161ccc3c8de38e59f45a20a36f9acedb3b944a5b145ab3d"
+   },
+   "native-control": {
+    "bytes": 595896,
+    "sha256": "5bee7a835681bb9150cbee9567753dc092de6335ca07315127c0c9a8497fcbe2"
+   },
+   "rust": {
+    "bytes": 520120,
+    "sha256": "03ef64ece74b90344a44408573d9d2fb8977ddda2b908a37d3ddd5ed8e477744"
+   },
+   "go": {
+    "bytes": 2584736,
+    "sha256": "c97311c6c46af617041d893f12cee923be562b3fc15d2a248c547b4250d35d41"
+   }
+  },
+  "01_array_traversal": {
+   "native": {
+    "bytes": 38770456,
+    "sha256": "c11d420e1a94a33d635efa5c2421a37349a508c9f30f5102a189d760114950c9"
+   },
+   "native.stripped": {
+    "bytes": 33072648,
+    "sha256": "2a386a6f88ce89c58c983f471657e4f12dc07568d08a5ecf8d16d9ffbcbe7121"
+   },
+   "native-control": {
+    "bytes": 590520,
+    "sha256": "4612abfc423fe784a505a5a8eaaed3eb67cc6ea203f87cb9856a43b8bd659099"
+   },
+   "rust": {
+    "bytes": 521448,
+    "sha256": "a9f92f99beadce4a58f69051f24d165ad38ed5977aba129ace8d35b3bfef96f3"
+   },
+   "go": {
+    "bytes": 2580640,
+    "sha256": "c3e07d2d39497bf0fdab042bb9718b4539a2e8b6f844a94f7c4b3bfd5c5dc251"
+   }
+  },
+  "03_json_aggregate": {
+   "native": {
+    "bytes": 38761784,
+    "sha256": "863333ca2ac8717c64fafadff973cb0aea811d8f1e870bae04ba4d896185f901"
+   },
+   "native.stripped": {
+    "bytes": 33065944,
+    "sha256": "3fff704d17578d2a22fd35ae6d62476f9108f4bb29a66b80733ad59556a0a014"
+   },
+   "rust": {
+    "bytes": 500008,
+    "sha256": "17c709c6b2176e05a608bb9dde166d9da46a264c8ec9168003817398353c2604"
+   },
+   "go": {
+    "bytes": 2584736,
+    "sha256": "8e0dbc5c5b0c944b99512fd5e974ebdab60f23c580d01f27217c58fa3685dc31"
+   }
+  },
+  "07_function_calls": {
+   "native": {
+    "bytes": 38714352,
+    "sha256": "2dce13df04ebcf854ffe69b6602e525e24d49d42f186b7aa2ccafdfa1ca05f60"
+   },
+   "native.stripped": {
+    "bytes": 33031960,
+    "sha256": "69b6a88ccf6637166b3e82aa5e85e2b63b5a4e92b2a85a6900d0efece14adff2"
+   },
+   "native-control": {
+    "bytes": 583512,
+    "sha256": "88fb3b2afd62ecdcac548068652816533c48d4205e5afbe9d9de487b0a2a616a"
+   },
+   "rust": {
+    "bytes": 517520,
+    "sha256": "23965eb6ec380447b5b9f3feed306bf5bf02d25558e6a7e3d0c32a086e6703e5"
+   },
+   "go": {
+    "bytes": 2580640,
+    "sha256": "a7ca31a1b485a72bfc8fecc4433979786bba3b5f801c0f8979145e97ce5b15d6"
+   }
+  },
+  "00_startup": {
+   "native": {
+    "bytes": 38706056,
+    "sha256": "753de5b14d209750d51018c024327b8d08a523a1d5ace574b21a3ca5d6389528"
+   },
+   "native.stripped": {
+    "bytes": 33024440,
+    "sha256": "7892f61cf5be84d9704ad2521019051a73397d6fc3a19f0f0a6f6ad55cd1d624"
+   },
+   "native-control": {
+    "bytes": 582416,
+    "sha256": "3cbb079aeb9d7836f6638508b48f6b94f55630cdd25ea89821a0e63ee14275b8"
+   },
+   "rust": {
+    "bytes": 516432,
+    "sha256": "63b1ef393bd74621c4953a3c9095cee1888836dad9438f86dbe8318eb321bb16"
+   },
+   "go": {
+    "bytes": 2580640,
+    "sha256": "b055da1c9064123166535c6f5622fa8c207852694280004f8b622312aa2b3566"
+   }
+  },
+  "09_json_hello": {
+   "native": {
+    "bytes": 38700392,
+    "sha256": "59a38505b5e2daae7bb65629aea4cda67f58672b6fb56b82eba6e9e5ac250199"
+   },
+   "native.stripped": {
+    "bytes": 33022288,
+    "sha256": "525df9d8aa77cebe78bcc5390cf33a3d4c52dca8a72f0667a0cfc5f00081f1f1"
+   },
+   "native-control": {
+    "bytes": 540696,
+    "sha256": "a01764139a1691beadbecbe261a1071b55b7a8cdf10ed42e6c7ba45eb4feff9a"
+   },
+   "rust": {
+    "bytes": 517152,
+    "sha256": "274a7fc83353b471715879b6e8f5c2ab18e6890a608702fce1904f969b11127e"
+   },
+   "go": {
+    "bytes": 2580640,
+    "sha256": "ca45a62da64461030e59bfd982de5224ffb91d3ca0bb06f726a399e2000ec39b"
+   }
+  },
+  "11_generate_sort": {
+   "native": {
+    "bytes": 38700952,
+    "sha256": "913b1ab864006ae5054697322f52d0e6ec4cb3cdaacbeabad6f3bd75498f641c"
+   },
+   "native.stripped": {
+    "bytes": 33020952,
+    "sha256": "656c843f752e06405a6eccf3b05ed7dff70dc334ee11c4a2a24ac4f1351b68a4"
+   },
+   "native-control": {
+    "bytes": 594352,
+    "sha256": "56380761343e486ce4ea243fc88c0c0eae7cb70695ebb1aab0d34136148c7ca5"
+   },
+   "rust": {
+    "bytes": 524112,
+    "sha256": "d2faf9fe4a81a81cdc8dfaf19e4f0847ef8019ac13a65c4eb6899380d422a946"
+   },
+   "go": {
+    "bytes": 2588832,
+    "sha256": "24065644995053f353b57b8250cd635c699af5edf5a0ffa138d67544ad1a1d53"
+   }
+  }
+ },
+ "verify": {
+  "failures": 0,
+  "skipped_rows": {
+   "03_json_aggregate": [
+    "control"
+   ]
+  }
+ },
+ "status": "shard_failed",
+ "finished": null,
+ "loadavg_end": "1.00 1.06 0.94 1/143 102845",
+ "trials_total": 3620,
+ "trials_failed": 0,
+ "shards": [
+  {
+   "shard": 1,
+   "vm": "vm-56ede8797dc74ac9a8a1051952b5841a",
+   "exit": 0,
+   "error": null,
+   "status": "ok",
+   "scenarios": [
+    "allocation-high-retention"
+   ],
+   "cases": [
+    "04_allocation_retention"
+   ],
+   "started": "2026-10-16T06:42:44Z",
+   "finished": "2026-10-16T06:59:31Z",
+   "cpu_model": "model name\t: 19/01",
+   "loadavg_start": "0.05 0.01 0.00 1/148 94456",
+   "loadavg_end": "1.00 1.06 0.94 1/143 102845",
+   "trials_total": 280,
+   "trials_failed": 0
+  },
+  {
+   "shard": 2,
+   "vm": "vm-d7ae9c7dc6614d8088a2de8cc39309f7",
+   "exit": 0,
+   "error": null,
+   "status": "ok",
+   "scenarios": [
+    "allocation-low-retention"
+   ],
+   "cases": [
+    "04_allocation_retention"
+   ],
+   "started": "2026-10-16T06:42:42Z",
+   "finished": "2026-10-16T06:57:43Z",
+   "cpu_model": "model name\t: 19/01",
+   "loadavg_start": "0.16 0.05 0.01 1/148 94456",
+   "loadavg_end": "1.01 1.11 0.96 1/142 102775",
+   "trials_total": 280,
+   "trials_failed": 0
+  },
+  {
+   "shard": 3,
+   "vm": "vm-b0daee92cfe94350b478898cdaa1b243",
+   "exit": 0,
+   "error": null,
+   "status": "ok",
+   "scenarios": [
+    "array-small",
+    "array-build",
+    "json-aggregate"
+   ],
+   "cases": [
+    "01_array_traversal",
+    "03_json_aggregate"
+   ],
+   "started": "2026-10-16T06:42:42Z",
+   "finished": "2026-10-16T07:00:04Z",
+   "cpu_model": "model name\t: 19/01",
+   "loadavg_start": "0.05 0.01 0.00 1/150 94458",
+   "loadavg_end": "1.03 1.10 0.97 1/143 108042",
+   "trials_total": 820,
+   "trials_failed": 0
+  },
+  {
+   "shard": 4,
+   "vm": "vm-6332654c012c4b6dace4ac099ef55300",
+   "exit": 0,
+   "error": null,
+   "status": "ok",
+   "scenarios": [
+    "array-empty",
+    "array-iterator",
+    "array-indexed",
+    "calls-empty",
+    "calls"
+   ],
+   "cases": [
+    "01_array_traversal",
+    "07_function_calls"
+   ],
+   "started": "2026-10-16T06:42:36Z",
+   "finished": "2026-10-16T07:00:00Z",
+   "cpu_model": "model name\t: 19/01",
+   "loadavg_start": "0.06 0.01 0.00 1/149 94457",
+   "loadavg_end": "1.10 1.13 0.98 1/143 109251",
+   "trials_total": 1400,
+   "trials_failed": 0
+  },
+  {
+   "shard": 5,
+   "vm": "vm-e4ee0491b0394a30965691e569bacf3c",
+   "exit": 0,
+   "error": null,
+   "status": "ok",
+   "scenarios": [
+    "startup",
+    "json-hello",
+    "generate-sort"
+   ],
+   "cases": [
+    "00_startup",
+    "09_json_hello",
+    "11_generate_sort"
+   ],
+   "started": "2026-10-16T06:42:29Z",
+   "finished": "2026-10-16T07:00:55Z",
+   "cpu_model": "model name\t: 19/01",
+   "loadavg_start": "0.07 0.02 0.00 1/150 94458",
+   "loadavg_end": "1.17 1.13 0.99 1/144 106639",
+   "trials_total": 840,
+   "trials_failed": 0
+  },
+  {
+   "shard": 6,
+   "vm": "vm-dc25c0d3207b4fcb8c8fd3acb8eb33bf",
+   "exit": 1,
+   "error": "Command '['tar', 'xzf', '/tmp/bench-stage.mzlwiut4/parts/6/results.tgz', '-C', '/tmp/bench-stage.mzlwiut4/parts/6']' returned non-zero exit status 2.",
+   "status": "shard_failed",
+   "scenarios": [],
+   "cases": [],
+   "started": null,
+   "finished": null,
+   "cpu_model": null,
+   "loadavg_start": null,
+   "loadavg_end": null,
+   "trials_total": null,
+   "trials_failed": null
+  }
+ ]
+}

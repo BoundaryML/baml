@@ -1,0 +1,81 @@
+== shard 1/6 on vm-56ede8797dc74ac9a8a1051952b5841a: allocation-high-retention
+06:42:44 execute bench-x86-v1 tier-a -> /home/ubuntu/ship/results
+06:42:45 source 213c70cc6889cf874a75761118d632e526ec6210
+06:49:55 04_allocation_retention native: 426.0s, 33091736 bytes stripped
+06:50:09 verify 04_allocation_retention: 98 trials, 0 failed
+06:50:19 280 trials scheduled; load ['0.89', '1.40', '0.85']
+06:53:37 100/280
+06:57:09 200/280
+06:59:31 280/280
+06:59:31 done: 280 trials, 0 failed
+== shard 2/6 on vm-d7ae9c7dc6614d8088a2de8cc39309f7: allocation-low-retention
+06:42:42 execute bench-x86-v1 tier-a -> /home/ubuntu/ship/results
+06:42:43 source 213c70cc6889cf874a75761118d632e526ec6210
+06:50:20 04_allocation_retention native: 452.5s, 33091736 bytes stripped
+06:50:34 verify 04_allocation_retention: 98 trials, 0 failed
+06:50:44 280 trials scheduled; load ['0.88', '1.41', '0.90']
+06:53:18 100/280
+06:55:48 200/280
+06:57:43 280/280
+06:57:43 done: 280 trials, 0 failed
+== shard 3/6 on vm-b0daee92cfe94350b478898cdaa1b243: array-small, array-build, json-aggregate
+06:42:42 execute bench-x86-v1 tier-a -> /home/ubuntu/ship/results
+06:42:43 source 213c70cc6889cf874a75761118d632e526ec6210
+06:50:00 01_array_traversal native: 432.5s, 33072648 bytes stripped
+06:53:44 03_json_aggregate native: 224.4s, 33065944 bytes stripped
+06:54:15 verify 01_array_traversal: 224 trials, 0 failed
+06:55:06 verify 03_json_aggregate: 364 trials, 0 failed
+06:55:16 820 trials scheduled; load ['0.94', '1.14', '0.91']
+06:55:52 100/820
+06:56:25 200/820
+06:57:02 300/820
+06:57:40 400/820
+06:58:12 500/820
+06:58:46 600/820
+06:59:19 700/820
+06:59:58 800/820
+07:00:04 820/820
+07:00:04 done: 820 trials, 0 failed
+== shard 4/6 on vm-6332654c012c4b6dace4ac099ef55300: array-empty, array-iterator, array-indexed, calls-empty, calls
+06:42:36 execute bench-x86-v1 tier-a -> /home/ubuntu/ship/results
+06:42:37 source 213c70cc6889cf874a75761118d632e526ec6210
+06:49:54 01_array_traversal native: 432.8s, 33072648 bytes stripped
+06:53:38 07_function_calls native: 224.0s, 33031960 bytes stripped
+06:54:08 verify 01_array_traversal: 224 trials, 0 failed
+06:54:15 verify 07_function_calls: 56 trials, 0 failed
+06:54:25 1400 trials scheduled; load ['1.04', '1.19', '0.91']
+06:54:48 100/1400
+06:55:14 200/1400
+06:55:37 300/1400
+06:55:59 400/1400
+06:56:23 500/1400
+06:56:51 600/1400
+06:57:15 700/1400
+06:57:38 800/1400
+06:58:02 900/1400
+06:58:26 1000/1400
+06:58:48 1100/1400
+06:59:15 1200/1400
+06:59:38 1300/1400
+06:59:59 1400/1400
+07:00:00 done: 1400 trials, 0 failed
+== shard 5/6 on vm-e4ee0491b0394a30965691e569bacf3c: startup, json-hello, generate-sort
+06:42:29 execute bench-x86-v1 tier-a -> /home/ubuntu/ship/results
+06:42:30 source 213c70cc6889cf874a75761118d632e526ec6210
+06:49:44 00_startup native: 429.4s, 33024440 bytes stripped
+06:53:27 09_json_hello native: 222.7s, 33022288 bytes stripped
+06:57:12 11_generate_sort native: 224.9s, 33020952 bytes stripped
+06:57:15 verify 00_startup: 14 trials, 0 failed
+06:57:22 verify 09_json_hello: 56 trials, 0 failed
+06:57:51 verify 11_generate_sort: 224 trials, 0 failed
+06:58:01 840 trials scheduled; load ['0.79', '1.03', '0.92']
+06:58:22 100/840
+06:58:43 200/840
+06:59:02 300/840
+06:59:24 400/840
+06:59:45 500/840
+07:00:03 600/840
+07:00:25 700/840
+07:00:47 800/840
+07:00:55 840/840
+07:00:55 done: 840 trials, 0 failed
