@@ -53,6 +53,7 @@ use bridge_ctypes::baml_bridge::cffi::{
     baml_ty::Ty as BamlTyVariant, inbound_map_entry::Key as InboundMapKey,
     inbound_value::Value as InboundValueVariant,
 };
+use bridge_encode::{BridgeFault, Completion};
 use prost::Message;
 use pyo3::{
     Bound, Py, PyAny, PyResult, Python,
@@ -413,7 +414,7 @@ pub(crate) fn dispatch_sync(dispatch: crate::callback_dispatch::Dispatch) {
         return;
     }
     catch_dispatch_panic(call_id, || {
-        let result = Python::attach(|py| -> PyResult<Option<Vec<u8>>> {
+        let result = Python::attach(|py| -> PyResult<()> {
             let frame = execution.as_ref().unwrap().frame()?;
             let value = PyModule::import(py, "baml_bridge._dispatch")?
                 .getattr("_invoke_with_frame")?
@@ -424,7 +425,8 @@ pub(crate) fn dispatch_sync(dispatch: crate::callback_dispatch::Dispatch) {
                 .call1((value.bind(py),))?
                 .extract()?;
             if !is_coroutine {
-                return encode_result_inbound(py, call_id, value).map(Some);
+                complete_with_value(py, call_id, value.bind(py));
+                return Ok(());
             }
             let context = PyModule::import(py, "contextvars")?
                 .getattr("copy_context")?
@@ -436,25 +438,22 @@ pub(crate) fn dispatch_sync(dispatch: crate::callback_dispatch::Dispatch) {
             rt.spawn_blocking(move || {
                 let _execution = execution;
                 catch_dispatch_panic(call_id, || {
-                    let result = Python::attach(|py| -> PyResult<Vec<u8>> {
+                    let result = Python::attach(|py| -> PyResult<()> {
                         let runner = PyModule::import(py, "baml_bridge._dispatch")?
                             .getattr("_run_sync_coroutine")?;
                         let value = context
                             .bind(py)
                             .call_method1("run", (runner, call_id, value.bind(py)))?
                             .unbind();
-                        encode_result_inbound(py, call_id, value)
+                        complete_with_value(py, call_id, value.bind(py));
+                        Ok(())
                     });
                     complete_dispatch_result(call_id, result);
                 })
             });
-            Ok(None)
+            Ok(())
         });
-        match result {
-            Ok(None) => {}
-            Ok(Some(bytes)) => send_dispatch_success(call_id, &bytes),
-            Err(error) => Python::attach(|py| send_dispatch_error_from_pyerr(call_id, py, &error)),
-        }
+        complete_dispatch_result(call_id, result);
     });
 }
 
@@ -467,10 +466,11 @@ fn catch_dispatch_panic(call_id: u32, action: impl FnOnce()) {
     }
 }
 
-fn complete_dispatch_result(call_id: u32, result: PyResult<Vec<u8>>) {
-    match result {
-        Ok(bytes) => send_dispatch_success(call_id, &bytes),
-        Err(error) => Python::attach(|py| send_dispatch_error_from_pyerr(call_id, py, &error)),
+/// A dispatch that raised before its callable's value could be completed
+/// with: the error is the call's result.
+fn complete_dispatch_result(call_id: u32, result: PyResult<()>) {
+    if let Err(error) = result {
+        Python::attach(|py| send_dispatch_error_from_pyerr(call_id, py, &error));
     }
 }
 
@@ -579,19 +579,63 @@ pub fn _discard_host_call_args(args: Vec<u8>) {
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn _complete_host_call_success(py: Python<'_>, call_id: u32, value: Py<PyAny>) {
-    catch_dispatch_panic(call_id, || {
-        match encode_result_inbound(py, call_id, value) {
-            Ok(bytes) => send_dispatch_success(call_id, &bytes),
-            // The host broke the callable's contract: a panic, as the engine's
-            // own return check reports it, not a catchable error.
-            Err(error) => {
-                observe_dispatch_error(call_id, py, &error);
-                let bytes = bridge_encode::host_contract_violation(&error.to_string(), "python")
-                    .encode_to_vec();
-                complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
-            }
-        }
+    catch_dispatch_panic(call_id, || complete_with_value(py, call_id, value.bind(py)));
+}
+
+/// Complete `call_id` with the value its callable returned, encoded against
+/// the return type of the slot the callable was bound to.
+fn complete_with_value(py: Python<'_>, call_id: u32, value: &Bound<'_, PyAny>) {
+    let observation = bridge_cffi::host_instrumentation::callback(call_id).map(|owner| {
+        let outcome = btel_types::InvocationOutcome::Ok;
+        let capture = owner
+            .wants_value(outcome)
+            .then(|| crate::host_capture::capture(value));
+        (owner, capture)
     });
+    let ret = match take_callback_signature(call_id) {
+        Some(bex_project::RuntimeTy::Function { ret, .. }) => *ret,
+        Some(_) | None => bex_project::RuntimeTy::Unknown,
+    };
+    let panic = |error: &bridge_encode::EncodeError, bytes: Vec<u8>| {
+        observe_dispatch_error(
+            call_id,
+            py,
+            &pyo3::exceptions::PyTypeError::new_err(error.to_string()),
+        );
+        complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
+    };
+    match crate::encode::encode_result(py, value, &ret) {
+        Completion::Wire(encoded) => {
+            if let Some((owner, capture)) = observation {
+                owner.observe(btel_types::InvocationOutcome::Ok, capture);
+            }
+            send_dispatch_success(call_id, &encoded.encode_to_vec());
+        }
+        // The callable's own code raised while its result was read: the
+        // error it threw, as any exception a callable raises.
+        Completion::HostError(error) => send_dispatch_error_from_pyerr(call_id, py, &error),
+        // The host broke the callable's contract: a panic, as the engine's
+        // own return check reports it, not a catchable error.
+        Completion::ContractViolation(error) => panic(
+            &error,
+            bridge_encode::host_contract_violation(&error.to_string(), "python").encode_to_vec(),
+        ),
+        // The bridge could not carry a result the callable produced in good
+        // faith: the bridge's own panic.
+        Completion::BridgeFailure(fault) => {
+            let message = match fault {
+                BridgeFault::Value(error) => error.to_string(),
+                BridgeFault::Host(error) => error.to_string(),
+            };
+            observe_dispatch_error(
+                call_id,
+                py,
+                &pyo3::exceptions::PyTypeError::new_err(message.clone()),
+            );
+            let bytes = bridge_encode::sdk_panic(&message).encode_to_vec();
+            complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
+        }
+    }
 }
 
 #[gen_stub_pyfunction]
@@ -620,34 +664,6 @@ fn decode_args<'py>(
     // The decoder releases any individual references that did not reach a
     // host wrapper, including failures partway through a nested argument.
     decoder.call1((bytes,))?.extract()
-}
-
-/// Encode a host callable's result against the return type of the slot it was
-/// bound to, as `InboundValue` bytes.
-fn encode_result_inbound(py: Python<'_>, call_id: u32, value: Py<PyAny>) -> PyResult<Vec<u8>> {
-    let observation = bridge_cffi::host_instrumentation::callback(call_id).map(|owner| {
-        let outcome = btel_types::InvocationOutcome::Ok;
-        let capture = owner
-            .wants_value(outcome)
-            .then(|| crate::host_capture::capture(value.bind(py)));
-        (owner, capture)
-    });
-
-    let ret = match take_callback_signature(call_id) {
-        Some(bex_project::RuntimeTy::Function { ret, .. }) => *ret,
-        Some(_) | None => bex_project::RuntimeTy::Unknown,
-    };
-    let encoded =
-        crate::encode::encode_value(py, value.bind(py), &ret, bridge_encode::PathSegment::Result)
-            .map(|value| value.encode_to_vec());
-
-    if encoded.is_ok()
-        && let Some((owner, capture)) = observation
-    {
-        // Encoding failures are observed by the existing dispatch error path.
-        owner.observe(btel_types::InvocationOutcome::Ok, capture);
-    }
-    encoded
 }
 
 /// Send a `complete_host_call` success with the given `InboundValue`-encoded
@@ -796,13 +812,15 @@ fn try_encode_baml_error_throw(
     // states what it is (its class in particular). Once the engine hydrates
     // a throw against the declared throws type, encode against it here.
     drop(take_callback_signature(call_id));
-    crate::encode::encode_value(
-        py,
-        &inner,
-        &bex_project::RuntimeTy::Unknown,
-        bridge_encode::PathSegment::Result,
-    )
-    .map(|value| Some(value.encode_to_vec()))
+    match crate::encode::encode_result(py, &inner, &bex_project::RuntimeTy::Unknown) {
+        Completion::Wire(value) => Ok(Some(value.encode_to_vec())),
+        Completion::HostError(error) => Err(error),
+        Completion::ContractViolation(error)
+        | Completion::BridgeFailure(BridgeFault::Value(error)) => {
+            Err(pyo3::exceptions::PyTypeError::new_err(error.to_string()))
+        }
+        Completion::BridgeFailure(BridgeFault::Host(error)) => Err(error),
+    }
 }
 
 /// Encode a Python exception as an `InboundValue` and send via

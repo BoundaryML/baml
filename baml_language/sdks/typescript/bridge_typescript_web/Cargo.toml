@@ -20,6 +20,7 @@ sys_wasm = { workspace = true }
 base64 = { workspace = true }
 futures = { workspace = true }
 js-sys = { workspace = true }
+log = { workspace = true }
 num-bigint = { workspace = true }
 prost = { workspace = true }
 serde-wasm-bindgen = { workspace = true }

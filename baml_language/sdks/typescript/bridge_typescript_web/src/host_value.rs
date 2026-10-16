@@ -1,6 +1,6 @@
 //! Raw Web host-value bindings.
 
-use wasm_bindgen::prelude::*;
+use wasm_bindgen::{JsCast, prelude::*};
 
 #[wasm_bindgen(js_name = configureWebSysops)]
 pub fn configure_web_sysops(fetch_key: u64, read_file_sync_key: u64) -> Result<(), JsError> {
@@ -20,7 +20,25 @@ pub fn mint_web_host_value_key() -> u64 {
 
 #[wasm_bindgen(js_name = registerWebHostValueReleaseCallback)]
 pub fn register_web_host_value_release_callback(callback: js_sys::Function) -> bool {
-    sys_wasm::register_host_value_release_callback(callback)
+    // Every release the engine drives also forgets the callable's signature;
+    // the runtime's own callback runs after. One closure for the page's life.
+    let forgetting = Closure::<dyn Fn(JsValue)>::new(move |key: JsValue| {
+        if let Some(key) = js_sys::BigInt::new(&key)
+            .ok()
+            .and_then(|key| u64::try_from(key).ok())
+        {
+            crate::encode::forget_signature(key);
+        }
+        if let Err(error) = callback.call1(&JsValue::NULL, &key) {
+            log::warn!("host-value release callback threw: {error:?}");
+        }
+    });
+    let function: js_sys::Function = forgetting
+        .as_ref()
+        .unchecked_ref::<js_sys::Function>()
+        .clone();
+    forgetting.forget();
+    sys_wasm::register_host_value_release_callback(function)
 }
 
 #[wasm_bindgen(js_name = releaseWebHostCallable)]

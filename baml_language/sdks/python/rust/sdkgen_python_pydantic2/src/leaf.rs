@@ -2085,7 +2085,8 @@ fn generic_inference_positions<'a>(
 ///
 /// This mirrors the host engine's `classify_param_var_positions` rules over all
 /// declared parameter types: a non-closure, non-ambiguous value occurrence is
-/// inferable (Rule 4 supplies `RustType` when a defaulted value is omitted),
+/// inferable from the values a call passes (an omitted defaulted value binds
+/// nothing, and the runtime refuses the call until `_types=` names it),
 /// while any closure occurrence poisons the var globally. A direct
 /// multi-TypeVar union is ambiguous only at that occurrence; another value
 /// argument can still bind the same var. Class `TypeVars` are excluded by the
@@ -2143,7 +2144,7 @@ fn render_method_block_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
     // makes `_types=` optional only when every own TypeVar has a value position.
     // Return/body-only, closure-poisoned, and ambiguous-union-only TypeVars keep
     // `_types=` required. Defaulted parameters still count because the engine's
-    // Rule 4 supplies `RustType` when their value is omitted. The class's
+    // an omitted value binds nothing and the runtime asks for `_types=`. The class's
     // TypeVars ride the receiver and are not part of this decision.
     if !m.generic_params.is_empty() {
         let inferable = own_generic_params_inferable(
@@ -2372,7 +2373,7 @@ fn render_function_params_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
     }
     let mut typed_params = render_typed_params(&f.param_names, &f.arg_tys, &f.arg_defaults, ctx);
     // `_types=` is optional only when every own TypeVar has an engine-inferable
-    // value position. Defaulted parameters count via Rule 4. Methods use the
+    // value position. Defaulted parameters count when a value is passed. Methods use the
     // same predicate above.
     if !f.generic_params.is_empty() {
         let has_kwonly_marker = f.arg_defaults.iter().any(Option::is_some);

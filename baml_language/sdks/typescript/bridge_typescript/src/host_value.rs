@@ -49,6 +49,7 @@ use std::{
 use bridge_ctypes::baml_bridge::cffi::{
     BamlHandleType, BamlOutboundValue, BamlToHostCall, baml_outbound_value::Value as OutboundValue,
 };
+use bridge_encode::{BridgeFault, Completion};
 use napi::{
     Env, Status,
     bindgen_prelude::{Buffer, External, FnArgs, Function, Unknown},
@@ -315,23 +316,35 @@ pub(crate) fn register_callable(
 /// against the return type of the slot the callable was bound to.
 ///
 /// Exposed to JS as `completeHostCallValue(callId, value)`. A value that does
-/// not fit raises, and the JS dispatch wrapper then completes the call with
-/// that error instead.
+/// not fit completes the call as a `HostContractViolation` panic; a value the
+/// bridge could not carry as an `SdkPanic`; an error the callable's own code
+/// raised while the value was read is raised here, and the JS dispatch
+/// wrapper then completes the call with that error.
 #[napi(js_name = "completeHostCallValue")]
 pub fn complete_host_call_value(env: Env, call_id: u32, value: Unknown<'_>) -> napi::Result<()> {
     let ret = match take_callback_signature(call_id) {
         Some(bex_project::RuntimeTy::Function { ret, .. }) => *ret,
         Some(_) | None => bex_project::RuntimeTy::Unknown,
     };
-    match crate::encode::encode_value(&env, value, &ret, bridge_encode::PathSegment::Result) {
-        Ok(bytes) => complete_host_call_bytes(call_id, 0, &bytes),
-        // The host broke the callable's contract: a panic, as the engine's
-        // own return check reports it, not a catchable error.
-        Err(error) => complete_host_call_bytes(
+    match crate::encode::encode_result(&env, value, &ret) {
+        Completion::Wire(value) => complete_host_call_bytes(call_id, 0, &value.encode_to_vec()),
+        Completion::HostError(error) => return Err(error),
+        Completion::ContractViolation(error) => complete_host_call_bytes(
             call_id,
             1,
-            &bridge_encode::host_contract_violation(&error.reason, "nodejs").encode_to_vec(),
+            &bridge_encode::host_contract_violation(&error.to_string(), "nodejs").encode_to_vec(),
         ),
+        Completion::BridgeFailure(fault) => {
+            let message = match fault {
+                BridgeFault::Value(error) => error.to_string(),
+                BridgeFault::Host(error) => error.to_string(),
+            };
+            complete_host_call_bytes(
+                call_id,
+                1,
+                &bridge_encode::sdk_panic(&message).encode_to_vec(),
+            );
+        }
     }
     Ok(())
 }
@@ -344,13 +357,19 @@ pub fn complete_host_call_value(env: Env, call_id: u32, value: Unknown<'_>) -> n
 #[napi(js_name = "completeHostCallThrow")]
 pub fn complete_host_call_throw(env: Env, call_id: u32, value: Unknown<'_>) -> napi::Result<()> {
     drop(take_callback_signature(call_id));
-    let bytes = crate::encode::encode_value(
-        &env,
-        value,
-        &bex_project::RuntimeTy::Unknown,
-        bridge_encode::PathSegment::Result,
-    )?;
-    complete_host_call_bytes(call_id, 1, &bytes);
+    let value = match crate::encode::encode_result(&env, value, &bex_project::RuntimeTy::Unknown) {
+        Completion::Wire(value) => value,
+        Completion::HostError(error) => return Err(error),
+        Completion::ContractViolation(error)
+        | Completion::BridgeFailure(BridgeFault::Value(error)) => {
+            return Err(napi::Error::new(
+                napi::Status::InvalidArg,
+                error.to_string(),
+            ));
+        }
+        Completion::BridgeFailure(BridgeFault::Host(error)) => return Err(error),
+    };
+    complete_host_call_bytes(call_id, 1, &value.encode_to_vec());
     Ok(())
 }
 

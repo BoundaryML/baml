@@ -1,8 +1,9 @@
 //! Python values encoded against the types the program declares.
 //!
-//! This is Python's answer to the walker in `bridge_encode`: how a Python
-//! object relates to each kind of slot. The rules are Python's, decided here
-//! and nowhere else:
+//! This is Python's answer to the walker in `bridge_encode`: what a Python
+//! object is, one level at a time ([`HostValue::shape`]), and what the bridge
+//! does for one that ships ([`Host`]). The conversions are Python's
+//! ([`Rules::Python`]), decided in the walker and nowhere else:
 //!
 //! - `bool` is not an `int`; an `int` is an `int`, and fits a `float` slot
 //!   when the float is exactly that integer, or a `bigint` slot always.
@@ -13,7 +14,8 @@
 //!   keys stands in for a class when every key is a declared field.
 //! - A callable becomes a host callable bound to a function slot, and the
 //!   slot's signature is recorded so the result can be encoded against it.
-//! - Handles, media, prompts and type values are host-owned leaves.
+//! - Handles, media, prompts and type values are leaves the bridge
+//!   serializes itself, once the walk has decided they ship.
 //!
 //! The declared types come from the generated SDK's program descriptor,
 //! registered once by `set_type_map`. A call to a function the descriptor
@@ -21,24 +23,24 @@
 //! argument as the type its Python value has.
 
 use std::{
-    cell::RefCell,
+    borrow::Cow,
     collections::HashMap,
     sync::{Arc, RwLock},
 };
 
 use baml_sdkgen_types::ProgramDescriptor;
-use baml_type::{MediaKind, Name, RuntimeTy, TypeName};
+use baml_type::{Int63, MediaKind, Name, RuntimeTy, TypeName};
 use bridge_cffi::handle_cffi;
 use bridge_ctypes::{
     HANDLE_TABLE,
     baml_bridge::cffi::{
-        BamlHandle, BamlHandleType, BamlTy, BamlTyDef, BamlValueMedia, BamlValuePromptAst,
-        CallFunctionArgs, InboundValue, call_function_args::CallTarget, inbound_value::Value,
+        BamlHandle, BamlTy, BamlTyDef, BamlValueMedia, BamlValuePromptAst, CallFunctionArgs,
+        call_function_args::CallTarget,
     },
 };
 use bridge_encode::{
-    Answer, EncodeError, Facts, FunctionSig, HostError, HostValue, Instance, Leaf, LeafKind, Param,
-    PathSegment, Scalar, ScalarSlot, encode, encode_arguments,
+    Completion, Error, Facts, FunctionSig, Host, HostValue, LeafKind, LeafWire, Owner, Owners,
+    Param, Root, Rules, Scalar, Shape, encode, encode_arguments,
 };
 use num_bigint::BigInt;
 use prost::Message;
@@ -66,10 +68,14 @@ static FACTS: RwLock<Option<Arc<Facts>>> = RwLock::new(None);
 #[pyo3(signature = (descriptor))]
 pub fn register_program_descriptor(descriptor: Option<Vec<u8>>) -> PyResult<()> {
     let facts = match descriptor {
-        Some(bytes) => Some(Arc::new(Facts::from_descriptor(
-            &ProgramDescriptor::decode_embedded(&bytes)
-                .map_err(|error| PyTypeError::new_err(error.to_string()))?,
-        ))),
+        Some(bytes) => {
+            let descriptor = ProgramDescriptor::decode_embedded(&bytes)
+                .map_err(|error| PyTypeError::new_err(error.to_string()))?;
+            Some(Arc::new(
+                Facts::from_descriptor(&descriptor)
+                    .map_err(|error| PyTypeError::new_err(error.to_string()))?,
+            ))
+        }
         None => None,
     };
     *FACTS
@@ -101,58 +107,35 @@ pub(crate) fn encode_call_kwargs(
 ) -> PyResult<()> {
     let facts = facts();
     let cx = Cx::new(py)?;
-    let outcome = (|| -> Result<(), Failure> {
-        if let Some(cancel) = cancel {
-            let encoded = encode(
-                &facts,
-                &cx.value(cancel.clone()),
-                &RuntimeTy::Unknown,
-                vec![PathSegment::Argument("_baml.cancel".into())],
-            )?;
-            call.invocation.get_or_insert_with(Default::default).cancel = Some(encoded.value);
-        }
-        let Some(kwargs) = kwargs else {
-            return Ok(());
-        };
+    let mut owners = Owners::new(&cx);
+    let (target, signature) = target_signature(&facts, call.call_target.as_ref());
+    if let Some(cancel) = cancel {
+        let encoded = encode(
+            &facts,
+            cx.value(cancel.clone()),
+            &RuntimeTy::Unknown,
+            Root::Argument("_baml.cancel".into()),
+            &mut owners,
+        )
+        .map_err(|error| raise(&target, error))?;
+        call.invocation.get_or_insert_with(Default::default).cancel = Some(encoded);
+    }
+    if let Some(kwargs) = kwargs {
         let arguments = kwargs
             .iter()
             .map(|(name, value)| Ok((name.extract::<String>()?, cx.value(value))))
             .collect::<PyResult<Vec<_>>>()?;
-        let (target, signature) = target_signature(&facts, call.call_target.as_ref())?;
         let bindings = bridge_ctypes::proto_ty_args_to_named(&call.type_args)
             .map_err(|error| PyTypeError::new_err(error.to_string()))?
             .type_args
             .into_iter()
             .map(|(name, ty)| (Name::new(&name), ty))
             .collect::<HashMap<_, _>>();
-        call.kwargs = match &signature {
-            Some(signature) => encode_arguments(&facts, signature, &bindings, &arguments)
-                .map_err(|error| Failure::Encode(target.clone(), error))?,
-            // No declared types: each argument is the type its value has.
-            None => arguments
-                .iter()
-                .map(|(name, value)| {
-                    let encoded = encode(
-                        &facts,
-                        value,
-                        &RuntimeTy::Unknown,
-                        vec![PathSegment::Argument(name.clone())],
-                    )
-                    .map_err(|error| Failure::Encode(target.clone(), error))?;
-                    Ok(bridge_ctypes::baml_bridge::cffi::InboundMapEntry {
-                        key: Some(
-                            bridge_ctypes::baml_bridge::cffi::inbound_map_entry::Key::StringKey(
-                                name.clone(),
-                            ),
-                        ),
-                        value: Some(encoded.value),
-                    })
-                })
-                .collect::<Result<Vec<_>, Failure>>()?,
-        };
-        Ok(())
-    })();
-    cx.finish(outcome)
+        call.kwargs = encode_arguments(&facts, &signature, &bindings, arguments, &mut owners)
+            .map_err(|error| raise(&target, error))?;
+    }
+    owners.keep();
+    Ok(())
 }
 
 /// Encode one Python value as the bridge would send it where the program
@@ -167,51 +150,77 @@ pub fn _encode_inbound<'py>(
     value: &Bound<'py, PyAny>,
     name: &str,
 ) -> PyResult<Bound<'py, PyBytes>> {
-    encode_value_for(
-        py,
-        value,
-        &RuntimeTy::Unknown,
-        PathSegment::Argument(name.to_string()),
-        "",
-    )
-    .map(|value| PyBytes::new(py, &value.encode_to_vec()))
-}
-
-/// Encode a host callable's result or thrown value against `slot`.
-pub(crate) fn encode_value(
-    py: Python<'_>,
-    value: &Bound<'_, PyAny>,
-    slot: &RuntimeTy,
-    root: PathSegment,
-) -> PyResult<InboundValue> {
-    encode_value_for(py, value, slot, root, "host callable")
-}
-
-/// Encode one Python value against `slot` for a path that starts at `root`;
-/// `target` names the call in a `TypeError`, or is empty for none.
-fn encode_value_for(
-    py: Python<'_>,
-    value: &Bound<'_, PyAny>,
-    slot: &RuntimeTy,
-    root: PathSegment,
-    target: &str,
-) -> PyResult<InboundValue> {
     let facts = facts();
     let cx = Cx::new(py)?;
-    let outcome = encode(&facts, &cx.value(value.clone()), slot, vec![root])
-        .map(|encoded| encoded.value)
-        .map_err(|error| Failure::Encode(target.to_string(), error));
-    cx.finish(outcome)
+    let mut owners = Owners::new(&cx);
+    let encoded = encode(
+        &facts,
+        cx.value(value.clone()),
+        &RuntimeTy::Unknown,
+        Root::Argument(name.to_string()),
+        &mut owners,
+    )
+    .map_err(|error| raise("", error))?;
+    // The bytes carry what the encode created (a cloned handle's key), as
+    // they would to the engine; the caller owns them and releases them.
+    owners.keep();
+    Ok(PyBytes::new(py, &encoded.encode_to_vec()))
+}
+
+/// Encode a host callable's result or thrown value against `slot`. What the
+/// result means for the call is the caller's to decide from the
+/// [`Completion`].
+pub(crate) fn encode_result(
+    py: Python<'_>,
+    value: &Bound<'_, PyAny>,
+    slot: &RuntimeTy,
+) -> Completion<PyErr> {
+    let facts = facts();
+    let cx = match Cx::new(py) {
+        Ok(cx) => cx,
+        Err(error) => return Completion::HostError(error),
+    };
+    let mut owners = Owners::new(&cx);
+    let result = encode(
+        &facts,
+        cx.value(value.clone()),
+        slot,
+        Root::Result,
+        &mut owners,
+    );
+    if result.is_ok() {
+        owners.keep();
+    }
+    Completion::from(result)
+}
+
+/// An encode's failure as Python raises it: a Python error as it is, a
+/// refusal as a `TypeError` naming `target` (the call), or the refusal alone
+/// when `target` is empty.
+fn raise(target: &str, error: Error<PyErr>) -> PyErr {
+    match error {
+        Error::Host(error) | Error::Commit(error) => error,
+        Error::Value(error) if target.is_empty() => PyTypeError::new_err(error.to_string()),
+        Error::Value(error) => PyTypeError::new_err(format!("{target}: {error}")),
+    }
 }
 
 /// The signature a call target declares: from the descriptor for a named
-/// function, from the live handle for a BAML callable, or none.
-fn target_signature(
-    facts: &Facts,
-    target: Option<&CallTarget>,
-) -> Result<(String, Option<FunctionSig>), Failure> {
+/// function, from the live handle for a BAML callable, or none, in which
+/// case every argument goes as the type its value has.
+fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, FunctionSig) {
+    let untyped = || FunctionSig {
+        class_generic_params: Vec::new(),
+        generic_params: Vec::new(),
+        params: Vec::new(),
+        ret: RuntimeTy::Unknown,
+        throws: RuntimeTy::Unknown,
+    };
     match target {
-        Some(CallTarget::FunctionName(name)) => Ok((name.clone(), facts.function(name).cloned())),
+        Some(CallTarget::FunctionName(name)) => (
+            name.clone(),
+            facts.function(name).cloned().unwrap_or_else(untyped),
+        ),
         Some(CallTarget::FunctionHandle(key)) => {
             let entry = HANDLE_TABLE.resolve(*key);
             let signature = match entry.as_deref() {
@@ -225,7 +234,7 @@ fn target_signature(
                             },
                         ..
                     },
-                )) => Some(FunctionSig {
+                )) => FunctionSig {
                     class_generic_params: Vec::new(),
                     generic_params: Vec::new(),
                     params: params
@@ -242,38 +251,19 @@ fn target_signature(
                         .collect(),
                     ret: (**ret).clone(),
                     throws: (**throws).clone(),
-                }),
+                },
                 // Not a callable, or no longer live: the request decoder
                 // reports that; the arguments go as their own types.
-                Some(_) | None => None,
+                Some(_) | None => untyped(),
             };
-            Ok(("callable".into(), signature))
+            ("callable".into(), signature)
         }
-        None => Ok(("call".into(), None)),
-    }
-}
-
-/// Why an encode stopped. A Python error raised while reading a value is
-/// kept as it is; a walker error becomes a `TypeError`.
-enum Failure {
-    Python(PyErr),
-    Encode(String, EncodeError),
-}
-
-impl From<PyErr> for Failure {
-    fn from(error: PyErr) -> Self {
-        Failure::Python(error)
-    }
-}
-
-impl From<EncodeError> for Failure {
-    fn from(error: EncodeError) -> Self {
-        Failure::Encode("host callable".into(), error)
+        None => ("call".into(), untyped()),
     }
 }
 
 /// What one encode shares across every value it visits: the Python helpers
-/// it needs, and the owners it created and may have to release.
+/// it needs to read a value and to ship one.
 pub(crate) struct Cx<'py> {
     py: Python<'py>,
     type_map: Bound<'py, PyAny>,
@@ -290,13 +280,6 @@ pub(crate) struct Cx<'py> {
     /// Streams, function specs, runtime values and BAML closures: Python
     /// wrappers around an engine handle, reached through `_to_pyhandle`.
     handle_wrappers: [Bound<'py, PyAny>; 4],
-    /// Host callables registered during this encode.
-    registered: RefCell<Vec<u64>>,
-    /// Handle keys cloned for the wire during this encode.
-    cloned: RefCell<Vec<u64>>,
-    /// The first Python error raised while answering the walker. The walker
-    /// sees a non-fit; the caller raises this instead of the walker's error.
-    failure: RefCell<Option<PyErr>>,
 }
 
 impl<'py> Cx<'py> {
@@ -321,50 +304,11 @@ impl<'py> Cx<'py> {
                 proto.getattr("BamlClosure")?,
             ],
             proto,
-            registered: RefCell::new(Vec::new()),
-            cloned: RefCell::new(Vec::new()),
-            failure: RefCell::new(None),
         })
     }
 
     fn value<'a>(&'a self, obj: Bound<'py, PyAny>) -> PyValue<'a, 'py> {
         PyValue { obj, cx: self }
-    }
-
-    /// Release what this encode created when it did not reach the engine,
-    /// and turn the outcome into Python's.
-    fn finish<T>(self, outcome: Result<T, Failure>) -> PyResult<T> {
-        match outcome {
-            Ok(value) => Ok(value),
-            Err(failure) => {
-                for key in self.registered.borrow().iter() {
-                    crate::host_value::release_registered(*key);
-                }
-                for key in self.cloned.borrow().iter() {
-                    // Best effort: a key the engine never saw has no other owner.
-                    let _ = handle_cffi::release_handle(*key);
-                }
-                if let Some(error) = self.failure.borrow_mut().take() {
-                    return Err(error);
-                }
-                Err(match failure {
-                    Failure::Python(error) => error,
-                    Failure::Encode(target, error) if target.is_empty() => {
-                        PyTypeError::new_err(error.to_string())
-                    }
-                    Failure::Encode(target, error) => {
-                        PyTypeError::new_err(format!("{target}: {error}"))
-                    }
-                })
-            }
-        }
-    }
-
-    /// Record a Python error raised while answering; the walker is told the
-    /// value does not fit, and the error is what the caller gets.
-    fn fail<T>(&self, error: PyErr) -> Option<T> {
-        self.failure.borrow_mut().get_or_insert(error);
-        None
     }
 
     fn is_enum(&self, obj: &Bound<'py, PyAny>) -> bool {
@@ -406,132 +350,162 @@ fn generic_origin<'py>(class: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>>
     Ok(class.clone())
 }
 
+/// A protobuf message's bytes, through its `SerializeToString`.
+fn message_bytes(message: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+    message.call_method0("SerializeToString")?.extract()
+}
+
+impl<'py> Host<PyValue<'_, 'py>> for Cx<'py> {
+    fn register(&self, callable: &PyValue<'_, 'py>, signature: &RuntimeTy) -> PyResult<u64> {
+        let marker = PyModule::import(self.py, "baml_bridge._host_marker")?
+            .getattr("marker_for")?
+            .call1((&callable.obj,))?;
+        let marker = if marker.is_none() {
+            None
+        } else {
+            Some(marker.cast::<BamlPyHandle>()?.borrow().handle_key)
+        };
+        crate::host_value::register_callable(
+            callable.obj.clone().unbind(),
+            marker,
+            signature.clone(),
+        )
+    }
+
+    fn leaf(&self, leaf: &PyValue<'_, 'py>, kind: LeafKind) -> PyResult<(LeafWire, Option<Owner>)> {
+        let obj = &leaf.obj;
+        match kind {
+            LeafKind::Handle => {
+                // A wrapper's `_to_pyhandle` clones the key into a Python
+                // object that releases it as usual; the wire takes a clone of
+                // its own.
+                let handle = if obj.is_instance_of::<BamlPyHandle>() {
+                    obj.clone()
+                } else {
+                    obj.call_method0("_to_pyhandle")?
+                };
+                let handle = handle.cast::<BamlPyHandle>()?.borrow();
+                let key = crate::py_handle::handle_clone(handle.handle_key, "inbound encode")?;
+                let handle_type = i32::try_from(handle.handle_type)
+                    .map_err(|_| PyTypeError::new_err("handle type does not fit the wire"))?;
+                Ok((
+                    LeafWire::Handle(BamlHandle { key, handle_type }),
+                    Some(Owner::Handle(key)),
+                ))
+            }
+            LeafKind::Media(kind) => {
+                let payload: BamlValueMedia = match kind {
+                    MediaKind::Image => obj
+                        .cast::<media::BamlImage>()?
+                        .borrow()
+                        .wire_payload(self.py)?,
+                    MediaKind::Audio => obj
+                        .cast::<media::BamlAudio>()?
+                        .borrow()
+                        .wire_payload(self.py)?,
+                    MediaKind::Video => obj
+                        .cast::<media::BamlVideo>()?
+                        .borrow()
+                        .wire_payload(self.py)?,
+                    MediaKind::Pdf => obj
+                        .cast::<media::BamlPdf>()?
+                        .borrow()
+                        .wire_payload(self.py)?,
+                    MediaKind::Generic => {
+                        return Err(PyTypeError::new_err(
+                            "a Python media value always has a kind",
+                        ));
+                    }
+                };
+                Ok((LeafWire::Media(payload), None))
+            }
+            LeafKind::Prompt => {
+                let prompt = leaf
+                    .prompt_data()?
+                    .ok_or_else(|| PyTypeError::new_err("a prompt leaf lost its prompt"))?;
+                let encoded = message_bytes(&prompt.call_method0("wire_copy")?)?;
+                let ast = BamlValuePromptAst::decode(encoded.as_slice())
+                    .map_err(|error| PyTypeError::new_err(error.to_string()))?;
+                Ok((LeafWire::Prompt(ast), None))
+            }
+            LeafKind::TypeValue => {
+                let encoded = message_bytes(&obj.call_method0("_wire_copy")?)?;
+                let definition = BamlTyDef::decode(encoded.as_slice())
+                    .map_err(|error| PyTypeError::new_err(error.to_string()))?;
+                Ok((LeafWire::TypeValue(definition), None))
+            }
+        }
+    }
+
+    fn release(&self, owner: Owner) {
+        match owner {
+            Owner::Callable(key) => crate::host_value::release_registered(key),
+            // Best effort: a key the engine never saw has no other owner.
+            Owner::Handle(key) => {
+                let _ = handle_cffi::release_handle(key);
+            }
+        }
+    }
+}
+
 pub(crate) struct PyValue<'a, 'py> {
     obj: Bound<'py, PyAny>,
     cx: &'a Cx<'py>,
 }
 
 impl<'py> PyValue<'_, 'py> {
-    fn is_pyclass<T: pyo3::PyTypeInfo>(&self) -> bool {
-        self.obj.is_instance_of::<T>()
-    }
-
     fn is_a(&self, class: &Bound<'py, PyAny>) -> bool {
         self.obj.is_instance(class).unwrap_or(false)
     }
 
-    /// A `BamlPyHandle` cloned for the wire, with the clone tracked for
-    /// rollback.
-    fn handle_leaf(&self, handle: &BamlPyHandle) -> PyResult<Leaf> {
-        let key = crate::py_handle::handle_clone(handle.handle_key, "inbound encode")?;
-        self.cx.cloned.borrow_mut().push(key);
-        Ok(Leaf {
-            value: InboundValue {
-                value_type: None,
-                value: Some(Value::Handle(BamlHandle {
-                    key,
-                    handle_type: i32::try_from(handle.handle_type)
-                        .map_err(|_| PyTypeError::new_err("handle type does not fit the wire"))?,
-                })),
-            },
-            kind: LeafKind::Handle,
-        })
-    }
-
-    fn prompt_leaf(&self, prompt: &Bound<'py, PyAny>) -> PyResult<Leaf> {
-        let encoded: Vec<u8> = prompt
-            .call_method0("wire_copy")?
-            .call_method0("SerializeToString")?
-            .extract()?;
-        let ast = BamlValuePromptAst::decode(encoded.as_slice())
-            .map_err(|error| PyTypeError::new_err(error.to_string()))?;
-        Ok(Leaf {
-            value: InboundValue {
-                value_type: None,
-                value: Some(Value::PromptAstValue(ast)),
-            },
-            kind: LeafKind::Prompt,
-        })
-    }
-
-    fn media_leaf(&self, kind: MediaKind, payload: PyResult<BamlValueMedia>) -> PyResult<Leaf> {
-        Ok(Leaf {
-            value: InboundValue {
-                value_type: None,
-                value: Some(Value::MediaValue(payload?)),
-            },
-            kind: LeafKind::Media(kind),
-        })
-    }
-
-    /// The leaf this object is, if it is one. `Ok(None)` for anything else.
-    fn try_leaf(&self) -> PyResult<Option<Leaf>> {
-        let py = self.cx.py;
-        if let Ok(handle) = self.obj.cast::<BamlPyHandle>() {
-            return self.handle_leaf(&handle.borrow()).map(Some);
+    /// The leaf this object is, if it is one.
+    fn leaf_kind(&self) -> PyResult<Option<LeafKind>> {
+        let obj = &self.obj;
+        if obj.is_instance_of::<BamlPyHandle>()
+            || self.cx.handle_wrappers.iter().any(|class| self.is_a(class))
+        {
+            return Ok(Some(LeafKind::Handle));
         }
-        if let Ok(image) = self.obj.cast::<media::BamlImage>() {
-            return self
-                .media_leaf(MediaKind::Image, image.borrow().wire_payload(py))
-                .map(Some);
+        if obj.is_instance_of::<media::BamlImage>() {
+            return Ok(Some(LeafKind::Media(MediaKind::Image)));
         }
-        if let Ok(audio) = self.obj.cast::<media::BamlAudio>() {
-            return self
-                .media_leaf(MediaKind::Audio, audio.borrow().wire_payload(py))
-                .map(Some);
+        if obj.is_instance_of::<media::BamlAudio>() {
+            return Ok(Some(LeafKind::Media(MediaKind::Audio)));
         }
-        if let Ok(video) = self.obj.cast::<media::BamlVideo>() {
-            return self
-                .media_leaf(MediaKind::Video, video.borrow().wire_payload(py))
-                .map(Some);
+        if obj.is_instance_of::<media::BamlVideo>() {
+            return Ok(Some(LeafKind::Media(MediaKind::Video)));
         }
-        if let Ok(pdf) = self.obj.cast::<media::BamlPdf>() {
-            return self
-                .media_leaf(MediaKind::Pdf, pdf.borrow().wire_payload(py))
-                .map(Some);
-        }
-        if self.is_a(&self.cx.prompt_ast) {
-            return self.prompt_leaf(&self.obj).map(Some);
+        if obj.is_instance_of::<media::BamlPdf>() {
+            return Ok(Some(LeafKind::Media(MediaKind::Pdf)));
         }
         if self.is_a(&self.cx.baml_type) {
-            let encoded: Vec<u8> = self
-                .obj
-                .call_method0("_wire_copy")?
-                .call_method0("SerializeToString")?
-                .extract()?;
-            let definition = BamlTyDef::decode(encoded.as_slice())
-                .map_err(|error| PyTypeError::new_err(error.to_string()))?;
-            return Ok(Some(Leaf {
-                value: InboundValue {
-                    value_type: None,
-                    value: Some(Value::TyDefValue(definition)),
-                },
-                kind: LeafKind::TypeValue,
-            }));
+            return Ok(Some(LeafKind::TypeValue));
         }
-        // Streams, function specs, runtime values and BAML closures wrap an
-        // engine handle.
-        if self.cx.handle_wrappers.iter().any(|class| self.is_a(class)) {
-            let handle = self.obj.call_method0("_to_pyhandle")?;
-            let handle = handle.cast::<BamlPyHandle>()?;
-            // `_to_pyhandle` already cloned the key for us; `handle_leaf`
-            // clones once more, so release the intermediate clone with
-            // the Python object as usual.
-            return self.handle_leaf(&handle.borrow()).map(Some);
+        if self.prompt_data()?.is_some() {
+            return Ok(Some(LeafKind::Prompt));
         }
-        // The generated `ai.Prompt` shell carries its AST in `_data`.
-        if self.cx.is_model(&self.obj) {
-            let private = self.obj.getattr("__pydantic_private__")?;
-            if !private.is_none()
-                && let Ok(data) = private.get_item("_data")
-                && data.is_instance(&self.cx.prompt_ast)?
-            {
-                return self.prompt_leaf(&data).map(Some);
-            }
-            for (wire_name, value) in self.model_fields()? {
-                if wire_name == "_data" && value.is_instance(&self.cx.prompt_ast)? {
-                    return self.prompt_leaf(&value).map(Some);
-                }
+        Ok(None)
+    }
+
+    /// The `_PortablePromptAst` this object is or carries: itself, or the
+    /// `_data` of the generated `ai.Prompt` shell.
+    fn prompt_data(&self) -> PyResult<Option<Bound<'py, PyAny>>> {
+        if self.is_a(&self.cx.prompt_ast) {
+            return Ok(Some(self.obj.clone()));
+        }
+        if !self.cx.is_model(&self.obj) {
+            return Ok(None);
+        }
+        let private = self.obj.getattr("__pydantic_private__")?;
+        if !private.is_none()
+            && let Ok(data) = private.get_item("_data")
+            && data.is_instance(&self.cx.prompt_ast)?
+        {
+            return Ok(Some(data));
+        }
+        for (wire_name, value) in self.model_fields()? {
+            if wire_name == "_data" && value.is_instance(&self.cx.prompt_ast)? {
+                return Ok(Some(value));
             }
         }
         Ok(None)
@@ -546,16 +520,15 @@ impl<'py> PyValue<'_, 'py> {
         let mut fields = Vec::new();
         for item in self.obj.try_iter()? {
             let (name, value): (String, Bound<'py, PyAny>) = item?.extract()?;
+            // The generator records a renamed field's BAML name in `alias`;
+            // a user's `serialization_alias` is for their own JSON, not ours.
             let wire_name = match infos.get_item(&name)? {
                 Some(info) => {
-                    let serialization = info.getattr("serialization_alias")?;
                     let alias = info.getattr("alias")?;
-                    if !serialization.is_none() {
-                        serialization.extract()?
-                    } else if !alias.is_none() {
-                        alias.extract()?
-                    } else {
+                    if alias.is_none() {
                         name
+                    } else {
+                        alias.extract()?
                     }
                 }
                 None => name,
@@ -575,97 +548,55 @@ impl<'py> PyValue<'_, 'py> {
         Ok(fields)
     }
 
-    fn try_instance(&self) -> PyResult<Option<Instance<Self>>> {
-        if self.cx.is_model(&self.obj) {
-            let Some(class) = self.cx.baml_name(&self.obj.get_type().into_any())? else {
-                return Ok(None);
-            };
-            let args: Vec<Bound<'py, PyAny>> = self
-                .cx
-                .proto
-                .getattr("pydantic_instance_type_args")?
-                .call1((&self.obj,))?
-                .extract()?;
-            let type_args = if args.is_empty() {
-                None
-            } else {
-                Some(
-                    args.iter()
-                        .map(|arg| {
-                            if arg.is_instance(&self.cx.baml_type)? {
-                                let definition = arg.call_method0("_wire_copy")?;
-                                self.cx.wire_ty(&definition.getattr("root")?)
-                            } else {
-                                let wire = self
-                                    .cx
-                                    .proto
-                                    .getattr("python_type_to_wire_ty")?
-                                    .call1((arg,))?;
-                                self.cx.wire_ty(&wire)
-                            }
-                        })
-                        .collect::<PyResult<Vec<_>>>()?,
-                )
-            };
-            let fields = self
-                .model_fields()?
-                .into_iter()
-                .map(|(name, value)| (name, self.cx.value(value)))
-                .collect();
-            return Ok(Some(Instance {
-                class,
-                type_args,
-                fields,
-            }));
-        }
-        if self.obj.is_instance(&self.cx.class_instance)? {
-            let class: String = self.obj.getattr("class_name")?.extract()?;
-            let fields = self.obj.getattr("fields")?;
-            let fields = fields
-                .cast::<PyDict>()?
-                .iter()
-                .map(|(name, value)| Ok((name.extract::<String>()?, self.cx.value(value))))
-                .collect::<PyResult<Vec<_>>>()?;
-            return Ok(Some(Instance {
-                class: TypeName::from_dotted_path(&class),
-                type_args: None,
-                fields,
-            }));
-        }
-        Ok(None)
+    /// A pydantic instance of a class the typemap knows, with the type
+    /// arguments pydantic's generic metadata gives it.
+    fn model_shape(&self) -> PyResult<Shape<Self>> {
+        let Some(class) = self.cx.baml_name(&self.obj.get_type().into_any())? else {
+            return Ok(Shape::Other);
+        };
+        let args: Vec<Bound<'py, PyAny>> = self
+            .cx
+            .proto
+            .getattr("pydantic_instance_type_args")?
+            .call1((&self.obj,))?
+            .extract()?;
+        let type_args = if args.is_empty() {
+            None
+        } else {
+            Some(
+                args.iter()
+                    .map(|arg| {
+                        if arg.is_instance(&self.cx.baml_type)? {
+                            let definition = arg.call_method0("_wire_copy")?;
+                            self.cx.wire_ty(&definition.getattr("root")?)
+                        } else {
+                            let wire = self
+                                .cx
+                                .proto
+                                .getattr("python_type_to_wire_ty")?
+                                .call1((arg,))?;
+                            self.cx.wire_ty(&wire)
+                        }
+                    })
+                    .collect::<PyResult<Vec<_>>>()?,
+            )
+        };
+        let fields = self
+            .model_fields()?
+            .into_iter()
+            .map(|(name, value)| (name, self.cx.value(value)))
+            .collect();
+        Ok(Shape::Instance {
+            class,
+            type_args,
+            fields,
+        })
     }
 
-    fn try_map(&self) -> PyResult<Option<Vec<(Self, Self)>>> {
-        if let Ok(dict) = self.obj.cast::<PyDict>() {
-            return Ok(Some(
-                dict.iter()
-                    .map(|(key, value)| (self.cx.value(key), self.cx.value(value)))
-                    .collect(),
-            ));
-        }
-        // A type metadata row is a plain record of five attributes.
-        if self.is_a(&self.cx.metadata_row) {
-            let py = self.cx.py;
-            return ["ty", "alias", "description", "docstring", "other"]
-                .iter()
-                .map(|name| {
-                    Ok((
-                        self.cx.value(PyString::new(py, name).into_any()),
-                        self.cx.value(self.obj.getattr(*name)?),
-                    ))
-                })
-                .collect::<PyResult<Vec<_>>>()
-                .map(Some);
-        }
-        Ok(None)
-    }
-
-    fn try_enum_member(&self) -> PyResult<Option<(TypeName, String)>> {
-        if !self.cx.is_enum(&self.obj) {
-            return Ok(None);
-        }
-        let Some(name) = self.cx.baml_name(&self.obj.get_type().into_any())? else {
-            return Ok(None);
+    /// An `Enum` member of an enum the typemap knows, by its variant.
+    fn enum_shape(&self) -> PyResult<Shape<Self>> {
+        let Some(enumeration) = self.cx.baml_name(&self.obj.get_type().into_any())? else {
+            return Ok(Shape::Other);
         };
         let value = self.obj.getattr("value")?;
         let Ok(variant) = value.extract::<String>() else {
@@ -674,245 +605,175 @@ impl<'py> PyValue<'_, 'py> {
                 self.describe()
             )));
         };
-        Ok(Some((name, variant)))
-    }
-
-    /// Python's `int` as the slot asks: the same number as an `int` when it
-    /// fits, a `bigint` by conversion, a `float` by conversion only when
-    /// exact, and under an open slot whatever width it needs.
-    fn int_scalar(&self, slot: ScalarSlot) -> PyResult<Answer<Scalar>> {
-        let small = self.obj.extract::<i64>().ok();
-        Ok(match (slot, small) {
-            (ScalarSlot::Int, Some(int)) => Answer::AsIs(Scalar::Int(int)),
-            (ScalarSlot::Int, None) => Answer::No,
-            (ScalarSlot::Bigint, Some(int)) => Answer::Converted(Scalar::Bigint(BigInt::from(int))),
-            (ScalarSlot::Bigint, None) => Answer::Converted(Scalar::Bigint(self.big_int()?)),
-            (ScalarSlot::Float, Some(int)) => match exact_float(int) {
-                Some(float) => Answer::Converted(Scalar::Float(float)),
-                None => Answer::No,
-            },
-            (ScalarSlot::Float, None) => Answer::No,
-            (ScalarSlot::Open, Some(int)) => Answer::AsIs(Scalar::Int(int)),
-            (ScalarSlot::Open, None) => Answer::AsIs(Scalar::Bigint(self.big_int()?)),
-            (ScalarSlot::Bool | ScalarSlot::String | ScalarSlot::Bytes, _) => Answer::No,
+        Ok(Shape::EnumMember {
+            enumeration,
+            variant,
         })
     }
 
-    fn big_int(&self) -> PyResult<BigInt> {
+    /// Python's `int`: the VM's integer when it fits, a `bigint` beyond.
+    fn int_scalar(&self) -> PyResult<Scalar> {
+        if let Ok(int) = self.obj.extract::<i64>()
+            && let Some(int) = Int63::new(int)
+        {
+            return Ok(Scalar::Int(int));
+        }
+        // `int.__format__` itself, not the object's: a subclass must not get
+        // to spell a different number.
         let hex: String = self
             .cx
             .py
-            .import("builtins")?
-            .getattr("format")?
+            .get_type::<PyInt>()
+            .getattr("__format__")?
             .call1((&self.obj, "x"))?
             .extract()?;
         BigInt::parse_bytes(hex.as_bytes(), 16)
+            .map(Scalar::BigInt)
             .ok_or_else(|| PyTypeError::new_err("Python int did not format as base sixteen"))
     }
 }
 
-/// A scalar that is one BAML scalar as it is: it fits the slot of that kind,
-/// or an open slot, and nothing else.
-fn only(slot: ScalarSlot, kind: ScalarSlot, scalar: Scalar) -> Answer<Scalar> {
-    if slot == kind || slot == ScalarSlot::Open {
-        Answer::AsIs(scalar)
-    } else {
-        Answer::No
-    }
-}
-
-/// Python's rule for an `int` in a `float` slot: only when the float is
-/// exactly that integer.
-#[expect(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    reason = "the round trip checks the cast was exact"
-)]
-fn exact_float(int: i64) -> Option<f64> {
-    let float = int as f64;
-    (float as i64 == int).then_some(float)
-}
-
 impl<'py> HostValue for PyValue<'_, 'py> {
-    fn is_null(&self) -> bool {
-        self.obj.is_none()
-    }
+    type Error = PyErr;
 
-    fn scalar(&self, slot: ScalarSlot) -> Answer<Scalar> {
-        if self.cx.is_enum(&self.obj) {
-            // An enum member is a variant, whatever it mixes in.
-            return Answer::No;
-        }
-        // Every Python scalar but `int` is exactly one BAML scalar and fits
-        // only that slot (or an open one); `int` has rules of its own.
-        if let Ok(bool) = self.obj.cast::<PyBool>() {
-            return only(slot, ScalarSlot::Bool, Scalar::Bool(bool.is_true()));
-        }
-        if self.is_pyclass::<PyInt>() {
-            return match self.int_scalar(slot) {
-                Ok(answer) => answer,
-                Err(error) => self.cx.fail(error).unwrap_or(Answer::No),
-            };
-        }
-        if let Ok(float) = self.obj.cast::<PyFloat>() {
-            return only(slot, ScalarSlot::Float, Scalar::Float(float.value()));
-        }
-        if let Ok(string) = self.obj.cast::<PyString>() {
-            return match string.to_str() {
-                Ok(string) => only(slot, ScalarSlot::String, Scalar::String(string.to_owned())),
-                Err(error) => self.cx.fail(error).unwrap_or(Answer::No),
-            };
-        }
-        if let Ok(bytes) = self.obj.cast::<PyBytes>() {
-            return only(
-                slot,
-                ScalarSlot::Bytes,
-                Scalar::Bytes(bytes.as_bytes().to_vec()),
-            );
-        }
-        if let Ok(bytes) = self.obj.cast::<PyByteArray>() {
-            return only(slot, ScalarSlot::Bytes, Scalar::Bytes(bytes.to_vec()));
-        }
-        Answer::No
-    }
+    const RULES: Rules = Rules::Python;
 
-    fn enum_member(&self) -> Option<(TypeName, String)> {
-        match self.try_enum_member() {
-            Ok(member) => member,
-            Err(error) => self.cx.fail(error),
+    fn shape(&self) -> PyResult<Shape<Self>> {
+        let obj = &self.obj;
+        if obj.is_none() {
+            return Ok(Shape::Null);
         }
-    }
-
-    fn enum_variant(&self, enumeration: &bridge_encode::EnumFacts) -> Answer<String> {
-        if !self.cx.is_enum(&self.obj)
-            && let Ok(string) = self.obj.cast::<PyString>()
-        {
-            // A string names a variant; the walker checks it is one.
-            return match string.to_str() {
-                Ok(string) => Answer::Converted(string.to_owned()),
-                Err(error) => self.cx.fail(error).unwrap_or(Answer::No),
-            };
+        if let Some(kind) = self.leaf_kind()? {
+            return Ok(Shape::Leaf(kind));
         }
-        match self.enum_member() {
-            Some((name, variant)) if name == enumeration.name => Answer::AsIs(variant),
-            Some(_) | None => Answer::No,
+        // An enum member is a variant, whatever it mixes in.
+        if self.cx.is_enum(obj) {
+            return self.enum_shape();
         }
-    }
-
-    fn list(&self) -> Option<Vec<Self>> {
-        if !(self.is_pyclass::<PyList>() || self.is_pyclass::<PyTuple>()) {
-            return None;
+        if let Ok(bool) = obj.cast::<PyBool>() {
+            return Ok(Shape::Scalar(Scalar::Bool(bool.is_true())));
         }
-        // Through the protocol, not the C-level items, so a subclass that
-        // overrides `__iter__` is read the way Python reads it.
-        let items = self
-            .obj
-            .try_iter()
-            .and_then(|iter| iter.collect::<PyResult<Vec<_>>>());
-        match items {
-            Ok(items) => Some(items.into_iter().map(|item| self.cx.value(item)).collect()),
-            Err(error) => self.cx.fail(error),
+        if obj.is_instance_of::<PyInt>() {
+            return self.int_scalar().map(Shape::Scalar);
         }
-    }
-
-    fn map(&self) -> Option<Vec<(Self, Self)>> {
-        match self.try_map() {
-            Ok(entries) => entries,
-            Err(error) => self.cx.fail(error),
+        if let Ok(float) = obj.cast::<PyFloat>() {
+            return Ok(Shape::Scalar(Scalar::Float(float.value())));
         }
-    }
-
-    fn instance(&self) -> Option<Instance<Self>> {
-        match self.try_instance() {
-            Ok(instance) => instance,
-            Err(error) => self.cx.fail(error),
+        if obj.is_instance_of::<PyString>() {
+            return Ok(Shape::Scalar(Scalar::String));
         }
-    }
-
-    fn is_callable(&self) -> bool {
-        // Classes are callable but are types, not functions; pydantic
-        // instances may be callable too and are values of their class.
-        self.obj.is_callable() && !self.is_pyclass::<PyType>() && !self.cx.is_model(&self.obj)
-    }
-
-    fn callable(&self, signature: &RuntimeTy) -> Option<Result<InboundValue, HostError>> {
-        if !self.is_callable() {
-            return None;
+        if obj.is_instance_of::<PyBytes>() || obj.is_instance_of::<PyByteArray>() {
+            return Ok(Shape::Scalar(Scalar::Bytes));
         }
-        let registration = (|| -> PyResult<u64> {
-            let marker = PyModule::import(self.cx.py, "baml_bridge._host_marker")?
-                .getattr("marker_for")?
-                .call1((&self.obj,))?;
-            let marker = if marker.is_none() {
-                None
-            } else {
-                Some(marker.cast::<BamlPyHandle>()?.borrow().handle_key)
-            };
-            crate::host_value::register_callable(
-                self.obj.clone().unbind(),
-                marker,
-                signature.clone(),
-            )
-        })();
-        Some(match registration {
-            Ok(key) => {
-                self.cx.registered.borrow_mut().push(key);
-                Ok(InboundValue {
-                    value_type: None,
-                    value: Some(Value::Handle(BamlHandle {
-                        key,
-                        handle_type: BamlHandleType::HostValueCallable as i32,
-                    })),
+        if obj.is_instance_of::<PyList>() || obj.is_instance_of::<PyTuple>() {
+            // Through the protocol, not the C-level items, so a subclass that
+            // overrides `__iter__` is read the way Python reads it.
+            let items = obj
+                .try_iter()?
+                .map(|item| Ok(self.cx.value(item?)))
+                .collect::<PyResult<Vec<_>>>()?;
+            return Ok(Shape::List(items));
+        }
+        if let Ok(dict) = obj.cast::<PyDict>() {
+            return Ok(Shape::Map(
+                dict.iter()
+                    .map(|(key, value)| (self.cx.value(key), self.cx.value(value)))
+                    .collect(),
+            ));
+        }
+        // A type metadata row is a plain record of five attributes.
+        if self.is_a(&self.cx.metadata_row) {
+            let py = self.cx.py;
+            let entries = ["ty", "alias", "description", "docstring", "other"]
+                .iter()
+                .map(|name| {
+                    Ok((
+                        self.cx.value(PyString::new(py, name).into_any()),
+                        self.cx.value(obj.getattr(*name)?),
+                    ))
                 })
-            }
-            Err(error) => {
-                let message = error.to_string();
-                self.cx.fail::<()>(error);
-                Err(HostError(message))
-            }
-        })
-    }
-
-    fn leaf(&self) -> Option<Result<Leaf, HostError>> {
-        match self.try_leaf() {
-            Ok(leaf) => leaf.map(Ok),
-            Err(error) => {
-                let message = error.to_string();
-                self.cx.fail::<()>(error);
-                Some(Err(HostError(message)))
-            }
+                .collect::<PyResult<Vec<_>>>()?;
+            return Ok(Shape::Map(entries));
         }
+        if self.cx.is_model(obj) {
+            return self.model_shape();
+        }
+        if obj.is_instance(&self.cx.class_instance)? {
+            let class: String = obj.getattr("class_name")?.extract()?;
+            let fields = obj.getattr("fields")?;
+            let fields = fields
+                .cast::<PyDict>()?
+                .iter()
+                .map(|(name, value)| Ok((name.extract::<String>()?, self.cx.value(value))))
+                .collect::<PyResult<Vec<_>>>()?;
+            return Ok(Shape::Instance {
+                class: TypeName::from_dotted_path(&class),
+                type_args: None,
+                fields,
+            });
+        }
+        // Classes are callable but are types, not functions.
+        if obj.is_callable() && !obj.is_instance_of::<PyType>() {
+            return Ok(Shape::Callable);
+        }
+        Ok(Shape::Other)
     }
 
+    fn text(&self) -> PyResult<Cow<'_, str>> {
+        self.obj.cast::<PyString>()?.to_str().map(Cow::Borrowed)
+    }
+
+    fn bytes(&self) -> PyResult<Cow<'_, [u8]>> {
+        if let Ok(bytes) = self.obj.cast::<PyBytes>() {
+            return Ok(Cow::Borrowed(bytes.as_bytes()));
+        }
+        // A bytearray is mutable, so its buffer is copied.
+        Ok(Cow::Owned(self.obj.cast::<PyByteArray>()?.to_vec()))
+    }
+
+    /// The type's name and, for a scalar, its text; a container by its
+    /// length. Bounded in work as in length: no user `__repr__` runs here.
     fn describe(&self) -> String {
         const LIMIT: usize = 48;
-        let type_name = self
-            .obj
+        let obj = &self.obj;
+        let type_name = obj
             .get_type()
             .name()
             .map(|name| name.to_string())
             .unwrap_or_else(|_| "object".to_string());
-        let repr = self
-            .obj
-            .repr()
-            .and_then(|repr| repr.to_str().map(str::to_owned))
-            .unwrap_or_default();
-        let mut shown: String = repr.chars().take(LIMIT).collect();
-        if shown.len() < repr.len() {
-            shown.push('…');
+        let shown = if obj.is_none() {
+            String::new()
+        } else if let Ok(text) = obj.cast::<PyString>() {
+            let text = text.to_string_lossy();
+            let mut shown: String = text.chars().take(LIMIT).collect();
+            if shown.chars().count() < text.chars().count() {
+                shown.push('…');
+            }
+            format!("{shown:?}")
+        } else if obj.is_instance_of::<PyBool>()
+            || obj.is_instance_of::<PyInt>()
+            || obj.is_instance_of::<PyFloat>()
+        {
+            let mut shown: String = obj
+                .str()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default()
+                .chars()
+                .take(LIMIT)
+                .collect();
+            if shown.chars().count() == LIMIT {
+                shown.push('…');
+            }
+            shown
+        } else if let Ok(len) = obj.len() {
+            format!("of length {len}")
+        } else {
+            String::new()
+        };
+        if shown.is_empty() {
+            type_name
+        } else {
+            format!("{type_name} {shown}")
         }
-        format!("{type_name} {shown}")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn exact_float_round_trips_only_representable_ints() {
-        assert_eq!(exact_float(3), Some(3.0));
-        assert_eq!(exact_float(-(1 << 53)), Some(-9_007_199_254_740_992.0));
-        assert_eq!(exact_float((1 << 53) + 1), None);
     }
 }
