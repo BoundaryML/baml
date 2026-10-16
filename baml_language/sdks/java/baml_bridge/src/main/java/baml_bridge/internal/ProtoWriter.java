@@ -149,8 +149,9 @@ public final class ProtoWriter {
         }
         WireWriter w = new WireWriter();
         for (int i = 0; i < names.length; i++) {
+            Object arg = bindTypeArgs(args[i], typeArgs);
             try {
-                w.writeMessage(CALL_ARGS_KWARGS, encodeMapEntry(names[i], args[i]));
+                w.writeMessage(CALL_ARGS_KWARGS, encodeMapEntry(names[i], arg));
             } catch (UnsupportedInboundTypeException e) {
                 // Rewrap the deep rejection so it names the *top-level* argument
                 // (the parameter from names[]), not the nested position — an
@@ -202,6 +203,24 @@ public final class ProtoWriter {
         w.writeRawBytes(preparedInvocation == null ? encodeCallFunctionArgs(names, args, callId, null) : encodeCallFunctionArgs(names, args, callId, null, preparedInvocation));
         w.writeInt64(CALL_ARGS_FUNCTION_HANDLE, functionHandle);
         return w.toByteArray();
+    }
+
+    /**
+     * The call's explicit type bag bound into a typed argument's slot type: the
+     * generated binding states each argument under its declared type, which
+     * mentions the call's type parameters, and the bag names them.
+     */
+    private static Object bindTypeArgs(Object arg, BamlTypes typeArgs) {
+        if (typeArgs == null || typeArgs.isEmpty()) {
+            return arg;
+        }
+        if (arg instanceof baml_bridge.BamlTypedValue typed) {
+            return new baml_bridge.BamlTypedValue(typed.value(), typed.type().substitute(typeArgs.asMap()));
+        }
+        if (arg instanceof baml_bridge.BamlTypedCallable typed) {
+            return new baml_bridge.BamlTypedCallable(typed.callable(), typed.functionType().substitute(typeArgs.asMap()));
+        }
+        return arg;
     }
 
     /** One {@code BamlTyArg}: TypeVar name on {@code type_var}, the lowered type on {@code type_value}. */
@@ -311,11 +330,15 @@ public final class ProtoWriter {
         } else if (value instanceof List<?> list) {
             boolean slotIsList = contextualType != null && contextualType.kind() == BamlType.Kind.LIST;
             w.writeMessage(IV_LIST, encodeList(list, slotIsList ? contextualType.listItem() : null));
-            statedType = slotIsList && isExact(contextualType) ? contextualType : naturalType(list);
+            statedType = slotIsList && isExact(contextualType)
+                    ? contextualType
+                    : stateNatural(naturalType(list), contextualType);
         } else if (value instanceof Map<?, ?> map) {
             boolean slotIsMap = contextualType != null && contextualType.kind() == BamlType.Kind.MAP;
             w.writeMessage(IV_MAP, encodeMap(map, slotIsMap ? contextualType.mapValue() : null));
-            statedType = slotIsMap && isExact(contextualType) ? contextualType : naturalType(map);
+            statedType = slotIsMap && isExact(contextualType)
+                    ? contextualType
+                    : stateNatural(naturalType(map), contextualType);
         } else if (value instanceof Enum<?> constant) {
             // Any Java enum: encode it only if its type is a registered generated
             // enum; an unregistered enum is not a BAML value.
@@ -444,6 +467,78 @@ public final class ProtoWriter {
     }
 
     /**
+     * The type a container states under a slot that does not fix it. An empty
+     * container has no element type of its own ({@code never} in
+     * {@code natural}): under {@code unknown} (or no slot) it states
+     * {@code unknown}, as the compiler types {@code []} with no annotation;
+     * under a slot that leaves a type variable open nothing binds the
+     * variable, and the call is refused until the caller names it, as the
+     * dynamic hosts refuse it. A {@code never?} stays: that is {@code null}.
+     */
+    private static BamlType stateNatural(BamlType natural, BamlType contextualType) {
+        if (natural == null || !mentionsNever(natural)) {
+            return natural;
+        }
+        boolean open = contextualType == null || contextualType.kind() == BamlType.Kind.UNKNOWN;
+        if (open) {
+            return neverToUnknown(natural);
+        }
+        String var = firstTypeVar(contextualType);
+        throw new IllegalArgumentException(
+                "BAML could not infer a type for `" + (var == null ? "T" : var)
+                        + "` from the value; pass the call's type arguments");
+    }
+
+    /** Whether {@code type} has a {@code never} anywhere but as an optional's inner type. */
+    private static boolean mentionsNever(BamlType type) {
+        return switch (type.kind()) {
+            case NEVER -> true;
+            case OPTIONAL -> type.optionalInner().kind() != BamlType.Kind.NEVER && mentionsNever(type.optionalInner());
+            case LIST -> mentionsNever(type.listItem());
+            case MAP -> mentionsNever(type.mapKey()) || mentionsNever(type.mapValue());
+            case UNION -> type.unionOptions().stream().anyMatch(ProtoWriter::mentionsNever);
+            case CLASS -> type.classTypeArgs().stream().anyMatch(ProtoWriter::mentionsNever);
+            default -> false;
+        };
+    }
+
+    /** {@code type} with every {@code never} that is not an optional's inner type spelled {@code unknown}. */
+    private static BamlType neverToUnknown(BamlType type) {
+        return switch (type.kind()) {
+            case NEVER -> BamlType.UNKNOWN;
+            case OPTIONAL -> type.optionalInner().kind() == BamlType.Kind.NEVER
+                    ? type
+                    : BamlType.optional(neverToUnknown(type.optionalInner()));
+            case LIST -> BamlType.list(neverToUnknown(type.listItem()));
+            case MAP -> BamlType.map(neverToUnknown(type.mapKey()), neverToUnknown(type.mapValue()));
+            case UNION -> BamlType.union(
+                    type.unionOptions().stream().map(ProtoWriter::neverToUnknown).toArray(BamlType[]::new));
+            case CLASS -> BamlType.classByFqn(
+                    type.fqn(),
+                    type.classTypeArgs().stream().map(ProtoWriter::neverToUnknown).toArray(BamlType[]::new));
+            default -> type;
+        };
+    }
+
+    /** The name of the first type variable {@code type} mentions, or {@code null}. */
+    private static String firstTypeVar(BamlType type) {
+        return switch (type.kind()) {
+            case TYPEVAR -> type.fqn();
+            case OPTIONAL -> firstTypeVar(type.optionalInner());
+            case LIST -> firstTypeVar(type.listItem());
+            case MAP -> {
+                String key = firstTypeVar(type.mapKey());
+                yield key != null ? key : firstTypeVar(type.mapValue());
+            }
+            case UNION -> type.unionOptions().stream().map(ProtoWriter::firstTypeVar)
+                    .filter(java.util.Objects::nonNull).findFirst().orElse(null);
+            case CLASS -> type.classTypeArgs().stream().map(ProtoWriter::firstTypeVar)
+                    .filter(java.util.Objects::nonNull).findFirst().orElse(null);
+            default -> null;
+        };
+    }
+
+    /**
      * The BAML type a Java value has on its own, as the engine would see it: the
      * concrete type of a value under a slot that fixes nothing. A container's
      * element type is the union of its elements' types (duplicates collapsed,
@@ -540,13 +635,17 @@ public final class ProtoWriter {
     /**
      * Bind the type variables of the field descriptor {@code desc} from the
      * natural type {@code natural} of the field's value, as the shared walker's
-     * {@code unify} does: an empty container binds {@code never} (the exact
-     * type of {@code []}), two fields that disagree about a variable are an
-     * error, and a union descriptor gives no evidence.
+     * solver does: an empty container has no element type and binds nothing
+     * (its {@code never} is the absence of evidence, not a type), two fields
+     * that disagree about a variable are an error, and a union descriptor
+     * gives no evidence.
      */
     private static void unify(BamlType desc, BamlType natural, Map<String, BamlType> bindings) {
         switch (desc.kind()) {
             case TYPEVAR -> {
+                if (mentionsNever(natural)) {
+                    return;
+                }
                 BamlType bound = bindings.putIfAbsent(desc.fqn(), natural);
                 if (bound != null && !bound.equals(natural)) {
                     throw new IllegalArgumentException(

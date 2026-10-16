@@ -1821,18 +1821,15 @@ mod tests {
         );
         assert!(
             file.contains(
-                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {new baml_bridge.BamlTypedValue(x, $"
+                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {new baml_bridge.BamlTypedValue(x, $RET0)}, $RET0, null, types);"
             ),
             "{file}"
         );
-        assert!(
-            file.contains(".substitute(types.asMap()))}, $RET0, null, types);"),
-            "{file}"
-        );
-        // Without the bag the value goes as it is: its own type binds `T`.
+        // Without the bag the value carries the open slot type `T`: its own
+        // type binds `T`, and one with none (an empty list) is refused.
         assert!(
             file.contains(
-                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0);"
+                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {new baml_bridge.BamlTypedValue(x, $RET0)}, $RET0);"
             ),
             "{file}"
         );
@@ -1845,7 +1842,7 @@ mod tests {
             "{file}"
         );
         assert!(
-            file.contains(".substitute(types.asMap()))}, $RET0, baml, types);"),
+            file.contains("{new baml_bridge.BamlTypedValue(x, $RET0)}, $RET0, baml, types);"),
             "{file}"
         );
 
@@ -1926,7 +1923,7 @@ mod tests {
         // bag through the runtime call.
         assert!(
             file.contains(
-                "baml_bridge.BamlFfi.callSync(\"user.probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0, baml, types);"
+                "baml_bridge.BamlFfi.callSync(\"user.probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {new baml_bridge.BamlTypedValue(x, $RET0)}), $RET0, baml, types);"
             ),
             "{file}"
         );

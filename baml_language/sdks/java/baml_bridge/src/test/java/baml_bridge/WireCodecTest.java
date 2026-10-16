@@ -852,17 +852,34 @@ class WireCodecTest {
 
     /**
      * A container under a slot that fixes nothing (no type, {@code unknown}, a
-     * type variable) states the type it has: its elements' type, with an empty
-     * container's element type being {@code never}.
+     * type variable) states the type it has: its elements' type. An empty
+     * container has none: it is {@code unknown[]} where nothing is declared,
+     * and refused under an open type variable, which it cannot bind.
      */
     @Test
     void encode_container_under_open_slot_states_its_natural_type() {
         assertArrayEquals(
                 BamlType.list(BamlType.INT).toWireTy(),
                 valueTypeOf(ProtoWriter.encodeInboundValue(List.of(1L, 2L))));
+        // An empty container has no element type of its own: with no slot it is
+        // `unknown[]`, and under a slot that leaves a type variable open the
+        // call is refused until the caller names the variable.
         assertArrayEquals(
-                BamlType.list(BamlType.NEVER).toWireTy(),
+                BamlType.list(BamlType.UNKNOWN).toWireTy(),
                 valueTypeOf(ProtoWriter.encodeInboundValue(List.of())));
+        assertArrayEquals(
+                BamlType.list(BamlType.UNKNOWN).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(), BamlType.UNKNOWN))));
+        IllegalArgumentException openList = assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        List.of(), BamlType.list(BamlType.typeVar("T")))));
+        assertTrue(openList.getMessage().contains("could not infer a type for `T`"), openList.getMessage());
+        IllegalArgumentException openMap = assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        Map.of(), BamlType.map(BamlType.STRING, BamlType.typeVar("T")))));
+        assertTrue(openMap.getMessage().contains("could not infer a type for `T`"), openMap.getMessage());
         assertArrayEquals(
                 BamlType.list(BamlType.union(BamlType.INT, BamlType.STRING)).toWireTy(),
                 valueTypeOf(ProtoWriter.encodeInboundValue(List.of(1L, "a", 2L))));
@@ -968,8 +985,8 @@ class WireCodecTest {
     /**
      * A generic class's bound type arguments are substituted into its field
      * descriptors: `T[]` is `int[]` for a `Shapes<int>`, which is what an empty
-     * list there states. Unbound, the field's slot is open and the list states
-     * what it is.
+     * list there states. Unbound, an empty list determines nothing about `T`
+     * and the instance is refused until the caller names it.
      */
     @Test
     void encode_generic_class_fields_are_typed_by_the_bound_arguments() {
@@ -980,9 +997,9 @@ class WireCodecTest {
                 firstFieldValueTypeOf(ProtoWriter.encodeInboundValue(bound)));
 
         Shapes unbound = new Shapes(List.of());
-        assertArrayEquals(
-                BamlType.list(BamlType.NEVER).toWireTy(),
-                firstFieldValueTypeOf(ProtoWriter.encodeInboundValue(unbound)));
+        IllegalArgumentException open = assertThrows(
+                IllegalArgumentException.class, () -> ProtoWriter.encodeInboundValue(unbound));
+        assertTrue(open.getMessage().contains("do not determine its type argument `T`"), open.getMessage());
     }
 
     /** A registered class instance names its class; a mixed-value map states the union. */
