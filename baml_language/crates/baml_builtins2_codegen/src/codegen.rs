@@ -13,9 +13,11 @@
 
 use std::{collections::BTreeMap, fmt::Write};
 
+use baml_base::RustPayloadKind as RustDataKind;
+
 use crate::{
     rust_ident::{rust_class_type_ident, rust_field_ident, rust_field_value_ident},
-    types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage},
+    types::{BamlType, NativeBuiltin, NativeClassBody, NativeClassDef, Receiver, VmUsage},
 };
 
 // ============================================================================
@@ -245,6 +247,11 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     let inner = "    ".repeat(depth + 1);
     let inner2 = "    ".repeat(depth + 2);
 
+    if let NativeClassBody::RustType(kind) = &def.body {
+        emit_rust_view_struct(out, class_name, def, *kind, depth);
+        return;
+    }
+
     // Struct definition
     writeln!(out, "{indent}/// Generated from `{}`", def.source_file).unwrap();
     writeln!(out, "{indent}pub struct {class_name}<'a> {{").unwrap();
@@ -254,7 +261,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     // Impl block with typed accessors
     writeln!(out, "{indent}impl<'a> {class_name}<'a> {{").unwrap();
 
-    for field in &def.fields {
+    for field in def.fields() {
         let raw_name = &field.name;
         let field_name = rust_field_ident(raw_name);
         match &field.field_type {
@@ -546,7 +553,119 @@ fn emit_copy_namespace_contents(out: &mut String, node: &ClassNamespaceNode, dep
     }
 }
 
+/// The `view::` struct of a `@@rust_type` class: the instance's type
+/// arguments and its payload, typed by the class's kind.
+fn emit_rust_view_struct(
+    out: &mut String,
+    class_name: &str,
+    def: &NativeClassDef,
+    kind: RustDataKind,
+    depth: usize,
+) {
+    let indent = "    ".repeat(depth);
+    let inner = "    ".repeat(depth + 1);
+    let inner2 = "    ".repeat(depth + 2);
+
+    writeln!(out, "{indent}/// Generated from `{}`", def.source_file).unwrap();
+    writeln!(out, "{indent}pub struct {class_name}<'a> {{").unwrap();
+    writeln!(out, "{inner}pub instance: &'a bex_vm_types::RustInstance,").unwrap();
+    writeln!(out, "{indent}}}\n").unwrap();
+    writeln!(out, "{indent}impl<'a> {class_name}<'a> {{").unwrap();
+    writeln!(
+        out,
+        "{inner}pub fn class_type_args(&self) -> &'a [bex_vm_types::RealizedTy] {{"
+    )
+    .unwrap();
+    writeln!(out, "{inner2}&self.instance.class_type_args").unwrap();
+    writeln!(out, "{inner}}}\n").unwrap();
+    match kind {
+        RustDataKind::Foreign => {
+            writeln!(
+                out,
+                "{inner}pub fn payload<T: bex_vm_types::BexRustData>(&self) -> &'a T {{"
+            )
+            .unwrap();
+            writeln!(out, "{inner2}match &self.instance.payload {{").unwrap();
+            writeln!(
+                out,
+                "{inner2}    bex_vm_types::RustPayload::Foreign(data) => data"
+            )
+            .unwrap();
+            writeln!(out, "{inner2}        .downcast_ref::<T>()").unwrap();
+            writeln!(
+                out,
+                "{inner2}        .expect(\"{class_name}: payload downcast failed\"),"
+            )
+            .unwrap();
+            writeln!(out, "{inner2}}}").unwrap();
+            writeln!(out, "{inner}}}\n").unwrap();
+        }
+    }
+    writeln!(out, "{indent}}}\n").unwrap();
+}
+
+/// The `copy::` struct of a `@@rust_type` class: the payload, typed by the
+/// class's kind, and `to_value` building the instance. A generic class takes
+/// its type arguments, which only the caller knows.
+fn emit_rust_copy_struct(
+    out: &mut String,
+    class_name: &str,
+    def: &NativeClassDef,
+    kind: RustDataKind,
+    depth: usize,
+) {
+    let indent = "    ".repeat(depth);
+    let inner = "    ".repeat(depth + 1);
+    let inner2 = "    ".repeat(depth + 2);
+    let class_ident = rust_class_type_ident(class_name);
+    let item = crate::lang_item::lang_item_expr(&def.namespace_prefix, &def.name);
+
+    writeln!(out, "{indent}/// Generated from `{}`", def.source_file).unwrap();
+    writeln!(out, "{indent}pub struct {class_ident} {{").unwrap();
+    match kind {
+        RustDataKind::Foreign => {
+            writeln!(
+                out,
+                "{inner}pub payload: Arc<dyn bex_vm_types::BexRustData>,"
+            )
+            .unwrap();
+        }
+    }
+    writeln!(out, "{indent}}}\n").unwrap();
+    writeln!(out, "{indent}impl {class_ident} {{").unwrap();
+    let type_args_param = if def.generic_params.is_empty() {
+        String::new()
+    } else {
+        ", class_type_args: Box<[bex_vm_types::RealizedTy]>".to_string()
+    };
+    writeln!(
+        out,
+        "{inner}pub fn to_value(self, vm: &mut BexVm{type_args_param}) -> bex_vm_types::Value {{"
+    )
+    .unwrap();
+    writeln!(out, "{inner2}let class_ptr = vm.lang_object({item});").unwrap();
+    let type_args = if def.generic_params.is_empty() {
+        "Box::new([])"
+    } else {
+        "class_type_args"
+    };
+    let payload = match kind {
+        RustDataKind::Foreign => "bex_vm_types::RustPayload::Foreign(self.payload)",
+    };
+    writeln!(
+        out,
+        "{inner2}vm.alloc_rust_instance(class_ptr, {type_args}, {payload})"
+    )
+    .unwrap();
+    writeln!(out, "{inner}}}").unwrap();
+    writeln!(out, "{indent}}}\n").unwrap();
+}
+
 fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, depth: usize) {
+    if let NativeClassBody::RustType(kind) = &def.body {
+        emit_rust_copy_struct(out, class_name, def, *kind, depth);
+        return;
+    }
     let indent = "    ".repeat(depth);
     let inner = "    ".repeat(depth + 1);
     let inner2 = "    ".repeat(depth + 2);
@@ -558,7 +677,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     // Struct definition with owned fields
     writeln!(out, "{indent}/// Generated from `{}`", def.source_file).unwrap();
     writeln!(out, "{indent}pub struct {class_ident} {{").unwrap();
-    for field in &def.fields {
+    for field in def.fields() {
         let rust_type = copy_field_type(&field.field_type);
         writeln!(
             out,
@@ -580,7 +699,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     writeln!(out, "{inner2}let class_ptr = vm.lang_object({item});").unwrap();
 
     // Convert each field to a Value
-    for field in &def.fields {
+    for field in def.fields() {
         let value_ident = rust_field_value_ident(&field.name);
         let conversion = copy_field_to_value(
             &rust_field_ident(&field.name).to_string(),
@@ -595,7 +714,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
         "{inner2}bex_vm_types::Value::object(vm.alloc_instance(class_ptr, vec!["
     )
     .unwrap();
-    for (i, field) in def.fields.iter().enumerate() {
+    for (i, field) in def.fields().iter().enumerate() {
         if i > 0 {
             out.push_str(", ");
         }
@@ -1399,9 +1518,14 @@ fn emit_immut_receiver_extraction_indented(
         // matching `receiver_input_type_with_vm_usage`.
         _ if recv.instance_backed && !needs_owned => {
             let view_path = receiver_view_path(recv);
+            let as_instance = if recv.rust_type.is_some() {
+                "as_rust_instance"
+            } else {
+                "as_instance"
+            };
             writeln!(
                 out,
-                "{indent}let __instance = vm.as_instance(&args[{idx}])?;"
+                "{indent}let __instance = vm.{as_instance}(&args[{idx}])?;"
             )
             .unwrap();
             writeln!(

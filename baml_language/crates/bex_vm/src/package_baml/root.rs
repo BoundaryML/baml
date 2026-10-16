@@ -157,6 +157,11 @@ impl BamlPackageBaml for PackageBamlImpl {
         match value.as_object_ptr() {
             Some(ptr) => match vm.get_object(ptr) {
                 Object::Instance(inst) => inst.cleaned.begin(),
+                // BUG: a `@@rust_type` instance carries no run-once latch, so
+                // a `cleanup` on a `@@rust_type` class would run on every
+                // invocation. No such class declares one yet; the latch (and
+                // the collector's finalizer scan) must come before one does.
+                Object::RustInstance(_) => true,
                 _ => true,
             },
             None => true,
@@ -790,6 +795,20 @@ pub(super) fn render_to_sink(
                 _ => (String::new(), Vec::new()),
             };
             DisplaySnap::Instance(class_name, paired, inst.fields.len() > limit)
+        }
+        // Its class, with nothing inside: the state is not BAML data.
+        Object::RustInstance(inst) => {
+            let class_name = match vm.get_object(inst.class) {
+                Object::Class(class) => {
+                    if state.qualified_class_names {
+                        class.name().to_string()
+                    } else {
+                        class.path.name.to_string()
+                    }
+                }
+                _ => String::new(),
+            };
+            DisplaySnap::Instance(class_name, Vec::new(), false)
         }
         Object::Variant(var) => {
             let name = match vm.get_object(var.enm) {
