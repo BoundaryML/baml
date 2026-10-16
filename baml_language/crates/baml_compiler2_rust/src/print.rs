@@ -1,7 +1,7 @@
 //! Rust source for admitted functions and classes, built as tokens and
 //! pretty-printed.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_mir::{
@@ -23,6 +23,7 @@ use crate::{
         binop_ty, equality_common, is_dead_null_write, is_omitted, param_place, unary_operand_ty,
     },
     generics::Instance,
+    memory::{AllocSites, Tracking},
     structure::Stmt,
     types::{ClassInst, Coercion, NativeTy, coercion},
     unions::{MemberTest, TestSite},
@@ -66,33 +67,66 @@ pub(crate) fn render_module<'db>(
     interfaces: &[&IfaceInfo<'db>],
     candidates: &[Candidate<'db>],
     names: &FxHashMap<FnId<'db>, Ident>,
-    table: &ClassTable<'db>,
-) -> Result<String, Rejection> {
+    types: &Types<'_, 'db>,
+) -> Result<(String, AllocSites), Rejection> {
+    let table = types.classes;
     let mut items = quote! {
-        use std::rc::Rc;
         use bex_aot::{
-            BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-            string,
+            BigInt, CcMap, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int,
+            json, map, string,
         };
-        use bex_aot::handle::{Shared, shared};
+        use bex_aot::handle::{Cc, Shared, cc, shared};
         use bex_aot::render::ToBaml;
     };
     for info in enums {
         items.extend(render_enum(info, table, names)?);
     }
     for class in classes {
-        items.extend(render_class(class, table, names)?);
+        items.extend(render_class(class, types, names)?);
     }
     for union in unions {
-        items.extend(render_union(union, table));
+        items.extend(render_union(union, types));
     }
     for interface in interfaces {
-        items.extend(render_iface(interface, table));
+        items.extend(render_iface(interface, types));
     }
+    let sites = Cell::new(AllocSites::default());
     for candidate in candidates {
-        items.extend(Printer::new(candidate, names, table).function()?);
+        items.extend(Printer::new(candidate, names, types, &sites).function()?);
     }
-    render_rust_file(HEADER, items)
+    Ok((render_rust_file(HEADER, items)?, sites.get()))
+}
+
+/// How the module spells types: the generated items' names, and which heap
+/// types are tracked by the cycle collector ([`crate::memory`]).
+pub(crate) struct Types<'a, 'db> {
+    pub(crate) classes: &'a ClassTable<'db>,
+    pub(crate) tracking: &'a Tracking<'db>,
+}
+
+impl<'db> Types<'_, 'db> {
+    /// The Rust spelling of `ty`.
+    fn ty(&self, ty: &NativeTy<'db>) -> TokenStream {
+        ty.to_tokens(&|decl| self.classes.ident(decl), &|ty| {
+            self.tracking.value(ty)
+        })
+    }
+
+    /// The cell of a captured local of type `ty`: `cell::Cell<T>`, or
+    /// `cell::CcCell<T>` when the cycle collector tracks it.
+    fn cell(&self, ty: &NativeTy<'db>) -> TokenStream {
+        let inner = self.ty(ty);
+        if self.tracking.cell(ty) {
+            quote! { cell::CcCell<#inner> }
+        } else {
+            quote! { cell::Cell<#inner> }
+        }
+    }
+
+    /// Whether handles to the class instance `class` are tracked.
+    fn class_tracked(&self, class: &ClassInst<'db>) -> bool {
+        self.tracking.value(&NativeTy::Class(class.clone()))
+    }
 }
 
 /// Parse the tokens back as a file and pretty-print them. A parse failure is
@@ -111,15 +145,23 @@ pub(crate) fn render_rust_file(header: &str, tokens: TokenStream) -> Result<Stri
 /// `Name { f: v, .. }`.
 fn render_class<'db>(
     class: &ClassInfo<'db>,
-    table: &ClassTable<'db>,
+    types: &Types<'_, 'db>,
     names: &FxHashMap<FnId<'db>, Ident>,
 ) -> Result<TokenStream, Rejection> {
-    let class_ident = |decl| table.ident(decl);
+    let table = types.classes;
     let doc = format!(" BAML class `{}`.", class.link_name);
     let name = &class.ident;
+    // The handle the class is used through, and the kind its handle-taking
+    // impls are at: `Shared<Self>`, or `Cc<Self>` when the cycle collector
+    // tracks the class.
+    let (handle, kind) = if types.class_tracked(&class.instance) {
+        (quote! { Cc<Self> }, quote! { <bex_aot::Tracked> })
+    } else {
+        (quote! { Shared<Self> }, TokenStream::new())
+    };
     let fields = class.fields.iter().map(|field| {
         let ident = &field.ident;
-        let ty = field.ty.to_tokens(&class_ident);
+        let ty = types.ty(&field.ty);
         let rename = field.renamed().then(|| {
             let baml_name = &field.name;
             quote! { #[serde(rename = #baml_name)] }
@@ -169,20 +211,20 @@ fn render_class<'db>(
                     ))
                 })?;
             quote! {
-                impl bex_aot::eq::EqHandle for #name {
+                impl bex_aot::eq::EqHandle #kind for #name {
                     const OVERRIDES: bool = true;
-                    fn call_eq(a: &Shared<Self>, b: &Shared<Self>) -> Result<bool, Thrown> {
+                    fn call_eq(a: &#handle, b: &#handle) -> Result<bool, Thrown> {
                         #method(a.clone(), b.clone())
                     }
-                    fn fields_eq(_a: &Shared<Self>, _b: &Shared<Self>, _cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+                    fn fields_eq(_a: &#handle, _b: &#handle, _cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
                         unreachable!("compared through the class's own `eq`")
                     }
                 }
             }
         }
         None => quote! {
-            impl bex_aot::eq::EqHandle for #name {
-                fn fields_eq(a: &Shared<Self>, b: &Shared<Self>, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
+            impl bex_aot::eq::EqHandle #kind for #name {
+                fn fields_eq(a: &#handle, b: &#handle, cx: &mut bex_aot::eq::EqCx) -> Result<bool, Thrown> {
                     #(#compared)*
                     Ok(true)
                 }
@@ -203,20 +245,26 @@ fn render_class<'db>(
                     ))
                 })?;
             quote! {
-                impl bex_aot::render::Overridable for #name {
+                impl bex_aot::render::Overridable #kind for #name {
                     const OVERRIDES: bool = true;
-                    fn call_override(this: &Shared<Self>) -> Result<Str, Thrown> {
+                    fn call_override(this: &#handle) -> Result<Str, Thrown> {
                         #method(this.clone())
                     }
                 }
             }
         }
-        None => quote! { impl bex_aot::render::Overridable for #name {} },
+        None => quote! { impl bex_aot::render::Overridable #kind for #name {} },
     };
     let readable = class.fields.iter().map(|field| {
         let ident = &field.ident;
         let baml_name = &field.name;
         quote! { (#baml_name, bex_aot::Readable::readable(&self.#ident)) }
+    });
+    // A memory manager's view of the object: every field, each of which
+    // reports the handles it holds.
+    let traced = class.fields.iter().map(|field| {
+        let ident = &field.ident;
+        quote! { bex_aot::mem::Trace::trace(&self.#ident, visitor); }
     });
     // Every class can be thrown (`throw C { .. }`) and caught by name, and
     // prints inside an uncaught throw as the engine does, so each one is an
@@ -233,6 +281,13 @@ fn render_class<'db>(
             fn from_json(json: &bex_aot::json::Json) -> Result<Self, bex_aot::json::DecodeError> {
                 let object = bex_aot::json::object(json, #json_name)?;
                 Ok(Self { #(#decoded),* })
+            }
+        }
+
+        impl bex_aot::mem::Trace for #name {
+            #[inline]
+            fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+                #(#traced)*
             }
         }
 
@@ -358,6 +413,11 @@ fn render_enum<'db>(
             }
         }
 
+        impl bex_aot::mem::Trace for #name {
+            #[inline(always)]
+            fn trace(&self, _visitor: &mut dyn bex_aot::mem::Visitor) {}
+        }
+
         #eq_impl
     })
 }
@@ -371,8 +431,7 @@ fn render_enum<'db>(
 /// when both sides hold the same variant and is false otherwise, which is
 /// the VM's broad `==` across kinds, and exists only when every member
 /// compares natively (classes compare structurally on the VM).
-fn render_union<'db>(info: &UnionInfo<'db>, table: &ClassTable<'db>) -> TokenStream {
-    let class_ident = |decl| table.ident(decl);
+fn render_union<'db>(info: &UnionInfo<'db>, types: &Types<'_, 'db>) -> TokenStream {
     let doc = format!(" BAML union `{}`.", info.described);
     let name = &info.ident;
     let variants = info
@@ -380,7 +439,7 @@ fn render_union<'db>(info: &UnionInfo<'db>, table: &ClassTable<'db>) -> TokenStr
         .iter()
         .zip(&info.members)
         .map(|(variant, member)| {
-            let ty = member.to_tokens(&class_ident);
+            let ty = types.ty(member);
             quote! { #variant(#ty), }
         });
     let copy = info
@@ -394,7 +453,7 @@ fn render_union<'db>(info: &UnionInfo<'db>, table: &ClassTable<'db>) -> TokenStr
         .iter()
         .zip(&info.members)
         .map(|(variant, member)| {
-            let ty = member.to_tokens(&class_ident);
+            let ty = types.ty(member);
             quote! {
                 |json| <#ty as bex_aot::json::FromJson>::from_json(json).map(Self::#variant)
             }
@@ -439,6 +498,15 @@ fn render_union<'db>(info: &UnionInfo<'db>, table: &ClassTable<'db>) -> TokenStr
             }
         }
 
+        impl bex_aot::mem::Trace for #name {
+            #[inline]
+            fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+                match self {
+                    #(Self::#variant_names(value) => bex_aot::mem::Trace::trace(value, visitor),)*
+                }
+            }
+        }
+
         impl bex_aot::serde::Serialize for #name {
             fn serialize<S: bex_aot::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
                 match self {
@@ -463,8 +531,7 @@ fn render_union<'db>(info: &UnionInfo<'db>, table: &ClassTable<'db>) -> TokenStr
 /// concrete object). JSON decoding into an interface has no VM form and is
 /// rejected at the call; the impl exists so a struct with such a field
 /// derives, and errors if it is ever reached.
-fn render_iface<'db>(info: &IfaceInfo<'db>, table: &ClassTable<'db>) -> TokenStream {
-    let class_ident = |decl| table.ident(decl);
+fn render_iface<'db>(info: &IfaceInfo<'db>, types: &Types<'_, 'db>) -> TokenStream {
     let doc = format!(" BAML interface `{}`.", info.link_name);
     let name = &info.union.ident;
     let variants = info
@@ -473,7 +540,7 @@ fn render_iface<'db>(info: &IfaceInfo<'db>, table: &ClassTable<'db>) -> TokenStr
         .iter()
         .zip(&info.union.members)
         .map(|(variant, member)| {
-            let ty = member.to_tokens(&class_ident);
+            let ty = types.ty(member);
             quote! { #variant(#ty), }
         });
     let copy = info
@@ -511,6 +578,15 @@ fn render_iface<'db>(info: &IfaceInfo<'db>, table: &ClassTable<'db>) -> TokenStr
             fn readable(&self) -> String {
                 match self {
                     #(Self::#variant_names(value) => bex_aot::Readable::readable(value),)*
+                }
+            }
+        }
+
+        impl bex_aot::mem::Trace for #name {
+            #[inline]
+            fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+                match self {
+                    #(Self::#variant_names(value) => bex_aot::mem::Trace::trace(value, visitor),)*
                 }
             }
         }
@@ -553,6 +629,10 @@ struct Printer<'a, 'db> {
     candidate: &'a Candidate<'db>,
     names: &'a FxHashMap<FnId<'db>, Ident>,
     classes: &'a ClassTable<'db>,
+    /// How types are spelled, tracked handles included.
+    types: &'a Types<'a, 'db>,
+    /// The allocation sites printed so far, by kind.
+    sites: &'a Cell<AllocSites>,
     /// Blocks that head a loop, whose merge label (if any) needs its own name.
     loop_headers: FxHashSet<usize>,
     /// The unwind site of the block whose code is being printed, if it has a
@@ -565,21 +645,53 @@ impl<'a, 'db> Printer<'a, 'db> {
     fn new(
         candidate: &'a Candidate<'db>,
         names: &'a FxHashMap<FnId<'db>, Ident>,
-        classes: &'a ClassTable<'db>,
+        types: &'a Types<'a, 'db>,
+        sites: &'a Cell<AllocSites>,
     ) -> Self {
         let mut loop_headers = FxHashSet::default();
         collect_loop_headers(&candidate.structured, &mut loop_headers);
         Self {
             candidate,
             names,
-            classes,
+            classes: types.classes,
+            types,
+            sites,
             loop_headers,
             unwind: RefCell::new(None),
         }
     }
 
     fn ty(&self, ty: &NativeTy<'db>) -> TokenStream {
-        ty.to_tokens(&|decl| self.classes.ident(decl))
+        self.types.ty(ty)
+    }
+
+    /// The cell of a captured local of type `ty`.
+    fn cell_ty(&self, ty: &NativeTy<'db>) -> TokenStream {
+        self.types.cell(ty)
+    }
+
+    /// Count one allocation site of a tracked or untracked object.
+    fn site(&self, tracked: bool) {
+        let mut sites = self.sites.get();
+        if tracked {
+            sites.tracked += 1;
+        } else {
+            sites.untracked += 1;
+        }
+        self.sites.set(sites);
+    }
+
+    /// The allocator for a heap literal of type `ty`, counted as one site:
+    /// `tracked` when the cycle collector tracks the type, else `untracked`.
+    fn allocator(
+        &self,
+        ty: &NativeTy<'db>,
+        untracked: TokenStream,
+        tracked: TokenStream,
+    ) -> TokenStream {
+        let is_tracked = self.types.tracking.value(ty);
+        self.site(is_tracked);
+        if is_tracked { tracked } else { untracked }
     }
 
     /// The unwind site of `block`: the error local of its handler and the
@@ -678,8 +790,8 @@ impl<'a, 'db> Printer<'a, 'db> {
         // value that calls it holds the cells and lends them per call.
         let captures = candidate.captures.iter().enumerate().map(|(index, ty)| {
             let ident = capture_ident(index);
-            let ty = self.ty(ty);
-            quote! { #ident: &cell::Cell<#ty> }
+            let cell = self.cell_ty(ty);
+            quote! { #ident: &#cell }
         });
         // A parameter whose default the prologue computes is an `Option<T>`
         // input (`__arg_k`); the prologue fills the parameter's local from it
@@ -712,18 +824,22 @@ impl<'a, 'db> Printer<'a, 'db> {
             .filter(|index| candidate.body.local(Local(*index)).is_captured || computed(*index))
             .map(|index| {
                 let ident = local_ident(Local(index));
-                let ty = self.ty(&candidate.param_tys()[index - 1].clone());
-                match (
-                    candidate.body.local(Local(index)).is_captured,
-                    computed(index),
-                ) {
-                    (true, true) => quote! { let mut #ident: cell::Cell<#ty> = cell::fresh(); },
+                let param_ty = candidate.param_tys()[index - 1].clone();
+                let ty = self.ty(&param_ty);
+                let captured = candidate.body.local(Local(index)).is_captured;
+                if captured {
+                    self.site(self.types.tracking.cell(&param_ty));
+                }
+                let cell = self.cell_ty(&param_ty);
+                match (captured, computed(index)) {
+                    (true, true) => quote! { let mut #ident: #cell = cell::fresh(); },
                     (true, false) => {
-                        quote! { let mut #ident: cell::Cell<#ty> = cell::with(#ident); }
+                        quote! { let mut #ident: #cell = cell::with(#ident); }
                     }
                     (false, _) => quote! { let mut #ident: #ty; },
                 }
-            });
+            })
+            .collect::<Vec<_>>();
         let ret = self.ty(candidate.return_ty());
         // Declared without initializers: rustc proves every read follows a
         // write, over the same paths the MIR has. Aliased temporaries are
@@ -739,8 +855,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let ident = local_ident(Local(index));
                 let tokens = match kind {
                     LocalKind::Value(ty) if candidate.body.local(Local(index)).is_captured => {
-                        let ty = self.ty(ty);
-                        quote! { cell::Cell<#ty> }
+                        self.cell_ty(ty)
                     }
                     LocalKind::Value(ty) => self.ty(ty),
                     LocalKind::Tag(TagSource::Thrown) => quote! { &'static str },
@@ -756,7 +871,13 @@ impl<'a, 'db> Printer<'a, 'db> {
         // overflowing the native stack.
         let guard = quote! { let _frame = bex_aot::depth::Guard::enter()?; };
         let body = self.tail_stmts(&candidate.structured)?;
+        let env = if candidate.is_lambda() {
+            self.lambda_env(name)
+        } else {
+            TokenStream::new()
+        };
         Ok(quote! {
+            #env
             #[doc = #doc]
             pub fn #name(#(#captures,)* #(#params),*) -> Result<#ret, Thrown> {
                 #guard
@@ -765,6 +886,47 @@ impl<'a, 'db> Printer<'a, 'db> {
                 #(#body)*
             }
         })
+    }
+
+    /// A lambda's environment: a struct holding the cells it captures, the
+    /// object a closure value of it is ([`bex_aot::func::Func`]). It traces
+    /// its cells, and a call lends them to the lambda's function with the
+    /// arguments unpacked from the tuple.
+    fn lambda_env(&self, name: &Ident) -> TokenStream {
+        let candidate = self.candidate;
+        let env = env_ident(name);
+        let doc = format!(" The environment of BAML lambda `{}`.", candidate.link_name);
+        let fields: Vec<Ident> = (0..candidate.captures.len()).map(capture_ident).collect();
+        let field_tys = candidate.captures.iter().map(|ty| self.cell_ty(ty));
+        let param_tys: Vec<TokenStream> = candidate
+            .param_tys()
+            .into_iter()
+            .map(|ty| self.ty(ty))
+            .collect();
+        let args: Vec<Ident> = (0..param_tys.len())
+            .map(|index| format_ident!("__arg{index}"))
+            .collect();
+        let ret = self.ty(candidate.return_ty());
+        quote! {
+            #[doc = #doc]
+            pub struct #env {
+                #(pub #fields: #field_tys,)*
+            }
+
+            impl bex_aot::mem::Trace for #env {
+                #[inline]
+                fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+                    #(bex_aot::mem::Trace::trace(&self.#fields, visitor);)*
+                }
+            }
+
+            impl bex_aot::func::Callable<(#(#param_tys,)*), #ret> for #env {
+                #[inline]
+                fn call(&self, (#(#args,)*): (#(#param_tys,)*)) -> Result<#ret, Thrown> {
+                    #name(#(&self.#fields,)* #(#args),*)
+                }
+            }
+        }
     }
 
     fn stmts(&self, stmts: &[Stmt]) -> Result<Vec<TokenStream>, Rejection> {
@@ -1223,7 +1385,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                     .collect::<Result<Vec<_>, _>>()?;
                 (
                     TokenStream::new(),
-                    self.fallible(&quote! { (#callee)(#(#args),*) }),
+                    self.fallible(&quote! { (#callee).call((#(#args,)*)) }),
                     result,
                 )
             }
@@ -1769,7 +1931,14 @@ impl<'a, 'db> Printer<'a, 'db> {
             }
             _ => {
                 let value = self.operand_borrowed(callback)?;
-                quote! { &*#value }
+                let names: Vec<Ident> = (0..actual_params.len())
+                    .map(|index| format_ident!("__arg{index}"))
+                    .collect();
+                let params = names.iter().zip(actual_params).map(|(name, ty)| {
+                    let ty = self.ty(ty);
+                    quote! { #name: #ty }
+                });
+                quote! { &|#(#params),*| (#value).call((#(#names,)*)) }
             }
         };
         let ret_as_is = match op {
@@ -2291,6 +2460,8 @@ impl<'a, 'db> Printer<'a, 'db> {
             StatementKind::FreshCell { local, carry_value } => {
                 let cell = self.cell_ref(CellId::Local(*local))?;
                 let ident = local_ident(*local);
+                let local_ty = self.local_ty(*local)?;
+                self.site(self.types.tracking.cell(&local_ty));
                 Ok(Some(if *carry_value {
                     quote! { #ident = cell::carry(#cell); }
                 } else {
@@ -2428,10 +2599,12 @@ impl<'a, 'db> Printer<'a, 'db> {
                     .iter()
                     .map(|element| self.operand(element, Some(element_ty)))
                     .collect::<Result<Vec<_>, _>>()?;
+                let new =
+                    self.allocator(literal_ty, quote! { array::new }, quote! { array::new_cc });
                 let value = if elements.is_empty() {
-                    quote! { array::new::<#element_tokens>(Vec::new()) }
+                    quote! { #new::<#element_tokens>(Vec::new()) }
                 } else {
-                    quote! { array::new::<#element_tokens>(Vec::from([#(#elements),*])) }
+                    quote! { #new::<#element_tokens>(Vec::from([#(#elements),*])) }
                 };
                 (value, literal_ty.clone())
             }
@@ -2459,10 +2632,11 @@ impl<'a, 'db> Printer<'a, 'db> {
                         Ok(quote! { (#key, #value) })
                     })
                     .collect::<Result<Vec<_>, Rejection>>()?;
+                let new = self.allocator(literal_ty, quote! { map::new }, quote! { map::new_cc });
                 let value = if entries.is_empty() {
-                    quote! { map::new::<#key_tokens, #value_tokens>(Vec::new()) }
+                    quote! { #new::<#key_tokens, #value_tokens>(Vec::new()) }
                 } else {
-                    quote! { map::new::<#key_tokens, #value_tokens>(Vec::from([#(#entries),*])) }
+                    quote! { #new::<#key_tokens, #value_tokens>(Vec::from([#(#entries),*])) }
                 };
                 (value, literal_ty.clone())
             }
@@ -2490,8 +2664,9 @@ impl<'a, 'db> Printer<'a, 'db> {
                         Ok(quote! { #ident: #value })
                     })
                     .collect::<Result<Vec<_>, Rejection>>()?;
+                let alloc = self.allocator(literal_ty, quote! { shared }, quote! { cc });
                 (
-                    quote! { shared(#name { #(#fields),* }) },
+                    quote! { #alloc(#name { #(#fields),* }) },
                     NativeTy::Class(class.clone()),
                 )
             }
@@ -2503,8 +2678,9 @@ impl<'a, 'db> Printer<'a, 'db> {
                 let test = self.member_test(site)?;
                 (self.member_test_tokens(operand, &ty, test)?, NativeTy::Bool)
             }
-            // A closure value: the cells it captures, cloned into a Rust
-            // closure that lends them to the lambda's function on every
+            // A closure value: the cells it captures, cloned into the
+            // lambda's environment (`<lambda>__env`, emitted with the
+            // lambda), which lends them to the lambda's function on every
             // call.
             Rvalue::MakeClosure {
                 lambda_idx,
@@ -2518,20 +2694,32 @@ impl<'a, 'db> Printer<'a, 'db> {
                     .names
                     .get(&site.id)
                     .ok_or_else(|| Rejection::invalid("lambda has no Rust name"))?;
-                let cells: Vec<Ident> = (0..captures.len())
-                    .map(|index| format_ident!("__cell{index}"))
-                    .collect();
-                let clones = cells
+                let env = env_ident(name);
+                // Whether any captured cell is tracked: if none is, the
+                // environment can never be on a cycle, whatever its
+                // function type's kind.
+                let tracked_capture = Cell::new(false);
+                let fields = captures
                     .iter()
-                    .zip(captures)
-                    .map(|(cell, capture)| {
+                    .enumerate()
+                    .map(|(index, capture)| {
+                        let field = capture_ident(index);
                         let source = match capture {
                             Operand::Copy(Place::Local(local))
                             | Operand::Move(Place::Local(local)) => {
+                                if self.types.tracking.cell(&self.local_ty(*local)?) {
+                                    tracked_capture.set(true);
+                                }
                                 self.cell_ref(CellId::Local(*local))?
                             }
                             Operand::Copy(Place::Capture(index))
                             | Operand::Move(Place::Capture(index)) => {
+                                let ty = self.candidate.captures.get(*index).ok_or_else(|| {
+                                    Rejection::invalid(format!("capture {index} has no type"))
+                                })?;
+                                if self.types.tracking.cell(ty) {
+                                    tracked_capture.set(true);
+                                }
                                 self.cell_ref(CellId::Capture(*index))?
                             }
                             other => {
@@ -2540,24 +2728,21 @@ impl<'a, 'db> Printer<'a, 'db> {
                                 )));
                             }
                         };
-                        Ok(quote! { let #cell = cell::Cell::clone(#source); })
+                        Ok(quote! { #field: cell::Cell::clone(#source) })
                     })
                     .collect::<Result<Vec<_>, Rejection>>()?;
-                let args: Vec<Ident> = (0..site.params.len())
-                    .map(|index| format_ident!("__arg{index}"))
-                    .collect();
-                let params = args.iter().zip(&site.params).map(|(arg, ty)| {
-                    let ty = self.ty(ty);
-                    quote! { #arg: #ty }
-                });
                 let ty = NativeTy::Fn(site.params.clone(), Box::new(site.ret.clone()));
+                let tracked = self.types.tracking.value(&ty);
+                self.site(tracked);
+                let alloc = if tracked && !tracked_capture.get() {
+                    quote! { func::alloc_acyclic }
+                } else {
+                    quote! { func::alloc }
+                };
                 let fn_ty = self.ty(&ty);
                 (
                     quote! {{
-                        #(#clones)*
-                        let __closure: #fn_ty = Rc::new(move |#(#params),*| {
-                            #name(#(&#cells,)* #(#args),*)
-                        });
+                        let __closure: #fn_ty = #alloc(#env { #(#fields),* });
                         __closure
                     }},
                     ty,
@@ -2708,8 +2893,8 @@ impl<'a, 'db> Printer<'a, 'db> {
         }})
     }
 
-    /// The function item of `instance` behind a counted pointer, as a
-    /// value of the function type `ty`.
+    /// The function item of `instance` as a value of the function type
+    /// `ty`: a function value that captures nothing.
     fn function_value(
         &self,
         instance: &Instance<'db>,
@@ -2719,9 +2904,10 @@ impl<'a, 'db> Printer<'a, 'db> {
             .names
             .get(&FnId::Declared(instance.clone()))
             .ok_or_else(|| Rejection::invalid("callee has no Rust name"))?;
+        self.site(self.types.tracking.value(ty));
         let fn_ty = self.ty(ty);
         Ok(quote! {{
-            let __function: #fn_ty = Rc::new(#name);
+            let __function: #fn_ty = func::item(#name);
             __function
         }})
     }
@@ -3054,7 +3240,7 @@ impl<'a, 'db> Printer<'a, 'db> {
                     quote! { #name::#variant }
                 }
                 // A declared function as a value (at its type arguments, for
-                // a generic one): its function item behind a counted pointer.
+                // a generic one): its function item behind a function handle.
                 Constant::Function(DeclRef::Source(_)) | Constant::GenericFunction { .. } => {
                     let instance = function_constant(operand)
                         .ok_or_else(|| Rejection::unsupported("stdlib function used as a value"))?;
@@ -3480,9 +3666,15 @@ fn local_ident(local: Local) -> Ident {
     format_ident!("_{}", local.0)
 }
 
-/// The parameter holding a lambda's `index`th capture.
+/// The parameter holding a lambda's `index`th capture, and the field of
+/// its environment holding the cell.
 fn capture_ident(index: usize) -> Ident {
     format_ident!("_c{index}")
+}
+
+/// The environment struct of the lambda whose function is `name`.
+fn env_ident(name: &Ident) -> Ident {
+    format_ident!("{name}__env")
 }
 
 /// An `int` literal, range-checked here; `int::lit` is a `const fn` the

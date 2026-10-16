@@ -26,6 +26,8 @@ impl ErrorObject for InvalidArgument {
     fn clone_box(&self) -> Box<dyn ErrorObject> {
         Box::new(self.clone())
     }
+
+    fn trace(&self, _visitor: &mut dyn crate::mem::Visitor) {}
 }
 
 /// `baml.errors.ParseError { message }`: text that does not parse as the
@@ -53,6 +55,8 @@ impl ErrorObject for ParseError {
     fn clone_box(&self) -> Box<dyn ErrorObject> {
         Box::new(self.clone())
     }
+
+    fn trace(&self, _visitor: &mut dyn crate::mem::Visitor) {}
 }
 
 #[cfg(test)]

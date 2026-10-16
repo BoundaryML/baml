@@ -22,12 +22,11 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, CcMap, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int,
+    json, map, string,
 };
-use bex_aot::handle::{Shared, shared};
+use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Row`.
 #[derive(Debug, bex_aot::serde::Serialize)]
@@ -45,6 +44,13 @@ impl bex_aot::json::FromJson for user_Row {
             amount: bex_aot::json::field(object, "amount", false)?,
             note: bex_aot::json::field(object, "note", true)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Row {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.amount, visitor);
+        bex_aot::mem::Trace::trace(&self.note, visitor);
     }
 }
 impl ToBaml for user_Row {
@@ -132,6 +138,15 @@ impl bex_aot::Readable for Union_int_or_float {
         }
     }
 }
+impl bex_aot::mem::Trace for Union_int_or_float {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::int(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::float(value) => bex_aot::mem::Trace::trace(value, visitor),
+        }
+    }
+}
 impl bex_aot::serde::Serialize for Union_int_or_float {
     fn serialize<S: bex_aot::serde::Serializer>(
         &self,
@@ -196,6 +211,16 @@ impl bex_aot::Readable for Union_int_or_float_or_string {
             Self::int(value) => bex_aot::Readable::readable(value),
             Self::float(value) => bex_aot::Readable::readable(value),
             Self::string(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::mem::Trace for Union_int_or_float_or_string {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::int(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::float(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::string(value) => bex_aot::mem::Trace::trace(value, visitor),
         }
     }
 }
@@ -279,6 +304,17 @@ impl bex_aot::Readable for Union_int_or_float_or_string_or_bool {
         }
     }
 }
+impl bex_aot::mem::Trace for Union_int_or_float_or_string_or_bool {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::int(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::float(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::string(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::bool(value) => bex_aot::mem::Trace::trace(value, visitor),
+        }
+    }
+}
 impl bex_aot::serde::Serialize for Union_int_or_float_or_string_or_bool {
     fn serialize<S: bex_aot::serde::Serializer>(
         &self,
@@ -354,6 +390,15 @@ impl bex_aot::Readable for Union_int_or_bigint {
         }
     }
 }
+impl bex_aot::mem::Trace for Union_int_or_bigint {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::int(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::bigint(value) => bex_aot::mem::Trace::trace(value, visitor),
+        }
+    }
+}
 impl bex_aot::serde::Serialize for Union_int_or_bigint {
     fn serialize<S: bex_aot::serde::Serializer>(
         &self,
@@ -419,6 +464,15 @@ impl bex_aot::Readable for Union_int_or_bool {
         match self {
             Self::int(value) => bex_aot::Readable::readable(value),
             Self::bool(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::mem::Trace for Union_int_or_bool {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::int(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::bool(value) => bex_aot::mem::Trace::trace(value, visitor),
         }
     }
 }

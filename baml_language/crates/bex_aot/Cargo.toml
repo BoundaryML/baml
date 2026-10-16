@@ -16,5 +16,13 @@ num-bigint = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+[features]
+# Count heap allocations and frees (`bex_aot::mem::stats`), keep a weak
+# registry of live objects (`bex_aot::mem::unreachable`) and honour
+# `BAML_MEM_TORTURE=1`. Off in every generated program: without it an
+# untracked handle is exactly `Rc<RefCell<T>>`, and a tracked one (`Cc`) is
+# the cycle collector's box with no registry.
+mem-stats = [  ]
+
 [lints]
 workspace = true

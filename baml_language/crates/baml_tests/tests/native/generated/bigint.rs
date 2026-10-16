@@ -22,12 +22,11 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, CcMap, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int,
+    json, map, string,
 };
-use bex_aot::handle::{Shared, shared};
+use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML function `user.arith`.
 pub fn user_arith(mut _1: BigInt, mut _2: BigInt) -> Result<Str, Thrown> {

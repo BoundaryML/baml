@@ -22,12 +22,11 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, CcMap, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int,
+    json, map, string,
 };
-use bex_aot::handle::{Shared, shared};
+use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML enum `user.Color`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, bex_aot::serde::Serialize)]
@@ -60,6 +59,10 @@ impl bex_aot::Readable for user_Color {
     fn readable(&self) -> String {
         Self::NAMES[*self as usize].to_string()
     }
+}
+impl bex_aot::mem::Trace for user_Color {
+    #[inline(always)]
+    fn trace(&self, _visitor: &mut dyn bex_aot::mem::Visitor) {}
 }
 impl bex_aot::BamlEq for user_Color {
     fn baml_eq(
@@ -101,6 +104,10 @@ impl bex_aot::Readable for user_Size {
         Self::NAMES[*self as usize].to_string()
     }
 }
+impl bex_aot::mem::Trace for user_Size {
+    #[inline(always)]
+    fn trace(&self, _visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
 impl bex_aot::BamlEq for user_Size {
     fn baml_eq(
         &self,
@@ -124,6 +131,12 @@ impl bex_aot::json::FromJson for user_Err {
         Ok(Self {
             message: bex_aot::json::field(object, "message", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Err {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.message, visitor);
     }
 }
 impl ToBaml for user_Err {
@@ -180,6 +193,12 @@ impl bex_aot::json::FromJson for user_Ok {
         })
     }
 }
+impl bex_aot::mem::Trace for user_Ok {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.value, visitor);
+    }
+}
 impl ToBaml for user_Ok {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Ok", &[("value", &self.value as &dyn ToBaml)]);
@@ -230,6 +249,10 @@ impl bex_aot::json::FromJson for user_Skip {
         Ok(Self {})
     }
 }
+impl bex_aot::mem::Trace for user_Skip {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
 impl ToBaml for user_Skip {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Skip", &[]);
@@ -278,6 +301,13 @@ impl bex_aot::json::FromJson for user_Warn {
             code: bex_aot::json::field(object, "code", false)?,
             note: bex_aot::json::field(object, "note", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Warn {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.code, visitor);
+        bex_aot::mem::Trace::trace(&self.note, visitor);
     }
 }
 impl ToBaml for user_Warn {
@@ -350,6 +380,13 @@ impl bex_aot::json::FromJson for user_Report {
             outcome: bex_aot::json::field(object, "outcome", false)?,
             label: bex_aot::json::field(object, "label", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Report {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.outcome, visitor);
+        bex_aot::mem::Trace::trace(&self.label, visitor);
     }
 }
 impl ToBaml for user_Report {
@@ -425,6 +462,12 @@ impl bex_aot::json::FromJson for user_Reversed {
         })
     }
 }
+impl bex_aot::mem::Trace for user_Reversed {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.outcome, visitor);
+    }
+}
 impl ToBaml for user_Reversed {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(
@@ -481,6 +524,12 @@ impl bex_aot::json::FromJson for user_Carrier {
         Ok(Self {
             payload: bex_aot::json::field(object, "payload", true)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Carrier {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.payload, visitor);
     }
 }
 impl ToBaml for user_Carrier {
@@ -541,6 +590,13 @@ impl bex_aot::json::FromJson for user_Cat {
             legs: bex_aot::json::field(object, "legs", false)?,
             name: bex_aot::json::field(object, "name", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Cat {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.legs, visitor);
+        bex_aot::mem::Trace::trace(&self.name, visitor);
     }
 }
 impl ToBaml for user_Cat {
@@ -613,6 +669,13 @@ impl bex_aot::json::FromJson for user_Fish {
             fins: bex_aot::json::field(object, "fins", false)?,
             name: bex_aot::json::field(object, "name", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Fish {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.fins, visitor);
+        bex_aot::mem::Trace::trace(&self.name, visitor);
     }
 }
 impl ToBaml for user_Fish {
@@ -697,6 +760,15 @@ impl bex_aot::Readable for Union_user_Err_or_user_Ok {
         }
     }
 }
+impl bex_aot::mem::Trace for Union_user_Err_or_user_Ok {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::user_Err(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Ok(value) => bex_aot::mem::Trace::trace(value, visitor),
+        }
+    }
+}
 impl bex_aot::serde::Serialize for Union_user_Err_or_user_Ok {
     fn serialize<S: bex_aot::serde::Serializer>(
         &self,
@@ -773,6 +845,17 @@ impl bex_aot::Readable for Union_user_Err_or_user_Ok_or_user_Skip_or_user_Warn {
             Self::user_Ok(value) => bex_aot::Readable::readable(value),
             Self::user_Skip(value) => bex_aot::Readable::readable(value),
             Self::user_Warn(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::mem::Trace for Union_user_Err_or_user_Ok_or_user_Skip_or_user_Warn {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::user_Err(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Ok(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Skip(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Warn(value) => bex_aot::mem::Trace::trace(value, visitor),
         }
     }
 }
@@ -867,6 +950,15 @@ impl bex_aot::Readable for Union_user_Color_or_user_Size {
         }
     }
 }
+impl bex_aot::mem::Trace for Union_user_Color_or_user_Size {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::user_Color(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Size(value) => bex_aot::mem::Trace::trace(value, visitor),
+        }
+    }
+}
 impl bex_aot::serde::Serialize for Union_user_Color_or_user_Size {
     fn serialize<S: bex_aot::serde::Serializer>(
         &self,
@@ -942,6 +1034,15 @@ impl bex_aot::Readable for Union_int_or_user_Color {
         }
     }
 }
+impl bex_aot::mem::Trace for Union_int_or_user_Color {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::int(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Color(value) => bex_aot::mem::Trace::trace(value, visitor),
+        }
+    }
+}
 impl bex_aot::serde::Serialize for Union_int_or_user_Color {
     fn serialize<S: bex_aot::serde::Serializer>(
         &self,
@@ -1012,6 +1113,15 @@ impl bex_aot::Readable for Union_int_or_string {
         }
     }
 }
+impl bex_aot::mem::Trace for Union_int_or_string {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::int(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::string(value) => bex_aot::mem::Trace::trace(value, visitor),
+        }
+    }
+}
 impl bex_aot::serde::Serialize for Union_int_or_string {
     fn serialize<S: bex_aot::serde::Serializer>(
         &self,
@@ -1076,6 +1186,15 @@ impl bex_aot::Readable for Union_user_Ok_or_user_Err {
         match self {
             Self::user_Ok(value) => bex_aot::Readable::readable(value),
             Self::user_Err(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::mem::Trace for Union_user_Ok_or_user_Err {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::user_Ok(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Err(value) => bex_aot::mem::Trace::trace(value, visitor),
         }
     }
 }
@@ -1147,6 +1266,15 @@ impl bex_aot::Readable for Union_user_Cat_or_user_Fish {
         match self {
             Self::user_Cat(value) => bex_aot::Readable::readable(value),
             Self::user_Fish(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::mem::Trace for Union_user_Cat_or_user_Fish {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::user_Cat(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Fish(value) => bex_aot::mem::Trace::trace(value, visitor),
         }
     }
 }

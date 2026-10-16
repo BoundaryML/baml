@@ -22,12 +22,11 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, CcMap, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int,
+    json, map, string,
 };
-use bex_aot::handle::{Shared, shared};
+use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Box<int>`.
 #[derive(Debug, bex_aot::serde::Serialize)]
@@ -43,6 +42,12 @@ impl bex_aot::json::FromJson for user_Box__int {
         Ok(Self {
             value: bex_aot::json::field(object, "value", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Box__int {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.value, visitor);
     }
 }
 impl ToBaml for user_Box__int {
@@ -99,6 +104,12 @@ impl bex_aot::json::FromJson for user_Box__string {
         })
     }
 }
+impl bex_aot::mem::Trace for user_Box__string {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.value, visitor);
+    }
+}
 impl ToBaml for user_Box__string {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Box", &[("value", &self.value as &dyn ToBaml)]);
@@ -151,6 +162,12 @@ impl bex_aot::json::FromJson for user_Box__user_Box__int {
         Ok(Self {
             value: bex_aot::json::field(object, "value", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Box__user_Box__int {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.value, visitor);
     }
 }
 impl ToBaml for user_Box__user_Box__int {
@@ -207,6 +224,13 @@ impl bex_aot::json::FromJson for user_Pair__int__string {
             first: bex_aot::json::field(object, "first", false)?,
             second: bex_aot::json::field(object, "second", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Pair__int__string {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.first, visitor);
+        bex_aot::mem::Trace::trace(&self.second, visitor);
     }
 }
 impl ToBaml for user_Pair__int__string {
@@ -284,6 +308,13 @@ impl bex_aot::json::FromJson for user_Pair__string__int {
         })
     }
 }
+impl bex_aot::mem::Trace for user_Pair__string__int {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.first, visitor);
+        bex_aot::mem::Trace::trace(&self.second, visitor);
+    }
+}
 impl ToBaml for user_Pair__string__int {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(
@@ -357,6 +388,13 @@ impl bex_aot::json::FromJson for user_Pair__user_Pt__string_array {
             first: bex_aot::json::field(object, "first", false)?,
             second: bex_aot::json::field(object, "second", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Pair__user_Pt__string_array {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.first, visitor);
+        bex_aot::mem::Trace::trace(&self.second, visitor);
     }
 }
 impl ToBaml for user_Pair__user_Pt__string_array {
@@ -434,6 +472,13 @@ impl bex_aot::json::FromJson for user_Pt {
         })
     }
 }
+impl bex_aot::mem::Trace for user_Pt {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.x, visitor);
+        bex_aot::mem::Trace::trace(&self.y, visitor);
+    }
+}
 impl ToBaml for user_Pt {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(
@@ -504,6 +549,12 @@ impl bex_aot::json::FromJson for user_Stack__int {
         })
     }
 }
+impl bex_aot::mem::Trace for user_Stack__int {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.items, visitor);
+    }
+}
 impl ToBaml for user_Stack__int {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Stack", &[("items", &self.items as &dyn ToBaml)]);
@@ -556,6 +607,12 @@ impl bex_aot::json::FromJson for user_Stack__string {
         Ok(Self {
             items: bex_aot::json::field(object, "items", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Stack__string {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.items, visitor);
     }
 }
 impl ToBaml for user_Stack__string {
@@ -612,6 +669,12 @@ impl bex_aot::json::FromJson for user_Box__user_Box__user_Box__int {
         })
     }
 }
+impl bex_aot::mem::Trace for user_Box__user_Box__user_Box__int {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.value, visitor);
+    }
+}
 impl ToBaml for user_Box__user_Box__user_Box__int {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Box", &[("value", &self.value as &dyn ToBaml)]);
@@ -666,6 +729,13 @@ impl bex_aot::json::FromJson for user_Pair__string__user_Box__int {
             first: bex_aot::json::field(object, "first", false)?,
             second: bex_aot::json::field(object, "second", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Pair__string__user_Box__int {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.first, visitor);
+        bex_aot::mem::Trace::trace(&self.second, visitor);
     }
 }
 impl ToBaml for user_Pair__string__user_Box__int {
@@ -754,6 +824,16 @@ impl bex_aot::Readable for Union_int_or_user_Box__int_or_user_Box__string {
             Self::int(value) => bex_aot::Readable::readable(value),
             Self::user_Box__int(value) => bex_aot::Readable::readable(value),
             Self::user_Box__string(value) => bex_aot::Readable::readable(value),
+        }
+    }
+}
+impl bex_aot::mem::Trace for Union_int_or_user_Box__int_or_user_Box__string {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        match self {
+            Self::int(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Box__int(value) => bex_aot::mem::Trace::trace(value, visitor),
+            Self::user_Box__string(value) => bex_aot::mem::Trace::trace(value, visitor),
         }
     }
 }
@@ -862,14 +942,14 @@ pub fn user_Box_swap__int(
 /// BAML function `user.Box.map<int, string>`.
 pub fn user_Box_map__int__string(
     mut _1: Shared<user_Box__int>,
-    mut _2: Rc<dyn Fn(Int63) -> Result<Str, Thrown>>,
+    mut _2: func::Func<(Int63,), Str>,
 ) -> Result<Shared<user_Box__string>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_Box__string>;
     let mut _3: Str;
     let mut _4: Int63;
     _4 = _1.borrow().value;
-    _3 = (_2)(_4)?;
+    _3 = (_2).call((_4,))?;
     _0 = shared(user_Box__string {
         value: _3.clone(),
     });
@@ -878,14 +958,14 @@ pub fn user_Box_map__int__string(
 /// BAML function `user.Box.map<int, Box<int>>`.
 pub fn user_Box_map__int__user_Box__int(
     mut _1: Shared<user_Box__int>,
-    mut _2: Rc<dyn Fn(Int63) -> Result<Shared<user_Box__int>, Thrown>>,
+    mut _2: func::Func<(Int63,), Shared<user_Box__int>>,
 ) -> Result<Shared<user_Box__user_Box__int>, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
     let mut _0: Shared<user_Box__user_Box__int>;
     let mut _3: Shared<user_Box__int>;
     let mut _4: Int63;
     _4 = _1.borrow().value;
-    _3 = (_2)(_4)?;
+    _3 = (_2).call((_4,))?;
     _0 = shared(user_Box__user_Box__int {
         value: _3.clone(),
     });
@@ -907,6 +987,18 @@ pub fn user_Box_get__user_Box__int(
     _0 = _1.borrow().value.clone();
     Ok(_0)
 }
+/// The environment of BAML lambda `.<lambda(boxes, 0)>`.
+pub struct user_boxes__lambda0__env {}
+impl bex_aot::mem::Trace for user_boxes__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), Str> for user_boxes__lambda0__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Str, Thrown> {
+        user_boxes__lambda0(__arg0)
+    }
+}
 /// BAML lambda `.<lambda(boxes, 0)>`.
 pub fn user_boxes__lambda0(mut _1: Int63) -> Result<Str, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
@@ -920,6 +1012,19 @@ pub fn user_boxes__lambda0(mut _1: Int63) -> Result<Str, Thrown> {
     _2 = string::concat(&_5, &_3);
     _0 = string::concat(&_2, &string::from_literal(">"));
     Ok(_0)
+}
+/// The environment of BAML lambda `.<lambda(boxes, 1)>`.
+pub struct user_boxes__lambda1__env {}
+impl bex_aot::mem::Trace for user_boxes__lambda1__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {}
+}
+impl bex_aot::func::Callable<(Int63,), Shared<user_Box__int>>
+for user_boxes__lambda1__env {
+    #[inline]
+    fn call(&self, (__arg0,): (Int63,)) -> Result<Shared<user_Box__int>, Thrown> {
+        user_boxes__lambda1(__arg0)
+    }
 }
 /// BAML lambda `.<lambda(boxes, 1)>`.
 pub fn user_boxes__lambda1(mut _1: Int63) -> Result<Shared<user_Box__int>, Thrown> {
@@ -942,9 +1047,9 @@ pub fn user_boxes(mut _1: Int63) -> Result<Int63, Thrown> {
     let mut _10: Int63;
     let mut _13: ();
     let mut _16: Shared<user_Box__string>;
-    let mut _17: Rc<dyn Fn(Int63) -> Result<Str, Thrown>>;
+    let mut _17: func::Func<(Int63,), Str>;
     let mut _20: Shared<user_Box__user_Box__int>;
-    let mut _21: Rc<dyn Fn(Int63) -> Result<Shared<user_Box__int>, Thrown>>;
+    let mut _21: func::Func<(Int63,), Shared<user_Box__int>>;
     let mut _24: Int63;
     let mut _25: Int63;
     let mut _26: Int63;
@@ -965,16 +1070,12 @@ pub fn user_boxes(mut _1: Int63) -> Result<Int63, Thrown> {
     _8 = user_Box_set__int(_2.clone(), _9)?;
     _13 = user_Box_swap__int(_2.clone(), _3.clone())?;
     _17 = {
-        let __closure: Rc<dyn Fn(Int63) -> Result<Str, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_boxes__lambda0(__arg0) });
+        let __closure: func::Func<(Int63,), Str> = func::alloc(user_boxes__lambda0__env {});
         __closure
     };
     _16 = user_Box_map__int__string(_2.clone(), _17.clone())?;
     _21 = {
-        let __closure: Rc<dyn Fn(Int63) -> Result<Shared<user_Box__int>, Thrown>> = Rc::new(move |
-            __arg0: Int63|
-        { user_boxes__lambda1(__arg0) });
+        let __closure: func::Func<(Int63,), Shared<user_Box__int>> = func::alloc(user_boxes__lambda1__env {});
         __closure
     };
     _20 = user_Box_map__int__user_Box__int(_5.clone(), _21.clone())?;
