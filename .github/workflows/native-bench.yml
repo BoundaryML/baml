@@ -1,0 +1,226 @@
+# Native backend benchmark: nine BAML programs run as the VM at every
+# telemetry level, as native executables, as a frozen native control and
+# as Rust, Go, Node, Bun and Python, on ephemeral Freestyle VMs booted
+# from a pinned snapshot, one per shard of the protocol. One pinned core,
+# fresh process per trial, every trial checked against an independent
+# oracle. Advisory: it never gates.
+#
+# Emission happens here (baml-cli at the candidate); measurement happens on
+# the VMs. The harness is baml_language/tools/native-bench; the result is one
+# bundle (kpis.json, kpis.html, summary.md, trials.csv) kept as
+# a workflow artifact and appended to the `bench-results` branch, where the
+# page is served read-only through raw.githack.com.
+#
+# The bench job runs candidate code with a read-only token; only the publish
+# job, which runs no candidate code, can write.
+#
+# Runs on: pull requests that touch the harness or this file (same-repo
+# branches only, since the Freestyle key is a secret); manual dispatch on
+# any branch that has this file; nightly on canary (schedules only fire on
+# the default branch).
+name: Native bench
+permissions:
+  contents: read
+on:
+  pull_request:
+    paths:
+      - "baml_language/tools/native-bench/**"
+      - ".github/workflows/native-bench.yml"
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR to comment on with the summary (optional)
+        default: ""
+      previous:
+        description: bundle path on bench-results to compare against, e.g. bench-x86-v1/2026-10-10-8ae74ff302b3 (optional)
+        default: ""
+  schedule:
+    - cron: "23 4 * * *"
+
+concurrency:
+  group: native-bench-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  # Stacked on #5264 (brr/native-v0): publish and comment there, where the
+  # native backend under test is reviewed. Drop before merging.
+  BENCH_COMMENT_PR: "5264"
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bench:
+    name: "native bench (bench-x86-v1)"
+    # Forks have no access to the secret; skip rather than fail.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # The native rows build one fat-LTO executable per case on the VM.
+    timeout-minutes: 240
+    outputs:
+      rendered: ${{ steps.rendered.outputs.rendered }}
+    steps:
+      # Bench the PR head, not the synthetic merge commit, so the candidate
+      # sha on the page is one a reader can check out.
+      - uses: useblacksmith/checkout@v1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: "Install Rust toolchain"
+        run: rustup show
+        working-directory: baml_language
+
+      # node for `npx freestyle` (the VM driver), sccache and direnv for the build.
+      - name: "Install tools (mise)"
+        uses: ./.github/actions/setup-mise
+        with:
+          install_args: "node sccache direnv"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "baml_language -> target"
+          cache-all-crates: true
+          cache-targets: false
+          save-if: ${{ github.ref == 'refs/heads/canary' }}
+          shared-key: "linux-cargo"
+
+      # The R2 keys select the shared sccache bucket in .envrc; without them
+      # sccache falls back to a local cache that is cold on every runner.
+      - name: "Load .envrc with direnv"
+        env:
+          BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+          BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+        run: |
+          set -euo pipefail
+          direnv allow .envrc
+          direnv export gha >> "$GITHUB_ENV"
+
+      # The emitter. Only this is built here; the measured executables are
+      # built on the VMs from a clean target so their build time is a result.
+      # The emitter only writes source, so it skips the release profile's fat
+      # LTO: that link took 7.5 of 10.5 minutes and sccache cannot cache it.
+      - name: "Build baml-cli"
+        env:
+          BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+          BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+          CARGO_PROFILE_RELEASE_LTO: "false"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+        run: cargo build --release -p baml_cli
+        working-directory: baml_language
+
+      - name: "Show sccache stats"
+        if: always()
+        run: sccache --show-stats || true
+
+      - name: "Fetch the previous bundle"
+        if: ${{ github.event.inputs.previous != '' }}
+        env:
+          PREV: ${{ github.event.inputs.previous }}
+        run: |
+          set -euo pipefail
+          [[ "$PREV" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ && "$PREV" != *..* ]] || { echo "bad previous: $PREV"; exit 1; }
+          git fetch --depth=1 origin bench-results
+          mkdir -p previous
+          git --work-tree=previous checkout origin/bench-results -- "$PREV"
+          echo "PREVIOUS=$PWD/previous/$PREV" >> "$GITHUB_ENV"
+
+      - name: "Run"
+        env:
+          FREESTYLE_API_KEY: ${{ secrets.FREESTYLE_API_KEY }}
+        working-directory: baml_language/tools/native-bench
+        run: |
+          set -euo pipefail
+          test -n "$FREESTYLE_API_KEY" || { echo "FREESTYLE_API_KEY is not set"; exit 1; }
+          python3 -m bench run --out "$RUNNER_TEMP/bundle" ${PREVIOUS:+--previous "$PREVIOUS"}
+          cat "$RUNNER_TEMP/bundle/summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # A run with failed trials still renders its page; publish that too.
+      - name: "Check for a rendered page"
+        id: rendered
+        if: always()
+        run: test -f "$RUNNER_TEMP/bundle/kpis.html" && echo "rendered=true" >> "$GITHUB_OUTPUT" || true
+
+      - name: "Upload the bundle"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-bench-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/bundle
+            !${{ runner.temp }}/bundle/results/runtime
+            !${{ runner.temp }}/bundle/results/verify
+          if-no-files-found: warn
+          retention-days: 30
+
+  publish:
+    name: "publish (bench-results, PR comment)"
+    needs: bench
+    if: ${{ always() && needs.bench.outputs.rendered == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: native-bench-${{ github.event.pull_request.head.sha || github.sha }}
+          path: bundle
+
+      # bench-results holds every bundle that completed: nightly and dispatch
+      # runs under <machine>/<date>-<sha12>, PR runs under <machine>/pr-<n>/.
+      - name: "Append to bench-results"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ env.BENCH_COMMENT_PR || github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          sha12=${SHA:0:12}
+          dest="bench-x86-v1/${PR:+pr-$PR/}$(date -u +%Y-%m-%d)-$sha12"
+          git init -q results && cd results
+          git config user.name "native-bench"
+          git config user.email "native-bench@users.noreply.github.com"
+          remote="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git fetch -q --depth=1 "$remote" bench-results 2>/dev/null; then
+            git checkout -q -B bench-results FETCH_HEAD
+          else
+            git checkout -q --orphan bench-results
+          fi
+          mkdir -p "$dest"
+          for f in kpis.json kpis.html summary.md manifest.json stage.json results/summary.json results/trials.csv results/protocol.json results/execute.log; do
+            [ -f "../bundle/$f" ] && install -D "../bundle/$f" "$dest/$f"
+          done
+          git add "$dest"
+          git -c core.hooksPath=/dev/null commit -q -m "bench: $dest" || echo "nothing to commit"
+          git push -q "$remote" bench-results
+          page="https://raw.githack.com/${GITHUB_REPOSITORY}/bench-results/$dest/kpis.html"
+          { echo "PAGE=$page"; echo "DEST=$dest"; echo "SHA12=$sha12"; } >> "$GITHUB_ENV"
+          { echo ""; echo "page: $page"; echo "bundle: https://github.com/${GITHUB_REPOSITORY}/tree/bench-results/$dest"; } >> "$GITHUB_STEP_SUMMARY"
+
+      # One sticky comment per PR, replaced on every run.
+      - name: "Comment on the PR"
+        if: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ env.BENCH_COMMENT_PR || github.event.pull_request.number || github.event.inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          [[ "$PR" =~ ^[0-9]+$ ]] || { echo "bad pr_number: $PR"; exit 1; }
+          marker="<!-- native-bench -->"
+          body=$(printf '%s\n%s\n\n**[Open the page](%s)** · [bundle](https://github.com/%s/tree/bench-results/%s) · [run %s](https://github.com/%s/actions/runs/%s)\n' \
+            "$marker" "$(cat bundle/summary.md)" "$PAGE" "$GITHUB_REPOSITORY" "$DEST" "$GITHUB_RUN_ID" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")
+          body="$body
+          <sub>native bench on bench-x86-v1 at \`$SHA12\`; the page is the bundle's kpis.html served from the bench-results branch.</sub>"
+          existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
+          if [ -n "$existing" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -f body="$body" >/dev/null
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -f body="$body" >/dev/null
+          fi

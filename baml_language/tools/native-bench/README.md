@@ -1,0 +1,225 @@
+# native-bench
+
+The macro benchmark of the native backend. Nine BAML programs run as the
+VM at every telemetry level, as native executables, as a frozen native
+control, and as hand-written Rust, Go, Node, Bun and Python, on an
+ephemeral VM booted from a pinned snapshot: one pinned core, one worker, a
+fresh process per trial, every trial checked against an independent
+oracle. One command produces one bundle with the numbers (`kpis.json`), the
+page (`kpis.html`), the PR summary (`summary.md`) and every trial
+(`results/trials.csv`).
+
+`.github/workflows/native-bench.yml` runs it on every pull request that
+touches this directory or the workflow, on dispatch against any branch, and
+nightly on `canary`. It is advisory: it never gates a merge.
+
+    cd baml_language && cargo build --release -p baml_cli && cd tools/native-bench
+    python3 -m bench run                                                      # tier A on the Freestyle snapshot
+    python3 -m bench run --machine machines/local.json --protocol protocols/smoke.json   # plumbing check here
+    python3 -m bench run --machine machines/local.json --protocol protocols/mem.json     # memory-management cases here
+    python3 -m bench render <bundle> [--previous <bundle>]                    # re-render the page and summary
+    python3 -m bench compare <before> <after>                                 # verdicts between two bundles
+
+The package is Python standard library plus one C file (the observer);
+it needs `python3`, `cc`, and for the Freestyle machine `npx` and the key
+in `FREESTYLE_API_KEY` or `~/.config/freestyle/api.key`.
+
+## What is measured
+
+Every bar on the page is one **scenario** (a case with fixed inputs) run as
+one **row** (an implementation at a telemetry level), `trials` times, in a
+fresh process each time. A trial runs `warmup` jobs untimed, then `jobs`
+jobs timed inside the process; the timed region is reported by the process
+itself over a JSONL protocol (`ready`, `result`, `drained`), and the parent
+observer records launch-to-ready, peak RSS from `wait4`, and the pinned CPU.
+The throughput charts show jobs per second from the per-job median; the
+per-job time, min and max are in each box's table.
+
+### Cases
+
+Each case is a directory under `cases/` with `workload.baml` (the program:
+`prepare` builds the input once, `run` is the timed job) and `README.txt`
+(the question, the work, what the BAML path exercises, where the timing
+boundary is, the evidence the oracle checks, and the claim the number can
+support). The same program is hand-ported to Rust, Go, TypeScript and
+Python in the snapshot's `ref/` directory with the same boundary.
+
+| case | question |
+|---|---|
+| `00_startup` | What does one correct invocation cost: launch, load, prepare, first result? |
+| `01_array_traversal` | What does traversing, indexing and building an integer array cost? |
+| `02_merge_sort` | How well does user-written control flow execute: loops, branches, indexing, mutation? |
+| `03_json_aggregate` | What does a useful data-transformation job cost: parse, validate, group, sort, serialize? |
+| `04_allocation_retention` | What does allocation cost as the surviving object graph grows (4 or 64 batches kept)? |
+| `07_function_calls` | What does a source-level loop of small function calls cost? |
+| `09_json_hello` | What does the smallest useful job cost: build a record, serialize it? |
+| `10_quick_sort` | Same question as merge sort with a recursive, in-place algorithm. |
+| `11_generate_sort` | What does generating 8,192 numbers and sorting them with the library sort cost? |
+| `12_cyclic_churn` | What does building and dropping request-scoped cyclic graphs cost, and are the cycles reclaimed? |
+| `13_live_heap` | What does ongoing allocation cost while a 1-4M-object graph stays live? |
+| `14_heap_calls` | What does a call-heavy loop cost when every call passes and returns heap objects? |
+| `15_cycles_into_live` | What does dropping request-scoped cycles cost when each points into a large live graph? |
+| `16_live_walk` | What does reading a large live recursive structure cost when nothing becomes garbage? |
+
+Cases 12-16 exist for the memory-management comparison (protocol `mem`)
+and have no reference ports yet: their `rust`, `go`, `node`, `bun` and
+`python` rows are skipped as missing artifacts.
+
+### Scenarios (protocol `tier-a`)
+
+| scenario | case | inputs | jobs × warmup |
+|---|---|---|---|
+| `startup` | 00 | none | 1 × 0 |
+| `array-empty`, `array-small` | 01 | iterator over 0 and 128 integers | 4096 × 16 |
+| `array-iterator`, `array-indexed`, `array-build` | 01 | 8,192 integers, three traversal styles | 128 × 4 |
+| `merge-random/sorted/reverse/duplicates` | 02 | 1,024 integers, four orders | 32 × 4 |
+| `quick-random/sorted/reverse/duplicates` | 10 | 1,024 integers, four orders | 32 × 4 |
+| `json-aggregate` | 03 | 1,024 JSON rows | 32 × 4 |
+| `allocation-low-retention`, `allocation-high-retention` | 04 | 128 batches of 2,048 objects, keep 4 or 64 | 8 × 1 |
+| `calls-empty`, `calls` | 07 | 0 and 128 calls | 4096 × 16 |
+| `json-hello` | 09 | one record | 4096 × 16 |
+| `generate-sort` | 11 | 8,192 numbers | 32 × 4 |
+
+Twenty trials per bar, seed 1729, CPU 3, one worker, 600 s timeout per trial.
+
+### Rows
+
+| row | what runs | `BAML_TELEMETRY` | recording |
+|---|---|---|---|
+| `native-off` | the candidate's `baml pack --native` crate with the bench glue as its `main`, built on the VM; the compiled bodies are attached to the program | off | none |
+| `native-low`, `native-medium`, `native-high` | the same executable, recording to a local sink through the engine, as the VM rows do: the recording must exist and report no delivery loss. Compiled functions the backend folds into their callers record no calls of their own | low / medium / high | local |
+| `control` | the snapshot's native executable of the same case, frozen when the snapshot was made (an older backend; a drift reference, not a baseline) | off | none |
+| `vm-off` | the same executable as `native-off` with no compiled bodies attached: the candidate's VM running the candidate's bytecode | off | none |
+| `vm-low`, `vm-medium`, `vm-high` | same, recording to a local sink; the recording must exist and report no delivery loss | low / medium / high | local |
+| `rust`, `go` | the reference executables prebuilt into the snapshot | | |
+| `node`, `bun`, `python` | the reference sources under the snapshot's pinned runtimes | | |
+
+The child environment is scrubbed: only the variables the row needs are
+set (`BAML_TELEMETRY`, the worker counts, the bytecode cache switch), so a
+developer's shell cannot leak into a measurement.
+
+The control row is the same program at the same level as `native-off`, so
+the difference between the two across runs is host drift, not the
+candidate. The page reports it; a verdict subtracts it.
+
+## What a run does
+
+1. **Stage** (on the runner). For every case, `baml pack --native
+   --native-report -f prepare -f run` generates the crate and records the
+   admission report, with a stand-in `cargo` on `PATH` so nothing is built
+   here. The crate's `main` is replaced by `bench/native_glue.rs`, its
+   manifest points at the VM's checkout, and the workspace's `Cargo.lock`
+   and toolchain are copied in; `baml_language` is archived at HEAD; the
+   cases, the protocol, the machine file and this package are copied into
+   `stage/`.
+2. **Execute** (on the machine, `python3 -m bench execute`). Unpack the
+   source. Freeze the snapshot's native executables as the control row.
+   Build every case's crate in release (fat LTO, one codegen unit, panic
+   unwind, as `baml pack --native` builds it) into one target directory
+   cleaned once, so the first case's time is a clean build and later cases
+   reuse its dependencies; the wall time and stripped size are results. Verify every row on every case's edge-case inputs against
+   the oracle, one trial each, and stop on any failure. Run the protocol's
+   trials in a shuffled order from its seed. Summarize.
+3. **Collect** (on the runner). Fetch `results/`, write `manifest.json`,
+   render `kpis.json`, `kpis.html` and `summary.md`, delete the
+   VM.
+
+The Freestyle provider boots a fresh VM from the snapshot in the machine
+file, copies the stage in, starts the execute step detached, polls for its
+done file (for at most an hour), copies the results back and deletes the VM
+in a `finally`. `"provider": "local"` runs here.
+
+### Shards
+
+A protocol's `shards` split its scenarios across machines that run at
+once, each booted from the same snapshot and executing as above with only
+its scenarios and the cases they use. A scenario is never split: all its
+rows, `control` included, run on one machine, so every bar and its drift
+reference share a host. Hosts differ by several percent, which is why.
+Each machine's first case is a clean build. `bench/shards.py` merges the
+shards into one `results/` (`manifest.json` lists each shard, its VM and
+its status; each shard's own files stay under `results/shards/<k>/`), and
+the bundle reads as one run. A local machine runs the whole protocol as
+one shard.
+
+`python3 -m bench plan <bundle>` recomputes the shards from a bundle's
+timings. A machine running scenarios S over cases C finishes at
+
+    B0 + Binc·(|C| − 1) + Σ_c verify_c + Σ_s trials_s
+
+(clean build, each further case's build, verification, trials). The plan is
+the fewest machines that all finish by the floor, `B0 + max_s(verify +
+trials_s)`, found by an exact branch and bound; `--slack` trades minutes for
+machines. Re-plan when scenarios or their costs change; the loader rejects
+shards that do not hold every scenario exactly once.
+
+## The bundle
+
+    <out>/
+      manifest.json      candidate sha and branch, emitter, protocol and machine hashes, toolchains,
+                         CPU, kernel, glibc, load before and after, every artifact's bytes and sha256,
+                         native build seconds, verify and trial counts, status
+      stage.json         what was emitted and why anything was not
+      emitted/<case>/    the admission report, the emit log, the generated project
+      results/
+        trials.csv       every trial: status, timings, RSS, GC counters, telemetry bytes, hashes
+        summary.json     per scenario x row: n, failed, median/min/max per metric, per job
+        protocol.json    the protocol as run
+        verify.csv       the failed verification trials, if any
+        execute.log
+      kpis.json          the data model behind the page (schema 2)
+      kpis.html          the page: nine KPIs, every implementation on every chart
+      summary.md         the table and verdicts for the PR comment
+
+`kpis.html` is self-contained: the template in `bench/templates/` has the
+JSON inserted into a `<script type="application/json">` block and draws the
+charts client-side. It works from disk, from a workflow artifact and from
+the `bench-results` branch. Without JavaScript the JSON is still in the
+file and beside it.
+
+## Rules the code enforces
+
+- A native build failure fails the run. The candidate not compiling is the
+  first thing the bench exists to notice.
+- A row whose artifact is missing is skipped and listed under
+  `verify.skipped_rows`; a run with no trials fails.
+- Every trial's output is checked against the oracle; a mismatch is a
+  failed trial, never dropped. Any failed trial fails the run (status
+  `trials_failed`); the page is still rendered and shows it.
+- Telemetry rows must produce a recording and report `telemetry_ok` with
+  zero delivery loss; off rows must produce none. Recordings are measured in
+  bytes and deleted after each trial.
+- A regression verdict (`compare`, or `run --previous`) needs the
+  candidate's change, net of the control row's change on the same run,
+  past `regression.threshold_percent` (5) with disjoint min-max ranges.
+  Everything else is `unchanged`.
+- Results from different machine files are never compared.
+
+## Files
+
+    bench/                      the package
+    cases/<case>/               workload.baml and README.txt
+    protocols/tier-a.json       the matrix above, in six shards
+    protocols/smoke.json        two scenarios, nine rows, three trials, for plumbing
+    protocols/mem.json          memory management: cases 01-04, 07, 10-14, native-off and vm-off, ten trials
+    machines/bench-x86-v1.json  the Freestyle snapshot and its guest layout
+    machines/local.json         this machine; BAML rows only unless references are present
+
+## Changing things
+
+- **A new case**: add `cases/<name>/workload.baml` with `prepare` and `run`,
+  write its `README.txt`, add its reference ports to the snapshot's `ref/`,
+  add scenarios to the protocol. The oracle in `bench/oracle.py` needs the
+  expected output for the new case.
+- **A new machine**: a new snapshot is a new file with a new name; the old
+  one never changes, so old bundles stay comparable with each other.
+- **A new row**: `bench/rows.py` defines what runs and under which
+  environment; the page draws every row it finds in the protocol.
+- **The page**: edit `bench/templates/kpis.html` and re-render any bundle
+  with `python3 -m bench render <bundle>`; the data model is `bench/kpis.py`.
+
+## Secrets and cost
+
+The workflow needs the `FREESTYLE_API_KEY` repository secret, and the
+`BAML_SCCACHE_R2_*` secrets for a warm emitter build. A tier-A run boots six
+VMs (4 vCPU, 8 GiB) for about 20 minutes each and deletes them.
