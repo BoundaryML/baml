@@ -282,6 +282,32 @@ impl TraceSnapshotBuilder {
         Ok(values)
     }
 
+    /// An instance's type arguments as a snapshot shows them: a compiled
+    /// declaration by name, a runtime declaration by its label; one with no
+    /// annotation form is left out.
+    fn trace_type_args(
+        class_type_args: &[bex_vm_types::RealizedTy],
+    ) -> Result<Vec<baml_type::RuntimeTy>, CopyError> {
+        let mut type_args = Self::vec_with_capacity(class_type_args.len())?;
+        for type_arg in class_type_args {
+            let Ok(annotated) =
+                crate::conversion::to_annotation::<std::convert::Infallible>(type_arg)
+            else {
+                continue;
+            };
+            type_args.push(baml_type::RuntimeTy::from(&annotated.map_heads(
+                &mut |head: &bex_external_types::WireHead<std::convert::Infallible>| match head {
+                    bex_external_types::WireHead::Static(name) => name.clone(),
+                    bex_external_types::WireHead::Live(never) => match *never {},
+                    bex_external_types::WireHead::Anonymous(label) => {
+                        baml_type::TypeName::local(label.clone())
+                    }
+                },
+            )));
+        }
+        Ok(type_args)
+    }
+
     fn copy_str(value: &str) -> Result<String, CopyError> {
         let mut output = String::new();
         output
@@ -398,27 +424,7 @@ impl TraceSnapshotBuilder {
                         let value = self.copy_value(heap, permit, slot.load())?;
                         fields.push((name, value));
                     }
-                    let mut type_args = Self::vec_with_capacity(instance.class_type_args.len())?;
-                    for type_arg in &instance.class_type_args {
-                        // A snapshot is display data: a compiled declaration
-                        // by name, a runtime declaration by its label.
-                        let Ok(annotated) =
-                            crate::conversion::to_annotation::<std::convert::Infallible>(type_arg)
-                        else {
-                            continue;
-                        };
-                        type_args.push(baml_type::RuntimeTy::from(&annotated.map_heads(
-                            &mut |head: &bex_external_types::WireHead<std::convert::Infallible>| {
-                                match head {
-                                    bex_external_types::WireHead::Static(name) => name.clone(),
-                                    bex_external_types::WireHead::Live(never) => match *never {},
-                                    bex_external_types::WireHead::Anonymous(label) => {
-                                        baml_type::TypeName::local(label.clone())
-                                    }
-                                }
-                            },
-                        )));
-                    }
+                    let type_args = Self::trace_type_args(&instance.class_type_args)?;
                     // A trace is read by a person: the display name, never an
                     // internal identity.
                     let type_name = Self::copy_str(&class.name().to_string())?;
@@ -431,6 +437,28 @@ impl TraceSnapshotBuilder {
                     self.omitted(
                         TraceOmissionReason::InvalidRuntimeValue,
                         "instance class pointer did not point at a class",
+                    )
+                }
+            }
+            // Its declaration and type arguments, with no fields; the payload
+            // records nothing a reader could use.
+            Object::RustInstance(instance) => {
+                let class_object = unsafe { instance.class.get() };
+                if let Object::Class(class) = class_object {
+                    match &instance.payload {
+                        bex_vm_types::RustPayload::Foreign(_) => {}
+                    }
+                    let type_args = Self::trace_type_args(&instance.class_type_args)?;
+                    let type_name = Self::copy_str(&class.name().to_string())?;
+                    self.alloc(TraceValue::Instance {
+                        type_name,
+                        type_args,
+                        fields: Vec::new(),
+                    })
+                } else {
+                    self.omitted(
+                        TraceOmissionReason::InvalidRuntimeValue,
+                        "rust instance class pointer did not point at a class",
                     )
                 }
             }
@@ -575,6 +603,7 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         | Object::Array(_)
         | Object::Map(_)
         | Object::Instance(_)
+        | Object::RustInstance(_)
         | Object::Variant(_)
         | Object::Float(_) => "unsupported value",
     }

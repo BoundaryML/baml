@@ -10,7 +10,7 @@ use baml_type::Name;
 use bex_heap::{BexHeap, GcStats, Generation, Tlab};
 use bex_vm_types::{
     Class, ClassField, ForwardRoots, GenericFunction, GlobalIndex, HeapPtr, Object, RealizedTy,
-    RootVisitor, Value, Weak,
+    RootVisitor, RustInstance, RustPayload, TestRustData, Value, Weak,
     types::{
         Edge, EdgeKind, ExportSurface, InterfaceDef, LocalName, MethodImpl, Objects, Package,
         PackageKind, RuntimeImplRule, Slots, TypeAliasDef, TypeValue,
@@ -635,6 +635,70 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
     assert!(
         matches!(unsafe { owner.get() }, Object::Package(_)),
         "the declaration's owner does not point at the package"
+    );
+}
+
+/// A class with no fields, as a `@@rust_type` class is, allocated at run time.
+fn alloc_tagged_class(tlab: &mut Tlab, name: &str) -> HeapPtr {
+    tlab.alloc(Object::Class(Box::new(Class {
+        path: LocalName::new(Vec::new(), Name::new(name)),
+        fields: Vec::new(),
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+        stream_done: false,
+        declared_crossing: baml_type::ClassCrossing::Opaque,
+        type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
+        cleanup: None,
+        methods: IndexMap::new(),
+        generic_param_count: 1,
+        owner: bex_vm_types::types::Owner::anonymous(),
+        telemetry_definition: bex_vm_types::DefinitionCell::default(),
+    })))
+}
+
+/// A `@@rust_type` instance holds its class by pointer: a collection keeps the
+/// class alive through the instance alone and repoints the instance when the
+/// class moves.
+#[test]
+fn rust_instance_keeps_and_follows_its_class() {
+    let heap = BexHeap::new(vec![]);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+
+    let class = alloc_tagged_class(&mut tlab, "Tagged");
+    // Reached by nothing: the control for "the class survives through the
+    // instance", not through anything else.
+    let orphan = alloc_tagged_class(&mut tlab, "Orphan");
+    let instance = tlab.alloc(Object::RustInstance(RustInstance::new(
+        class,
+        Box::new([RealizedTy::int()]),
+        RustPayload::Foreign(Arc::new(TestRustData(7))),
+    )));
+
+    let (_, roots, forwarding) = unsafe { heap.collect_garbage(&[instance]) };
+    tlab.invalidate();
+    assert!(
+        !forwarding.contains_key(&orphan),
+        "an unreached class is collected"
+    );
+    let Object::RustInstance(moved) = (unsafe { roots[0].get() }) else {
+        panic!("expected a rust instance")
+    };
+    assert_eq!(
+        moved.class, forwarding[&class],
+        "the class edge was repointed"
+    );
+    assert_eq!(heap.generation_of(moved.class), Generation::Gen2);
+    let Object::Class(class_object) = (unsafe { moved.class.get() }) else {
+        panic!("the class edge must reach a class")
+    };
+    assert_eq!(class_object.name().to_string(), "Tagged");
+    assert_eq!(&*moved.class_type_args, &[RealizedTy::int()]);
+    let RustPayload::Foreign(payload) = &moved.payload;
+    assert_eq!(
+        payload.downcast_ref::<TestRustData>(),
+        Some(&TestRustData(7))
     );
 }
 

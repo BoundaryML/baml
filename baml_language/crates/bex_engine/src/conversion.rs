@@ -553,27 +553,21 @@ impl BexEngine {
                     // annotation-only, and method generic substitution
                     // recovers the instance's head and class type arguments
                     // after resolving the handle.
-                    ClassCrossing::Opaque => {
-                        Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
-                            kind: bex_external_types::TaggedHeapHandleKind::RuntimeValue,
-                            ty: ty()?,
-                            heap_handle: self.heap.create_handle(ptr),
-                        }))
-                    }
-                    ClassCrossing::Stream => {
-                        Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
-                            kind: bex_external_types::TaggedHeapHandleKind::Stream,
-                            ty: ty()?,
-                            heap_handle: self.heap.create_handle(ptr),
-                        }))
-                    }
-                    ClassCrossing::FunctionSpec => {
-                        Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
-                            kind: bex_external_types::TaggedHeapHandleKind::FunctionSpec,
-                            ty: ty()?,
-                            heap_handle: self.heap.create_handle(ptr),
-                        }))
-                    }
+                    ClassCrossing::Opaque => Ok(self.live_reference(
+                        ptr,
+                        bex_external_types::TaggedHeapHandleKind::RuntimeValue,
+                        ty()?,
+                    )),
+                    ClassCrossing::Stream => Ok(self.live_reference(
+                        ptr,
+                        bex_external_types::TaggedHeapHandleKind::Stream,
+                        ty()?,
+                    )),
+                    ClassCrossing::FunctionSpec => Ok(self.live_reference(
+                        ptr,
+                        bex_external_types::TaggedHeapHandleKind::FunctionSpec,
+                        ty()?,
+                    )),
                     // A media value and a rendered prompt cross as the
                     // payload their wrapper holds; a host builds a fresh
                     // wrapper around it.
@@ -708,6 +702,39 @@ impl BexEngine {
             Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
             Object::RustData(arc) => Ok(bex_external_types::try_convert_rust_data(arc)
                 .unwrap_or_else(|| BexExternalValue::RustData(arc.clone()))),
+            // Its state has no form outside the VM, so it crosses by
+            // reference, as an `Instance` of the same crossing does.
+            Object::RustInstance(instance) => {
+                let Object::Class(class) = (unsafe { instance.class.get() }) else {
+                    panic!("RustInstance.class should point to a Class object")
+                };
+                let ty = to_annotation(&bex_vm_types::RealizedTy::Class(
+                    bex_vm_types::TypeHead::new(instance.class, class.type_tag),
+                    instance.class_type_args.clone(),
+                ))?;
+                let kind = match class.crossing() {
+                    ClassCrossing::Opaque => bex_external_types::TaggedHeapHandleKind::RuntimeValue,
+                    ClassCrossing::Stream => bex_external_types::TaggedHeapHandleKind::Stream,
+                    ClassCrossing::FunctionSpec => {
+                        bex_external_types::TaggedHeapHandleKind::FunctionSpec
+                    }
+                    // The compiler never gives a `@@rust_type` class a
+                    // crossing that reads an instance's contents.
+                    crossing @ (ClassCrossing::Fields
+                    | ClassCrossing::Media(_)
+                    | ClassCrossing::Prompt) => {
+                        return Err(EngineError::VmInternalError(
+                            bex_vm::errors::VmInternalError::BridgeFailure {
+                                message: format!(
+                                    "`{}` is a `@@rust_type` class but crosses as {crossing:?}",
+                                    class.name()
+                                ),
+                            },
+                        ));
+                    }
+                };
+                Ok(self.live_reference(ptr, kind, ty))
+            }
             Object::HostClosure(_) => Err(EngineError::CannotConvert {
                 type_name: "host_closure".to_string(),
             }),
@@ -724,6 +751,23 @@ impl BexEngine {
 }
 
 impl BexEngine {
+    /// A rooted reference to the instance at `ptr`, for a class that crosses
+    /// by reference: the engine's proxy `kind` selects the host wrapper, and
+    /// method generic substitution recovers the instance's head and class type
+    /// arguments after resolving the handle.
+    fn live_reference(
+        &self,
+        ptr: HeapPtr,
+        kind: bex_external_types::TaggedHeapHandleKind,
+        ty: bex_external_types::AnnotationTy,
+    ) -> BexExternalValue {
+        BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+            kind,
+            ty,
+            heap_handle: self.heap.create_handle(ptr),
+        })
+    }
+
     /// An instance's fields, each at its type under the instance's type
     /// arguments.
     fn instance_fields(
@@ -1791,31 +1835,10 @@ fn find_matching_union_member(
                             .find(|member| matches!(member, bex_vm_types::RealizedTy::String))
                     }),
                 Object::Instance(inst) => {
-                    let class_obj = unsafe { inst.class.get() };
-                    if let Object::Class(class) = class_obj {
-                        // Compare both class name and type args.  When the
-                        // union member has empty type args (e.g. a bare `Foo`)
-                        // it matches any instance of `Foo` regardless of its
-                        // class_type_args — preserving first-match semantics
-                        // for `Foo<int> | Foo`.  When type args are present
-                        // on the union member they must equal the instance's
-                        // class_type_args exactly.
-                        let head = bex_vm_types::TypeHead::new(inst.class, class.type_tag);
-                        members.iter().find(|m| {
-                            matches!(m, bex_vm_types::RealizedTy::Class(tn, expected_args)
-                                if *tn == head
-                                && (expected_args.is_empty()
-                                    || (expected_args.len() == inst.class_type_args.len()
-                                        && expected_args
-                                            .iter()
-                                            .zip(inst.class_type_args.iter())
-                                            .all(|(e, a)| {
-                                                e == a
-                                            }))))
-                        })
-                    } else {
-                        None
-                    }
+                    matching_class_member(inst.class, &inst.class_type_args, members)
+                }
+                Object::RustInstance(inst) => {
+                    matching_class_member(inst.class, &inst.class_type_args, members)
                 }
                 Object::Variant(variant) => {
                     let enum_obj = unsafe { variant.enm.get() };
@@ -1901,6 +1924,34 @@ fn find_matching_union_member(
             matches!(member, bex_vm_types::RealizedTy::Union(nested)
                 if find_matching_union_member(value, nested).is_some())
         })
+    })
+}
+
+/// The union member an instance of `class` at `class_type_args` matches.
+///
+/// Compares both class and type args. When the union member has empty type
+/// args (e.g. a bare `Foo`) it matches any instance of `Foo` regardless of its
+/// `class_type_args`, preserving first-match semantics for `Foo<int> | Foo`.
+/// When type args are present on the union member they must equal the
+/// instance's `class_type_args` exactly.
+fn matching_class_member<'m>(
+    class: HeapPtr,
+    class_type_args: &[bex_vm_types::RealizedTy],
+    members: &'m [bex_vm_types::RealizedTy],
+) -> Option<&'m bex_vm_types::RealizedTy> {
+    let Object::Class(declaration) = (unsafe { class.get() }) else {
+        return None;
+    };
+    let head = bex_vm_types::TypeHead::new(class, declaration.type_tag);
+    members.iter().find(|m| {
+        matches!(m, bex_vm_types::RealizedTy::Class(tn, expected_args)
+            if *tn == head
+            && (expected_args.is_empty()
+                || (expected_args.len() == class_type_args.len()
+                    && expected_args
+                        .iter()
+                        .zip(class_type_args.iter())
+                        .all(|(e, a)| e == a))))
     })
 }
 
