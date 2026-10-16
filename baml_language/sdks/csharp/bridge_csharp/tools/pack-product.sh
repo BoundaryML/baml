@@ -272,6 +272,7 @@ unzip -Z1 "$work/normalized/package-a.nupkg" \
   echo '[Content_Types].xml'
   echo '_rels/.rels'
   echo 'README.md'
+  echo 'LICENSE'
   echo 'baml-bridge.nuspec'
   echo 'buildTransitive/baml-bridge.targets'
   echo 'lib/net10.0/Baml.Bridge.dll'
@@ -280,7 +281,7 @@ unzip -Z1 "$work/normalized/package-a.nupkg" \
 } | LC_ALL=C sort > "$work/expected-package-entries.txt"
 diff -u "$work/expected-package-entries.txt" \
   "$work/actual-package-entries.txt"
-expected_package_entry_count="$((expected_native_count + 7))"
+expected_package_entry_count="$((expected_native_count + 8))"
 test "$(wc -l < "$work/actual-package-entries.txt")" \
   -eq "$expected_package_entry_count"
 unzip -p "$work/normalized/package-a.nupkg" baml-bridge.nuspec \

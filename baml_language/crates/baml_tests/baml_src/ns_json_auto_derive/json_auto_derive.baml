@@ -248,8 +248,8 @@ class Tree {
 
 function recursive_class_to_json_str() -> string throws baml.json.SerializationError | baml.json.ParseError {
     let leaf: Tree = Tree { value: 2, children: [] };
-    let root: Tree = Tree { value: 1, children: [leaf] };
-    let j: baml.json.json = root.to_json();
+    let top: Tree = Tree { value: 1, children: [leaf] };
+    let j: baml.json.json = top.to_json();
     baml.json.stringify(j)
 }
 
@@ -454,8 +454,8 @@ test "nested_class_override_honored_in_map_from_json" {
 // recursive_class_from_json
 function recursive_class_from_json_sum() -> int throws baml.json.SerializationError | baml.json.ParseError | baml.json.DecodeError {
     let leaf: Tree = Tree { value: 2, children: [] };
-    let root: Tree = Tree { value: 1, children: [leaf] };
-    let s: string = baml.json.stringify(root.to_json());
+    let top: Tree = Tree { value: 1, children: [leaf] };
+    let s: string = baml.json.stringify(top.to_json());
     let j: baml.json.json = baml.json.parse(s);
     let parsed: Tree = Tree.from_json(j);
     parsed.value + parsed.children[0].value

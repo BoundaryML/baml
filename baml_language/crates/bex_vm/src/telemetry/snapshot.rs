@@ -178,14 +178,14 @@ impl Scratch {
                         _ => unreachable!("class declaration is an object"),
                     }
                 }
-                Object::Class(class) => b.declaration(&class.name, class.type_tag, false),
-                Object::Enum(enm) => b.declaration(&enm.name, enm.type_tag, true),
+                Object::Class(class) => b.declaration(&class.name(), class.type_tag, false),
+                Object::Enum(enm) => b.declaration(&enm.name(), enm.type_tag, true),
                 Object::Cell(cell) => {
                     SnapshotObject::Cell(self.add(&mut b.leaves(), cell.load(), depth + 1))
                 }
                 Object::Function(f) => SnapshotObject::Descriptive {
                     kind: Description::Function,
-                    name: b.leaves().label(&f.name.as_str().into()),
+                    name: b.leaves().label(&f.name().as_str().into()),
                 },
                 Object::Closure(_) => describe(Description::Closure),
                 Object::BoundMethod(_) => describe(Description::BoundMethod),
@@ -759,9 +759,10 @@ mod tests {
     fn maps_instances_and_variants_keep_identity_and_fields_after_gc() {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
-            name: bex_vm_types::DeclarationName::Declared(baml_type::TypeName::local(
+            path: bex_vm_types::types::LocalName::new(
+                Vec::new(),
                 baml_type::Name::new("TestClass"),
-            )),
+            ),
             fields: vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
@@ -796,16 +797,14 @@ mod tests {
             other: indexmap::IndexMap::default(),
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
             stream_done: false,
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 1,
             owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let enum_ptr = vm.tlab.alloc(Object::Enum(Box::new(bex_vm_types::Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: bex_vm_types::DeclarationName::Declared(baml_type::TypeName::local(
-                baml_type::Name::new("Color"),
-            )),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Color")),
             variants: vec![
                 bex_vm_types::EnumVariant {
                     name: "Red".to_string(),

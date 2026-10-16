@@ -108,8 +108,10 @@ impl LayoutOrder {
 /// Package initialization order: a package with `let`s initializes after
 /// every package with `let`s it reaches over the set's edges — directly, or
 /// through packages that have none — and among the packages free to
-/// initialize, the least by `(name, position)` goes first, so one set has
-/// one order.
+/// initialize, the one placed first in the set goes first, so one set has
+/// one order. A package's label takes no part: renaming a package does not
+/// reorder its initialization. (The set's placement is the program's, which
+/// orders a package's dependencies by EDGE name, so renaming an edge may.)
 ///
 /// Reach is taken over every edge rather than between the members alone:
 /// the packages without `let`s between two members still carry the
@@ -167,14 +169,13 @@ fn init_order(
             dependents.entry(prerequisite).or_default().push(id);
         }
     }
-    let key = |id: LinkPackageId| (set.name(id).as_str(), id);
-    let mut ready: BTreeSet<(&str, LinkPackageId)> = waiting
+    let mut ready: BTreeSet<LinkPackageId> = waiting
         .iter()
         .filter(|(_, count)| **count == 0)
-        .map(|(&id, _)| key(id))
+        .map(|(&id, _)| id)
         .collect();
     let mut order = Vec::with_capacity(members.len());
-    while let Some((_, id)) = ready.pop_first() {
+    while let Some(id) = ready.pop_first() {
         order.push(id);
         for &dependent in dependents.get(&id).into_iter().flatten() {
             let count = waiting
@@ -182,7 +183,7 @@ fn init_order(
                 .unwrap_or_else(|| unreachable!("every dependent is a member"));
             *count -= 1;
             if *count == 0 {
-                ready.insert(key(dependent));
+                ready.insert(dependent);
             }
         }
     }

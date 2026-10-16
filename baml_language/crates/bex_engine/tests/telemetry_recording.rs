@@ -241,7 +241,7 @@ async fn execution_reaches_encoded_files_and_shutdown_drains_once() {
     // exposing a policy setter solely for this test. Executable code is unchanged.
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(function) = object {
-            if function.name.rsplit('.').next() == Some("leaf") {
+            if function.name().rsplit('.').next() == Some("leaf") {
                 function.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
                     client: "test".into(),
                 });

@@ -12,9 +12,9 @@ use baml_type::DeclName;
 /// MIR's types are headed by the compiler's own identity: a declaration IS
 /// its [`DeclName`] (the declaring root plus its path), never a spelling. A
 /// head is rendered as a name only where MIR is displayed or emitted as
-/// display metadata, through the program's spelling table; emit anchors every
-/// head to its declaration's object by identity, so nothing between the
-/// checker and the unit re-derives a declaration from a name.
+/// display metadata, canonically from a viewpoint; emit anchors every head to
+/// its declaration's object by identity, so nothing between the checker and
+/// the unit re-derives a declaration from a name.
 pub type RuntimeTy = baml_type::RuntimeTy<DeclName>;
 /// See [`RuntimeTy`].
 pub type RealizedTy = baml_type::RealizedTy<DeclName>;
@@ -145,9 +145,6 @@ pub struct RuntimeSignature {
     pub throws_type: TyTemplate,
     /// The declaration's joined `///` doc-comment lines, if any.
     pub docstring: Option<String>,
-    /// The name the declaration was written with; `None` for lambdas
-    /// (which have no source-level name).
-    pub name: Option<String>,
     /// Display strings for the generic type parameters (`T extends Bound`).
     pub display_type_params: Vec<String>,
     /// The name of each type-argument slot in the callee frame, in slot
@@ -1139,10 +1136,10 @@ pub enum Rvalue<'db> {
     /// Lowers to `Instruction::LoadType(const_idx)` in bytecode.
     LoadType(TyTemplate),
 
-    /// Reify the package lexically enclosing this call site. The package name
-    /// is baked by lowering; dynamically compiled code substitutes its owning
-    /// runtime package at execution.
-    CurrentPackage(String),
+    /// Reify the package lexically enclosing this call site: the unit's own,
+    /// identified by whoever lays the unit into an executable; dynamically
+    /// compiled code substitutes its owning runtime package at execution.
+    CurrentPackage,
 }
 
 impl Rvalue<'_> {
@@ -1198,7 +1195,7 @@ impl Rvalue<'_> {
             }
             Self::TraceHookSettings { .. } => false,
             Self::LoadType(_)
-            | Self::CurrentPackage(_)
+            | Self::CurrentPackage
             | Self::Uint8Array(_)
             | Self::MakeGenericFunction { .. } => true,
             Self::Array(_, elements)
@@ -1232,7 +1229,7 @@ pub enum AggregateKind<'db> {
     ///
     /// `class` is the declaration the literal constructs, wherever it lives;
     /// its wire spelling is rendered only at emit's boundary
-    /// ([`crate::class_link_name`]). `type_arg_templates` is non-empty only
+    /// ([`crate::class_display_name`]). `type_arg_templates` is non-empty only
     /// for generic class instantiations: each element corresponds to one
     /// class-level type parameter in De Bruijn order (matching
     /// `enclosing_generic_params()`). These templates are emitted as
@@ -1332,7 +1329,7 @@ pub enum Constant<'db> {
 /// A function's identity in MIR: its declaration, or — for a lambda or a
 /// tagged-template body closure — the owner it was lowered inside plus its
 /// ordinal there. Rendered to a name only at emit's boundary
-/// ([`MirFunctionId::link_name`] / [`crate::function_link_name`]).
+/// ([`MirFunctionId::display_name`] / [`crate::function_display_name`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MirFunctionId<'db> {
     Declared(baml_compiler2_hir::loc::FunctionLoc<'db>),
@@ -1365,13 +1362,13 @@ pub enum FunctionOwner<'db> {
 }
 
 impl MirFunctionId<'_> {
-    /// The name this function links and displays as — the declaration's
-    /// link name, or the synthetic spelling `<lambda(owner, i)>` /
+    /// The name this function displays as — the declaration's canonical
+    /// display name, or the synthetic spelling `<lambda(owner, i)>` /
     /// `<tagged(owner, i)>` under an EMPTY package segment (the historical
     /// rendering, which the bytecode display pins).
-    pub fn link_name(&self, db: &dyn crate::Db) -> String {
+    pub fn display_name(&self, db: &dyn crate::Db) -> String {
         match self {
-            MirFunctionId::Declared(func) => crate::lower::definition_link_name(
+            MirFunctionId::Declared(func) => crate::lower::definition_display_name(
                 db,
                 baml_compiler2_hir::contributions::Definition::Function(*func),
             ),
@@ -1404,17 +1401,17 @@ impl MirFunctionId<'_> {
     }
 
     /// This identity as a [`fmt::Display`] value that renders
-    /// [`Self::link_name`] when formatted, not when created.
+    /// [`Self::display_name`] when formatted, not when created.
     pub fn display<'a>(&'a self, db: &'a dyn crate::Db) -> impl fmt::Display + 'a {
         // Assertion messages format their arguments only when they fire, so
-        // a caller that never fails never pays for `definition_link_name`.
+        // a caller that never fails never pays for `definition_display_name`.
         struct Lazy<'a, 'db> {
             db: &'a dyn crate::Db,
             id: &'a MirFunctionId<'db>,
         }
         impl fmt::Display for Lazy<'_, '_> {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str(&self.id.link_name(self.db))
+                f.write_str(&self.id.display_name(self.db))
             }
         }
         Lazy { db, id: self }

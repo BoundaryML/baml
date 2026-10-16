@@ -18,7 +18,7 @@
 
 use std::ops::Index;
 
-use baml_base::{Literal, MediaKind, Name};
+use baml_base::{Literal, MediaKind, Name, Path};
 use la_arena::{Arena, Idx};
 use text_size::TextRange;
 
@@ -35,9 +35,11 @@ pub struct TypeRef {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeRefKind {
-    /// Named type path: `User`, `baml.http.Request`, `Stream<T>`.
+    /// Named type path: `User`, `baml.http.Request`, `Stream<T>`. The path
+    /// carries who wrote it, which decides how its first segment is read
+    /// (`hir::package::path_head_for`).
     Path {
-        segments: Vec<Name>,
+        path: Path,
         /// Generic type arguments (`<T>` in `Stream<T>`). Empty for non-generic paths.
         generic_args: Box<[TypeRefId]>,
         /// Named associated type bindings, e.g. `Iterator<Item = int>`.
@@ -186,15 +188,10 @@ impl std::fmt::Display for TypeRefDisplay<'_> {
         let store = self.store;
         match &store[self.id].kind {
             TypeRefKind::Path {
-                segments,
+                path,
                 generic_args,
                 associated_type_bindings,
             } => {
-                let path = segments
-                    .iter()
-                    .map(Name::as_str)
-                    .collect::<Vec<_>>()
-                    .join(".");
                 write!(f, "{path}")?;
                 if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
                     write!(f, "<")?;
@@ -374,12 +371,11 @@ impl TypeRefBuilder {
 
         let kind = match &te.kind {
             TypeExprKind::Path {
-                segments,
+                path,
                 generic_args,
                 associated_type_bindings,
-                ..
             } => TypeRefKind::Path {
-                segments: segments.clone(),
+                path: path.clone(),
                 generic_args: generic_args.iter().map(|arg| self.lower(arg)).collect(),
                 associated_type_bindings: associated_type_bindings
                     .iter()
@@ -568,7 +564,7 @@ mod tests {
         let prim = |k: TypeExprKind| k.at(sp);
         let path = |name: &str| {
             TypeExprKind::Path {
-                segments: name.split('.').map(Name::new).collect(),
+                path: baml_base::Path::new(name.split('.').map(Name::new).collect()),
                 generic_args: vec![],
                 associated_type_bindings: vec![],
             }
@@ -590,7 +586,7 @@ mod tests {
             path("baml.http.Request"),
             // `Stream<int, Item = string>` — generic args plus an assoc binding.
             TypeExprKind::Path {
-                segments: vec![Name::new("Stream")],
+                path: baml_base::Path::new(vec![Name::new("Stream")]),
                 generic_args: vec![prim(TypeExprKind::Int)],
                 associated_type_bindings: vec![AssociatedTypeBinding {
                     name: Name::new("Item"),

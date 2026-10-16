@@ -325,6 +325,7 @@ jobs:
             fi
           ) > "${outdir}/${asset}.sha256"
 
+          cp ../LICENSE "${outdir}/${asset}.LICENSE"
           echo "dir=${outdir}" >> "$GITHUB_OUTPUT"
           echo "asset=${asset}" >> "$GITHUB_OUTPUT"
           echo "Built ${asset}"
@@ -414,4 +415,5 @@ jobs:
           path: |
             baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}
             baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}.sha256
+            baml_language/${{ steps.artifact.outputs.dir }}/${{ steps.artifact.outputs.asset }}.LICENSE
           if-no-files-found: error

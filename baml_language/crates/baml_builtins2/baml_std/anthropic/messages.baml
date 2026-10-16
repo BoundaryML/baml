@@ -183,7 +183,7 @@ class Client {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            anthropic.internal.preview(self, input) catch_all (e) {
+            root.internal.preview(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

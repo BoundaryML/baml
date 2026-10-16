@@ -13,7 +13,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_type::{DeclarationName, Literal, typetag::TypeTag};
+use baml_type::{Literal, typetag::TypeTag};
 use bex_heap::TlabHolder;
 use bex_sap::{
     CompiledSapModel,
@@ -65,7 +65,7 @@ impl BamlNamespaceSap for PackageBamlImpl {
         })?;
         let data: Arc<dyn bex_vm_types::BexRustData> = Arc::new(ParseCache { model });
         let data = Value::object(vm.alloc_rust_data(data));
-        let class = vm.resolve_class("baml.sap._ParseCache");
+        let class = vm.lang_object(crate::lang_items::BAML_SAP_PARSE_CACHE);
         let cache = vm.tlab.alloc(Object::Instance(Instance::new(
             class,
             Box::new([target]),
@@ -114,7 +114,7 @@ impl BamlNamespaceSap_ParseCache for PackageBamlImpl {
         match parse(vm, *cache, json, Completion::Partial)? {
             Some(value) => Ok(value),
             None => {
-                let no_yield = vm.resolve_class("baml.sap._NoYield");
+                let no_yield = vm.lang_object(crate::lang_items::BAML_SAP_NO_YIELD);
                 Ok(Value::object(vm.alloc_instance(no_yield, Vec::new())))
             }
         }
@@ -417,7 +417,7 @@ fn reached_class(vm: &BexVm, head: TypeHead) -> &Class {
 /// failure about one of its fields names it, on every path.
 fn model_name(class: &Class, args: &[RealizedTy]) -> NamedTy {
     NamedTy::class(
-        DefKey::new(class.type_tag, class.name.clone()),
+        DefKey::new(class.type_tag, class.name()),
         args.iter().map(definitions::lane_realized_ty),
     )
 }
@@ -457,7 +457,7 @@ fn build_model(
             unreachable!("an enum type's head is an enum: {head:?}")
         };
         enums.insert(
-            DefKey::new(enm.type_tag, enm.name.clone()),
+            DefKey::new(enm.type_tag, enm.name()),
             definitions::enum_definition(enm),
         );
     }
@@ -466,10 +466,7 @@ fn build_model(
             unreachable!("a type alias's head is a type alias: {head:?}")
         };
         aliases.insert(
-            DefKey::new(
-                alias.type_tag,
-                DeclarationName::Declared(alias.name.clone()),
-            ),
+            DefKey::new(alias.type_tag, alias.name()),
             definitions::lane_realized_ty(&alias.definition),
         );
     }

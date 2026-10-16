@@ -56,13 +56,17 @@
 //! LLM declarative functions are skipped entirely (and never recursed into), so
 //! their synthetic `client` / `function_name` / `args` calls produce no hints.
 
-use baml_base::{SourceFile, SourceRootKind};
+use baml_base::{LangPackage, SourceFile};
 use baml_compiler2_ast::{
     Expr, ExprId, Stmt,
     ast::{AstSourceMap, ExprBody, FunctionOrigin},
 };
 use baml_compiler2_hir::{
-    body::FunctionBody, contributions::Definition, item_data, loc::DeclRef, package::package_items,
+    body::FunctionBody,
+    contributions::Definition,
+    item_data,
+    loc::DeclRef,
+    package::{lang_roots, package_items},
     scope::FileScopeId,
 };
 use baml_compiler2_hir_ty::ide::infer_for_scope;
@@ -526,10 +530,7 @@ fn is_assert_without_hints(
         return false;
     };
     let root = function.file(db).source_root(db);
-    root.kind(db) == SourceRootKind::Stdlib
-        && root
-            .self_name(db)
-            .is_some_and(|name| name.as_str() == "assert")
+    lang_roots(db).get(LangPackage::Assert) == Some(root)
 }
 
 fn parameter_definition(
@@ -1003,7 +1004,7 @@ function is_true(condition: bool) -> bool { condition }
             r#"
 
 function demo() -> bool {
-    assert.equal(1, 2) && assert.is_true(true)
+    root.assert.equal(1, 2) && root.assert.is_true(true)
 }
 "#,
         );

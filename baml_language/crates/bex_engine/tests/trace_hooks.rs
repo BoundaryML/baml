@@ -299,8 +299,14 @@ async fn linked_hooked_callee_cannot_enter_through_call_exact_args() {
     for object in &mut program.objects.0 {
         // Reproduce only main's externally emitted call to target. Stdlib
         // helpers also have declared hooks and must keep their own call sites.
+        // A pooled function carries no name, only its identity; before the
+        // program is loaded nothing owns it, so match the declaration.
         if let bex_vm_types::Object::Function(function) = object
-            && function.name == "user.main"
+            && function
+                .identity
+                .declared_name()
+                .map(baml_type::Name::as_str)
+                == Some("main")
         {
             for instruction in &mut function.bytecode.instructions {
                 if let bex_vm_types::Instruction::CallHooked { callee, ntypeargs } = *instruction {
@@ -337,7 +343,12 @@ async fn internal_vm_failure_in_a_hook_is_not_treated_as_a_null_decision() {
     let mut replaced = false;
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(function) = object {
-            if function.name == "user.recovery_hook" {
+            if function
+                .identity
+                .declared_name()
+                .map(baml_type::Name::as_str)
+                == Some("recovery_hook")
+            {
                 function.bytecode = bex_vm_types::bytecode::Bytecode {
                     instructions: vec![
                         bex_vm_types::Instruction::LoadConst(0),

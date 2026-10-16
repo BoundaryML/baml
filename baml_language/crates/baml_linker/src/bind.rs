@@ -5,7 +5,7 @@
 //! against another.
 
 use baml_linker_types::{Locator, PackageRecord};
-use bex_vm_types::types::EdgeKind;
+use bex_vm_types::types::{EdgeKind, PackageKind};
 
 use super::{LinkError, LinkPackageId, Linker, PerPackage};
 
@@ -32,13 +32,13 @@ impl Linker<'_, '_> {
 
     /// Bind one dependency table (a unit's or a tail's): slot `k + 1` is the
     /// package entry `k`'s edge names in the edge table of the package bound
-    /// to its `via`, and the entry's kind must be the edge's — a direct entry
-    /// binds a declared edge whose package's interface payload has the
-    /// recorded digest, a prelude entry a prelude edge, a transitive entry
-    /// either (its parent's digest covers it). A static link set holds
-    /// packages reached under declared and prelude names only; a view's
-    /// re-export edge and an anonymous declaration's edge exist on runtime
-    /// package objects.
+    /// to its `via`, and the entry's kind must match the package reached — a
+    /// direct entry binds an ordinary package whose interface payload has the
+    /// recorded digest, a transitive entry anything (its parent's digest
+    /// covers it). A prelude entry binds the set's language package of that
+    /// identity, through no edge at all. A static link set reaches its
+    /// packages under plain dependency edges only; a view's re-export edge
+    /// exists on runtime package objects.
     fn bind(
         &self,
         owner: LinkPackageId,
@@ -56,58 +56,57 @@ impl Linker<'_, '_> {
                     via.0
                 )));
             };
+            // A prelude entry binds by identity, through no edge; the other
+            // two locate an edge in the parent's table.
+            let edge_name = match locator {
+                Locator::Prelude(language) => {
+                    let Some(target) = self.set.language_package(*language) else {
+                        return Err(LinkError::MissingLanguagePackage {
+                            package: owner_name.clone(),
+                            language: *language,
+                        });
+                    };
+                    bound.push(target);
+                    continue;
+                }
+                Locator::Direct { edge, .. } | Locator::Transitive { edge, .. } => edge,
+            };
             let Some(edge) = self
                 .set
                 .package(parent)
                 .edges
                 .iter()
-                .find(|edge| edge.name == *locator.edge())
+                .find(|edge| edge.name == *edge_name)
             else {
                 // The edge is read in the PARENT's table: the owner's own for
                 // a direct entry, an earlier slot's package for a transitive
                 // one — so the package named is the one whose table lacks it.
                 return Err(LinkError::UnknownDependency {
                     package: self.set.name(parent).clone(),
-                    edge: locator.edge().clone(),
+                    edge: edge_name.clone(),
                 });
             };
-            let runtime_only = |what: &str| {
-                LinkError::invalid(format!(
-                    "package `{owner_name}` reaches `{}` through a runtime-only {what} edge",
-                    locator.edge()
-                ))
-            };
-            match (locator, edge.kind) {
-                (Locator::Direct { edge: name, digest }, EdgeKind::Declared) => {
-                    Self::verify_digest(
-                        owner_name,
-                        name,
-                        *digest,
-                        self.set.package(edge.target).record,
-                    )?;
+            if edge.kind == EdgeKind::ReExported {
+                return Err(LinkError::invalid(format!(
+                    "package `{owner_name}` reaches `{edge_name}` through a runtime-only re-export \
+                     edge"
+                )));
+            }
+            let target = self.set.package(edge.target);
+            match (locator, target.kind) {
+                (Locator::Direct { edge: name, digest }, PackageKind::Ordinary) => {
+                    Self::verify_digest(owner_name, name, *digest, target.record)?;
                 }
-                (Locator::Direct { edge: name, .. }, EdgeKind::Prelude) => {
+                (Locator::Direct { edge: name, .. }, PackageKind::Language(_)) => {
                     return Err(LinkError::invalid(format!(
                         "package `{owner_name}` records an interface fingerprint for the prelude \
                          package `{name}`"
                     )));
                 }
-                (Locator::Prelude { .. }, EdgeKind::Prelude) => {}
-                (Locator::Prelude { edge: name }, EdgeKind::Declared) => {
-                    return Err(LinkError::invalid(format!(
-                        "package `{owner_name}` records no interface fingerprint for its dependency \
-                         `{name}`"
-                    )));
+                (Locator::Prelude(_), PackageKind::Language(_) | PackageKind::Ordinary) => {
+                    unreachable!("a prelude entry binds by identity above")
                 }
-                (Locator::Transitive { .. }, EdgeKind::Declared | EdgeKind::Prelude) => {}
-                (
-                    Locator::Direct { .. } | Locator::Prelude { .. } | Locator::Transitive { .. },
-                    EdgeKind::ReExported,
-                ) => return Err(runtime_only("re-export")),
-                (
-                    Locator::Direct { .. } | Locator::Prelude { .. } | Locator::Transitive { .. },
-                    EdgeKind::Anonymous,
-                ) => return Err(runtime_only("anonymous-declaration")),
+                (Locator::Transitive { .. }, PackageKind::Language(_) | PackageKind::Ordinary) => {}
             }
             bound.push(edge.target);
         }

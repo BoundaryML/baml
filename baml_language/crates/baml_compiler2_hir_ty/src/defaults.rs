@@ -591,7 +591,7 @@ mod tests {
         let mut binding_body = ExprBody::default();
         let value = binding_body
             .exprs
-            .alloc(Expr::Path(vec![Name::new("later")]));
+            .alloc(Expr::Path(baml_base::Path::bare(Name::new("later"))));
         let stmt = binding_body.stmts.alloc(Stmt::TypeBinding {
             name: Name::new("T"),
             value: TypeBindingValue::Runtime(value),

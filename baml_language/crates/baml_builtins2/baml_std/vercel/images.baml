@@ -122,7 +122,7 @@ class AiGatewayImageClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            vercel.internal.gateway_images_render(self, input, preview = true) catch_all (e) {
+            root.internal.gateway_images_render(self, input, preview = true) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

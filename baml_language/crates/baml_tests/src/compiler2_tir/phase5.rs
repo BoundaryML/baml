@@ -63,8 +63,8 @@ fn generic_param_names(params: &[baml_compiler2_hir::item_data::GenericParamData
 /// Build a sorted, human-readable summary of what `package_items(db, "baml")`
 /// contains, separated by namespace.
 fn render_baml_package_items(db: &ProjectDatabase) -> String {
-    let baml_pkg = baml_compiler2_hir::package::spelling(db)
-        .root(&Name::new("baml"))
+    let baml_pkg = baml_compiler2_hir::package::lang_roots(db)
+        .get(baml_base::LangPackage::Baml)
         .unwrap();
     let items = package_items(db, baml_pkg);
 
@@ -177,8 +177,8 @@ fn render_baml_package_items(db: &ProjectDatabase) -> String {
 #[test]
 fn baml_package_inventory() {
     let db = make_db();
-    let baml_pkg = baml_compiler2_hir::package::spelling(&db)
-        .root(&Name::new("baml"))
+    let baml_pkg = baml_compiler2_hir::package::lang_roots(&db)
+        .get(baml_base::LangPackage::Baml)
         .unwrap();
     let items = package_items(&db, baml_pkg);
 
@@ -382,9 +382,8 @@ fn file_package_derives_correct_namespaces() {
         if path_str == "<builtin>/baml/containers.baml" {
             let pkg_info = file_package(&db, *file);
             assert_eq!(
-                baml_compiler2_hir::package::spelling(&db)
-                    .of(pkg_info.root)
-                    .as_str(),
+                baml_compiler2_hir_ty::render::Viewpoint::canonical(&db)
+                    .display_package(pkg_info.root),
                 "baml"
             );
             assert!(
@@ -398,9 +397,8 @@ fn file_package_derives_correct_namespaces() {
         if path_str == "<builtin>/baml/ns_env/env.baml" {
             let pkg_info = file_package(&db, *file);
             assert_eq!(
-                baml_compiler2_hir::package::spelling(&db)
-                    .of(pkg_info.root)
-                    .as_str(),
+                baml_compiler2_hir_ty::render::Viewpoint::canonical(&db)
+                    .display_package(pkg_info.root),
                 "baml"
             );
             assert_eq!(
@@ -414,9 +412,8 @@ fn file_package_derives_correct_namespaces() {
         if path_str == "<builtin>/baml/ns_http/http.baml" {
             let pkg_info = file_package(&db, *file);
             assert_eq!(
-                baml_compiler2_hir::package::spelling(&db)
-                    .of(pkg_info.root)
-                    .as_str(),
+                baml_compiler2_hir_ty::render::Viewpoint::canonical(&db)
+                    .display_package(pkg_info.root),
                 "baml"
             );
             assert_eq!(
@@ -430,9 +427,8 @@ fn file_package_derives_correct_namespaces() {
         if path_str == "<builtin>/baml/ns_sys/sys.baml" {
             let pkg_info = file_package(&db, *file);
             assert_eq!(
-                baml_compiler2_hir::package::spelling(&db)
-                    .of(pkg_info.root)
-                    .as_str(),
+                baml_compiler2_hir_ty::render::Viewpoint::canonical(&db)
+                    .display_package(pkg_info.root),
                 "baml"
             );
             assert_eq!(
@@ -510,7 +506,7 @@ fn cross_namespace_type_resolution_via_root() {
         &db,
         _root_file,
         &baml_compiler2_ast::TypeExprKind::Path {
-            segments,
+            path: baml_base::Path::new(segments),
             generic_args: vec![],
             associated_type_bindings: vec![],
         }
@@ -532,7 +528,7 @@ fn cross_namespace_type_resolution_via_root() {
         &db,
         ns_file,
         &baml_compiler2_ast::TypeExprKind::Path {
-            segments,
+            path: baml_base::Path::new(segments),
             generic_args: vec![],
             associated_type_bindings: vec![],
         }
@@ -564,7 +560,7 @@ fn same_namespace_resolution_no_prefix() {
         &db,
         _f1,
         &baml_compiler2_ast::TypeExprKind::Path {
-            segments,
+            path: baml_base::Path::new(segments),
             generic_args: vec![],
             associated_type_bindings: vec![],
         }
@@ -616,7 +612,7 @@ fn nested_namespace_resolution() {
         &db,
         _root_file,
         &baml_compiler2_ast::TypeExprKind::Path {
-            segments,
+            path: baml_base::Path::new(segments),
             generic_args: vec![],
             associated_type_bindings: vec![],
         }
@@ -646,7 +642,7 @@ fn bare_name_cross_namespace_rejected() {
         &db,
         _ns_file,
         &baml_compiler2_ast::TypeExprKind::Path {
-            segments,
+            path: baml_base::Path::new(segments),
             generic_args: vec![],
             associated_type_bindings: vec![],
         }
@@ -683,7 +679,7 @@ fn multi_segment_bare_path_rejected() {
         &db,
         _f1,
         &baml_compiler2_ast::TypeExprKind::Path {
-            segments,
+            path: baml_base::Path::new(segments),
             generic_args: vec![],
             associated_type_bindings: vec![],
         }

@@ -8,7 +8,7 @@ use bex_vm_types::{
     bytecode::{Bytecode, SwitchDispatch, SwitchEntry, SwitchKey, SwitchTable},
     types::{
         Class, EdgeKind, Function, FunctionKind, FunctionOrigin, GenericFunction, LocalName,
-        ProgramEdge, ProgramPackage,
+        PackageKind, ProgramEdge, ProgramPackage,
     },
 };
 
@@ -18,12 +18,13 @@ fn item(name: &str) -> LocalName {
     LocalName::new(Vec::new(), Name::new(name))
 }
 
+/// A test function: `name` is `pkg.ns.f`, kept as the ITEM path `ns.f` (the
+/// package segment is the owner's, which a pooled function has none of).
 fn func(name: &str, instructions: Vec<Instruction>) -> Object {
     Object::Function(Box::new(Function {
-        name: name.to_string(),
+        identity: test_identity(name),
         source_file: "user.baml".to_string(),
         docstring: None,
-        declared_name: None,
         arity: 0,
         real_local_count: 0,
         bytecode: Bytecode {
@@ -49,11 +50,25 @@ fn func(name: &str, instructions: Vec<Instruction>) -> Object {
         display_return_type: String::new(),
         throws_type: bex_vm_types::TyTemplate::Never,
         origin: FunctionOrigin::Internal,
-        is_interface_body: false,
         native_key: None,
         body_meta: None,
-        runtime_package: bex_vm_types::HeapPtr::null(),
+        owner: bex_vm_types::HeapPtr::null(),
     }))
+}
+
+/// `pkg.ns.f` → the declared identity of `ns.f` (every test function is a
+/// free function; the package segment is dropped, since a pooled function's
+/// package is its owner, not part of its identity).
+fn test_identity(name: &str) -> bex_vm_types::types::FunctionIdentity {
+    let mut segments: Vec<&str> = name.split('.').collect();
+    let leaf = segments.pop().expect("a test function has a name");
+    if leaf == "$init" {
+        return bex_vm_types::types::FunctionIdentity::Init;
+    }
+    let namespace = segments.into_iter().skip(1).map(Name::new).collect();
+    bex_vm_types::types::FunctionIdentity::Declared(bex_vm_types::types::FnPath::Free(
+        bex_vm_types::types::LocalName::new(namespace, Name::new(leaf)),
+    ))
 }
 
 /// A function whose constants reference local objects `refs`.
@@ -69,13 +84,11 @@ fn func_with_constants(name: &str, refs: &[usize]) -> Object {
     object
 }
 
-/// A class named `name` in the local package (displays as `user.<name>`),
+/// A class at the path `name` of whichever package pools it,
 /// at class-bucket offset 0 (its own tag field is its operand).
 fn class(name: &str) -> Object {
     Object::Class(Box::new(Class {
-        name: bex_vm_types::DeclarationName::Declared(baml_type::QualifiedTypeName::local(
-            Name::new(name),
-        )),
+        path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new(name)),
         fields: Vec::new(),
         description: None,
         alias: None,
@@ -83,7 +96,7 @@ fn class(name: &str) -> Object {
         other: indexmap::IndexMap::new(),
         stream_done: false,
         type_tag: TypeHead::unresolved_operand(ObjectIndex::from_raw(0)).tag(),
-        has_cleanup: false,
+        cleanup: None,
         methods: indexmap::IndexMap::new(),
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
@@ -111,12 +124,12 @@ fn import(dep: u32, path: DeclPath) -> ImportEntry {
     }
 }
 
-/// A declared edge of the executable's record.
+/// A dependency edge of the executable's record.
 fn declared(name: &str, target: u32) -> ProgramEdge {
     ProgramEdge {
         name: Name::new(name),
         target,
-        kind: EdgeKind::Declared,
+        kind: EdgeKind::Dependency,
     }
 }
 
@@ -129,11 +142,9 @@ fn direct(edge: &str, digest: Digest) -> Locator {
     }
 }
 
-/// A prelude entry: `edge` in the owner's own table, no payload.
-fn prelude(edge: &str) -> Locator {
-    Locator::Prelude {
-        edge: Name::new(edge),
-    }
+/// A prelude entry: the language package by identity, no payload.
+fn prelude(language: baml_base::LangPackage) -> Locator {
+    Locator::Prelude(language)
 }
 
 /// A record carrying a valid interface artifact around `payload`: the linker
@@ -166,13 +177,18 @@ fn package_named<'p>(program: &'p Program, name: &str) -> &'p ProgramPackage {
         .unwrap_or_else(|| panic!("no package `{name}`"))
 }
 
+/// Every pooled object's display: functions as the loader will render them
+/// (under the label of the package whose cells hold them).
 fn function_names(program: &Program) -> Vec<String> {
     program
         .objects
         .iter()
-        .map(|object| match object {
-            Object::Function(function) => function.name.clone(),
-            Object::Class(class) => format!("class {}", class.name),
+        .enumerate()
+        .map(|(index, object)| match object {
+            Object::Function(_) => program
+                .function_name(ObjectIndex::from_raw(index))
+                .expect("a function renders"),
+            Object::Class(class) => format!("class {}", class.path),
             Object::GenericFunction(generic) => format!("generic@{}", generic.function.raw()),
             other => format!("{other:?}"),
         })
@@ -220,12 +236,13 @@ fn package<'a>(
 ) -> LinkPackage<'a> {
     LinkPackage {
         name: Name::new(name),
+        kind: PackageKind::Ordinary,
         edges: edges
             .into_iter()
             .map(|(edge, id)| LinkEdge {
                 name: Name::new(edge),
                 target: LinkPackageId(id),
-                kind: EdgeKind::Declared,
+                kind: EdgeKind::Dependency,
             })
             .collect(),
         unit,
@@ -597,7 +614,7 @@ fn layout_is_package_major_in_set_order() {
     let program = linked(&set);
     assert_eq!(
         function_names(&program),
-        vec!["class user.U", "user.f", "class user.S", "baml.x"]
+        vec!["class U", "user.f", "class S", "baml.x"]
     );
     let callables = program.rendered_callables();
     assert_eq!(callables["user.f"].object, ObjectIndex::from_raw(1));
@@ -622,11 +639,11 @@ fn layout_is_package_major_in_set_order() {
         vec!["user", "baml"]
     );
     // The linker owns the tags: each declaration's is its image index.
-    for (abs, expected) in [(0, "user.U"), (2, "user.S")] {
+    for (abs, expected) in [(0, "U"), (2, "S")] {
         let Object::Class(class) = &program.objects[ObjectIndex::from_raw(abs)] else {
             panic!("object {abs} is not a class")
         };
-        assert_eq!(class.name.to_string(), expected);
+        assert_eq!(class.path.to_string(), expected);
         assert_eq!(class.type_tag, TypeTag::of_static_index(abs));
     }
 }
@@ -717,19 +734,20 @@ fn packages_without_lets_may_reach_each_other() {
     assert_eq!(order, Ok(vec![3, 0]));
 }
 
-/// Two packages may share a name (names live on edges); the order among
-/// packages free to initialize is by name, then by position, so every link
-/// of one set orders them the same way.
+/// The order among packages free to initialize is their position in the
+/// set, so every link of one set orders them the same way. A package's label
+/// takes no part, whether two packages share one or it would sort another
+/// way.
 #[test]
-fn init_order_breaks_a_tie_between_same_named_packages_by_position() {
+fn init_order_among_free_packages_is_by_position_whatever_they_are_called() {
     let set = [
         with_lets("user", &[]),
         with_lets("lib", &[]),
         with_lets("lib", &[]),
-        with_lets("lib", &[]),
+        with_lets("app", &[]),
     ];
     for _ in 0..32 {
-        assert_eq!(init_order_of(&set), Ok(vec![1, 2, 3, 0]));
+        assert_eq!(init_order_of(&set), Ok(vec![0, 1, 2, 3]));
     }
 }
 
@@ -752,12 +770,13 @@ fn an_init_cycle_is_refused_naming_both_packages() {
 }
 
 #[test]
-fn init_order_is_topological_with_alphabetical_ties() {
-    // `a` depends on `c`; `b` is independent. In-degree-zero packages sort
-    // by name (b, c), then `a` is released.
+fn init_order_is_topological_with_ties_by_position() {
+    // `a` depends on `c`; `z` is independent. The packages free to
+    // initialize go in set order (`z`, then `c` — not by label), then `a`
+    // is released.
     let record = interface_record(b"iface");
     let empty = CompilationUnit::default();
-    let tails: Vec<InitTail> = ["a", "b", "c"]
+    let tails: Vec<InitTail> = ["a", "z", "c"]
         .into_iter()
         .map(|name| InitTail {
             objects: vec![func(&format!("{name}.$init"), vec![Instruction::Return])],
@@ -770,7 +789,7 @@ fn init_order_is_topological_with_alphabetical_ties() {
         .collect();
     let mut packages = vec![
         package("a", vec![("c", 2)], &empty, &record),
-        package("b", vec![], &empty, &record),
+        package("z", vec![], &empty, &record),
         package("c", vec![], &empty, &record),
     ];
     for (package, tail) in packages.iter_mut().zip(&tails) {
@@ -783,10 +802,12 @@ fn init_order_is_topological_with_alphabetical_ties() {
     .unwrap();
     assert_eq!(program.init_order, vec![1, 2, 0]);
     // Placement is set order; only the execution order is topological.
-    assert_eq!(
-        function_names(&program),
-        vec!["a.$init", "b.$init", "c.$init"]
-    );
+    let placed: Vec<usize> = program
+        .packages
+        .iter()
+        .map(|package| package.init.expect("every package has an init").raw())
+        .collect();
+    assert_eq!(placed, vec![0, 1, 2]);
 }
 
 #[test]
@@ -1054,7 +1075,7 @@ fn a_tail_reaches_its_own_packages_declarations_as_imports() {
         packages: vec![user],
     })
     .unwrap();
-    assert_eq!(function_names(&program), vec!["class user.Widget", "$init"]);
+    assert_eq!(function_names(&program), vec!["class Widget", "$init"]);
     assert_eq!(
         function(&program, 1).bytecode.instructions[0],
         Instruction::AllocInstance {
@@ -1077,7 +1098,7 @@ fn a_rule_body_aimed_at_a_named_function_is_an_invalid_unit() {
     unit.interfaces
         .push(Object::Interface(Box::new(InterfaceDef {
             structural_default: None,
-            name: baml_type::TypeName::local(Name::new("Greeter")),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Greeter")),
             type_tag: TypeHead::unresolved_operand(ObjectIndex::from_raw(0)).tag(),
             args: Vec::new(),
             requires: Vec::new(),
@@ -1150,38 +1171,118 @@ fn a_unit_compiled_against_another_interface_is_refused() {
 }
 
 #[test]
-fn a_direct_dependency_without_a_fingerprint_is_malformed() {
+fn a_prelude_entry_for_an_absent_language_package_is_refused() {
     let record = interface_record(b"iface");
     let provider = unit_with_class("Widget", "Widget");
     let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
-    // A declared edge recorded as a prelude entry: no digest to bind by.
-    consumer.dependencies.push(prelude("app"));
+    // A prelude entry binds by identity: no package of that identity, no
+    // binding — an edge named like the package does not stand in for it.
+    consumer
+        .dependencies
+        .push(prelude(baml_base::LangPackage::Baml));
     consumer
         .object_imports
         .push(import(1, DeclPath::Class(item("Widget"))));
     let set = LinkSet {
         root: LinkPackageId(1),
         packages: vec![
-            package("app", vec![], &provider, &record),
-            package("user", vec![("app", 0)], &consumer, &record),
+            package("baml", vec![], &provider, &record),
+            package("user", vec![("baml", 0)], &consumer, &record),
         ],
     };
-    assert!(matches!(
-        link(&set),
-        Err(LinkError::InvalidUnit(message)) if message.contains("no interface fingerprint")
-    ));
+    assert_eq!(
+        link(&set).err(),
+        Some(LinkError::MissingLanguagePackage {
+            package: Name::new("user"),
+            language: baml_base::LangPackage::Baml,
+        })
+    );
+}
+
+#[test]
+fn a_prelude_entry_binds_through_no_edge() {
+    // The prelude is bound by identity: the owner need not reach the
+    // language package under any edge name for its prelude entry to bind.
+    let record = interface_record(b"iface");
+    let stdlib = unit_with_class("S", "S");
+    let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
+    consumer
+        .dependencies
+        .push(prelude(baml_base::LangPackage::Baml));
+    consumer
+        .object_imports
+        .push(import(1, DeclPath::Class(item("S"))));
+    let empty = PackageRecord {
+        interface_blob: Vec::new(),
+    };
+    let set = LinkSet {
+        root: LinkPackageId(1),
+        packages: vec![
+            LinkPackage {
+                kind: bex_vm_types::types::PackageKind::Language(baml_base::LangPackage::Baml),
+                ..package("baml", vec![], &stdlib, &empty)
+            },
+            package("user", vec![], &consumer, &record),
+        ],
+    };
+    let program = linked(&set);
+    assert_eq!(
+        function_names(&program),
+        vec!["class S", "user.make"],
+        "the consumer's import binds to the language package's class"
+    );
+}
+
+#[test]
+fn a_transitive_entry_may_reach_a_language_package() {
+    // A transitive entry binds whatever the parent's edge reaches; a
+    // language package there is accepted without a fingerprint, as a
+    // prelude entry is.
+    let record = interface_record(b"iface");
+    let stdlib = unit_with_class("S", "S");
+    let middle = unit_with_fn("lib.noop", vec![Instruction::Return]);
+    let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
+    consumer.dependencies = vec![
+        direct("lib", fingerprint_of(&record)),
+        Locator::Transitive {
+            via: DepSlot(1),
+            edge: Name::new("baml"),
+        },
+    ];
+    consumer
+        .object_imports
+        .push(import(2, DeclPath::Class(item("S"))));
+    let empty = PackageRecord {
+        interface_blob: Vec::new(),
+    };
+    let set = LinkSet {
+        root: LinkPackageId(2),
+        packages: vec![
+            LinkPackage {
+                kind: bex_vm_types::types::PackageKind::Language(baml_base::LangPackage::Baml),
+                ..package("baml", vec![], &stdlib, &empty)
+            },
+            package("lib", vec![("baml", 0)], &middle, &record),
+            package("user", vec![("lib", 1)], &consumer, &record),
+        ],
+    };
+    let program = linked(&set);
+    assert_eq!(
+        function_names(&program),
+        vec!["class S", "lib.noop", "user.make"]
+    );
 }
 
 #[test]
 fn a_prelude_dependency_carries_no_fingerprint() {
-    // The prelude is bound by its fixed name and carries no blob; a unit
-    // recording a fingerprint for it is malformed, one recording none links.
+    // The prelude is bound by identity and carries no blob; a unit recording
+    // a fingerprint for it is malformed, one recording none links.
     let stdlib = unit_with_class("S", "S");
     let make_consumer = |fingerprint: Option<Digest>| {
         let mut consumer = unit_with_fn("user.make", vec![alloc_import(0), Instruction::Return]);
         consumer.dependencies.push(match fingerprint {
             Some(digest) => direct("baml", digest),
-            None => prelude("baml"),
+            None => prelude(baml_base::LangPackage::Baml),
         });
         consumer
             .object_imports
@@ -1199,11 +1300,22 @@ fn a_prelude_dependency_carries_no_fingerprint() {
                 package("user", vec![("baml", 0)], consumer, &empty),
             ],
         };
-        set.packages[1].edges[0].kind = EdgeKind::Prelude;
+        set.packages[0].kind = PackageKind::Language(baml_base::LangPackage::Baml);
         set
     };
     let unfingerprinted = make_consumer(None);
     link(&set(&unfingerprinted)).unwrap();
+    // The runtime finds each language package by what it is, so a second
+    // package claiming to be `baml` cannot link.
+    let mut doubled = set(&unfingerprinted);
+    doubled.packages[1].kind = PackageKind::Language(baml_base::LangPackage::Baml);
+    assert!(matches!(
+        link(&doubled),
+        Err(LinkError::DuplicateLanguagePackage {
+            language: baml_base::LangPackage::Baml,
+            ..
+        })
+    ));
     let fingerprinted = make_consumer(Some([7; 32]));
     assert!(matches!(
         link(&set(&fingerprinted)),
@@ -1310,7 +1422,12 @@ fn an_exported_function_must_be_a_function() {
     let Object::Function(function) = &mut unit.code[0] else {
         unreachable!()
     };
-    function.is_interface_body = true;
+    function.identity = bex_vm_types::types::FunctionIdentity::InterfaceBody(
+        bex_vm_types::types::BodyKey::Default {
+            interface: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("I")),
+            method: Name::new("f"),
+        },
+    );
     assert!(refused(&unit, None, &record).contains("exports function f"));
 }
 
@@ -1471,20 +1588,18 @@ fn a_runtime_only_edge_kind_is_refused() {
     consumer
         .dependencies
         .push(direct("app", fingerprint_of(&record)));
-    for kind in [EdgeKind::ReExported, EdgeKind::Anonymous] {
-        let mut set = LinkSet {
-            root: LinkPackageId(1),
-            packages: vec![
-                package("app", vec![], &provider, &record),
-                package("user", vec![("app", 0)], &consumer, &record),
-            ],
-        };
-        set.packages[1].edges[0].kind = kind;
-        assert!(matches!(
-            link(&set),
-            Err(LinkError::InvalidUnit(message)) if message.contains("runtime-only")
-        ));
-    }
+    let mut set = LinkSet {
+        root: LinkPackageId(1),
+        packages: vec![
+            package("app", vec![], &provider, &record),
+            package("user", vec![("app", 0)], &consumer, &record),
+        ],
+    };
+    set.packages[1].edges[0].kind = EdgeKind::ReExported;
+    assert!(matches!(
+        link(&set),
+        Err(LinkError::InvalidUnit(message)) if message.contains("runtime-only")
+    ));
 }
 
 #[test]

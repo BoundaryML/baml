@@ -4,12 +4,6 @@ function namespaced_generic_class_type_pattern_requires_type_args(boxed: root.ll
     }
 }
 
-function namespace_relative_generic_class_type_pattern_requires_type_args(boxed: llm.openai.Box<int>) -> int {
-    match (boxed) {
-        llm.openai.Box => 1
-    }
-}
-
 function namespaced_generic_class_type_pattern_rejects_extra_type_args(boxed: root.llm.openai.Box<int>) -> int {
     match (boxed) {
         root.llm.openai.Box<int, string> => 1,

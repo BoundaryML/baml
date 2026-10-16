@@ -50,7 +50,7 @@ interface Equals {
     /// `PartialEq`: the `float` impl keeps the law by making `NaN` equal to
     /// itself rather than agreeing with IEEE.
     function eq(self, other: Self) -> bool throws never {
-        baml._equals_structural_default(self, other)
+        root._equals_structural_default(self, other)
     }
     /// Whether `self` and `other` differ. Defaults to `!self.eq(other)`.
     ///
@@ -335,12 +335,12 @@ implement Equals for uint8array {
 // type here. It also lets `T[]`/`map<string, V>` satisfy `Equals` bounds for any `T`/`V`.
 implement<T> Equals for T[] {
     function eq(self, other: Self) -> bool throws never {
-        baml.ops.equals_equals(self, other)
+        root.ops.equals_equals(self, other)
     }
 }
 
 implement<V> Equals for map<string, V> {
     function eq(self, other: Self) -> bool throws never {
-        baml.ops.equals_equals(self, other)
+        root.ops.equals_equals(self, other)
     }
 }

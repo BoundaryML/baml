@@ -12,6 +12,7 @@ rust-version.workspace = true
 version = "0.22.2"
 authors.workspace = true
 license.workspace = true
+license-file = "LICENSE"
 homepage.workspace = true
 documentation.workspace = true
 repository.workspace = true

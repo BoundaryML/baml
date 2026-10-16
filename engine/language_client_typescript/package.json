@@ -7,7 +7,7 @@
     "url": "git+https://github.com/BoundaryML/baml.git",
     "directory": "engine/language_client_typescript"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": [
     "napi-rs",
     "NAPI",

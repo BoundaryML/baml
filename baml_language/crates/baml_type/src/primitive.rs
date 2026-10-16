@@ -41,11 +41,11 @@ impl PrimitiveType {
     /// Media primitives (`image`, `audio`, `video`, `pdf`) have corresponding
     /// classes in `baml_builtins2/baml_std/baml/ns_media/media.baml`, and
     /// `uint8array` has its class in `baml_builtins2/baml_std/baml/uint8array.baml`.
-    pub fn builtin_class_path(&self) -> &'static [&'static str] {
+    pub fn builtin_class_path(&self) -> &'static [baml_base::Name] {
         crate::compiler_aliases::by_target(crate::compiler_aliases::AliasTarget::Primitive(*self))
             .definition
             .expect("primitives have member declarations")
-            .path
+            .path()
     }
 
     pub fn from_literal(lit: &baml_base::Literal) -> Self {
@@ -132,10 +132,10 @@ impl BuiltinTypeName {
     ///
     /// Compiler intrinsics deliberately return `None`: their documentation is
     /// supplied by the language-topic registry instead.
-    pub fn builtin_definition_path(self) -> Option<&'static [&'static str]> {
+    pub fn builtin_definition_path(self) -> Option<&'static [baml_base::Name]> {
         crate::compiler_aliases::by_target(self.target())
             .definition
-            .map(|definition| definition.path)
+            .map(crate::compiler_aliases::Definition::path)
     }
 
     fn target(self) -> crate::compiler_aliases::AliasTarget {
@@ -194,11 +194,11 @@ mod tests {
         assert_eq!(
             BuiltinTypeName::from_alias("string")
                 .and_then(BuiltinTypeName::builtin_definition_path),
-            Some(&["String"][..])
+            Some(&[baml_base::Name::new("String")][..])
         );
         assert_eq!(
             BuiltinTypeName::from_alias("json").and_then(BuiltinTypeName::builtin_definition_path),
-            Some(&["json", "json"][..])
+            Some(&[baml_base::Name::new("json"), baml_base::Name::new("json")][..])
         );
         assert_eq!(
             BuiltinTypeName::from_alias("never").and_then(BuiltinTypeName::builtin_definition_path),

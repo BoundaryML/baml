@@ -882,7 +882,7 @@ impl<N: Clone> TyTemplate<N> {
     /// A lossy [`Ty`] view for rendering only: frame refs become
     /// `TypeVar("#n")`. Every other node maps structurally, so
     /// [`fmt::Display`] can delegate to `Ty`'s renderer.
-    fn to_display_ty(&self) -> crate::Ty<N> {
+    pub fn to_display_ty(&self) -> crate::Ty<N> {
         use crate::Ty;
         match self {
             Self::TypeArgRef(n) => Ty::TypeVar(crate::ParamTy::new(*n, Name::new(format!("#{n}")))),

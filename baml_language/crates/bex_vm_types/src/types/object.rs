@@ -149,14 +149,17 @@ impl Object {
         unreachable!("followed a reference to a tombstone: the object it named is gone")
     }
 
-    /// The qualified name of a nominal declaration, if it has one.
+    /// The qualified name of a nominal declaration, if it has one: its path
+    /// under its package's display name, put together on demand (see
+    /// `declaration_name`). An anonymous (runtime-created) declaration has
+    /// none. Display and boundary spelling only — never an identity.
     #[must_use]
-    pub fn declaration_name(&self) -> Option<&baml_type::TypeName> {
+    pub fn declaration_name(&self) -> Option<baml_type::TypeName> {
         match self {
-            Object::Class(class) => class.name.declared(),
-            Object::Enum(enm) => enm.name.declared(),
-            Object::Interface(interface) => Some(&interface.name),
-            Object::TypeAlias(alias) => Some(&alias.name),
+            Object::Class(class) => class.name().declared().cloned(),
+            Object::Enum(enm) => enm.name().declared().cloned(),
+            Object::Interface(interface) => interface.name().declared().cloned(),
+            Object::TypeAlias(alias) => alias.name().declared().cloned(),
             _ => None,
         }
     }
@@ -404,7 +407,7 @@ impl std::fmt::Display for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Object::Function(function) => function.fmt(f),
-            Object::Interface(interface) => write!(f, "<interface {}>", interface.name),
+            Object::Interface(interface) => write!(f, "<interface {}>", interface.name()),
             Object::Package(_) => write!(f, "<package>"),
             Object::ImplRule(_) => write!(f, "<impl_rule>"),
             Object::Class(class) => class.fmt(f),

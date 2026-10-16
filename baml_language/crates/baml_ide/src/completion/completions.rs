@@ -218,7 +218,7 @@ impl<'db> Completions<'db> {
     }
 
     /// A builtin type alias (`int`, `string`, `json`) — the language's own
-    /// spelling table, offered wherever a type can be written.
+    /// alias table, offered wherever a type can be written.
     pub(super) fn add_builtin_type(&mut self, alias: &str) {
         let item = Completion {
             label: alias.to_string(),

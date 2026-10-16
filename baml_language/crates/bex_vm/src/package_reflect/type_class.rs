@@ -536,9 +536,9 @@ fn render_definition_display_name(vm: &BexVm, definition: &RenderDefinition) -> 
     | RenderDefinition::Enum(ptr)
     | RenderDefinition::TypeAlias(ptr)) = definition;
     match vm.get_object(*ptr) {
-        Object::Class(class) => class.name.display_name().to_string(),
-        Object::Enum(enm) => enm.name.display_name().to_string(),
-        Object::TypeAlias(alias) => alias.name.display_name().to_string(),
+        Object::Class(class) => class.name().display_name().to_string(),
+        Object::Enum(enm) => enm.name().display_name().to_string(),
+        Object::TypeAlias(alias) => alias.name().display_name().to_string(),
         _ => unreachable!("a render definition points at a nominal declaration"),
     }
 }
@@ -566,7 +566,7 @@ fn rendered_realized_class_name(
     class: &bex_vm_types::Class,
     args: &[bex_vm_types::RealizedTy],
 ) -> String {
-    let display_name = class.name.display_name();
+    let display_name = class.name().display_name();
     let base = class.alias.as_deref().unwrap_or(display_name.as_str());
     if args.is_empty() {
         base.to_string()
@@ -1175,7 +1175,7 @@ fn render_witness_sources(
             continue;
         };
         source.push_str("\n  implements ");
-        source.push_str(interface.name.render_user_facing().as_str());
+        source.push_str(interface.name().display_name().as_str());
         let args = rule
             .interface_args
             .iter()
@@ -1296,8 +1296,8 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
     let mut spellings = indexmap::IndexMap::new();
     for ptr in enum_ptrs.iter().chain(&class_ptrs) {
         let (tag, base) = match vm.get_object(*ptr) {
-            Object::Class(class) => (class.type_tag, class.name.display_name().to_string()),
-            Object::Enum(enm) => (enm.type_tag, enm.name.display_name().to_string()),
+            Object::Class(class) => (class.type_tag, class.name().display_name().to_string()),
+            Object::Enum(enm) => (enm.type_tag, enm.name().display_name().to_string()),
             _ => continue,
         };
         if spellings.contains_key(&tag) {
@@ -1314,7 +1314,7 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
         };
         let name = spellings
             .get(&enm.type_tag)
-            .map_or_else(|| enm.name.display_name().to_string(), Clone::clone);
+            .map_or_else(|| enm.name().display_name().to_string(), Clone::clone);
         if !rendered_declarations.insert(name.clone()) {
             continue;
         }
@@ -1352,7 +1352,7 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
         };
         let name = spellings
             .get(&class.type_tag)
-            .map_or_else(|| class.name.display_name().to_string(), Clone::clone);
+            .map_or_else(|| class.name().display_name().to_string(), Clone::clone);
         if !rendered_declarations.insert(name.clone()) {
             continue;
         }
@@ -1459,26 +1459,7 @@ mod renderability_tests {
     use super::*;
 
     fn empty_package() -> bex_vm_types::types::Package {
-        bex_vm_types::types::Package {
-            name: baml_type::Name::default(),
-            edges: indexmap::IndexMap::new(),
-            classes: indexmap::IndexMap::new(),
-            enums: indexmap::IndexMap::new(),
-            interfaces: indexmap::IndexMap::new(),
-            impl_rules: indexmap::IndexMap::new(),
-            type_aliases: indexmap::IndexMap::new(),
-            globals: indexmap::IndexMap::new(),
-            slots: bex_vm_types::types::Slots::Own {
-                cells: Box::new([]),
-                initialized: true,
-            },
-            objects: bex_vm_types::types::Objects::Own(Box::new([])),
-            surface: bex_vm_types::types::ExportSurface::Projected,
-            init: None,
-            test_init: None,
-            diagnostics: Vec::new(),
-            session: None,
-        }
+        bex_vm_types::types::Package::empty(baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE))
     }
 
     fn alloc_test_class(
@@ -1489,7 +1470,7 @@ mod renderability_tests {
     ) -> (bex_vm_types::HeapPtr, baml_type::typetag::TypeTag) {
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(name)),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name)),
             fields: Vec::new(),
             description: description.map(str::to_string),
             alias: None,
@@ -1497,7 +1478,7 @@ mod renderability_tests {
             other: indexmap::IndexMap::new(),
             stream_done: false,
             type_tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::Package(owner),

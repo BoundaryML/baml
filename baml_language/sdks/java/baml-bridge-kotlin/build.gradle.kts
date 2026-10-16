@@ -43,6 +43,11 @@ val bamlVersion = (project.findProperty("bamlVersion") as String?)?.takeIf { it.
 group = "com.boundaryml"
 version = bamlVersion
 
+// Keep the repository license in every published JAR, including classifiers.
+tasks.withType<Jar>().configureEach {
+    from(file("../../../../LICENSE")) { into("META-INF") }
+}
+
 dependencies {
     // The runtime library this extends. `api` (transitive) + composite-build
     // substitution: resolves against the sibling ../baml_bridge project locally

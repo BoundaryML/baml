@@ -21,10 +21,11 @@ use baml_compiler2_hir::item_data::{file_functions, is_required_interface_method
 use baml_compiler2_mir::{
     AggregateKind, BinOp, BlockId, Constant, Local, MirFunction, MirFunctionBody, MirFunctionKind,
     Operand, OptLevel, Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey, Terminator,
-    TypeTest, UnaryOp, class_link_name, enum_link_name, function_link_name, lower_function,
+    TypeTest, UnaryOp, class_display_name, enum_display_name, function_display_name,
+    lower_function,
 };
 use baml_type::{Literal, TyTemplate};
-use bex_vm_types::{FunctionKind, Object, Program};
+use bex_vm_types::{FunctionKind, Object, ObjectIndex, Program};
 
 use crate::structure::{Cfg, Flow, Stmt, Structured, structurize};
 
@@ -108,7 +109,7 @@ pub fn compile_program<'db>(
                     continue;
                 }
             };
-            let name = mir.identity.link_name(db);
+            let name = mir.identity.display_name(db);
             let MirFunctionKind::Bytecode(body) = &mir.kind else {
                 continue;
             };
@@ -199,6 +200,7 @@ pub fn compile_program<'db>(
                 out: String::new(),
                 pending: Vec::new(),
                 temps: 0,
+                live_in: Vec::new(),
             };
             match generator.function(&symbols[name]) {
                 Ok(code) => {
@@ -288,12 +290,18 @@ impl ProgramIndex {
         let mut classes = HashMap::new();
         let mut enums = HashMap::new();
         let mut strings = HashMap::new();
+        // Names as the loader renders them: under the label of the package
+        // that placed the declaration. A pooled declaration's own `name()`
+        // has no owner until load, so it would render unqualified.
         for (index, object) in program.objects.iter().enumerate() {
             match object {
                 Object::Function(function) => {
-                    objects.insert(function.name.clone(), index);
+                    let Some(name) = program.function_name(ObjectIndex::from_raw(index)) else {
+                        continue;
+                    };
+                    objects.insert(name.clone(), index);
                     functions.insert(
-                        function.name.clone(),
+                        name,
                         FunctionInfo {
                             kind: function.kind,
                             layout: function.argument_layout(),
@@ -304,19 +312,22 @@ impl ProgramIndex {
                         },
                     );
                 }
-                // Keyed by the qualified name, which is what MIR's link names
-                // spell; the display name elides the local package and is not
-                // an identity.
-                Object::Class(class) => {
-                    classes.insert(class.name.to_string(), (index, class.fields.len()));
-                }
-                Object::Enum(enm) => {
-                    enums.insert(enm.name.to_string(), index);
-                }
                 Object::String(text) => {
                     strings.entry(text.to_string()).or_insert(index);
                 }
                 _ => {}
+            }
+        }
+        for package in &program.packages {
+            for (path, &object) in &package.classes {
+                if let Object::Class(class) = &program.objects[object] {
+                    let name = qualified(&package.name, path);
+                    classes.insert(name, (object.raw(), class.fields.len()));
+                }
+            }
+            for (path, &object) in &package.enums {
+                let name = qualified(&package.name, path);
+                enums.insert(name, object.raw());
             }
         }
         Self {
@@ -327,6 +338,17 @@ impl ProgramIndex {
             strings,
         }
     }
+}
+
+/// A declaration's fully qualified name, `package.ns.Name`: what MIR's
+/// `class_display_name` and `enum_display_name` spell. `TypeName`'s display
+/// name elides the local package and would miss them.
+fn qualified(package: &baml_type::Name, path: &bex_vm_types::types::LocalName) -> String {
+    std::iter::once(package.as_str())
+        .chain(path.namespace.iter().map(baml_type::Name::as_str))
+        .chain(std::iter::once(path.name.as_str()))
+        .collect::<Vec<_>>()
+        .join(".")
 }
 
 /// VM-owned builtins that never yield to run a callback, by `native_key`.
@@ -662,7 +684,7 @@ fn suspends_directly<'db>(
             let Operand::Constant(Constant::Function(func)) = callee else {
                 return true;
             };
-            let Some(info) = index.functions.get(&function_link_name(db, *func)) else {
+            let Some(info) = index.functions.get(&function_display_name(db, *func)) else {
                 return false;
             };
             match info.kind {
@@ -691,7 +713,7 @@ fn user_callee_name<'db>(
     let Operand::Constant(Constant::Function(func)) = callee else {
         return None;
     };
-    let name = function_link_name(db, *func);
+    let name = function_display_name(db, *func);
     let info = index.functions.get(&name)?;
     matches!(info.kind, FunctionKind::Bytecode).then_some(name)
 }
@@ -740,9 +762,16 @@ struct Generator<'a, 'db> {
     /// holds another call (two `vm` borrows) whatever the expression is.
     pending: Vec<String>,
     temps: usize,
+    /// For a resumable function, the locals live on entry to each block:
+    /// what a suspension keeps in the frame's slots.
+    live_in: Vec<Vec<bool>>,
 }
 
 type Gen<T> = Result<T, Rejection>;
+
+/// What a suspension keeps: live locals (local `i` in slot `i`), then live
+/// array iterators with the slot of their position.
+type Saved = (Vec<usize>, Vec<(usize, usize)>);
 
 fn unsupported<T>(what: impl Into<String>) -> Gen<T> {
     Err(Rejection::Unsupported(what.into()))
@@ -866,15 +895,77 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// Locals saved across a suspension, with their slot: every local but
-    /// the static type ones, then each array iterator's position.
-    fn saved(&self) -> (Vec<usize>, Vec<usize>) {
-        let locals = (0..self.analysis.reprs.len())
-            .filter(|i| !self.analysis.static_types.contains_key(i))
-            .collect();
+    /// The array iterators, in the order their positions take slots after
+    /// the locals'.
+    fn iters(&self) -> Vec<usize> {
         let mut iters: Vec<usize> = self.analysis.array_iters.keys().copied().collect();
         iters.sort_unstable();
-        (locals, iters)
+        iters
+    }
+
+    /// What a suspension at the end of `block` keeps in the frame's slots:
+    /// each local live once it resumes, then the position of each live array
+    /// iterator, with its slot. Live once it resumes means live into the
+    /// block the resume continues at, less the local the resume writes, plus
+    /// live into the block's handler when a raise can land there. Every other
+    /// local is dead across the suspension: it is neither saved nor restored,
+    /// and keeps its default until it is next written.
+    fn saved_at(&self, block: BlockId) -> Gen<Saved> {
+        let (destination, target) = self.resume_edge(block)?;
+        let mut live = self.live_in[target.0].clone();
+        if let Place::Local(local) = destination {
+            live[local.0] = false;
+        }
+        if let Some(handler) = self.body.blocks[block.0].unwind {
+            for (live, handler) in live.iter_mut().zip(&self.live_in[handler.0]) {
+                *live |= *handler;
+            }
+        }
+        let locals = (0..self.analysis.reprs.len())
+            .filter(|&i| live[i] && !self.analysis.static_types.contains_key(&i))
+            .collect();
+        let base = self.analysis.reprs.len().max(self.arity());
+        let iters = self
+            .iters()
+            .into_iter()
+            .enumerate()
+            .filter(|&(_, iter)| live[iter])
+            .map(|(j, iter)| (iter, base + j))
+            .collect();
+        Ok((locals, iters))
+    }
+
+    /// The local a suspension at the end of `block` writes when it resumes,
+    /// and the block it continues at.
+    fn resume_edge(&self, block: BlockId) -> Gen<(Place, BlockId)> {
+        match self.body.blocks[block.0].terminator.as_ref() {
+            Some(
+                Terminator::Call {
+                    destination,
+                    target,
+                    ..
+                }
+                | Terminator::SysOp {
+                    destination,
+                    target,
+                    ..
+                }
+                | Terminator::Await {
+                    destination,
+                    target,
+                    ..
+                }
+                | Terminator::AwaitAny {
+                    destination,
+                    target,
+                    ..
+                },
+            ) => Ok((destination.clone(), *target)),
+            Some(Terminator::Spawn { future, resume, .. }) => Ok((future.clone(), *resume)),
+            _ => Err(Rejection::Invalid(
+                "resume after a non-suspending block".into(),
+            )),
+        }
     }
 
     /// A resumable function: the VM drives it through `Resume`/`Step`. Its
@@ -884,8 +975,9 @@ impl<'db> Generator<'_, 'db> {
     /// `loop { match bb }`, since a resume enters the middle of the function.
     fn resumable_function(&mut self, symbol: &str) -> Gen<String> {
         let arity = self.body.locals.len().min(self.arity());
-        let (locals, iters) = self.saved();
+        let iters = self.iters();
         let slots = self.analysis.reprs.len().max(arity) + iters.len();
+        self.live_in = baml_compiler2_mir::live_in(self.body);
         let declared = self.declared_at.map_or(0, |span| self.line_of(span));
         self.out.clear();
         let _ = writeln!(
@@ -940,22 +1032,8 @@ impl<'db> Generator<'_, 'db> {
         let entry = self.body.entry.0;
         self.line(3, &format!("bb = {entry};"));
         self.line(2, "}");
+        // Each resume arm restores what its suspension saved (`saved_at`).
         self.line(2, "point => {");
-        for &i in &locals {
-            let value = coerce(
-                &format!("vm.slot(depth, {i})"),
-                Repr::Value,
-                self.repr(Local(i)),
-            );
-            self.line(3, &format!("l{i} = {value};"));
-        }
-        for (j, iter) in iters.iter().enumerate() {
-            let slot = self.analysis.reprs.len().max(arity) + j;
-            self.line(
-                3,
-                &format!("i{iter} = bex_vm::compiled_rt::expect_int(vm.slot(depth, {slot}))?;"),
-            );
-        }
         self.line(3, "match (point, resume.input) {");
         for block in 0..self.body.blocks.len() {
             if self.block_suspends(block) {
@@ -994,50 +1072,43 @@ impl<'db> Generator<'_, 'db> {
     /// handler.
     fn resume_arms(&mut self, block: BlockId, depth: usize) -> Gen<()> {
         let point = block.0 + 1;
-        let (destination, target) = match self.body.blocks[block.0].terminator.as_ref() {
-            Some(
-                Terminator::Call {
-                    destination,
-                    target,
-                    ..
-                }
-                | Terminator::SysOp {
-                    destination,
-                    target,
-                    ..
-                }
-                | Terminator::Await {
-                    destination,
-                    target,
-                    ..
-                }
-                | Terminator::AwaitAny {
-                    destination,
-                    target,
-                    ..
-                },
-            ) => (destination, target),
-            Some(Terminator::Spawn { future, resume, .. }) => (future, resume),
-            _ => {
-                return Err(Rejection::Invalid(
-                    "resume after a non-suspending block".into(),
-                ));
-            }
-        };
+        let (destination, target) = self.resume_edge(block)?;
         if !matches!(destination, Place::Local(_)) {
             return unsupported("a suspending call's result stored into a field or element");
         }
-        let store = self.store(block, destination, &Expr::new("v", Repr::Value))?;
+        let store = self.store(block, &destination, &Expr::new("v", Repr::Value))?;
         self.line(depth, &format!("({point}, ResumeInput::Value(v)) => {{"));
+        self.restore_locals(block, depth + 1)?;
         self.line(depth + 1, &store);
         self.line(depth + 1, &format!("bb = {};", target.0));
         self.line(depth, "}");
         if self.body.blocks[block.0].unwind.is_some() {
             self.line(depth, &format!("({point}, ResumeInput::Thrown(e)) => {{"));
+            self.restore_locals(block, depth + 1)?;
             let jump = self.unwind_jump(block, "e", depth + 1)?;
             self.flush(depth + 1);
             self.out.push_str(&jump);
             self.line(depth, "}");
+        }
+        Ok(())
+    }
+
+    /// Read back what the suspension at the end of `block` saved.
+    fn restore_locals(&mut self, block: BlockId, depth: usize) -> Gen<()> {
+        let (locals, iters) = self.saved_at(block)?;
+        for i in locals {
+            let value = coerce(
+                &format!("vm.slot(depth, {i})"),
+                Repr::Value,
+                self.repr(Local(i)),
+            );
+            self.line(depth, &format!("l{i} = {value};"));
+        }
+        for (iter, slot) in iters {
+            self.line(
+                depth,
+                &format!("i{iter} = bex_vm::compiled_rt::expect_int(vm.slot(depth, {slot}))?;"),
+            );
         }
         Ok(())
     }
@@ -1135,7 +1206,7 @@ impl<'db> Generator<'_, 'db> {
                 self.callee_ptr(block, callee)?;
                 let args = match callee {
                     Operand::Constant(Constant::Function(func)) => {
-                        let name = function_link_name(self.db, *func);
+                        let name = function_display_name(self.db, *func);
                         self.laid_out_args(block, &name, argument_layout.as_ref(), args)?
                             .join(", ")
                     }
@@ -1179,7 +1250,7 @@ impl<'db> Generator<'_, 'db> {
             }
             _ => return Err(Rejection::Invalid("pause at a non-suspending block".into())),
         };
-        self.save_locals(depth);
+        self.save_locals(block, depth)?;
         self.flush(depth);
         self.line(depth, "vm.note_line(depth, line);");
         self.line(depth, &format!("return Ok({step});"));
@@ -1191,7 +1262,7 @@ impl<'db> Generator<'_, 'db> {
     fn callee_ptr(&mut self, block: BlockId, callee: &Operand<'db>) -> Gen<()> {
         let code = match callee {
             Operand::Constant(Constant::Function(func)) => {
-                let name = function_link_name(self.db, *func);
+                let name = function_display_name(self.db, *func);
                 let Some(object) = self.index.objects.get(&name) else {
                     return unsupported(format!("callee `{name}` not found in the program"));
                 };
@@ -1262,21 +1333,20 @@ impl<'db> Generator<'_, 'db> {
         Ok(values.join(", "))
     }
 
-    /// Save every local and iterator position in the frame's slots.
-    fn save_locals(&mut self, depth: usize) {
-        let arity = self.body.locals.len().min(self.arity());
-        let (locals, iters) = self.saved();
+    /// Save what stays live across the suspension at the end of `block`.
+    fn save_locals(&mut self, block: BlockId, depth: usize) -> Gen<()> {
+        let (locals, iters) = self.saved_at(block)?;
         for i in locals {
             let value = self.value_arg(&format!("l{i}"), self.repr(Local(i)));
             self.statement(depth, &format!("vm.set_slot(depth, {i}, {value});"));
         }
-        for (j, iter) in iters.iter().enumerate() {
-            let slot = self.analysis.reprs.len().max(arity) + j;
+        for (iter, slot) in iters {
             self.statement(
                 depth,
                 &format!("vm.set_slot(depth, {slot}, Value::int(i{iter}));"),
             );
         }
+        Ok(())
     }
 
     fn arity(&self) -> usize {
@@ -1706,7 +1776,7 @@ impl<'db> Generator<'_, 'db> {
             Constant::Bigint(_) => return unsupported("bigint literal"),
             // A named function as a value: its object, as bytecode loads it.
             Constant::Function(func) => {
-                let name = function_link_name(self.db, *func);
+                let name = function_display_name(self.db, *func);
                 let Some(object) = self.index.objects.get(&name) else {
                     return unsupported(format!("function `{name}` not found in the program"));
                 };
@@ -1862,7 +1932,7 @@ impl<'db> Generator<'_, 'db> {
                 if !type_arg_templates.is_empty() {
                     return unsupported("instance of a generic class");
                 }
-                let name = class_link_name(self.db, *class);
+                let name = class_display_name(self.db, *class);
                 let Some(&(object, field_count)) = self.index.classes.get(&name) else {
                     return unsupported(format!("class `{name}` not found in the program"));
                 };
@@ -1906,7 +1976,7 @@ impl<'db> Generator<'_, 'db> {
             }
             Rvalue::VirtualFieldAccess { .. } => unsupported("interface field access"),
             Rvalue::LoadType(_) => unsupported("type value"),
-            Rvalue::CurrentPackage(_) => unsupported("current package"),
+            Rvalue::CurrentPackage => unsupported("current package"),
             Rvalue::TraceHookSettings { .. } => unsupported("trace hook"),
         }
     }
@@ -1917,7 +1987,7 @@ impl<'db> Generator<'_, 'db> {
                 if !args.is_empty() {
                     return unsupported("type test against a generic class");
                 }
-                let name = class_link_name(self.db, *class);
+                let name = class_display_name(self.db, *class);
                 let Some(&(object, _)) = self.index.classes.get(&name) else {
                     return unsupported(format!("class `{name}` not found in the program"));
                 };
@@ -1926,7 +1996,7 @@ impl<'db> Generator<'_, 'db> {
                 ))
             }
             TypeTest::Enum(enum_ref) => {
-                let name = enum_link_name(self.db, *enum_ref);
+                let name = enum_display_name(self.db, *enum_ref);
                 let Some(&object) = self.index.enums.get(&name) else {
                     return unsupported(format!("enum `{name}` not found in the program"));
                 };
@@ -2060,7 +2130,7 @@ impl<'db> Generator<'_, 'db> {
         let Operand::Constant(Constant::Function(func)) = callee else {
             return unsupported("call through a function value");
         };
-        let name = function_link_name(self.db, *func);
+        let name = function_display_name(self.db, *func);
         let Some(info) = self.index.functions.get(&name) else {
             return unsupported(format!("callee `{name}` not found in the program"));
         };
@@ -2252,7 +2322,7 @@ fn static_realized(
         TyTemplate::Class(name, args) if args.is_empty() => {
             let &(object, _) = index
                 .classes
-                .get(&baml_compiler2_mir::decl_link_name(db, name))?;
+                .get(&baml_compiler2_mir::decl_display_name(db, name))?;
             format!("vm.class_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
         }
         _ => return None,
