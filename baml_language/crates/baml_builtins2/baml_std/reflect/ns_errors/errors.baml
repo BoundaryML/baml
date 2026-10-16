@@ -32,7 +32,8 @@ class TypeMismatch {
 }
 
 /// A reflection call got an argument it cannot accept: `Enum.get_value` given
-/// a value that is not an enum value.
+/// a value that is not an enum value, or a `reflect.Package` or
+/// `reflect.Session` that holds no package.
 ///
 /// The `reflect` counterpart of `baml.errors.InvalidArgument`, with the same
 /// shape: `reflect` does not depend on `baml`, so it cannot name that class.

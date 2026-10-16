@@ -32,6 +32,7 @@ use super::{
     BamlClassPackage, BamlClassSession, BamlPackageReflect, Continuation, ImplResolver,
     NativeCallResult, PackageReflectImpl, copy,
     graft::{Commit, LoadTarget, load_package},
+    type_kinds::invalid_argument,
 };
 use crate::{
     BexVm,
@@ -39,7 +40,7 @@ use crate::{
         ArtifactKind, PinnedArtifact, RuntimeCompileArtifact, RuntimeCompileArtifactSlot,
         RuntimeSessionCompileArtifact, RuntimeSessionStepKind,
     },
-    errors::{VmBamlError, VmRustFnError},
+    errors::VmRustFnError,
     vm::CallableSignature,
 };
 
@@ -167,40 +168,39 @@ fn view_edges(
 /// The edge name a view reaches its base under.
 const REEXPORTED_BASE_EDGE: &str = "$base";
 
-fn package_ptr(vm: &BexVm, value: Value) -> Result<HeapPtr, VmRustFnError> {
+/// The `Object::Package` a `reflect.Package` (or `reflect.Session`) value
+/// holds, or why it holds none.
+fn package_object(vm: &BexVm, value: Value) -> Result<HeapPtr, &'static str> {
     let Some(wrapper_ptr) = value.as_object_ptr() else {
-        return Err(VmBamlError::InvalidArgument {
-            message: "reflect.Package receiver is not an instance".to_string(),
-        }
-        .into());
+        return Err("reflect.Package receiver is not an instance");
     };
     let Object::Instance(wrapper) = vm.get_object(wrapper_ptr) else {
-        return Err(VmBamlError::InvalidArgument {
-            message: "reflect.Package receiver is not an instance".to_string(),
-        }
-        .into());
+        return Err("reflect.Package receiver is not an instance");
     };
     let Some(ptr) = wrapper.load_field(0).as_object_ptr() else {
-        return Err(VmBamlError::InvalidArgument {
-            message: "reflect.Package is not initialized".to_string(),
-        }
-        .into());
+        return Err("reflect.Package is not initialized");
     };
     if !matches!(vm.get_object(ptr), Object::Package(_)) {
-        return Err(VmBamlError::InvalidArgument {
-            message: "reflect.Package has an invalid runtime payload".to_string(),
-        }
-        .into());
+        return Err("reflect.Package has an invalid runtime payload");
     }
     Ok(ptr)
 }
 
+/// [`package_object`], throwing `reflect.errors.InvalidArgument` for a value
+/// that holds no package.
+fn package_ptr(vm: &mut BexVm, value: Value) -> Result<HeapPtr, VmRustFnError> {
+    package_object(vm, value).map_err(|message| invalid_argument(vm, message))
+}
+
+/// Take the compiled artifact out of its `reflect.CompileArtifact` wrapper,
+/// or say why it cannot be taken; the caller throws the message as
+/// `reflect.errors.InvalidArgument`.
 fn take_compile_artifact(
     vm: &BexVm,
     value: Value,
     invalid_message: &str,
     consumed_message: &str,
-) -> Result<PinnedArtifact, VmRustFnError> {
+) -> Result<PinnedArtifact, String> {
     let Some(inner) = value
         .as_object_ptr()
         .and_then(|pointer| match vm.get_object(pointer) {
@@ -208,24 +208,15 @@ fn take_compile_artifact(
             _ => None,
         })
     else {
-        return Err(VmBamlError::InvalidArgument {
-            message: invalid_message.to_string(),
-        }
-        .into());
+        return Err(invalid_message.to_string());
     };
     let slot = vm
         .as_rust_data::<RuntimeCompileArtifactSlot>(&inner)
-        .map_err(|_| VmBamlError::InvalidArgument {
-            message: invalid_message.to_string(),
-        })?;
-    let taken = slot.take().map_err(|_| VmBamlError::InvalidArgument {
-        message: format!("{invalid_message}: artifact state is unavailable"),
-    })?;
-    taken.ok_or_else(|| {
-        VmRustFnError::from(VmBamlError::InvalidArgument {
-            message: consumed_message.to_string(),
-        })
-    })
+        .map_err(|_| invalid_message.to_string())?;
+    let taken = slot
+        .take()
+        .map_err(|_| format!("{invalid_message}: artifact state is unavailable"))?;
+    taken.ok_or_else(|| consumed_message.to_string())
 }
 
 fn local_name(path: &str) -> Option<LocalName> {
@@ -1002,12 +993,10 @@ struct RegisterPackageTests {
 }
 
 impl Continuation for RegisterPackageTests {
-    fn call(self: Box<Self>, _vm: &mut BexVm, collector: Value) -> NativeCallResult {
+    fn call(self: Box<Self>, vm: &mut BexVm, collector: Value) -> NativeCallResult {
         let Some(collector_ptr) = collector.as_object_ptr() else {
-            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                message: "testing.TestCollector.new returned a non-instance".to_string(),
-            })
-            .into();
+            return invalid_argument(vm, "testing.TestCollector.new returned a non-instance")
+                .into();
         };
         NativeCallResult::YieldToCall {
             callee: self.test_init,
@@ -1037,10 +1026,8 @@ impl Continuation for FinishPackageTests {
         let tests_value = match vm.get_object(self.collector_ptr) {
             Object::Instance(collector) => collector.load_field(1),
             _ => {
-                return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                    message: "test collector changed kind during registration".to_string(),
-                })
-                .into();
+                return invalid_argument(vm, "test collector changed kind during registration")
+                    .into();
             }
         };
         let registrations = match vm.as_array(&tests_value) {
@@ -1093,17 +1080,18 @@ impl BamlClassPackage for PackageReflectImpl {
             "Package compile artifact has already been consumed",
         ) {
             Ok(artifact) => artifact,
-            Err(error) => return error.into(),
+            Err(message) => return invalid_argument(vm, message).into(),
         };
         if !matches!(&artifact.kind, ArtifactKind::Package) {
-            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                message: "reflect.Package._finish received a Session.eval artifact".to_string(),
-            })
+            return invalid_argument(
+                vm,
+                "reflect.Package._finish received a Session.eval artifact",
+            )
             .into();
         }
         let dependencies = match pinned_dependencies(vm, &pins, packages) {
             Ok(dependencies) => dependencies,
-            Err(error) => return error.into(),
+            Err(message) => return invalid_argument(vm, message).into(),
         };
         let package = Package {
             name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
@@ -1130,7 +1118,7 @@ impl BamlClassPackage for PackageReflectImpl {
         let loaded =
             match load_package(vm, package_ptr, LoadTarget::Package, &artifact.emitted, &[]) {
                 Ok(loaded) => loaded,
-                Err(error) => return error.into(),
+                Err(error) => return error.into_native_error(vm).into(),
             };
 
         // Linking is complete. First telemetry observation may now register
@@ -1175,7 +1163,7 @@ impl BamlClassPackage for PackageReflectImpl {
     }
 
     fn find_class(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
-        let ptr = package_ptr(vm, *package).ok()?;
+        let ptr = package_object(vm, *package).ok()?;
         find_class(vm, ptr, name.as_str())
     }
 
@@ -1189,7 +1177,7 @@ impl BamlClassPackage for PackageReflectImpl {
     }
 
     fn find_enum(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
-        let ptr = package_ptr(vm, *package).ok()?;
+        let ptr = package_object(vm, *package).ok()?;
         find_enum(vm, ptr, name.as_str())
     }
 
@@ -1203,7 +1191,7 @@ impl BamlClassPackage for PackageReflectImpl {
     }
 
     fn find_interface(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
-        let ptr = package_ptr(vm, *package).ok()?;
+        let ptr = package_object(vm, *package).ok()?;
         find_interface(vm, ptr, name.as_str())
     }
 
@@ -1346,7 +1334,7 @@ impl BamlClassPackage for PackageReflectImpl {
     }
 
     fn classes(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
-        let Ok(ptr) = package_ptr(vm, *package) else {
+        let Ok(ptr) = package_object(vm, *package) else {
             return IndexMap::new();
         };
         exported_declarations(vm, ptr, |package| &package.classes)
@@ -1361,7 +1349,7 @@ impl BamlClassPackage for PackageReflectImpl {
     }
 
     fn enums(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
-        let Ok(ptr) = package_ptr(vm, *package) else {
+        let Ok(ptr) = package_object(vm, *package) else {
             return IndexMap::new();
         };
         exported_declarations(vm, ptr, |package| &package.enums)
@@ -1371,7 +1359,7 @@ impl BamlClassPackage for PackageReflectImpl {
     }
 
     fn interfaces(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
-        let Ok(ptr) = package_ptr(vm, *package) else {
+        let Ok(ptr) = package_object(vm, *package) else {
             return IndexMap::new();
         };
         exported_declarations(vm, ptr, |package| &package.interfaces)
@@ -1386,7 +1374,7 @@ impl BamlClassPackage for PackageReflectImpl {
     }
 
     fn functions(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
-        let Ok(ptr) = package_ptr(vm, *package) else {
+        let Ok(ptr) = package_object(vm, *package) else {
             return IndexMap::new();
         };
         // Every free function along the export chain, each under the first
@@ -1449,7 +1437,7 @@ impl BamlClassPackage for PackageReflectImpl {
     }
 
     fn diagnostics(vm: &mut BexVm, package: &Value) -> Vec<Value> {
-        let Ok(ptr) = package_ptr(vm, *package) else {
+        let Ok(ptr) = package_object(vm, *package) else {
             return Vec::new();
         };
         let diagnostics = match vm.get_object(ptr) {
@@ -1467,18 +1455,15 @@ impl BamlClassPackage for PackageReflectImpl {
 /// compiled against, by the alias the compile spelled each under. The
 /// caller's `packages` must be exactly that map — same aliases, same package
 /// objects — or the artifact's references would bind to declarations the
-/// compiler never read.
+/// compiler never read. A mismatch is a message the caller throws as
+/// `reflect.errors.InvalidArgument`.
 fn pinned_dependencies(
     vm: &BexVm,
     pins: &IndexMap<String, bex_heap::Handle>,
     packages: &IndexMap<bex_str::BexStr, Value>,
-) -> Result<IndexMap<String, HeapPtr>, VmRustFnError> {
+) -> Result<IndexMap<String, HeapPtr>, String> {
     use bex_heap::WeakHeapRef as _;
-    let mismatch = |message: String| {
-        VmRustFnError::from(VmBamlError::InvalidArgument {
-            message: format!("reflect.Package._finish: {message}"),
-        })
-    };
+    let mismatch = |message: String| format!("reflect.Package._finish: {message}");
     let mut dependencies = IndexMap::with_capacity(pins.len());
     for (alias, handle) in pins {
         let pinned = vm
@@ -1490,7 +1475,7 @@ fn pinned_dependencies(
                 "the artifact was compiled against package `{alias}`, which `packages` omits"
             )));
         };
-        if package_ptr(vm, *given)? != pinned {
+        if package_object(vm, *given)? != pinned {
             return Err(mismatch(format!(
                 "package `{alias}` is not the one the artifact was compiled against"
             )));
@@ -1655,7 +1640,8 @@ fn graft_session_submission(
         LoadTarget::Session,
         &artifact.emitted,
         &commits,
-    )?;
+    )
+    .map_err(|error| error.into_native_error(vm))?;
     let actions = loaded
         .commits
         .iter()
@@ -1753,7 +1739,7 @@ impl BamlClassSession for PackageReflectImpl {
             "Session artifact has already been consumed",
         ) {
             Ok(artifact) => artifact,
-            Err(error) => return error.into(),
+            Err(message) => return invalid_argument(vm, message).into(),
         };
         debug_assert!(
             pins.is_empty(),
@@ -1763,10 +1749,8 @@ impl BamlClassSession for PackageReflectImpl {
         let (metadata, lease) = match kind {
             ArtifactKind::Session { meta, lease } => (meta, lease),
             ArtifactKind::Package => {
-                return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                    message: "Session._finish received a Package.compile artifact".to_string(),
-                })
-                .into();
+                return invalid_argument(vm, "Session._finish received a Package.compile artifact")
+                    .into();
             }
         };
         let actions = match graft_session_submission(vm, package, &artifact, &metadata) {
@@ -1792,7 +1776,7 @@ impl BamlClassSession for PackageReflectImpl {
     }
 
     fn diagnostics(vm: &mut BexVm, session: &Value) -> Vec<Value> {
-        let Ok(package) = package_ptr(vm, *session) else {
+        let Ok(package) = package_object(vm, *session) else {
             return Vec::new();
         };
         let diagnostics = match vm.get_object(package) {

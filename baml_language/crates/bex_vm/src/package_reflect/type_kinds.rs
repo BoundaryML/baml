@@ -2051,7 +2051,17 @@ fn invalid_enum_value(vm: &mut BexVm, value: Value) -> crate::errors::VmRustFnEr
         "reflect.Enum.get_value expects an enum value, got {}",
         vm.type_of(&value)
     );
-    let message = Value::object(vm.alloc_string(message.as_str()));
+    invalid_argument(vm, message)
+}
+
+/// Throw `reflect.errors.InvalidArgument { message }`: how a reflection
+/// native reports an argument or receiver it cannot accept. `reflect` does
+/// not depend on `baml`, so its natives never throw a `baml.errors` value.
+pub(super) fn invalid_argument(
+    vm: &mut BexVm,
+    message: impl Into<bex_str::BexStr>,
+) -> crate::errors::VmRustFnError {
+    let message = Value::object(vm.alloc_string(message));
     crate::errors::VmRustFnError::thrown_fresh(
         copy::errors::InvalidArgument { message }.to_value(vm),
     )

@@ -425,7 +425,7 @@ function refused() -> reflect.Session {
   b.eval(`let m = 1`);
   let artifact = a._compile<unknown>(`n = 9`);
   let _ = b._finish<unknown>(artifact) catch (e) {
-    baml.errors.InvalidArgument => { null },
+    reflect.errors.InvalidArgument => { null },
   };
   b
 }
