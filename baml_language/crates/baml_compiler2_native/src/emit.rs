@@ -1280,6 +1280,20 @@ impl<'db> Generator<'_, 'db> {
         if let Some(cause) = self.cause_slot {
             self.line(3, &format!("vm.set_slot(depth, {cause}, Value::NULL);"));
         }
+        // A write-through local's slot holds its value from its first
+        // assignment on; before that, its default, so a resume restoring it
+        // where liveness overapproximates (a local a terminator assigns)
+        // reads a well-typed value, as when every suspension saved it.
+        for local in self.write_through.clone() {
+            if local > arity {
+                let default = coerce(
+                    self.repr(Local(local)).default_value(),
+                    self.repr(Local(local)),
+                    Repr::Value,
+                );
+                self.line(3, &format!("vm.set_slot(depth, {local}, {default});"));
+            }
+        }
         for i in 1..=arity {
             let arg = coerce(
                 &format!("vm.slot(depth, {})", i - 1),
