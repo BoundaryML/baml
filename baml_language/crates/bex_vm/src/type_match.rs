@@ -116,9 +116,11 @@ fn primitive_member(vm: &BexVm, value: Value, ty: &Ty) -> Option<bool> {
     Some(value_primitive(vm, value) == Some(slot))
 }
 
-/// The primitive concrete types, for [`primitive_member`]'s comparison.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Primitive {
+/// The primitive concrete types, for [`primitive_member`]'s comparison and
+/// for a caller that asks the same membership question of many primitive
+/// values and wants to ask it once per primitive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Primitive {
     Int,
     Bigint,
     Float,
@@ -128,10 +130,30 @@ enum Primitive {
     Uint8Array,
 }
 
+impl Primitive {
+    /// How many primitives there are: the size of a table indexed by
+    /// [`Self::index`].
+    pub const COUNT: usize = 7;
+
+    /// A dense index for a per-primitive table.
+    pub fn index(self) -> usize {
+        match self {
+            Self::Int => 0,
+            Self::Bigint => 1,
+            Self::Float => 2,
+            Self::String => 3,
+            Self::Bool => 4,
+            Self::Null => 5,
+            Self::Uint8Array => 6,
+        }
+    }
+}
+
 /// `value`'s concrete type if it is a primitive; `None` for every other value
 /// (an instance, a variant, a container, a callable, a definition object), none
-/// of which inhabits a primitive type.
-fn value_primitive(vm: &BexVm, value: Value) -> Option<Primitive> {
+/// of which inhabits a primitive type. A cell is read through, as
+/// `BexVm::value_concrete_ty` reads it.
+pub fn value_primitive(vm: &BexVm, value: Value) -> Option<Primitive> {
     if value.as_int().is_some() {
         return Some(Primitive::Int);
     }
@@ -159,12 +181,12 @@ fn value_primitive(vm: &BexVm, value: Value) -> Option<Primitive> {
         | Object::BoundMethod(_)
         | Object::GenericFunction(_)
         | Object::HostClosure(_)
-        | Object::Cell(_)
         | Object::Array(_)
         | Object::Map(_)
         | Object::Future(_)
         | Object::RustData(_)
         | Object::Type(_) => None,
+        Object::Cell(cell) => value_primitive(vm, cell.load()),
         Object::Tombstone => Object::tombstone_reached(),
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(_) => None,

@@ -317,12 +317,13 @@ async fn body_only_var_still_requires_binding() {
         panic!("expected TypeMismatch, got {err:?}");
     };
     // The message must read for a non-type-theorist: name the function, the var,
-    // and how to specify it via subscript; no `<:`/variance jargon, and no
-    // `_types=` (an internal wiring detail, not a user-facing surface).
+    // and how to specify it, in BAML's own spelling (the engine speaks to every
+    // host); no `<:`/variance jargon, and no `_types=` (an internal wiring
+    // detail, not a user-facing surface).
     assert!(
         message.contains("one_type_arg")
             && message.contains('T')
-            && message.contains("one_type_arg[int]"),
+            && message.contains("one_type_arg<int>"),
         "unfriendly must-specify message: {message:?}"
     );
     assert!(
@@ -570,15 +571,14 @@ async fn infer_tag_or_value_binds_t_from_int() {
 }
 
 #[tokio::test]
-async fn infer_tag_or_value_string_arg_binds_rust_type() {
-    // §H H3 (decided): tag_or_value("hi") ⇒ the `string` sibling absorbs the
-    // actual, so the `T` arm gets no residual evidence. `T` still has a value
-    // position (the `x` param) and no closure occurrence, so it defaults to
-    // `rust_type` (rule 4) rather than being rejected.
+async fn infer_tag_or_value_string_arg_binds_never() {
+    // §H H3: tag_or_value("hi") ⇒ the `string` sibling absorbs the actual, so
+    // nothing pins `T`: the value could be a `T` or not, and the tie breaks to
+    // `T = never`. (Nothing arriving at all stays must-specify.)
     let out = call_infer(TAG_OR_VALUE_REFLECT, "tag_or_value", vec![s("hi")])
         .await
         .unwrap();
-    assert_eq!(out, BEV::String("$rust_type".into()));
+    assert_eq!(out, BEV::String("never".into()));
 }
 
 #[tokio::test]

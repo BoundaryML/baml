@@ -22,6 +22,8 @@
 //! by a value that is not a BAML value is the host's bridge to say, before the
 //! value is sent.
 
+use std::collections::HashMap;
+
 use baml_type::normalize;
 use bex_external_types::{BexExternalAdt, BexExternalValue, Handle, HostValueKind, TypeDefRef};
 use bex_heap::{HeapPermit, TlabHolder};
@@ -142,6 +144,73 @@ struct Hydrator<'a, H: HeapPermit<BexThread>> {
     holder: &'a mut H,
     overlay: InboundRuntimeOverlay<'a>,
     path: Vec<Segment>,
+    /// Membership answers for primitive values under slots the algebra has to
+    /// decide (a union, a recursive alias): a list of a thousand ints under
+    /// `json` asks the same question a thousand times. The algebra's answer
+    /// for a primitive depends on nothing but the primitive and the slot
+    /// unless the slot mentions a literal type, where it depends on the value
+    /// (`"circle"` is a `string` but not a `"square"`); such a slot is asked
+    /// per value. A primitive or `unknown` slot is answered without the
+    /// algebra by [`bex_vm::value_is_member`] itself and is not recorded.
+    members: HashMap<RealizedTy, SlotMembership>,
+}
+
+/// What a hydration remembers about one slot's membership of primitives.
+enum SlotMembership {
+    /// The slot mentions a literal type (through aliases too): the answer is
+    /// the value's, never memoized.
+    PerValue,
+    /// The answer per primitive, filled in the first time each is asked.
+    ByPrimitive([Option<bool>; bex_vm::Primitive::COUNT]),
+}
+
+/// Does `ty` mention a literal type anywhere, with recursive aliases
+/// unfolded through their definitions? Membership of a primitive value in
+/// such a type depends on the value itself.
+fn mentions_literal(vm: &BexVm, ty: &Ty, seen: &mut Vec<HeapPtr>) -> bool {
+    match ty {
+        Ty::Literal(..) | Ty::EnumVariant(..) | Ty::Error => true,
+        Ty::TypeAlias(head) => {
+            if seen.contains(&head.ptr()) {
+                return false;
+            }
+            seen.push(head.ptr());
+            match vm.type_alias_definition(head.ptr()) {
+                Some(body) => mentions_literal(vm, body.as_ty(), seen),
+                // An alias with no definition is refused elsewhere; treat it
+                // as value-dependent so nothing is memoized about it.
+                None => true,
+            }
+        }
+        Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Uint8Array
+        | Ty::Media(_)
+        | Ty::Class(..)
+        | Ty::Interface(..)
+        | Ty::Enum(_)
+        | Ty::List(_)
+        | Ty::Map { .. }
+        | Ty::Union(_)
+        | Ty::Function { .. }
+        | Ty::Future(..)
+        | Ty::RustType
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::TypeVar(_)
+        | Ty::AssociatedTypeProjection { .. }
+        | Ty::Unknown
+        | Ty::Never => {
+            let mut found = false;
+            ty.visit_children(&mut |child| found = found || mentions_literal(vm, child, seen));
+            found
+        }
+    }
 }
 
 impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
@@ -177,8 +246,43 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
 
     /// `value`, built, is a member of `ty`: the check a list makes on a push
     /// and a class on a field write.
-    fn member(&self, value: Value, ty: &RealizedTy) -> Result<(), Refusal> {
-        if is_member(self.vm(), value, ty.as_ty()) {
+    fn member(&mut self, value: Value, ty: &RealizedTy) -> Result<(), Refusal> {
+        let answered_by_slot = matches!(
+            ty.as_ty(),
+            Ty::Unknown
+                | Ty::Int
+                | Ty::Bigint
+                | Ty::Float
+                | Ty::String
+                | Ty::Bool
+                | Ty::Null
+                | Ty::Uint8Array
+        );
+        let is = match bex_vm::value_primitive(self.vm(), value) {
+            Some(primitive) if !answered_by_slot => {
+                let vm = &self.holder.holder().vm;
+                let slot = self.members.entry(ty.clone()).or_insert_with(|| {
+                    if mentions_literal(vm, ty.as_ty(), &mut Vec::new()) {
+                        SlotMembership::PerValue
+                    } else {
+                        SlotMembership::ByPrimitive([None; bex_vm::Primitive::COUNT])
+                    }
+                });
+                match slot {
+                    SlotMembership::PerValue => is_member(vm, value, ty.as_ty()),
+                    SlotMembership::ByPrimitive(answers) => match answers[primitive.index()] {
+                        Some(is) => is,
+                        None => {
+                            let is = is_member(vm, value, ty.as_ty());
+                            answers[primitive.index()] = Some(is);
+                            is
+                        }
+                    },
+                }
+            }
+            Some(_) | None => is_member(self.vm(), value, ty.as_ty()),
+        };
+        if is {
             Ok(())
         } else {
             Err(self.refuse(RefusalKind::NotAMember {
@@ -634,6 +738,7 @@ impl BexEngine {
             holder,
             overlay,
             path: Vec::new(),
+            members: HashMap::new(),
         };
         hydrator.value(value)
     }

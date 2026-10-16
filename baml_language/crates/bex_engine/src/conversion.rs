@@ -207,6 +207,17 @@ impl BexEngine {
         ty: &RuntimeTy,
         overlay: InboundRuntimeOverlay<'_>,
     ) -> Result<bex_vm_types::RuntimeTy, EngineError> {
+        let anchored = self.anchor_wire_ty_heads(vm, ty, overlay)?;
+        heads_match_their_kind(vm, &anchored)?;
+        Ok(anchored)
+    }
+
+    fn anchor_wire_ty_heads(
+        &self,
+        vm: &BexVm,
+        ty: &RuntimeTy,
+        overlay: InboundRuntimeOverlay<'_>,
+    ) -> Result<bex_vm_types::RuntimeTy, EngineError> {
         ty.try_map_heads(&mut |name: &baml_type::TypeName| {
             let spelling = name.to_string();
             let ptr = self
@@ -230,6 +241,80 @@ impl BexEngine {
             Ok(bex_vm_types::TypeHead::new(ptr, tag))
         })
     }
+}
+
+/// Every head in a host-stated type is a declaration of the kind the type
+/// spells, and a class head takes as many type arguments as the class
+/// declares: `list<class Color>` for an enum `Color`, or `Box` with no
+/// arguments, is refused rather than built.
+fn heads_match_their_kind(vm: &BexVm, ty: &bex_vm_types::RuntimeTy) -> Result<(), EngineError> {
+    use bex_vm_types::RuntimeTy as Anchored;
+    let mismatch = |what: &str| EngineError::TypeMismatch {
+        message: format!("host-supplied type `{ty}` names {what}"),
+    };
+    match ty {
+        Anchored::Class(head, args) => match vm.get_object(head.ptr()) {
+            Object::Class(class) => {
+                if class.generic_param_count != args.len() {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "host-supplied type `{ty}` gives {} type argument(s) to a class that \
+                             takes {}",
+                            args.len(),
+                            class.generic_param_count
+                        ),
+                    });
+                }
+            }
+            _ => return Err(mismatch("as a class a declaration that is not one")),
+        },
+        Anchored::Enum(head) | Anchored::EnumVariant(head, _) => {
+            if !matches!(vm.get_object(head.ptr()), Object::Enum(_)) {
+                return Err(mismatch("as an enum a declaration that is not one"));
+            }
+        }
+        Anchored::Interface(head, ..) => {
+            if !matches!(vm.get_object(head.ptr()), Object::Interface(_)) {
+                return Err(mismatch("as an interface a declaration that is not one"));
+            }
+        }
+        Anchored::TypeAlias(head) => {
+            if !matches!(vm.get_object(head.ptr()), Object::TypeAlias(_)) {
+                return Err(mismatch("as an alias a declaration that is not one"));
+            }
+        }
+        Anchored::Int
+        | Anchored::Bigint
+        | Anchored::Float
+        | Anchored::String
+        | Anchored::Bool
+        | Anchored::Null
+        | Anchored::Uint8Array
+        | Anchored::Media(_)
+        | Anchored::Literal(..)
+        | Anchored::List(_)
+        | Anchored::Map { .. }
+        | Anchored::Union(_)
+        | Anchored::Function { .. }
+        | Anchored::Future(..)
+        | Anchored::AssociatedTypeProjection { .. }
+        | Anchored::TypeVar(_)
+        | Anchored::RustType
+        | Anchored::Type
+        | Anchored::Resource
+        | Anchored::PromptAst
+        | Anchored::Unknown
+        | Anchored::Never => {}
+    }
+    let mut failure = None;
+    ty.visit_children(&mut |child| {
+        if failure.is_none()
+            && let Err(error) = heads_match_their_kind(vm, child)
+        {
+            failure = Some(error);
+        }
+    });
+    failure.map_or(Ok(()), Err)
 }
 
 /// The runtime declarations a type reaches, in the wire's pointer-free form.
@@ -1346,7 +1431,8 @@ pub(crate) fn contains_type_var(ty: &RuntimeTy) -> bool {
 /// Combine two types into a normalized union — the `RuntimeTy` seam over the
 /// shared [`baml_type_runtime::union_ty`]. Used when the same `TypeVar` is
 /// inferred from several arguments (`choose(5, "a")` → `T = int | string`) or a
-/// host-only sibling (`choose(5, host_obj)` → `int | rust_type`).
+/// host-only sibling (`choose(5, host_obj)` → `int | rust_type`, the type an
+/// opaque host value has).
 #[cfg(test)]
 pub(crate) fn union_runtime_ty(a: &RuntimeTy, b: &RuntimeTy) -> RuntimeTy {
     RuntimeTy::try_from(baml_type_runtime::union_ty(&Ty::from(a), &Ty::from(b)))
@@ -1436,53 +1522,79 @@ pub(crate) fn infer_bindings_runtime_checked(
     Ok(out)
 }
 
-/// Where each `TypeVar` occurs across a generic call's *parameter* types, used
-/// to classify still-unbound vars after inference (03c `03c-impl-guide` rules
-/// 2 & 4):
-///
-/// - `value_position` — the var appears in a parameter at a position **not**
-///   inside a function-typed sub-term (a bare arg, container element, class/map
-///   arg, union member). Such a var, if it came up unbound (empty collection,
-///   `null` actual, union-sibling-absorbed, unbound generic), **defaults to
-///   `RustType`** and rides opaquely (rule 4).
-/// - `closure` — the var appears **inside a function-typed parameter's
-///   signature** (its params/return/throws, any depth). A host callable is
-///   opaque to BAML, so the var cannot be inferred from it *or* validated
-///   against it; it is **poisoned** and must be specified explicitly (rule 2),
-///   overriding any value-position evidence it might also have.
-///
-/// A var in neither set has no parameter occurrence at all (return-only /
-/// body-only) ⇒ must-specify (rule 3), left for Gate A.
-///
-/// `ambiguous_union` is a further must-specify carve-out: a var that is a direct
-/// member of a union alongside **another** free `TypeVar` (`f<T,U>(x: T | U |
-/// int)`). Such a union has no principled way to split the actual between its
-/// free vars, so an unbound one is rejected rather than defaulted to `RustType`
-/// (03b J12, distinct from §H's single-`TypeVar`-beside-concrete case).
-#[derive(Default)]
-pub(crate) struct ParamVarPositions {
-    pub value_position: std::collections::HashSet<String>,
-    pub closure: std::collections::HashSet<String>,
-    pub ambiguous_union: std::collections::HashSet<String>,
-}
-
-/// Classify every `TypeVar` occurring in the declared parameter types into
-/// [`ParamVarPositions`]. See that type's docs for the rule mapping.
-pub(crate) fn classify_param_var_positions(params: &[RuntimeTy]) -> ParamVarPositions {
-    let mut out = ParamVarPositions::default();
+/// The type variables that occur **inside a function-typed parameter's
+/// signature** (its params, return or throws, at any depth) across a generic
+/// call's parameter types. A host callable is opaque to BAML, so such a var
+/// cannot be inferred from it *or* validated against it: it is poisoned and
+/// must be specified explicitly (TYPEVAR BINDING POLICY rule 2), overriding
+/// any value-position evidence it might also have.
+pub(crate) fn closure_poisoned_vars(params: &[RuntimeTy]) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
     for p in params {
-        walk_var_positions(p, false, &mut out);
+        walk_closure_vars(p, false, &mut out);
     }
     out
 }
 
-fn walk_var_positions(ty: &RuntimeTy, in_closure: bool, out: &mut ParamVarPositions) {
+/// The type variables that occur under a union (an optional is one) in a
+/// parameter whose value arrived (`arrived[i]`), outside any function-typed
+/// position. A value under such a union that a concrete sibling took binds
+/// the variable to nothing; the caller then binds it to `never` (TYPEVAR
+/// BINDING POLICY rule 4).
+pub(crate) fn vars_under_unions(
+    params: &[RuntimeTy],
+    arrived: &[bool],
+) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    for (param, arrived) in params.iter().zip(arrived) {
+        if *arrived {
+            walk_union_vars(param, false, &mut out);
+        }
+    }
+    out
+}
+
+fn walk_union_vars(ty: &RuntimeTy, under_union: bool, out: &mut std::collections::HashSet<String>) {
+    match ty {
+        RuntimeTy::TypeVar(name) => {
+            if under_union {
+                out.insert(name.to_string());
+            }
+        }
+        // A function-typed position is rule 2's: nothing under it is evidence.
+        RuntimeTy::Function { .. } => {}
+        RuntimeTy::Union(members) => {
+            for m in members {
+                walk_union_vars(m, true, out);
+            }
+        }
+        RuntimeTy::List(inner) => walk_union_vars(inner, under_union, out),
+        RuntimeTy::Map { key, value, .. } => {
+            walk_union_vars(key, under_union, out);
+            walk_union_vars(value, under_union, out);
+        }
+        RuntimeTy::Class(_, args) => {
+            for a in args {
+                walk_union_vars(a, under_union, out);
+            }
+        }
+        RuntimeTy::Future(value, error) => {
+            walk_union_vars(value, under_union, out);
+            walk_union_vars(error, under_union, out);
+        }
+        _ => {}
+    }
+}
+
+fn walk_closure_vars(
+    ty: &RuntimeTy,
+    in_closure: bool,
+    out: &mut std::collections::HashSet<String>,
+) {
     match ty {
         RuntimeTy::TypeVar(name) => {
             if in_closure {
-                out.closure.insert(name.to_string());
-            } else {
-                out.value_position.insert(name.to_string());
+                out.insert(name.to_string());
             }
         }
         // Descending into a function-typed position poisons every var reached
@@ -1494,46 +1606,31 @@ fn walk_var_positions(ty: &RuntimeTy, in_closure: bool, out: &mut ParamVarPositi
             ..
         } => {
             for p in params {
-                walk_var_positions(&p.ty, true, out);
+                walk_closure_vars(&p.ty, true, out);
             }
-            walk_var_positions(ret, true, out);
-            walk_var_positions(throws, true, out);
+            walk_closure_vars(ret, true, out);
+            walk_closure_vars(throws, true, out);
         }
         RuntimeTy::List(inner) => {
-            walk_var_positions(inner, in_closure, out);
+            walk_closure_vars(inner, in_closure, out);
         }
         RuntimeTy::Map { key, value, .. } => {
-            walk_var_positions(key, in_closure, out);
-            walk_var_positions(value, in_closure, out);
+            walk_closure_vars(key, in_closure, out);
+            walk_closure_vars(value, in_closure, out);
         }
         RuntimeTy::Union(members) => {
-            // A union with ≥2 direct `TypeVar` members is un-inferrable (no
-            // principled split). Mark those direct members must-specify so the
-            // rule-4 default skips them (03b J12).
-            let direct_tvs: Vec<&str> = members
-                .iter()
-                .filter_map(|m| match m {
-                    RuntimeTy::TypeVar(name) => Some(name.as_str()),
-                    _ => None,
-                })
-                .collect();
-            if direct_tvs.len() >= 2 {
-                for name in &direct_tvs {
-                    out.ambiguous_union.insert(name.to_string());
-                }
-            }
             for m in members {
-                walk_var_positions(m, in_closure, out);
+                walk_closure_vars(m, in_closure, out);
             }
         }
         RuntimeTy::Class(_, args) => {
             for a in args {
-                walk_var_positions(a, in_closure, out);
+                walk_closure_vars(a, in_closure, out);
             }
         }
         RuntimeTy::Future(value, error) => {
-            walk_var_positions(value, in_closure, out);
-            walk_var_positions(error, in_closure, out);
+            walk_closure_vars(value, in_closure, out);
+            walk_closure_vars(error, in_closure, out);
         }
         _ => {}
     }
@@ -2598,9 +2695,9 @@ mod inference_unifier_tests {
     fn infer_binds_top_type_actual() {
         // The runtime unifier no longer special-cases the top type `unknown`
         // (the `skip_top` knob was removed): it binds like any concrete actual,
-        // matching compile-time inference. In practice the synth layer never
-        // feeds `unknown` here — a no-evidence value becomes host-only
-        // `rust_type` instead — so this binding does not arise end-to-end.
+        // matching compile-time inference. In practice the boundary never
+        // feeds `unknown` here: a host states `unknown` only for a value it
+        // cannot type, and inference then binds it as any other type.
         let unknown = RuntimeTy::unknown();
         assert_eq!(infer(&tv("T"), &unknown).get("T"), Some(&unknown));
     }

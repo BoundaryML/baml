@@ -3189,6 +3189,16 @@ impl BexVm {
         })
     }
 
+    /// Whether `value` is a panic of exactly `class`, by the class's identity.
+    pub fn is_panic_of(&self, value: Value, class: PanicClass) -> bool {
+        value.as_object_ptr().is_some_and(|ptr| {
+            matches!(
+                self.get_object(ptr),
+                Object::Instance(instance) if instance.class == self.panic_class_ptrs[class as usize]
+            )
+        })
+    }
+
     /// Whether `value` is the cancellation panic, `baml.panics.Cancelled`,
     /// by its class's identity.
     pub fn is_cancelled_panic(&self, value: Value) -> bool {

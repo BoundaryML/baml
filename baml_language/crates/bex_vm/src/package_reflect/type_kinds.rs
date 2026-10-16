@@ -51,6 +51,21 @@ impl BexVm {
         &mut self,
         definition: &PortableTypeDef,
     ) -> Result<TypeValue, String> {
+        // One name, one declaration: a class and an enum (or two classes) of
+        // one name would silently shadow each other in `declared` below.
+        let mut names = std::collections::HashSet::new();
+        for name in definition
+            .classes
+            .iter()
+            .map(|class| &class.name)
+            .chain(definition.enums.iter().map(|enm| &enm.name))
+        {
+            if !names.insert(name) {
+                return Err(format!(
+                    "host type definition declares `{name}` more than once"
+                ));
+            }
+        }
         // Allocate every declaration first, field-less, so members that name
         // each other have something to point at. Same ordering constraint the
         // runtime class builder has, for the same reason.

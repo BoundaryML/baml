@@ -603,3 +603,57 @@ async fn a_union_envelope_is_not_a_host_value() {
     };
     assert_eq!(*value, BexExternalValue::Int(7));
 }
+
+// ── Membership is the value's, not the primitive's, where a literal is declared ─
+
+#[tokio::test]
+async fn a_literal_field_is_checked_per_value_not_per_primitive() {
+    // Two instances of one class in one list: the first inhabits the literal
+    // field, the second does not. The answer for the second must not be the
+    // first's just because both hold strings.
+    let source = r#"
+        class Sq { kind "square" }
+        function second(xs: Sq[]) -> string { xs[1].kind }
+        type Kind = "a" | Kind[]
+        function kinds(k: Kind) -> int { 0 }
+    "#;
+    let good = instance("user.Sq", vec![], &[("kind", s("square"))]);
+    let bad = instance("user.Sq", vec![], &[("kind", s("circle"))]);
+    let message = refusal(
+        call(
+            source,
+            "second",
+            vec![list(
+                class("user.Sq", vec![]),
+                vec![good.clone(), bad.clone()],
+            )],
+        )
+        .await,
+    );
+    assert_eq!(
+        message,
+        "argument `xs` of `second`: at `[1].kind`: Value of type 'string' does not match the \
+         declared type `\"square\"`"
+    );
+    // The same through a recursive alias that mentions a literal.
+    let kind = RuntimeTy::TypeAlias(TypeName::from_dotted_path("user.Kind"));
+    let message = refusal(
+        call(
+            source,
+            "kinds",
+            vec![list(kind.clone(), vec![s("a"), s("b")])],
+        )
+        .await,
+    );
+    assert_eq!(
+        message,
+        "argument `k` of `kinds`: at `[1]`: Value of type 'string' does not match the declared \
+         type `Kind`"
+    );
+    assert_eq!(
+        call(source, "kinds", vec![list(kind, vec![s("a"), s("a")])])
+            .await
+            .unwrap(),
+        BexExternalValue::Int(0)
+    );
+}

@@ -1365,7 +1365,9 @@ fn host_display_name(function_name: &str) -> &str {
 }
 
 /// A generic call whose `var` could not be inferred from the arguments — tell the
-/// caller to specify it, with the Python subscript and `_types=` forms.
+/// caller to specify it. The message reaches every host, so it names the
+/// BAML type argument form and lets each SDK's own documentation say how that
+/// is spelled.
 fn friendly_must_specify(function_name: &str, generic_params: &[String], var: &str) -> String {
     let name = host_display_name(function_name);
     let placeholders = if generic_params.is_empty() {
@@ -1379,8 +1381,8 @@ fn friendly_must_specify(function_name: &str, generic_params: &[String], var: &s
     };
     format!(
         "`{name}` is a generic BAML function, and BAML could not infer a type for its type \
-         parameter `{var}` from the call arguments. Python callers must specify it explicitly \
-         as a subscript — e.g. `{name}[{placeholders}](...)`."
+         parameter `{var}` from the call arguments. Pass the type arguments explicitly, as \
+         `{name}<{placeholders}>(...)` would in BAML."
     )
 }
 
@@ -3082,6 +3084,11 @@ impl BexEngine {
         // whose type names a runtime declaration is what lets a host spell
         // that declaration in a stated type, so their bindings are read from
         // the handles before anything is built, and go into the call's overlay.
+        // The names the host itself bound, explicit arguments and definitions
+        // alike: each has to be a type parameter the callee declares (Gate A
+        // checks it once the declaration is known), so a stray name can
+        // neither go unnoticed nor smuggle a definition into the call.
+        let host_named: Vec<String> = type_args.keys().chain(type_defs.keys()).cloned().collect();
         let mut type_args = type_args;
         let mut live_type_args = IndexMap::new();
         for (declared, arg) in declared_param_types.iter().zip(&args) {
@@ -3192,6 +3199,18 @@ impl BexEngine {
         // (unsubstituted) `return_type` is used; self-receiver substitution does
         // not change whether the callee is generic.
         let declared_generic_params = Self::function_generic_params_of(function_index);
+        if let Some(stray) = host_named
+            .iter()
+            .find(|name| !declared_generic_params.iter().any(|p| p == *name))
+        {
+            return Err(EngineError::TypeMismatch {
+                message: format!(
+                    "`{}` declares no type parameter `{stray}`; its type parameters are [{}]",
+                    host_display_name(function_name),
+                    declared_generic_params.join(", ")
+                ),
+            });
+        }
         let callee_is_generic = !declared_generic_params.is_empty()
             || declared_param_types
                 .iter()
@@ -3213,15 +3232,18 @@ impl BexEngine {
         //   3. No value position ⇒ must-specify. If `T`'s only occurrences are
         //      return-only or body-only (no value position anywhere), `T`
         //      likewise MUST be explicitly specified; errors if not.
-        //   4. Value position, no leaf ⇒ `RustType`. If `T` has ≥1 value
-        //      position, NO closure occurrence, and inference still produced no
-        //      binding (an omitted argument, an actual a concrete union sibling
-        //      absorbed), default `T = RustType` and let it ride opaquely.
+        //   4. A known union sibling took the value ⇒ `T = never`. If `T` occurs
+        //      under a union or optional (`x: T | string | null`, `x: T?`) in a
+        //      parameter whose value ARRIVED, and that value bound `T` to
+        //      nothing because a concrete sibling took it ("hi", `null`), the
+        //      value could be a `T` or not: the tie breaks to `never`, the type
+        //      no value has. Nothing arriving at all (an omitted defaulted
+        //      argument) is NOT this case: that var errors like any other
+        //      unbound var. The engine never guesses a wider type argument.
         //
         // The normal path (a value position that *did* yield a binding) is
-        // unchanged. Steps 2–3 are detectable from the *signature alone*, so the
-        // error is eager, at the call site (Gate A below) — not deferred into the
-        // body.
+        // unchanged. Every unbound var is caught at the call site (Gate A
+        // below) — not deferred into the body.
         //
         // Mechanically: inference only ever *adds* bindings — each landed
         // argument's concrete type is paired with its declared formal and the
@@ -3434,8 +3456,9 @@ impl BexEngine {
     /// explicit and receiver bindings already in `type_args` win. Then the
     /// position rules of the TYPEVAR BINDING POLICY (see
     /// `call_resolved_with_trace`): a var inside a closure-typed parameter is
-    /// never bound from a value (rule 2), and a var in a value position that
-    /// still has no binding defaults to `$rust_type` (rule 4).
+    /// never bound from a value (rule 2); a var under a union whose arrived
+    /// value a concrete sibling took is `never` (rule 4). A var the values
+    /// bind to nothing otherwise stays unbound, for Gate A to refuse.
     fn infer_type_args_from_landed(
         thread: &ActiveHeapPermit<BexThread>,
         declared_param_types: &[RuntimeTy],
@@ -3462,33 +3485,25 @@ impl BexEngine {
                 }
             })?;
 
-        // Classify where each TypeVar occurs across the parameter types to
-        // drive rules 2 and 4.
-        let positions = crate::conversion::classify_param_var_positions(declared_param_types);
-
+        // Rule 2 (closure poison): drop any value-inferred binding of a var
+        // that occurs inside a closure-typed parameter, so the var is required
+        // explicitly — even when another argument would otherwise pin it
+        // (`apply<T,R>(f: (T)->R, x: T)` — `x` must NOT bind `T`).
+        let poisoned = crate::conversion::closure_poisoned_vars(declared_param_types);
         for (name, ty) in inferred {
-            // Rule 2 (closure poison): drop any value-inferred binding so the
-            // var is required explicitly — even when another argument would
-            // otherwise pin it (`apply<T,R>(f: (T)->R, x: T)` — `x` must NOT
-            // bind `T`).
-            if positions.closure.contains(&name) {
+            if poisoned.contains(&name) {
                 continue;
             }
             type_args.entry(name).or_insert(ty);
         }
-
-        // Rule 4 (RustType default): a var with ≥1 value position, no closure
-        // occurrence, still unbound after inference defaults to `rust_type` and
-        // rides opaquely. Vars with no value position (return/body-only, rule 3)
-        // and closure-poisoned vars (rule 2) are left unbound for the caller's
-        // must-specify error.
-        for var in &positions.value_position {
-            if positions.closure.contains(var) || positions.ambiguous_union.contains(var) {
+        // Rule 4 (absorbed): a var under a union in a parameter whose value
+        // arrived, still unbound, was taken by a known sibling: `never`.
+        let arrived: Vec<bool> = landed.iter().map(Option::is_some).collect();
+        for name in crate::conversion::vars_under_unions(declared_param_types, &arrived) {
+            if poisoned.contains(&name) {
                 continue;
             }
-            type_args
-                .entry(var.clone())
-                .or_insert_with(|| RuntimeTy::RustType);
+            type_args.entry(name).or_insert(RuntimeTy::Never);
         }
         Ok(())
     }
@@ -4983,16 +4998,31 @@ impl BexEngine {
             };
             thread.vm.panic_to_exception_value(panic)
         };
-        // The value lands as what it is, and is then held to the contract: a
-        // panic the host raised is a panic whatever the callable declares;
-        // anything else has to be a member of `E`.
+        // The value lands as what it is, and is then held to the contract.
+        // The two panics a bridge raises on the boundary's behalf (its
+        // callable broke its contract; the bridge itself failed) are panics
+        // whatever the callable declares; any other panic a host builds is
+        // not a value a callable may throw, and anything else has to be a
+        // member of `E`.
         let overlay = crate::conversion::InboundRuntimeOverlay::none();
         let landed = match self.hydrate(thread, thrown, overlay) {
             Ok(landed) => landed,
             Err(refusal) => return violation(thread, refusal.to_string()),
         };
         if thread.vm.is_panic(landed) {
-            return landed;
+            let boundary_panic = [
+                bex_vm_types::PanicClass::HostContractViolation,
+                bex_vm_types::PanicClass::SdkPanic,
+            ]
+            .into_iter()
+            .any(|class| thread.vm.is_panic_of(landed, class));
+            if boundary_panic {
+                return landed;
+            }
+            return violation(
+                thread,
+                "a host callable may not raise a BAML panic of its own".to_string(),
+            );
         }
         match Self::check_member(thread, landed, declared_throws) {
             Ok(()) => landed,
