@@ -213,6 +213,7 @@ pub fn compile_program<'db>(
                 preds: Vec::new(),
                 loop_headers: BTreeSet::new(),
                 write_through: BTreeSet::new(),
+                call_types: Vec::new(),
             };
             match generator.function(&symbols[name]) {
                 Ok(code) => {
@@ -858,6 +859,8 @@ struct Generator<'a, 'db> {
     /// assigned only outside loops, so each assignment also writes the
     /// local's slot and no suspension saves it.
     write_through: BTreeSet<usize>,
+    /// The type arguments of the call `pause` is emitting.
+    call_types: Vec<String>,
 }
 
 type Gen<T> = Result<T, Rejection>;
@@ -1534,16 +1537,9 @@ impl<'db> Generator<'_, 'db> {
                     }
                     _ => self.arg_values(block, args)?,
                 };
-                let type_args = if types.is_empty() {
-                    "TypeArgs::new()".to_string()
-                } else {
-                    format!("TypeArgs::from_iter([{}])", types.join(", "))
-                };
+                self.call_types = types;
                 (
-                    format!(
-                        "Step::Call {{ callee, argc: {}, type_args: {type_args} }}",
-                        args.len()
-                    ),
+                    format!("Step::Call {{ callee, argc: {} }}", args.len()),
                     args,
                 )
             }
@@ -1551,10 +1547,7 @@ impl<'db> Generator<'_, 'db> {
                 self.callee_ptr(block, callee)?;
                 let args = self.arg_values(block, args)?;
                 (
-                    format!(
-                        "Step::Call {{ callee, argc: {}, type_args: TypeArgs::new() }}",
-                        args.len()
-                    ),
+                    format!("Step::Call {{ callee, argc: {} }}", args.len()),
                     args,
                 )
             }
@@ -1599,6 +1592,9 @@ impl<'db> Generator<'_, 'db> {
         );
         for arg in &args {
             self.line(depth, &format!("vm.push_arg({arg});"));
+        }
+        for ty in std::mem::take(&mut self.call_types) {
+            self.line(depth, &format!("vm.push_type_arg({ty});"));
         }
         self.line(depth, "vm.note_line(depth, line);");
         self.line(depth, &format!("return Ok({step});"));
@@ -2726,7 +2722,7 @@ fn render_module(
          #![allow(unused_mut, unused_variables, unused_assignments, unused_labels, unused_parens, \
          unreachable_code, non_snake_case, clippy::all, clippy::pedantic)]\n\n\
          use bex_vm::{BexVm, NativeFunction, errors::VmError};\n\
-         use bex_vm::compiled_rt::{CompiledEntry, CompiledFn, Resume, Step, TypeArgs};\n\
+         use bex_vm::compiled_rt::{CompiledEntry, CompiledFn, Resume, Step};\n\
          use bex_vm_types::{BinOp, CmpOp, ObjectIndex, RealizedTy, Value};\n\n\
          type R<T> = Result<T, Box<VmError>>;\n\n",
     );

@@ -293,8 +293,10 @@ is written through: each assignment also writes its slot, and no
 suspension saves it. A loop that calls bytecode then saves only what the
 loop changes, where bytecode, whose locals always live in their slots,
 saves nothing; a body with forty locals set before such a loop went from
-saving forty-three slots per call to two. A call's type arguments are inline
-(TypeArgs), so a suspending generic call allocates nothing.
+saving forty-three slots per call to two. A call's arguments and type
+arguments are pushed (onto the stack, into a buffer the VM reuses), so a
+suspending call allocates nothing and Step stays two words: with type
+arguments inline it was 144 bytes, moved out of every step.
 
 The frame then parks at its stub, code the loader appends to every compiled
 function's bytecode (compiled_rt::stub):

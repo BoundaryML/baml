@@ -503,6 +503,7 @@ pub(crate) mod tests {
             root_context: btel_types::context::Context::default(),
             pending_call_type_args: Vec::new(),
             compiled_type_args: Vec::new(),
+            call_type_args: Vec::new(),
             compiled_delivery: None,
             stack_floor: 0,
             pending_call_type_values: Vec::new(),
@@ -1261,7 +1262,6 @@ pub(crate) mod tests {
                     Ok(Step::Call {
                         callee: helper,
                         argc: 1,
-                        type_args: crate::compiled_rt::TypeArgs::new(),
                     })
                 }
                 Resume::Value(h) => {
@@ -2283,6 +2283,9 @@ pub struct BexVm {
     /// Spare buffer for the type arguments compiled code passes to generic
     /// builtins (`compiled_rt::call_builtin_typed`), kept for its capacity.
     pub(crate) compiled_type_args: Vec<bex_vm_types::RealizedTy>,
+    /// The type arguments of the call a resumable compiled body requests
+    /// (`compiled_rt::BexVm::push_type_arg`), reused across calls.
+    pub(crate) call_type_args: Vec<bex_vm_types::RealizedTy>,
     /// An error the unwinder delivered to a suspended compiled body, which the
     /// run loop hands it when resuming it.
     compiled_delivery: Option<Box<VmError>>,
@@ -3070,6 +3073,7 @@ impl BexVm {
             root_context: Context::default(),
             pending_call_type_args: Vec::new(),
             compiled_type_args: Vec::new(),
+            call_type_args: Vec::new(),
             compiled_delivery: None,
             stack_floor: 0,
             pending_call_type_values: Vec::new(),
@@ -8224,22 +8228,22 @@ impl BexVm {
         };
         match step {
             Step::Return(value) => self.complete_compiled(frame_idx, function, Ok(value)),
-            Step::Call {
-                callee,
-                argc,
-                type_args,
-            } => {
+            Step::Call { callee, argc } => {
                 park(self, *frame_idx, stub::AFTER_CALL);
                 let argc = argc as usize;
                 let locals_offset = StackIndex::from_raw(self.stack.len() - argc);
-                self.compiled_caller_call(
+                let mut type_args = std::mem::take(&mut self.call_type_args);
+                let outcome = self.compiled_caller_call(
                     callee,
                     locals_offset,
                     argc,
                     &type_args,
                     frame_idx,
                     function,
-                )
+                );
+                type_args.clear();
+                self.call_type_args = type_args;
+                outcome
             }
             // The interpreter's own instruction, on this frame, then
             // `ResumeCompiled` with its result.

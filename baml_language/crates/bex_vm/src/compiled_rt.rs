@@ -65,19 +65,17 @@ pub enum Resume {
 
 /// What a [`ResumableBody`] asks of the VM. The body records its resume point
 /// in its frame before returning a request.
+#[derive(Clone, Copy)]
 pub enum Step {
     /// The body finished with this value.
     Return(Value),
     /// Call `callee` through the VM's call path (bytecode, an LLM function, a
     /// sys op, a builtin that runs callbacks, a closure, a compiled function
     /// that can suspend) with the `argc` arguments the body pushed
-    /// ([`BexVm::push_arg`]).
-    Call {
-        callee: HeapPtr,
-        argc: u32,
-        /// Type arguments, for a generic callee.
-        type_args: TypeArgs,
-    },
+    /// ([`BexVm::push_arg`]) and the type arguments it pushed
+    /// ([`BexVm::push_type_arg`]). Every step a body returns is moved out of
+    /// it, so this stays small: two words.
+    Call { callee: HeapPtr, argc: u32 },
     /// `await future`, run by the interpreter's own `Await` on this frame.
     Await(Value),
     /// `baml.future.__await_any(futures)`: the index of the first settled one.
@@ -87,10 +85,6 @@ pub enum Step {
     /// Let the scheduler run (a GC, another task) and continue.
     Yield,
 }
-
-/// The type arguments of a [`Step::Call`]: inline for the one or two a
-/// generic call has, so a suspending call allocates nothing for them.
-pub type TypeArgs = smallvec::SmallVec<[RealizedTy; 2]>;
 
 /// A compiled body, by whether it can suspend.
 #[derive(Clone, Copy)]
@@ -943,6 +937,14 @@ impl BexVm {
     #[inline]
     pub fn push_arg(&mut self, value: Value) {
         self.stack.push(value);
+    }
+
+    /// Push a type argument of the call a resumable body is about to request
+    /// ([`Step::Call`]), into a buffer the VM reuses: a generic call
+    /// allocates nothing for them.
+    #[inline]
+    pub fn push_type_arg(&mut self, ty: RealizedTy) {
+        self.call_type_args.push(ty);
     }
 
     /// The value of `future` when it has settled with one and awaiting it
