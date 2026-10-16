@@ -426,7 +426,7 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
             }
             crate::Rvalue::LoadType(_)
             | crate::Rvalue::TraceHookSettings { .. }
-            | crate::Rvalue::CurrentPackage(_)
+            | crate::Rvalue::CurrentPackage
             | crate::Rvalue::MakeGenericFunction { .. } => {
                 // LoadType takes no local operands.
             }
@@ -719,7 +719,7 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         }
         crate::Rvalue::LoadType(_)
         | crate::Rvalue::TraceHookSettings { .. }
-        | crate::Rvalue::CurrentPackage(_)
+        | crate::Rvalue::CurrentPackage
         | crate::Rvalue::MakeGenericFunction { .. } => {
             // No local operands.
         }
@@ -1126,7 +1126,7 @@ fn apply_subst_to_rvalue<'db>(rv: &mut crate::Rvalue<'db>, subst: &HashMap<Local
         }
         crate::Rvalue::LoadType(_)
         | crate::Rvalue::TraceHookSettings { .. }
-        | crate::Rvalue::CurrentPackage(_)
+        | crate::Rvalue::CurrentPackage
         | crate::Rvalue::MakeGenericFunction { .. } => {
             // No local operands — nothing to substitute.
         }
@@ -1452,7 +1452,7 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         }
         crate::Rvalue::LoadType(_)
         | crate::Rvalue::TraceHookSettings { .. }
-        | crate::Rvalue::CurrentPackage(_)
+        | crate::Rvalue::CurrentPackage
         | crate::Rvalue::MakeGenericFunction { .. } => {
             // No local operands — nothing to remap.
         }
@@ -1728,7 +1728,7 @@ fn verify_mir(
                         }
                         crate::Rvalue::LoadType(_)
                         | crate::Rvalue::TraceHookSettings { .. }
-                        | crate::Rvalue::CurrentPackage(_)
+                        | crate::Rvalue::CurrentPackage
                         | crate::Rvalue::MakeGenericFunction { .. } => {
                             // LoadType takes no local operands — nothing to check.
                         }

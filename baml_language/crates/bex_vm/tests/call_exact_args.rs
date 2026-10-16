@@ -10,7 +10,7 @@ fn function<'a>(program: &'a BytecodeProgram, name: &str) -> &'a Function {
         .objects
         .iter()
         .find_map(|object| match object {
-            Object::Function(function) if function.name == name => Some(function.as_ref()),
+            Object::Function(function) if function.name() == name => Some(function.as_ref()),
             _ => None,
         })
         .expect("function exists")
@@ -48,7 +48,7 @@ const SIMPLE: &str =
 #[test]
 fn exact_calls_preserve_operands_and_source_positions() {
     let program = convert_program(compile_source(SIMPLE)).unwrap();
-    let main = function(&program, "user.main");
+    let main = function(&program, "main");
     let original = main.bytecode.lower_to_compact();
     let compact = main.bytecode.compact.as_ref().unwrap();
     let mut restored = compact.code.clone();
@@ -82,7 +82,7 @@ fn nonmatching_argument_layout_stays_general() {
     }
     main.bytecode.compact = None;
     let program = convert_program(program).unwrap();
-    let instructions = ops(function(&program, "user.main"));
+    let instructions = ops(function(&program, "main"));
     assert_eq!(
         instructions
             .iter()
@@ -112,7 +112,7 @@ fn writable_callee_globals_are_not_specialized() {
         .push(Instruction::StoreGlobal(global));
     leaf.bytecode.compact = None;
     let program = convert_program(program).unwrap();
-    let instructions = ops(function(&program, "user.main"));
+    let instructions = ops(function(&program, "main"));
     assert_eq!(
         instructions
             .iter()
@@ -127,7 +127,7 @@ fn generic_calls_keep_type_arguments() {
     let source =
         "function identity<T>(n: T) -> T { n } function main() -> int { identity<int>(42) }";
     let program = convert_program(compile_source(source)).unwrap();
-    let instructions = ops(function(&program, "user.main"));
+    let instructions = ops(function(&program, "main"));
     assert!(instructions.iter().any(|(_, op)| *op == OpCode::Call));
     assert!(
         !instructions

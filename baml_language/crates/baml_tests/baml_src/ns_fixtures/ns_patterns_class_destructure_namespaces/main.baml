@@ -20,28 +20,6 @@ function DestructureQualifiedMatch() -> int {
     }
 }
 
-function DestructureNamespaceQualifiedLet() -> int {
-    let response = llm.openai.Response {
-        text: "ok",
-        score: 45
-    };
-
-    let llm.openai.Response { score } = response;
-    score
-}
-
-function DestructureNamespaceQualifiedMatch() -> int {
-    let response = llm.openai.Response {
-        text: "ok",
-        score: 46
-    };
-
-    match (response) {
-        llm.openai.Response { score: 0 } => 0,
-        llm.openai.Response { score: let matched } => matched
-    }
-}
-
 function TypePatternQualifiedLet() -> int {
     let response: root.fixtures.patterns_class_destructure_namespaces.llm.openai.Response = root.fixtures.patterns_class_destructure_namespaces.llm.openai.Response {
         text: "ok",
@@ -62,26 +40,6 @@ function TypePatternQualifiedMatch() -> int {
     }
 }
 
-function TypePatternNamespaceQualifiedLet() -> int {
-    let response: llm.openai.Response = llm.openai.Response {
-        text: "ok",
-        score: 47
-    };
-
-    response.score
-}
-
-function TypePatternNamespaceQualifiedMatch() -> int {
-    let response = llm.openai.Response {
-        text: "ok",
-        score: 48
-    };
-
-    match (response) {
-        llm.openai.Response => response.score
-    }
-}
-
 function GenericDestructureQualifiedLet() -> int {
     let boxed: root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> = root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> {
         value: 49
@@ -89,15 +47,6 @@ function GenericDestructureQualifiedLet() -> int {
 
     let root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> { value } = boxed;
     value
-}
-
-function GenericDestructureNamespaceQualifiedLet() -> int {
-    let boxed: llm.openai.Box<string> = llm.openai.Box<string> {
-        value: "ok"
-    };
-
-    let llm.openai.Box<string> { value } = boxed;
-    value.length()
 }
 
 function GenericTypePatternQualifiedMatch() -> int {
@@ -111,17 +60,6 @@ function GenericTypePatternQualifiedMatch() -> int {
     }
 }
 
-function GenericTypePatternNamespaceQualifiedMatch() -> int {
-    let boxed: llm.openai.Box<int> | llm.openai.Box<string> = llm.openai.Box<string> {
-        value: "ready"
-    };
-
-    match (boxed) {
-        llm.openai.Box<int> => 0,
-        llm.openai.Box<string> => 51
-    }
-}
-
 function DeepGenericDestructureQualifiedLet() -> int {
     let outer: root.fixtures.patterns_class_destructure_namespaces.llm.openai.Outer<int> = root.fixtures.patterns_class_destructure_namespaces.llm.openai.Outer<int> {
         inner: root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> { value: 52 }
@@ -131,15 +69,4 @@ function DeepGenericDestructureQualifiedLet() -> int {
         inner: root.fixtures.patterns_class_destructure_namespaces.llm.openai.Box<int> { value }
     } = outer;
     value
-}
-
-function DeepGenericDestructureNamespaceQualifiedLet() -> int {
-    let outer: llm.openai.Outer<string> = llm.openai.Outer<string> {
-        inner: llm.openai.Box<string> { value: "done" }
-    };
-
-    let llm.openai.Outer<string> {
-        inner: llm.openai.Box<string> { value }
-    } = outer;
-    value.length()
 }

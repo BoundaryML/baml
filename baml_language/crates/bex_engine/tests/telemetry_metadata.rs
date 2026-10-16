@@ -62,7 +62,7 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
             && matches!(
-                f.name.rsplit('.').next(),
+                f.name().rsplit('.').next(),
                 Some("greet" | "Extract" | "Nothing")
             )
         {

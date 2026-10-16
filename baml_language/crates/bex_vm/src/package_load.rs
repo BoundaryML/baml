@@ -4,8 +4,9 @@
 //! [`ProgramPackage`] map (it must be `HeapPtr`-free — there is no heap at emit
 //! time, and a `HeapPtr` can't serialize). At load we allocate the heap
 //! `Object::Package` / `Object::ImplRule` objects from it and build the
-//! [`PackageIndex`] (package name → its `Object::Package` pointer, plus the
-//! program-wide interface → impl-rules index).
+//! [`PackageIndex`] (each package's `Object::Package` pointer by ordinal and
+//! each language package's by identity, plus the program-wide interface →
+//! impl-rules index).
 //!
 //! These are *cross-referencing compile-time objects* — their `HeapPtr` fields
 //! point at interfaces / functions / classes / other packages — and a
@@ -19,11 +20,15 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use baml_base::{LangItem, LangPackage};
 use baml_type::{MediaKind, Name};
 use bex_heap::{BexHeap, Generation};
 use bex_vm_types::{
     HeapPtr, Object, ObjectIndex, TypeHead,
-    types::{LocalName, MethodImpl, Package, ProgramImplRule, ProgramPackage, RuntimeImplRule},
+    types::{
+        LocalName, MethodImpl, Package, PackageKind, ProgramImplRule, ProgramPackage,
+        RuntimeImplRule,
+    },
 };
 use indexmap::IndexMap;
 
@@ -301,6 +306,12 @@ pub struct PackageIndex {
     /// The root package's pointer — null only for the empty index of a VM
     /// with no executable, where nothing resolves.
     root: HeapPtr,
+    /// Each language package's `Object::Package` pointer, indexed by its
+    /// position in [`LangPackage::ALL`]; null where the executable does not
+    /// load that package. How the language's own implementation reaches the
+    /// standard library: by what a package is, never by a name the program
+    /// gives it ([`Self::lang_declaration`]).
+    lang: [HeapPtr; LangPackage::ALL.len()],
     /// Canonical `Object::Interface` pointer → every `Object::ImplRule` of that
     /// interface in the program, in package-load order.
     impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>>,
@@ -331,18 +342,43 @@ impl PackageIndex {
         root.accessible(self.root, name)
     }
 
-    /// Whether `package` is one of the language packages the root reaches
-    /// under a fixed name — the prelude every package reaches without
-    /// declaring an edge to it.
-    pub fn is_prelude(&self, package: HeapPtr) -> bool {
-        baml_builtins2::stdlib_package_names()
-            .iter()
-            .any(|name| self.accessible(&Name::new(name)) == Some(package))
-    }
-
     /// Every loaded package's `Object::Package` pointer, by ordinal.
     pub fn package_ptrs(&self) -> impl Iterator<Item = HeapPtr> + '_ {
         self.packages.iter().copied()
+    }
+
+    /// The language package `package`, if the executable loads it.
+    pub fn lang_package(&self, package: LangPackage) -> Option<HeapPtr> {
+        let ptr = self.lang[package as usize];
+        (!ptr.is_null()).then_some(ptr)
+    }
+
+    /// The class, enum, interface, or recursive type alias `item` names, if
+    /// the executable loads its package. By identity: the package by what it
+    /// is, the item by its path there — no name the program gives a package
+    /// is consulted, so a root that calls itself `baml` captures nothing.
+    pub fn lang_declaration(&self, item: LangItem) -> Option<HeapPtr> {
+        let package_ptr = self.lang_package(item.package())?;
+        // SAFETY: the index holds compile-time package objects.
+        #[expect(unsafe_code, reason = "deref a compile-time package pointer")]
+        let package = (unsafe { package_ptr.get() }).as_package()?;
+        package.declaration(item.namespace(), item.name())
+    }
+
+    /// The head of the declaration `item` names — its pointer and the tag it
+    /// carries — if the executable loads its package.
+    pub fn lang_head(&self, item: LangItem) -> Option<TypeHead> {
+        let ptr = self.lang_declaration(item)?;
+        // SAFETY: a package's declaration pointers are compile-time objects.
+        #[expect(unsafe_code, reason = "deref a compile-time declaration pointer")]
+        let tag = match unsafe { ptr.get() } {
+            Object::Class(class) => class.type_tag,
+            Object::Enum(enm) => enm.type_tag,
+            Object::Interface(interface) => interface.type_tag,
+            Object::TypeAlias(alias) => alias.type_tag,
+            _ => return None,
+        };
+        Some(TypeHead::new(ptr, tag))
     }
 
     /// Every impl rule of the interface at `iface_ptr`, across all packages.
@@ -409,8 +445,16 @@ fn fill_package_slots(
     let mut index = PackageIndex {
         packages: package_ptrs.clone(),
         root: package_ptrs[root as usize],
+        lang: [HeapPtr::null(); LangPackage::ALL.len()],
         impl_rules: IndexMap::new(),
     };
+    for (pkg, &ptr) in packages.iter().zip(&package_ptrs) {
+        if let PackageKind::Language(language) = pkg.kind {
+            // `Program::validate` admits one package per language package.
+            debug_assert!(index.lang[language as usize].is_null());
+            index.lang[language as usize] = ptr;
+        }
+    }
     for (pkg, slots) in packages.iter().zip(layout) {
         // Impl rules first: a package's `impl_rules` map points at their slots.
         let mut impl_rules: IndexMap<HeapPtr, Vec<HeapPtr>> = IndexMap::new();
@@ -445,6 +489,7 @@ fn fill_package_slots(
         }
         let package = Package {
             name: pkg.name.clone(),
+            kind: pkg.kind,
             edges: pkg
                 .edges
                 .iter()
@@ -501,72 +546,70 @@ fn fill_package_slots(
                 ),
             }
         }
+        // So does every function the package placed in the pool
+        // (`ProgramPackage::objects`): named functions and bodies, its
+        // initializers and their helpers, its closure bodies — which is what
+        // renders a static function's name, and its telemetry's parent and
+        // package, under its package.
+        for index in pkg.objects.clone() {
+            if let Object::Function(function) = heap.compile_time_object_mut(index as usize) {
+                function.owner = owner;
+            }
+        }
     }
     index
 }
 
-/// Look up a class, enum, or interface object pointer by its fully-qualified
-/// dotted name — the package as the root reaches it, then the item path —
-/// from the root's viewpoint. The free-function form of
-/// [`crate::vm::BexVm::lookup_type_by_fqn`], usable before a `BexVm` exists
-/// (e.g. to pre-resolve builtin error/panic classes in `BexVm::new`).
-pub fn lookup_type_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<HeapPtr> {
-    let mut parts: Vec<Name> = fqn.split('.').map(Name::new).collect();
-    let name = parts.pop()?;
-    if parts.is_empty() {
-        return None;
+impl crate::BexVm {
+    /// Whether the object at `ptr` is a language package — one of the
+    /// standard library's, the prelude ([`PackageKind::Language`]). `false`
+    /// for an ordinary package and for anything that is not a package (an
+    /// anonymous declaration an edge reaches).
+    pub fn is_language_package(&self, ptr: HeapPtr) -> bool {
+        matches!(
+            self.get_object(ptr),
+            Object::Package(package) if matches!(package.kind, PackageKind::Language(_))
+        )
     }
-    let pkg = parts.remove(0);
-    let pkg_ptr = packages.accessible(&pkg)?;
-    // SAFETY: `packages` only ever holds compile-time `Object::Package` pointers.
-    #[expect(unsafe_code, reason = "deref a compile-time package pointer")]
-    let package = (unsafe { pkg_ptr.get() }).as_package()?;
-    let local = LocalName {
-        namespace: parts,
-        name,
-    };
-    package
-        .classes
-        .get(&local)
-        .or_else(|| package.enums.get(&local))
-        .or_else(|| package.interfaces.get(&local))
-        .copied()
-}
 
-/// The head of the class, enum, interface, or type alias `fqn` names — its
-/// pointer and the tag it carries — from the root's viewpoint. Usable before
-/// a `BexVm` exists.
-pub fn declaration_head_by_fqn(packages: &PackageIndex, fqn: &str) -> Option<TypeHead> {
-    let mut parts: Vec<Name> = fqn.split('.').map(Name::new).collect();
-    let name = parts.pop()?;
-    if parts.is_empty() {
-        return None;
+    /// The prelude under the fixed names the root reaches it by: the root's
+    /// edges whose target is a language package, in edge order. Empty for a
+    /// VM with no executable.
+    pub fn prelude(&self) -> impl Iterator<Item = (Name, HeapPtr)> + '_ {
+        let root = self.packages.root();
+        let root = (!root.is_null())
+            .then(|| self.get_object(root).as_package())
+            .flatten();
+        root.into_iter().flat_map(|root| {
+            root.edges
+                .iter()
+                .filter(|(_, edge)| self.is_language_package(edge.target))
+                .map(|(name, edge)| (name.clone(), edge.target))
+        })
     }
-    let pkg = parts.remove(0);
-    let pkg_ptr = packages.accessible(&pkg)?;
-    // SAFETY: `packages` only ever holds compile-time `Object::Package` pointers.
-    #[expect(unsafe_code, reason = "deref a compile-time package pointer")]
-    let package = (unsafe { pkg_ptr.get() }).as_package()?;
-    let local = LocalName {
-        namespace: parts,
-        name,
-    };
-    let ptr = *package
-        .classes
-        .get(&local)
-        .or_else(|| package.enums.get(&local))
-        .or_else(|| package.interfaces.get(&local))
-        .or_else(|| package.type_aliases.get(&local))?;
-    // SAFETY: a package's declaration pointers are compile-time objects.
-    #[expect(unsafe_code, reason = "deref a compile-time declaration pointer")]
-    let tag = match unsafe { ptr.get() } {
-        Object::Class(class) => class.type_tag,
-        Object::Enum(enm) => enm.type_tag,
-        Object::Interface(interface) => interface.type_tag,
-        Object::TypeAlias(alias) => alias.type_tag,
-        _ => return None,
-    };
-    Some(TypeHead::new(ptr, tag))
+
+    /// Add the prelude to a runtime package's edge table, under the fixed
+    /// names the root reaches it by: a runtime package (a `Package.compile`
+    /// result, a `with_types` view) reaches the same language packages as the
+    /// host image. Its own edges are `$`-named, which no identifier spells,
+    /// or aliases already refused when they take a reserved name, so a
+    /// prelude name is always free.
+    pub fn add_prelude(&self, edges: &mut IndexMap<Name, bex_vm_types::types::Edge>) {
+        for (name, target) in self.prelude() {
+            let previous = edges.insert(
+                name,
+                bex_vm_types::types::Edge {
+                    target,
+                    kind: bex_vm_types::types::EdgeKind::Dependency,
+                },
+            );
+            debug_assert!(
+                previous.is_none(),
+                "a runtime package's own edges cannot take a prelude name: they are `$`-named \
+                 or aliases validated against the reserved names"
+            );
+        }
+    }
 }
 
 /// One of the stdlib time classes a CSV cell decodes to.
@@ -578,11 +621,10 @@ pub enum TimeClass {
 }
 
 /// The stdlib declarations the runtime recognizes structurally — the CSV
-/// cell classes, the JSON media wrappers, the `json` alias, the prompt cache
-/// delimiter, and the live
-/// capabilities a host proxies — resolved to heads once from the loaded
-/// packages and shared by every VM the engine spawns, like the error and
-/// panic class tables.
+/// cell classes, the JSON media wrappers, the `json` alias, the classes whose
+/// instances it reads by shape, and the live capabilities a host proxies —
+/// resolved to heads once from the loaded packages and shared by every VM
+/// the engine spawns, like the error and panic class tables.
 ///
 /// A program that does not load one of them (no stdlib) has no value of that
 /// type, so the entry is absent and nothing matches it.
@@ -591,8 +633,56 @@ pub struct StdlibHeads {
     time: Vec<(TimeClass, TypeHead)>,
     media: Vec<(MediaKind, TypeHead)>,
     json: Option<TypeHead>,
-    cache_delimiter: Option<TypeHead>,
+    classes: Vec<(StdlibClass, TypeHead)>,
     capabilities: Vec<(StdlibCapability, TypeHead)>,
+}
+
+/// A stdlib class the runtime reads by shape: native code knows an
+/// instance's fields, so it must know the instance is the stdlib's own class
+/// and not one that merely renders under the same name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StdlibClass {
+    /// `ai.Role`.
+    PromptRole,
+    /// `ai.Prompt`.
+    Prompt,
+    /// `reflect.interface.Implementation`.
+    InterfaceImplementation,
+    /// `reflect.WithMeta`.
+    WithMeta,
+    /// `reflect.enum.Value`.
+    EnumValue,
+    /// `reflect.Meta`.
+    Meta,
+    /// `ai.CacheDelimiter`, the value `${cache(args)}` interpolates into a
+    /// prompt.
+    CacheDelimiter,
+}
+
+impl StdlibClass {
+    const ALL: [Self; 7] = [
+        Self::PromptRole,
+        Self::Prompt,
+        Self::InterfaceImplementation,
+        Self::WithMeta,
+        Self::EnumValue,
+        Self::Meta,
+        Self::CacheDelimiter,
+    ];
+
+    /// The class by identity: its language package and its path there. Read
+    /// once, at load.
+    const fn item(self) -> LangItem {
+        match self {
+            Self::PromptRole => crate::lang_items::AI_ROLE,
+            Self::Prompt => crate::lang_items::AI_PROMPT,
+            Self::InterfaceImplementation => crate::lang_items::REFLECT_INTERFACE_IMPLEMENTATION,
+            Self::WithMeta => crate::lang_items::REFLECT_WITH_META,
+            Self::EnumValue => crate::lang_items::REFLECT_ENUM_VALUE,
+            Self::Meta => crate::lang_items::REFLECT_META,
+            Self::CacheDelimiter => crate::lang_items::AI_CACHE_DELIMITER,
+        }
+    }
 }
 
 /// A live stdlib capability a host reaches through a proxy rather than a
@@ -606,49 +696,53 @@ pub enum StdlibCapability {
 }
 
 impl StdlibHeads {
+    /// Every head by identity, once, at load: the language package by what it
+    /// is and the item by its path there; nothing here is ever derived from a
+    /// name the program gives a package or from a declaration's rendering.
     pub fn resolve(packages: &PackageIndex) -> Self {
-        let head = |fqn: &str| declaration_head_by_fqn(packages, fqn);
+        let head = |item: LangItem| packages.lang_head(item);
         let time = [
-            (TimeClass::Instant, "baml.time.Instant"),
-            (TimeClass::PlainDate, "baml.time.PlainDate"),
-            (TimeClass::PlainDateTime, "baml.time.PlainDateTime"),
+            (TimeClass::Instant, crate::lang_items::BAML_TIME_INSTANT),
+            (
+                TimeClass::PlainDate,
+                crate::lang_items::BAML_TIME_PLAIN_DATE,
+            ),
+            (
+                TimeClass::PlainDateTime,
+                crate::lang_items::BAML_TIME_PLAIN_DATE_TIME,
+            ),
         ]
         .into_iter()
-        .filter_map(|(class, fqn)| Some((class, head(fqn)?)))
+        .filter_map(|(class, item)| Some((class, head(item)?)))
         .collect();
         // A runtime media value is an instance of one of these classes; there
         // is no `Generic` media value, and no wrapper class for it.
-        let media = [
-            MediaKind::Image,
-            MediaKind::Audio,
-            MediaKind::Video,
-            MediaKind::Pdf,
-        ]
-        .into_iter()
-        .filter_map(|kind| Some((kind, head(kind.wrapper_class_name()?)?)))
-        .collect();
-        // Resolved from the root's viewpoint under the prelude's fixed names,
-        // once, at load: a package of the user's spelled `ai` cannot be
-        // reached under that name (the edge is reserved), and nothing here is
-        // ever re-derived from a declaration's rendered name.
+        let media = MediaKind::ALL
+            .into_iter()
+            .filter_map(|kind| Some((kind, head(kind.wrapper_class()?)?)))
+            .collect();
         let capabilities = [
             (
                 StdlibCapability::FunctionSpec,
-                baml_type::qualified_name::AI_FUNCTION_SPEC,
+                crate::lang_items::AI_FUNCTION_SPEC,
             ),
             (
                 StdlibCapability::Stream,
-                baml_type::qualified_name::AI_STREAM_STREAM,
+                crate::lang_items::AI_STREAM_STREAM,
             ),
         ]
         .into_iter()
-        .filter_map(|(capability, fqn)| Some((capability, head(fqn)?)))
+        .filter_map(|(capability, item)| Some((capability, head(item)?)))
         .collect();
+        let classes = StdlibClass::ALL
+            .into_iter()
+            .filter_map(|class| Some((class, head(class.item())?)))
+            .collect();
         Self {
             time,
             media,
-            json: head("baml.json.json"),
-            cache_delimiter: head("ai.CacheDelimiter"),
+            json: head(crate::lang_items::BAML_JSON_JSON),
+            classes,
             capabilities,
         }
     }
@@ -678,12 +772,6 @@ impl StdlibHeads {
             .map(|(kind, _)| *kind)
     }
 
-    /// Whether `head` is `ai.CacheDelimiter`, the value `${cache(args)}`
-    /// interpolates into a prompt.
-    pub fn is_cache_delimiter(&self, head: TypeHead) -> bool {
-        self.cache_delimiter == Some(head)
-    }
-
     /// The recursive `baml.json.json` alias, if the program loads it.
     pub fn json_alias(&self) -> Option<TypeHead> {
         self.json
@@ -692,6 +780,14 @@ impl StdlibHeads {
     /// Whether `head` is the recursive `baml.json.json` alias.
     pub fn is_json_alias(&self, head: TypeHead) -> bool {
         self.json == Some(head)
+    }
+
+    /// Whether the declaration tagged `tag` is the stdlib's own `class` — by
+    /// identity, never a class that merely renders the same.
+    pub fn is_class(&self, class: StdlibClass, tag: baml_type::typetag::TypeTag) -> bool {
+        self.classes
+            .iter()
+            .any(|(known, head)| *known == class && head.tag() == tag)
     }
 }
 

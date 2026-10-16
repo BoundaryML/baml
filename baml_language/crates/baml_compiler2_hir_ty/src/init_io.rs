@@ -256,9 +256,9 @@ fn io_sysop_of<'db>(
     }
 }
 
-/// `func`'s user-facing dotted name (`baml.env.get`) as seen from `viewer`:
-/// a dependency package qualifies by its spelling, the viewer's own package
-/// never does.
+/// `func`'s dotted name as source at `viewer`'s root namespace writes it
+/// (`baml.env.get`, `root.util.read`), or the display name of a package the
+/// viewer has no edge to ([`crate::render::Viewpoint::path`]).
 fn qualified_name<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
@@ -266,25 +266,8 @@ fn qualified_name<'db>(
 ) -> Name {
     let data = baml_compiler2_hir::item_data::function_data(db, func);
     let pkg = baml_compiler2_hir::file_package::file_package(db, func.file(db));
-    let mut parts: Vec<&str> = Vec::new();
-    let spelled;
-    if pkg.root != viewer {
-        // The viewer's own edge name for the package, not its canonical
-        // spelling: a dependency reached under an alias is named in source by
-        // that alias, and a diagnostic that says otherwise names something the
-        // reader cannot find in their own file.
-        let viewpoint = crate::render::Viewpoint::user_facing(db, viewer);
-        spelled = match viewpoint.package_prefix(pkg.root) {
-            Some(prefix) => Name::new(prefix),
-            None => baml_compiler2_hir::package::spelling(db)
-                .of(pkg.root)
-                .clone(),
-        };
-        parts.push(spelled.as_str());
-    }
-    parts.extend(pkg.namespace_path.iter().map(Name::as_str));
-    parts.push(data.name.as_str());
-    Name::new(parts.join("."))
+    let decl = baml_type::DeclName::in_root(pkg.root, pkg.namespace_path, data.name.clone());
+    Name::new(crate::render::Viewpoint::user_facing(db, viewer).path(&decl))
 }
 
 /// Whether `func` transitively reaches an io sysop, and which one.

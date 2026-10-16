@@ -172,13 +172,22 @@ fn describe_via_dispatch(db: &ProjectDatabase, name: &str) -> String {
     match dispatch(db, package(db), name) {
         Some(ResolvedTarget::Keyword(ref kw)) => capture_keyword(kw),
         Some(ResolvedTarget::Package(pkg)) => {
-            let entries = baml_ide::list_package_items(db, pkg, baml_ide::Internals::Hide);
+            let entries =
+                baml_ide::list_package_items(db, package(db), pkg, baml_ide::Internals::Hide);
             capture_listing(&entries)
         }
-        Some(ResolvedTarget::Namespace { package, ns_path }) => {
-            let entries =
-                baml_ide::list_namespace_items(db, package, &ns_path, baml_ide::Internals::Hide)
-                    .unwrap_or_default();
+        Some(ResolvedTarget::Namespace {
+            package: listed,
+            ns_path,
+        }) => {
+            let entries = baml_ide::list_namespace_items(
+                db,
+                package(db),
+                listed,
+                &ns_path,
+                baml_ide::Internals::Hide,
+            )
+            .unwrap_or_default();
             capture_listing(&entries)
         }
         Some(ResolvedTarget::Item(def)) => {
@@ -289,7 +298,12 @@ function LlmIdentity(input: string) -> string {
 fn render_project_listing() {
     let db = multi_ns_project();
     let pkg_id = db.workspace_root().unwrap();
-    let entries = baml_ide::list_package_items(&db, pkg_id, baml_ide::Internals::Hide);
+    let entries = baml_ide::list_package_items(
+        &db,
+        db.workspace_root().unwrap(),
+        pkg_id,
+        baml_ide::Internals::Hide,
+    );
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
 }
@@ -301,8 +315,14 @@ fn render_namespace_listing_llm() {
     let db = multi_ns_project();
     let pkg_id = db.workspace_root().unwrap();
     let ns_path = vec![baml_db::Name::new("llm")];
-    let entries =
-        baml_ide::list_namespace_items(&db, pkg_id, &ns_path, baml_ide::Internals::Hide).unwrap();
+    let entries = baml_ide::list_namespace_items(
+        &db,
+        db.workspace_root().unwrap(),
+        pkg_id,
+        &ns_path,
+        baml_ide::Internals::Hide,
+    )
+    .unwrap();
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
 }
@@ -795,7 +815,12 @@ fn render_builtin_package_listing() {
     let pkg_id = baml_compiler2_hir::package::lang_roots(&db)
         .get(baml_db::LangPackage::Baml)
         .unwrap();
-    let entries = baml_ide::list_package_items(&db, pkg_id, baml_ide::Internals::Hide);
+    let entries = baml_ide::list_package_items(
+        &db,
+        db.workspace_root().unwrap(),
+        pkg_id,
+        baml_ide::Internals::Hide,
+    );
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
     let listed_names: Vec<&str> = output
@@ -821,8 +846,14 @@ fn render_builtin_namespace_env() {
         .get(baml_db::LangPackage::Baml)
         .unwrap();
     let ns_path = vec![baml_db::Name::new("env")];
-    let entries =
-        baml_ide::list_namespace_items(&db, pkg_id, &ns_path, baml_ide::Internals::Hide).unwrap();
+    let entries = baml_ide::list_namespace_items(
+        &db,
+        db.workspace_root().unwrap(),
+        pkg_id,
+        &ns_path,
+        baml_ide::Internals::Hide,
+    )
+    .unwrap();
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
@@ -851,6 +882,18 @@ fn describe_reflect_type_and_intrinsic() {
     );
 }
 
+/// A standard-library method's signature is spelled as the viewer writes it
+/// (`baml.errors.Io`), not as the library's own source does (`root.errors.Io`
+/// inside `baml`).
+#[test]
+fn describe_builtin_method_signature_is_spelled_from_the_viewer() {
+    let db = simple_project();
+    let output = describe_via_dispatch(&db, "baml.http.Response.text");
+    assert!(output.contains("baml.errors.Io"), "{output}");
+    assert!(output.contains("baml.errors.Timeout"), "{output}");
+    assert!(!output.contains("root."), "{output}");
+}
+
 /// `baml describe ai.internal` — list items in the `ai.internal` namespace,
 /// the home of the package-private helpers and the prompt-rendering plumbing
 /// (there is deliberately no `baml.prompt` namespace).
@@ -861,8 +904,14 @@ fn render_builtin_namespace_ai_internal() {
         .get(baml_db::LangPackage::Ai)
         .unwrap();
     let ns_path = vec![baml_db::Name::new("internal")];
-    let entries =
-        baml_ide::list_namespace_items(&db, pkg_id, &ns_path, baml_ide::Internals::Hide).unwrap();
+    let entries = baml_ide::list_namespace_items(
+        &db,
+        db.workspace_root().unwrap(),
+        pkg_id,
+        &ns_path,
+        baml_ide::Internals::Hide,
+    )
+    .unwrap();
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
@@ -872,10 +921,15 @@ fn render_builtin_namespace_ai_internal() {
 #[test]
 fn render_testing_package_listing() {
     let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::spelling(&db)
-        .root(&baml_db::Name::new("testing"))
+    let pkg_id = baml_compiler2_hir::package::lang_roots(&db)
+        .get(baml_db::LangPackage::Testing)
         .unwrap();
-    let entries = baml_ide::list_package_items(&db, pkg_id, baml_ide::Internals::Hide);
+    let entries = baml_ide::list_package_items(
+        &db,
+        db.workspace_root().unwrap(),
+        pkg_id,
+        baml_ide::Internals::Hide,
+    );
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
@@ -885,10 +939,15 @@ fn render_testing_package_listing() {
 #[test]
 fn render_assert_package_listing() {
     let db = simple_project();
-    let pkg_id = baml_compiler2_hir::package::spelling(&db)
-        .root(&baml_db::Name::new("assert"))
+    let pkg_id = baml_compiler2_hir::package::lang_roots(&db)
+        .get(baml_db::LangPackage::Assert)
         .unwrap();
-    let entries = baml_ide::list_package_items(&db, pkg_id, baml_ide::Internals::Hide);
+    let entries = baml_ide::list_package_items(
+        &db,
+        db.workspace_root().unwrap(),
+        pkg_id,
+        baml_ide::Internals::Hide,
+    );
     assert!(!entries.is_empty());
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
@@ -1017,7 +1076,12 @@ fn render_describe_ns_member() {
 fn deep_namespace_listing_produces_dotted_fqn() {
     let db = deep_ns_project();
     let pkg_id = db.workspace_root().unwrap();
-    let entries = baml_ide::list_package_items(&db, pkg_id, baml_ide::Internals::Hide);
+    let entries = baml_ide::list_package_items(
+        &db,
+        db.workspace_root().unwrap(),
+        pkg_id,
+        baml_ide::Internals::Hide,
+    );
     let output = capture_listing(&entries);
     insta::assert_snapshot!(output);
 }

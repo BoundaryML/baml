@@ -34,9 +34,21 @@ pub enum LinkError {
     /// A package's edge table reaches two packages under one name, so the
     /// name would resolve to neither.
     DuplicateEdge { package: Name, edge: Name },
+    /// Two packages of the set are the same language package; the runtime
+    /// finds each language package by identity, so one world holds one.
+    DuplicateLanguagePackage {
+        package: Name,
+        language: baml_base::LangPackage,
+    },
     /// Two packages with `let`s reach each other, so neither can initialize
     /// after the other.
     InitCycle { package: Name, other: Name },
+    /// A unit's dependency table names a language package the link set does
+    /// not hold.
+    MissingLanguagePackage {
+        package: Name,
+        language: baml_base::LangPackage,
+    },
     /// A unit is malformed: an index outside its declared space, a table that
     /// contradicts its buckets, an entry that violates the format's laws.
     InvalidUnit(String),
@@ -88,10 +100,21 @@ impl std::fmt::Display for LinkError {
             Self::DuplicateEdge { package, edge } => {
                 write!(f, "package `{package}` reaches two packages as `{edge}`")
             }
+            Self::DuplicateLanguagePackage { package, language } => write!(
+                f,
+                "package `{package}` is a second `{}` language package",
+                language.manifest_name()
+            ),
             Self::InitCycle { package, other } => write!(
                 f,
                 "packages `{package}` and `{other}` reach each other and both have `let`s, so \
                  neither can initialize first"
+            ),
+            Self::MissingLanguagePackage { package, language } => write!(
+                f,
+                "package `{package}` depends on the language package `{}`, which the link set \
+                 does not hold",
+                language.manifest_name()
             ),
             Self::InvalidUnit(message) => write!(f, "invalid unit: {message}"),
         }

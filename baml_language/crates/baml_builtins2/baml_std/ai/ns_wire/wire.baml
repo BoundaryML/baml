@@ -255,7 +255,7 @@ class ResolvedMedia {
 /// resolution pass in `sys_llm`: existing base64 is retained, and URL fetching
 /// is selected by the provider. Media built from a file already holds its
 /// content as base64.
-function resolve_media(media: ai.MediaPart, fetch_url: bool) -> ResolvedMedia {
+function resolve_media(media: root.MediaPart, fetch_url: bool) -> ResolvedMedia {
     match (media) {
         let image: baml.media.Image => {
             root.internal._resolve_media_content(
@@ -295,7 +295,7 @@ function resolve_media(media: ai.MediaPart, fetch_url: bool) -> ResolvedMedia {
 /// Resolve media for a request preview without fetching a URL. Existing base64
 /// and `data:` payloads are preserved; provider-specific renderers decide
 /// whether an ordinary URL is supported on their wire form.
-function resolve_media_preview(media: ai.MediaPart) -> ResolvedMedia {
+function resolve_media_preview(media: root.MediaPart) -> ResolvedMedia {
     match (media) {
         let image: baml.media.Image => {
             root.internal._resolve_media_preview_content(
@@ -414,7 +414,7 @@ function merge_request_body(base: baml.json.json, overrides: baml.json.json?) ->
 /// `Text`, a media part is `Media` with null provenance. The rendered prompt
 /// then lowers through the same path as the journal's turns.
 ///
-/// A `root.CacheDelimiter` is dropped, and the text on either side of it is
+/// A `ai.CacheDelimiter` is dropped, and the text on either side of it is
 /// joined back into one `Text` block, so a client that lowers these blocks
 /// sends exactly what it would send for the same prompt without the
 /// `${cache(...)}`. A client whose wire has a cache marker lowers

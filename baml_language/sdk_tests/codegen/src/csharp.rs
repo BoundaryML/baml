@@ -104,7 +104,7 @@ fn generate_fixture(crate_dir: &Path, fixture_name: &str) {
         "C# {fixture_name} fixture diagnostics: {errors:#?}"
     );
 
-    let symbols = baml_ide::build_symbol_pool(&db);
+    let symbols = baml_ide::build_symbol_pool(&db, root);
     let bytecode = baml_artifact::encode(
         baml_artifact::ArtifactKind::Program,
         &db.get_bytecode(root)

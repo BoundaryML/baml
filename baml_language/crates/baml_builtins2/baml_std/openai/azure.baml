@@ -223,7 +223,7 @@ class AzureClient {
         /// from a Standard deployment, so a `${cache()}` on a GPT-5.6 PTU-M
         /// deployment is a 400.
         function default_cache_args(self) -> baml.json.json {
-            openai.internal.default_cache_breakpoint(self.model)
+            root.internal.default_cache_breakpoint(self.model)
         }
 
         function id(self) -> string {
@@ -231,7 +231,7 @@ class AzureClient {
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            openai.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
+            root.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

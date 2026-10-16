@@ -79,7 +79,7 @@ class TextDelta {
 /// Turn metadata as it arrives on the wire. Providers send stop_reason and
 /// token counts on different events; each TurnMeta carries what its event had
 /// and TurnStream folds non-null fields together (last write wins). The token
-/// counts mean what they mean in `root.events.Usage`.
+/// counts mean what they mean in `ai.events.Usage`.
 class TurnMeta {
     stop_reason: root.content.StopReason?,
     input_tokens: int?,

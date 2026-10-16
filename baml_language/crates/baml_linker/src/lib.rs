@@ -49,7 +49,7 @@
 //! — so a package's objects are one contiguous range and its position in the
 //! set is its position in the image. Init parts EXECUTE in package
 //! initialization order — each package with `let`s after every package with
-//! `let`s it reaches, ties by name then position — which
+//! `let`s it reaches, ties by position in the set — which
 //! `Program::init_order` records as package ordinals; placement
 //! does not encode it. A generic-function VALUE (`foo<int>` as data) is
 //! emitted once per unit and interned here by `(base function's absolute
@@ -102,12 +102,16 @@ impl LinkPackageId {
 /// the other packages of the set.
 #[derive(Clone, Debug)]
 pub struct LinkPackage<'a> {
-    /// The package's display spelling: `ProgramPackage::name`. Display data —
-    /// a package's link identity is its [`LinkPackageId`], and its executable
-    /// identity its position in
-    /// [`Program::packages`](bex_vm_types::Program::packages). Names live on
-    /// edges, so two packages may share a spelling.
+    /// The package's display label: `ProgramPackage::name`. Lossy display
+    /// only, neither unique nor identifying — a package's link identity is
+    /// its [`LinkPackageId`], and its executable identity its position in
+    /// [`Program::packages`](bex_vm_types::Program::packages). Names that
+    /// reach a package live on edges, so two packages may carry this one.
     pub name: Name,
+    /// What the package is: a language package (the prelude, bound by
+    /// identity without a fingerprint) or an ordinary one. Carried into the
+    /// executable as `ProgramPackage::kind`.
+    pub kind: bex_vm_types::types::PackageKind,
     /// The package's edge table: every direct dependency and prelude package
     /// by the name this package reaches it under. Each name reaches one
     /// package ([`LinkError::DuplicateEdge`]); the table is carried into the
@@ -138,6 +142,14 @@ pub struct LinkSet<'a> {
 impl<'a> LinkSet<'a> {
     fn ids(&self) -> impl Iterator<Item = LinkPackageId> + '_ {
         (0..self.packages.len()).map(LinkPackageId::of)
+    }
+
+    /// The set's package that IS the language package `language`, if the
+    /// set holds it.
+    fn language_package(&self, language: baml_base::LangPackage) -> Option<LinkPackageId> {
+        self.ids().find(|&id| {
+            self.package(id).kind == bex_vm_types::types::PackageKind::Language(language)
+        })
     }
 
     fn package(&self, id: LinkPackageId) -> &LinkPackage<'a> {
@@ -230,7 +242,19 @@ impl Linker<'_, '_> {
                 self.set.packages.len()
             )));
         }
+        // The runtime finds each language package by what it is, so a set
+        // holds at most one of each (`Program::validate` holds the executable
+        // to the same law).
+        let mut language_packages = HashSet::new();
         for package in &self.set.packages {
+            if let bex_vm_types::types::PackageKind::Language(language) = package.kind
+                && !language_packages.insert(language)
+            {
+                return Err(LinkError::DuplicateLanguagePackage {
+                    package: package.name.clone(),
+                    language,
+                });
+            }
             layout::validate_objects(&package.name, package.unit, package.tail)?;
             let mut edges = HashSet::new();
             for edge in &package.edges {

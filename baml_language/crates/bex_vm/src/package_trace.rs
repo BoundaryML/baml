@@ -95,7 +95,7 @@ pub(crate) fn alloc_settings(vm: &mut BexVm, options: &TraceOptionsData) -> Valu
             InvocationMode::Timing => "Timing",
             InvocationMode::Span => "Span",
         };
-        let enm = vm.lookup_type_by_fqn("trace.Mode").expect("trace.Mode");
+        let enm = vm.lang_object(crate::lang_items::TRACE_MODE);
         let Object::Enum(def) = vm.get_object(enm) else {
             unreachable!("trace.Mode must be an enum");
         };

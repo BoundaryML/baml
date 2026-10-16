@@ -7,7 +7,7 @@ class Arg {
     /// can never collide with a declared parameter or named-argument key.
     name: string,
     /// The parameter's type.
-    type: reflect.Type,
+    type: root.Type,
 }
 
 /// Metadata baked into reflected schema definitions.
@@ -95,19 +95,19 @@ class Diagnostic {
 /// Common identity-preserving surface shared by every reflection kind view.
 interface TypeView {
     /// The `type` value this view wraps, restoring the unnarrowed type.
-    function as_type(self) -> reflect.Type throws never;
+    function as_type(self) -> root.Type throws never;
 }
 
 /// The closed set of reflection views for a runtime `type` value.
-type TypeKind = reflect.class.Type
-    | reflect.enum.Type
-    | reflect.union.Type
-    | reflect.literal.Type
-    | reflect.array.Type
-    | reflect.map.Type
-    | reflect.interface.Type
-    | reflect.primitive.Type
-    | reflect.function.Type;
+type TypeKind = root.class.Type
+    | root.enum.Type
+    | root.union.Type
+    | root.literal.Type
+    | root.array.Type
+    | root.map.Type
+    | root.interface.Type
+    | root.primitive.Type
+    | root.function.Type;
 
 /// Implemented automatically by every function value, with its parameter
 /// list erased. `Returns` pins the held function's return type and `Throws`
@@ -132,26 +132,26 @@ interface AnyFunction {
 interface AnyClass {
     /// Read a field as `T`. A missing field returns `null`; use `has_field` to
     /// distinguish that case from a present field whose value is null.
-    function get<T>(self, name: string) -> T? throws reflect.errors.TypeMismatch {
+    function get<T>(self, name: string) -> T? throws root.errors.TypeMismatch {
         if (!self.has_field(name)) {
             return null;
         }
         // NOTE: spelled with `let … else` rather than `self.get_field(name)?.value<T>()`
         // because an optional-chained call does not thread `T` to the callee.
-        let field: reflect.class.Field = self.get_field(name) else {
+        let field: root.class.Field = self.get_field(name) else {
             return null;
         };
         field.value<T>()
     }
 
     /// Return a value-bound field handle, or `null` when no such field exists.
-    function get_field(self, name: string) -> reflect.class.Field? throws never {
-        let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+    function get_field(self, name: string) -> root.class.Field? throws never {
+        let class_type: root.class.Type = root.Type.of_value(self).as_class() else {
             return null;
         };
         for (let field in class_type.fields()) {
             if (field.name == name) {
-                return reflect.class.Field {
+                return root.class.Field {
                     name: field.name,
                     type: field.type,
                     meta: field.meta,
@@ -165,7 +165,7 @@ interface AnyClass {
     /// Whether this value's runtime class declares a field called `name`.
     /// `false` when the runtime type is not a class.
     function has_field(self, name: string) -> bool throws never {
-        let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+        let class_type: root.class.Type = root.Type.of_value(self).as_class() else {
             return false;
         };
         for (let field in class_type.fields()) {
@@ -177,14 +177,14 @@ interface AnyClass {
     }
 
     /// Reflected fields bound to this value for `Field.value<T>()`.
-    function list_fields(self) -> reflect.class.Field[] throws never {
-        let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
+    function list_fields(self) -> root.class.Field[] throws never {
+        let class_type: root.class.Type = root.Type.of_value(self).as_class() else {
             return [];
         };
-        let fields: reflect.class.Field[] = [];
+        let fields: root.class.Field[] = [];
         for (let field in class_type.fields()) {
             fields.push(
-                reflect.class.Field {
+                root.class.Field {
                     name: field.name,
                     type: field.type,
                     meta: field.meta,
@@ -197,19 +197,19 @@ interface AnyClass {
 
     /// The rendered name of this value's concrete runtime type.
     function name(self) -> string throws never {
-        reflect.Type.of_value(self).to_string()
+        root.Type.of_value(self).to_string()
     }
 
     /// This value's concrete runtime type.
-    function type(self) -> reflect.Type throws never {
-        reflect.Type.of_value(self)
+    function type(self) -> root.Type throws never {
+        root.Type.of_value(self)
     }
 
     /// The class declaration's schema metadata, or empty metadata when the
     /// runtime type is not a class.
-    function attributes(self) -> reflect.Meta throws never {
-        let class_type: reflect.class.Type = reflect.Type.of_value(self).as_class() else {
-            return reflect.Meta { alias: null, description: null, docstring: null, other: {}, skip: false };
+    function attributes(self) -> root.Meta throws never {
+        let class_type: root.class.Type = root.Type.of_value(self).as_class() else {
+            return root.Meta { alias: null, description: null, docstring: null, other: {}, skip: false };
         };
         class_type.meta()
     }
@@ -230,9 +230,9 @@ class Signature {
     /// Named/optional parameters, keyed by parameter name.
     opts: map<string, Arg>,
     /// The return type.
-    returns: reflect.Type,
+    returns: root.Type,
     /// The error type; `never` if the function cannot throw.
-    errors: reflect.Type,
+    errors: root.Type,
     /// The function's doc comment (joined `///` lines); null when absent.
     docstring: string?,
 }
@@ -246,8 +246,8 @@ class Signature {
 /// callee's whole function type and the value's type.
 class InvalidArgumentError {
     argument: string,
-    expected: reflect.Type,
-    got: reflect.Type,
+    expected: root.Type,
+    got: root.Type,
 }
 
 /// One-shot compiler output consumed by Package._finish or Session._finish.
@@ -289,7 +289,7 @@ class Package {
     function _compile(
         files: map<string, string>,
         packages: map<string, Package>,
-    ) -> CompileArtifact throws reflect.errors.CompilationError {
+    ) -> CompileArtifact throws root.errors.CompilationError {
         $rust_io_function
     }
 
@@ -304,20 +304,20 @@ class Package {
 
     /// The exported class called `name`, or `null` if the package exports none.
     //baml:mut_vm
-    function get_class(self, name: string) -> reflect.class.Type? throws never {
+    function get_class(self, name: string) -> root.class.Type? throws never {
         $rust_function
     }
 
     /// The exported enum called `name`, or `null` if the package exports none.
     //baml:mut_vm
-    function get_enum(self, name: string) -> reflect.enum.Type? throws never {
+    function get_enum(self, name: string) -> root.enum.Type? throws never {
         $rust_function
     }
 
     /// The exported interface called `name`, or `null` if the package exports
     /// none.
     //baml:mut_vm
-    function get_interface(self, name: string) -> reflect.interface.Type? throws never {
+    function get_interface(self, name: string) -> root.interface.Type? throws never {
         $rust_function
     }
 
@@ -331,8 +331,8 @@ class Package {
     //baml:mut_vm
     function with_types(
         self,
-        types: map<string, reflect.Type | reflect.TypeView>,
-    ) -> Package throws reflect.errors.CompilationError {
+        types: map<string, root.Type | root.TypeView>,
+    ) -> Package throws root.errors.CompilationError {
         $rust_function
     }
     //baml:mut_vm
@@ -340,31 +340,31 @@ class Package {
     ///
     /// A lookup by name has nowhere to put type arguments, so an unspecialized
     /// generic function is refused here.
-    function get_function<F>(self, name: string) -> F? throws reflect.errors.CompilationError {
+    function get_function<F>(self, name: string) -> F? throws root.errors.CompilationError {
         $rust_function
     }
 
     /// Exported class types, keyed by package-local name.
     //baml:mut_vm
-    function classes(self) -> map<string, reflect.class.Type> throws never {
+    function classes(self) -> map<string, root.class.Type> throws never {
         $rust_function
     }
 
     /// Exported enum types, keyed by package-local name.
     //baml:mut_vm
-    function enums(self) -> map<string, reflect.enum.Type> throws never {
+    function enums(self) -> map<string, root.enum.Type> throws never {
         $rust_function
     }
 
     /// Exported interface types, keyed by package-local name.
     //baml:mut_vm
-    function interfaces(self) -> map<string, reflect.interface.Type> throws never {
+    function interfaces(self) -> map<string, root.interface.Type> throws never {
         $rust_function
     }
 
     //baml:mut_vm
     /// Exported free-function signatures, keyed by package-local name.
-    function functions(self) -> map<string, reflect.function.Type> throws never {
+    function functions(self) -> map<string, root.function.Type> throws never {
         $rust_function
     }
 
@@ -395,14 +395,12 @@ class Session {
     /// - `reflect.errors.CompilationError` if the dependencies do not resolve.
     function new(
         packages: map<string, Package> = {},
-    ) -> Session throws reflect.errors.CompilationError {
+    ) -> Session throws root.errors.CompilationError {
         Session._new(packages)
     }
 
     //baml:mut_vm
-    function _new(
-        packages: map<string, Package>,
-    ) -> Session throws reflect.errors.CompilationError {
+    function _new(packages: map<string, Package>) -> Session throws root.errors.CompilationError {
         $rust_function
     }
 
@@ -421,11 +419,11 @@ class Session {
     function eval<T>(
         self,
         source: string,
-    ) -> T throws reflect.errors.CompilationError | reflect.errors.EvaluationError | reflect.errors.SessionBusy {
+    ) -> T throws root.errors.CompilationError | root.errors.EvaluationError | root.errors.SessionBusy {
         let artifact = self._compile<T>(source);
         self._finish<T>(artifact) catch (cause) {
             _ => {
-                throw reflect.errors.EvaluationError {
+                throw root.errors.EvaluationError {
           message: _render_cause(cause),
           cause: cause,
         }
@@ -436,7 +434,7 @@ class Session {
     function _compile<T>(
         self,
         source: string,
-    ) -> CompileArtifact throws reflect.errors.CompilationError | reflect.errors.SessionBusy {
+    ) -> CompileArtifact throws root.errors.CompilationError | root.errors.SessionBusy {
         $rust_io_function
     }
 
@@ -489,6 +487,6 @@ function signature(f: AnyFunction) -> Signature throws never {
 function call_any<R, E>(
     f: AnyFunction<Returns = R, Throws = E>,
     args: map<string, unknown>,
-) -> R throws E | InvalidArgumentError | reflect.errors.CompilationError {
+) -> R throws E | InvalidArgumentError | root.errors.CompilationError {
     $rust_function
 }

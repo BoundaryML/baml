@@ -160,7 +160,9 @@ pub struct FileAst {
 #[salsa::tracked(returns(ref))]
 pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
     let tree = baml_compiler_parser::syntax_tree(db, file);
-    let path = file.path(db);
+    // Root-relative: the path names the file's `$init_test_…` function, which
+    // is part of the package's unit and must not carry the checkout's location.
+    let path = file_package::root_relative_path(db, file);
     let package = file_package::file_package(db, file);
     let test_owner = if package.namespace_path.is_empty() {
         "root".to_string()
@@ -180,7 +182,17 @@ pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
     } else {
         baml_compiler2_ast::lower_file_with_path_and_test_owner
     };
-    let (items, diagnostics, env_var_refs) = lower(&tree, Some(path.as_path()), Some(&test_owner));
+    let (mut items, diagnostics, env_var_refs) =
+        lower(&tree, Some(path.as_path()), Some(&test_owner));
+    if package.root.exclude_tests(db) {
+        // Both test forms lower into per-file registrars. Remove them before
+        // building HIR so their entire subtree (including nested/catch
+        // lambdas) is absent from code, constants, and package interfaces.
+        items.retain(|item| {
+            !matches!(item, baml_compiler2_ast::Item::Function(function)
+                if function.metadata.origin == baml_compiler2_ast::FunctionOrigin::TestInitializer)
+        });
+    }
     FileAst {
         items,
         diagnostics,

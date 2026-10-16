@@ -31,7 +31,7 @@ fn engine_for(project: &Path, source: &str) -> Arc<bex_engine::BexEngine> {
     let mut program = baml_test_support::compile_source(source);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
-            && f.name.ends_with(".Ask")
+            && f.declared_name().is_some_and(|name| name == "Ask")
         {
             // Capture like an LLM function, without a model.
             f.body_meta = Some(bex_vm_types::FunctionMeta::Llm {

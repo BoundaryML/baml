@@ -39,6 +39,10 @@ fn generate_panic_class_enum(panics: &[&NativeClassDef]) -> TokenStream {
         .map(|p| format!("{PANICS_NAMESPACE}.{}", p.name))
         .collect();
     let names: Vec<&str> = panics.iter().map(|p| p.name.as_str()).collect();
+    let items: Vec<TokenStream> = panics
+        .iter()
+        .map(|p| crate::lang_item::lang_item_tokens(PANICS_NAMESPACE, &p.name))
+        .collect();
 
     quote! {
         /// Panic class tag — one variant per `baml.panics.*` class.
@@ -61,6 +65,14 @@ fn generate_panic_class_enum(panics: &[&NativeClassDef]) -> TokenStream {
             pub const fn name(&self) -> &'static str {
                 match self {
                     #(PanicClass::#variant_idents => #names,)*
+                }
+            }
+
+            /// The class by identity: its item in the `baml` language package,
+            /// which is how the runtime reaches it.
+            pub const fn item(&self) -> ::baml_base::LangItem {
+                match self {
+                    #(PanicClass::#variant_idents => #items,)*
                 }
             }
 

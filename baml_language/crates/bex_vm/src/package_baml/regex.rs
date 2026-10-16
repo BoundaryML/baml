@@ -38,7 +38,7 @@ use crate::{
 };
 
 /// Fully-qualified name of the enum classifying a `baml.regex.Error`.
-const ERROR_KIND_FQN: &str = "baml.regex.ErrorKind";
+const ERROR_KIND: baml_base::LangItem = crate::lang_items::BAML_REGEX_ERROR_KIND;
 
 // =============================================================================
 // Building BAML values
@@ -159,11 +159,7 @@ fn match_value(
 
 /// Materialize a classified construction error and translate its byte span to codepoints.
 fn error_value(vm: &mut BexVm, pattern: &str, err: &BuildError) -> Result<Value, VmRustFnError> {
-    let enum_ptr = vm.lookup_type_by_fqn(ERROR_KIND_FQN).ok_or_else(|| {
-        VmInternalError::MissingNativeFunction {
-            name: ERROR_KIND_FQN.to_string(),
-        }
-    })?;
+    let enum_ptr = vm.lang_object(ERROR_KIND);
     let variant = match vm.get_object(enum_ptr) {
         Object::Enum(en) => en
             .variants
@@ -172,7 +168,7 @@ fn error_value(vm: &mut BexVm, pattern: &str, err: &BuildError) -> Result<Value,
         _ => None,
     }
     .ok_or_else(|| VmInternalError::MissingNativeFunction {
-        name: format!("{ERROR_KIND_FQN}.{}", err.kind.variant_name()),
+        name: format!("{ERROR_KIND}.{}", err.kind.variant_name()),
     })?;
 
     // The engine reports byte offsets into the pattern; the BAML class

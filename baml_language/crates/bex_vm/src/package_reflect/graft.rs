@@ -64,8 +64,8 @@ use bex_vm_types::{
     head_walk::visit_object_heads_mut,
     relink::{IndexOperand, visit_object_operands},
     types::{
-        EdgeKind, ExportSurface, LocalName, MethodImpl, Objects, Owner, Package, RuntimeImplRule,
-        Slots, Value,
+        ExportSurface, LocalName, MethodImpl, Objects, Owner, Package, PackageKind,
+        RuntimeImplRule, Slots, Value,
     },
 };
 use indexmap::IndexMap;
@@ -435,7 +435,7 @@ impl Image {
                 let is_body = matches!(path, DeclPath::InterfaceBody(_));
                 if !matches!(
                     vm.get_object(ptr),
-                    Object::Function(function) if function.is_interface_body == is_body
+                    Object::Function(function) if function.is_interface_body() == is_body
                 ) {
                     return Err(link_error(format!(
                         "the unit exports `{path}` as a {:?} object",
@@ -530,6 +530,14 @@ fn place_objects<'a>(
     for object in owned {
         let mut object = object.clone();
         adopt(&mut object, package_ptr);
+        // A class with a finalizer joins the heap: the collector's
+        // finalizer scan must run from now on, whatever the host's classes
+        // declare.
+        if let Object::Class(class) = &object
+            && class.cleanup.is_some()
+        {
+            vm.heap.note_finalizable_class();
+        }
         // A runtime function takes its telemetry identity at allocation.
         let ptr = vm
             .alloc_runtime_object(object)
@@ -701,18 +709,35 @@ fn bind_slots(
         let Object::Package(package) = vm.get_object(parent) else {
             unreachable!("a bound dependency slot is a package")
         };
-        let edge = package.edges.get(locator.edge()).ok_or_else(|| {
+        // A prelude entry binds the executable's language package of that
+        // identity, through no edge; the other two locate an edge in the
+        // parent's table.
+        let edge_name = match locator {
+            Locator::Prelude(language) => {
+                let target = vm.packages.lang_package(*language).ok_or_else(|| {
+                    link_error(format!(
+                        "the language package `{}` is not loaded",
+                        language.manifest_name()
+                    ))
+                })?;
+                bound.push(Bound::Package(target));
+                continue;
+            }
+            Locator::Direct { edge, .. } | Locator::Transitive { edge, .. } => edge,
+        };
+        let edge = package.edges.get(edge_name).ok_or_else(|| {
             link_error(format!(
-                "dependency `{}` names no package the compile was given",
-                locator.edge()
+                "dependency `{edge_name}` names no package the compile was given"
             ))
         })?;
-        verify_fingerprint(vm, locator, edge.kind, edge.target)?;
-        bound.push(match edge.kind {
-            EdgeKind::Anonymous => Bound::Declaration(edge.target),
-            EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Prelude => {
-                Bound::Package(edge.target)
-            }
+        verify_fingerprint(vm, locator, edge.target)?;
+        bound.push(match vm.get_object(edge.target) {
+            Object::Package(_) => Bound::Package(edge.target),
+            Object::Class(_) | Object::Enum(_) => Bound::Declaration(edge.target),
+            other => unreachable!(
+                "a dependency edge targets a package or an anonymous declaration, found {:?}",
+                ObjectType::of(other)
+            ),
         });
     }
     Ok(bound)
@@ -724,37 +749,26 @@ fn bind_slots(
 /// package served from a compiled blob must still carry those bytes. A
 /// projected surface (a `with_types` view, an anonymous declaration) has no
 /// payload — the compile read the seam's projection of it — so the pin is its
-/// whole identity. A prelude entry binds a prelude edge and a transitive
-/// entry either kind; neither carries a digest, as in the static lane.
-fn verify_fingerprint(
-    vm: &BexVm,
-    locator: &Locator,
-    kind: EdgeKind,
-    target: HeapPtr,
-) -> Result<(), VmRustFnError> {
-    let (edge, expected) = match (locator, kind) {
-        (Locator::Prelude { .. }, EdgeKind::Prelude) | (Locator::Transitive { .. }, _) => {
-            return Ok(());
-        }
-        (
-            Locator::Prelude { edge },
-            EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Anonymous,
-        ) => {
-            return Err(link_error(format!(
-                "dependency `{edge}` carries no interface fingerprint"
-            )));
-        }
-        (Locator::Direct { edge, .. }, EdgeKind::Prelude) => {
+/// whole identity. A transitive entry binds anything and carries no digest,
+/// as in the static lane; a prelude entry is bound by identity before this
+/// is asked.
+fn verify_fingerprint(vm: &BexVm, locator: &Locator, target: HeapPtr) -> Result<(), VmRustFnError> {
+    let target = vm.get_object(target);
+    let is_language = matches!(
+        target,
+        Object::Package(package) if matches!(package.kind, PackageKind::Language(_))
+    );
+    let (edge, expected) = match (locator, is_language) {
+        (Locator::Transitive { .. }, _) => return Ok(()),
+        (Locator::Prelude(_), _) => unreachable!("a prelude entry is bound by identity"),
+        (Locator::Direct { edge, .. }, true) => {
             return Err(link_error(format!(
                 "dependency `{edge}` is a prelude package but carries an interface fingerprint"
             )));
         }
-        (
-            Locator::Direct { edge, digest },
-            EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Anonymous,
-        ) => (edge, *digest),
+        (Locator::Direct { edge, digest }, false) => (edge, *digest),
     };
-    let blob = match vm.get_object(target) {
+    let blob = match target {
         Object::Package(target) => match &target.surface {
             ExportSurface::Compiled(blob) => blob,
             ExportSurface::Projected => return Ok(()),
@@ -803,10 +817,10 @@ fn slot_binding(
 fn anonymous_export(vm: &BexVm, declaration: HeapPtr, path: &DeclPath) -> Option<HeapPtr> {
     let exported = match (vm.get_object(declaration), path) {
         (Object::Class(class), DeclPath::Class(item)) => {
-            item.namespace.is_empty() && item.name == *class.name.item_name()
+            item.namespace.is_empty() && item.name == *class.path.name
         }
         (Object::Enum(enm), DeclPath::Enum(item)) => {
-            item.namespace.is_empty() && item.name == *enm.name.item_name()
+            item.namespace.is_empty() && item.name == *enm.path.name
         }
         _ => false,
     };
@@ -1082,7 +1096,7 @@ fn adopt(object: &mut Object, package_ptr: HeapPtr) {
             alias.type_tag = TypeTag::fresh_dynamic();
             alias.owner = package_ptr;
         }
-        Object::Function(function) => function.runtime_package = package_ptr,
+        Object::Function(function) => function.owner = package_ptr,
         Object::GenericFunction(function) => function.runtime_package = package_ptr,
         // Neither a declaration nor a body: nothing to mint or own.
         Object::String(_)
@@ -1185,7 +1199,7 @@ fn relocate(
                 let SwitchDispatch::Keys(keys) = &switch.dispatch else {
                     return Err(link_error(format!(
                         "function `{}` states a switch by values instead of keys",
-                        function.name
+                        function.name()
                     )));
                 };
                 if let Some(index) = keys.iter().find_map(|key| match key {
@@ -1332,7 +1346,8 @@ fn load_rule(
                 ))
             })?;
         let fqn = image.objects[*local];
-        if !matches!(vm.get_object(fqn), Object::Function(function) if function.is_interface_body) {
+        if !matches!(vm.get_object(fqn), Object::Function(function) if function.is_interface_body())
+        {
             return Err(link_error(format!(
                 "impl method `{name}` resolves to an object that is not an interface body"
             )));

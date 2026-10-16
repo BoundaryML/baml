@@ -18,7 +18,7 @@ fn function<'a>(program: &'a BytecodeProgram, name: &str) -> &'a Function {
         .objects
         .iter()
         .find_map(|object| match object {
-            Object::Function(function) if function.name == name => Some(function.as_ref()),
+            Object::Function(function) if function.name() == name => Some(function.as_ref()),
             _ => None,
         })
         .expect("function exists")
@@ -27,7 +27,7 @@ fn function<'a>(program: &'a BytecodeProgram, name: &str) -> &'a Function {
 #[test]
 fn throw_of_a_call_result_keeps_its_statement_sequence_point() {
     let program = convert_program(compile_source(SOURCE)).unwrap();
-    let compact = function(&program, "user.thrower")
+    let compact = function(&program, "thrower")
         .bytecode
         .compact
         .as_ref()

@@ -1,0 +1,41 @@
+// A top-level item has two spellings and no third: its bare name, from the
+// namespace that declares it, and its fully qualified path, `root.` (or a
+// dependency's edge name) followed by every namespace down to it. A path is
+// never read relative to the namespace it is written in, so a child
+// namespace's items are not reachable as `child.Item`.
+//
+// Everything here is written from the package's root namespace about items
+// of `llm` and `llm.vendor`; each needs `root.` in front.
+
+function annotation(response: llm.Response) -> int {
+    1
+}
+
+function constructor() -> int {
+    llm.Response { text: "x" }.text.length()
+}
+
+function call() -> int {
+    llm.make()
+}
+
+function type_pattern(value: root.llm.Response | int) -> int {
+    match (value) {
+        llm.Response => 1,
+        _ => 0
+    }
+}
+
+function destructure(response: root.llm.Response) -> int {
+    let llm.Response { text } = response;
+    text.length()
+}
+
+function two_levels() -> int {
+    llm.vendor.Box<int> { value: 1 }.value
+}
+
+// The same items, spelled in full: these resolve.
+function qualified(response: root.llm.Response) -> int {
+    root.llm.make() + root.llm.vendor.Box<int> { value: 1 }.value + response.text.length()
+}

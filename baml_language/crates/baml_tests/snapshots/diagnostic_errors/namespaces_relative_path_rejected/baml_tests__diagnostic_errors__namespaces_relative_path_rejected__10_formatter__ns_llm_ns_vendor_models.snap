@@ -1,0 +1,10 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+class Box<T> {
+    value: T,
+}
+
+function unbox() -> int {
+    3
+}

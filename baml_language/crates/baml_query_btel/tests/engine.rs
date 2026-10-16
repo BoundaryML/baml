@@ -1402,7 +1402,16 @@ fn the_agent_runner_names_its_output_type() {
         .0
         .iter()
         .filter_map(|object| match object {
-            bex_vm_types::Object::Function(f) if f.name == "ai.<(ai.Agent as ai.Runner)>.run" => {
+            // The body `ai.Agent` provides for `ai.Runner.run`.
+            bex_vm_types::Object::Function(f)
+                if matches!(
+                    &f.identity,
+                    bex_vm_types::types::FunctionIdentity::InterfaceBody(
+                        bex_vm_types::types::BodyKey::ImplMethod(body),
+                    ) if body.method.as_str() == "run"
+                        && body.interface.path.name.as_str() == "Runner"
+                ) =>
+            {
                 Some(f.type_param_names.as_slice())
             }
             _ => None,

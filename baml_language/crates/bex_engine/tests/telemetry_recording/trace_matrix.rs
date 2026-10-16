@@ -746,29 +746,68 @@ async fn scalar_values(program: &Program) {
     }
 }
 
+/// The class `program` declares whose display name ends with `name`, beside
+/// the name a loaded instance's declaration answers with. A pooled class
+/// carries only its path; the package tables say which package declares it,
+/// and so what it is called.
+fn class_named<'p>(
+    program: &'p Program,
+    name: &str,
+) -> (&'p bex_vm_types::Class, bex_vm_types::DeclarationName) {
+    program
+        .packages
+        .iter()
+        .flat_map(|package| {
+            package
+                .classes
+                .iter()
+                .map(move |(path, object)| (path.under(&package.name), *object))
+        })
+        .find(|(qualified, _)| qualified.display_name().ends_with(name))
+        .map(|(qualified, object)| {
+            let bex_vm_types::Object::Class(class) = &program.objects[object] else {
+                panic!("the class table names a class");
+            };
+            (&**class, bex_vm_types::DeclarationName::Declared(qualified))
+        })
+        .unwrap_or_else(|| panic!("the program declares a class named `{name}`"))
+}
+
+/// [`class_named`], for an enum.
+fn enum_named<'p>(
+    program: &'p Program,
+    name: &str,
+) -> (&'p bex_vm_types::Enum, bex_vm_types::DeclarationName) {
+    program
+        .packages
+        .iter()
+        .flat_map(|package| {
+            package
+                .enums
+                .iter()
+                .map(move |(path, object)| (path.under(&package.name), *object))
+        })
+        .find(|(qualified, _)| qualified.display_name().ends_with(name))
+        .map(|(qualified, object)| {
+            let bex_vm_types::Object::Enum(enm) = &program.objects[object] else {
+                panic!("the enum table names an enum");
+            };
+            (&**enm, bex_vm_types::DeclarationName::Declared(qualified))
+        })
+        .unwrap_or_else(|| panic!("the program declares an enum named `{name}`"))
+}
+
 fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> Snapshot {
     use baml_type::RealizedTy;
-    use bex_vm_types::Object;
 
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let class = |suffix: &str| {
-        program
-            .objects
-            .0
-            .iter()
-            .find_map(|object| match object {
-                Object::Class(class) if class.name.display_name().ends_with(suffix) => Some(class),
-                _ => None,
-            })
-            .unwrap()
-    };
     let field =
         |_: &mut btel_snapshot::Leaves<'_>, (key, value): (&str, Value)| (key.into(), value);
     let root = match scenario {
         "cycle" | "node" => {
-            let class = class("MatrixNode");
-            let named = b.declaration(&class.name, class.type_tag, false);
+            let (class, class_name) = class_named(program, "MatrixNode");
+            let named = b.declaration(&class_name, class.type_tag, false);
             let declaration = b.leaves().object(named).unwrap();
             let slot = b.leaves().reserve().unwrap();
             let object = Value::Object(slot.id());
@@ -783,18 +822,8 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
             object
         }
         "enum" => {
-            let enm = program
-                .objects
-                .0
-                .iter()
-                .find_map(|object| match object {
-                    Object::Enum(enm) if enm.name.display_name().ends_with("MatrixChoice") => {
-                        Some(enm)
-                    }
-                    _ => None,
-                })
-                .unwrap();
-            let named = b.declaration(&enm.name, enm.type_tag, true);
+            let (enm, enum_name) = enum_named(program, "MatrixChoice");
+            let named = b.declaration(&enum_name, enm.type_tag, true);
             Value::Enum {
                 declaration: b.leaves().object(named).unwrap(),
                 variant: 1,
@@ -815,8 +844,8 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
             Value::Object(b.leaves().object(empty).unwrap())
         }
         "generic" => {
-            let class = class("MatrixBox");
-            let named = b.declaration(&class.name, class.type_tag, false);
+            let (class, class_name) = class_named(program, "MatrixBox");
+            let named = b.declaration(&class_name, class.type_tag, false);
             let declaration = b.leaves().object(named).unwrap();
             let fields = [("value", Value::Int(7))];
             let instance = b.instance(declaration, [RealizedTy::Int], fields.into_iter(), field);
@@ -1086,21 +1115,11 @@ fn one_field_instance(
     args: bool,
     additional_args: &[External],
 ) -> Snapshot {
-    let class = program
-        .objects
-        .0
-        .iter()
-        .find_map(|object| match object {
-            bex_vm_types::Object::Class(class) if class.name.display_name().ends_with(name) => {
-                Some(class)
-            }
-            _ => None,
-        })
-        .unwrap();
+    let (class, class_name) = class_named(program, name);
     assert_eq!(class.fields.len(), 1);
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let named = b.declaration(&class.name, class.type_tag, false);
+    let named = b.declaration(&class_name, class.type_tag, false);
     let declaration = b.leaves().object(named).unwrap();
     let value = scalar(&mut b, field);
     let instance = b.instance(declaration, [], std::iter::once(value), |_, value| {

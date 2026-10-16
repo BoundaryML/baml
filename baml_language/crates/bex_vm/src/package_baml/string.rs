@@ -138,7 +138,7 @@ impl BamlClassString for PackageBamlImpl {
         // Codepoint-indexed, not byte-indexed. A negative index counts from the
         // end; an index still outside the string after that yields `null`, so a
         // non-null result is always exactly one codepoint.
-        resolve_index(index, string.char_len()).and_then(|i| string.char_at_codepoint(i))
+        resolve_index(index, string.char_len()).map(|i| string.char_slice(i..i + 1))
     }
 
     fn code_point_at(string: &BexStr, index: i64) -> Option<i64> {
@@ -148,7 +148,7 @@ impl BamlClassString for PackageBamlImpl {
         // `char` is always in `[0, 0x10FFFF]`, so the widening to `i64` is
         // lossless.
         resolve_index(index, string.char_len())
-            .and_then(|i| string.as_str().chars().nth(i))
+            .and_then(|i| string.char_at(i))
             .map(|c| i64::from(u32::from(c)))
     }
 

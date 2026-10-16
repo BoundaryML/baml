@@ -139,7 +139,7 @@ function ue_preserves_cause_chain() -> bool {
     ue_chained_normalized() catch_all (error, context) {
         baml.errors.UnknownError => {
             match (context.root_cause().error) {
-                let root: string => root == "root",
+                let cause: string => cause == "root",
                 _ => false,
             }
         },
@@ -178,7 +178,7 @@ function ue_context_survives_gc() -> bool {
     ue_gc_normalized() catch_all (error, context) {
         baml.errors.UnknownError => {
             match (context.root_cause().error) {
-                let root: UeRootCause => root.message == "root",
+                let cause: UeRootCause => cause.message == "root",
                 _ => false,
             }
         },

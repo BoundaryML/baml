@@ -188,7 +188,7 @@ pub fn load_fixture(fixtures_root: &Path, fixture: &str) -> LoadedFixture {
         );
     }
 
-    let pool = baml_ide::build_symbol_pool(&db);
+    let pool = baml_ide::build_symbol_pool(&db, root);
     let program = db
         .get_bytecode(root)
         .unwrap_or_else(|e| panic!("fixture `{fixture}`: bytecode compilation failed: {e:?}"));

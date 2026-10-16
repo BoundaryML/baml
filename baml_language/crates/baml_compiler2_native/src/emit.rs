@@ -21,10 +21,11 @@ use baml_compiler2_hir::item_data::{file_functions, is_required_interface_method
 use baml_compiler2_mir::{
     AggregateKind, BinOp, BlockId, Constant, Local, MirFunction, MirFunctionBody, MirFunctionKind,
     Operand, OptLevel, Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey, Terminator,
-    TypeTest, UnaryOp, class_link_name, enum_link_name, function_link_name, lower_function,
+    TypeTest, UnaryOp, class_display_name, enum_display_name, function_display_name,
+    lower_function,
 };
 use baml_type::{Literal, TyTemplate};
-use bex_vm_types::{FunctionKind, Object, Program};
+use bex_vm_types::{FunctionKind, Object, ObjectIndex, Program};
 
 use crate::structure::{Cfg, Flow, Stmt, Structured, structurize};
 
@@ -108,7 +109,7 @@ pub fn compile_program<'db>(
                     continue;
                 }
             };
-            let name = mir.identity.link_name(db);
+            let name = mir.identity.display_name(db);
             let MirFunctionKind::Bytecode(body) = &mir.kind else {
                 continue;
             };
@@ -288,12 +289,18 @@ impl ProgramIndex {
         let mut classes = HashMap::new();
         let mut enums = HashMap::new();
         let mut strings = HashMap::new();
+        // Names as the loader renders them: under the label of the package
+        // that placed the declaration. A pooled declaration's own `name()`
+        // has no owner until load, so it would render unqualified.
         for (index, object) in program.objects.iter().enumerate() {
             match object {
                 Object::Function(function) => {
-                    objects.insert(function.name.clone(), index);
+                    let Some(name) = program.function_name(ObjectIndex::from_raw(index)) else {
+                        continue;
+                    };
+                    objects.insert(name.clone(), index);
                     functions.insert(
-                        function.name.clone(),
+                        name,
                         FunctionInfo {
                             kind: function.kind,
                             layout: function.argument_layout(),
@@ -304,19 +311,22 @@ impl ProgramIndex {
                         },
                     );
                 }
-                // Keyed by the qualified name, which is what MIR's link names
-                // spell; the display name elides the local package and is not
-                // an identity.
-                Object::Class(class) => {
-                    classes.insert(class.name.to_string(), (index, class.fields.len()));
-                }
-                Object::Enum(enm) => {
-                    enums.insert(enm.name.to_string(), index);
-                }
                 Object::String(text) => {
                     strings.entry(text.to_string()).or_insert(index);
                 }
                 _ => {}
+            }
+        }
+        for package in &program.packages {
+            for (path, &object) in &package.classes {
+                if let Object::Class(class) = &program.objects[object] {
+                    let name = qualified(&package.name, path);
+                    classes.insert(name, (object.raw(), class.fields.len()));
+                }
+            }
+            for (path, &object) in &package.enums {
+                let name = qualified(&package.name, path);
+                enums.insert(name, object.raw());
             }
         }
         Self {
@@ -327,6 +337,17 @@ impl ProgramIndex {
             strings,
         }
     }
+}
+
+/// A declaration's fully qualified name, `package.ns.Name`: what MIR's
+/// `class_display_name` and `enum_display_name` spell. `TypeName`'s display
+/// name elides the local package and would miss them.
+fn qualified(package: &baml_type::Name, path: &bex_vm_types::types::LocalName) -> String {
+    std::iter::once(package.as_str())
+        .chain(path.namespace.iter().map(baml_type::Name::as_str))
+        .chain(std::iter::once(path.name.as_str()))
+        .collect::<Vec<_>>()
+        .join(".")
 }
 
 /// VM-owned builtins that never yield to run a callback, by `native_key`.
@@ -662,7 +683,7 @@ fn suspends_directly<'db>(
             let Operand::Constant(Constant::Function(func)) = callee else {
                 return true;
             };
-            let Some(info) = index.functions.get(&function_link_name(db, *func)) else {
+            let Some(info) = index.functions.get(&function_display_name(db, *func)) else {
                 return false;
             };
             match info.kind {
@@ -691,7 +712,7 @@ fn user_callee_name<'db>(
     let Operand::Constant(Constant::Function(func)) = callee else {
         return None;
     };
-    let name = function_link_name(db, *func);
+    let name = function_display_name(db, *func);
     let info = index.functions.get(&name)?;
     matches!(info.kind, FunctionKind::Bytecode).then_some(name)
 }
@@ -1135,7 +1156,7 @@ impl<'db> Generator<'_, 'db> {
                 self.callee_ptr(block, callee)?;
                 let args = match callee {
                     Operand::Constant(Constant::Function(func)) => {
-                        let name = function_link_name(self.db, *func);
+                        let name = function_display_name(self.db, *func);
                         self.laid_out_args(block, &name, argument_layout.as_ref(), args)?
                             .join(", ")
                     }
@@ -1191,7 +1212,7 @@ impl<'db> Generator<'_, 'db> {
     fn callee_ptr(&mut self, block: BlockId, callee: &Operand<'db>) -> Gen<()> {
         let code = match callee {
             Operand::Constant(Constant::Function(func)) => {
-                let name = function_link_name(self.db, *func);
+                let name = function_display_name(self.db, *func);
                 let Some(object) = self.index.objects.get(&name) else {
                     return unsupported(format!("callee `{name}` not found in the program"));
                 };
@@ -1706,7 +1727,7 @@ impl<'db> Generator<'_, 'db> {
             Constant::Bigint(_) => return unsupported("bigint literal"),
             // A named function as a value: its object, as bytecode loads it.
             Constant::Function(func) => {
-                let name = function_link_name(self.db, *func);
+                let name = function_display_name(self.db, *func);
                 let Some(object) = self.index.objects.get(&name) else {
                     return unsupported(format!("function `{name}` not found in the program"));
                 };
@@ -1862,7 +1883,7 @@ impl<'db> Generator<'_, 'db> {
                 if !type_arg_templates.is_empty() {
                     return unsupported("instance of a generic class");
                 }
-                let name = class_link_name(self.db, *class);
+                let name = class_display_name(self.db, *class);
                 let Some(&(object, field_count)) = self.index.classes.get(&name) else {
                     return unsupported(format!("class `{name}` not found in the program"));
                 };
@@ -1906,7 +1927,7 @@ impl<'db> Generator<'_, 'db> {
             }
             Rvalue::VirtualFieldAccess { .. } => unsupported("interface field access"),
             Rvalue::LoadType(_) => unsupported("type value"),
-            Rvalue::CurrentPackage(_) => unsupported("current package"),
+            Rvalue::CurrentPackage => unsupported("current package"),
             Rvalue::TraceHookSettings { .. } => unsupported("trace hook"),
         }
     }
@@ -1917,7 +1938,7 @@ impl<'db> Generator<'_, 'db> {
                 if !args.is_empty() {
                     return unsupported("type test against a generic class");
                 }
-                let name = class_link_name(self.db, *class);
+                let name = class_display_name(self.db, *class);
                 let Some(&(object, _)) = self.index.classes.get(&name) else {
                     return unsupported(format!("class `{name}` not found in the program"));
                 };
@@ -1926,7 +1947,7 @@ impl<'db> Generator<'_, 'db> {
                 ))
             }
             TypeTest::Enum(enum_ref) => {
-                let name = enum_link_name(self.db, *enum_ref);
+                let name = enum_display_name(self.db, *enum_ref);
                 let Some(&object) = self.index.enums.get(&name) else {
                     return unsupported(format!("enum `{name}` not found in the program"));
                 };
@@ -2060,7 +2081,7 @@ impl<'db> Generator<'_, 'db> {
         let Operand::Constant(Constant::Function(func)) = callee else {
             return unsupported("call through a function value");
         };
-        let name = function_link_name(self.db, *func);
+        let name = function_display_name(self.db, *func);
         let Some(info) = self.index.functions.get(&name) else {
             return unsupported(format!("callee `{name}` not found in the program"));
         };
@@ -2252,7 +2273,7 @@ fn static_realized(
         TyTemplate::Class(name, args) if args.is_empty() => {
             let &(object, _) = index
                 .classes
-                .get(&baml_compiler2_mir::decl_link_name(db, name))?;
+                .get(&baml_compiler2_mir::decl_display_name(db, name))?;
             format!("vm.class_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
         }
         _ => return None,
