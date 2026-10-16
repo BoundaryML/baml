@@ -776,6 +776,9 @@ fn convert_object(
         Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.to_vec())),
         Object::RustData(data) => Ok(bex_external_types::try_convert_rust_data(data)
             .unwrap_or_else(|| BexExternalValue::RustData(data.clone()))),
+        // Its state has no form outside the VM, and a bare handle would lose
+        // the class it is an instance of.
+        Object::RustInstance(..) => unconvertible("rust instance"),
         Object::Float(f) => Ok(BexExternalValue::Float(*f)),
         Object::Closure(_) => unconvertible("closure"),
         Object::BoundMethod(_) => unconvertible("bound_method"),

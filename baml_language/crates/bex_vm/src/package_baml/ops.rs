@@ -626,6 +626,39 @@ impl EqualsDriver {
                     _ => step(pa == pb),
                 }
             }
+            (Object::RustInstance(x), Object::RustInstance(y)) => {
+                // The same concrete type, as for `Instance`: `Equals.eq(self,
+                // other: Self)` needs one `Self`.
+                if x.class != y.class
+                    || !resolve::ImplResolver::new(vm)
+                        .ty_args_equivalent(&x.class_type_args, &y.class_type_args)
+                {
+                    return Cmp::NotEqual;
+                }
+                // A custom `Equals.eq` decides; else the payloads compare.
+                match value_concrete_ty(vm, pa)
+                    .map(|ty| resolve_equals_eq(vm, Value::object(pa), &ty))
+                {
+                    Some(Ok(Some((callee, type_args)))) => {
+                        return Cmp::Yield {
+                            callee,
+                            args: vec![Value::object(pa), Value::object(pb)],
+                            type_args,
+                        };
+                    }
+                    Some(Err(e)) => return Cmp::Error(e),
+                    Some(Ok(None)) | None => {}
+                }
+                match (&x.payload, &y.payload) {
+                    // Opaque state is equal only by identity, and `pa != pb`
+                    // here.
+                    (
+                        bex_vm_types::RustPayload::Foreign(_),
+                        bex_vm_types::RustPayload::Foreign(_),
+                    ) => Cmp::NotEqual,
+                }
+            }
+            (Object::RustInstance(_), _) => Cmp::NotEqual,
 
             // By reference:
             (Object::Function(_), Object::Function(_))

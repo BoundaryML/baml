@@ -2306,6 +2306,13 @@ fn value_type_tag(value: Value) -> i64 {
                     // primitive arms above are raw tags in the same space.
                     class.type_tag.as_i64()
                 }
+                Object::RustInstance(instance) => {
+                    let class_obj = unsafe { instance.class.get() };
+                    let Object::Class(class) = class_obj else {
+                        unreachable!("RustInstance.class does not point to a Class object")
+                    };
+                    class.type_tag.as_i64()
+                }
             }
         }
     }
@@ -4476,6 +4483,21 @@ impl BexVm {
                 }
                 other => unreachable!(
                     "Variant.enm must point to an Enum, found {:?}",
+                    ObjectType::of(other)
+                ),
+            },
+            // A `@@rust_type` class's instance is the class at its realized
+            // type arguments, exactly as a plain instance is.
+            Object::RustInstance(instance) => match self.get_object(instance.class) {
+                Object::Class(class) => {
+                    debug_assert_eq!(instance.class_type_args.len(), class.generic_param_count);
+                    ConcreteRealizedTy::Class(
+                        bex_vm_types::TypeHead::new(instance.class, class.type_tag),
+                        instance.class_type_args.clone(),
+                    )
+                }
+                other => unreachable!(
+                    "RustInstance.class must point to a Class, found {:?}",
                     ObjectType::of(other)
                 ),
             },

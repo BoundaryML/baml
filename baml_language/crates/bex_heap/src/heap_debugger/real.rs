@@ -344,6 +344,19 @@ impl BexHeap {
             Object::Cell(cell) => {
                 self.debug_assert_valid_value(&cell.load());
             }
+            Object::RustInstance(instance) => {
+                let class_idx = instance.class;
+                self.debug_assert_valid_index(class_idx);
+                let class_obj = unsafe { self.get_object(class_idx) };
+                assert!(
+                    matches!(class_obj, Object::Class(_)),
+                    "rust instance.class not Class: obj_idx={idx:?} class_idx={class_idx:?}"
+                );
+                match &instance.payload {
+                    // Holds no heap references.
+                    bex_vm_types::RustPayload::Foreign(_) => {}
+                }
+            }
             Object::Function(_)
             | Object::GenericFunction(_)
             | Object::Class(_)

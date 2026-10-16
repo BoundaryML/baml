@@ -203,6 +203,37 @@ impl Scratch {
                         _ => unreachable!("class declaration is an object"),
                     }
                 }
+                // Its declaration and type arguments, with no fields; the
+                // payload records nothing a reader could use.
+                Object::RustInstance(instance) => {
+                    let class = Value::object(instance.class);
+                    match self.add(&mut b.leaves(), class, depth + 1) {
+                        SnapshotValue::Object(declaration) => {
+                            match &instance.payload {
+                                bex_vm_types::RustPayload::Foreign(_) => {}
+                            }
+                            let type_arguments: SmallVec<[(OwnedType, bool); 2]> =
+                                if instance.class_type_args.is_empty() {
+                                    SmallVec::new()
+                                } else {
+                                    let mut leaves = b.leaves();
+                                    instance
+                                        .class_type_args
+                                        .iter()
+                                        .map(|ty| owned_type(&mut leaves, &mut self.carried, ty))
+                                        .collect()
+                                };
+                            b.described_instance(
+                                declaration,
+                                type_arguments,
+                                std::iter::empty(),
+                                |_, never: std::convert::Infallible| match never {},
+                            )
+                        }
+                        SnapshotValue::Truncated(reason) => SnapshotObject::Truncated(reason),
+                        _ => unreachable!("class declaration is an object"),
+                    }
+                }
                 Object::Class(class) => {
                     // SAFETY: inherited heap permit; the cell is the class's.
                     let definition =
