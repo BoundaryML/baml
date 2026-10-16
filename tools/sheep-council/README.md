@@ -32,6 +32,8 @@ infisical run --projectId=bdd280e2-259c-4750-9b16-a8597a67214c --env=dev-humans 
 
 The uploader also prints a `composeUrl`. Give that exact link to the human so they can open the Compose page in Loops, choose or revise the topic, update the subject and body, review the rendered email, and schedule or send it for Friday at 1:00 PM PT. The uploader does not schedule or send the campaign.
 
+(Do NOT create a pull request with the draft of the new LMX.)
+
 ## Download the campaign archive
 
 Download every campaign and email message in the Sheep Council campaign group as uploadable LMX source and Markdown previews:
