@@ -48,6 +48,29 @@ pub fn initialize_from_bytecode_with_metadata(
     api.take_status(status).map_err(SdkError::new)
 }
 
+/// Shut down the process-global runtime: wait for in-flight calls and
+/// spawned work to finish (with no timeout), complete telemetry delivery
+/// (sealing the recording), and release the runtime. Call it as the last
+/// BAML operation before the process exits: Rust runs no exit hook that
+/// would do it, so without it the tail of the telemetry recording is lost.
+///
+/// Blocks the calling thread until shutdown completes; from async code, run
+/// it with `tokio::task::spawn_blocking` rather than stalling an executor
+/// thread. Repeated calls return `Ok(())`, as does a call when the engine
+/// never loaded (it is not loaded just to be shut down). Calls made after
+/// shutdown fail until a runtime is initialized again, which a generated
+/// SDK does not do on its own.
+pub fn shutdown() -> Result<(), SdkError> {
+    let Some(api) = capi::loaded_api() else {
+        return Ok(());
+    };
+    // SAFETY: the engine returns an owned status buffer that `take_status`
+    // reads and frees exactly once.
+    #[expect(unsafe_code)]
+    let status = unsafe { (api.shutdown_runtime)() };
+    api.take_status(status).map_err(SdkError::new)
+}
+
 /// Initialize (or replace) the process-global runtime by compiling BAML
 /// source files (`file name → content`, names relative to `root_path`).
 pub fn initialize_from_files(
