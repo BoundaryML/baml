@@ -127,9 +127,7 @@ function collect(
     if let cls: reflect.Class = ty.as_class() {
         let out: Leaf[] = [];
         for (let field in cls.fields()) {
-            let field_type: reflect.Type = field.type else {
-                throw reject(`Decisions cannot reflect field ${field.name}`)
-            };
+            let field_type = field.type;
             if (field.meta.skip) {
                 if (!accepts_null(field_type)) {
                     throw reject(`Skipped Decisions field ${field.name} must accept null`)
@@ -417,9 +415,7 @@ function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>
             if (field.meta.skip) {
                 let _ = fields.set(field.name, null);
             } else {
-                let field_type: reflect.Type = field.type else {
-                    throw failed("Missing field type")
-                };
+                let field_type = field.type;
                 let _ = fields.set(field.name, assemble(field_type, path.concat([field.name]), values));
             }
         }
