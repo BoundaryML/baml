@@ -47,6 +47,9 @@ pub struct ClassAttrs {
     /// `@@stream.done`: while streaming, an instance is never surfaced until
     /// the whole object is complete.
     pub stream_done: bool,
+    /// `@@rust_type`: the class keeps its state in Rust, of this kind, and
+    /// declares no fields. Only its own functions create an instance.
+    pub rust_type: Option<baml_base::RustPayloadKind>,
 }
 
 /// The `@@` attributes an enum can carry.

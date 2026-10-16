@@ -1,0 +1,83 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0016
+
+  × builtin-only syntax `@@rust_type` is only allowed in builtin stdlib files
+   ╭─[rust_type_attribute.baml:7:5]
+ 7 │     @@rust_type
+   ·     ─────┬─────
+   ·          ╰── builtin-only syntax
+   ╰────
+
+  [hir] E0016
+
+  × builtin-only syntax `@@rust_type` is only allowed in builtin stdlib files
+    ╭─[rust_type_attribute.baml:11:5]
+ 11 │     @@rust_type
+    ·     ─────┬─────
+    ·          ╰── builtin-only syntax
+    ╰────
+
+  [hir] E0186
+
+  × class `WithFields` is a `@@rust_type` class and cannot declare fields: its state lives in Rust
+    ╭─[rust_type_attribute.baml:12:5]
+ 12 │     n: int,
+    ·     ┬
+    ·     ╰── field on a `@@rust_type` class
+    ╰────
+
+  [hir] E0016
+
+  × builtin-only syntax `@@rust_type` is only allowed in builtin stdlib files
+    ╭─[rust_type_attribute.baml:16:5]
+ 16 │     @@rust_type("Nope")
+    ·     ─────────┬─────────
+    ·              ╰── builtin-only syntax
+    ╰────
+
+  [hir] E0037
+
+  × `@@rust_type` does not accept `"Nope"`: it takes no argument yet
+    ╭─[rust_type_attribute.baml:16:17]
+ 16 │     @@rust_type("Nope")
+    ·                 ───┬──
+    ·                    ╰── invalid builtin declaration
+    ╰────
+
+  [hir] E0037
+
+  × `@@rust_type` takes at most one string argument
+    ╭─[rust_type_attribute.baml:20:5]
+ 20 │     @@rust_type("A", "B")
+    ·     ──────────┬──────────
+    ·               ╰── invalid builtin declaration
+    ╰────
+
+  [hir] E0016
+
+  × builtin-only syntax `@@rust_type` is only allowed in builtin stdlib files
+    ╭─[rust_type_attribute.baml:20:5]
+ 20 │     @@rust_type("A", "B")
+    ·     ──────────┬──────────
+    ·               ╰── builtin-only syntax
+    ╰────
+
+  [hir] E0016
+
+  × attribute `@@rust_type` is not valid on an enum; allowed: `@@rust_type` on a class
+    ╭─[rust_type_attribute.baml:24:5]
+ 24 │     @@rust_type
+    ·     ─────┬─────
+    ·          ╰── not valid here
+    ╰────
+
+  [type] E0173
+
+  × class `Bare` cannot be built with a class literal: it is a `@@rust_type` class, whose state only its own functions create
+    ╭─[rust_type_attribute.baml:29:5]
+ 29 │     Bare {}
+    ·     ───────
+    ╰────

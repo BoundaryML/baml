@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// `@@rust_type` marks a class whose state lives in Rust. Outside the standard
+// library the attribute itself is refused; the rules it brings are reported
+// alongside, since the class is still lowered: such a class declares no
+// fields, its argument names a kind of state, and no literal builds one.
+
+class Bare {
+    @@rust_type
+}
+
+class WithFields {
+    @@rust_type
+    n: int,
+}
+
+class UnknownKind {
+    @@rust_type("Nope")
+}
+
+class TooManyArguments {
+    @@rust_type("A", "B")
+}
+
+enum NotAClass {
+    @@rust_type
+    One,
+}
+
+function build() -> Bare {
+    Bare {}
+}

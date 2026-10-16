@@ -364,13 +364,10 @@ fn class_export_carries_attrs_bounds_and_interface_targets() {
     let db = fixture_db();
     let iface = user_interface(&db);
 
-    let ExportedType::Class {
-        fields, methods, ..
-    } = lookup(iface, &[], "Card")
-    else {
+    let ExportedType::Class { body, methods, .. } = lookup(iface, &[], "Card") else {
         panic!("Card must export as ExportedType::Class");
     };
-    let (field_name, _, attrs) = &fields[0];
+    let (field_name, _, attrs) = &body.fields()[0];
     assert_eq!(field_name.as_str(), "title");
     assert_eq!(attrs.alias.as_deref(), Some("t"));
     assert_eq!(attrs.description.as_deref(), Some("card title"));

@@ -1027,11 +1027,11 @@ enum PendingDiag<'db> {
         class_name: baml_type::DeclName,
         companion: baml_type::type_kind::BuiltinCompanion,
     },
-    /// A class literal for a class holding `$rust_type` state in `field`.
+    /// A class literal for a class whose state lives in Rust.
     CannotConstructOpaqueClass {
         expr: ExprId,
         class_name: baml_type::DeclName,
-        field: baml_type::Name,
+        state: crate::diagnostics::OpaqueState,
     },
     /// A builtin lowered at its call site, referenced other than as a
     /// direct call's callee.
@@ -9606,6 +9606,17 @@ impl<'db> InferenceContext<'db> {
                 });
             return Ty::error();
         }
+        let class_data = baml_compiler2_hir::item_data::class_data(db, class);
+        if class_data.attrs.rust_type.is_some() {
+            return self.refuse_opaque_construction(
+                body,
+                object,
+                class_name,
+                crate::diagnostics::OpaqueState::Tagged,
+                fields,
+                spreads,
+            );
+        }
         let field_types = crate::lower::class_field_types(db, class);
         if let Some((field, _)) = field_types
             .iter()
@@ -9615,14 +9626,12 @@ impl<'db> InferenceContext<'db> {
                 body,
                 object,
                 class_name,
-                field.clone(),
+                crate::diagnostics::OpaqueState::Field(field.clone()),
                 fields,
                 spreads,
             );
         }
-        let generic_count = baml_compiler2_hir::item_data::class_data(db, class)
-            .generic_params
-            .len();
+        let generic_count = class_data.generic_params.len();
         let generic_names: Vec<baml_type::ParamTy> = crate::lower::class_generic_frame(db, class);
         let through_alias = pinned.is_some();
         let mut instantiation = match pinned {
@@ -9741,7 +9750,7 @@ impl<'db> InferenceContext<'db> {
         body: &ExprBody,
         object: ExprId,
         class_name: baml_type::DeclName,
-        field: baml_type::Name,
+        state: crate::diagnostics::OpaqueState,
         fields: &[ObjectExprField],
         spreads: &[baml_compiler2_ast::SpreadField],
     ) -> Ty {
@@ -9755,7 +9764,7 @@ impl<'db> InferenceContext<'db> {
             .push(PendingDiag::CannotConstructOpaqueClass {
                 expr: object,
                 class_name,
-                field,
+                state,
             });
         Ty::error()
     }
@@ -9782,7 +9791,6 @@ impl<'db> InferenceContext<'db> {
                 .push(PendingDiag::TraceOpaqueValue { expr: object });
             return Ty::error();
         }
-        let exported_fields = row.fields;
         let generic_params = row.generic_params;
         let generic_param_bounds = row.generic_param_bounds;
         if baml_type::type_kind::is_type_kind_class_decl(self.lang(), &class_name) {
@@ -9816,6 +9824,19 @@ impl<'db> InferenceContext<'db> {
                 });
             return Ty::error();
         }
+        let exported_fields = match row.body {
+            crate::extern_loc::ClassRowBody::RustType(_) => {
+                return self.refuse_opaque_construction(
+                    body,
+                    object,
+                    class_name,
+                    crate::diagnostics::OpaqueState::Tagged,
+                    fields,
+                    spreads,
+                );
+            }
+            crate::extern_loc::ClassRowBody::Fields(fields) => fields,
+        };
         if let Some((field, ..)) = exported_fields
             .iter()
             .find(|(_, field_ty, _)| matches!(field_ty, baml_type::Ty::RustType))
@@ -9824,7 +9845,7 @@ impl<'db> InferenceContext<'db> {
                 body,
                 object,
                 class_name,
-                field.clone(),
+                crate::diagnostics::OpaqueState::Field(field.clone()),
                 fields,
                 spreads,
             );
@@ -9979,7 +10000,8 @@ impl<'db> InferenceContext<'db> {
         }
         if let Some(class) = mounted_class_loc(self.db, qtn)
             && let Some((_, field_ty, _)) = extern_class_row(self.db, class)
-                .fields
+                .body
+                .fields()
                 .iter()
                 .find(|(field, ..)| field == member)
         {
@@ -13393,9 +13415,9 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::CannotConstructOpaqueClass {
                         expr,
                         class_name,
-                        field,
+                        state,
                     } => (
-                        TirTypeError::CannotConstructOpaqueClass { class_name, field },
+                        TirTypeError::CannotConstructOpaqueClass { class_name, state },
                         expr,
                     ),
                     PendingDiag::CallSiteBuiltinValue { expr, reference } => {

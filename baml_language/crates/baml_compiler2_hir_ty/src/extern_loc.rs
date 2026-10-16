@@ -40,8 +40,8 @@ use crate::{
     callable::{ExternalCallTarget, FunctionSignatureTy},
     impls::{MountedImplFacts, ResolvedImplFacts},
     package_interface::{
-        ExportedAssociatedType, ExportedFieldAttrs, ExportedFunction, ExportedImpl, ExportedType,
-        package_interface,
+        ExportedAssociatedType, ExportedClassBody, ExportedFieldAttrs, ExportedFunction,
+        ExportedImpl, ExportedType, package_interface,
     },
     render::{Spell, Viewpoint},
 };
@@ -263,10 +263,28 @@ impl std::fmt::Debug for ExternTypeAliasLoc<'_> {
 /// the blob controls.
 #[derive(Clone, Copy)]
 pub struct ClassRow<'db> {
-    pub fields: &'db [(Name, baml_type::Ty, ExportedFieldAttrs)],
+    pub body: ClassRowBody<'db>,
     pub methods: &'db [ExportedFunction],
     pub generic_params: &'db [ParamTy],
     pub generic_param_bounds: &'db [Vec<baml_type::Interface>],
+}
+
+/// What an extern class holds: its fields, or the `@@rust_type` kind of the
+/// Rust-owned state in their place.
+#[derive(Clone, Copy)]
+pub enum ClassRowBody<'db> {
+    Fields(&'db [(Name, baml_type::Ty, ExportedFieldAttrs)]),
+    RustType(baml_base::RustPayloadKind),
+}
+
+impl<'db> ClassRowBody<'db> {
+    /// The fields, of which a `@@rust_type` class has none.
+    pub fn fields(self) -> &'db [(Name, baml_type::Ty, ExportedFieldAttrs)] {
+        match self {
+            Self::Fields(fields) => fields,
+            Self::RustType(_) => &[],
+        }
+    }
 }
 
 /// An exported enum row, borrowed whole from the package interface. Data
@@ -307,12 +325,15 @@ pub fn extern_class_row<'db>(
     match type_row_at(db, head) {
         Some(ExportedType::Class {
             qtn: _,
-            fields,
+            body,
             methods,
             generic_params,
             generic_param_bounds,
         }) => ClassRow {
-            fields,
+            body: match body {
+                ExportedClassBody::Fields(fields) => ClassRowBody::Fields(fields),
+                ExportedClassBody::RustType(kind) => ClassRowBody::RustType(*kind),
+            },
             methods,
             generic_params,
             generic_param_bounds,

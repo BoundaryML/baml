@@ -256,12 +256,44 @@ fn try_map_functions<N: Head, M: Head, E>(
         .collect()
 }
 
+/// What an exported class holds: its fields, or Rust-owned state in their
+/// place. A class has one or the other, never both.
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub enum ExportedClassBody<N: Head = DeclName> {
+    /// A plain class: its fields, in declaration order.
+    Fields(Vec<(Name, Ty<N>, ExportedFieldAttrs)>),
+    /// A `@@rust_type` class: its state lives in Rust, of this kind, and only
+    /// its own functions create an instance, so a dependent may not write a
+    /// literal of it.
+    RustType(baml_base::RustPayloadKind),
+}
+
+impl<N: Head> ExportedClassBody<N> {
+    /// The fields, of which a `@@rust_type` class has none.
+    pub fn fields(&self) -> &[(Name, Ty<N>, ExportedFieldAttrs)] {
+        match self {
+            Self::Fields(fields) => fields,
+            Self::RustType(_) => &[],
+        }
+    }
+
+    fn try_map_heads<M: Head, E>(
+        &self,
+        f: &mut impl FnMut(&N) -> Result<M, E>,
+    ) -> Result<ExportedClassBody<M>, E> {
+        Ok(match self {
+            Self::Fields(fields) => ExportedClassBody::Fields(try_map_fields(fields, f)?),
+            Self::RustType(kind) => ExportedClassBody::RustType(*kind),
+        })
+    }
+}
+
 /// A type exported from a package.
 #[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub enum ExportedType<N: Head = DeclName> {
     Class {
         qtn: N,
-        fields: Vec<(Name, Ty<N>, ExportedFieldAttrs)>,
+        body: ExportedClassBody<N>,
         methods: Vec<ExportedFunction<N>>,
         generic_params: Vec<ParamTy>,
         generic_param_bounds: Vec<Vec<baml_type::Interface<N>>>,
@@ -297,13 +329,13 @@ impl<N: Head> ExportedType<N> {
         Ok(match self {
             Self::Class {
                 qtn,
-                fields,
+                body,
                 methods,
                 generic_params,
                 generic_param_bounds,
             } => ExportedType::Class {
                 qtn: f(qtn)?,
-                fields: try_map_fields(fields, f)?,
+                body: body.try_map_heads(f)?,
                 methods: try_map_functions(methods, f)?,
                 generic_params: generic_params.clone(),
                 generic_param_bounds: try_map_bounds(generic_param_bounds, f)?,
@@ -1122,11 +1154,11 @@ fn validate_row_identities(
             }
             listed(kind, namespace, &key)?;
             match row {
-                ExportedType::Class { fields, .. } => {
+                ExportedType::Class { body, .. } => {
                     unique_members(
                         "class field",
                         &key,
-                        &mut fields.iter().map(|(field, ..)| field),
+                        &mut body.fields().iter().map(|(field, ..)| field),
                     )?;
                 }
                 ExportedType::Enum { variants, .. } => {
@@ -1716,9 +1748,15 @@ fn lower_class_export<'db>(
     }
 
     let qtn = qualify_def(db, Definition::Class(class_loc), name);
+    // A `@@rust_type` class exports no fields: a field written on one is
+    // already an error, and its state lives in Rust.
+    let body = match class_data.attrs.rust_type {
+        Some(kind) => ExportedClassBody::RustType(kind),
+        None => ExportedClassBody::Fields(fields),
+    };
     ExportedType::Class {
         qtn,
-        fields,
+        body,
         methods,
         generic_params: class_frame,
         generic_param_bounds: plain_bounds(

@@ -156,7 +156,8 @@ fn projected_interface(
     digest_of: &dyn Fn(bex_vm_types::RuntimePackageIdentity) -> Digest,
 ) -> Result<WireInterface, RuntimeCompileDiagnostic> {
     use baml_compiler2_hir_ty::package_interface::{
-        ExportedFieldAttrs, ExportedImpl, ExportedImplOrigin, ExportedType, ReExport,
+        ExportedClassBody, ExportedFieldAttrs, ExportedImpl, ExportedImplOrigin, ExportedType,
+        ReExport,
     };
     use bex_vm_types::MountHead;
 
@@ -322,7 +323,8 @@ fn projected_interface(
             &name,
             ExportedType::Class {
                 qtn: WireName::own(Vec::new(), class.name.clone()),
-                fields,
+                // A class built at run time keeps its state in its fields.
+                body: ExportedClassBody::Fields(fields),
                 methods: Vec::new(),
                 generic_params: Vec::new(),
                 generic_param_bounds: Vec::new(),
