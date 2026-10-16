@@ -273,6 +273,35 @@ impl TelemetryState {
         self.context = context;
     }
 
+    /// The current context as a context-observation record names it, and the
+    /// snapshot the record must carry when no earlier record delivered it.
+    #[cfg(all(not(test), not(target_arch = "wasm32")))]
+    pub(crate) fn context_reference(
+        &mut self,
+    ) -> (
+        btel_records::ContextReference,
+        Option<btel_snapshot::Snapshot>,
+    ) {
+        use btel_records::ContextReference;
+
+        if self.context.is_empty() {
+            return (ContextReference::Empty, None);
+        }
+        if let Some((context, id)) = &self.context_snapshot
+            && context.same_version(&self.context)
+        {
+            return (ContextReference::Snapshot(*id), None);
+        }
+        self.prepare_context();
+        match self.pending_context_snapshot.take() {
+            Some(captured) => (
+                ContextReference::Snapshot(captured.root_id()),
+                Some(captured),
+            ),
+            None => (ContextReference::Unavailable, None),
+        }
+    }
+
     #[cfg(all(not(test), not(target_arch = "wasm32")))]
     fn prepare_context(&mut self) {
         if self.context.is_empty()
@@ -1465,23 +1494,7 @@ impl TelemetryState {
                 self.runtime.write_span(self.thread.id, record);
                 return;
             }
-            let mut snapshot = None;
-            let reference = if self.context.is_empty() {
-                ContextReference::Empty
-            } else if let Some((context, id)) = &self.context_snapshot
-                && context.same_version(&self.context)
-            {
-                ContextReference::Snapshot(*id)
-            } else {
-                self.prepare_context();
-                if let Some(captured) = self.pending_context_snapshot.take() {
-                    let id = captured.root_id();
-                    snapshot = Some(captured);
-                    ContextReference::Snapshot(id)
-                } else {
-                    ContextReference::Unavailable
-                }
-            };
+            let (reference, snapshot) = self.context_reference();
             if self
                 .runtime
                 .write_span_with_context(self.thread.id, reference, snapshot, record)

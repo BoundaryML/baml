@@ -275,14 +275,15 @@ pub fn path_head(
 /// namespace ([`baml_base::Path::compiler_item`]), read as a plain name —
 /// the semantic index records no binding for it, so none shadows it.
 pub fn compiler_path_head(db: &dyn crate::Db, segments: &[Name]) -> PathHead {
-    let [first, _, ..] = segments else {
-        unreachable!("a compiler-written path names a package or item and a member: {segments:?}")
-    };
-    match baml_base::LangPackage::from_manifest_name(first.as_str()) {
-        Some(package) => lang_roots(db)
-            .get(package)
-            .map_or(PathHead::Plain, PathHead::Lang),
-        None => PathHead::Plain,
+    match segments {
+        [first, _, ..] => match baml_base::LangPackage::from_manifest_name(first.as_str()) {
+            Some(package) => lang_roots(db)
+                .get(package)
+                .map_or(PathHead::Plain, PathHead::Lang),
+            None => PathHead::Plain,
+        },
+        [_] => PathHead::Plain,
+        [] => unreachable!("a compiler-written path names an item"),
     }
 }
 

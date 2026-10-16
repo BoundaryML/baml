@@ -575,6 +575,34 @@ fn passthrough_directive_is_restricted_to_builtins() {
 }
 
 #[test]
+fn passthrough_directive_is_restricted_to_builtins_on_implementation_methods() {
+    for source in [
+        "interface Shape { function area(self) -> int; }
+class Square {
+    side: int,
+    implements Shape {
+        //baml:trace_passthrough
+        function area(self) -> int { self.side }
+    }
+}",
+        "interface Shape { function area(self) -> int; }
+class Square { side: int }
+implements Shape for Square {
+    //baml:trace_passthrough
+    function area(self) -> int { self.side }
+}",
+    ] {
+        let messages = errors(source);
+        assert!(
+            messages
+                .iter()
+                .any(|message| message.contains("trace_passthrough")),
+            "{source}: {messages:?}"
+        );
+    }
+}
+
+#[test]
 fn unattached_passthrough_directive_is_not_silently_ignored() {
     let messages = errors("//baml:trace_passthrough\nclass Holder { value: int }");
     assert!(

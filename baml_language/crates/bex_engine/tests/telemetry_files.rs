@@ -300,6 +300,67 @@ async fn cas_storage_failure_disables_recording_but_execution_continues() {
     assert!(engine.telemetry_result().unwrap().is_err());
 }
 
+#[tokio::test]
+async fn telemetry_disabled_inside_an_owned_span_does_not_stop_execution() {
+    let root = tempfile::tempdir().unwrap();
+    let program = baml_test_support::compile_source(
+        r#"
+        function main() -> int {
+            let span = trace.start_span("operation");
+            let total = span.run(() -> int {
+                let total = 0;
+                let i = 0;
+                while (i < 100) {
+                    baml.sys.sleep(baml.time.Duration.from_milliseconds(10n));
+                    let child = spawn { i };
+                    total += await child;
+                    i += 1;
+                }
+                total
+            });
+            span.finish(total);
+            total
+        }
+        "#,
+    );
+    let engine = engine(
+        program,
+        TelemetryRecording::local_files(
+            root.path(),
+            RecordingConfig {
+                flush_interval_duration: Duration::from_millis(1),
+                ..RecordingConfig::default()
+            },
+        ),
+    );
+    // Once the body is awaiting inside the owned span, the recording's
+    // directory becomes a file: the next write fails and disables it.
+    let recordings = root.path().join(".baml/btel/recordings");
+    let breaker = tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let dir = std::fs::read_dir(&recordings)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        std::fs::remove_dir_all(&dir).unwrap();
+        std::fs::write(&dir, b"not a directory").unwrap();
+    });
+    assert_eq!(
+        engine
+            .call_function("main", vec![], context(), true)
+            .await
+            .unwrap(),
+        BexExternalValue::Int(4950)
+    );
+    breaker.await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), engine.shutdown())
+        .await
+        .unwrap();
+    assert!(engine.telemetry_result().unwrap().is_err());
+}
+
 fn assert_cas_blob(project: &std::path::Path, id: proto::CasId) {
     let id = btel_snapshot::CasId::from(id);
     let path = btel_file::cas_path(&project.join(".baml/btel/cas"), id);

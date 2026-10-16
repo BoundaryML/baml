@@ -411,7 +411,12 @@ pub(crate) fn synthesize_llm_spec_body(
             span,
         )
     } else {
-        ctx.alloc_expr(Expr::Path(baml_base::Path::bare(target_name)), span)
+        // Compiler-written, so a parameter named like the function cannot
+        // shadow it.
+        ctx.alloc_expr(
+            Expr::Path(baml_base::Path::compiler_item(vec![target_name])),
+            span,
+        )
     };
     let target_args = companion_type_args(
         generic_param_names,

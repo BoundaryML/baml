@@ -1773,7 +1773,16 @@ impl<'db> SemanticIndexBuilder<'db> {
                     let type_expr = &field.type_expr;
                     self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
                 }
-                for method in &class.methods {
+                for method in class
+                    .methods
+                    .iter()
+                    .chain(class.implements.iter().flat_map(|block| &block.methods))
+                {
+                    self.validate_function_phase1(method, is_builtin_file);
+                }
+            }
+            ast::Item::ImplementsFor(implements) => {
+                for method in &implements.methods {
                     self.validate_function_phase1(method, is_builtin_file);
                 }
             }

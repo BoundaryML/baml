@@ -8207,6 +8207,10 @@ impl BexVm {
                     frame.telemetry = None;
                 }
             }
+            // An active `Span.run` scope observes through the same state.
+            for active in &mut self.manual_activations {
+                active.telemetry = None;
+            }
         }
     }
 

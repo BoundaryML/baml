@@ -33,7 +33,6 @@ pub enum DeliveryError {
     InvalidPlan,
     Expired,
     Encoding,
-    UnsupportedOwnedSpans,
     Http,
     Unauthorized,
     InitialAuthorization(bcs_api::HttpFailure),
@@ -44,12 +43,6 @@ pub enum DeliveryError {
 
 impl fmt::Display for DeliveryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if matches!(self, Self::UnsupportedOwnedSpans) {
-            return write!(
-                f,
-                "owned operation spans currently require local telemetry; BCS reader support is not enabled"
-            );
-        }
         if let Self::InitialConnection(error) = self {
             return write!(f, "initial cloud telemetry connection failed: {error}");
         }

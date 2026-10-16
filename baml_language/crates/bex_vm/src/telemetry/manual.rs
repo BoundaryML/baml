@@ -100,6 +100,8 @@ struct Recording {
     options: OperationOptions,
     thread: btel_types::TelemetryId,
     context: ContextReference,
+    /// The snapshot `context` names, when the completion must deliver it.
+    context_payload: Option<btel_snapshot::Snapshot>,
     clock: Arc<btel_clock::ClockEpoch>,
     #[cfg(not(target_arch = "wasm32"))]
     runtime: Arc<btel_processor::TelemetryRuntime>,
@@ -165,19 +167,12 @@ impl ManualSpan {
                         },
                     )));
                 }
+                // The operation's own context, not the caller's: the
+                // announcement may not have delivered it (Timing writes none).
                 #[cfg(all(not(test), not(target_arch = "wasm32")))]
-                let recorded_context = if context.is_empty() {
-                    ContextReference::Empty
-                } else {
-                    state
-                        .context_snapshot
-                        .as_ref()
-                        .map_or(ContextReference::Unavailable, |(_, id)| {
-                            ContextReference::Snapshot(*id)
-                        })
-                };
+                let (recorded_context, context_payload) = state.context_reference();
                 #[cfg(any(test, target_arch = "wasm32"))]
-                let recorded_context = ContextReference::Unavailable;
+                let (recorded_context, context_payload) = (ContextReference::Unavailable, None);
                 state.set_context(old_context);
                 let await_time = Arc::new(Mutex::new(AwaitDuration::ZERO));
                 template = Some(ManualContext {
@@ -198,6 +193,7 @@ impl ManualSpan {
                     options,
                     thread: state.thread.id,
                     context: recorded_context,
+                    context_payload,
                     clock: state.clock.clone(),
                     #[cfg(not(target_arch = "wasm32"))]
                     runtime: state.runtime.clone(),
@@ -430,10 +426,20 @@ impl Recording {
             SpanRecord::ManualSpanCompletion(Box::new(completion))
         };
         if deferred {
-            self.runtime.defer_span(self.thread, self.context, record);
+            // A deferred record cannot carry the snapshot it would name.
+            let context = if self.context_payload.is_some() {
+                ContextReference::Unavailable
+            } else {
+                self.context
+            };
+            self.runtime.defer_span(self.thread, context, record);
         } else {
-            self.runtime
-                .write_span_with_context(self.thread, self.context, None, record);
+            self.runtime.write_span_with_context(
+                self.thread,
+                self.context,
+                self.context_payload.take(),
+                record,
+            );
         }
     }
 }
