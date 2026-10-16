@@ -83,6 +83,14 @@ impl Value {
     pub const TRUE: Value = Value(4);
     pub const OMITTED_ARG: Value = Value(6);
 
+    /// What an absent optional class field holds in its slot: the same
+    /// "nothing was supplied here" word as [`Self::OMITTED_ARG`], the way
+    /// JavaScript's `undefined` marks both an omitted argument and a missing
+    /// property. It never reaches program code — instance field reads report
+    /// it as [`Self::NULL`] (see `Instance`) — and only presence-aware code
+    /// (JSON encoding, deep copies, reflection) tells it apart from `null`.
+    pub const ABSENT: Value = Self::OMITTED_ARG;
+
     /// Largest representable BAML integer (`2^62 - 1 = 4_611_686_018_427_387_903`).
     ///
     /// Integers in BAML are i63 (low bit reserved for the tag). Values
@@ -229,6 +237,20 @@ impl Value {
     #[inline(always)]
     pub const fn is_omitted(self) -> bool {
         self.0 == Self::OMITTED_ARG.0
+    }
+
+    /// `true` for [`Self::ABSENT`], an absent class field's slot.
+    #[inline(always)]
+    pub const fn is_absent(self) -> bool {
+        self.0 == Self::ABSENT.0
+    }
+
+    /// `self`, or [`Self::NULL`] for [`Self::ABSENT`]: how an absent field
+    /// reads.
+    #[inline(always)]
+    #[must_use]
+    pub const fn absent_as_null(self) -> Value {
+        if self.is_absent() { Self::NULL } else { self }
     }
 
     #[inline(always)]

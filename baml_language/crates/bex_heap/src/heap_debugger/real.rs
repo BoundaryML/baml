@@ -297,12 +297,13 @@ impl BexHeap {
                     panic!("instance.class not Class: obj_idx={idx:?} class_idx={class_idx:?}");
                 };
                 assert!(
-                    instance.fields.len() == class.fields.len(),
+                    instance.field_len() == class.fields.len(),
                     "instance field count mismatch: obj_idx={idx:?} fields_len={} class_fields_len={}",
-                    instance.fields.len(),
+                    instance.field_len(),
                     class.fields.len()
                 );
-                for slot in &instance.fields {
+                // Raw slots: an absent field's sentinel is not a pointer.
+                for slot in instance.field_slots() {
                     self.debug_assert_valid_value(&slot.load());
                 }
             }

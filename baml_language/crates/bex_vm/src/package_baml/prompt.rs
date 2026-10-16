@@ -107,7 +107,7 @@ struct PromptRole {
 fn read_cache_delimiter(vm: &BexVm, value: Value) -> Option<serde_json::Value> {
     let ptr = value.as_object_ptr()?;
     let (class, args) = match vm.get_object(ptr) {
-        Object::Instance(instance) => (instance.class, instance.fields.first()?.load()),
+        Object::Instance(instance) => (instance.class, instance.try_load_field(0)?),
         _ => return None,
     };
     let is_delimiter = match vm.get_object(class) {

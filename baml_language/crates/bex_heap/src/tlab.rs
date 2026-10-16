@@ -727,7 +727,7 @@ mod tests {
             match instance_ptr.get() {
                 Object::Instance(inst) => {
                     assert_eq!(inst.class, class_ptr);
-                    assert_eq!(inst.fields.len(), 2);
+                    assert_eq!(inst.field_len(), 2);
                     assert_eq!(inst.load_field(0), Value::int(10));
                 }
                 _ => panic!("Expected Instance"),

@@ -734,11 +734,11 @@ impl BexEngine {
 
                 debug_assert_eq!(
                     class.fields.len(),
-                    instance.fields.len(),
+                    instance.field_len(),
                     "Class '{}' has {} fields but instance has {} fields",
                     class.name(),
                     class.fields.len(),
-                    instance.fields.len(),
+                    instance.field_len(),
                 );
 
                 // Read field types directly from the Class object on the heap
@@ -746,9 +746,11 @@ impl BexEngine {
                     class
                         .fields
                         .iter()
-                        .zip(instance.fields.iter())
-                        .map(|(class_field, slot)| {
-                            let value = slot.load();
+                        // An absent optional field crosses the boundary as
+                        // `null`, as it always has: host decoders (Go, C++)
+                        // require every declared field to be present.
+                        .zip(instance.field_values())
+                        .map(|(class_field, value)| {
                             let field_type = class_field.field_template.substitute_symbolic(
                                 &instance
                                     .class_type_args

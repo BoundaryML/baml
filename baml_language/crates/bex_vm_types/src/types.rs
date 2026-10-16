@@ -1135,6 +1135,34 @@ mod tests {
     }
 
     #[test]
+    fn absent_field_reads_as_null_until_stored() {
+        let instance = Instance::new(
+            HeapPtr::null(),
+            Box::new([]),
+            vec![Value::ABSENT, Value::NULL],
+        );
+
+        // Ordinary reads never surface the sentinel.
+        assert_eq!(instance.load_field(0), Value::NULL);
+        assert_eq!(instance.try_load_field(0), Some(Value::NULL));
+        assert_eq!(
+            instance.field_values().collect::<Vec<_>>(),
+            [Value::NULL, Value::NULL]
+        );
+        // Presence-aware reads do.
+        assert_eq!(instance.field_slots()[0].load(), Value::ABSENT);
+        assert!(instance.is_field_absent(0));
+        assert!(!instance.is_field_absent(1));
+        assert!(!instance.is_field_absent(2));
+
+        // Any store, `null` included, makes the field present.
+        instance.store_field(0, Value::NULL);
+        assert!(!instance.is_field_absent(0));
+        instance.store_field(1, Value::ABSENT);
+        assert!(instance.is_field_absent(1));
+    }
+
+    #[test]
     #[should_panic(expected = "index out of bounds")]
     fn instance_load_field_panics_for_invalid_slot() {
         let instance = Instance::new(HeapPtr::null(), Box::new([]), vec![Value::int(10)]);

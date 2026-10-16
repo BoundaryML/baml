@@ -127,13 +127,11 @@ impl<'a> BexClass<'a> {
                     .ok_or_else(|| AccessError::FieldNotFound {
                         expected: name.to_string(),
                     })?;
-                let field = instance
-                    .fields
-                    .get(field_idx)
-                    .ok_or_else(|| AccessError::FieldNotFound {
+                let field = instance.try_load_field(field_idx).ok_or_else(|| {
+                    AccessError::FieldNotFound {
                         expected: name.to_string(),
-                    })?
-                    .load();
+                    }
+                })?;
                 Ok(BexValue::OwnedValue(field))
             }
         }
@@ -696,11 +694,11 @@ fn convert_object(
             let fields = class
                 .fields
                 .iter()
-                .zip(instance.fields.iter())
-                .map(|(field, slot)| {
+                .zip(instance.field_values())
+                .map(|(field, value)| {
                     Ok((
                         field.name.clone(),
-                        owned_inner(BexValue::OwnedValue(slot.load()), heap, handle_heap, lossy)?,
+                        owned_inner(BexValue::OwnedValue(value), heap, handle_heap, lossy)?,
                     ))
                 })
                 .collect::<Result<_, _>>()?;

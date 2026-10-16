@@ -159,14 +159,16 @@ impl HashDriver {
                                 };
                                 let mut bytes = framed(9, &class.type_tag.as_i64().to_le_bytes());
                                 bytes.extend_from_slice(
-                                    &(instance.fields.len() as u64).to_le_bytes(),
+                                    &(instance.field_len() as u64).to_le_bytes(),
                                 );
+                                // Presence-blind, like `==`: an absent field
+                                // hashes as `null`.
+                                let fields: Vec<Value> = instance.field_values().collect();
                                 self.pending.extend(
-                                    instance
-                                        .fields
-                                        .iter()
+                                    fields
+                                        .into_iter()
                                         .rev()
-                                        .map(|field| Work::Value(field.load(), true)),
+                                        .map(|field| Work::Value(field, true)),
                                 );
                                 bytes
                             }

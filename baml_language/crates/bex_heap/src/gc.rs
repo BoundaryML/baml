@@ -940,7 +940,9 @@ impl BexHeap {
                 if let Some(&new_ptr) = forwarding.get(&inst.class) {
                     inst.class = new_ptr;
                 }
-                for slot in &inst.fields {
+                // Raw slots: an absent field's sentinel is not a pointer and
+                // must survive the rewrite.
+                for slot in inst.field_slots() {
                     let mut value = slot.load();
                     self.fixup_value(&mut value, forwarding);
                     slot.store(value);
@@ -1266,9 +1268,8 @@ impl BexHeap {
                     worklist.push(inst.class);
                 }
                 worklist.extend(
-                    inst.fields
-                        .iter()
-                        .filter_map(|slot| slot.load().as_object_ptr())
+                    inst.field_values()
+                        .filter_map(|value| value.as_object_ptr())
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );
             }
@@ -2580,7 +2581,7 @@ mod tests {
         let Object::Instance(inst) = (unsafe { inst_ptr.get() }) else {
             panic!("not instance")
         };
-        assert_eq!(inst.fields.len(), 2);
+        assert_eq!(inst.field_len(), 2);
         assert!(inst.load_field(0).is_object());
         assert_eq!(inst.load_field(1), Value::int(42));
 
@@ -3488,7 +3489,7 @@ mod tests {
         let Object::Instance(inst) = (unsafe { new_roots[4].get() }) else {
             panic!("new_roots[4] not Instance")
         };
-        let Some(inst_leaf) = inst.fields.first().and_then(|v| v.load().as_object_ptr()) else {
+        let Some(inst_leaf) = inst.try_load_field(0).and_then(|v| v.as_object_ptr()) else {
             panic!("instance.fields[0] not Object")
         };
         let Object::String(s) = (unsafe { inst_leaf.get() }) else {

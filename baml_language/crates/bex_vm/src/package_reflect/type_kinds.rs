@@ -1279,7 +1279,7 @@ pub(crate) fn as_view_type_value(vm: &BexVm, value: Value) -> Option<Value> {
     let is_view = baml_type::type_kind::TypeKind::ALL
         .iter()
         .any(|kind| vm.lang_declaration(kind.class()) == Some(instance.class));
-    is_view.then(|| instance.fields[0].load())
+    is_view.then(|| instance.load_field(0))
 }
 
 /// The `Object::Type` value a kind-view instance wraps (`_ty`, its sole
@@ -1296,7 +1296,7 @@ pub(crate) fn view_type_value(
     let Object::Instance(instance) = vm.get_object(ptr) else {
         unreachable!("kind-view receiver must be an Object::Instance")
     };
-    check_kind_invariant(vm, instance.fields[0].load(), expected)
+    check_kind_invariant(vm, instance.load_field(0), expected)
 }
 
 fn reflected_class(

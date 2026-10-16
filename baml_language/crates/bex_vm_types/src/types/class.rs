@@ -163,7 +163,16 @@ pub struct Instance {
     /// Fields are accessed by index. No string lookups. Each slot is atomic so
     /// racing field reads/writes across `spawn` fibers cannot become a Rust
     /// data race.
-    pub fields: Vec<AtomicValueSlot>,
+    ///
+    /// A slot holding [`Value::ABSENT`] is an optional field that was never
+    /// given a value (omitted from a constructor, missing from a decoded JSON
+    /// object or a host value, or unset through reflection). The ordinary
+    /// readers ([`Self::load_field`], [`Self::try_load_field`],
+    /// [`Self::field_values`]) report it as `null`, so program code never sees
+    /// the sentinel; only presence-aware code (JSON encoding, deep copies,
+    /// reflection, the GC's pointer rewrite) reads the raw slot. Any store
+    /// makes the field present.
+    pub(crate) fields: Vec<AtomicValueSlot>,
 
     /// BEP-042 `cleanup` run-once latch. `false` for a fresh instance; flipped
     /// `true` by the first `cleanup` invocation (explicit, `defer`, or the GC
@@ -173,6 +182,8 @@ pub struct Instance {
 }
 
 impl Instance {
+    /// An instance of `class` with `fields` in slot order. A field value of
+    /// [`Value::ABSENT`] makes that (optional) field absent.
     pub fn new(
         class: HeapPtr,
         class_type_args: Box<[crate::RealizedTy]>,
@@ -191,14 +202,35 @@ impl Instance {
         self.fields.len()
     }
 
+    /// The field's value, `null` for an absent field.
     #[inline]
     pub fn try_load_field(&self, idx: usize) -> Option<Value> {
-        self.fields.get(idx).map(AtomicValueSlot::load)
+        self.fields
+            .get(idx)
+            .map(|slot| slot.load().absent_as_null())
     }
 
+    /// The field's value, `null` for an absent field.
     #[inline]
     pub fn load_field(&self, idx: usize) -> Value {
-        self.fields[idx].load()
+        self.fields[idx].load().absent_as_null()
+    }
+
+    /// Whether the field at `idx` is absent. `false` for an index out of
+    /// range.
+    #[inline]
+    pub fn is_field_absent(&self, idx: usize) -> bool {
+        self.fields
+            .get(idx)
+            .is_some_and(|slot| slot.load().is_absent())
+    }
+
+    /// Every raw slot in slot order, [`Value::ABSENT`] included. For the
+    /// garbage collector, which rewrites pointers in place, and for
+    /// presence-aware walks.
+    #[inline]
+    pub fn field_slots(&self) -> &[AtomicValueSlot] {
+        &self.fields
     }
 
     #[inline]
@@ -215,8 +247,9 @@ impl Instance {
         self.fields[idx].store(value);
     }
 
+    /// Every field's value in slot order, `null` for an absent field.
     pub fn field_values(&self) -> impl Iterator<Item = Value> + '_ {
-        self.fields.iter().map(AtomicValueSlot::load)
+        self.fields.iter().map(|slot| slot.load().absent_as_null())
     }
 }
 

@@ -549,7 +549,7 @@ impl EqualsDriver {
                 if x.class != y.class
                     || !resolve::ImplResolver::new(vm)
                         .ty_args_equivalent(&x.class_type_args, &y.class_type_args)
-                    || x.fields.len() != y.fields.len()
+                    || x.field_len() != y.field_len()
                 {
                     return Cmp::NotEqual;
                 }
@@ -568,8 +568,11 @@ impl EqualsDriver {
                     Some(Err(e)) => return Cmp::Error(e),
                     Some(Ok(None)) | None => {}
                 }
-                for (fx, fy) in x.fields.iter().zip(y.fields.iter()) {
-                    self.stack.push((fx.load(), fy.load()));
+                // Presence-blind: an absent field compares as `null`, so a
+                // decoded `{}` equals a literal that spells its optionals
+                // out as `null`.
+                for (fx, fy) in x.field_values().zip(y.field_values()) {
+                    self.stack.push((fx, fy));
                 }
                 Cmp::Continue
             }

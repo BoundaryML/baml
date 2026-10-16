@@ -1140,7 +1140,7 @@ fn serialize_media(
 pub(crate) fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<bex_vm_types::MediaValue>> {
     let ptr = value.as_object_ptr()?;
     let (class, data_value) = match vm.get_object(ptr) {
-        Object::Instance(inst) => (inst.class, inst.fields.first()?.load()),
+        Object::Instance(inst) => (inst.class, inst.try_load_field(0)?),
         _ => return None,
     };
     let class_head = match vm.get_object(class) {

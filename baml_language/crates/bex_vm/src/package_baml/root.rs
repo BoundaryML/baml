@@ -274,7 +274,7 @@ pub(super) fn collect_to_string_overrides(
             .into_iter()
             .flat_map(|(key, value)| [key, value])
             .collect(),
-        Object::Instance(inst) => inst.fields.iter().map(AtomicValueSlot::load).collect(),
+        Object::Instance(inst) => inst.field_values().collect(),
         _ => Vec::new(),
     };
     for v in children {
@@ -617,7 +617,7 @@ pub(super) fn render_to_sink(
             )
         }
         Object::Instance(inst) => {
-            let limit = state.snapshot_child_limit(inst.fields.len());
+            let limit = state.snapshot_child_limit(inst.field_len());
             let (class_name, paired) = match vm.get_object(inst.class) {
                 Object::Class(class) => {
                     let name = if state.qualified_class_names {
@@ -626,10 +626,8 @@ pub(super) fn render_to_sink(
                         class.path.name.to_string()
                     };
                     let fields = inst
-                        .fields
-                        .iter()
+                        .field_values()
                         .take(limit)
-                        .map(AtomicValueSlot::load)
                         .enumerate()
                         .map(|(i, v)| {
                             let field_name = class
@@ -644,7 +642,7 @@ pub(super) fn render_to_sink(
                 }
                 _ => (String::new(), Vec::new()),
             };
-            DisplaySnap::Instance(class_name, paired, inst.fields.len() > limit)
+            DisplaySnap::Instance(class_name, paired, inst.field_len() > limit)
         }
         Object::Variant(var) => {
             let name = match vm.get_object(var.enm) {
@@ -852,9 +850,19 @@ fn deep_copy_value_recursive(
                     )));
                     copied_objects.insert(ptr, placeholder_ptr);
 
-                    let mut new_fields = Vec::with_capacity(instance.fields.len());
-                    for field in instance.field_values() {
-                        new_fields.push(deep_copy_value_recursive(vm, field, copied_objects)?);
+                    // Raw slots: a copy keeps each optional field's presence.
+                    let slots: Vec<Value> = instance
+                        .field_slots()
+                        .iter()
+                        .map(AtomicValueSlot::load)
+                        .collect();
+                    let mut new_fields = Vec::with_capacity(slots.len());
+                    for field in slots {
+                        new_fields.push(if field.is_absent() {
+                            Value::ABSENT
+                        } else {
+                            deep_copy_value_recursive(vm, field, copied_objects)?
+                        });
                     }
 
                     let new_instance = Instance::new(

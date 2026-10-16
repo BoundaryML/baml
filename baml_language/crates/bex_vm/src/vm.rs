@@ -2746,7 +2746,7 @@ impl BexVm {
         let handle = self
             .as_instance(&value)
             .ok()
-            .and_then(|instance| (!instance.fields.is_empty()).then(|| instance.load_field(0)));
+            .and_then(|instance| instance.try_load_field(0));
         let Some(handle) = handle else {
             return Err(
                 self.trace_attachment_error("$trace expects trace.Options or trace.ReservedSpan")
