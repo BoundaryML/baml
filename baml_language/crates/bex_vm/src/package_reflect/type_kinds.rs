@@ -2058,7 +2058,7 @@ class Fresh {}
         vm.forward_roots(&forwarding);
         index.forward_roots(&forwarding);
         assert_eq!(index.tables.rule_count(), 1);
-        let moved = TypeHead::new(forwarding[&class.ptr()], class.tag());
+        let moved = TypeHead::new(forwarding.forwarded(class.ptr()), class.tag());
         assert!(
             crate::package_baml::resolve::ImplResolver::new(&vm).type_implements(
                 &class_ty(moved),

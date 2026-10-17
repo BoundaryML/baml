@@ -43,7 +43,7 @@
 use std::cell::UnsafeCell;
 
 use bex_vm_types::{
-    ForwardingMap, FutureRead, HeapPtr, Meter, Object, Value,
+    ForwardingMap, FutureRead, HeapPtr, Meter, Object, SlotRange, Value,
     types::{Future, Objects, Slots},
 };
 
@@ -255,7 +255,10 @@ impl BexHeap {
         }
         for (instance, cleanup) in seeds {
             // Both were seeded above, so both are now in `forwarding`.
-            self.push_pending_finalizer(forwarding[&instance], forwarding[&cleanup]);
+            self.push_pending_finalizer(
+                forwarding.forwarded(instance),
+                forwarding.forwarded(cleanup),
+            );
         }
     }
 
@@ -309,7 +312,10 @@ impl BexHeap {
         for (instance, cleanup) in seeds {
             // Both were seeded above, so both are now in `forwarding` — at
             // their own address if this collection did not move them.
-            self.push_pending_finalizer(forwarding[&instance], forwarding[&cleanup]);
+            self.push_pending_finalizer(
+                forwarding.forwarded(instance),
+                forwarding.forwarded(cleanup),
+            );
         }
     }
 
@@ -447,21 +453,58 @@ impl BexHeap {
         }
     }
 
-    /// A forwarding map with room for as many entries as the last collection
-    /// recorded, so the trace does not rehash while it copies.
-    fn new_forwarding_map(&self) -> ForwardingMap {
-        ForwardingMap::with_capacity_and_hasher(
-            self.last_survivors
-                .load(std::sync::atomic::Ordering::Relaxed),
-            Default::default(),
-        )
+    /// The forwarding map of a collection at `level`: every slot of the
+    /// generations it evacuates is indexed; the compile-time pool, and the
+    /// old generation in a minor collection, are left in place. Ranges are
+    /// tagged with their generation.
+    ///
+    /// # Safety
+    ///
+    /// Caller must hold exclusive heap access: the spaces' chunk lists are read.
+    unsafe fn new_forwarding_map(&self, level: CollectionLevel) -> ForwardingMap {
+        let mut ranges = Vec::new();
+        let mut add = |space: &ChunkedVec<Object>, moving: bool, generation: Generation| {
+            let bytes = ChunkedVec::<Object>::CHUNK_SIZE * size_of::<Object>();
+            for chunk in 0..space.num_chunks() {
+                // SAFETY: `chunk` is below `num_chunks`; the caller's exclusive
+                // access keeps the chunk list stable.
+                let start = unsafe { space.chunk_start_ptr(chunk) } as usize;
+                ranges.push(SlotRange {
+                    start,
+                    end: start + bytes,
+                    moving,
+                    tag: generation as u8,
+                });
+            }
+        };
+        // SAFETY: the caller holds exclusive heap access.
+        unsafe {
+            add(self.gen0_ref(), true, Generation::Gen0);
+            add(self.gen1_ref(), true, Generation::Gen1);
+            add(
+                self.gen2_ref(),
+                level == CollectionLevel::Major,
+                Generation::Gen2,
+            );
+        }
+        let compile_time = self.compile_time_range();
+        if !compile_time.is_empty() {
+            ranges.push(SlotRange {
+                start: compile_time.start,
+                end: compile_time.end,
+                moving: false,
+                tag: Generation::CompileTime as u8,
+            });
+        }
+        ForwardingMap::with_ranges(ranges)
     }
 
     fn copy_collection(&self, roots: &[HeapPtr]) -> (GcStats, Vec<HeapPtr>, ForwardingMap) {
         // SAFETY: collection caller guarantees exclusive heap access.
         let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self, roots.len()) };
         // Track old -> new pointer mappings (forwarding pointers)
-        let mut forwarding = self.new_forwarding_map();
+        // SAFETY: collection caller guarantees exclusive heap access.
+        let mut forwarding = unsafe { self.new_forwarding_map(CollectionLevel::Major) };
 
         self.debug_verify_tlab_canaries();
 
@@ -606,8 +649,6 @@ impl BexHeap {
 
         // Update the handle table so external handles point to new locations.
         self.update_handles(&forwarding);
-        self.last_survivors
-            .store(forwarding.len(), std::sync::atomic::Ordering::Relaxed);
 
         self.gc_policy.after_full(
             live_count
@@ -1492,7 +1533,8 @@ impl BexHeap {
     ) -> (GcStats, Vec<HeapPtr>, ForwardingMap) {
         // SAFETY: collection caller guarantees exclusive heap access.
         let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self, roots.len()) };
-        let mut forwarding = self.new_forwarding_map();
+        // SAFETY: collection caller guarantees exclusive heap access.
+        let mut forwarding = unsafe { self.new_forwarding_map(CollectionLevel::Minor) };
 
         self.bump_epoch();
 
@@ -1647,8 +1689,6 @@ impl BexHeap {
             .collect();
 
         self.update_handles(&forwarding);
-        self.last_survivors
-            .store(forwarding.len(), std::sync::atomic::Ordering::Relaxed);
 
         // A minor collection does not satisfy the full-GC allocation budget.
         #[cfg(feature = "gc_profiling")]

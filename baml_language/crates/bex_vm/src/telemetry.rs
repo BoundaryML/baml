@@ -1977,8 +1977,8 @@ mod tests {
         state.forward_roots(&forwarding);
         assert_eq!(definitions(&state), before);
         let moved = CallPathKey {
-            visible_caller: Some(forwarding[&caller]),
-            callee: forwarding[&callee],
+            visible_caller: Some(forwarding.forwarded(caller)),
+            callee: forwarding.forwarded(callee),
             ..key
         };
         assert_eq!(

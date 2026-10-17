@@ -987,9 +987,10 @@ mod tests {
         #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
         let (_, _, forwarding) =
             unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Minor) };
-        assert!(
-            !forwarding.contains_key(&old_class),
-            "precondition: an unvisited Gen2 object is absent from a minor forwarding map"
+        assert_eq!(
+            forwarding.get(&old_class).copied().unwrap_or(old_class),
+            old_class,
+            "precondition: a minor collection leaves an unvisited Gen2 object where it is"
         );
         hook.forward_roots(&forwarding);
         assert_eq!(

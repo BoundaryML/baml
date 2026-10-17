@@ -112,7 +112,7 @@ use std::{
 
 use ::bex_heap::{HeapPermit as _, Tlab};
 // Re-export event types for callers.
-use ::bex_vm_types::{ForwardingMap, RootHaver, types::FutureId};
+use ::bex_vm_types::{RootHaver, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
 #[cfg(target_arch = "wasm32")]
@@ -1038,7 +1038,7 @@ pub struct BexEngine {
     root_package: HeapPtr,
     /// The class that owns each method, from the classes' own method
     /// tables: what tells a callee's class-generic prefix from its own.
-    method_owners: ForwardingMap,
+    method_owners: HashMap<HeapPtr, HeapPtr>,
     /// Resolved class names for instance allocation (`IndexMap` preserves definition order)
     resolved_class_names: indexmap::IndexMap<String, HeapPtr>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -1866,7 +1866,7 @@ impl BexEngine {
         // without re-resolving it.
         let packages = Arc::new(package_index);
         let root_package = packages.root();
-        let method_owners: ForwardingMap = packages
+        let method_owners: HashMap<HeapPtr, HeapPtr> = packages
             .package_ptrs()
             .flat_map(|package_ptr| {
                 // SAFETY: the package index holds compile-time package objects.
