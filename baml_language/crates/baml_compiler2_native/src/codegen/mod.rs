@@ -742,9 +742,25 @@ impl<'db> Generator<'_, 'db> {
                 args,
                 ntypeargs,
                 argument_layout,
+                has_trace,
                 ..
             } => {
                 let (type_args, args) = args.split_at((*ntypeargs).min(args.len()));
+                // A `$trace` attachment is the final operand: handed to the
+                // VM for the call it requests, as bytecode's `SetCallTrace`.
+                let args = if *has_trace {
+                    let Some((trace, args)) = args.split_last() else {
+                        return Err(Rejection::Invalid(
+                            "a traced call without its attachment".into(),
+                        ));
+                    };
+                    let trace = self.operand(block, trace)?;
+                    let trace = self.value_arg(&trace.code, trace.repr);
+                    self.statement(depth, &format!("vm.set_call_trace({trace})?;"));
+                    args
+                } else {
+                    args
+                };
                 let (types, _) = self.call_type_args(type_args)?;
                 self.callee_ptr(block, callee)?;
                 let args = match callee {
@@ -765,7 +781,7 @@ impl<'db> Generator<'_, 'db> {
                     }
                     _ => self.arg_values(block, args)?,
                 };
-                if !matches!(callee, Operand::Constant(_)) && types.is_empty() {
+                if !matches!(callee, Operand::Constant(_)) && types.is_empty() && !*has_trace {
                     self.direct_closure_call(block, &args, depth)?;
                 }
                 self.call_types = types;
@@ -793,14 +809,31 @@ impl<'db> Generator<'_, 'db> {
                 argument_layout,
                 destination,
                 target,
+                has_trace,
                 ..
             } => {
+                // As for a direct call: the attachment is the final operand,
+                // handed to the VM, and the call is always requested.
+                let args = if *has_trace {
+                    let Some((trace, args)) = args.split_last() else {
+                        return Err(Rejection::Invalid(
+                            "a traced call without its attachment".into(),
+                        ));
+                    };
+                    let trace = self.operand(block, trace)?;
+                    let trace = self.value_arg(&trace.code, trace.repr);
+                    self.statement(depth, &format!("vm.set_call_trace({trace})?;"));
+                    args
+                } else {
+                    args
+                };
                 let step = self.virtual_request(
                     block,
                     depth,
                     iface,
                     method,
                     args,
+                    *has_trace,
                     *ntypeargs,
                     *self_arg,
                     argument_layout.as_ref(),

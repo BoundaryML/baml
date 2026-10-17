@@ -4117,7 +4117,7 @@ impl BexVm {
         state.set_context(context);
     }
 
-    fn trace_config(&mut self, value: Value) -> Result<CallTrace, VmError> {
+    pub(crate) fn trace_config(&mut self, value: Value) -> Result<CallTrace, VmError> {
         use bex_vm_types::trace::{ReservationError, ReservedSpanData, TraceOptionsData};
 
         let handle = self

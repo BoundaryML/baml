@@ -239,6 +239,7 @@ impl<'db> Generator<'_, 'db> {
         iface: &TyTemplateInterface,
         method: &str,
         args: &[Operand<'db>],
+        traced: bool,
         ntypeargs: usize,
         self_arg: usize,
         layout: Option<&baml_type::CallLayout>,
@@ -300,6 +301,9 @@ impl<'db> Generator<'_, 'db> {
         }
         let layout = match layout {
             Some(layout) => layout,
+            // A traced call reaches the VM's call path, which applies the
+            // attachment, so it is never run in place.
+            None if traced => "None".to_string(),
             None => {
                 let call = self.fallible(
                     block,

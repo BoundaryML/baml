@@ -202,6 +202,15 @@ impl BexVm {
         ))
     }
 
+    /// A `$trace` attachment for the call the running body requests next,
+    /// as bytecode's `SetCallTrace` sets it: the VM's call path applies it to
+    /// that call (its context patch, its record), then clears it.
+    pub fn set_call_trace(&mut self, value: Value) -> Result<(), Box<VmError>> {
+        let trace = self.trace_config(value).map_err(Box::new)?;
+        self.pending_call_trace = Some(trace);
+        Ok(())
+    }
+
     /// Call a compiled function from compiled code.
     ///
     /// Every call gets a frame, as in bytecode: it counts toward the depth

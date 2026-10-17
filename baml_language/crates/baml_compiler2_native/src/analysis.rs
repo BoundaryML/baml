@@ -358,30 +358,12 @@ fn flow_of(terminator: &Terminator<'_>) -> Result<Flow, Rejection> {
         },
         Terminator::Return | Terminator::Unreachable => Flow::Exit,
         Terminator::Throw { .. } | Terminator::Rethrow { .. } => Flow::Exit,
-        Terminator::Call {
-            target, has_trace, ..
-        } => {
-            if *has_trace {
-                return Err(Rejection::Unsupported(
-                    "call with a $trace attachment".into(),
-                ));
-            }
-            Flow::Goto(target.0)
-        }
+        Terminator::Call { target, .. } => Flow::Goto(target.0),
         Terminator::ShortCircuit { eval_rhs, join, .. } => Flow::Branch {
             then_block: join.0,
             else_block: eval_rhs.0,
         },
-        Terminator::VirtualCall {
-            target, has_trace, ..
-        } => {
-            if *has_trace {
-                return Err(Rejection::Unsupported(
-                    "interface method call with a $trace attachment".into(),
-                ));
-            }
-            Flow::Goto(target.0)
-        }
+        Terminator::VirtualCall { target, .. } => Flow::Goto(target.0),
         Terminator::SysOp { target, .. }
         | Terminator::Await { target, .. }
         | Terminator::AwaitAny { target, .. } => Flow::Goto(target.0),
@@ -409,6 +391,11 @@ pub(crate) fn suspends_directly<'db>(
         | Terminator::Spawn { .. }
         | Terminator::Await { .. }
         | Terminator::AwaitAny { .. } => true,
+        // A `$trace` attachment is applied by the VM's call path, which the
+        // call reaches as a request.
+        Terminator::Call {
+            has_trace: true, ..
+        } => true,
         Terminator::Call {
             callee,
             args,
