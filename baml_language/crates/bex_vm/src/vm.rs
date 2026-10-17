@@ -1024,7 +1024,7 @@ pub(crate) mod tests {
 
     /// The int a hand-written compiled body reads from a value it knows is
     /// one.
-    fn test_int(value: Value) -> i64 {
+    pub(crate) fn test_int(value: Value) -> i64 {
         value.as_int().expect("an int")
     }
 
@@ -1047,10 +1047,11 @@ pub(crate) mod tests {
     /// Run `user.Main` of `source` with the named functions' bodies replaced
     /// by hand-written compiled bodies, shaped as `baml_compiler2_native`
     /// emits them (a resumable one keeping 3 slots: its argument, one local
-    /// and its point). `objects` receives each named function's object index
-    /// before the run, for bodies that call or name other functions.
+    /// and its point). `objects` receives each named function's, class's or
+    /// interface's object index before the run, for bodies that call or
+    /// name other objects.
     #[cfg(not(target_arch = "wasm32"))]
-    fn run_with_compiled_bodies(
+    pub(crate) fn run_with_compiled_bodies(
         source: &str,
         bodies: &[(&str, crate::compiled_rt::CompiledFn)],
         objects: &[(&str, &std::sync::atomic::AtomicU32)],
@@ -1066,12 +1067,20 @@ pub(crate) mod tests {
                         .packages
                         .iter()
                         .find_map(|package| {
-                            package.classes.iter().find_map(|(path, object)| {
-                                (path.under(&package.name).display_name().as_str() == *name)
-                                    .then(|| object.raw())
-                            })
+                            package.classes.iter().chain(&package.interfaces).find_map(
+                                |(path, object)| {
+                                    // Spelled under its package: the display
+                                    // name elides the root package.
+                                    let qualified = std::iter::once(package.name.as_str())
+                                        .chain(path.namespace.iter().map(baml_type::Name::as_str))
+                                        .chain(std::iter::once(path.name.as_str()))
+                                        .collect::<Vec<_>>()
+                                        .join(".");
+                                    (qualified == *name).then(|| object.raw())
+                                },
+                            )
                         })
-                        .unwrap_or_else(|| panic!("no callable or class `{name}`"))
+                        .unwrap_or_else(|| panic!("no callable, class or interface `{name}`"))
                 },
                 |callable| callable.object.raw(),
             );
@@ -2112,20 +2121,20 @@ use error_evidence::RaiseEntry;
 
 /// The parameter list a callable value executes with; see
 /// [`BexVm::callee_params`].
-enum CalleeParams<'a> {
+pub(crate) enum CalleeParams<'a> {
     Function(&'a Function),
     Host(&'a bex_vm_types::HostClosure),
 }
 
 impl CalleeParams<'_> {
-    fn arity(&self) -> usize {
+    pub(crate) fn arity(&self) -> usize {
         match self {
             Self::Function(function) => function.arity,
             Self::Host(host) => host.arity,
         }
     }
 
-    fn layout(&self) -> baml_type::CallLayout {
+    pub(crate) fn layout(&self) -> baml_type::CallLayout {
         match self {
             Self::Function(function) => function.argument_layout(),
             Self::Host(host) => baml_type::CallLayout::from_modes(
@@ -2136,7 +2145,7 @@ impl CalleeParams<'_> {
         }
     }
 
-    fn layout_is(&self, layout: &baml_type::CallLayout) -> bool {
+    pub(crate) fn layout_is(&self, layout: &baml_type::CallLayout) -> bool {
         match self {
             Self::Function(function) => function.argument_layout_is(layout),
             Self::Host(_) => self.layout() == *layout,
@@ -6711,7 +6720,7 @@ impl BexVm {
     /// conditions — the type checker proved the receiver implements the interface
     /// before emitting the access, and `field_links` is total over the interface's
     /// declared fields (E0124) — so they surface as internal errors.
-    fn resolve_virtual_field_slot(
+    pub(crate) fn resolve_virtual_field_slot(
         &mut self,
         receiver: Value,
         iface_head: bex_vm_types::TypeHead,
@@ -7424,7 +7433,10 @@ impl BexVm {
     /// The parameter list a callable value executes with: the `Function`
     /// behind a closure, bound method or generic wrapper, or a host closure's
     /// declared parameters.
-    fn callee_params(&self, callee: HeapPtr) -> Result<CalleeParams<'_>, VmInternalError> {
+    pub(crate) fn callee_params(
+        &self,
+        callee: HeapPtr,
+    ) -> Result<CalleeParams<'_>, VmInternalError> {
         let function = match self.get_object(callee) {
             Object::Function(function) => return Ok(CalleeParams::Function(function)),
             Object::HostClosure(host) => return Ok(CalleeParams::Host(host)),

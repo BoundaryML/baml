@@ -25,8 +25,10 @@
 mod arith;
 mod call;
 mod heap;
+mod r#virtual;
 
 use bex_vm_types::{HeapPtr, Value, types::Function};
+pub use r#virtual::VirtualSite;
 
 use crate::{
     errors::{ThrowKind, VmError, VmInternalError, VmThrown},
