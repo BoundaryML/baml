@@ -769,6 +769,7 @@ impl<'db> Generator<'_, 'db> {
                 };
                 let (types, _) = self.call_type_args(type_args)?;
                 self.callee_ptr(block, callee)?;
+                let mut laid_out = false;
                 let args = match callee {
                     Operand::Constant(Constant::Function(func)) => {
                         let name = function_display_name(self.db, *func);
@@ -779,22 +780,52 @@ impl<'db> Generator<'_, 'db> {
                         };
                         self.laid_out_args(block, &name, info, argument_layout.as_ref(), args)?
                     }
+                    // Named arguments to a function value: laid over the
+                    // callee's slots at run time, as the interpreter's
+                    // `CallIndirect` remaps them, and pushed here.
                     _ if argument_layout
                         .as_ref()
                         .is_some_and(|layout| layout.0.iter().any(Option::is_some)) =>
                     {
-                        return unsupported("named arguments to a function value");
+                        let layout = argument_layout.as_ref().expect("checked");
+                        let slots: Vec<String> = layout
+                            .0
+                            .iter()
+                            .map(|slot| match slot {
+                                Some(name) => format!("Some({:?})", name.as_str()),
+                                None => "None".to_string(),
+                            })
+                            .collect();
+                        let values = self.arg_values(block, args)?;
+                        self.statement(
+                            depth,
+                            &format!(
+                                "let argc = vm.push_indirect_args(callee, &[{}], &[{}])?;",
+                                slots.join(", "),
+                                values.join(", ")
+                            ),
+                        );
+                        laid_out = true;
+                        Vec::new()
                     }
                     _ => self.arg_values(block, args)?,
                 };
-                if !matches!(callee, Operand::Constant(_)) && types.is_empty() && !*has_trace {
+                if !matches!(callee, Operand::Constant(_))
+                    && types.is_empty()
+                    && !*has_trace
+                    && !laid_out
+                {
                     self.direct_closure_call(block, &args, depth)?;
                 }
                 self.call_types = types;
-                (
-                    format!("Step::Call {{ callee, argc: {} }}", args.len()),
-                    args,
-                )
+                if laid_out {
+                    ("Step::Call { callee, argc }".to_string(), args)
+                } else {
+                    (
+                        format!("Step::Call {{ callee, argc: {} }}", args.len()),
+                        args,
+                    )
+                }
             }
             Terminator::SysOp { callee, args, .. } => {
                 self.callee_ptr(block, callee)?;

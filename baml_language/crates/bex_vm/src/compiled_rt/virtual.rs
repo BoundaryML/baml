@@ -261,6 +261,31 @@ impl BexVm {
         }
     }
 
+    /// Push `args` for a call of the function value `callee` whose site
+    /// names some arguments (`layout`), laid over its slots as the
+    /// interpreter's `CallIndirect` lays them: a bound method's receiver
+    /// joins them as the leading required slot before the mapping, then is
+    /// left for the call path to insert, as it does for every compiled
+    /// request of a bound method. Returns the argument count pushed.
+    pub fn push_indirect_args(
+        &mut self,
+        callee: HeapPtr,
+        layout: &[Option<&str>],
+        args: &[Value],
+    ) -> Result<u32, Box<VmError>> {
+        let Object::BoundMethod(method) = self.get_object(callee) else {
+            return self.push_virtual_args(callee, Some(layout), args);
+        };
+        let receiver = method.receiver;
+        let full_layout: Vec<Option<&str>> =
+            std::iter::once(None).chain(layout.iter().copied()).collect();
+        let full_args: Vec<Value> = std::iter::once(receiver).chain(args.iter().copied()).collect();
+        let base = self.stack.len();
+        let count = self.push_virtual_args(callee, Some(&full_layout), &full_args)?;
+        self.stack.0.remove(base);
+        Ok(count - 1)
+    }
+
     fn lay_out_virtual_args(
         &mut self,
         callee: HeapPtr,
