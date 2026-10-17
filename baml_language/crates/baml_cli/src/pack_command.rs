@@ -521,7 +521,17 @@ impl PackArgs {
                 .arg("--manifest-path")
                 .arg(build_dir.join("Cargo.toml"))
                 .arg("--target-dir")
-                .arg(&target_dir);
+                .arg(&target_dir)
+                // From the workspace, so rustup selects the toolchain its
+                // `rust-toolchain.toml` pins (the one the runtime was tested
+                // with), not the machine's default.
+                .current_dir(&workspace);
+            // A BAML function with thousands of locals becomes one Rust
+            // function as large, and rustc's default stack can overflow
+            // generating its debug info; give it room unless the caller chose.
+            if std::env::var_os("RUST_MIN_STACK").is_none() {
+                cargo.env("RUST_MIN_STACK", (256usize << 20).to_string());
+            }
             cargo
                 .status()
                 .context("failed to run cargo; is it on PATH?")
