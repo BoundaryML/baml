@@ -202,7 +202,7 @@ def cmd_run(args):
     builds = {}
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     load_start = os.getloadavg()
-    if load_start[0] > (os.cpu_count() or 1) / 4:
+    if load_start[0] > max(2, (os.cpu_count() or 1) / 4):
         _log(f"warning: load average {load_start[0]:.1f} on {os.cpu_count()} cores; results will be noisy")
     try:
         _log(f"building {len(workloads)} workloads with {cli}")

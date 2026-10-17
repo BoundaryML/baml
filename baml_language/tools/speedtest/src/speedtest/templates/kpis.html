@@ -87,7 +87,7 @@ const cls = key => [isBaml(key) ? 'b' : '', key === P ? 'p' : ''].join(' ').trim
 
 // header
 const c = D.candidate, r = D.run, ok = r.trials_failed === 0 && !r.verify_failures;
-const load = (r.loadavg_start || [0])[0], busy = load > (D.machine.cores || 1) / 4;
+const load = (r.loadavg_start || [0])[0], busy = load > Math.max(2, (D.machine.cores || 1) / 4);
 const tc = Object.entries(D.machine.toolchains || {}).filter(([, v]) => v).map(([k, v]) => `${k} ${v.replace(/^[A-Za-z]+\s*/, '')}`).join(' · ');
 document.getElementById('hd').innerHTML = `<h1>BAML Speedtest</h1><div class="facts">
  <span><b>candidate</b> <code>${esc((c.sha||'').slice(0,12))}</code> ${esc(c.branch||'')}</span>
