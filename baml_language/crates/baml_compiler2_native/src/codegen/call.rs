@@ -163,56 +163,62 @@ impl<'db> Generator<'_, 'db> {
         Ok(values)
     }
 
-    /// The `RealizedTy` expressions of a call's type-argument operands, each
-    /// a local holding a statically known type; `what` names the construct
-    /// in the rejection otherwise. A non-generic caller has no frame type
-    /// arguments to substitute, so a type known only at run time keeps the
-    /// function bytecode.
-    pub(super) fn static_type_operands(
-        &self,
+    /// Type operands (type locals) as `RealizedTy` expressions, and whether
+    /// every one is known statically: a type built from the frame's type
+    /// arguments, or read from a pooled constant, is built where it is used.
+    pub(super) fn type_operands(
+        &mut self,
         what: &str,
         operands: &[Operand<'db>],
-    ) -> Gen<Vec<String>> {
+    ) -> Gen<(Vec<String>, bool)> {
         let mut types = Vec::with_capacity(operands.len());
+        let mut fixed = true;
         for operand in operands {
-            let ty = match operand {
-                Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => self
-                    .analysis
-                    .static_types
-                    .get(&local.0)
-                    .map(|ty| ty.code.clone()),
-                _ => None,
+            let local = match operand {
+                Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => local.0,
+                _ => return unsupported(format!("{what} with a type argument that is not a type local")),
             };
-            let Some(ty) = ty else {
-                return unsupported(format!("{what} with a type argument known only at runtime"));
-            };
-            types.push(ty);
+            if let Some(ty) = self.analysis.static_types.get(&local) {
+                types.push(ty.code.clone());
+            } else if let Some(template) = self.analysis.frame_types.get(&local).cloned() {
+                fixed = false;
+                types.push(self.realized(&template)?);
+            } else {
+                return unsupported(format!("{what} with a type argument that is not a type local"));
+            }
         }
-        Ok(types)
+        Ok((types, fixed))
     }
 
     /// The operands of a dispatch through `iface`: the interface object's
-    /// pointer and the `&[RealizedTy]` of its instantiation. Both are known
-    /// at compile time when the interface is in the program and every
-    /// argument is a static type; associated types are outputs of the
-    /// implementation, not part of its selection, so they are not spelled.
-    pub(super) fn static_interface(&self, iface: &TyTemplateInterface) -> Gen<(String, String)> {
+    /// pointer, the `&[RealizedTy]` of its instantiation, and whether that
+    /// instantiation is known statically (else it is built from the frame or
+    /// a pooled constant where the dispatch runs). Associated types are
+    /// outputs of the implementation, not part of its selection, so they are
+    /// not spelled.
+    pub(super) fn interface_operands(
+        &mut self,
+        iface: &TyTemplateInterface,
+    ) -> Gen<(String, String, bool)> {
         let name = decl_display_name(self.db, &iface.name);
         let Some(object) = self.index.interface_at(&iface.name)? else {
             return unsupported(format!("interface `{name}` not found in the program"));
         };
         let mut args = Vec::with_capacity(iface.generics.len());
+        let mut fixed = true;
         for template in &iface.generics {
-            let Some(ty) = static_realized(self.index, template) else {
-                return unsupported(format!(
-                    "interface `{name}` instantiated with a type known only at runtime"
-                ));
-            };
-            args.push(ty);
+            match static_realized(self.index, template) {
+                Some(ty) => args.push(ty),
+                None => {
+                    fixed = false;
+                    args.push(self.realized(template)?);
+                }
+            }
         }
         Ok((
             format!("vm.idx_to_ptr(ObjectIndex::from_raw({object}))"),
             format!("&[{}]", args.join(", ")),
+            fixed,
         ))
     }
 
@@ -239,9 +245,9 @@ impl<'db> Generator<'_, 'db> {
         destination: &Place,
         target: BlockId,
     ) -> Gen<String> {
-        let (iface, iface_args) = self.static_interface(iface)?;
+        let (iface, iface_args, iface_fixed) = self.interface_operands(iface)?;
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
-        let types = self.static_type_operands("interface method call", type_args)?;
+        let (types, types_fixed) = self.type_operands("interface method call", type_args)?;
         let values = self.arg_values(block, args)?;
         let Some(receiver) = values.get(self_arg) else {
             return Err(Rejection::Invalid(format!(
@@ -266,20 +272,32 @@ impl<'db> Generator<'_, 'db> {
             }
             _ => None,
         };
-        let site = format!("S{}", block.0);
-        self.statement(
-            depth,
-            &format!(
-                "static {site}: bex_vm::compiled_rt::VirtualSite = bex_vm::compiled_rt::VirtualSite::new();"
-            ),
-        );
-        self.statement(
-            depth,
-            &format!(
-                "let callee = vm.virtual_target(&{site}, {receiver}, {iface}, {iface_args}, {method:?}, &[{}])?;",
-                types.join(", ")
-            ),
-        );
+        // The site's cache keys on the receiver alone, so only a dispatch
+        // whose instantiation is the same on every pass uses it.
+        if iface_fixed && types_fixed {
+            let site = format!("S{}", block.0);
+            self.statement(
+                depth,
+                &format!(
+                    "static {site}: bex_vm::compiled_rt::VirtualSite = bex_vm::compiled_rt::VirtualSite::new();"
+                ),
+            );
+            self.statement(
+                depth,
+                &format!(
+                    "let callee = vm.virtual_target(&{site}, {receiver}, {iface}, {iface_args}, {method:?}, &[{}])?;",
+                    types.join(", ")
+                ),
+            );
+        } else {
+            self.statement(
+                depth,
+                &format!(
+                    "let callee = vm.virtual_target_uncached({receiver}, {iface}, {iface_args}, {method:?}, &[{}])?;",
+                    types.join(", ")
+                ),
+            );
+        }
         let layout = match layout {
             Some(layout) => layout,
             None => {

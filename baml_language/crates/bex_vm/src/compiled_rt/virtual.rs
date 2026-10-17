@@ -146,8 +146,34 @@ impl BexVm {
         method: &str,
         method_type_args: &[RealizedTy],
     ) -> Result<HeapPtr, Box<VmError>> {
-        let key = self.site_key(receiver);
-        if let Some(tag) = key
+        self.virtual_target_in(Some(site), receiver, iface, iface_args, method, method_type_args)
+    }
+
+    /// [`Self::virtual_target`] for a site whose instantiation (`iface_args`,
+    /// `method_type_args`) can differ between passes: resolved every time,
+    /// since a site's cache keys on the receiver alone.
+    pub fn virtual_target_uncached(
+        &mut self,
+        receiver: Value,
+        iface: HeapPtr,
+        iface_args: &[RealizedTy],
+        method: &str,
+        method_type_args: &[RealizedTy],
+    ) -> Result<HeapPtr, Box<VmError>> {
+        self.virtual_target_in(None, receiver, iface, iface_args, method, method_type_args)
+    }
+
+    fn virtual_target_in(
+        &mut self,
+        site: Option<&VirtualSite>,
+        receiver: Value,
+        iface: HeapPtr,
+        iface_args: &[RealizedTy],
+        method: &str,
+        method_type_args: &[RealizedTy],
+    ) -> Result<HeapPtr, Box<VmError>> {
+        let key = site.and(self.site_key(receiver));
+        if let (Some(site), Some(tag)) = (site, key)
             && let Some((callee, frame)) = site.get(tag, self.image())
         {
             self.call_type_args.extend_from_slice(frame);
@@ -168,7 +194,7 @@ impl BexVm {
             .implementation_method(&implementation, method)
             .map_err(|error| Box::new(VmError::from(error)))?;
         if implementation.is_static()
-            && let Some(tag) = key
+            && let (Some(site), Some(tag)) = (site, key)
             && let Some(index) = self.compile_time_index(callee)
         {
             site.set(tag, index, self.image(), &frame);

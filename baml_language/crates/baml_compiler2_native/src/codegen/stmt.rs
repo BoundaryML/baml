@@ -210,7 +210,7 @@ impl Generator<'_, '_> {
                     value,
                     ..
                 } => {
-                    let (iface, iface_args) = self.static_interface(iface)?;
+                    let (iface, iface_args, _) = self.interface_operands(iface)?;
                     let receiver = self.operand(id, receiver)?;
                     let receiver = self.value_arg(&receiver.code, receiver.repr);
                     let value = self.operand(id, value)?;

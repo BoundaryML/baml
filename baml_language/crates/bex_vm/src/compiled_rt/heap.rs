@@ -232,6 +232,19 @@ impl BexVm {
         Value::object(self.tlab.alloc(closure))
     }
 
+    /// `receiver.method` as a value: a bound method over the function object
+    /// `function`, with the receiver's class type arguments curried in, as
+    /// bytecode's `MakeBoundMethod` builds it.
+    pub fn make_bound_method(&mut self, function: HeapPtr, receiver: Value) -> Value {
+        let type_args = self.bound_method_curried_type_args(receiver);
+        let bound = Object::BoundMethod(bex_vm_types::BoundMethod {
+            function,
+            receiver,
+            type_args,
+        });
+        Value::object(self.tlab.alloc(bound))
+    }
+
     // ── Enums and classes ─────────────────────────────────────────────────────
 
     /// The variant index of an enum value.

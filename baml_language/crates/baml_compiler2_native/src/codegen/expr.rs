@@ -219,7 +219,22 @@ impl<'db> Generator<'_, 'db> {
                     Repr::Value,
                 ))
             }
-            Rvalue::MakeBoundMethod { .. } => unsupported("function used as a value"),
+            // `receiver.method` as a value, as bytecode's `MakeBoundMethod`
+            // builds it.
+            Rvalue::MakeBoundMethod { func, receiver } => {
+                let name = function_display_name(self.db, *func);
+                let Some((object, _)) = self.index.function(self.db, *func)? else {
+                    return unsupported(format!("method `{name}` not found in the program"));
+                };
+                let receiver = self.operand(block, receiver)?;
+                let receiver = self.value_arg(&receiver.code, receiver.repr);
+                Ok(Expr::new(
+                    format!(
+                        "vm.make_bound_method(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {receiver})"
+                    ),
+                    Repr::Value,
+                ))
+            }
             // `foo<T>`: a `GenericFunction` over the function's global slot
             // at the frame-derived arguments, as `MakeGenericFunction`
             // builds it (`foo<int>` is a pooled constant instead).
@@ -270,16 +285,8 @@ impl<'db> Generator<'_, 'db> {
                 receiver,
                 type_args,
             } => {
-                let (iface, iface_args) = self.static_interface(iface)?;
-                let mut types = Vec::with_capacity(type_args.len());
-                for template in type_args {
-                    let Some(ty) = static_realized(self.index, template) else {
-                        return unsupported(
-                            "interface method value with a type argument known only at runtime",
-                        );
-                    };
-                    types.push(ty);
-                }
+                let (iface, iface_args, _) = self.interface_operands(iface)?;
+                let types = self.realized_all(type_args)?;
                 let receiver = self.operand(block, receiver)?;
                 let receiver = self.value_arg(&receiver.code, receiver.repr);
                 let code = self.fallible(
@@ -297,11 +304,9 @@ impl<'db> Generator<'_, 'db> {
                 method,
                 type_args,
             } => {
-                let Some(self_ty) = static_realized(self.index, self_ty) else {
-                    return unsupported("interface function value on a type known only at runtime");
-                };
-                let (iface, iface_args) = self.static_interface(iface)?;
-                let types = self.static_type_operands("interface function value", type_args)?;
+                let self_ty = self.realized(self_ty)?;
+                let (iface, iface_args, _) = self.interface_operands(iface)?;
+                let (types, _) = self.type_operands("interface function value", type_args)?;
                 let code = self.fallible(
                     block,
                     &format!(
@@ -317,7 +322,7 @@ impl<'db> Generator<'_, 'db> {
                 field_index,
                 ..
             } => {
-                let (iface, iface_args) = self.static_interface(iface)?;
+                let (iface, iface_args, _) = self.interface_operands(iface)?;
                 let receiver = self.operand(block, receiver)?;
                 let receiver = self.value_arg(&receiver.code, receiver.repr);
                 let code = self.fallible(
