@@ -332,6 +332,10 @@ fn interface_dispatch_compiles_as_a_runtime_resolved_call() {
     assert!(total.contains("staticS"), "{total}");
     assert!(total.contains("vm.virtual_target(&S"), "{total}");
     assert!(
+        total.contains("ifletSome(v)=vm.call_inline(callee,&["),
+        "{total}"
+    );
+    assert!(
         total.contains("vm.push_virtual_args(callee,None,&["),
         "{total}"
     );

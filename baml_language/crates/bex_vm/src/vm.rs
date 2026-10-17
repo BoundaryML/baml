@@ -1089,9 +1089,25 @@ pub(crate) mod tests {
                 std::sync::atomic::Ordering::Relaxed,
             );
         }
+        // An interface implementation's body keys no name map; it is found
+        // by its display name among the pooled functions.
         let indices: Vec<usize> = bodies
             .iter()
-            .map(|(name, _)| callables[*name].object.raw())
+            .map(|(name, _)| {
+                callables.get(*name).map_or_else(
+                    || {
+                        (0..program.objects.len())
+                            .find(|&index| {
+                                program
+                                    .function_name(ObjectIndex::from_raw(index))
+                                    .as_deref()
+                                    == Some(*name)
+                            })
+                            .unwrap_or_else(|| panic!("no function `{name}`"))
+                    },
+                    |callable| callable.object.raw(),
+                )
+            })
             .collect();
         for ((_, body), index) in bodies.iter().zip(indices) {
             let Object::Function(function) = &mut program.objects[ObjectIndex::from_raw(index)]

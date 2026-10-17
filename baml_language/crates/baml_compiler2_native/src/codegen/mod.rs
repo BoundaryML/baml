@@ -602,6 +602,8 @@ impl<'db> Generator<'_, 'db> {
                 ntypeargs,
                 self_arg,
                 argument_layout,
+                destination,
+                target,
                 ..
             } => {
                 let step = self.virtual_request(
@@ -613,6 +615,8 @@ impl<'db> Generator<'_, 'db> {
                     *ntypeargs,
                     *self_arg,
                     argument_layout.as_ref(),
+                    destination,
+                    *target,
                 )?;
                 (step, Vec::new())
             }

@@ -8,10 +8,10 @@ use baml_compiler2_mir::{
 };
 use bex_vm_types::FunctionKind;
 
-use super::{Gen, Generator, unsupported};
+use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     admit::{FunctionInfo, Rejection},
-    analysis::{builtin_is_callable, static_realized},
+    analysis::{Repr, builtin_is_callable, static_realized},
 };
 
 impl<'db> Generator<'_, 'db> {
@@ -234,10 +234,12 @@ impl<'db> Generator<'_, 'db> {
     /// The request of an interface method call in a resumable body: bind
     /// `callee` to the method's implementation for the receiver through the
     /// site's inline cache (a `static` of this body, which also pushes the
-    /// call's type arguments), push the value arguments laid over that
-    /// callee's slots, and return the `Step` expression. `args` are the
-    /// method's type arguments then its value arguments in declared order;
-    /// `self_arg` indexes the receiver among the value arguments.
+    /// call's type arguments); when that callee is a compiled body that runs
+    /// to completion, call it in place and continue at `target`; otherwise
+    /// push the value arguments laid over the callee's slots and return the
+    /// `Step` expression. `args` are the method's type arguments then its
+    /// value arguments in declared order; `self_arg` indexes the receiver
+    /// among the value arguments.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn virtual_request(
         &mut self,
@@ -249,6 +251,8 @@ impl<'db> Generator<'_, 'db> {
         ntypeargs: usize,
         self_arg: usize,
         layout: Option<&baml_type::CallLayout>,
+        destination: &Place,
+        target: BlockId,
     ) -> Gen<String> {
         let (iface, iface_args) = self.static_interface(iface)?;
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
@@ -261,7 +265,8 @@ impl<'db> Generator<'_, 'db> {
             )));
         };
         // The slots this site pushes, for the VM to lay over the resolved
-        // callee's; a site that pushes the method's own slots needs none.
+        // callee's; a site that pushes the method's own slots needs none,
+        // and only such a site calls an inline callee in place.
         let layout = match layout {
             Some(layout) if layout.0.iter().any(Option::is_some) => {
                 let slots: Vec<String> = layout
@@ -272,9 +277,9 @@ impl<'db> Generator<'_, 'db> {
                         None => "None".to_string(),
                     })
                     .collect();
-                format!("Some(&[{}])", slots.join(", "))
+                Some(format!("Some(&[{}])", slots.join(", ")))
             }
-            _ => "None".to_string(),
+            _ => None,
         };
         let site = format!("S{}", block.0);
         self.statement(
@@ -290,6 +295,22 @@ impl<'db> Generator<'_, 'db> {
                 types.join(", ")
             ),
         );
+        let layout = match layout {
+            Some(layout) => layout,
+            None => {
+                let call = self.fallible(
+                    block,
+                    &format!("vm.call_inline(callee, &[{}])", values.join(", ")),
+                )?;
+                let store = self.store(block, destination, &Expr::new("v", Repr::Value))?;
+                let jump = self.jump_to(target.0);
+                self.line(depth, &format!("if let Some(v) = {call} {{"));
+                self.line(depth + 1, &store);
+                self.line(depth + 1, &jump);
+                self.line(depth, "}");
+                "None".to_string()
+            }
+        };
         self.statement(
             depth,
             &format!(
