@@ -2014,7 +2014,10 @@ impl BexEngine {
                 // Drive the VM to completion. $init only contains synchronous
                 // bytecode, but events and GC safepoints may still yield.
                 loop {
-                    match vm.exec() {
+                    let state = vm.exec();
+                    // There is no live-output subscriber during $init.
+                    vm.pending_logs.clear();
+                    match state {
                         Ok(VmExecState::Complete(_)) => {
                             if let Some(telemetry) = &telemetry {
                                 telemetry.validate(&vm, true);
@@ -5677,6 +5680,21 @@ impl BexEngine {
                     telemetry.validate(&thread.vm, false);
                 }
                 let vm_exec_result = thread.vm.exec();
+                // Logs compiled code queued while it ran, in order, before
+                // whatever `exec` returned: as bytecode's `Log` would have
+                // reached here first.
+                if !thread.vm.pending_logs.is_empty() {
+                    for log in std::mem::take(&mut thread.vm.pending_logs) {
+                        self.capture_baml_log_event(
+                            &thread,
+                            log_capture.as_ref(),
+                            log.level,
+                            log.event_name.as_deref(),
+                            log.data,
+                            log.source_location,
+                        );
+                    }
+                }
                 if let Some(telemetry) = &self.telemetry {
                     telemetry.validate(&thread.vm, false);
                 }

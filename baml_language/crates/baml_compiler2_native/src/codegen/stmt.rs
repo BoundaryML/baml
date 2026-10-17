@@ -216,6 +216,45 @@ impl Generator<'_, '_> {
                     let value = self.value_arg(&value.code, value.repr);
                     self.statement(depth, &format!("vm.bind_type(depth, {slot}, {value})?;"));
                 }
+                // `log.*`: the `$baml_log` record bytecode's `SendEvent`
+                // makes, queued for the engine (`vm.log_event`).
+                StatementKind::Intrinsic {
+                    op: IntrinsicOp::Log(level),
+                    args,
+                } => {
+                    let level = match level {
+                        baml_compiler2_mir::LogLevel::Info => 0,
+                        baml_compiler2_mir::LogLevel::Debug => 1,
+                        baml_compiler2_mir::LogLevel::Warn => 2,
+                        baml_compiler2_mir::LogLevel::Error => 3,
+                    };
+                    let Some(data) = args.first() else {
+                        return Err(Rejection::Invalid("`log` without its data".into()));
+                    };
+                    let data = self.operand(id, data)?;
+                    let data = self.value_arg(&data.code, data.repr);
+                    let name = match args.get(1) {
+                        Some(name) => {
+                            let name = self.operand(id, name)?;
+                            self.value_arg(&name.code, name.repr)
+                        }
+                        None => "Value::NULL".to_string(),
+                    };
+                    let (file, start, end) = statement.span.map_or((0, 0, 0), |span| {
+                        (
+                            span.file_id.as_u32(),
+                            u32::from(span.range.start()),
+                            u32::from(span.range.end()),
+                        )
+                    });
+                    let code = self.fallible(
+                        id,
+                        &format!(
+                            "vm.log_event({level}, {data}, {name}, {file}, line, {start}, {end})"
+                        ),
+                    )?;
+                    self.statement(depth, &format!("{code};"));
+                }
                 StatementKind::Intrinsic { .. } => return unsupported("compiler intrinsic"),
                 StatementKind::VirtualFieldStore {
                     iface,

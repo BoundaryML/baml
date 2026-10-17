@@ -559,6 +559,7 @@ pub(crate) mod tests {
             context_transfers: Vec::new(),
             argv: Arc::from([]),
             pending_call_trace: None,
+            pending_logs: Vec::new(),
             pending_trace_hooks: Vec::new(),
             inherited_hook_suppression: false,
             pending_host_trace: None,
@@ -2973,6 +2974,12 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pub(crate) pending_call_trace: Option<CallTrace>,
+    /// Logs compiled code emitted since `exec` last returned, in order. A
+    /// bytecode `log.*` returns `VmExecState::Log` to the engine; a compiled
+    /// body cannot leave mid-statement, so it queues the same record here and
+    /// the engine takes them (before anything else `exec` returns), so they
+    /// keep their order with every other effect the engine performs.
+    pub pending_logs: Vec<PendingLog>,
     pending_trace_hooks: Vec<PendingTraceHook>,
     /// Inherited by a spawned BAML task independently of the parent's lifetime.
     inherited_hook_suppression: bool,
@@ -3015,6 +3022,16 @@ pub struct BexVm {
     /// program-image rules enter this cache, so runtime package loading and
     /// dynamic builder registration remain live on every dynamic dispatch.
     static_virtual_call_cache: HashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
+}
+
+/// A `log.*` compiled code emitted; see [`BexVm::pending_logs`]. The fields
+/// are those of [`VmExecState::Log`].
+#[derive(Debug, Clone)]
+pub struct PendingLog {
+    pub level: btel_records::LogLevel,
+    pub event_name: Option<Arc<str>>,
+    pub data: Value,
+    pub source_location: Option<VmEventSourceLocation>,
 }
 
 /// VM execution state.
@@ -3765,6 +3782,7 @@ impl BexVm {
             context_transfers: Vec::new(),
             argv,
             pending_call_trace: None,
+            pending_logs: Vec::new(),
             pending_trace_hooks: Vec::new(),
             inherited_hook_suppression: false,
             pending_host_trace: None,
@@ -4071,7 +4089,7 @@ impl BexVm {
         Ok((level, name, data))
     }
 
-    fn record_log(
+    pub(crate) fn record_log(
         &mut self,
         frame_idx: usize,
         level: btel_records::LogLevel,

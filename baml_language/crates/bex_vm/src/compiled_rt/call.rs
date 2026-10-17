@@ -211,6 +211,55 @@ impl BexVm {
         Ok(())
     }
 
+    /// `log.info(data, name?)` and its siblings in compiled code (`level` is
+    /// 0 info, 1 debug, 2 warn, 3 error): the record bytecode's `SendEvent`
+    /// of the `$baml_log` payload makes, recorded for telemetry here and
+    /// queued for the engine ([`Self::pending_logs`]) instead of returned,
+    /// since a compiled body cannot leave mid-statement. `line` is the body's
+    /// current line; `file_id`, `start` and `end` the statement's span.
+    #[allow(clippy::too_many_arguments)]
+    pub fn log_event(
+        &mut self,
+        level: u8,
+        data: Value,
+        event_name: Value,
+        file_id: u32,
+        line: u32,
+        start: u32,
+        end: u32,
+    ) -> Result<(), Box<VmError>> {
+        use btel_records::LogLevel;
+        let level = match level {
+            0 => LogLevel::Info,
+            1 => LogLevel::Debug,
+            2 => LogLevel::Warn,
+            _ => LogLevel::Error,
+        };
+        let name = if event_name.is_null() || event_name.is_omitted() {
+            None
+        } else {
+            let name = self
+                .as_string(&event_name)
+                .map_err(|error| Box::new(VmError::from(error)))?;
+            Some(std::sync::Arc::<str>::from(name.as_str()))
+        };
+        let top = self.frames.len().saturating_sub(1);
+        self.record_log(top, level, name.clone(), data);
+        self.pending_logs.push(crate::vm::PendingLog {
+            level,
+            event_name: name,
+            data,
+            source_location: Some(crate::vm::VmEventSourceLocation {
+                file_id,
+                line: line & !super::SHIELDED_LINE,
+                column: 0,
+                start_offset: start,
+                end_offset: end,
+            }),
+        });
+        Ok(())
+    }
+
     /// Call a compiled function from compiled code.
     ///
     /// Every call gets a frame, as in bytecode: it counts toward the depth
