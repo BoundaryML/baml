@@ -137,7 +137,7 @@ fn compute_shaped_functions_are_admitted_and_the_rest_stay_bytecode() {
         module
             .functions
             .iter()
-            .find(|f| f.name == name)
+            .find(|f| f.display == name)
             .unwrap_or_else(|| panic!("{name} should compile"))
             .resumable
     };
@@ -146,11 +146,11 @@ fn compute_shaped_functions_are_admitted_and_the_rest_stay_bytecode() {
     assert!(!resumable("user.fib"));
     assert!(!resumable("user.sum"));
 
-    let closure = rejection(&module, "user.uses_closure");
-    assert!(
-        matches!(closure, Rejection::Unsupported(_)),
-        "closures are outside the subset: {closure}"
-    );
+    // A function passing a closure to a callback-running builtin compiles
+    // as a resumable body (the builtin suspends it); its lambda compiles on
+    // its own.
+    assert!(resumable("user.uses_closure"));
+    assert!(!resumable("user.<lambda(uses_closure, 0)>"));
     // A generic function compiles too: one body for every instantiation.
     assert!(admitted.contains(&"user.generic"), "{admitted:?}");
     assert!(
@@ -229,7 +229,7 @@ fn body_of(module: &NativeModule, name: &str) -> String {
     let symbol = &module
         .functions
         .iter()
-        .find(|f| f.name == name)
+        .find(|f| f.display == name)
         .unwrap_or_else(|| panic!("{name} should compile"))
         .symbol;
     let start = module
@@ -307,7 +307,7 @@ fn interface_dispatch_compiles_as_a_runtime_resolved_call() {
         let function = module
             .functions
             .iter()
-            .find(|f| f.name == name)
+            .find(|f| f.display == name)
             .unwrap_or_else(|| panic!("{name} should compile; rejected: {:?}", module.rejected));
         // Only the calls suspend; a method value, a field and a call on a
         // primitive (devirtualized by MIR) resolve in place.
@@ -588,7 +588,7 @@ fn entry_points_prune_admission_to_what_they_reach() {
                 && matches!(rejection, Rejection::Unreached)),
         "the stdlib is pruned too"
     );
-    // Closures stay bytecode, but what they reach is still reached.
+    // A closure in a function no entry reaches is unreached with its maker.
     assert!(matches!(
         rejection(&module, "user.uses_closure"),
         Rejection::Unreached
@@ -625,4 +625,149 @@ fn entry_points_prune_admission_to_what_they_reach() {
         rejection(&module, "user.build"),
         Rejection::Unreached
     ));
+}
+
+const CLOSURES: &str = r#"
+function cap_local(n: int) -> int {
+  let total = 0;
+  let add = (x: int) -> void { total = total + x; };
+  add(n);
+  add(n);
+  total
+}
+
+function cap_param(n: int) -> int {
+  let bump = () -> int { n = n + 1; n };
+  bump();
+  bump()
+}
+
+function loop_cells() -> int {
+  let total = 0;
+  for (let i = 0; i < 3; i += 1) {
+    let f = () -> int { i };
+    total = total + f();
+  }
+  total
+}
+
+function nested(a: int) -> int {
+  let outer = (b: int) -> int {
+    let inner = (c: int) -> int { a + b + c };
+    inner(1)
+  };
+  outer(2)
+}
+
+function stored(xs: int[]) -> int[] {
+  let double = (x: int) -> int { x * 2 };
+  xs.map(double)
+}
+
+function main() -> string {
+  `${cap_local(2)}|${cap_param(1)}|${loop_cells()}|${nested(3)}|${stored([1, 2])}`
+}
+"#;
+
+/// Closures compile: a captured local is a cell in a Rust variable, a
+/// captured parameter is wrapped at entry, a loop header's binding carries
+/// its value into the next iteration's cell, a lambda is a unit of its own
+/// reading its captures off its closure, and a closure is made over the
+/// lambda's own object.
+#[test]
+fn closures_compile() {
+    let module = compile(CLOSURES);
+    let admitted: Vec<&str> = module
+        .functions
+        .iter()
+        .map(|f| f.display.as_str())
+        .collect();
+    for name in [
+        "user.cap_local",
+        "user.<lambda(cap_local, 0)>",
+        "user.cap_param",
+        "user.<lambda(cap_param, 0)>",
+        "user.loop_cells",
+        "user.<lambda(loop_cells, 0)>",
+        "user.nested",
+        "user.<lambda(nested, 0)>",
+        "user.<lambda(<lambda(nested, 0)>, 1)>",
+        "user.stored",
+        "user.<lambda(stored, 0)>",
+    ] {
+        assert!(
+            admitted.contains(&name),
+            "{name} should compile; got {admitted:?} / {:?}",
+            module.rejected
+        );
+    }
+    // A lambda's entry names its own object, as the loader renders it, with
+    // the package it belongs to in the report.
+    let lambda = module
+        .functions
+        .iter()
+        .find(|f| f.display == "user.<lambda(cap_local, 0)>")
+        .expect("compiles");
+    assert_eq!(lambda.name, ".<lambda(cap_local, 0)>");
+    assert_eq!(lambda.arity, 1);
+    assert!(lambda.symbol.starts_with("user__lambda_cap_local__0__"));
+
+    let compact = |name: &str| {
+        body_of(&module, name)
+            .split_whitespace()
+            .collect::<String>()
+    };
+    // The captured local's cell, made where the binding is created, read and
+    // written through, and handed to the closure over the lambda's object.
+    let cap_local = compact("user.cap_local");
+    assert!(
+        cap_local.contains("=vm.new_cell(Value::NULL);"),
+        "{cap_local}"
+    );
+    assert!(cap_local.contains("vm.cell_store(l"), "{cap_local}");
+    assert!(cap_local.contains("vm.cell_load(l"), "{cap_local}");
+    assert!(
+        cap_local.contains(&format!(
+            "vm.make_closure(vm.idx_to_ptr(ObjectIndex::from_raw({})),vec![l",
+            lambda.object
+        )),
+        "{cap_local}"
+    );
+    // A call through the closure: direct when its body is compiled and
+    // inline, through the VM otherwise.
+    assert!(
+        cap_local.contains("vm.closure_inline_body(callee,1)"),
+        "{cap_local}"
+    );
+    assert!(
+        cap_local.contains("vm.call_closure_compiled(callee,body,&["),
+        "{cap_local}"
+    );
+    assert!(
+        cap_local.contains("Step::Call{callee,argc:1}"),
+        "{cap_local}"
+    );
+    // The lambda reads and writes the capture's cell off its frame, and
+    // keeps the int it holds unboxed.
+    let add = compact("user.<lambda(cap_local, 0)>");
+    assert!(add.contains("vm.capture_cell(depth,0)?"), "{add}");
+    assert!(add.contains("expect_int(vm.cell_load(t"), "{add}");
+    assert!(add.contains("vm.add_i64("), "{add}");
+    assert!(add.contains("vm.cell_store(t"), "{add}");
+    // A captured parameter is wrapped at entry.
+    let cap_param = compact("user.cap_param");
+    assert!(
+        cap_param.contains("letmutl1:Value=vm.new_cell(args[0]);")
+            || cap_param.contains("l1=vm.new_cell(arg);"),
+        "{cap_param}"
+    );
+    // A loop header's binding is carried into the next iteration's cell.
+    let loop_cells = compact("user.loop_cells");
+    assert!(loop_cells.contains("vm.cell_load(l"), "{loop_cells}");
+    assert!(loop_cells.contains("=vm.new_cell(t"), "{loop_cells}");
+    // A nested lambda forwards a capture's cell to the closure it makes.
+    let outer = compact("user.<lambda(nested, 0)>");
+    assert!(outer.contains("vm.make_closure("), "{outer}");
+    assert!(outer.contains("vm.capture_cell(depth,0)?"), "{outer}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
