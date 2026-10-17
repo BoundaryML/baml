@@ -15,14 +15,15 @@ class Class {
         // evaluating BAML default expressions. Keep the public API as the BEP
         // specifies and resolve the default in this BAML wrapper before crossing
         // the native boundary.
-        Class._new(name, fields, implementations)
+        Class._new(name, root._as_field_rows(fields), implementations)
     }
 
-    /// (internal) Internal native backing `new`; all arguments have been materialized.
+    /// (internal) Internal native backing `new`; all arguments have been
+    /// materialized and every field type is a `type` value.
     //baml:mut_vm
     function _new(
         name: string,
-        fields: map<string, root.TypeView | root.WithMeta<root.Type>>,
+        fields: map<string, root.Type | root.WithMeta<root.Type>>,
         implementations: root.interface.Implementation[],
     ) -> root.Class throws root.errors.CompilationError {
         $rust_function
@@ -49,10 +50,19 @@ class Class {
     ///   interface in the closure has a method without a default body, if
     ///   `fields` names a field an interface already declares, or if two
     ///   interfaces declare the same field with different types.
-    //baml:mut_vm
     function extends<I>(
         name: string,
         fields: map<string, root.TypeView | root.WithMeta<root.Type>>,
+    ) -> root.Class throws root.errors.CompilationError {
+        Class._extends<I>(name, root._as_field_rows(fields))
+    }
+
+    /// (internal) Internal native backing `extends`; every field type is a
+    /// `type` value.
+    //baml:mut_vm
+    function _extends<I>(
+        name: string,
+        fields: map<string, root.Type | root.WithMeta<root.Type>>,
     ) -> root.Class throws root.errors.CompilationError {
         $rust_function
     }
@@ -175,8 +185,14 @@ class Union {
     /// # Throws
     ///
     /// - `reflect.errors.CompilationError` if the members cannot form a union.
-    //baml:mut_vm
     function new(types: root.TypeView[]) -> root.Union throws root.errors.CompilationError {
+        Union._new(root._as_types(types))
+    }
+
+    /// (internal) Internal native backing `new`; every member is a `type`
+    /// value.
+    //baml:mut_vm
+    function _new(types: root.Type[]) -> root.Union throws root.errors.CompilationError {
         $rust_function
     }
 
@@ -256,8 +272,13 @@ class Map {
     _ty: root.Type,
 
     /// Constructs the map type `map<key, value>`.
-    //baml:mut_vm
     function new(key: root.TypeView, value: root.TypeView) -> root.Map throws never {
+        Map._new(key.as_type(), value.as_type())
+    }
+
+    /// (internal) Internal native backing `new`; both types are `type` values.
+    //baml:mut_vm
+    function _new(key: root.Type, value: root.Type) -> root.Map throws never {
         $rust_function
     }
 

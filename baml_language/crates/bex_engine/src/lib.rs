@@ -7066,10 +7066,18 @@ impl BexEngine {
         args: &[Value],
     ) -> Result<PendingRuntimeCompile, OpError> {
         let operation = SysOp::ReflectSessionCompile;
+        // `reflect` does not depend on `baml`, so a bad receiver throws
+        // `reflect.errors.InvalidArgument`, never `baml.errors.InvalidArgument`.
         let invalid = |message: String| {
-            OpError::new(
+            OpError::host_thrown_value(
                 operation,
-                bex_vm_types::errors::VmBamlError::InvalidArgument { message },
+                BexExternalValue::Instance {
+                    class_name: "reflect.errors.InvalidArgument".to_string(),
+                    type_args: Vec::new(),
+                    fields: indexmap::indexmap! {
+                        "message".to_string() => BexExternalValue::String(message.into()),
+                    },
+                },
             )
         };
         let receiver = args

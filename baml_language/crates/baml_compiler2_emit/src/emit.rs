@@ -625,7 +625,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             Rvalue::IsType { operand, .. }
             | Rvalue::IsTypeTag { operand, .. }
             | Rvalue::SatisfiesBound { ty: operand, .. }
-            | Rvalue::BoundMismatch { ty: operand, .. }
             | Rvalue::MakeBoundMethod {
                 receiver: operand, ..
             }
@@ -3488,11 +3487,6 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
 
     fn satisfies_bound(&mut self) -> Result<(), Self::Error> {
         self.emit(Instruction::SatisfiesBound);
-        Ok(())
-    }
-
-    fn bound_mismatch(&mut self) -> Result<(), Self::Error> {
-        self.emit(Instruction::BoundMismatch);
         Ok(())
     }
 

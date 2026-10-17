@@ -620,8 +620,8 @@ pub struct CallTypeArgPlan<T = baml_type::Ty> {
 pub struct ScopedTypeBinding {
     pub name: baml_type::Name,
     pub parameter: baml_type::ParamTy,
-    /// The `reflect.Type`, kind view, or pending builder type the slot is
-    /// bound from, evaluated once when the statement runs.
+    /// The `reflect.Type` or `reflect.TypeView` the slot is bound from,
+    /// evaluated once when the statement runs.
     pub operand: ExprId,
     /// The declared `extends` bounds, in written order. The statement checks
     /// each one at run time, and `T` satisfies them statically afterwards. A
@@ -942,6 +942,16 @@ enum PendingDiag<'db> {
     ComputedGenericArgumentRequiresLetType {
         expr: ExprId,
         name: baml_type::Name,
+    },
+    /// A `let type T extends … = …` statement without an `else` block: its
+    /// bounds are checked when it runs, so a miss needs somewhere to go.
+    BoundedLetTypeRequiresElse {
+        stmt: StmtId,
+        name: baml_type::Name,
+    },
+    /// A `let type` operand that is a class builder's pending type.
+    LetTypePendingOperand {
+        expr: ExprId,
     },
     /// A constant pattern argument that does not compile.
     InvalidRegexPattern {
@@ -3152,9 +3162,16 @@ impl<'db> InferenceContext<'db> {
             Stmt::TypeBinding {
                 name,
                 operand,
+                bounds,
                 else_branch,
-                ..
             } => {
+                if !bounds.is_empty() && else_branch.is_none() {
+                    self.pending_diags
+                        .push(PendingDiag::BoundedLetTypeRequiresElse {
+                            stmt,
+                            name: name.clone(),
+                        });
+                }
                 self.bind_scoped_type(body, stmt, name.clone(), *operand, *else_branch);
             }
             Stmt::Let {
@@ -3397,20 +3414,9 @@ impl<'db> InferenceContext<'db> {
         self.validate_runtime_type_operand(body, operand);
         let bounds = self.scoped_type_bounds(stmt);
         // The statement checks each bound at run time. A miss runs the
-        // `else` block, which must diverge like a `let … else`; without one
-        // it throws `reflect.errors.TypeMismatch` from the statement.
+        // `else` block, which must diverge like a `let … else`; a bounded
+        // statement without one is reported where it is visited.
         self.finish_let_else(body, else_branch);
-        if else_branch.is_none() && !bounds.is_empty() {
-            let mismatch = match self.lang_decl(
-                baml_base::LangPackage::Reflect,
-                &["errors"],
-                "TypeMismatch",
-            ) {
-                Some(decl) => Ty::intern(InferTy::Class(decl, Box::new([]))),
-                None => Ty::error(),
-            };
-            self.record_throw(operand, &mismatch);
-        }
         // The parameter's identity is its statement's index in the body:
         // exact (two statements never share an index) and source-derived,
         // so it is stable across runs. A scoped parameter never leaves its
@@ -5760,19 +5766,24 @@ impl<'db> InferenceContext<'db> {
             return;
         }
         let got = self.infer_expr(body, operand, &Expectation::None);
+        // A diagnosed operand stays quiet. Nothing else is exempt: an
+        // `unknown` must be narrowed to a type with `match` or `is` before it
+        // binds, since a value the checker has not typed may not be erased
+        // into the frame and fail at run time. An open operand deposits the
+        // contract as a bound and is re-judged here once it solves.
+        if got.has_error() {
+            return;
+        }
+        // A builder's pending type is not a type until the builder is built,
+        // and binding it then could fail at run time; it gets its own message
+        // naming the fix.
         let pending_type = matches!(got.kind(), InferTy::Class(name, _)
-            if self.lang().is(baml_base::LangPackage::Reflect, name.root())
-                && name.namespace().iter().map(baml_type::Name::as_str)
-                    .eq(["class"])
-                && name.name().as_str() == "PendingType");
-        // A diagnosed operand stays quiet; a pending builder type is a
-        // known value the VM resolves (or refuses) at the boundary. Nothing
-        // else is exempt: an `unknown` must be narrowed to a type with
-        // `match` or `is` before it binds, since a value the checker has not
-        // typed may not be erased into the frame and fail at run time. An
-        // open operand deposits the contract as a bound and is re-judged
-        // here once it solves.
-        if pending_type || got.has_error() {
+            if self
+                .lang_decl(baml_base::LangPackage::Reflect, &["class"], "PendingType")
+                .is_some_and(|pending| pending == *name));
+        if pending_type {
+            self.pending_diags
+                .push(PendingDiag::LetTypePendingOperand { expr: operand });
             return;
         }
         // The operand contract is `reflect.Type | reflect.TypeView`: a kind
@@ -12218,6 +12229,9 @@ impl<'db> InferenceContext<'db> {
                         TirTypeError::ComputedGenericArgumentRequiresLetType { name },
                         expr,
                     ),
+                    PendingDiag::LetTypePendingOperand { expr } => {
+                        (TirTypeError::LetTypePendingOperand, expr)
+                    }
                     PendingDiag::MountedPackageCallUnsupported { expr, path } => {
                         (TirTypeError::MountedPackageCallUnsupported { path }, expr)
                     }
@@ -12534,6 +12548,15 @@ impl<'db> InferenceContext<'db> {
                             },
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Expr(at),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::BoundedLetTypeRequiresElse { stmt, name } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::BoundedLetTypeRequiresElse { name },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Stmt(stmt),
                             related: Vec::new(),
                         });
                         continue;

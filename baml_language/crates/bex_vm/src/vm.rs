@@ -2796,10 +2796,10 @@ impl BexVm {
 
     /// The `type` value a type-operand position received. Every such
     /// position's contract is `reflect.Type | reflect.TypeView`: a kind view
-    /// converts to the `type` it wraps, and a pending builder reference
-    /// resolves to its built type (or throws naming the un-frozen builder).
-    /// Shared by the call type-argument lane and `BindType`, so the two
-    /// boundaries cannot drift on what a type operand may be.
+    /// converts to the `type` it wraps, and any other view has already been
+    /// through its own `as_type()` in BAML. Shared by the call type-argument
+    /// lane and `BindType`, so the two boundaries cannot drift on what a type
+    /// operand may be. It never throws.
     fn type_operand_value(&mut self, value: Value) -> Result<TypeValue, VmError> {
         let value =
             crate::package_reflect::type_kinds::as_view_type_value(self, value).unwrap_or(value);
@@ -2812,14 +2812,8 @@ impl BexVm {
         if let Some(type_value) = direct {
             return Ok(type_value);
         }
-        if let Some(result) =
-            crate::package_reflect::runtime_class_builder::coerce_pending_type_arg(self, value)
-        {
-            return result.map_err(VmError::thrown_fresh);
-        }
-        // Static checking admits only `reflect.Type | reflect.TypeView` and a
-        // pending builder type here, so any other value is a compiler bug,
-        // not a program error.
+        // Static checking admits only `reflect.Type | reflect.TypeView` here,
+        // so any other value is a compiler bug, not a program error.
         Err(VmInternalError::TypeError {
             expected: Type::Object(ObjectType::Type),
             got: self.type_of(&value),
@@ -2866,20 +2860,6 @@ impl BexVm {
             crate::package_baml::resolve::ImplResolver::for_value(self, value)
                 .type_implements(&ty, head, &args, &assoc),
         )
-    }
-
-    /// The `reflect.errors.TypeMismatch` a missed bound throws when its
-    /// statement has no `else` block, naming the type and the bound.
-    fn bound_mismatch(&mut self, value: Value, bound: Value) -> Result<Value, VmError> {
-        let ty = self.type_operand_value(value)?.ty;
-        let (head, args, assoc) = self.bound_parts(bound)?;
-        let message = format!(
-            "type {ty} does not implement interface {}",
-            bex_vm_types::RealizedTy::Interface(head, args, assoc)
-        );
-        let message = Value::object(self.alloc_string(message));
-        let class = self.lang_object(crate::lang_items::REFLECT_ERRORS_TYPE_MISMATCH);
-        Ok(Value::object(self.alloc_instance(class, vec![message])))
     }
 
     fn take_type_args(&mut self, start: usize, count: usize) -> Result<TakenTypeArgs, VmError> {
@@ -10299,18 +10279,12 @@ impl BexVm {
                         self.stack.push(value);
                     }
 
-                    // ── `let type T extends I = …` bound checks ─────────────────
+                    // ── `let type T extends I = …` bound check ──────────────────
                     OpCode::SatisfiesBound => {
                         let bound = self.stack.ensure_pop();
                         let value = self.stack.ensure_pop();
                         let satisfied = self.satisfies_bound(value, bound)?;
                         self.stack.push(Value::bool(satisfied));
-                    }
-                    OpCode::BoundMismatch => {
-                        let bound = self.stack.ensure_pop();
-                        let value = self.stack.ensure_pop();
-                        let error = self.bound_mismatch(value, bound)?;
-                        self.stack.push(error);
                     }
 
                     // ── Lexical runtime type binding ────────────────────────────

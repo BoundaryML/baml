@@ -5,11 +5,14 @@ source: crates/baml_tests/src/generated_tests.rs
 class user.Wrapper {
   inner: T
 }
-function user.bounds_are_interfaces(t: reflect.Type) -> int  [expr] {
-  { let type A extends user.Wrapper<int> = t; let type B extends Missing = t; let type C extends reflect.AnyFunction = t; let type D extends Named & Holder<_> = t } 1
+function user.bound_check_does_not_throw(t: reflect.Type) -> int  [expr] {
+  { let type T extends Named = t else { return 0 } } 1
 }
-function user.declared_clause_names_the_bound_check(t: reflect.Type) -> int  [expr] {
-  { let type T extends Named = t } 1
+function user.bounded_needs_else(t: reflect.Type) -> int  [expr] {
+  { let type T extends Named = t; let type U extends Named & Holder<int> = t } 1
+}
+function user.bounds_are_interfaces(t: reflect.Type) -> int  [expr] {
+  { let type A extends user.Wrapper<int> = t else { return 0 }; let type B extends Missing = t else { return 0 }; let type C extends reflect.AnyFunction = t else { return 0 }; let type D extends Named & Holder<_> = t else { return 0 } } 1
 }
 function user.else_must_diverge(t: reflect.Type) -> int  [expr] {
   { let type T extends Named = t else {  } 0 } 1
@@ -22,6 +25,9 @@ function user.nullable_operand(t: reflect.Type?) -> int  [expr] {
 }
 function user.operand_solved_to_int() -> int  [expr] {
   { let v = ident(1); let type T = v } 1
+}
+function user.pending_operand() -> int  [expr] {
+  { let builder = reflect.Class.builder("Node"); let type T = builder.type() } 1
 }
 function user.the_binding_is_not_in_scope_yet(t: reflect.Type) -> int  [expr] {
   { let type T extends Holder<T> = t else { let unseen: T? = null; return 0 } } 1

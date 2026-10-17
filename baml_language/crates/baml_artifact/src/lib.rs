@@ -99,7 +99,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 ///
 /// Version 19: `SatisfiesBound` and `BoundMismatch` (the run-time bound check
 /// of `let type T extends I = …`) appended to the instruction set.
-pub const FORMAT_VERSION: u32 = 19;
+///
+/// Version 20: `BoundMismatch` removed from the end of the instruction set. A
+/// bounded `let type` must have an `else` block, so a missed bound never
+/// throws.
+pub const FORMAT_VERSION: u32 = 20;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

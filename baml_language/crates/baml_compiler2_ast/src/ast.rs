@@ -1153,12 +1153,12 @@ pub enum Stmt {
     Expr(ExprId),
     /// `let type T [extends A & B] = operand [else { … }];` inside a body:
     /// bind a rigid, block-scoped type parameter `T` for the remainder of the
-    /// enclosing block. Its runtime type is the `reflect.Type` (or kind view,
-    /// or pending builder type) `operand` evaluates to, evaluated once when
-    /// the statement runs. `T` is opaque to static checking apart from its
+    /// enclosing block. Its runtime type is the `reflect.Type` (or
+    /// `reflect.TypeView`) `operand` evaluates to, evaluated once when the
+    /// statement runs. `T` is opaque to static checking apart from its
     /// `bounds`, which the statement checks at run time: a type that misses
-    /// one runs `else_branch` (which must diverge) or, without one, throws
-    /// `reflect.errors.TypeMismatch`.
+    /// one runs `else_branch`, which must diverge and which a bounded
+    /// statement must have.
     TypeBinding {
         name: Name,
         operand: ExprId,

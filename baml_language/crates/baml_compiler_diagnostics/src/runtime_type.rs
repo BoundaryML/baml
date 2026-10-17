@@ -139,6 +139,31 @@ pub fn computed_generic_argument_requires_let_type(name: &str) -> Diagnostic {
     )
 }
 
+/// E0111 — a bounded `let type T extends I = …;` has no `else` block. The
+/// bounds are checked when the statement runs, so like a refutable `let`
+/// pattern it must say what happens on a miss: `else { … }`, which diverges.
+pub fn bounded_let_type_requires_else(name: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::RefutablePatternInLet,
+        format!(
+            "`let type {name} extends …` checks its bounds when it runs, so it needs an \
+             `else` block for a type that misses them"
+        ),
+    )
+}
+
+/// E0001 — a `let type` operand is a class builder's pending type
+/// (`reflect.class.Builder.type()`). It is not a type until the builder is
+/// built, so binding it could fail at run time; the operand is the built class
+/// instead.
+pub fn let_type_pending_operand() -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::TypeMismatch,
+        "`let type` cannot bind a class builder's pending type; call `build()` and bind the \
+         class it returns",
+    )
+}
+
 /// E0172 — a value typed by a body-scoped `let type T = …` binding would be
 /// observable outside the block that binds `T`. The binding re-executes on
 /// every pass through its block and may bind `T` to a different type each
@@ -274,6 +299,16 @@ mod tests {
                 computed_generic_argument_requires_let_type("runtime_t"),
                 "E0002",
                 "`runtime_t` is a value, not a type; bind its runtime type first with `let type T = runtime_t;` and write `T` here",
+            ),
+            (
+                bounded_let_type_requires_else("V"),
+                "E0111",
+                "`let type V extends …` checks its bounds when it runs, so it needs an `else` block for a type that misses them",
+            ),
+            (
+                let_type_pending_operand(),
+                "E0001",
+                "`let type` cannot bind a class builder's pending type; call `build()` and bind the class it returns",
             ),
             (
                 scoped_type_escapes_block("Out"),

@@ -1094,10 +1094,6 @@ pub enum Instruction {
     /// others are free. As for a generic parameter's bound, only a concrete
     /// type can satisfy it.
     SatisfiesBound,
-    /// The error a missed bound throws: pops the bound, then the type (as
-    /// [`Self::SatisfiesBound`]), and pushes a `reflect.errors.TypeMismatch`
-    /// naming both. The following `Throw` raises it.
-    BoundMismatch,
 }
 
 /// Compact bytecode opcodes.
@@ -1314,10 +1310,9 @@ pub enum OpCode {
     // Preserve the legacy discriminant; new compilers select Span or EmptySpan.
     TraceHookRich,
     TraceHookEmptySpan,
-    // The `let type` bound checks, appended to preserve serialized
+    // The `let type` bound check, appended to preserve serialized
     // discriminants.
     SatisfiesBound,
-    BoundMismatch,
 }
 
 impl OpCode {
@@ -1464,8 +1459,7 @@ impl OpCode {
             | Self::TraceHookSpan
             | Self::TraceHookRich
             | Self::TraceHookEmptySpan
-            | Self::SatisfiesBound
-            | Self::BoundMismatch => 1,
+            | Self::SatisfiesBound => 1,
             Self::AllocInstance | Self::Call | Self::CallExactArgs | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
@@ -1626,7 +1620,6 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::TraceHookRich as u8 => Ok(Self::TraceHookRich),
             x if x == Self::TraceHookEmptySpan as u8 => Ok(Self::TraceHookEmptySpan),
             x if x == Self::SatisfiesBound as u8 => Ok(Self::SatisfiesBound),
-            x if x == Self::BoundMismatch as u8 => Ok(Self::BoundMismatch),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
@@ -1647,7 +1640,6 @@ impl std::fmt::Display for OpCode {
             Self::TraceHookRich => "TRACE_HOOK_RICH",
             Self::TraceHookEmptySpan => "TRACE_HOOK_EMPTY_SPAN",
             Self::SatisfiesBound => "SATISFIES_BOUND",
-            Self::BoundMismatch => "BOUND_MISMATCH",
 
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
@@ -1967,7 +1959,6 @@ impl std::fmt::Display for Instruction {
             Instruction::TraceHookRich => f.write_str("TRACE_HOOK_RICH"),
             Instruction::TraceHookEmptySpan => f.write_str("TRACE_HOOK_EMPTY_SPAN"),
             Instruction::SatisfiesBound => f.write_str("SATISFIES_BOUND"),
-            Instruction::BoundMismatch => f.write_str("BOUND_MISMATCH"),
 
             Instruction::CallHooked { callee, ntypeargs } => {
                 write!(f, "CALL_HOOKED {callee} {ntypeargs}")
@@ -2502,7 +2493,6 @@ impl Bytecode {
             match instr {
                 // ── Unit ops: no operands ────────────────────────────
                 Instruction::SatisfiesBound
-                | Instruction::BoundMismatch
                 | Instruction::EndTraceHook
                 | Instruction::TraceHookHidden
                 | Instruction::TraceHookTiming
@@ -3010,7 +3000,6 @@ impl Bytecode {
             Instruction::TraceHookRich => OpCode::TraceHookRich,
             Instruction::TraceHookEmptySpan => OpCode::TraceHookEmptySpan,
             Instruction::SatisfiesBound => OpCode::SatisfiesBound,
-            Instruction::BoundMismatch => OpCode::BoundMismatch,
 
             Instruction::Call { .. } => OpCode::Call,
 

@@ -215,29 +215,23 @@ impl BamlClassType for PackageReflectImpl {
     /// associated binding (the compiler fills the defaults), so the selected
     /// impl must bind exactly those: unlike a generic bound, the request cannot
     /// leave an associated type open.
-    fn implements(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
-        // Either side may be a kind view: `implemented_by` swaps the receiver
-        // with an argument typed `reflect.TypeView`.
-        let self_value = super::type_kinds::type_view_value(vm, *self_value);
-        let other = super::type_kinds::type_view_value(vm, *other);
-        let Some(self_ty) = type_value_ty(vm, self_value) else {
+    ///
+    /// Both sides are `type` values: `implements` and `implemented_by` call
+    /// `as_type()` on their `reflect.TypeView` argument in BAML, and
+    /// `implemented_by` swaps the two before it gets here.
+    fn _implements(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
+        let Some(self_ty) = type_value_ty(vm, *self_value) else {
             return false;
         };
-        let Some((iface_head, iface_args, iface_assoc)) = reflected_interface(vm, other) else {
+        let Some((iface_head, iface_args, iface_assoc)) = reflected_interface(vm, *other) else {
             return false;
         };
-        resolve::ImplResolver::for_value(vm, self_value).type_implements(
+        resolve::ImplResolver::for_value(vm, *self_value).type_implements(
             &self_ty,
             iface_head,
             &iface_args,
             &iface_assoc,
         )
-    }
-
-    /// BEP-044: `iface_t.implemented_by(t)` — same answer as
-    /// `t.implements(iface_t)` but with the receiver flipped.
-    fn implemented_by(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
-        Self::implements(vm, other, self_value)
     }
 }
 

@@ -784,7 +784,7 @@ impl BamlClassClass for PackageReflectImpl {
         mint_class(vm, name.as_str(), rows, witnesses)
     }
 
-    fn extends(
+    fn _extends(
         vm: &mut BexVm,
         name: &bex_str::BexStr,
         fields: &IndexMap<bex_str::BexStr, Value>,
@@ -1264,7 +1264,7 @@ impl BamlClassLiteral for PackageReflectImpl {
 }
 
 impl BamlClassMap for PackageReflectImpl {
-    fn new(vm: &mut BexVm, key: &Value, value: &Value) -> Value {
+    fn _new(vm: &mut BexVm, key: &Value, value: &Value) -> Value {
         let key = reflected_type_value(vm, *key);
         let value = reflected_type_value(vm, *value);
         alloc_runtime_composite(
@@ -1298,7 +1298,7 @@ impl BamlClassMap for PackageReflectImpl {
     }
 }
 impl BamlClassUnion for PackageReflectImpl {
-    fn new(vm: &mut BexVm, types: &[Value]) -> Result<Value, crate::errors::VmRustFnError> {
+    fn _new(vm: &mut BexVm, types: &[Value]) -> Result<Value, crate::errors::VmRustFnError> {
         if types.is_empty() {
             let diagnostic = runtime_type::runtime_empty_union().with_phase(DiagnosticPhase::Hir);
             return Err(crate::errors::VmRustFnError::thrown_fresh(
@@ -1499,7 +1499,7 @@ fn substitute_witness_field_type(
 }
 
 pub(super) fn reflected_type_value(vm: &BexVm, value: Value) -> TypeValue {
-    let ptr = type_view_value(vm, value)
+    let ptr = value
         .as_object_ptr()
         .unwrap_or_else(|| unreachable!("type argument must be Object::Type"));
     let Object::Type(type_value) = vm.get_object(ptr) else {
@@ -1590,7 +1590,6 @@ pub(super) fn with_meta_row(vm: &BexVm, value: Value) -> Option<Result<WithMetaR
 pub(super) fn reflected_type_row(vm: &BexVm, value: Value) -> Result<ReflectedTypeRow, String> {
     const EXPECTED: &str =
         "class fields must be type values or reflect.WithMeta<reflect.Type> rows";
-    let value = type_view_value(vm, value);
     let Some(ptr) = value.as_object_ptr() else {
         return Err(EXPECTED.into());
     };
@@ -1681,13 +1680,6 @@ pub(crate) fn as_view_type_value(vm: &BexVm, value: Value) -> Option<Value> {
     is_view.then(|| instance.fields[0].load())
 }
 
-/// The `type` value a `reflect.TypeView` argument denotes: a kind view
-/// converts to the `type` it wraps, and anything else (a `type` value itself)
-/// is returned as is.
-pub(crate) fn type_view_value(vm: &BexVm, value: Value) -> Value {
-    as_view_type_value(vm, value).unwrap_or(value)
-}
-
 /// The `Object::Type` value a kind-view instance wraps (`_ty`, its sole
 /// declared field), after enforcing the kind invariant.
 pub(crate) fn view_type_value(
@@ -1771,6 +1763,12 @@ pub(super) fn string_map_rows(
 /// Pair `payload` with schema metadata as a `reflect.WithMeta` row. `payload`
 /// is a `type` value for `reflect.Type.meta` and a pending reference for
 /// `reflect.class.PendingType.meta`.
+///
+/// `WithMeta<T>` is generic, so the row carries its type argument like any
+/// other generic instance: `reflect.Type` or `reflect.class.PendingType`.
+/// The generated `copy::WithMeta::to_value` allocates without type
+/// arguments, and BAML code that tests a row's type (a `match` over
+/// `TypeView | WithMeta<Type>`) reads them.
 pub(super) fn alloc_with_meta(
     vm: &mut BexVm,
     payload: Value,
@@ -1794,14 +1792,21 @@ pub(super) fn alloc_with_meta(
     let alias = opt_string(vm, alias);
     let description = opt_string(vm, description);
     let docstring = opt_string(vm, docstring);
-    copy::WithMeta {
-        ty: payload,
-        alias,
-        description,
-        docstring,
-        other,
-    }
-    .to_value(vm)
+    let type_arg = match payload.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
+        Some(Object::Type(_)) => bex_vm_types::RealizedTy::Type,
+        _ => {
+            let pending = vm
+                .lang_head(crate::lang_items::REFLECT_CLASS_PENDING_TYPE)
+                .unwrap_or_else(|| unreachable!("the stdlib declares reflect.class.PendingType"));
+            bex_vm_types::RealizedTy::Class(pending, Box::new([]))
+        }
+    };
+    let class = vm.lang_object(crate::lang_items::REFLECT_WITH_META);
+    Value::object(vm.tlab.alloc_instance_with_type_args(
+        class,
+        Box::new([type_arg]),
+        vec![payload, alias, description, docstring, other],
+    ))
 }
 
 fn alloc_meta(
@@ -2046,7 +2051,17 @@ fn invalid_enum_value(vm: &mut BexVm, value: Value) -> crate::errors::VmRustFnEr
         "reflect.Enum.get_value expects an enum value, got {}",
         vm.type_of(&value)
     );
-    let message = Value::object(vm.alloc_string(message.as_str()));
+    invalid_argument(vm, message)
+}
+
+/// Throw `reflect.errors.InvalidArgument { message }`: how a reflection
+/// native reports an argument or receiver it cannot accept. `reflect` does
+/// not depend on `baml`, so its natives never throw a `baml.errors` value.
+pub(super) fn invalid_argument(
+    vm: &mut BexVm,
+    message: impl Into<bex_str::BexStr>,
+) -> crate::errors::VmRustFnError {
+    let message = Value::object(vm.alloc_string(message));
     crate::errors::VmRustFnError::thrown_fresh(
         copy::errors::InvalidArgument { message }.to_value(vm),
     )

@@ -282,8 +282,7 @@ pub(crate) fn display_instruction(
         | Instruction::Spawn
         | Instruction::LoadType(_)
         | Instruction::BindType(_)
-        | Instruction::SatisfiesBound
-        | Instruction::BoundMismatch => String::new(),
+        | Instruction::SatisfiesBound => String::new(),
     };
 
     (instruction.to_string(), metadata)
@@ -471,7 +470,6 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::LoadType(_)
         | Instruction::BindType(_)
         | Instruction::SatisfiesBound
-        | Instruction::BoundMismatch
         | Instruction::ThrowIfPanic => Style::new().blue().bright(),
         Instruction::Unreachable => Style::new().red().bright(),
         Instruction::MakeClosure { .. }
@@ -970,7 +968,6 @@ fn display_instruction_textual(
         Instruction::TraceHookRich => "trace_hook_rich".into(),
         Instruction::TraceHookEmptySpan => "trace_hook_empty_span".into(),
         Instruction::SatisfiesBound => "satisfies_bound".into(),
-        Instruction::BoundMismatch => "bound_mismatch".into(),
 
         Instruction::CallIndirect => "call_indirect".to_string(),
         Instruction::SetCallTrace => "set_call_trace".to_string(),
@@ -1327,7 +1324,6 @@ pub fn display_compact_bytecode(
             // Unit ops: no operands
             OpCode::Return
             | OpCode::SatisfiesBound
-            | OpCode::BoundMismatch
             | OpCode::Await
             | OpCode::AwaitAny
             | OpCode::Throw

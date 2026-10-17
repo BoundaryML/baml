@@ -963,21 +963,23 @@ fn runtime_type_binding_parts<'a>(
 }
 
 /// Re-bind every earlier `let type` step's type for a later step, with its
-/// bounds, so `T` keeps the same static meaning there.
+/// bounds, so `T` keeps the same static meaning there. A bounded `let type`
+/// must have an `else` block; the step that wrote the binding already checked
+/// the bounds, so this one is not expected to run.
 fn runtime_type_binding_prelude(bindings: &IndexMap<String, SessionVisibleSymbol>) -> String {
     let mut prelude = String::new();
-    for symbol in bindings.values() {
+    for (name, symbol) in bindings {
         if let SessionVisibleKind::TypeBinding { type_value, bounds } = &symbol.kind {
-            let bounds = if bounds.is_empty() {
-                String::new()
+            if bounds.is_empty() {
+                let _ = writeln!(prelude, "let type {} = {type_value};", symbol.internal);
             } else {
-                format!(" {bounds}")
-            };
-            let _ = writeln!(
-                prelude,
-                "let type {}{bounds} = {type_value};",
-                symbol.internal
-            );
+                let _ = writeln!(
+                    prelude,
+                    "let type {} {bounds} = {type_value} else {{ \
+                     baml.sys.panic(\"session type `{name}` no longer satisfies its bounds\") }};",
+                    symbol.internal
+                );
+            }
         }
     }
     prelude
@@ -1517,8 +1519,8 @@ fn lower_session_submission(
             let bounds = parts.bounds.map(&rewrite).unwrap_or_default();
             // The step stores the type value itself; later steps re-bind it
             // (`runtime_type_binding_prelude`). A bounded binding checks its
-            // bounds here, where it is written, running its `else` block or
-            // throwing on a miss.
+            // bounds here, where it is written, and runs its `else` block on
+            // a miss.
             let source = if bounds.is_empty() {
                 format!("let {backing_name} = {{\n{prelude}({operand})\n}}\n")
             } else {

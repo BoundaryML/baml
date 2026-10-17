@@ -125,14 +125,14 @@ test "a name declared as another kind is a miss" {
 }
 
 /// Names what `lookup` threw. An uninitialized receiver throws
-/// `baml.errors.InvalidArgument`, which the `get_*` lookups do not declare, so
-/// the lookup is widened to `throws unknown` to make that arm reachable.
+/// `reflect.errors.InvalidArgument`, which the `get_*` lookups do not declare,
+/// so the lookup is widened to `throws unknown` to make that arm reachable.
 function rl_thrown(lookup: () -> unknown throws unknown) -> string {
     lookup() catch (e) {
         reflect.errors.NotFound => {
             return "NotFound";
         }
-        baml.errors.InvalidArgument { message } => {
+        reflect.errors.InvalidArgument { message } => {
             return message;
         }
     };
@@ -161,6 +161,23 @@ test "get on an uninitialized package reports the receiver, not a miss" {
         fault,
     );
     assert.equal(forged.find_class("Foo"), null)
+}
+
+test "other calls on an uninitialized package or session report the receiver" {
+    let forged = reflect.Package { _inner: 1 };
+    assert.equal(
+        rl_thrown(() -> unknown {
+            forged.with_types({ "N": int.type() })
+        }),
+        "reflect.Package is not initialized",
+    );
+    let session = reflect.Session { _inner: 1 };
+    assert.equal(
+        rl_thrown(() -> unknown {
+            session.eval<int>("1")
+        }),
+        "Session is not initialized",
+    )
 }
 
 test "value get reads a field" {

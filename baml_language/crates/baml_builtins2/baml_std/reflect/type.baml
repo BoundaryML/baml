@@ -154,16 +154,21 @@ class Type {
     ///
     /// Returns `false` when `other` is not an interface, or when the receiver
     /// is not a concrete type (an interface does not implement itself).
-    //baml:vm
     function implements(self, other: root.TypeView) -> bool throws never {
-        $rust_function
+        self._implements(other.as_type())
     }
 
     /// Reverse of [`implements`]: `iface.implemented_by(t)` is the same as
     /// `t.implements(iface)`, with the same associated-type rule. Useful when
     /// the call site naturally reads "does this interface include that type?".
-    //baml:vm
     function implemented_by(self, other: root.TypeView) -> bool throws never {
+        other.as_type()._implements(self)
+    }
+
+    /// (internal) Internal native backing `implements` and `implemented_by`;
+    /// both sides are `type` values.
+    //baml:vm
+    function _implements(self, other: root.Type) -> bool throws never {
         $rust_function
     }
 }

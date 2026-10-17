@@ -9577,14 +9577,14 @@ impl<'db> LoweringContext<'db> {
     /// order. A bound is a constraint, not a type: it travels as its interface,
     /// type arguments and the associated types it pins, and the VM asks of it
     /// exactly what a generic parameter's bound asks. A miss runs the `else`
-    /// block (which TIR made diverge) or, without one, throws
-    /// `reflect.errors.TypeMismatch` naming the bound.
+    /// block, which TIR requires on a bounded statement and made diverge.
     fn emit_scoped_type_binding(
         &mut self,
         binding: &crate::inference_provider::ScopedTypeBinding,
         else_branch: Option<AstExprId>,
     ) -> Lowered<()> {
         let value = self.lower_to_operand(binding.operand)?;
+        let value = self.type_operand_as_type(binding.operand, value)?;
         let generic_params = self.enclosing_generic_params();
         let slot = RuntimeGenericLayout::new(&generic_params)
             .slot(&binding.parameter)
@@ -9599,9 +9599,15 @@ impl<'db> LoweringContext<'db> {
         if binding.bounds.is_empty() {
             return Ok(());
         }
+        let Some(else_expr) = else_branch else {
+            return Err(self.internal_error(
+                "a bounded `let type` reached lowering without the `else` block TIR requires",
+                binding.operand,
+            ));
+        };
         let bound_type =
             self.load_type_value(&Tir2Ty::TypeVar(binding.parameter.clone()), &generic_params);
-        let else_block = else_branch.map(|_| self.builder.create_block());
+        let miss = self.builder.create_block();
         for bound in &binding.bounds {
             let bound = tir2_interface_to_template(
                 &bound.name,
@@ -9619,45 +9625,83 @@ impl<'db> LoweringContext<'db> {
                 },
             );
             let next = self.builder.create_block();
-            let miss = else_block.unwrap_or_else(|| self.builder.create_block());
             self.builder
                 .branch(Operand::Copy(Place::local(satisfied)), next, miss);
-            if else_block.is_none() {
-                self.builder.set_current_block(miss);
-                let mismatch = self.builder.temp(self.type_mismatch_ty());
-                self.builder.assign(
-                    Place::local(mismatch),
-                    Rvalue::BoundMismatch {
-                        ty: bound_type.clone(),
-                        bound,
-                    },
-                );
-                self.emit_throw(Operand::Copy(Place::local(mismatch)));
-            }
             self.builder.set_current_block(next);
         }
-        if let (Some(miss), Some(else_expr)) = (else_block, else_branch) {
-            let bound = self.builder.current_block();
-            self.builder.set_current_block(miss);
-            let else_ty = self.expr_ty(else_expr)?;
-            let else_dest = self.builder.temp(else_ty);
-            self.lower_expr(else_expr, Place::local(else_dest))?;
-            // As for `let … else`: a recovery state could leave a fall-through.
-            if !self.builder.is_current_terminated() {
-                self.builder.unreachable();
-            }
-            self.builder.set_current_block(bound);
+        let bound = self.builder.current_block();
+        self.builder.set_current_block(miss);
+        let else_ty = self.expr_ty(else_expr)?;
+        let else_dest = self.builder.temp(else_ty);
+        self.lower_expr(else_expr, Place::local(else_dest))?;
+        // As for `let … else`: a recovery state could leave a fall-through.
+        if !self.builder.is_current_terminated() {
+            self.builder.unreachable();
         }
+        self.builder.set_current_block(bound);
         Ok(())
     }
 
-    /// `reflect.errors.TypeMismatch`, the error a missed `let type` bound
-    /// throws.
-    fn type_mismatch_ty(&self) -> RuntimeTy {
-        let item = baml_base::lang_item!(Reflect: errors.TypeMismatch);
-        DeclName::of_lang_item(self.lang(), item).map_or(RuntimeTy::Unknown, |name| {
-            RuntimeTy::Class(name, Box::new([]))
-        })
+    /// Whether a `let type` operand of static type `ty` needs its own
+    /// `as_type()` before the VM binds it. The VM's type-operand boundary
+    /// unwraps `reflect.Type` and the nine kind views itself; every other
+    /// `reflect.TypeView` (a class of the user's own, the interface, a type
+    /// parameter bounded by it) does not reach it as a `type` value
+    /// otherwise. The checker admits only `reflect.Type | reflect.TypeView`,
+    /// so an operand that needs the call holds a `reflect.TypeView` whatever
+    /// its value.
+    fn type_operand_needs_as_type(&self, ty: &Tir2Ty) -> bool {
+        let lang = self.lang();
+        let unwrapped_by_vm = |member: &Tir2Ty| match member {
+            Tir2Ty::Type | Tir2Ty::Never => true,
+            Tir2Ty::Class(name, _) => baml_type::type_kind::TypeKind::ALL.iter().any(|kind| {
+                DeclName::of_lang_item(lang, kind.class()).is_some_and(|decl| decl == *name)
+            }),
+            _ => false,
+        };
+        match ty {
+            Tir2Ty::Union(members) => !members.iter().all(unwrapped_by_vm),
+            other => !unwrapped_by_vm(other),
+        }
+    }
+
+    /// The `let type` operand `value` as the VM's type-operand boundary takes
+    /// it: a `reflect.TypeView` the VM does not unwrap itself goes through its
+    /// own `as_type()` ([`Self::type_operand_needs_as_type`]).
+    fn type_operand_as_type(
+        &mut self,
+        operand: AstExprId,
+        value: Operand<'db>,
+    ) -> Lowered<Operand<'db>> {
+        if !self
+            .tir_expr_type(operand)
+            .is_some_and(|ty| self.type_operand_needs_as_type(ty))
+        {
+            return Ok(value);
+        }
+        let type_view =
+            DeclName::of_lang_item(self.lang(), baml_base::lang_item!(Reflect: TypeView))
+                .ok_or_else(|| {
+                    self.internal_error(
+                        "`let type` takes a `reflect.TypeView`, but the `reflect` language \
+                         package is not installed",
+                        operand,
+                    )
+                })?;
+        // `TypeView` is non-generic and declares no associated types.
+        let iface = tir2_interface_to_template(&type_view, &[], &[], &self.runtime(), &[]);
+        let converted = self.builder.temp(RuntimeTy::type_type());
+        self.emit_virtual_call_with_operands(
+            iface,
+            "as_type",
+            vec![value],
+            /* ntypeargs */ 0,
+            /* self_arg */ 0,
+            /* argument_layout */ None,
+            RuntimeTy::type_type(),
+            Place::local(converted),
+        );
+        Ok(Operand::Copy(Place::local(converted)))
     }
 
     /// A `reflect.Type` value for `ty`, realized in the enclosing frame.
