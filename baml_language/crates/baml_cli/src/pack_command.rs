@@ -891,7 +891,7 @@ fn native_manifest(workspace: &Path, profile: NativeProfile) -> String {
 fn report_native(module: &baml_db::native::NativeModule) {
     let mut out = String::new();
     for function in &module.functions {
-        out.push_str(&format!("native   {}\n", function.name));
+        out.push_str(&format!("native   {}\n", function.display));
     }
     for (name, rejection) in &module.rejected {
         out.push_str(&format!("bytecode {name:<48} {rejection}\n"));

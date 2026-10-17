@@ -524,7 +524,7 @@ impl BexVm {
     #[cold]
     #[inline(never)]
     #[allow(unsafe_code)]
-    fn call_compiled_funnelled(
+    pub(super) fn call_compiled_funnelled(
         &mut self,
         callee: HeapPtr,
         type_args: &[RealizedTy],

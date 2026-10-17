@@ -1,21 +1,26 @@
 //! Admission: which functions of a program compile, and the module's
 //! index of the program they run in.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque, hash_map::Entry};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque, hash_map::Entry},
+    hash::Hash,
+};
 
 use baml_base::SourceRoot;
 use baml_compiler2_emit::{
     DeclCoords, class_coords, class_head_coords, declared_function_coords, enum_coords,
-    enum_head_coords, function_coords, interface_head_coords,
+    enum_head_coords, function_coords, function_identity, interface_head_coords,
 };
 use baml_compiler2_hir::{
+    file_package::file_package,
     item_data::{file_functions, file_lets, is_required_interface_method},
     loc::FunctionLoc,
     package::{edge_table, world_files},
 };
 use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef, FunctionRef};
 use baml_compiler2_mir::{
-    MirFunction, MirFunctionBody, MirFunctionKind, OptLevel, lower_function, lower_let_body,
+    FunctionOwner, MirFunction, MirFunctionBody, MirFunctionId, MirFunctionKind, OptLevel,
+    lower_function, lower_let_body,
 };
 use bex_vm_types::{
     ConstValue, DeclPath, FnPath, FunctionKind, Object, ObjectIndex, Program,
@@ -23,7 +28,7 @@ use bex_vm_types::{
 };
 
 use crate::{
-    analysis::Analysis,
+    analysis::{Analysis, Repr, capture_reprs, value_reprs},
     codegen::Generator,
     reach::{reachable, references},
     render::render_module,
@@ -61,6 +66,10 @@ pub struct CompiledFunction {
     /// in the module's table so a table from another build is refused at
     /// load, never what the body is bound by.
     pub name: String,
+    /// `name` under its package's label, for reports: a closure body renders
+    /// under no package label (`.<lambda(f, 0)>`), so this says whose it is
+    /// (`user.<lambda(f, 0)>`); any other function's is its `name`.
+    pub display: String,
     /// The Rust symbol of the body (`bex_vm::compiled_rt::CompiledBody`).
     pub symbol: String,
     /// Object index of that bytecode function in the program.
@@ -142,6 +151,10 @@ pub fn compile_program<'db>(
             let MirFunctionKind::Bytecode(body) = &mir.kind else {
                 continue;
             };
+            // Its lambdas are units of their own, whatever becomes of it: a
+            // closure over a bytecode lambda is still a closure, and a
+            // compiled lambda is entered through the VM either way.
+            admit_lambdas(db, &index, &mut units, &mut rejected, mir, &[], &lines);
             let object = match index.declared(db, function) {
                 Ok(Some(object)) => object,
                 Ok(None) => {
@@ -159,24 +172,17 @@ pub fn compile_program<'db>(
             if entries.is_some() {
                 refs.insert(object, references(db, &index, body, &mir.lambdas));
             }
-            let name = index.name(object).to_owned();
-            let info = index.info(object);
-            if !matches!(info.kind, FunctionKind::Bytecode) {
-                continue;
-            }
-            match Analysis::new(db, &index, mir, body) {
-                Ok(analysis) => {
-                    units.insert(
-                        object,
-                        Unit {
-                            mir,
-                            analysis,
-                            lines: lines.clone(),
-                        },
-                    );
-                }
-                Err(rejection) => rejected.push((name, rejection)),
-            }
+            admit_unit(
+                db,
+                &index,
+                &mut units,
+                &mut rejected,
+                object,
+                mir,
+                body,
+                Vec::new(),
+                &lines,
+            );
         }
         if entries.is_some() {
             for &binding in file_lets(db, file) {
@@ -232,7 +238,7 @@ pub fn compile_program<'db>(
         }
         let symbols: HashMap<usize, String> = units
             .keys()
-            .map(|&object| (object, symbol_for(index.name(object), object)))
+            .map(|&object| (object, symbol_for(index.display(object), object)))
             .collect();
         let mut bodies = String::new();
         let mut functions = Vec::new();
@@ -248,6 +254,7 @@ pub fn compile_program<'db>(
                 in_loop: false,
                 natives: &mut natives,
                 body: body_of(unit.mir),
+                lambdas: &unit.mir.lambdas,
                 analysis: &unit.analysis,
                 lines: &unit.lines,
                 declared_at: unit.mir.span,
@@ -273,6 +280,7 @@ pub fn compile_program<'db>(
                     bodies.push_str(&code);
                     functions.push(CompiledFunction {
                         name: index.name(object).to_owned(),
+                        display: index.display(object).to_owned(),
                         symbol: symbols[&object].clone(),
                         object,
                         arity: index.info(object).arity,
@@ -291,7 +299,7 @@ pub fn compile_program<'db>(
         }
         for (object, rejection) in failed {
             units.remove(&object);
-            rejected.push((index.name(object).to_owned(), rejection));
+            rejected.push((index.display(object).to_owned(), rejection));
         }
     };
 
@@ -303,6 +311,83 @@ pub fn compile_program<'db>(
     }
 }
 
+/// Make `mir`, the function at `object` with the bytecode body `body`, a
+/// unit when the program has it as bytecode and its analysis admits it;
+/// `captures` is a lambda's (see [`Analysis::captures`]).
+#[allow(clippy::too_many_arguments)]
+fn admit_unit<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    index: &ProgramIndex,
+    units: &mut BTreeMap<usize, Unit<'db>>,
+    rejected: &mut Vec<(String, Rejection)>,
+    object: usize,
+    mir: &'db MirFunction<'db>,
+    body: &'db MirFunctionBody<'db>,
+    captures: Vec<Repr>,
+    lines: &std::sync::Arc<[u32]>,
+) {
+    let name = index.display(object).to_owned();
+    let info = index.info(object);
+    if !matches!(info.kind, FunctionKind::Bytecode) {
+        return;
+    }
+    match Analysis::new(db, index, mir, body, captures) {
+        Ok(analysis) => {
+            units.insert(
+                object,
+                Unit {
+                    mir,
+                    analysis,
+                    lines: lines.clone(),
+                },
+            );
+        }
+        Err(rejection) => rejected.push((name, rejection)),
+    }
+}
+
+/// The lambdas lowered inside `parent` (and inside those, recursively) as
+/// units of their own, each bound to its object by identity. `captures` is
+/// the parent's own, when it is a lambda.
+fn admit_lambdas<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    index: &ProgramIndex,
+    units: &mut BTreeMap<usize, Unit<'db>>,
+    rejected: &mut Vec<(String, Rejection)>,
+    parent: &'db MirFunction<'db>,
+    captures: &[Repr],
+    lines: &std::sync::Arc<[u32]>,
+) {
+    let MirFunctionKind::Bytecode(parent_body) = &parent.kind else {
+        return;
+    };
+    let values = value_reprs(parent_body);
+    for (lambda_idx, lambda) in parent.lambdas.iter().enumerate() {
+        let MirFunctionKind::Bytecode(body) = &lambda.kind else {
+            continue;
+        };
+        let captures = capture_reprs(parent_body, lambda_idx, &values, captures);
+        let object = match index.lambda(db, &lambda.identity) {
+            Ok(Some(object)) => object,
+            Ok(None) => {
+                rejected.push((
+                    lambda.identity.display_name(db),
+                    Rejection::Invalid("no function of this identity in the program".into()),
+                ));
+                continue;
+            }
+            Err(rejection) => {
+                rejected.push((lambda.identity.display_name(db), rejection));
+                continue;
+            }
+        };
+        admit_lambdas(db, index, units, rejected, lambda, &captures, lines);
+        admit_unit(
+            db, index, units, rejected, object, lambda, body, captures, lines,
+        );
+    }
+}
+
 fn body_of<'a, 'db>(mir: &'a MirFunction<'db>) -> &'a MirFunctionBody<'db> {
     match &mir.kind {
         MirFunctionKind::Bytecode(body) => body,
@@ -310,11 +395,11 @@ fn body_of<'a, 'db>(mir: &'a MirFunction<'db>) -> &'a MirFunctionBody<'db> {
     }
 }
 
-/// The Rust symbol of the body of function `object`, named `name`: the name
-/// for readers, the object index for uniqueness. A rendered name repeats
-/// across packages and within one (two spellings can render alike, and a
-/// closure body renders under no package label); an object index is one
-/// function of the program.
+/// The Rust symbol of the body of function `object`, named `name` (its
+/// display name, with its package label): the name for readers, the object
+/// index for uniqueness. A rendered name repeats across packages and within
+/// one (two spellings can render alike); an object index is one function of
+/// the program.
 fn symbol_for(name: &str, object: usize) -> String {
     let mut symbol = String::with_capacity(name.len() + 8);
     for ch in name.chars() {
@@ -356,6 +441,16 @@ struct DeclKey {
     path: DeclPath,
 }
 
+/// A closure body's identity in the program: the package placing it and its
+/// [`FunctionIdentity`] there (its parent and ordinal). A lambda enters no
+/// package table — only the `MakeClosure` in its parent names its object —
+/// so it is found on the function objects themselves.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct LambdaKey {
+    package: u32,
+    identity: FunctionIdentity,
+}
+
 #[derive(Default)]
 pub(crate) struct ProgramIndex {
     /// Each package's ordinal by the source root it was emitted from, read
@@ -369,12 +464,16 @@ pub(crate) struct ProgramIndex {
     enums: HashMap<DeclKey, usize>,
     /// Interface object by identity.
     interfaces: HashMap<DeclKey, usize>,
+    /// Lambda (closure body) object by identity.
+    lambdas: HashMap<LambdaKey, usize>,
     /// Identities more than one object claimed: a malformed program. Every
     /// lookup of one is refused, so neither object is compiled against the
     /// other's index.
     ambiguous: HashSet<DeclKey>,
-    /// Every function of the program by object index, and its name as the
-    /// loader renders it.
+    ambiguous_lambdas: HashSet<LambdaKey>,
+    /// Every function of the program by object index, its name as the
+    /// loader renders it, and that name under its package's label
+    /// ([`CompiledFunction::display`]).
     infos: HashMap<usize, FunctionInfo>,
     names: HashMap<usize, String>,
     /// Methods and interface bodies by method name: what an interface
@@ -382,6 +481,7 @@ pub(crate) struct ProgramIndex {
     methods: HashMap<String, Vec<usize>>,
     /// The methods and interface bodies of every non-stdlib package.
     user_methods: Vec<usize>,
+    displays: HashMap<usize, String>,
     /// String literal → the compile-time string object bytecode loads it from.
     pub(crate) strings: HashMap<String, usize>,
     /// Function object → the global slot its object is loaded from: what a
@@ -401,12 +501,42 @@ impl ProgramIndex {
             packages: package_ordinals(db, root, program),
             ..Self::default()
         };
+        let mut collisions: Vec<String> = Vec::new();
         for (object, item) in program.objects.iter().enumerate() {
             match item {
                 Object::Function(function) => {
                     let Some(name) = program.function_name(ObjectIndex::from_raw(object)) else {
                         continue;
                     };
+                    // The ordinal of the package placing the object; a
+                    // hand-built program may list no ranges.
+                    let placing = u32::try_from(object).ok().and_then(|raw| {
+                        (0u32..)
+                            .zip(&program.packages)
+                            .find(|(_, package)| package.objects.contains(&raw))
+                    });
+                    let display = match &placing {
+                        Some((_, package)) if name.starts_with('.') => {
+                            format!("{}{name}", package.name)
+                        }
+                        _ => name.clone(),
+                    };
+                    if let (FunctionIdentity::Synthetic { .. }, Some((package, _))) =
+                        (&function.identity, &placing)
+                    {
+                        collisions.extend(
+                            claim(
+                                &mut index.lambdas,
+                                &mut index.ambiguous_lambdas,
+                                LambdaKey {
+                                    package: *package,
+                                    identity: function.identity.clone(),
+                                },
+                                object,
+                            )
+                            .map(|key| format!("{key:?}")),
+                        );
+                    }
                     index.names.insert(object, name);
                     let method = match &function.identity {
                         FunctionIdentity::Declared(FnPath::Method { name, .. }) => Some(name),
@@ -426,6 +556,7 @@ impl ProgramIndex {
                             index.user_methods.push(object);
                         }
                     }
+                    index.displays.insert(object, display);
                     index.infos.insert(
                         object,
                         FunctionInfo {
@@ -462,7 +593,6 @@ impl ProgramIndex {
                 index.globals.entry(object.raw()).or_insert(slot);
             }
         }
-        let mut collisions = Vec::new();
         for (ordinal, package) in (0u32..).zip(&program.packages) {
             let key = |path: DeclPath| DeclKey {
                 package: ordinal,
@@ -480,39 +610,51 @@ impl ProgramIndex {
                 if !index.infos.contains_key(&object.raw()) {
                     continue;
                 }
-                collisions.extend(claim(
-                    &mut index.functions,
-                    &mut index.ambiguous,
-                    key(path.clone()),
-                    object.raw(),
-                ));
+                collisions.extend(
+                    claim(
+                        &mut index.functions,
+                        &mut index.ambiguous,
+                        key(path.clone()),
+                        object.raw(),
+                    )
+                    .map(|key| format!("{key:?}")),
+                );
             }
             for (path, &object) in &package.classes {
                 let Object::Class(class) = &program.objects[object] else {
                     continue;
                 };
-                collisions.extend(claim(
-                    &mut index.classes,
-                    &mut index.ambiguous,
-                    key(DeclPath::Class(path.clone())),
-                    (object.raw(), class.fields.len()),
-                ));
+                collisions.extend(
+                    claim(
+                        &mut index.classes,
+                        &mut index.ambiguous,
+                        key(DeclPath::Class(path.clone())),
+                        (object.raw(), class.fields.len()),
+                    )
+                    .map(|key| format!("{key:?}")),
+                );
             }
             for (path, &object) in &package.enums {
-                collisions.extend(claim(
-                    &mut index.enums,
-                    &mut index.ambiguous,
-                    key(DeclPath::Enum(path.clone())),
-                    object.raw(),
-                ));
+                collisions.extend(
+                    claim(
+                        &mut index.enums,
+                        &mut index.ambiguous,
+                        key(DeclPath::Enum(path.clone())),
+                        object.raw(),
+                    )
+                    .map(|key| format!("{key:?}")),
+                );
             }
             for (path, &object) in &package.interfaces {
-                collisions.extend(claim(
-                    &mut index.interfaces,
-                    &mut index.ambiguous,
-                    key(DeclPath::Interface(path.clone())),
-                    object.raw(),
-                ));
+                collisions.extend(
+                    claim(
+                        &mut index.interfaces,
+                        &mut index.ambiguous,
+                        key(DeclPath::Interface(path.clone())),
+                        object.raw(),
+                    )
+                    .map(|key| format!("{key:?}")),
+                );
             }
         }
         debug_assert!(
@@ -520,6 +662,24 @@ impl ProgramIndex {
             "the program's tables place two objects at one identity: {collisions:?}"
         );
         index
+    }
+
+    /// The object of the closure body `identity` (a synthetic function), if
+    /// the program has one. `Err` when its identity is ambiguous in the
+    /// program.
+    pub(crate) fn lambda<'db>(
+        &self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        identity: &MirFunctionId<'db>,
+    ) -> Result<Option<usize>, Rejection> {
+        let Some(&package) = self.packages.get(&identity_root(db, identity)) else {
+            return Ok(None);
+        };
+        let key = LambdaKey {
+            package,
+            identity: function_identity(db, identity),
+        };
+        lookup_key(&self.lambdas, &self.ambiguous_lambdas, &key)
     }
 
     /// The object of the declared function `function`, if the program has
@@ -648,6 +808,12 @@ impl ProgramIndex {
         self.methods.get(method).into_iter().flatten().copied()
     }
 
+    /// [`Self::name`] under its package's label; see
+    /// [`CompiledFunction::display`].
+    pub(crate) fn display(&self, object: usize) -> &str {
+        &self.displays[&object]
+    }
+
     fn lookup<T: Copy>(
         &self,
         table: &HashMap<DeclKey, T>,
@@ -657,32 +823,33 @@ impl ProgramIndex {
         let Some(&package) = self.packages.get(&root) else {
             return Ok(None);
         };
-        self.lookup_key(table, &DeclKey { package, path })
+        lookup_key(table, &self.ambiguous, &DeclKey { package, path })
     }
+}
 
-    fn lookup_key<T: Copy>(
-        &self,
-        table: &HashMap<DeclKey, T>,
-        key: &DeclKey,
-    ) -> Result<Option<T>, Rejection> {
-        if self.ambiguous.contains(key) {
-            return Err(Rejection::Invalid(format!(
-                "ambiguous declaration {key:?}: more than one object of the program has it"
-            )));
-        }
-        Ok(table.get(key).copied())
+/// `key`'s entry in `table`, unless `ambiguous` lists it.
+fn lookup_key<K: Hash + Eq + std::fmt::Debug, T: Copy>(
+    table: &HashMap<K, T>,
+    ambiguous: &HashSet<K>,
+    key: &K,
+) -> Result<Option<T>, Rejection> {
+    if ambiguous.contains(key) {
+        return Err(Rejection::Invalid(format!(
+            "ambiguous declaration {key:?}: more than one object of the program has it"
+        )));
     }
+    Ok(table.get(key).copied())
 }
 
 /// Record that `key` names `value`. A second, different claim on one key
 /// marks the key ambiguous for every later lookup and is returned, so the
 /// caller can report every collision at once.
-fn claim<T: Copy + Eq>(
-    table: &mut HashMap<DeclKey, T>,
-    ambiguous: &mut HashSet<DeclKey>,
-    key: DeclKey,
+fn claim<K: Hash + Eq + Clone, T: Copy + Eq>(
+    table: &mut HashMap<K, T>,
+    ambiguous: &mut HashSet<K>,
+    key: K,
     value: T,
-) -> Option<DeclKey> {
+) -> Option<K> {
     match table.entry(key) {
         Entry::Vacant(vacant) => {
             vacant.insert(value);
@@ -693,6 +860,20 @@ fn claim<T: Copy + Eq>(
             ambiguous.insert(occupied.key().clone());
             Some(occupied.key().clone())
         }
+    }
+}
+
+/// The source root a function's identity places it in: its declaration's
+/// file's, or — for a closure body — the file's of the declaration (a
+/// function or a top-level `let`) its chain of owners ends in.
+fn identity_root(db: &dyn baml_compiler2_mir::Db, identity: &MirFunctionId<'_>) -> SourceRoot {
+    match identity {
+        MirFunctionId::Declared(function) => file_package(db, function.file(db)).root,
+        MirFunctionId::Synthetic { parent, .. } => match parent.as_ref() {
+            FunctionOwner::Function(function) => file_package(db, function.file(db)).root,
+            FunctionOwner::Let(binding) => file_package(db, binding.file(db)).root,
+            FunctionOwner::Synthetic(owner) => identity_root(db, owner),
+        },
     }
 }
 
@@ -737,6 +918,10 @@ mod tests {
     #[test]
     fn symbols_are_identifiers() {
         assert_eq!(symbol_for("user.Add", 3), "user_Add_3");
+        assert_eq!(
+            symbol_for("user.<lambda(f, 0)>", 7),
+            "user__lambda_f__0___7"
+        );
         assert_eq!(symbol_for("pkg.ns.Class.m", 0), "pkg_ns_Class_m_0");
         assert_eq!(
             symbol_for("user.<(user.A as baml.Show)>.show", 12),
@@ -775,10 +960,16 @@ mod tests {
             None
         );
         assert!(matches!(
-            index.lookup_key(&index.functions, &key("f")),
+            lookup_key(&index.functions, &index.ambiguous, &key("f")),
             Err(Rejection::Invalid(reason)) if reason.starts_with("ambiguous declaration")
         ));
-        assert_eq!(index.lookup_key(&index.functions, &key("g")), Ok(Some(5)));
-        assert_eq!(index.lookup_key(&index.functions, &key("h")), Ok(None));
+        assert_eq!(
+            lookup_key(&index.functions, &index.ambiguous, &key("g")),
+            Ok(Some(5))
+        );
+        assert_eq!(
+            lookup_key(&index.functions, &index.ambiguous, &key("h")),
+            Ok(None)
+        );
     }
 }

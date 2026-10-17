@@ -156,8 +156,22 @@ impl Generator<'_, '_> {
                     self.statement(depth, &code);
                 }
                 StatementKind::Drop(_) | StatementKind::Nop => {}
-                StatementKind::FreshCell { .. } => {
-                    return unsupported("captured local");
+                // The captured local's binding is created here: a new cell,
+                // holding null or the value of the cell it replaces (a loop
+                // header's binding, carried into the next iteration).
+                StatementKind::FreshCell { local, carry_value } => {
+                    let init = if *carry_value {
+                        self.hoist(Expr::new(
+                            format!("vm.cell_load(l{})?", local.0),
+                            Repr::Value,
+                        ))
+                        .code
+                    } else {
+                        "Value::NULL".to_string()
+                    };
+                    let cell = Expr::new(format!("vm.new_cell({init})"), Repr::Value);
+                    let code = self.store(id, &Place::Local(*local), &cell)?;
+                    self.statement(depth, &code);
                 }
                 // `type T = value`: bind the value into the frame's slot, as
                 // `BindType` does. Every type the body derives after this

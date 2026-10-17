@@ -155,7 +155,7 @@ pub(crate) fn function_path<'db>(
 /// The runtime identity of a MIR function ([`bex_vm_types::types::FunctionIdentity`]):
 /// a declared function's path in its package or its body key, a synthetic's
 /// parent and ordinal. What a pooled `Function` carries instead of a name.
-pub(crate) fn function_identity<'db>(
+pub fn function_identity<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     identity: &baml_compiler2_mir::MirFunctionId<'db>,
 ) -> bex_vm_types::types::FunctionIdentity {

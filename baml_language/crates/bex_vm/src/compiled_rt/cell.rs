@@ -140,7 +140,9 @@ impl BexVm {
         callee: HeapPtr,
         body: CompiledBody,
         args: &[Value],
+        line: u32,
     ) -> Result<Value, Box<VmError>> {
+        self.note_call_line(line);
         if self.frames.len() >= crate::vm::MAX_FRAMES {
             return Err(Box::new(VmError::thrown_fresh(
                 self.panic_to_exception_value(VmPanic::StackOverflow),
@@ -158,16 +160,16 @@ impl BexVm {
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         if self.telemetry.is_some() {
-            return self.call_compiled_observed(callee, args);
+            return self.call_compiled_funnelled(callee, &[], args);
         }
         let context = self.current_context().clone();
         let locals_offset = StackIndex::from_raw(self.stack.len());
-        let mut frame = crate::vm::BytecodeFrame::compiled(callee, locals_offset, context);
-        if let Object::Closure(closure) = self.get_object(callee)
-            && !closure.captured_type_args.is_empty()
-        {
-            frame.type_args = closure.captured_type_args.to_vec();
-        }
+        let type_args = match self.get_object(callee) {
+            Object::Closure(closure) => closure.captured_type_args.to_vec(),
+            _ => Vec::new(),
+        };
+        let frame =
+            crate::vm::BytecodeFrame::compiled(callee, locals_offset, type_args, context, None);
         self.frames.push(Frame::Bytecode(frame));
         let result = body(self, args);
         if result.is_ok() {
@@ -250,7 +252,13 @@ mod tests {
         let closure = vm.make_closure(function, vec![a, b], Box::new([RealizedTy::Int]));
         let closure = closure.as_object_ptr().expect("a closure is an object");
         let context = vm.current_context().clone();
-        let frame = BytecodeFrame::compiled(closure, StackIndex::from_raw(vm.stack.len()), context);
+        let frame = BytecodeFrame::compiled(
+            closure,
+            StackIndex::from_raw(vm.stack.len()),
+            Vec::new(),
+            context,
+            None,
+        );
         vm.frames.push(Frame::Bytecode(frame));
         let depth = vm.frame_depth();
         assert_eq!(vm.capture_cell(depth, 0).unwrap(), a);
@@ -267,7 +275,9 @@ mod tests {
         let frame = BytecodeFrame::compiled(
             function,
             StackIndex::from_raw(vm.stack.len()),
+            Vec::new(),
             context_of(&vm),
+            None,
         );
         vm.frames.push(Frame::Bytecode(frame));
         assert!(matches!(

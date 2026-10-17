@@ -1,9 +1,14 @@
-//! Operands and places: reading and writing locals, fields, and elements.
+//! Operands and places: reading and writing locals, fields, elements, and
+//! the cells of captured locals.
+//!
+//! A captured local's Rust variable holds its cell (`Place::Local` of it
+//! names the cell; `Place::Deref` the value in it); a lambda's captures are
+//! cells in its closure, read off its frame (`Place::Capture`).
 
-use baml_compiler2_mir::{BlockId, Operand, Place};
+use baml_compiler2_mir::{BlockId, CellId, Operand, Place};
 
 use super::{Expr, Gen, Generator, unsupported};
-use crate::{analysis::Repr, render::coerce};
+use crate::{admit::Rejection, analysis::Repr, render::coerce};
 
 impl<'db> Generator<'_, 'db> {
     pub(super) fn operand(&mut self, block: BlockId, operand: &Operand<'db>) -> Gen<Expr> {
@@ -68,7 +73,35 @@ impl<'db> Generator<'_, 'db> {
                     self.fallible(block, &format!("vm.load_array_element({base}, {index})"))?;
                 Ok(Expr::new(code, Repr::Value))
             }
-            Place::Capture(_) | Place::Deref(_) => unsupported("captured local"),
+            Place::Capture(index) => Ok(Expr::new(
+                format!("vm.capture_cell(depth, {index})?"),
+                Repr::Value,
+            )),
+            Place::Deref(cell) => {
+                let (cell, repr) = self.cell(cell);
+                let code = coerce(&format!("vm.cell_load({cell})?"), Repr::Value, repr);
+                Ok(Expr::new(code, repr))
+            }
+        }
+    }
+
+    /// The cell `cell` names, bound, and how the value in it is held.
+    fn cell(&mut self, cell: &CellId) -> (String, Repr) {
+        match cell {
+            CellId::Local(local) => (format!("l{}", local.0), self.analysis.values[local.0]),
+            CellId::Capture(index) => {
+                let cell = self.hoist(Expr::new(
+                    format!("vm.capture_cell(depth, {index})?"),
+                    Repr::Value,
+                ));
+                let repr = self
+                    .analysis
+                    .captures
+                    .get(*index)
+                    .copied()
+                    .unwrap_or(Repr::Value);
+                (cell.code, repr)
+            }
         }
     }
 
@@ -108,7 +141,14 @@ impl<'db> Generator<'_, 'db> {
                 )?;
                 Ok(format!("{code};"))
             }
-            Place::Capture(_) | Place::Deref(_) => unsupported("captured local"),
+            Place::Deref(cell) => {
+                let value = self.value_arg(&value.code, value.repr);
+                let (cell, _) = self.cell(cell);
+                Ok(format!("vm.cell_store({cell}, {value})?;"))
+            }
+            Place::Capture(_) => Err(Rejection::Invalid(
+                "store into a closure's capture cell".into(),
+            )),
         }
     }
 }

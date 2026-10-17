@@ -206,7 +206,7 @@ impl FunctionOrigin {
 /// body its parent and ordinal, an initializer its role — and the package it
 /// belongs to is [`Function::owner`], so a name is always rendered from a
 /// viewpoint (today, lossily, the owner's display label), never stored.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum FunctionIdentity {
     /// A declared free function or class-inherent method.
     Declared(FnPath),
@@ -241,7 +241,7 @@ pub enum FunctionIdentity {
 }
 
 /// What a synthetic function was lowered from.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum SyntheticKind {
     /// A lambda expression.
     Lambda,
@@ -252,7 +252,7 @@ pub enum SyntheticKind {
 /// Where a synthetic function was lowered: a function (declared, body, or
 /// itself synthetic), or a top-level `let` initializer, which is lowered as a
 /// body and only ever OWNS synthetic functions.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum SyntheticParent {
     Function(FunctionIdentity),
     Let(ItemPath),

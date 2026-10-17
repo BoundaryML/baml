@@ -141,18 +141,21 @@ impl<'db> Collector<'_, 'db> {
                     self.operand(value);
                 }
             }
-            // A closure's body runs when the closure is called; its
-            // references are its maker's.
+            // A closure's body runs when the closure is called: the lambda's
+            // object is reached, and its references are its maker's.
             Rvalue::MakeClosure {
                 lambda_idx,
                 captures,
                 ..
             } => {
                 self.operands(captures);
-                if let Some(lambda) = lambdas.get(*lambda_idx)
-                    && let MirFunctionKind::Bytecode(body) = &lambda.kind
-                {
-                    self.body(body, &lambda.lambdas);
+                if let Some(lambda) = lambdas.get(*lambda_idx) {
+                    if let Ok(Some(object)) = self.index.lambda(self.db, &lambda.identity) {
+                        self.out.insert(object);
+                    }
+                    if let MirFunctionKind::Bytecode(body) = &lambda.kind {
+                        self.body(body, &lambda.lambdas);
+                    }
                 }
             }
             Rvalue::MakeBoundMethod { func, receiver } => {

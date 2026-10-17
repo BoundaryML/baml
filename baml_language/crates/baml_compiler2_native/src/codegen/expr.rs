@@ -8,6 +8,7 @@ use baml_compiler2_mir::function_display_name;
 
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
+    Rejection,
     analysis::{Repr, static_realized, template_blocker},
     render::{binop_name, cmp_name},
 };
@@ -127,7 +128,42 @@ impl<'db> Generator<'_, 'db> {
             } => unsupported("untyped array aggregate"),
             Rvalue::Map(..) => unsupported("map literal"),
             Rvalue::Uint8Array(_) => unsupported("byte array literal"),
-            Rvalue::MakeClosure { .. } => unsupported("closure"),
+            // A closure over a lambda, which is a unit of its own (compiled
+            // or not: the object is the same): its cells, the enclosing
+            // function's type arguments it captures, and the lambda's object.
+            Rvalue::MakeClosure {
+                lambda_idx,
+                captures,
+                type_arg_templates,
+            } => {
+                let Some(lambda) = self.lambdas.get(*lambda_idx) else {
+                    return Err(Rejection::Invalid(format!(
+                        "closure over lambda {lambda_idx} of a function with {}",
+                        self.lambdas.len()
+                    )));
+                };
+                let Some(object) = self.index.lambda(self.db, &lambda.identity)? else {
+                    let name = lambda.identity.display_name(self.db);
+                    return unsupported(format!("lambda `{name}` not found in the program"));
+                };
+                // The enclosing function's type arguments the closure
+                // captures, read from the frame where they name its own.
+                let types = self.realized_all(type_arg_templates)?;
+                let mut cells = Vec::with_capacity(captures.len());
+                for capture in captures {
+                    let cell = self.operand(block, capture)?;
+                    cells.push(self.value_arg(&cell.code, cell.repr));
+                }
+                Ok(Expr::new(
+                    format!(
+                        "vm.make_closure(vm.idx_to_ptr(ObjectIndex::from_raw({object})), \
+                         vec![{}], vec![{}].into_boxed_slice())",
+                        cells.join(", "),
+                        types.join(", ")
+                    ),
+                    Repr::Value,
+                ))
+            }
             Rvalue::MakeBoundMethod { .. } => unsupported("function used as a value"),
             // `foo<T>`: a `GenericFunction` over the function's global slot
             // at the frame-derived arguments, as `MakeGenericFunction`

@@ -4,8 +4,8 @@
 use std::collections::{BTreeSet, HashMap};
 
 use baml_compiler2_mir::{
-    Constant, MirFunction, MirFunctionBody, Operand, Place, Rvalue, StatementKind, SwitchKey,
-    Terminator,
+    CellId, Constant, MirFunction, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
+    SwitchKey, Terminator,
 };
 use baml_type::{Literal, TyTemplate};
 use bex_vm_types::FunctionKind;
@@ -56,7 +56,17 @@ impl Repr {
 
 pub(crate) struct Analysis {
     pub(crate) arity: usize,
+    /// How each local's slot is held. A captured local's slot holds its
+    /// cell, a `Value`; see [`Self::values`] for what the cell holds.
     pub(crate) reprs: Vec<Repr>,
+    /// How the value each local names is held: for a captured local, the
+    /// value in its cell (what a `Deref` of it reads or writes), otherwise
+    /// the slot itself ([`Self::reprs`]).
+    pub(crate) values: Vec<Repr>,
+    /// For a lambda, how the value behind each of its closure's captures is
+    /// held (what `Deref(Capture(i))` reads or writes): the repr of the
+    /// enclosing function's local the capture is the cell of.
+    pub(crate) captures: Vec<Repr>,
     /// The shape of the body's graph. Only an inline body structures it
     /// (`Generator::function`); a resumable body runs its blocks as a state
     /// machine and needs no structure.
@@ -87,25 +97,25 @@ impl Analysis {
         index: &ProgramIndex,
         mir: &MirFunction<'db>,
         body: &MirFunctionBody<'db>,
+        captures: Vec<Repr>,
     ) -> Result<Self, Rejection> {
         if mir.arity + 1 > body.locals.len() {
             return Err(Rejection::Invalid("fewer locals than parameters".into()));
         }
-        for (i, local) in body.locals.iter().enumerate() {
-            if local.is_captured {
-                return Err(Rejection::Unsupported(format!(
-                    "local _{i} is captured by a closure"
-                )));
-            }
-        }
-        let mut reprs: Vec<Repr> = body
-            .locals
+        let values = value_reprs(body);
+        // A captured local's slot holds its cell from its `FreshCell` on (a
+        // parameter's from frame entry, where the body wraps it).
+        let reprs: Vec<Repr> = values
             .iter()
-            .map(|local| Repr::of(&local.ty))
+            .zip(&body.locals)
+            .map(|(&value, local)| {
+                if local.is_captured {
+                    Repr::Value
+                } else {
+                    value
+                }
+            })
             .collect();
-        // A parameter with a default arrives as `OmittedArg` and MIR's
-        // prologue tests for that sentinel in the body; such a local stays a
-        // `Value` so the test sees the sentinel instead of an unboxed zero.
         let mut static_types = HashMap::new();
         let mut frame_types = HashMap::new();
         for block in &body.blocks {
@@ -113,33 +123,18 @@ impl Analysis {
                 let StatementKind::Assign { destination, value } = &statement.kind else {
                     continue;
                 };
-                match value {
-                    Rvalue::BinaryOp { left, right, .. } => {
-                        for (this, other) in [(left, right), (right, left)] {
-                            if let (
-                                Operand::Copy(Place::Local(local))
-                                | Operand::Move(Place::Local(local)),
-                                Operand::Constant(Constant::OmittedArg),
-                            ) = (this, other)
-                            {
-                                reprs[local.0] = Repr::Value;
-                            }
-                        }
+                if let Rvalue::LoadType(template) = value {
+                    let Place::Local(local) = destination else {
+                        continue;
+                    };
+                    if let Some(code) = static_realized(index, template) {
+                        let primitive = is_primitive(template);
+                        static_types.insert(local.0, StaticTy { code, primitive });
+                    } else if reads_frame(template)
+                        && realized_expr(index, template, true).is_some()
+                    {
+                        frame_types.insert(local.0, template.clone());
                     }
-                    Rvalue::LoadType(template) => {
-                        let Place::Local(local) = destination else {
-                            continue;
-                        };
-                        if let Some(code) = static_realized(index, template) {
-                            let primitive = is_primitive(template);
-                            static_types.insert(local.0, StaticTy { code, primitive });
-                        } else if reads_frame(template)
-                            && realized_expr(index, template, true).is_some()
-                        {
-                            frame_types.insert(local.0, template.clone());
-                        }
-                    }
-                    _ => {}
                 }
             }
         }
@@ -187,6 +182,8 @@ impl Analysis {
         Ok(Self {
             arity: mir.arity,
             reprs,
+            values,
+            captures,
             cfg,
             user_callees,
             static_types,
@@ -201,6 +198,83 @@ impl Analysis {
     pub(crate) fn is_type_local(&self, i: usize) -> bool {
         self.static_types.contains_key(&i) || self.frame_types.contains_key(&i)
     }
+}
+
+/// How the value each local of `body` names is held: its declared type's
+/// repr. A parameter with a default arrives as `OmittedArg` and MIR's
+/// prologue tests for that sentinel in the body; such a local stays a
+/// `Value` so the test sees the sentinel instead of an unboxed zero.
+pub(crate) fn value_reprs(body: &MirFunctionBody<'_>) -> Vec<Repr> {
+    let mut values: Vec<Repr> = body
+        .locals
+        .iter()
+        .map(|local| Repr::of(&local.ty))
+        .collect();
+    for block in &body.blocks {
+        for statement in &block.statements {
+            let StatementKind::Assign {
+                value: Rvalue::BinaryOp { left, right, .. },
+                ..
+            } = &statement.kind
+            else {
+                continue;
+            };
+            for (this, other) in [(left, right), (right, left)] {
+                if let (
+                    Operand::Copy(place) | Operand::Move(place),
+                    Operand::Constant(Constant::OmittedArg),
+                ) = (this, other)
+                    && let Place::Local(local) | Place::Deref(CellId::Local(local)) = place
+                {
+                    values[local.0] = Repr::Value;
+                }
+            }
+        }
+    }
+    values
+}
+
+/// How the value behind each capture of the `lambda_idx`-th lambda of the
+/// function whose body is `parent` is held: each capture is the cell of one
+/// of the parent's locals (`values`, see [`value_reprs`]) or one of the
+/// parent's own captures (`captures`), forwarded.
+pub(crate) fn capture_reprs(
+    parent: &MirFunctionBody<'_>,
+    lambda_idx: usize,
+    values: &[Repr],
+    captures: &[Repr],
+) -> Vec<Repr> {
+    let sites = parent.blocks.iter().flat_map(|block| &block.statements);
+    for statement in sites {
+        let StatementKind::Assign {
+            value:
+                Rvalue::MakeClosure {
+                    lambda_idx: made,
+                    captures: cells,
+                    ..
+                },
+            ..
+        } = &statement.kind
+        else {
+            continue;
+        };
+        if *made != lambda_idx {
+            continue;
+        }
+        return cells
+            .iter()
+            .map(|cell| match cell {
+                Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+                    values.get(local.0).copied().unwrap_or(Repr::Value)
+                }
+                Operand::Copy(Place::Capture(index)) | Operand::Move(Place::Capture(index)) => {
+                    captures.get(*index).copied().unwrap_or(Repr::Value)
+                }
+                _ => Repr::Value,
+            })
+            .collect();
+    }
+    Vec::new()
 }
 
 /// `xs.iter()` on a local of array type, as `(iterator local, array local)`.
@@ -472,10 +546,17 @@ pub(crate) struct StaticTy {
     pub(crate) primitive: bool,
 }
 
-/// Whether `template` is a primitive or an array of primitives.
+/// Whether `template` is a primitive (`null` and `never` included: a throws
+/// type of `never` is the common type argument of a callback-taking builtin)
+/// or an array of primitives.
 fn is_primitive(template: &baml_compiler2_mir::TyTemplate) -> bool {
     match template {
-        TyTemplate::Int | TyTemplate::Float | TyTemplate::Bool | TyTemplate::String => true,
+        TyTemplate::Int
+        | TyTemplate::Float
+        | TyTemplate::Bool
+        | TyTemplate::String
+        | TyTemplate::Null
+        | TyTemplate::Never => true,
         TyTemplate::List(element) => is_primitive(element),
         _ => false,
     }
@@ -523,6 +604,7 @@ pub(crate) fn realized_expr(
         TyTemplate::String => "RealizedTy::String".to_string(),
         TyTemplate::Null => "RealizedTy::Null".to_string(),
         TyTemplate::Unknown => "RealizedTy::unknown()".to_string(),
+        TyTemplate::Never => "RealizedTy::Never".to_string(),
         TyTemplate::TypeArgRef(slot) => {
             if !frame {
                 return None;
@@ -612,8 +694,7 @@ pub(crate) fn template_blocker(
             | TyTemplate::RustType
             | TyTemplate::Type
             | TyTemplate::Resource
-            | TyTemplate::PromptAst
-            | TyTemplate::Never => "an opaque type",
+            | TyTemplate::PromptAst => "an opaque type",
             _ => return None,
         })
     }

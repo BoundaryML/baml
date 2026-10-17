@@ -24,8 +24,8 @@ use std::{
 };
 
 use baml_compiler2_mir::{
-    BlockId, Constant, Local, MirFunctionBody, Operand, Place, StatementKind, SwitchKey,
-    Terminator, function_display_name,
+    BlockId, Constant, Local, MirFunction, MirFunctionBody, Operand, Place, StatementKind,
+    SwitchKey, Terminator, function_display_name,
 };
 
 use crate::{
@@ -69,6 +69,9 @@ pub(crate) struct Generator<'a, 'db> {
     /// Builtin native keys the module binds, by key → ordinal.
     pub(crate) natives: &'a mut BTreeMap<String, usize>,
     pub(crate) body: &'a MirFunctionBody<'db>,
+    /// The lambdas lowered inside this function, which its `MakeClosure`s
+    /// index.
+    pub(crate) lambdas: &'a [MirFunction<'db>],
     pub(crate) analysis: &'a Analysis,
     /// Line starts of the source file, and the function's declaration span.
     pub(crate) lines: &'a [u32],
@@ -166,7 +169,15 @@ impl<'db> Generator<'_, 'db> {
                 continue;
             }
             let ty = repr.rust_type();
-            if (1..=arity).contains(&i) {
+            if (1..=arity).contains(&i) && self.body.locals[i].is_captured {
+                // A captured parameter gets its cell at entry (bytecode's
+                // preamble wraps it): the one binding without a `FreshCell`.
+                let _ = writeln!(
+                    out,
+                    "    let mut l{i}: {ty} = vm.new_cell(args[{}]);",
+                    i - 1
+                );
+            } else if (1..=arity).contains(&i) {
                 let arg = coerce(&format!("args[{}]", i - 1), Repr::Value, *repr);
                 let _ = writeln!(out, "    let mut l{i}: {ty} = {arg};");
             } else {
@@ -292,6 +303,12 @@ impl<'db> Generator<'_, 'db> {
         // `i`: read every argument before writing any write-through slot,
         // which would land on the next argument.
         for i in 1..=arity {
+            if self.body.locals[i].is_captured {
+                // Its cell, as at an inline entry.
+                self.line(3, &format!("let arg = vm.slot(depth, {});", i - 1));
+                self.line(3, &format!("l{i} = vm.new_cell(arg);"));
+                continue;
+            }
             let arg = coerce(
                 &format!("vm.slot(depth, {})", i - 1),
                 Repr::Value,
@@ -540,7 +557,8 @@ impl<'db> Generator<'_, 'db> {
                 if let StatementKind::Assign {
                     destination: Place::Local(local),
                     ..
-                } = &statement.kind
+                }
+                | StatementKind::FreshCell { local, .. } = &statement.kind
                 {
                     excluded.insert(local.0);
                 }
@@ -714,6 +732,9 @@ impl<'db> Generator<'_, 'db> {
                     }
                     _ => self.arg_values(block, args)?,
                 };
+                if !matches!(callee, Operand::Constant(_)) && types.is_empty() {
+                    self.direct_closure_call(block, &args, depth)?;
+                }
                 self.call_types = types;
                 (
                     format!("Step::Call {{ callee, argc: {} }}", args.len()),
@@ -805,6 +826,36 @@ impl<'db> Generator<'_, 'db> {
         Ok(())
     }
 
+    /// Before a call through a function value suspends (`pause`): when the
+    /// value is a closure (or a plain function) whose body is compiled and
+    /// inline, call it directly, as a call to a named compiled function is
+    /// made, and continue; anything else goes through the VM. `callee` and
+    /// `args` are bound.
+    fn direct_closure_call(&mut self, block: BlockId, args: &[String], depth: usize) -> Gen<()> {
+        let (destination, target) = self.resume_edge(block)?;
+        self.flush(depth);
+        self.line(
+            depth,
+            &format!(
+                "if let Some(body) = vm.closure_inline_body(callee, {}) {{",
+                args.len()
+            ),
+        );
+        let call = self.fallible(
+            block,
+            &format!(
+                "vm.call_closure_compiled(callee, body, &[{}], line)",
+                args.join(", ")
+            ),
+        )?;
+        let store = self.store(block, &destination, &Expr::new(call, Repr::Value))?;
+        self.statement(depth + 1, &store);
+        let jump = self.jump_to(target.0);
+        self.line(depth + 1, &jump);
+        self.line(depth, "}");
+        Ok(())
+    }
+
     /// How a block of a resumable function hands control on.
     fn transfer(&mut self, id: BlockId, depth: usize) -> Gen<()> {
         if self.block_suspends(id.0) {
@@ -868,13 +919,13 @@ impl<'db> Generator<'_, 'db> {
     fn resume_arms(&mut self, block: BlockId, depth: usize) -> Gen<()> {
         let point = block.0 + 1;
         let (destination, target) = self.resume_edge(block)?;
-        if !matches!(destination, Place::Local(_)) {
+        if !matches!(destination, Place::Local(_) | Place::Deref(_)) {
             return unsupported("a suspending call's result stored into a field or element");
         }
-        let store = self.store(block, &destination, &Expr::new("v", Repr::Value))?;
         self.line(depth, &format!("({point}, Resume::Value(v)) => {{"));
         self.restore_locals(block, depth + 1)?;
-        self.line(depth + 1, &store);
+        let store = self.store(block, &destination, &Expr::new("v", Repr::Value))?;
+        self.statement(depth + 1, &store);
         self.line(depth + 1, &format!("bb = {};", target.0));
         self.line(depth, "}");
         if self.body.blocks[block.0].unwind.is_some() {
