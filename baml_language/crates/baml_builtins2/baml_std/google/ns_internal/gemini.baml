@@ -1205,11 +1205,7 @@ function gemini_invoke_stream(
     let call = ai.events.ModelCall {
         resolved_model: ai.events.ModelKey { provider: c.provider(), model: c.model },
         usage: null,
-        timing: ai.events.Timing {
-            start_time: started,
-            duration: null,
-            ttft: null,
-        },
+        timing: ai.events.Timing { start_time: started, duration: null, ttft: null },
         http_request: if (c.capture_wire) {
             baml.http.Request {
                 method: req.method,

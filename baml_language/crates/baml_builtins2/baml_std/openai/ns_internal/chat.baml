@@ -1581,11 +1581,7 @@ function _chat_send(
     let call = ai.events.ModelCall {
         resolved_model: ai.events.ModelKey { provider: provider, model: requested_model },
         usage: null,
-        timing: ai.events.Timing {
-            start_time: started,
-            duration: started.elapsed(),
-            ttft: null,
-        },
+        timing: ai.events.Timing { start_time: started, duration: started.elapsed(), ttft: null },
         http_request: if (capture_wire) {
             baml.http.Request {
                 method: request.method,
@@ -1879,11 +1875,7 @@ function chat_invoke_stream(
     let call = ai.events.ModelCall {
         resolved_model: ai.events.ModelKey { provider: compat.provider, model: params.model },
         usage: null,
-        timing: ai.events.Timing {
-            start_time: started,
-            duration: null,
-            ttft: null,
-        },
+        timing: ai.events.Timing { start_time: started, duration: null, ttft: null },
         http_request: if (capture_wire) {
             baml.http.Request {
                 method: request.method,

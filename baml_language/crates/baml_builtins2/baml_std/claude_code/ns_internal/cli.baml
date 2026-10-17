@@ -451,11 +451,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     let call = ai.events.ModelCall {
         resolved_model: ai.events.ModelKey { provider: c.provider(), model: c.model },
         usage: null,
-        timing: ai.events.Timing {
-            start_time: started,
-            duration: started.elapsed(),
-            ttft: null,
-        },
+        timing: ai.events.Timing { start_time: started, duration: started.elapsed(), ttft: null },
         http_request: null,
         http_response: null,
         sse_responses: null,
