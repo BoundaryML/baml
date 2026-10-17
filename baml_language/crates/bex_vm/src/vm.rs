@@ -932,11 +932,12 @@ pub(crate) mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn native_body_is_indistinguishable_from_bytecode() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
         use crate::telemetry::{InvocationOutcome, SpanRecord, TimingRecord};
 
         static CALLS: AtomicUsize = AtomicUsize::new(0);
+        static SAME: AtomicU32 = AtomicU32::new(0);
         fn add_native(
             vm: &mut BexVm,
             args: &[Value],
@@ -944,10 +945,30 @@ pub(crate) mod tests {
             CALLS.fetch_add(1, Ordering::Relaxed);
             Ok(vm.add_int(args[0], args[1])?)
         }
+        // `Same<T>(x: T, y: T) -> bool { y is T }`: a generic body reading
+        // its frame, calling a compiled generic callee with its own type
+        // argument (`Add` stands in: it takes two ints).
+        fn same_native(
+            vm: &mut BexVm,
+            args: &[Value],
+        ) -> Result<Value, Box<crate::errors::VmError>> {
+            let depth = vm.frame_depth();
+            let t = vm.frame_type_arg(depth, 0)?;
+            let callee =
+                vm.idx_to_ptr(ObjectIndex::from_raw(SAME.load(Ordering::Relaxed) as usize));
+            let _ = vm.call_compiled_with_types(
+                callee,
+                add_native,
+                std::slice::from_ref(&t),
+                &[args[0], args[1]],
+            )?;
+            Ok(Value::bool(vm.value_is_member_of(args[1], &t)))
+        }
 
         const SOURCE: &str = r#"
             function Add(a: int, b: int) -> int { a + b }
-            function AddStr(a: int, b: int) -> string { `${Add(a, b)}` }
+            function Same<T>(x: T, y: T) -> bool { Add(1, 2); y is T }
+            function AddStr(a: int, b: int) -> string { `${Add(a, b)}|${Same<int>(a, b)}` }
             function Caller(a: int, b: int) -> string {
                 AddStr(a, b) catch (e, ctx) {
                     baml.panics.IntegerOverflow => {
@@ -963,9 +984,11 @@ pub(crate) mod tests {
 
         type Timings = Vec<(btel_types::CallPathId, InvocationOutcome, bool)>;
         type NamedPaths = HashMap<btel_types::CallPathId, (Option<String>, String)>;
+        /// The type arguments each span announced, by callee name.
+        type TypeArgs = Vec<(String, String)>;
 
         fn named(
-            run: &(String, Timings, NamedPaths),
+            run: &(String, Timings, NamedPaths, TypeArgs),
         ) -> Vec<(Option<String>, String, InvocationOutcome, bool)> {
             run.1
                 .iter()
@@ -976,22 +999,47 @@ pub(crate) mod tests {
                 .collect()
         }
 
-        fn run(native: bool) -> (String, Timings, NamedPaths) {
+        fn run(native: bool) -> (String, Timings, NamedPaths, TypeArgs) {
             let mut program = baml_test_support::compile_source(SOURCE);
             let entry = program.rendered_callables()["user.Main"].object.raw();
+            let add = program.rendered_callables()["user.Add"].object.raw();
+            SAME.store(u32::try_from(add).unwrap(), Ordering::Relaxed);
             if native {
-                let add = program.rendered_callables()["user.Add"].object.raw();
-                let Object::Function(function) = &mut program.objects[ObjectIndex::from_raw(add)]
-                else {
-                    unreachable!()
-                };
-                assert!(matches!(function.kind, FunctionKind::Bytecode));
-                function.native_body = Some(test_body(
-                    crate::compiled_rt::CompiledFn::Inline(add_native),
-                    0,
-                ));
+                for (name, body) in [
+                    ("user.Add", add_native as crate::compiled_rt::CompiledBody),
+                    ("user.Same", same_native),
+                ] {
+                    let object = program.rendered_callables()[name].object.raw();
+                    let Object::Function(function) =
+                        &mut program.objects[ObjectIndex::from_raw(object)]
+                    else {
+                        unreachable!()
+                    };
+                    assert!(matches!(function.kind, FunctionKind::Bytecode));
+                    function.native_body =
+                        Some(test_body(crate::compiled_rt::CompiledFn::Inline(body), 0));
+                }
             }
+            let same = program.rendered_callables()["user.Same"].object.raw();
             let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+            // `Same`'s spans capture inputs, so its announcement carries the
+            // call's type arguments: the record a compiled generic call must
+            // produce as a bytecode one does.
+            let Object::Function(same) = vm.get_object(vm.heap.compile_time_ptr(same)) else {
+                unreachable!()
+            };
+            vm.telemetry
+                .as_ref()
+                .unwrap()
+                .set_policy(
+                    same,
+                    crate::telemetry::TelemetryPolicy {
+                        span_from_entry: true,
+                        capture_inputs: true,
+                        ..crate::telemetry::TelemetryPolicy::NONE
+                    },
+                )
+                .unwrap();
             vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
             let result = loop {
                 match vm.exec().unwrap() {
@@ -1031,33 +1079,53 @@ pub(crate) mod tests {
                     named_paths.insert(*call_path, (caller, callee.fqn));
                 }
             }
-            (result, timings, named_paths)
+            let type_args = telemetry
+                .span_records()
+                .iter()
+                .filter_map(|event| match event {
+                    SpanRecord::FunctionSpanAnnouncement {
+                        call_path,
+                        captured_type_args: Some(type_args),
+                        ..
+                    } => Some((named_paths[call_path].1.clone(), format!("{type_args:?}"))),
+                    _ => None,
+                })
+                .collect();
+            (result, timings, named_paths, type_args)
         }
 
         let bytecode = run(false);
         assert_eq!(CALLS.load(Ordering::Relaxed), 0);
         let native = run(true);
+        // `Add` runs natively from `AddStr` twice (the second overflows) and
+        // from the compiled `Same` once, on the first call only.
         assert_eq!(
             CALLS.load(Ordering::Relaxed),
-            2,
-            "the native body must run for both calls"
+            3,
+            "the native bodies must run for every call"
         );
 
         // Same value: the first call adds, the second overflows, is caught by
         // the bytecode `catch` in `Caller`, and its trace's innermost frame is
         // the compiled function.
-        assert_eq!(bytecode.0, "3|user.Add");
+        assert_eq!(bytecode.0, "3|true|user.Add");
         assert_eq!(native.0, bytecode.0);
 
         // Same telemetry: the user functions (Main, Caller x2, AddStr x2,
-        // Add x2) plus whatever stdlib bytecode the program reaches, with the
-        // second Add completing in error, on the same call paths.
+        // Add x3, Same x1) plus whatever stdlib bytecode the program reaches,
+        // with the second Add completing in error, on the same call paths;
+        // the generic call's announced type arguments included.
         // Call-path ids come from a process-global counter, so compare the
         // records by the (caller, callee) names the ids resolve to.
         let bytecode_named = named(&bytecode);
         let native_named = named(&native);
-        assert!(bytecode_named.len() >= 7);
+        assert!(bytecode_named.len() >= 9);
         assert_eq!(native_named, bytecode_named);
+        assert!(
+            !bytecode.3.is_empty(),
+            "the generic call announces its type arguments"
+        );
+        assert_eq!(native.3, bytecode.3);
         let add_outcomes: Vec<_> = native_named
             .iter()
             .filter(|(caller, callee, _, _)| {
