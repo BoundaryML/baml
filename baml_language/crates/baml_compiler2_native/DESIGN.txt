@@ -264,13 +264,14 @@ calls to compiled functions, builtins (callback-running ones through the VM),
 sys ops and LLM functions (through the VM), function values, await,
 await_any, spawn, generic builtins when every type argument is static (a
 primitive, a non-generic class, or an array of those), string literals from
-the program's string objects, and for-in over an array (an index walk with the
-semantics baml.iter.ArrayIterator documents).
+the program's string objects, for-in over an array (an index walk with the
+semantics baml.iter.ArrayIterator documents), and interface dispatch on a
+statically known interface (section 11).
 
 Stays bytecode: closures (creating one; calling one works), user generic
-functions, interface dispatch other than array iteration, type values
-needing frame type arguments, map literals and indexes, enum variant
-literals, bigint, trace hooks, defer cleanup pads.
+functions, interface dispatch through an interface instantiated with a frame
+type argument, type values needing frame type arguments, map literals and
+indexes, enum variant literals, bigint, trace hooks, defer cleanup pads.
 
 
 9. Performance: what caps it
@@ -360,3 +361,35 @@ lowered to compact code, allocated for every await (21x slower than bytecode
 on a settled future), with its own frame in the trace.
 
 Open: raise evidence for compiled landings.
+
+
+11. Interface dispatch
+
+An interface method call names its interface and method statically and its
+receiver's implementation at run time (MIR emits VirtualCall even for a
+concrete receiver; only a structural witness is devirtualized). Compiled
+code resolves it as the interpreter does (the same ImplResolver, the same
+frame type arguments) and treats the call as a suspension: the body
+resolves the callee through the site's cache, lays the arguments over that
+callee's slots as the interpreter's remap does, and requests the call
+(Step::Call), so a bytecode, generic or suspending implementation runs as
+it would from bytecode. When the callee is a compiled body that cannot
+suspend and takes no type arguments, the body calls it in place
+(call_compiled) and continues. Interface fields, bound method values and
+(Self as I).method values resolve inline.
+
+The cache (compiled_rt::VirtualSite) is one static per call site in the
+generated crate: an atomic word pairing the receiver's type tag with the
+callee's object index, filled for static implementations only (a structural
+default can be replaced by an implementation a later-loaded package
+registers, as in the interpreter), keyed by tag only where the tag decides
+the implementation (a primitive, an instance of a non-generic class in the
+image), with the implementation's frame type arguments beside it for the
+receiver that first filled the site. A hit is one load and a compare where
+the interpreter probes a table keyed by call site and receiver.
+
+Open: a site whose implementation stays bytecode pays the stub round trip;
+devirtualizing at compile time (a non-generic interface with one static
+implementation for the receiver's static type) would keep such a function
+inline. A call with named or omitted optional arguments to an inline
+implementation is requested rather than called in place.
