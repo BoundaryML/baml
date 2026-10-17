@@ -476,22 +476,49 @@ class Agent {
             | reflect.errors.CompilationError
             | root.errors.Failure;
 
+        //baml:trace_passthrough
         function run<Out>(self, spec: FunctionSpec<Out>) -> RunResult<Out> {
-            let schema_attempts = self._validated_schema_attempts();
             let selected = self.client ?? spec.default_client;
-            let j = Journal.new(spec);
-            let delivered = _Delivered { count: 0 };
-            self._deliver(j, delivered);
-            self._run_steps<Out>(selected, spec, j, delivered, schema_attempts) catch_all (e) {
+            let inputs: map<string, unknown> = {};
+            let arguments = spec.arguments();
+            for (let key in arguments.keys()) {
+                inputs[key] = arguments[key];
+            }
+            inputs["client"] = selected;
+            inputs["on_event"] = self.on_event;
+            let span = trace._create_span(spec.target(), inputs = inputs, config = trace._passthrough()) catch_all (e) {
                 _ => {
-                    // A turn is on the record before it is judged, so the turn
-                    // that ends the run with an error is in the journal: the
-                    // reply that did not parse and the repair attempts before
-                    // it, the cut-short turn, the refusal, the failed tool.
-                    // Every error passes here, and the listener gets what the
-                    // journal holds before the error propagates.
-                    self._deliver(j, delivered);
-                    throw e
+                    throw baml.errors.UnknownError.with_message<never>(e, "could not start agent span")
+                },
+            };
+            span.run(() -> {
+                let schema_attempts = self._validated_schema_attempts();
+                let j = Journal.new(spec);
+                let delivered = _Delivered { count: 0 };
+                self._deliver(j, delivered);
+                let result = self._run_steps<Out>(selected, spec, j, delivered, schema_attempts) catch_all (e) {
+                    _ => {
+                        // A turn is on the record before it is judged, so the turn
+                        // that ends the run with an error is in the journal: the
+                        // reply that did not parse and the repair attempts before
+                        // it, the cut-short turn, the refusal, the failed tool.
+                        // Every error passes here, and the listener gets what the
+                        // journal holds before the error propagates.
+                        self._deliver(j, delivered);
+                        throw e
+                    },
+                };
+                span.finish(result.value);
+                result
+            }) catch_all_panics (e, context) {
+                let e: trace.SpanError => {
+                    let error = baml.errors.UnknownError.with_message<never>(e, "could not enter agent span");
+                    span.fail_with_context(error, context);
+                    throw error;
+                },
+                _ => {
+                    span.fail_with_context(e, context);
+                    throw e;
                 },
             }
         }

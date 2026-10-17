@@ -364,6 +364,9 @@ pub(crate) fn lower_client_initializer(
 pub(crate) fn synthesize_llm_spec_body(
     function_name: &str,
     param_names: &[Name],
+    generic_param_names: &[Name],
+    owner_class_name: Option<&Name>,
+    owner_generic_param_names: &[Name],
     client_spec: &crate::lower_cst::LlmClientSpec,
     out_type: Option<crate::ast::TypeExpr>,
     tools_value: Option<&rowan::NodeOrToken<SyntaxNode, baml_compiler_syntax::SyntaxToken>>,
@@ -384,6 +387,54 @@ pub(crate) fn synthesize_llm_spec_body(
         Expr::Literal(Literal::String(function_name.to_string())),
         span,
     );
+
+    let binds_receiver = owner_class_name.is_some()
+        && param_names
+            .first()
+            .is_some_and(|name| name.as_str() == "self");
+    let target_name = Name::new(function_name);
+    let target = if binds_receiver {
+        let receiver = ctx.alloc_expr(Expr::Path(baml_base::Path::bare(Name::new("self"))), span);
+        ctx.alloc_expr(
+            Expr::MemberAccess {
+                base: receiver,
+                member: target_name,
+            },
+            span,
+        )
+    } else if let Some(owner) = owner_class_name {
+        ctx.alloc_expr(
+            Expr::Path(baml_base::Path::compiler_item(vec![
+                owner.clone(),
+                target_name,
+            ])),
+            span,
+        )
+    } else {
+        // Compiler-written, so a parameter named like the function cannot
+        // shadow it.
+        ctx.alloc_expr(
+            Expr::Path(baml_base::Path::compiler_item(vec![target_name])),
+            span,
+        )
+    };
+    let target_args = companion_type_args(
+        generic_param_names,
+        owner_generic_param_names,
+        owner_class_name.is_some() && !binds_receiver,
+        span,
+    );
+    let target = if target_args.is_empty() {
+        target
+    } else {
+        ctx.alloc_expr(
+            Expr::GenericApply {
+                base: target,
+                type_args: target_args,
+            },
+            span,
+        )
+    };
 
     // args: { "p": p, ... }
     let entries: Vec<MapExprEntry> = param_names
@@ -780,6 +831,7 @@ pub(crate) fn synthesize_llm_spec_body(
             type_args,
             fields: vec![
                 ObjectExprField::explicit(Name::new("spec_name"), name_lit),
+                ObjectExprField::explicit(Name::new("target_function"), target),
                 ObjectExprField::explicit(Name::new("args"), args_map),
                 ObjectExprField::explicit(Name::new("prompt_template"), prompt_lambda),
                 ObjectExprField::explicit(Name::new("toolbox"), toolbox),
@@ -1112,11 +1164,26 @@ pub(crate) fn synthesize_spec_agent_run_body(
         },
         span,
     );
+    let trace_callee = ctx.alloc_expr(
+        Expr::Path(baml_base::compiler_path!(trace._passthrough)),
+        span,
+    );
+    let trace = ctx.alloc_expr(
+        Expr::Call {
+            callee: trace_callee,
+            type_args: vec![],
+            args: vec![],
+        },
+        span,
+    );
     let run_call = ctx.alloc_expr(
         Expr::Call {
             callee: run_callee,
             type_args: vec![],
-            args: vec![CallArg::positional(spec_call)],
+            args: vec![
+                CallArg::positional(spec_call),
+                CallArg::named("$trace", trace),
+            ],
         },
         span,
     );
@@ -1184,6 +1251,18 @@ pub(crate) fn synthesize_spec_stream_body(
         Expr::Path(baml_base::Path::bare(Name::new("on_event"))),
         span,
     );
+    let trace_callee = ctx.alloc_expr(
+        Expr::Path(baml_base::compiler_path!(trace._passthrough)),
+        span,
+    );
+    let trace = ctx.alloc_expr(
+        Expr::Call {
+            callee: trace_callee,
+            type_args: vec![],
+            args: vec![],
+        },
+        span,
+    );
     let call = ctx.alloc_expr(
         Expr::Call {
             callee: stream_spec_callee,
@@ -1192,6 +1271,7 @@ pub(crate) fn synthesize_spec_stream_body(
                 CallArg::positional(spec_call),
                 CallArg::named("client", client_ref),
                 CallArg::named("on_event", on_event_ref),
+                CallArg::named("$trace", trace),
             ],
         },
         span,

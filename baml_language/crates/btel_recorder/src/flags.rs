@@ -23,11 +23,23 @@ impl CompletionFlags {
         reason = "mirror the two-bit outcome field in the wire contract"
     )]
     pub fn from_wire(bits: u32, late: bool) -> Option<Self> {
-        if bits & !0b1011 != 0 || bits & 3 == 0 || (late && bits & 8 != 0) {
+        let manual = bits & 32 != 0;
+        let closed = bits & 16 != 0;
+        if bits & !0b11_1011 != 0
+            || (closed && bits & 3 != 0)
+            || (!closed && bits & 3 == 0)
+            || (late && (bits & 8 != 0 || manual || closed))
+        {
             None
         } else {
-            Some(Self(u8::try_from(bits).expect("four-bit value")))
+            Some(Self(u8::try_from(bits).expect("six-bit value")))
         }
+    }
+    pub const fn is_manual(self) -> bool {
+        self.0 & 32 != 0
+    }
+    pub const fn is_closed(self) -> bool {
+        self.0 & 16 != 0
     }
     pub const fn outcome(self) -> InvocationOutcome {
         match self.0 & 3 {
@@ -49,5 +61,28 @@ pub(crate) const fn outcome(value: InvocationOutcome) -> proto::InvocationOutcom
             proto::InvocationOutcome::Errored
         }
         InvocationOutcome::Cancelled => proto::InvocationOutcome::Cancelled,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn neutral_close_is_general_and_requires_no_outcome_bits() {
+        for bits in [16, 24, 48, 56] {
+            let flags = CompletionFlags::from_wire(bits, false).unwrap();
+            assert_eq!(flags.is_manual(), bits & 32 != 0);
+            assert!(flags.is_closed());
+            assert_eq!(flags.requires_announcement(), bits & 8 != 0);
+            assert!(CompletionFlags::from_wire(bits, true).is_none());
+        }
+        for bits in [0, 32, 40, 17, 18, 19, 49, 50, 51, 64] {
+            assert!(CompletionFlags::from_wire(bits, false).is_none(), "{bits}");
+        }
+        for bits in [33, 34, 35, 41, 42, 43] {
+            let flags = CompletionFlags::from_wire(bits, false).unwrap();
+            assert!(flags.is_manual());
+            assert!(!flags.is_closed());
+        }
     }
 }

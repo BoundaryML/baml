@@ -1773,7 +1773,16 @@ impl<'db> SemanticIndexBuilder<'db> {
                     let type_expr = &field.type_expr;
                     self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
                 }
-                for method in &class.methods {
+                for method in class
+                    .methods
+                    .iter()
+                    .chain(class.implements.iter().flat_map(|block| &block.methods))
+                {
+                    self.validate_function_phase1(method, is_builtin_file);
+                }
+            }
+            ast::Item::ImplementsFor(implements) => {
+                for method in &implements.methods {
                     self.validate_function_phase1(method, is_builtin_file);
                 }
             }
@@ -1787,6 +1796,14 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn validate_function_phase1(&mut self, function: &ast::FunctionDef, is_builtin_file: bool) {
+        if function.metadata.explicit_trace_passthrough
+            && self.file.source_root(self.db).kind(self.db) != baml_base::SourceRootKind::Stdlib
+        {
+            self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
+                feature: "//baml:trace_passthrough".to_owned(),
+                span: function.span,
+            });
+        }
         for param in &function.params {
             if let Some(type_expr) = &param.type_expr {
                 self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);

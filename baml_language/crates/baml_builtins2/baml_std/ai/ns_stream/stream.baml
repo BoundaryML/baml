@@ -680,22 +680,54 @@ function _token_timeout_error(
 ///
 /// Partial and final values share one type: a partial is the declared type parsed
 /// from the text received so far.
+class _StreamValue<T> {
+    value: T,
+}
+
+class _StreamError {
+    error: root.errors.InvokeError | trace.SpanError | baml.panics.Panic,
+}
+
 class Stream<T> {
     _provider: string,
     _next_text: () -> string? throws root.errors.InvokeError,
+    _release: () -> void throws never,
+    _span: trace.Span,
     _cache: baml.sap._ParseCache<T>,
     _text: string,
     _finished: bool,
+    _result: _StreamValue<T> | _StreamError | null,
 
-    /// Return the next parsed partial value, or Done after EOF.
+    /// Return a partial value, or Done at EOF. EOF also settles the final
+    /// parse; a final parse error is cached for final(), preserving Done.
     function next(self) -> T | Done {
+        if (self._finished) {
+            return Done {};
+        }
+        let caller = trace.current_context();
+        self._span.run(() -> {
+            _in_context(
+                () -> {
+                    self._next()
+                },
+                $trace = _context_patch(caller),
+            )
+        }) catch_all_panics (e, context) {
+            _ => {
+                self._fail(e, context);
+                throw e;
+            },
+        }
+    }
+
+    function _next(self) -> T | Done {
         while (true) {
-            if (self._finished) {
-                return Done {};
-            }
             match (self._next_text()) {
                 null => {
                     self._finished = true;
+                    self._settle() catch (e) {
+                        root.errors.ParseFailed => {}
+                    };
                     return Done {};
                 },
                 let s: string => {
@@ -703,9 +735,7 @@ class Stream<T> {
                     let parsed: T | baml.sap._NoYield = self._cache._parse_partial(self._text) catch (e) {
                         let parse: baml.errors.LlmClient => {
                             throw root.errors.ParseFailed {
-                                provider: self._provider,
-                                raw_output: self._text,
-                                message: parse.message,
+                                provider: self._provider, raw_output: self._text, message: parse.message,
                             }
                         },
                     };
@@ -721,18 +751,59 @@ class Stream<T> {
         baml.sys.panic("unreachable")
     }
 
-    /// Drain the stream and parse the accumulated text as the final value.
+    /// Drain and return the cached final value, or rethrow the cached error.
     function final(self) -> T {
-        while (!self._finished) {
-            match (self._next_text()) {
-                null => {
-                    self._finished = true
-                },
-                let s: string => {
-                    self._text = self._text + s
-                },
-            }
+        if (self._result != null) {
+            return self._settle();
         }
+        let caller = trace.current_context();
+        self._span.run(() -> {
+            _in_context(
+                () -> {
+                    while (!self._finished) {
+                        match (self._next_text()) {
+                            null => {
+                                self._finished = true;
+                            },
+                            let s: string => {
+                                self._text = self._text + s;
+                            },
+                        }
+                    }
+                    self._settle()
+                },
+                $trace = _context_patch(caller),
+            )
+        }) catch_all_panics (e, context) {
+            _ => {
+                self._fail(e, context);
+                throw e;
+            },
+        }
+    }
+
+    function _settle(self) -> T {
+        match (self._result) {
+            let result: _StreamValue<T> => {
+                return result.value;
+            },
+            let failure: _StreamError => {
+                throw failure.error;
+            },
+            null => {},
+        }
+        let value = self._parse_final_value() catch_all_panics (e, context) {
+            _ => {
+                self._fail(e, context);
+                throw e;
+            },
+        };
+        self._result = _StreamValue<T> { value: value };
+        self._span.finish(value);
+        value
+    }
+
+    function _parse_final_value(self) -> T {
         self._cache._parse_final(self._text) catch (e) {
             let parse: baml.errors.LlmClient => {
                 throw root.errors.ParseFailed {
@@ -743,6 +814,47 @@ class Stream<T> {
             },
         }
     }
+
+    function _fail(
+        self,
+        error: root.errors.InvokeError | trace.SpanError | baml.panics.Panic,
+        context: baml.errors.Context,
+    ) -> void {
+        if (self._result == null) {
+            self._finished = true;
+            self._result = _StreamError { error: error };
+            self._release();
+            self._span.fail_with_context(error, context);
+        }
+    }
+
+    /// Release stream resources and end any still-open tracing lifetime.
+    /// Abandonment does not imply cancellation or successful parsing.
+    function cleanup(self) -> void {
+        self._finished = true;
+        self._release() catch_all (e) {
+            _ => {
+                self._span.close();
+                throw e;
+            },
+        };
+        self._span.close();
+    }
+}
+
+/// (internal) Run `body`; its `$trace` layers a context over the current one.
+function _in_context<T, E>(body: () -> T throws E) -> T throws E {
+    body()
+}
+
+/// (internal) A patch that layers `caller`'s context over the span's, so work a
+/// stream does for a step keeps the context that step was called in.
+function _context_patch(caller: trace.Context) -> trace.Options throws never {
+    let metadata: map<string, string | int | float | bool | null> = {};
+    for (let key in caller.metadata.keys()) {
+        metadata[key] = caller.metadata[key];
+    }
+    trace.context(metadata = metadata, distinct_id = caller.distinct_id)
 }
 
 /// One-turn streaming over a spec: render the spec's prompt exactly as the
@@ -756,16 +868,12 @@ class Stream<T> {
 /// non-streaming client fails at the call site; the spec's DEFAULT client is
 /// only checked at runtime (ai.errors.StreamingUnsupported when it cannot
 /// stream).
+//baml:trace_passthrough
 function from_spec<T>(
     spec: root.FunctionSpec<T>,
     client: StreamingClient? = null,
     on_event: ((root.events.Event) -> void)? = null,
 ) -> Stream<T> {
-    if (!spec.tools().is_empty()) {
-        throw baml.errors.InvalidArgument {
-            message: `streaming does not run the tool loop yet: ${spec.name()} has a non-empty toolbox`,
-        }
-    }
     let selected: StreamingClient = match (client) {
         let s: StreamingClient => s,
         null => {
@@ -779,62 +887,87 @@ function from_spec<T>(
             }
         },
     };
-    // StreamingClient requires Client, so the downcast always succeeds.
-    let provider = match (selected) {
-        let c: root.Client => c.id(),
-    };
-    let emit = root.events.guard(on_event);
-    let settled = false;
-    if let cb: (root.events.Event) -> void throws never = emit {
-        cb(root.events.RunStarted { spec_name: spec.name(), arguments: spec.arguments() });
+    let inputs: map<string, unknown> = {};
+    let arguments = spec.arguments();
+    for (let key in arguments.keys()) {
+        inputs[key] = arguments[key];
     }
-    let turns = selected.invoke_stream(
-        root.ModelTurnInput {
-            prompt: spec.prompt_template,
-            journal: root.Journal.new(spec),
-            toolbox: spec.tools(),
-            output_type: spec.output_type(),
-        },
-    );
-    // The host-facing stream is `ai.stream.Stream`. It is provider-agnostic:
-    // all it needs is a way to pull the next text delta from TurnStream.
-    Stream {
-        _provider: provider,
-        _next_text: () -> {
-            match (turns.next()) {
-                let d: Done => {
-                    // Settle: fold the completed turn (this is where the
-                    // previously-discarded streamed usage is recovered) and
-                    // emit the same events the Agent path emits. The flag
-                    // guards re-entry: a listener that pulls this same stream
-                    // (e.g. calls final() mid-callback) must not re-settle.
-                    if (!settled) {
-                        settled = true;
-                        if let cb: (root.events.Event) -> void throws never = emit {
-                            let turn = turns.final_turn();
-                            cb(
-                                root.events.AssistantMessage {
-                                    content: turn.content,
-                                    client_id: provider,
-                                },
-                            );
-                            if let u: root.events.Usage = turn.usage {
-                                cb(u);
-                            }
-                            for (let call in turn.calls) {
-                                cb(call);
+    inputs["client"] = selected;
+    inputs["on_event"] = on_event;
+    let span = trace._create_span(spec.target(), inputs = inputs, config = trace._passthrough());
+    span.run(() -> {
+        if (!spec.tools().is_empty()) {
+            throw baml.errors.InvalidArgument {
+                message: `streaming does not run the tool loop yet: ${spec.name()} has a non-empty toolbox`,
+            }
+        }
+        // StreamingClient requires Client, so the downcast always succeeds.
+        let provider = match (selected) {
+            let c: root.Client => c.id(),
+        };
+        let emit = root.events.guard(on_event);
+        let settled = false;
+        if let cb: (root.events.Event) -> void throws never = emit {
+            cb(root.events.RunStarted { spec_name: spec.name(), arguments: spec.arguments() });
+        }
+        let turns = selected.invoke_stream(
+            root.ModelTurnInput {
+                prompt: spec.prompt_template,
+                journal: root.Journal.new(spec),
+                toolbox: spec.tools(),
+                output_type: spec.output_type(),
+            },
+        );
+        // The host-facing stream is `ai.stream.Stream`. It is provider-agnostic:
+        // all it needs is a way to pull the next text delta from TurnStream.
+        Stream {
+            _provider: provider,
+            _next_text: () -> {
+                match (turns.next()) {
+                    let d: Done => {
+                        // Settle: fold the completed turn (this is where the
+                        // previously-discarded streamed usage is recovered) and
+                        // emit the same events the Agent path emits. The flag
+                        // guards re-entry: a listener that pulls this same stream
+                        // (e.g. calls final() mid-callback) must not re-settle.
+                        if (!settled) {
+                            settled = true;
+                            if let cb: (root.events.Event) -> void throws never = emit {
+                                let turn = turns.final_turn();
+                                cb(
+                                    root.events.AssistantMessage {
+                                        content: turn.content,
+                                        client_id: provider,
+                                    },
+                                );
+                                if let u: root.events.Usage = turn.usage {
+                                    cb(u);
+                                }
+                                for (let call in turn.calls) {
+                                    cb(call);
+                                }
                             }
                         }
-                    }
-                    null
-                },
-                let batch: string[] => batch.join(""),
-            } catch_all (e) {
-                _ => throw root.errors.normalize(e),
-            }
+                        null
+                    },
+                    let batch: string[] => batch.join(""),
+                } catch_all (e) {
+                    _ => throw root.errors.normalize(e),
+                }
+            },
+            _release: () -> {
+                turns._finish();
+            },
+            _span: span,
+            _result: null,
+            _cache: baml.sap._new_parse_cache<T>(),
+            _text: "",
+            _finished: false,
+        }
+    }) catch_all_panics (e, context) {
+        _ => {
+            span.fail_with_context(e, context);
+            throw e;
         },
-        _cache: baml.sap._new_parse_cache<T>(),
-        _text: "",
-        _finished: false,
     }
 }

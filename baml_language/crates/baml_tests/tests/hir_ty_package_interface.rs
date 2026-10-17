@@ -1138,8 +1138,8 @@ fn reflect_resolves_as_an_ordinary_builtin_package() {
         "<builtin>/assert/reflect_probe.baml",
         "type DeclaredReflect = reflect.Signature\n",
     );
-    // `log` declares no such edge: a package reaches only what its
-    // manifest lists, and no leak across undeclared packages exists.
+    // `log` declares no such edge, but stdlib packages reach their sibling
+    // language packages through the implicit language-package edges.
     let log_file = db.file(
         "<builtin>/log/reflect_probe.baml",
         "type UndeclaredReflect = reflect.Signature\n",
@@ -1160,12 +1160,7 @@ fn reflect_resolves_as_an_ordinary_builtin_package() {
         .first()
         .expect("log alias");
     let log_errors = baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, log_alias);
-    assert!(
-        log_errors
-            .iter()
-            .any(|(_, error)| format!("{error:?}").contains("reflect.Signature")),
-        "an undeclared package must not resolve: {log_errors:?}"
-    );
+    assert!(log_errors.is_empty(), "{log_errors:?}");
 
     let user_alias = *baml_compiler2_hir::item_data::file_type_aliases(&db, user_file)
         .first()

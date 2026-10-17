@@ -1468,6 +1468,10 @@ pub enum FunctionOrigin {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FunctionMetadata {
+    /// Retain call tracing controls without an automatic invocation span.
+    pub trace_passthrough: bool,
+    /// Source directive (as opposed to compiler-generated metadata), for validation.
+    pub explicit_trace_passthrough: bool,
     pub origin: FunctionOrigin,
     /// Marks compiler/runtime implementation details that are outside BAML's
     /// user-facing language surface.
@@ -1483,6 +1487,8 @@ impl FunctionMetadata {
         Self {
             origin,
             is_language_internal: false,
+            trace_passthrough: false,
+            explicit_trace_passthrough: false,
         }
     }
 
@@ -1490,6 +1496,8 @@ impl FunctionMetadata {
         Self {
             origin,
             is_language_internal: true,
+            trace_passthrough: false,
+            explicit_trace_passthrough: false,
         }
     }
 }

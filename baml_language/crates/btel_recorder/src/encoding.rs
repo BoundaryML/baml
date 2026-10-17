@@ -105,6 +105,9 @@ impl EncodedSpans {
                         leaf(&mut self.bytes, 7, &m);
                     }
                     Event::FunctionAnnouncement(m) => {
+                        if m.manual {
+                            self.require(btel_settings::encoding::MANUAL_SPAN_FORMAT_MINOR);
+                        }
                         if m.type_args_cas_id.is_some() {
                             self.require(btel_settings::encoding::TYPE_ARGS_FORMAT_MINOR);
                         }
@@ -121,7 +124,7 @@ impl EncodedSpans {
         }
     }
 
-    fn require(&mut self, minor: u32) {
+    pub(crate) fn require(&mut self, minor: u32) {
         self.required_minor = self.required_minor.max(minor);
     }
 
@@ -135,6 +138,12 @@ impl EncodedSpans {
     #[inline]
     #[allow(unsafe_code)]
     fn completion(&mut self, tag: u8, message: &crate::proto::FunctionCompletion) {
+        if message.completion_flags & 16 != 0 && message.completion_flags & 32 == 0 {
+            self.require(btel_settings::encoding::OWNED_SPAN_FORMAT_MINOR);
+        }
+        if message.completion_flags & 32 != 0 {
+            self.require(btel_settings::encoding::MANUAL_SPAN_FORMAT_MINOR);
+        }
         // Maximum protobuf body: 3*(tag+10-byte varint), 3*(tag+fixed64),
         // one tag+5-byte uint32 = 66 bytes, plus two tag/length pairs = 70.
         // Optional CAS message adds tag+length+2*(tag+fixed64) = 20 bytes, and
@@ -334,6 +343,7 @@ mod tests {
                 panicked: true,
             }),
             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+                manual: false,
                 id: u64::MAX,
                 parent_id: u64::MAX,
                 call_path_id: u32::MAX,

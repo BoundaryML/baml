@@ -895,6 +895,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             origin: FunctionOrigin::Internal,
             native_key: None,
             body_meta: None,
+            trace_passthrough: false,
             owner: bex_vm_types::HeapPtr::null(),
         }
     }

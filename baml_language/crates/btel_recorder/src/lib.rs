@@ -387,6 +387,7 @@ impl ConversionBuffer {
                 self.event(
                     thread,
                     Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+                        manual: false,
                         id: id.get(),
                         parent_id: parent_id.get(),
                         call_path_id: call_path.get(),
@@ -429,6 +430,49 @@ impl ConversionBuffer {
                 for function in [Some(*callee), *visible_caller].into_iter().flatten() {
                     self.define_function(function);
                 }
+            }
+            SpanRecord::ManualSpanAnnouncement(entry) => {
+                self.spans
+                    .require(btel_settings::encoding::OWNED_SPAN_FORMAT_MINOR);
+                self.event(
+                    thread,
+                    Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+                        manual: false,
+                        id: entry.id.get(),
+                        parent_id: entry.parent_id.get(),
+                        call_path_id: entry.call_path.get(),
+                        entered_at_ticks: entry.entered_at.get(),
+                        inputs_cas_id: entry.captured_inputs.as_ref().map(cas_id),
+                        type_args_cas_id: entry.captured_type_args.as_ref().map(cas_id),
+                    }),
+                );
+            }
+            SpanRecord::ManualSpanCompletion(done) => {
+                self.spans
+                    .require(btel_settings::encoding::OWNED_SPAN_FORMAT_MINOR);
+                let outcome = match done.outcome {
+                    Some(btel_types::InvocationOutcome::Ok) => 1,
+                    Some(
+                        btel_types::InvocationOutcome::Errored
+                        | btel_types::InvocationOutcome::Panicked,
+                    ) => 2,
+                    Some(btel_types::InvocationOutcome::Cancelled) => 3,
+                    None => 16,
+                };
+                self.event(
+                    thread,
+                    Event::FunctionCompletion(proto::FunctionCompletion {
+                        id: done.id.get(),
+                        parent_id: done.parent_id.get(),
+                        node: CallPathNodeId::new(done.call_path, false).get(),
+                        entered_at_ticks: done.entered_at.get(),
+                        exited_at_ticks: done.exited_at.get(),
+                        self_await_ticks: done.await_time.get().get(),
+                        completion_flags: outcome | if done.requires_announcement { 8 } else { 0 },
+                        value_cas_id: done.captured_value.as_ref().map(cas_id),
+                        panicked: done.outcome == Some(btel_types::InvocationOutcome::Panicked),
+                    }),
+                );
             }
             SpanRecord::FunctionSpanCompletionOk {
                 id,

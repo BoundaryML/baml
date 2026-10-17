@@ -144,6 +144,20 @@ impl<P> Processing<P> {
                 *thread = Some(*thread_id);
                 return;
             }
+            SpanRecord::ManualSpanCompletion(done) => {
+                // Neutral closure measures resource lifetime, not a completed
+                // request. Include only terminal success/error in latency stats.
+                if let Some(outcome) = done.outcome {
+                    self.sample::<I, V>(
+                        done.call_path,
+                        done.entered_at,
+                        done.exited_at,
+                        done.await_time,
+                        false,
+                        outcome,
+                    );
+                }
+            }
             // Every function completion form is one population invocation. Its
             // variant fixes the outcome; thread completions are not invocations.
             SpanRecord::FunctionSpanCompletionOk {
@@ -414,7 +428,7 @@ impl<P> Processing<P> {
 mod runtime;
 #[cfg(not(target_arch = "wasm32"))]
 pub use runtime::{
-    ExecutionScope, FutureErrorLinks, RecordingControl, RuntimeError, TelemetryRuntime,
+    ExecutionScope, FutureErrorLinks, RecordingControl, RuntimeError, SpanOwner, TelemetryRuntime,
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -433,6 +447,16 @@ impl fmt::Display for ProcessorError {
 
 impl std::error::Error for ProcessorError {}
 
+type DeferredSpans<I, V> = std::sync::Arc<
+    std::sync::Mutex<
+        Vec<(
+            TelemetryId,
+            btel_records::ContextReference,
+            SpanRecord<I, V>,
+        )>,
+    >,
+>;
+
 /// One exclusive consumer of a chunk pool, bound to the current OS thread.
 /// No SPSC backend, heap access, record cloning, or dynamic dispatch.
 pub struct Processor<InputCapture, ValueCapture, P = NoSinkPublisher> {
@@ -445,6 +469,7 @@ pub struct Processor<InputCapture, ValueCapture, P = NoSinkPublisher> {
     detached_timing: Vec<TimingRecord>,
     next_flush: Instant,
     finished: bool,
+    deferred_spans: Option<DeferredSpans<InputCapture, ValueCapture>>,
 }
 
 impl<I, V> Processor<I, V> {
@@ -492,7 +517,14 @@ impl<I, V, P: Publisher<I, V>> Processor<I, V, P> {
             },
             next_flush: Instant::now() + CACHE_FLUSH_INTERVAL_DURATION,
             finished: false,
+            deferred_spans: None,
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn with_deferred_spans(mut self, spans: DeferredSpans<I, V>) -> Self {
+        self.deferred_spans = Some(spans);
+        self
     }
 
     pub fn publisher(&self) -> &P {
@@ -569,6 +601,41 @@ impl<I, V, P: Publisher<I, V>> Processor<I, V, P> {
                     self.processing.cache.flush(|delta| {
                         publisher::publish_aggregate(&mut self.processing.publisher, delta);
                     });
+                    // Destructors cannot bind producers under GC locks, and
+                    // shutdown must not reserve another OS-worker slot. Once
+                    // producers have drained, publish the remaining owned
+                    // completions directly on the consumer before sealing.
+                    if let Some(deferred) = &self.deferred_spans {
+                        let pending = std::mem::take(
+                            &mut *deferred
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner),
+                        );
+                        for (thread, context, record) in pending {
+                            use btel_records::ContextReference;
+                            let marker = match context {
+                                ContextReference::Empty => SpanRecord::ContextCleared,
+                                ContextReference::Unavailable => SpanRecord::ContextSelected {
+                                    captured_context: None,
+                                },
+                                ContextReference::Snapshot(id) => {
+                                    SpanRecord::ContextReferenced { id }
+                                }
+                            };
+                            self.processing.publisher.before_batch(2);
+                            let mut selected = Some(thread);
+                            for mut record in [marker, record] {
+                                if P::DETACH_RECORDS {
+                                    self.processing.publisher.before_detached_span(&record);
+                                }
+                                self.processing.span(&mut selected, &mut record);
+                                if P::DETACH_RECORDS {
+                                    self.processing.publisher.after_detached_span();
+                                }
+                            }
+                            self.processing.publisher.after_batch(2);
+                        }
+                    }
                     self.processing.publisher.finish();
                     self.processing.contexts.fill(DecoderContext::default());
                     self.finished = true;

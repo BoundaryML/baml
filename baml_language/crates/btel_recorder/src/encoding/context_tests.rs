@@ -187,6 +187,35 @@ fn largest_completion_and_context_fit_admitted_capacity() {
 }
 
 #[test]
+fn largest_owned_announcement_and_context_fit_admitted_capacity() {
+    let mut writer = EncodedSpans::default();
+    let thread = allocate_telemetry_id();
+    writer.select_context(thread, Some(context(u64::MAX)));
+    writer.reserve(MAX_EVENT_BYTES);
+    let capacity = writer.capacity();
+    let capture = Some(proto::CasId {
+        low: u64::MAX,
+        high: u64::MAX,
+    });
+    writer.event(
+        thread,
+        Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+            id: u64::MAX,
+            parent_id: u64::MAX,
+            call_path_id: u32::MAX,
+            entered_at_ticks: u64::MAX,
+            inputs_cas_id: capture,
+            type_args_cas_id: capture,
+            manual: true,
+        }),
+    );
+    assert_eq!(writer.capacity(), capacity);
+    let thread_varint = prost::encoding::encoded_len_varint(thread.get());
+    assert!(writer.len() + (10 - thread_varint) <= MAX_EVENT_BYTES);
+    assert_eq!(sections(&mut writer)[0].context, Some(context(u64::MAX)));
+}
+
+#[test]
 fn changing_context_pays_for_a_new_section_not_just_the_hash() {
     let thread = allocate_telemetry_id();
     let mut shared = EncodedSpans::default();

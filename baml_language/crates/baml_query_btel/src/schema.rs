@@ -15,7 +15,7 @@
 //!   visible; they never make a thread a root or a path a top-level path.
 
 /// Physical layout of these tables. Change on any DDL change.
-pub const SCHEMA_VERSION: i64 = 17;
+pub const SCHEMA_VERSION: i64 = 20;
 /// Interpretation of evidence into rows. Change when reconciliation changes
 /// meaning without a DDL change; either mismatch rebuilds the index.
 pub const NORMALIZATION_VERSION: i64 = 1;
@@ -306,6 +306,7 @@ CREATE TABLE call (
   type_args_cas BLOB,
   completed_sequence INTEGER,
   late INTEGER,
+  manual INTEGER,
   exited_ticks INTEGER,
   self_await_ticks INTEGER,
   outcome INTEGER,

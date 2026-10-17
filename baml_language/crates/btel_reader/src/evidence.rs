@@ -9,6 +9,7 @@ pub enum Outcome {
     Ok = 1,
     Errored = 2,
     Cancelled = 3,
+    Closed = 4,
 }
 
 impl Outcome {
@@ -17,6 +18,7 @@ impl Outcome {
             1 => Some(Self::Ok),
             2 => Some(Self::Errored),
             3 => Some(Self::Cancelled),
+            4 => Some(Self::Closed),
             _ => None,
         }
     }
@@ -28,6 +30,7 @@ impl Outcome {
             Self::Ok => "ok",
             Self::Errored => "errored",
             Self::Cancelled => "cancelled",
+            Self::Closed => "closed",
         }
     }
     pub fn from_thread(outcome: i32) -> Option<Self> {
@@ -40,7 +43,11 @@ impl Outcome {
 pub fn completion(done: &proto::FunctionCompletion, late: bool) -> Option<(Outcome, bool)> {
     let flags = CompletionFlags::from_wire(done.completion_flags, late)?;
     // Bits 0..1 hold the outcome; from_wire rejected zero.
-    let outcome = Outcome::from_code(i64::from(flags.bits() & 3))?;
+    let outcome = if flags.is_closed() {
+        Outcome::Closed
+    } else {
+        Outcome::from_code(i64::from(flags.bits() & 3))?
+    };
     Some((outcome, flags.requires_announcement()))
 }
 

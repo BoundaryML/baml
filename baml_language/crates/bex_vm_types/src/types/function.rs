@@ -493,6 +493,9 @@ pub struct Function {
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
 
+    /// Compiler/stdlib forwarding entry: hold controls without an automatic span.
+    pub trace_passthrough: bool,
+
     /// The package this function belongs to — the same edge a class carries
     /// to its package ([`super::Owner`]): bound by the loader for a static
     /// package's functions, set by the grafter for a runtime package's. A
@@ -564,8 +567,8 @@ pub struct Closure {
 ///
 /// The type environment resolved when the method is bound is curried in via
 /// [`Self::type_args`], so `CallIndirect` carries no separate type arguments.
-/// See the field documentation for the ordinary-bound-method limitation around
-/// a later explicit generic application.
+/// A later explicit generic application appends method arguments while
+/// preserving the receiver and already-curried class/impl arguments.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.

@@ -439,6 +439,20 @@ fn lower_function(
                 lower_expr_body::synthesize_llm_spec_body(
                     name.as_str(),
                     &param_names,
+                    &generic_params
+                        .iter()
+                        .map(|param| param.name.clone())
+                        .collect::<Vec<_>>(),
+                    class_method.map(|owner| owner.name),
+                    &class_method
+                        .map(|owner| {
+                            owner
+                                .generic_params
+                                .iter()
+                                .map(|param| param.name.clone())
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default(),
                     &client_spec,
                     return_type.clone(),
                     tools_value.as_ref(),
@@ -513,10 +527,16 @@ fn lower_function(
         return_type,
         throws,
         body,
-        declarative_meta,
-        metadata: crate::ast::FunctionMetadata::user_facing(
-            crate::ast::FunctionOrigin::UserDefined,
-        ),
+        declarative_meta: declarative_meta.clone(),
+        metadata: crate::ast::FunctionMetadata {
+            trace_passthrough: declarative_meta.is_some()
+                || crate::docstring::has_baml_marker(node, "trace_passthrough"),
+            explicit_trace_passthrough: crate::docstring::has_baml_marker(
+                node,
+                "trace_passthrough",
+            ),
+            ..crate::ast::FunctionMetadata::user_facing(crate::ast::FunctionOrigin::UserDefined)
+        },
         attributes,
         docstring,
         is_tagged_template_tag,

@@ -199,8 +199,11 @@ pub fn validate_file(
                             || !valid_node(done.node)
                             || CompletionFlags::from_wire(done.completion_flags, late).is_none_or(
                                 |flags| {
-                                    done.panicked
-                                        && flags.outcome() != btel_types::InvocationOutcome::Errored
+                                    (flags.is_closed()
+                                        && (done.panicked || done.value_cas_id.is_some()))
+                                        || (done.panicked
+                                            && flags.outcome()
+                                                != btel_types::InvocationOutcome::Errored)
                                 },
                             )
                         {

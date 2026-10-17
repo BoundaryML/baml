@@ -224,7 +224,7 @@ SELECT __btel_hex(n.node_id) AS profiler_node_id,
 FROM main.profile_node n",
 };
 
-const SPAN_STATUS_DOC: &str = "return, user_error, panic_error (a panic other than a cancellation), or cancel_error (cancelled, or unwound by baml.sys.exit)";
+const SPAN_STATUS_DOC: &str = "return, user_error, panic_error (a panic other than a cancellation), cancel_error (cancelled, or unwound by baml.sys.exit), or closed (an explicit operation ended without an outcome)";
 
 const TYPE_ARGS_DOC: &str = "the type arguments a generic function was called with, by type-parameter name: type_args['T'] is {\"$type\": {\"type\": \"class\", \"name\": \"user.Resume\"}}, and a list of them {\"$type\": {\"type\": \"list\", \"item\": …}}. A method's include its class's (Box<int>.map<string>: {T: int, U: string}), an interface method's its Self, a lambda's its enclosing function's. Captured exactly when input_args is. NULL for a non-generic function, a span whose inputs aren't captured, a future or a network span";
 
@@ -282,7 +282,7 @@ pub const SPANS: Relation = Relation {
         value("network_event_values", NETWORK_EVENTS_DOC),
         value(
             "error_value",
-            "the baml.errors.Context of a failed span: error_value['error'], error_value['stack_trace'], error_value['cause']",
+            "the baml.errors.Context of a failed invocation; for a manual operation, the value passed to fail()",
         ),
         col(
             "context_distinct_id",
@@ -300,7 +300,7 @@ pub const SPANS: Relation = Relation {
         col(
             "span_reason",
             "text",
-            "policy_promoted (recorded only after it finished, by a policy) or other",
+            "policy_promoted (recorded only after it finished, by a policy), or other",
         ),
     ],
     view: "
@@ -351,7 +351,7 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
   __btel_hex(p.node_id) AS profiler_node_id,
   __btel_pubid(r.recording_id, c.parent_id) AS parent_span_id,
   CASE c.outcome WHEN 1 THEN 'return' WHEN 2 THEN IIF(c.panicked, 'panic_error', 'user_error')
-    WHEN 3 THEN 'cancel_error' END AS status,
+    WHEN 3 THEN 'cancel_error' WHEN 4 THEN 'closed' END AS status,
   NULL AS scheduled_time,
   __btel_utc(c.entered_ticks, IIF(e.conflict = 0, e.utc_ticks, NULL), e.utc_unix_ns,
     e.multiplier, e.shift) AS start_time,
@@ -363,11 +363,11 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS type_args,
   -- Host adapters capture a named map (Python) or positional list (Node) as
   -- a value root. BAML functions capture FunctionArgs with a slot layout.
-  __btel_ref(IIF(f.definition_key LIKE 'host:%', 2, 1), c.inputs_cas, f.argument_names,
+  __btel_ref(IIF(c.manual = 1 OR f.definition_key LIKE 'host:%', 2, 1), c.inputs_cas, f.argument_names,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
   IIF(c.outcome = 1, __btel_ref(2, c.value_cas, NULL, 0), NULL) AS output_value,
   NULL AS network_event_values,
-  IIF(c.outcome IN (2, 3), __btel_ref(3, c.value_cas, NULL, 0), NULL) AS error_value,
+  IIF(c.outcome IN (2, 3), __btel_ref(IIF(c.manual = 1, 2, 3), c.value_cas, NULL, 0), NULL) AS error_value,
   cx.distinct_id AS context_distinct_id,
   __btel_context_metadata(ec.state, ec.cas, cx.state) AS context_metadata,
   -- The usage the stdlib recorded on this span (ModelUsage), unless a
@@ -382,7 +382,7 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
        JOIN main.network_event v ON v.rec = x.rec AND v.span_id = x.span_id
          AND v.name = 'data' AND v.payload_cas IS NOT NULL
        WHERE x.rec = c.rec AND x.parent_id = c.call_id)) AS temporary_projections,
-  IIF(c.late = 1, 'policy_promoted', 'other') AS span_reason,
+  CASE WHEN c.late = 1 THEN 'policy_promoted' ELSE 'other' END AS span_reason,
   c.rec AS __span_id_rec, c.call_id AS __span_id_key,
   c.rec AS __future_id_rec, c.thread_id AS __future_id_key,
   c.rec AS __parent_span_id_rec, c.parent_id AS __parent_span_id_key
@@ -578,7 +578,7 @@ SELECT __btel_pubid(r.recording_id, c.call_id) AS span_id,
     e.multiplier, e.shift) AS start_time,
   __btel_ref(2, c.type_args_cas, NULL,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS type_args,
-  __btel_ref(IIF(f.definition_key LIKE 'host:%', 2, 1), c.inputs_cas, f.argument_names,
+  __btel_ref(IIF(c.manual = 1 OR f.definition_key LIKE 'host:%', 2, 1), c.inputs_cas, f.argument_names,
     c.needs_announcement = 1 AND c.announced_sequence IS NULL) AS input_args,
   NULL AS network_event_values,
   cx.distinct_id AS context_distinct_id,

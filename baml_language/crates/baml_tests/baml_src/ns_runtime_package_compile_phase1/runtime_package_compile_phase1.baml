@@ -590,4 +590,3 @@ test "one package under two aliases is one package" {
     let main = generated.get_function<() -> int>("root.main");
     assert.equal(main(), 7)
 }
-

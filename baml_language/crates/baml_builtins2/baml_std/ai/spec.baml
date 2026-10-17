@@ -134,6 +134,8 @@ function prompt(
 /// Neither companion is public.
 class FunctionSpec<Out> {
     spec_name: string,
+    /// Original callable, retained for definition identity without invoking it.
+    target_function: reflect.AnyFunction,
     args: map<string, unknown>,
     prompt_template: (OutputFormat) -> Prompt throws root.errors.PromptRenderError,
     toolbox: root.tools.Toolbox,
@@ -142,12 +144,15 @@ class FunctionSpec<Out> {
     /// Runs this bound spec through the default agent. `client` overrides the
     /// bound client; null keeps it. `on_event` observes the same journal
     /// events a direct LLM-function call reports.
+    //baml:trace_passthrough
     function call(
         self,
         client: Client? = null,
         on_event: ((root.events.Event) -> void)? = null,
     ) -> Out {
-        Agent.new(client = client, on_event = on_event).run(self).value
+        Agent.new(client = client, on_event = on_event)
+            .run(self, $trace = trace._passthrough())
+            .value
     }
 
     /// Parses an existing model reply using this spec's realized output type.
@@ -167,6 +172,10 @@ class FunctionSpec<Out> {
                 output_type: self.output_type(),
             },
         )
+    }
+
+    function target(self) -> reflect.AnyFunction {
+        self.target_function
     }
 
     function name(self) -> string {

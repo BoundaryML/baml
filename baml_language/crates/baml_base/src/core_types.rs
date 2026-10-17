@@ -238,8 +238,8 @@ impl Path {
     /// surrounding scope binds.
     pub fn compiler_item(segments: Vec<Name>) -> Self {
         debug_assert!(
-            segments.len() > 1,
-            "a compiler-written path names an item and a member"
+            !segments.is_empty(),
+            "a compiler-written path names an item"
         );
         Self {
             segments: Cow::Owned(segments),

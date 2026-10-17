@@ -166,13 +166,18 @@ async fn cancelling_shutdown_does_not_reopen_a_closed_transport() {
     let (entered, started) = mpsc::channel();
     let (release, released) = mpsc::channel();
     let mut first = true;
-    let engine = engine_with_writer("function main() -> int { 1 }", move |_| {
-        if std::mem::take(&mut first) {
-            entered.send(()).unwrap();
-            released.recv_timeout(Duration::from_secs(10)).unwrap();
-        }
-        Ok(())
-    });
+    // A live manual owner also exercises terminal deferred publication without
+    // reserving another producer from this deliberately tiny worker pool.
+    let engine = engine_with_writer(
+        r#"function main() -> int { let span = trace.start_span("pending"); 1 }"#,
+        move |_| {
+            if std::mem::take(&mut first) {
+                entered.send(()).unwrap();
+                released.recv_timeout(Duration::from_secs(10)).unwrap();
+            }
+            Ok(())
+        },
+    );
     engine
         .call_function("main", vec![], context(), true)
         .await
