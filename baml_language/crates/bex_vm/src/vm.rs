@@ -1404,6 +1404,54 @@ pub(crate) mod tests {
         }
     }
 
+    /// A resumable body calling a bound method value requests the call with
+    /// the method's visible arguments; the VM inserts the receiver, as
+    /// `CallIndirect` does.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn resumable_bodies_call_bound_method_values() {
+        use crate::compiled_rt::{CompiledFn, Resume, Step};
+        type Out = Result<Step, Box<crate::errors::VmError>>;
+
+        // fn Apply(f, x) { f(x) } with `f` a bound method value.
+        fn apply(vm: &mut BexVm, resume: Resume) -> Out {
+            let depth = vm.frame_depth();
+            match resume {
+                Resume::Start => {
+                    vm.reserve_slots(depth, 3);
+                    let callee = crate::compiled_rt::callee_ptr(vm.slot(depth, 0))?;
+                    let x = vm.slot(depth, 1);
+                    vm.set_slot(depth, 2, Value::int(1));
+                    vm.push_arg(x);
+                    Ok(Step::Call { callee, argc: 1 })
+                }
+                Resume::Value(value) => Ok(Step::Return(value)),
+                Resume::Thrown(error) => Err(error),
+                Resume::Yielded => unreachable!("Apply never yields"),
+            }
+        }
+        const SOURCE: &str = r#"
+            class Scale {
+                by int
+                function times(self, x: int) -> int { self.by * x }
+            }
+            function Apply(f: (int) -> int throws never, x: int) -> int { f(x) }
+            function Main() -> string {
+                let s = Scale { by: 3 };
+                `${Apply(s.times, 5)}|${Apply((x: int) -> int { x + 1 }, 5)}`
+            }
+        "#;
+        for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[("user.Apply", CompiledFn::Resumable(apply))],
+                &[],
+                telemetry,
+            );
+            assert_eq!(out, "15|6", "telemetry: {telemetry}");
+        }
+    }
+
     /// The unwinder never consults a compiled frame's bytecode handlers: the
     /// body runs in place of that bytecode, so an error its body does not
     /// catch leaves the frame even where the bytecode has a `catch`.
@@ -8335,8 +8383,19 @@ impl BexVm {
             Step::Return(value) => self.complete_compiled(frame_idx, function, Ok(value)),
             Step::Call { callee, argc } => {
                 park(self, *frame_idx, stub::AFTER_CALL);
-                let argc = argc as usize;
-                let locals_offset = StackIndex::from_raw(self.stack.len() - argc);
+                let mut argc = argc as usize;
+                let mut args_offset = self.stack.len() - argc;
+                // A bound method's receiver joins the pushed arguments as the
+                // leading slot, as `CallIndirect` inserts it; the call path
+                // resolves the inner function and seeds the receiver's type
+                // arguments from the bound method itself.
+                if let Object::BoundMethod(method) = self.get_object(callee) {
+                    let receiver = method.receiver;
+                    self.stack.insert(args_offset, receiver);
+                    argc += 1;
+                    args_offset = self.stack.len() - argc;
+                }
+                let locals_offset = StackIndex::from_raw(args_offset);
                 let mut type_args = std::mem::take(&mut self.call_type_args);
                 let outcome = self.compiled_caller_call(
                     callee,
