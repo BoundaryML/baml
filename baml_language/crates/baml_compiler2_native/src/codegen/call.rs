@@ -31,34 +31,11 @@ impl<'db> Generator<'_, 'db> {
             return unsupported(format!("callee `{name}` not found in the program"));
         };
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
-        // Type arguments must be known statically: a non-generic caller has
-        // no frame type arguments to substitute.
-        let mut types = Vec::with_capacity(type_args.len());
-        let mut primitive = true;
-        for arg in type_args {
-            let ty = match arg {
-                Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
-                    self.analysis.static_types.get(&local.0).map(|ty| {
-                        primitive &= ty.primitive;
-                        ty.code.clone()
-                    })
-                }
-                Operand::Constant(_) | Operand::Copy(_) | Operand::Move(_) => None,
-            };
-            let Some(ty) = ty else {
-                return unsupported(format!(
-                    "call to `{name}` with a type argument known only at runtime"
-                ));
-            };
-            types.push(ty);
-        }
+        let (types, primitive) = self.call_type_args(type_args)?;
         let values = self.laid_out_args(block, &name, info, layout, args)?;
         let args = format!("&[{}]", values.join(", "));
         match info.kind {
             FunctionKind::Bytecode => {
-                if !types.is_empty() {
-                    return unsupported(format!("call to generic function `{name}`"));
-                }
                 let Some(symbol) = self
                     .symbols
                     .get(&object)
@@ -68,12 +45,19 @@ impl<'db> Generator<'_, 'db> {
                         "suspending call to `{name}` emitted inline"
                     )));
                 };
-                self.fallible(
-                    block,
-                    &format!(
+                // A generic callee's frame starts with the call's type
+                // arguments (a plain function carries none of its own).
+                let call = if types.is_empty() {
+                    format!(
                         "vm.call_compiled(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, {args}, line)"
-                    ),
-                )
+                    )
+                } else {
+                    format!(
+                        "vm.call_compiled_with_types(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, &[{}], {args}, line)",
+                        types.join(", ")
+                    )
+                };
+                self.fallible(block, &call)
             }
             FunctionKind::NativeUnresolved | FunctionKind::Native(_) => {
                 let Some(key) = info.native_key.as_deref() else {

@@ -2,7 +2,8 @@
 //! terminator, and how an error leaves a block.
 
 use baml_compiler2_mir::{
-    BlockId, Local, Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey, Terminator,
+    BlockId, IntrinsicOp, Local, Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
+    Terminator,
 };
 
 use super::{Expr, Gen, Generator, YIELD_EVERY, unsupported};
@@ -142,10 +143,11 @@ impl Generator<'_, '_> {
             self.set_line(statement.span, depth, false);
             match &statement.kind {
                 StatementKind::Assign { destination, value } => {
-                    // A static type local is consumed as a call's type
-                    // argument; it has no runtime value of its own.
+                    // A type local is built where it is consumed (a call's
+                    // type argument, a `type` value); it has no runtime
+                    // value of its own.
                     if let (Place::Local(local), Rvalue::LoadType(_)) = (destination, value)
-                        && self.analysis.static_types.contains_key(&local.0)
+                        && self.analysis.is_type_local(local.0)
                     {
                         continue;
                     }
@@ -156,6 +158,20 @@ impl Generator<'_, '_> {
                 StatementKind::Drop(_) | StatementKind::Nop => {}
                 StatementKind::FreshCell { .. } => {
                     return unsupported("captured local");
+                }
+                // `type T = value`: bind the value into the frame's slot, as
+                // `BindType` does. Every type the body derives after this
+                // reads the frame again (`Generator::realized`).
+                StatementKind::Intrinsic {
+                    op: IntrinsicOp::BindType(slot),
+                    args,
+                } => {
+                    let [value] = args.as_slice() else {
+                        return Err(Rejection::Invalid("`BindType` takes one operand".into()));
+                    };
+                    let value = self.operand(id, value)?;
+                    let value = self.value_arg(&value.code, value.repr);
+                    self.statement(depth, &format!("vm.bind_type(depth, {slot}, {value})?;"));
                 }
                 StatementKind::Intrinsic { .. } => return unsupported("compiler intrinsic"),
                 StatementKind::VirtualFieldStore {

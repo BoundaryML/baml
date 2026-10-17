@@ -6,13 +6,19 @@
 
 use baml_compiler2_emit::OptLevel;
 use baml_db::native::{NativeModule, Rejection, compile_program};
+use bex_vm_types::{Object, ObjectIndex, RealizedTy, types::Program};
 
 fn compile(source: &str) -> NativeModule {
+    compile_with_program(source).0
+}
+
+fn compile_with_program(source: &str) -> (NativeModule, Program) {
     let db = baml_test_support::setup_test_db(source);
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
         baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
-    compile_program(&db, root, &program, OptLevel::Two, "program.bexa")
+    let module = compile_program(&db, root, &program, OptLevel::Two, "program.bexa");
+    (module, program)
 }
 
 const FIXTURE: &str = r#"
@@ -145,10 +151,8 @@ fn compute_shaped_functions_are_admitted_and_the_rest_stay_bytecode() {
         matches!(closure, Rejection::Unsupported(_)),
         "closures are outside the subset: {closure}"
     );
-    assert!(matches!(
-        rejection(&module, "user.generic"),
-        Rejection::Unsupported(reason) if reason.contains("generic")
-    ));
+    // A generic function compiles too: one body for every instantiation.
+    assert!(admitted.contains(&"user.generic"), "{admitted:?}");
     assert!(
         module
             .rejected
@@ -313,10 +317,14 @@ fn interface_dispatch_compiles_as_a_runtime_resolved_call() {
             "{name}"
         );
     }
+    // No dispatch keeps a function of the fixture bytecode. (The stdlib
+    // compiled beside it has interfaces instantiated with frame type
+    // arguments and functions typed as interfaces, which stay bytecode.)
     assert!(
         module
             .rejected
             .iter()
+            .filter(|(name, _)| name.starts_with("user."))
             .all(|(_, rejection)| !rejection.to_string().contains("interface")),
         "{:?}",
         module.rejected
@@ -418,4 +426,127 @@ fn functions_whose_names_render_alike_compile_to_their_own_objects() {
             "the entry's name is what the loader renders for its object"
         );
     }
+}
+
+/// Generic functions compile polymorphically: one body per function that
+/// reads `T` off its frame (`vm.frame_type_arg`) and builds every type it
+/// derives from it once on entry, for its `is T` tests, `T[]` arrays,
+/// generic class instances, nested generic calls, and generic function
+/// values; a fully concrete `foo<int>` is the program's pooled object.
+#[test]
+fn generic_functions_compile_against_the_frame() {
+    const SOURCE: &str = r#"
+class Point { x int y int }
+class Box<T> {
+  value T
+  function get(self) -> T { self.value }
+}
+function identity<T>(x: T) -> T { x }
+function is_t<T>(witness: T, x: int | string) -> bool { x is T }
+function singleton<T>(x: T) -> T[] { [x] }
+function twice<T>(x: T) -> T { identity<T>(identity<T>(x)) }
+function boxed<T>(x: T) -> Box<T> { Box { value: x } }
+function unbox<T>(b: Box<T>) -> T { b.get() }
+function is_box_int(x: Box<int> | Box<string>) -> bool { x is Box<int> }
+function id_int() -> (int) -> int throws never { identity<int> }
+function id_point() -> (Point) -> Point throws never { identity<Point> }
+function id_of<T>() -> (T) -> T throws never { identity<T> }
+function is_int_t<T>() -> bool { reflect.Type.of<T>() == reflect.Type.of<int>() }
+function bound(t: reflect.Type) -> bool { type U = unreflect(t); reflect.Type.of<U>() == t }
+"#;
+    let (module, program) = compile_with_program(SOURCE);
+    let admitted: Vec<&str> = module.functions.iter().map(|f| f.name.as_str()).collect();
+    for name in [
+        "user.identity",
+        "user.is_t",
+        "user.singleton",
+        "user.twice",
+        "user.boxed",
+        "user.unbox",
+        "user.is_box_int",
+        "user.id_int",
+        "user.id_point",
+        "user.id_of",
+        "user.is_int_t",
+        "user.bound",
+        "user.Box.get",
+    ] {
+        assert!(
+            admitted.contains(&name),
+            "{name} should compile; rejected: {:?}",
+            module.rejected
+        );
+    }
+    let compact = |name: &str| {
+        body_of(&module, name)
+            .split_whitespace()
+            .collect::<String>()
+    };
+    // The frame's type argument, read once on entry; `is T` is membership in it.
+    let is_t = compact("user.is_t");
+    assert!(
+        is_t.contains("letty0:RealizedTy=vm.frame_type_arg(depth,0)?;"),
+        "{is_t}"
+    );
+    assert!(is_t.contains("vm.value_is_member_of("), "{is_t}");
+    // `T[]` is an array of the frame's type.
+    let singleton = compact("user.singleton");
+    assert!(
+        singleton.contains("vm.new_array(ty0.clone(),"),
+        "{singleton}"
+    );
+    // A nested generic call passes the substituted type on.
+    let twice = compact("user.twice");
+    assert!(twice.contains("vm.call_compiled_with_types("), "{twice}");
+    assert!(twice.contains("&[ty0.clone()]"), "{twice}");
+    // A generic class instance carries its class type arguments ...
+    let boxed = compact("user.boxed");
+    assert!(boxed.contains("vm.new_generic_instance("), "{boxed}");
+    // ... and a call of its method passes them as the owner's arguments.
+    let unbox = compact("user.unbox");
+    assert!(unbox.contains("vm.call_compiled_with_types("), "{unbox}");
+    // `is Box<int>` compares the instance's arguments.
+    let is_box_int = compact("user.is_box_int");
+    assert!(is_box_int.contains("vm.is_instance_of_at("), "{is_box_int}");
+    assert!(is_box_int.contains("&[RealizedTy::Int]"), "{is_box_int}");
+    // `foo<int>` and `foo<Point>` are the program's pooled objects, so
+    // identity is the program's; `foo<T>` is built from the frame.
+    let is_int = |ty: &RealizedTy| matches!(ty, RealizedTy::Int);
+    let is_class = |ty: &RealizedTy| matches!(ty, RealizedTy::Class(..));
+    for (name, is_type_arg) in [
+        ("user.id_int", &is_int as &dyn Fn(&RealizedTy) -> bool),
+        ("user.id_point", &is_class),
+    ] {
+        let body = compact(name);
+        let pooled = body
+            .split("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw(")
+            .nth(1)
+            .and_then(|rest| rest.split(')').next())
+            .and_then(|index| index.parse::<usize>().ok())
+            .unwrap_or_else(|| panic!("{name} loads a pooled object: {body}"));
+        let Object::GenericFunction(generic) = &program.objects[ObjectIndex::from_raw(pooled)]
+        else {
+            panic!("{name} loads object {pooled}, not a generic function")
+        };
+        assert_eq!(generic.type_args.len(), 1);
+        assert!(
+            is_type_arg(&generic.type_args[0]),
+            "{name}: {:?}",
+            generic.type_args
+        );
+    }
+    let id_of = compact("user.id_of");
+    assert!(
+        id_of.contains("vm.make_generic_function(depth,GlobalIndex::from_raw("),
+        "{id_of}"
+    );
+    // A body binding a type (`type U = t`) builds its derived types where
+    // they are used, after the binding, not on entry.
+    let bound = compact("user.bound");
+    assert!(bound.contains("vm.bind_type(depth,"), "{bound}");
+    assert!(!bound.contains("letty0:"), "{bound}");
+    // Reflecting `T` passes the frame's type to the builtin.
+    let is_int_t = compact("user.is_int_t");
+    assert!(is_int_t.contains("ty0.clone()"), "{is_int_t}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
 }

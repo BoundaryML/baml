@@ -264,7 +264,9 @@ impl BexVm {
         body: CompiledBody,
         type_args: &[RealizedTy],
         args: &[Value],
+        line: u32,
     ) -> Result<Value, Box<VmError>> {
+        self.note_call_line(line);
         if self.frames.len() >= crate::vm::MAX_FRAMES {
             return Err(Box::new(VmError::thrown_fresh(
                 self.panic_to_exception_value(VmPanic::StackOverflow),
@@ -289,9 +291,17 @@ impl BexVm {
         let locals_offset = StackIndex::from_raw(self.stack.len());
         let mut frame_type_args = self.pooled_type_args();
         frame_type_args.extend_from_slice(type_args);
-        self.frames.push(crate::vm::Frame::Bytecode(
-            crate::vm::BytecodeFrame::compiled(callee, locals_offset, frame_type_args, context),
-        ));
+        let mut frame =
+            crate::vm::BytecodeFrame::compiled(callee, locals_offset, frame_type_args, context);
+        // A type naming a runtime declaration rides beside the frame's
+        // arguments as an exact value, as a bytecode call carries it.
+        let type_values = crate::vm::exact_type_values(type_args);
+        if !type_values.is_empty() {
+            frame.type_metadata = Some(Box::new(crate::vm::FrameTypeMetadata {
+                values: type_values,
+            }));
+        }
+        self.frames.push(crate::vm::Frame::Bytecode(frame));
         let result = body(self, args);
         if result.is_ok() {
             if let Some(crate::vm::Frame::Bytecode(frame)) = self.frames.pop() {

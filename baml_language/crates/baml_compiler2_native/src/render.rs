@@ -20,7 +20,7 @@ pub(crate) fn render_module(
          unreachable_code, non_snake_case, clippy::all, clippy::pedantic)]\n\n\
          use bex_vm::{BexVm, NativeFunction, errors::VmError};\n\
          use bex_vm::compiled_rt::{CompiledEntry, CompiledFn, Resume, Step};\n\
-         use bex_vm_types::{BinOp, CmpOp, ObjectIndex, RealizedTy, Value};\n\n\
+         use bex_vm_types::{BinOp, CmpOp, GlobalIndex, ObjectIndex, RealizedTy, Value};\n\n\
          type R<T> = Result<T, Box<VmError>>;\n\n",
     );
     for (key, ordinal) in natives {

@@ -67,6 +67,10 @@ pub(crate) struct Analysis {
     /// needs no frame type arguments), with the `RealizedTy` expression that
     /// builds it. Such a local is only ever a call's type argument.
     pub(crate) static_types: HashMap<usize, StaticTy>,
+    /// Locals assigned a type derived from the frame's type arguments
+    /// (`LoadType` of a template with a `TypeArgRef`), by the template: a
+    /// call's type argument, or a `type` value (`Generator::realized`).
+    pub(crate) frame_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
     /// Whether the body itself suspends (await, spawn, a sys op, or a call
     /// compiled code cannot make directly); callers of suspending functions
     /// are found by the admission fixpoint.
@@ -103,6 +107,7 @@ impl Analysis {
         // prologue tests for that sentinel in the body; such a local stays a
         // `Value` so the test sees the sentinel instead of an unboxed zero.
         let mut static_types = HashMap::new();
+        let mut frame_types = HashMap::new();
         for block in &body.blocks {
             for statement in &block.statements {
                 let StatementKind::Assign { destination, value } = &statement.kind else {
@@ -122,11 +127,16 @@ impl Analysis {
                         }
                     }
                     Rvalue::LoadType(template) => {
-                        if let (Place::Local(local), Some(code)) =
-                            (destination, static_realized(index, template))
-                        {
+                        let Place::Local(local) = destination else {
+                            continue;
+                        };
+                        if let Some(code) = static_realized(index, template) {
                             let primitive = is_primitive(template);
                             static_types.insert(local.0, StaticTy { code, primitive });
+                        } else if reads_frame(template)
+                            && realized_expr(index, template, true).is_some()
+                        {
+                            frame_types.insert(local.0, template.clone());
                         }
                     }
                     _ => {}
@@ -180,9 +190,16 @@ impl Analysis {
             cfg,
             user_callees,
             static_types,
+            frame_types,
             suspends,
             array_iters,
         })
+    }
+
+    /// Whether local `i` holds a type (a `LoadType` temp this backend
+    /// builds as a `RealizedTy`), with no `Value` of its own.
+    pub(crate) fn is_type_local(&self, i: usize) -> bool {
+        self.static_types.contains_key(&i) || self.frame_types.contains_key(&i)
     }
 }
 
@@ -465,26 +482,140 @@ fn is_primitive(template: &baml_compiler2_mir::TyTemplate) -> bool {
 }
 
 /// The `RealizedTy` expression for a type template that needs no frame type
-/// arguments: primitives, non-generic classes, and arrays of them.
+/// arguments: primitives, declared types, and containers of them.
 pub(crate) fn static_realized(
     index: &ProgramIndex,
     template: &baml_compiler2_mir::TyTemplate,
 ) -> Option<String> {
+    realized_expr(index, template, false)
+}
+
+/// Whether `template` reads the frame's type arguments (has a `TypeArgRef`).
+pub(crate) fn reads_frame(template: &baml_compiler2_mir::TyTemplate) -> bool {
+    let mut reads = false;
+    template.for_each_type_arg_ref(&mut |_| reads = true);
+    reads
+}
+
+/// The expression building the `RealizedTy` of `template`, as
+/// `TyTemplate::substitute` builds it: a frame reference reads the running
+/// function's type argument (`vm.frame_type_arg(depth, n)?`, so only inside
+/// a body, with `frame`), and each composite is built from its parts.
+/// `None` for a shape this backend does not build (see
+/// [`template_blocker`]).
+pub(crate) fn realized_expr(
+    index: &ProgramIndex,
+    template: &baml_compiler2_mir::TyTemplate,
+    frame: bool,
+) -> Option<String> {
+    let part = |part: &baml_compiler2_mir::TyTemplate| realized_expr(index, part, frame);
+    let parts = |parts: &[baml_compiler2_mir::TyTemplate]| {
+        parts
+            .iter()
+            .map(part)
+            .collect::<Option<Vec<_>>>()
+            .map(|parts| parts.join(", "))
+    };
     Some(match template {
         TyTemplate::Int => "RealizedTy::Int".to_string(),
         TyTemplate::Float => "RealizedTy::Float".to_string(),
         TyTemplate::Bool => "RealizedTy::Bool".to_string(),
         TyTemplate::String => "RealizedTy::String".to_string(),
-        TyTemplate::List(element) => {
-            format!(
-                "RealizedTy::List(Box::new({}))",
-                static_realized(index, element)?
-            )
+        TyTemplate::Null => "RealizedTy::Null".to_string(),
+        TyTemplate::Unknown => "RealizedTy::unknown()".to_string(),
+        TyTemplate::TypeArgRef(slot) => {
+            if !frame {
+                return None;
+            }
+            format!("vm.frame_type_arg(depth, {slot})?")
         }
-        TyTemplate::Class(name, args) if args.is_empty() => {
+        TyTemplate::List(element) => format!("RealizedTy::List(Box::new({}))", part(element)?),
+        TyTemplate::Map { key, value } => format!(
+            "RealizedTy::Map {{ key: Box::new({}), value: Box::new({}) }}",
+            part(key)?,
+            part(value)?
+        ),
+        TyTemplate::Union(members) => format!("RealizedTy::Union(Box::new([{}]))", parts(members)?),
+        TyTemplate::Class(name, args) => {
             let (object, _) = index.class_at(name).ok().flatten()?;
-            format!("vm.class_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
+            if args.is_empty() {
+                format!("vm.class_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
+            } else {
+                format!(
+                    "vm.class_type_at(vm.idx_to_ptr(ObjectIndex::from_raw({object})), Box::new([{}]))",
+                    parts(args)?
+                )
+            }
+        }
+        TyTemplate::Enum(name) => {
+            let object = index.enum_at(name).ok().flatten()?;
+            format!("vm.enum_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
+        }
+        // The runtime boundary normalizes a literal's freshness to `Regular`.
+        TyTemplate::Literal(literal, _) => {
+            let literal = match literal {
+                Literal::Int(n) => format!("Literal::Int({n}i64)"),
+                Literal::Bool(b) => format!("Literal::Bool({b})"),
+                Literal::String(s) => format!("Literal::String(String::from({s:?}))"),
+                Literal::Float(f) => format!("Literal::Float(String::from({f:?}))"),
+                Literal::Bigint(_) => return None,
+            };
+            format!(
+                "RealizedTy::Literal(bex_vm::compiled_rt::{literal}, bex_vm::compiled_rt::Freshness::Regular)"
+            )
         }
         _ => return None,
     })
+}
+
+/// The first leaf of `template` this backend does not build, for the
+/// rejection naming it.
+pub(crate) fn template_blocker(
+    index: &ProgramIndex,
+    template: &baml_compiler2_mir::TyTemplate,
+) -> &'static str {
+    fn blocker_of(
+        index: &ProgramIndex,
+        template: &baml_compiler2_mir::TyTemplate,
+    ) -> Option<&'static str> {
+        let parts = |parts: &[baml_compiler2_mir::TyTemplate]| {
+            parts.iter().find_map(|part| blocker_of(index, part))
+        };
+        Some(match template {
+            TyTemplate::List(element) => return blocker_of(index, element),
+            TyTemplate::Map { key, value } => {
+                return blocker_of(index, key).or_else(|| blocker_of(index, value));
+            }
+            TyTemplate::Union(members) => return parts(members),
+            TyTemplate::Class(name, args) => {
+                if index.class_at(name).ok().flatten().is_none() {
+                    return Some("a class not in the program");
+                }
+                return parts(args);
+            }
+            TyTemplate::Enum(name) => {
+                if index.enum_at(name).ok().flatten().is_none() {
+                    return Some("an enum not in the program");
+                }
+                return None;
+            }
+            TyTemplate::Interface(..) => "an interface type",
+            TyTemplate::Function { .. } => "a function type",
+            TyTemplate::Future(..) => "a future type",
+            TyTemplate::AssociatedTypeProjection { .. } => "a projection",
+            TyTemplate::TypeAlias(_) => "a recursive alias",
+            TyTemplate::EnumVariant(..) => "an enum variant type",
+            TyTemplate::Literal(Literal::Bigint(_), _) => "a bigint literal type",
+            TyTemplate::Bigint
+            | TyTemplate::Uint8Array
+            | TyTemplate::Media(_)
+            | TyTemplate::RustType
+            | TyTemplate::Type
+            | TyTemplate::Resource
+            | TyTemplate::PromptAst
+            | TyTemplate::Never => "an opaque type",
+            _ => return None,
+        })
+    }
+    blocker_of(index, template).unwrap_or("a type this backend does not build")
 }

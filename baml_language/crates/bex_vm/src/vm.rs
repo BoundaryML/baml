@@ -202,6 +202,25 @@ fn append_virtual_method_type_args(
     values
 }
 
+/// The exact values a bytecode call carries beside `type_args`
+/// (`take_type_args`): none when every argument names only compiled
+/// declarations, which every consumer finds from the program; each argument
+/// as its own value when one names a runtime declaration. A compiled caller
+/// has its type arguments as realized types, and a `type` value is exactly
+/// its realized type, so the two lanes carry the same content.
+pub(crate) fn exact_type_values(type_args: &[bex_vm_types::RealizedTy]) -> Vec<Option<TypeValue>> {
+    if type_args
+        .iter()
+        .all(crate::reachable::is_statically_declared)
+    {
+        return Vec::new();
+    }
+    type_args
+        .iter()
+        .map(|ty| Some(TypeValue::new(ty.clone())))
+        .collect()
+}
+
 /// Append the type arguments a call passes (`type_args`, with the exact
 /// values beside them in `type_values`, sparse) to `frame`'s, after those the
 /// callee value carried: the layout `[carried.., passed..]` every reader of
@@ -292,7 +311,7 @@ pub struct BytecodeFrame {
     /// Exact BEP-066 runtime-type metadata. Ordinary calls have no dynamic
     /// definitions or exact values, so keep the comparatively large pair of
     /// side lanes boxed and absent from their hot call frames.
-    type_metadata: Option<Box<FrameTypeMetadata>>,
+    pub(crate) type_metadata: Option<Box<FrameTypeMetadata>>,
     /// Byte offset of the most recently dispatched opcode (compact path).
     /// In the legacy path this mirrors `instruction_ptr - 1` and is kept
     /// up-to-date before each `step()` call.
@@ -360,13 +379,13 @@ struct PendingTraceHook {
 }
 
 #[derive(Clone, Debug, Default)]
-struct FrameTypeMetadata {
+pub(crate) struct FrameTypeMetadata {
     /// Exact runtime type values for explicitly supplied slots. Wrapper-
     /// supplied static slots use `None` and are reconstructed normally. The
     /// frame's realized `type_args` remain the execution authority and root
     /// their own heads; these values preserve the additional reflection
     /// identity needed to reconstruct an explicitly supplied `type` value.
-    values: Vec<Option<TypeValue>>,
+    pub(crate) values: Vec<Option<TypeValue>>,
 }
 
 impl FrameTypeMetadata {
@@ -376,7 +395,7 @@ impl FrameTypeMetadata {
     /// `LoadType` constant means, so such frames share the program-wide cache.
     /// One that binds a runtime declaration must not: the same constant
     /// resolves to a different type per binding.
-    fn binds_runtime_declaration(&self, heap: &BexHeap) -> bool {
+    pub(crate) fn binds_runtime_declaration(&self, heap: &BexHeap) -> bool {
         self.values.iter().flatten().any(|value| {
             let mut runtime = false;
             value.ty.visit_heads(&mut |head| {
@@ -1349,7 +1368,7 @@ pub(crate) mod tests {
             let callee = vm.idx_to_ptr(ObjectIndex::from_raw(
                 NAME_OF.load(Ordering::Relaxed) as usize
             ));
-            vm.call_compiled_with_types(callee, name_of, &[ty], &[args[0]])
+            vm.call_compiled_with_types(callee, name_of, &[ty], &[args[0]], 0)
         }
         const SOURCE: &str = r#"
             function NameOf<T>(x: T) -> string { "bytecode" }
@@ -2653,7 +2672,7 @@ pub struct BexVm {
     /// constants in static functions. The compact numeric key keeps the
     /// per-iteration lookup cheaper than re-hashing the full realized type.
     /// Entries are explicit VM GC roots.
-    static_load_type_cache: HashMap<(usize, usize), HeapPtr>,
+    pub(crate) static_load_type_cache: HashMap<(usize, usize), HeapPtr>,
     /// Monomorphic static virtual-call results keyed by caller site and the
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
@@ -2902,9 +2921,8 @@ pub fn convert_program_with_natives(
 /// An entry names its function by object index, the identity the generated
 /// code already depends on (it bakes callee and class indices in), and
 /// repeats the function's link name and arity so a table from another build
-/// is refused here instead of running against the wrong objects. A mismatch,
-/// a non-bytecode kind, or a generic function is a build inconsistency, not a
-/// user error.
+/// is refused here instead of running against the wrong objects. A mismatch
+/// or a non-bytecode kind is a build inconsistency, not a user error.
 fn attach_native_bodies(
     objects: &mut [Object],
     table: &NativeBodyTable,
@@ -2929,11 +2947,6 @@ fn attach_native_bodies(
         }
         if !matches!(function.kind, FunctionKind::Bytecode) {
             return Err(mismatch("targets a function that is not bytecode"));
-        }
-        if !function.generic_param_bounds.is_empty() || !function.display_type_params.is_empty() {
-            return Err(mismatch(
-                "targets a generic function; compiled bodies take no type arguments",
-            ));
         }
         function.native_body = Some(entry.erase());
     }
@@ -3819,7 +3832,7 @@ impl BexVm {
     /// resolves to its built type (or throws naming the un-frozen builder).
     /// Shared by the call type-argument lane and `BindType`, so the two
     /// boundaries cannot drift on what a type operand may be.
-    fn type_operand_value(&mut self, value: Value) -> Result<TypeValue, VmError> {
+    pub(crate) fn type_operand_value(&mut self, value: Value) -> Result<TypeValue, VmError> {
         let value =
             crate::package_reflect::type_kinds::as_view_type_value(self, value).unwrap_or(value);
         let direct = value.as_object_ptr().and_then(|ptr| {
@@ -8677,13 +8690,14 @@ impl BexVm {
         let outcome = if type_args.is_empty() {
             self.execute_call_from_locals_offset(callee, locals_offset, argc, frame_idx, function)
         } else {
+            let type_values = exact_type_values(type_args);
             self.execute_call_from_locals_offset_with_type_args(
                 callee,
                 locals_offset,
                 argc,
                 CallOptions {
                     type_args,
-                    type_values: &[],
+                    type_values: &type_values,
                 },
                 frame_idx,
                 function,

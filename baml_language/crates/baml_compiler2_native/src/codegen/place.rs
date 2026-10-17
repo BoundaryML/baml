@@ -17,8 +17,34 @@ impl<'db> Generator<'_, 'db> {
     pub(super) fn load(&mut self, block: BlockId, place: &Place) -> Gen<Expr> {
         match place {
             Place::Local(local) => {
-                if self.analysis.static_types.contains_key(&local.0) {
-                    return unsupported("type value");
+                // A type derived from the frame as a `type` value: built
+                // per read, as bytecode's `LoadType` of such a template is.
+                // A statically known one is the site's one object, as its
+                // `LoadType` cache keeps it.
+                if let Some(template) = self.analysis.frame_types.get(&local.0).cloned() {
+                    let slot = match template {
+                        baml_type::TyTemplate::TypeArgRef(slot) => format!("Some({slot})"),
+                        _ => "None".to_string(),
+                    };
+                    let ty = self.realized(&template)?;
+                    return Ok(Expr::new(
+                        format!("vm.type_value(depth, {slot}, {ty})"),
+                        Repr::Value,
+                    ));
+                }
+                if let Some(ty) = self.analysis.static_types.get(&local.0) {
+                    let code = ty.code.clone();
+                    let site = match self.static_value_sites.iter().position(|c| *c == code) {
+                        Some(site) => site,
+                        None => {
+                            self.static_value_sites.push(code.clone());
+                            self.static_value_sites.len() - 1
+                        }
+                    };
+                    return Ok(Expr::new(
+                        format!("vm.static_type_value(depth, {site}, {code})"),
+                        Repr::Value,
+                    ));
                 }
                 if self.analysis.array_iters.contains_key(&local.0) {
                     return unsupported("array iterator used as a value");

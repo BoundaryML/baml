@@ -31,7 +31,8 @@ use baml_compiler2_mir::{
 use crate::{
     admit::{ProgramIndex, Rejection},
     analysis::{
-        Analysis, Repr, array_iter_call, array_next_call, loops, suspends_directly, user_callee,
+        Analysis, Repr, array_iter_call, array_next_call, loops, reads_frame, realized_expr,
+        suspends_directly, template_blocker, user_callee,
     },
     render::{coerce, is_atom},
     structure::{Structured, structurize},
@@ -105,6 +106,17 @@ pub(crate) struct Generator<'a, 'db> {
     /// An inline body's structured control flow, built when it is emitted;
     /// a resumable body has none.
     pub(crate) structured: Option<Structured>,
+    /// The templates over the frame's type arguments the body realizes
+    /// once on entry, by the local `ty{k}` holding each (`Self::realized`).
+    pub(crate) frame_templates: Vec<baml_compiler2_mir::TyTemplate>,
+    /// Whether derived types are built once on entry. A body binding a type
+    /// into its frame (`type T = ..`) builds each where it is used instead,
+    /// since a template may read the slot bound.
+    pub(crate) hoist_types: bool,
+    /// The statically known types the body reads as `type` values, by the
+    /// expression building each: one cached object per site
+    /// (`vm.static_type_value`), as bytecode's `LoadType` keeps.
+    pub(crate) static_value_sites: Vec<String>,
 }
 
 type Gen<T> = Result<T, Rejection>;
@@ -150,7 +162,7 @@ impl<'db> Generator<'_, 'db> {
              let result = (|| -> R<Value> {{"
         );
         for (i, repr) in self.analysis.reprs.iter().enumerate() {
-            if self.analysis.static_types.contains_key(&i) {
+            if self.analysis.is_type_local(i) {
                 continue;
             }
             let ty = repr.rust_type();
@@ -192,6 +204,7 @@ impl<'db> Generator<'_, 'db> {
         self.structured = Some(structured);
         self.out.clear();
         self.stmts(&stmts, 1)?;
+        self.declare_frame_types(&mut out, 1);
         out.push_str(&self.out);
         // Every path ends in an `Exit`; this is unreachable, and keeps the
         // function well-typed if a leaf falls through after structuring.
@@ -221,7 +234,7 @@ impl<'db> Generator<'_, 'db> {
              let result = (|| -> Result<Step, Box<VmError>> {{"
         );
         for (i, repr) in self.analysis.reprs.iter().enumerate() {
-            if !self.analysis.static_types.contains_key(&i) {
+            if !self.analysis.is_type_local(i) {
                 let _ = writeln!(
                     self.out,
                     "    let mut l{i}: {} = {};",
@@ -323,7 +336,11 @@ impl<'db> Generator<'_, 'db> {
         self.line(3, "}");
         self.line(2, "}");
         self.line(1, "}");
-        // The blocks.
+        // The blocks. Every entry (a start or a resume) rebuilds the types
+        // the body derives from its frame, whose heads a collection may
+        // have moved while it was suspended; they are declared between the
+        // prologue and the loop once the blocks say which.
+        let mut prologue = std::mem::take(&mut self.out);
         self.in_loop = true;
         self.line(1, "loop {");
         self.line(2, "match bb {");
@@ -342,7 +359,114 @@ impl<'db> Generator<'_, 'db> {
         self.out.push_str(
             "    })();\n    if result.is_err() {\n        vm.note_line(depth, line);\n    }\n    result\n}\n",
         );
-        Ok(std::mem::take(&mut self.out))
+        let blocks = std::mem::take(&mut self.out);
+        self.declare_frame_types(&mut prologue, 1);
+        prologue.push_str(&blocks);
+        Ok(prologue)
+    }
+
+    /// Declare the body's frame-derived types (`let ty{k}: RealizedTy`),
+    /// in the order the body first needed them.
+    fn declare_frame_types(&self, out: &mut String, depth: usize) {
+        for (k, template) in self.frame_templates.iter().enumerate() {
+            let code = realized_expr(self.index, template, true)
+                .expect("a hoisted template was rendered when it was hoisted");
+            for _ in 0..depth {
+                out.push_str("    ");
+            }
+            let _ = writeln!(out, "let ty{k}: RealizedTy = {code};");
+        }
+    }
+
+    /// An expression of type `RealizedTy` for `template`, owned: a static
+    /// template is built in place; one reading the frame's type arguments
+    /// is a clone of the local built on entry (`frame_templates`), or built
+    /// where it is used when the body binds types (`hoist_types`).
+    pub(super) fn realized(&mut self, template: &baml_compiler2_mir::TyTemplate) -> Gen<String> {
+        let blocked = || {
+            unsupported(format!(
+                "type template with {}",
+                template_blocker(self.index, template)
+            ))
+        };
+        if !reads_frame(template) {
+            return realized_expr(self.index, template, false).map_or_else(blocked, Ok);
+        }
+        let Some(code) = realized_expr(self.index, template, true) else {
+            return blocked();
+        };
+        if !self.hoist_types {
+            let name = format!("t{}", self.temps);
+            self.temps += 1;
+            self.pending
+                .push(format!("let {name}: RealizedTy = {code};"));
+            return Ok(name);
+        }
+        let k = match self.frame_templates.iter().position(|t| t == template) {
+            Some(k) => k,
+            None => {
+                self.frame_templates.push(template.clone());
+                self.frame_templates.len() - 1
+            }
+        };
+        Ok(format!("ty{k}.clone()"))
+    }
+
+    /// [`Self::realized`] for each of `templates`.
+    pub(super) fn realized_all(
+        &mut self,
+        templates: &[baml_compiler2_mir::TyTemplate],
+    ) -> Gen<Vec<String>> {
+        templates
+            .iter()
+            .map(|template| self.realized(template))
+            .collect()
+    }
+
+    /// An expression of type `&RealizedTy` for `template`: the entry local
+    /// borrowed, or a built type bound to a temporary first.
+    pub(super) fn realized_ref(
+        &mut self,
+        template: &baml_compiler2_mir::TyTemplate,
+    ) -> Gen<String> {
+        let owned = self.realized(template)?;
+        if let Some(local) = owned.strip_suffix(".clone()") {
+            return Ok(format!("&{local}"));
+        }
+        let name = format!("t{}", self.temps);
+        self.temps += 1;
+        self.pending
+            .push(format!("let {name}: RealizedTy = {owned};"));
+        Ok(format!("&{name}"))
+    }
+
+    /// A call's type arguments (the leading `ntypeargs` operands, each a
+    /// type local) as owned `RealizedTy` expressions, and whether every one
+    /// is a statically known primitive (`StaticTy::primitive`).
+    pub(super) fn call_type_args(
+        &mut self,
+        type_args: &[Operand<'db>],
+    ) -> Gen<(Vec<String>, bool)> {
+        let mut types = Vec::with_capacity(type_args.len());
+        let mut primitive = true;
+        for arg in type_args {
+            let local = match arg {
+                Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => local.0,
+                Operand::Constant(_) | Operand::Copy(_) | Operand::Move(_) => {
+                    return unsupported("call with a type argument that is not a type local");
+                }
+            };
+            if let Some(ty) = self.analysis.static_types.get(&local) {
+                primitive &= ty.primitive;
+                types.push(ty.code.clone());
+            } else if let Some(template) = self.analysis.frame_types.get(&local).cloned() {
+                primitive = false;
+                types.push(self.realized(&template)?);
+            } else {
+                return unsupported("call with a type argument known only at runtime");
+            }
+        }
+        Ok((types, primitive))
     }
 
     /// Work out the body's frame layout and the control-flow facts its
@@ -356,6 +480,17 @@ impl<'db> Generator<'_, 'db> {
             }
         }
         let catches = blocks.iter().any(|block| block.handling.is_some());
+        self.hoist_types = !blocks.iter().any(|block| {
+            block.statements.iter().any(|statement| {
+                matches!(
+                    statement.kind,
+                    StatementKind::Intrinsic {
+                        op: baml_compiler2_mir::IntrinsicOp::BindType(_),
+                        ..
+                    }
+                )
+            })
+        });
         if self.suspends {
             let arity = self.body.locals.len().min(self.arity());
             let base = self.analysis.reprs.len().max(arity) + self.iters().len();
@@ -483,7 +618,7 @@ impl<'db> Generator<'_, 'db> {
             }
         }
         let locals = (0..self.analysis.reprs.len())
-            .filter(|&i| live[i] && !self.analysis.static_types.contains_key(&i))
+            .filter(|&i| live[i] && !self.analysis.is_type_local(i))
             .collect();
         let base = self.analysis.reprs.len().max(self.arity());
         let iters = self
@@ -559,7 +694,7 @@ impl<'db> Generator<'_, 'db> {
                 ..
             } => {
                 let (type_args, args) = args.split_at((*ntypeargs).min(args.len()));
-                let types = self.static_type_operands("call", type_args)?;
+                let (types, _) = self.call_type_args(type_args)?;
                 self.callee_ptr(block, callee)?;
                 let args = match callee {
                     Operand::Constant(Constant::Function(func)) => {

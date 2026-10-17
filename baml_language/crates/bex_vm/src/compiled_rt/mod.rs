@@ -19,14 +19,19 @@
 //! type checker should have ruled out.
 //!
 //! Nothing here reads run-loop state (`pc`, the current frame index, the
-//! current function). Operations that do — `LoadType`, calls, `Await` — are
-//! not part of this surface.
+//! current function): a body names its own frame by the frame count it read
+//! on entry (`frame_depth`), and reads its type arguments off it.
 
 mod arith;
 mod call;
 mod heap;
+mod types;
 mod r#virtual;
 
+/// The literal and freshness of a `RealizedTy::Literal` generated code
+/// builds, re-exported so the generated crate needs only this one.
+pub use baml_base::Literal;
+pub use baml_type::Freshness;
 use bex_vm_types::{HeapPtr, Value, types::Function};
 pub use r#virtual::VirtualSite;
 

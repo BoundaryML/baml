@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque, hash_map:
 use baml_base::SourceRoot;
 use baml_compiler2_emit::{
     DeclCoords, class_coords, class_head_coords, declared_function_coords, enum_coords,
-    function_coords, interface_head_coords,
+    enum_head_coords, function_coords, interface_head_coords,
 };
 use baml_compiler2_hir::{
     item_data::{file_functions, is_required_interface_method},
@@ -131,10 +131,6 @@ pub fn compile_program<'db>(
             };
             let name = index.name(object).to_owned();
             let info = index.info(object);
-            if info.generic {
-                rejected.push((name, Rejection::Unsupported("generic function".into())));
-                continue;
-            }
             if !matches!(info.kind, FunctionKind::Bytecode) {
                 continue;
             }
@@ -219,6 +215,9 @@ pub fn compile_program<'db>(
                 write_through: BTreeSet::new(),
                 call_types: Vec::new(),
                 structured: None,
+                frame_templates: Vec::new(),
+                hoist_types: true,
+                static_value_sites: Vec::new(),
             };
             match generator.function(&symbols[&object]) {
                 Ok(code) => {
@@ -294,7 +293,6 @@ pub(crate) struct FunctionInfo {
     pub(crate) layout: baml_type::CallLayout,
     pub(crate) native_key: Option<String>,
     pub(crate) arity: usize,
-    pub(crate) generic: bool,
 }
 
 /// A declaration's identity in the program: the package placing it, as its
@@ -332,6 +330,15 @@ pub(crate) struct ProgramIndex {
     names: HashMap<usize, String>,
     /// String literal → the compile-time string object bytecode loads it from.
     pub(crate) strings: HashMap<String, usize>,
+    /// Function object → the global slot its object is loaded from: what a
+    /// `GenericFunction` names its function by.
+    pub(crate) globals: HashMap<usize, usize>,
+    /// Class or enum object → the tag its type head carries in this
+    /// program, which the heads in pooled objects compare by.
+    heads: HashMap<usize, baml_type::typetag::TypeTag>,
+    /// The program's pooled `foo<..>` values, as (function global slot,
+    /// type arguments, object index).
+    generic_functions: Vec<(usize, Box<[bex_vm_types::RealizedTy]>, usize)>,
 }
 
 impl ProgramIndex {
@@ -354,15 +361,33 @@ impl ProgramIndex {
                             layout: function.argument_layout(),
                             native_key: function.native_key.as_deref().map(str::to_owned),
                             arity: function.arity,
-                            generic: !function.generic_param_bounds.is_empty()
-                                || !function.display_type_params.is_empty(),
                         },
                     );
                 }
                 Object::String(text) => {
                     index.strings.entry(text.to_string()).or_insert(object);
                 }
+                Object::GenericFunction(generic) => {
+                    index.generic_functions.push((
+                        generic.function.raw(),
+                        generic.type_args.clone(),
+                        object,
+                    ));
+                }
+                Object::Class(class) => {
+                    index.heads.insert(object, class.type_tag);
+                }
+                Object::Enum(declaration) => {
+                    index.heads.insert(object, declaration.type_tag);
+                }
                 _ => {}
+            }
+        }
+        for (slot, global) in program.globals.iter().enumerate() {
+            if let ConstValue::Object(object) = global
+                && index.infos.contains_key(&object.raw())
+            {
+                index.globals.entry(object.raw()).or_insert(slot);
             }
         }
         let mut collisions = Vec::new();
@@ -477,6 +502,52 @@ impl ProgramIndex {
         head: &baml_type::DeclName,
     ) -> Result<Option<usize>, Rejection> {
         self.lookup(&self.interfaces, interface_head_coords(head))
+    }
+
+    /// [`Self::enum_`] for the enum a type template's head names.
+    pub(crate) fn enum_at(&self, head: &baml_type::DeclName) -> Result<Option<usize>, Rejection> {
+        self.lookup(&self.enums, enum_head_coords(head))
+    }
+
+    /// The program's pooled `GenericFunction` over the function at `object`
+    /// at `type_args` (a plain function reference at none): the object
+    /// `Constant::Function` and `Constant::GenericFunction` load, so
+    /// identity is the program's. `None` when the program pools no such
+    /// object, or a type argument names a declaration it does not have.
+    pub(crate) fn pooled_generic_function(
+        &self,
+        object: usize,
+        type_args: &[baml_compiler2_mir::RealizedTy],
+    ) -> Option<usize> {
+        let global = *self.globals.get(&object)?;
+        let head_of = |decl: &baml_type::DeclName| {
+            let object = self
+                .class_at(decl)
+                .ok()
+                .flatten()
+                .map(|(object, _)| object)
+                .or_else(|| self.enum_at(decl).ok().flatten())?;
+            self.heads.get(&object).copied()
+        };
+        let mut known = true;
+        for ty in type_args {
+            ty.visit_heads(&mut |decl| known &= head_of(decl).is_some());
+        }
+        if !known {
+            return None;
+        }
+        let anchored: Vec<bex_vm_types::RealizedTy> = type_args
+            .iter()
+            .map(|ty| {
+                ty.map_heads(&mut |decl| {
+                    bex_vm_types::TypeHead::unresolved(head_of(decl).expect("checked above"))
+                })
+            })
+            .collect();
+        self.generic_functions
+            .iter()
+            .find(|(slot, args, _)| *slot == global && args[..] == anchored[..])
+            .map(|&(_, _, object)| object)
     }
 
     /// The object of `enum_ref`, if the program has it.

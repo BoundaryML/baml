@@ -262,16 +262,19 @@ arms (ThrowIfPanic), calls with named or omitted arguments to a named callee
 (laid over the callee's slots at compile time, as the VM does at run time),
 calls to compiled functions, builtins (callback-running ones through the VM),
 sys ops and LLM functions (through the VM), function values, await,
-await_any, spawn, generic builtins when every type argument is static (a
-primitive, a non-generic class, or an array of those), string literals from
-the program's string objects, for-in over an array (an index walk with the
-semantics baml.iter.ArrayIterator documents), and interface dispatch on a
-statically known interface (section 11).
+await_any, spawn, generic functions and classes (section 12), generic
+builtins (a structural rendering with a type argument that is not a static
+primitive goes through the VM, since it may run a user to_string), type
+values, string literals from the program's string objects, for-in over an
+array (an index walk with the semantics baml.iter.ArrayIterator documents),
+and interface dispatch on a statically known interface (section 11).
 
-Stays bytecode: closures (creating one; calling one works), user generic
-functions, interface dispatch through an interface instantiated with a frame
-type argument, type values needing frame type arguments, map literals and
-indexes, enum variant literals, bigint, trace hooks, defer cleanup pads.
+Stays bytecode: closures (creating one; calling one works), interface
+dispatch through an interface instantiated with a frame type argument, map
+literals and indexes, enum variant literals, bigint, trace hooks, defer
+cleanup pads, and type templates of a shape the backend does not build
+(interface, function and future types, projections, recursive aliases,
+opaque types).
 
 
 9. Performance: what caps it
@@ -393,3 +396,57 @@ devirtualizing at compile time (a non-generic interface with one static
 implementation for the receiver's static type) would keep such a function
 inline. A call with named or omitted optional arguments to an inline
 implementation is requested rather than called in place.
+
+12. Generics
+
+A generic function is one body for every instantiation, as its bytecode is:
+no monomorphization. A call seeds the callee's frame with its type arguments
+in the callee's De Bruijn order (the owner's, then the function's own; a
+class method's receiver arguments arrive as leading passed arguments, as MIR
+lowers the call), and the body reads them off its frame
+(compiled_rt::frame_type_arg(depth, n)), exactly where LoadType substitutes
+TypeArgRef(n).
+
+Where the type arguments live, by call shape:
+
+  bytecode -> compiled    the call funnel binds the pending type arguments
+                          onto the just-pushed frame before an inline body
+                          runs (a bytecode callee gets them once the funnel
+                          returns, which is after an inline body would have
+                          run); a resumable callee gets them as bytecode
+                          does, before the run loop resumes it.
+  compiled -> compiled    call_compiled_with_types: the frame is pushed with
+                          them. Telemetry on: through the funnel, so
+                          CallTypeArgs { passed } is recorded as for bytecode.
+  compiled -> anything    Step::Call with push_type_arg, through the same
+      (resumable)         funnel path a bytecode generic call takes.
+  compiled -> builtin     call_builtin_typed: current_call_type_args(), where
+                          a native callee reads them.
+  entry point             set_entry_point_with_type_args: on the frame before
+                          the body starts at its stub.
+
+The frame's vector comes from a pool on the VM (take at push, return at pop
+for the compiled shapes; frames the interpreter pops just drop theirs), so a
+generic call allocates nothing in the steady state.
+
+Every type the body derives from its frame (T[], Box<T>, is T, foo<T>) is
+rendered from its template as the RealizedTy constructor LoadType would
+build, and built once on entry into a local (ty0, ty1, ..); a resumable body
+rebuilds them on every resume, since a collection may move their heads while
+it is suspended. A body that binds a type into its frame (type T = ..)
+builds each where it is used instead, after the binding. A type value read
+from a frame slot keeps the exact value an explicit type argument carried
+(FrameTypeMetadata), as LoadType prefers it; a statically known type read as
+a value is the site's one cached object, as bytecode's LoadType cache keeps
+it, so === across two reads holds as there. foo<int> as a value is the
+program's pooled GenericFunction, found at compile time by (global slot,
+anchored type arguments); foo<T> allocates one as MakeGenericFunction does.
+
+A type argument naming a runtime declaration rides beside the frame's
+arguments as an exact value, as a bytecode call carries it (take_type_args);
+the two lanes have the same content, since a type value is exactly its
+realized type.
+
+Open: a generic builtin whose type argument is a frame type cannot be shown
+primitive at compile time; its structural rendering goes through Step::Call
+even when the argument turns out to be int.

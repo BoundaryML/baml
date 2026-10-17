@@ -4,10 +4,11 @@ use baml_compiler2_mir::{
     AggregateKind, BinOp, BlockId, Rvalue, TypeTest, UnaryOp, class_display_name, enum_display_name,
 };
 
+use baml_compiler2_mir::function_display_name;
+
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
-    admit::Rejection,
-    analysis::{Repr, static_realized},
+    analysis::{Repr, static_realized, template_blocker},
     render::{binop_name, cmp_name},
 };
 
@@ -59,9 +60,7 @@ impl<'db> Generator<'_, 'db> {
                 Ok(Expr::new(code, Repr::Bool))
             }
             Rvalue::Array(template, elements) => {
-                let element_ty = static_realized(self.index, template).ok_or_else(|| {
-                    Rejection::Unsupported("array of a non-primitive type".into())
-                })?;
+                let element_ty = self.realized(template)?;
                 let mut values = Vec::with_capacity(elements.len());
                 for element in elements {
                     let element = self.operand(block, element)?;
@@ -80,9 +79,6 @@ impl<'db> Generator<'_, 'db> {
                     },
                 fields,
             } => {
-                if !type_arg_templates.is_empty() {
-                    return unsupported("instance of a generic class");
-                }
                 let name = class_display_name(self.db, *class);
                 let Some((object, field_count)) = self.index.class(self.db, *class)? else {
                     return unsupported(format!("class `{name}` not found in the program"));
@@ -102,10 +98,24 @@ impl<'db> Generator<'_, 'db> {
                     format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
                     Repr::Value,
                 ));
+                if type_arg_templates.is_empty() {
+                    return Ok(Expr::new(
+                        format!(
+                            "vm.new_instance({}.as_object_ptr().expect(\"class object\"), vec![{}])",
+                            class.code,
+                            values.join(", ")
+                        ),
+                        Repr::Value,
+                    ));
+                }
+                // An instance of a generic class carries its class type
+                // arguments, as `AllocInstance` with type operands stores them.
+                let type_args = self.realized_all(type_arg_templates)?;
                 Ok(Expr::new(
                     format!(
-                        "vm.new_instance({}.as_object_ptr().expect(\"class object\"), vec![{}])",
+                        "vm.new_generic_instance({}.as_object_ptr().expect(\"class object\"), Box::new([{}]), vec![{}])",
                         class.code,
+                        type_args.join(", "),
                         values.join(", ")
                     ),
                     Repr::Value,
@@ -118,10 +128,47 @@ impl<'db> Generator<'_, 'db> {
             Rvalue::Map(..) => unsupported("map literal"),
             Rvalue::Uint8Array(_) => unsupported("byte array literal"),
             Rvalue::MakeClosure { .. } => unsupported("closure"),
-            Rvalue::MakeBoundMethod { .. }
-            | Rvalue::MakeGenericFunction { .. }
-            | Rvalue::MakeGenericFunctionFromValue { .. } => {
-                unsupported("function used as a value")
+            Rvalue::MakeBoundMethod { .. } => unsupported("function used as a value"),
+            // `foo<T>`: a `GenericFunction` over the function's global slot
+            // at the frame-derived arguments, as `MakeGenericFunction`
+            // builds it (`foo<int>` is a pooled constant instead).
+            Rvalue::MakeGenericFunction {
+                func,
+                type_arg_templates,
+            } => {
+                let name = function_display_name(self.db, *func);
+                let Some((object, _)) = self.index.function(self.db, *func)? else {
+                    return unsupported(format!("function `{name}` not found in the program"));
+                };
+                let Some(&global) = self.index.globals.get(&object) else {
+                    return unsupported(format!("function `{name}` has no global slot"));
+                };
+                let type_args = self.realized_all(type_arg_templates)?;
+                Ok(Expr::new(
+                    format!(
+                        "vm.make_generic_function(depth, GlobalIndex::from_raw({global}), Box::new([{}]))",
+                        type_args.join(", ")
+                    ),
+                    Repr::Value,
+                ))
+            }
+            // `g<T>` on a function value: a closure carrying the arguments,
+            // as `MakeGenericFunctionFromValue` builds it.
+            Rvalue::MakeGenericFunctionFromValue {
+                value,
+                type_arg_templates,
+            } => {
+                let value = self.operand(block, value)?;
+                let value = self.value_arg(&value.code, value.repr);
+                let type_args = self.realized_all(type_arg_templates)?;
+                let code = self.fallible(
+                    block,
+                    &format!(
+                        "vm.specialize_function_value({value}, &[{}])",
+                        type_args.join(", ")
+                    ),
+                )?;
+                Ok(Expr::new(code, Repr::Value))
             }
             // Interface dispatch resolved at run time against a statically
             // known interface, as the interpreter's `MakeVirtual*` and
@@ -190,7 +237,13 @@ impl<'db> Generator<'_, 'db> {
                 )?;
                 Ok(Expr::new(code, Repr::Value))
             }
-            Rvalue::LoadType(_) => unsupported("type value"),
+            // A type local this backend builds is consumed where it is used
+            // (`Generator::realized`); one reaching here has a shape it does
+            // not build.
+            Rvalue::LoadType(template) => unsupported(format!(
+                "type template with {}",
+                template_blocker(self.index, template)
+            )),
             Rvalue::CurrentPackage => unsupported("current package"),
             Rvalue::TraceHookSettings { .. } => unsupported("trace hook"),
         }
@@ -199,15 +252,21 @@ impl<'db> Generator<'_, 'db> {
     pub(super) fn type_test(&mut self, value: &str, test: &TypeTest<'db>) -> Gen<String> {
         match test {
             TypeTest::Class { class, args } => {
-                if !args.is_empty() {
-                    return unsupported("type test against a generic class");
-                }
                 let Some((object, _)) = self.index.class(self.db, *class)? else {
                     let name = class_display_name(self.db, *class);
                     return unsupported(format!("class `{name}` not found in the program"));
                 };
+                if args.is_empty() {
+                    return Ok(format!(
+                        "vm.is_instance_of({value}, vm.idx_to_ptr(ObjectIndex::from_raw({object})))"
+                    ));
+                }
+                // `is C<..>`: the class, then each argument invariantly, as
+                // the interpreter's test against a class with type arguments.
+                let type_args = self.realized_all(args)?;
                 Ok(format!(
-                    "vm.is_instance_of({value}, vm.idx_to_ptr(ObjectIndex::from_raw({object})))"
+                    "vm.is_instance_of_at({value}, vm.idx_to_ptr(ObjectIndex::from_raw({object})), &[{}])",
+                    type_args.join(", ")
                 ))
             }
             TypeTest::Enum(enum_ref) => {
@@ -219,7 +278,12 @@ impl<'db> Generator<'_, 'db> {
                     "vm.is_variant_of({value}, vm.idx_to_ptr(ObjectIndex::from_raw({object})))"
                 ))
             }
-            TypeTest::Template(_) => unsupported("structural type test"),
+            // `is T` for a structural type: membership in the realized type,
+            // by the canonical algebra, as bytecode's `IsType` decides it.
+            TypeTest::Template(template) => {
+                let ty = self.realized_ref(template)?;
+                Ok(format!("vm.value_is_member_of({value}, {ty})"))
+            }
         }
     }
 

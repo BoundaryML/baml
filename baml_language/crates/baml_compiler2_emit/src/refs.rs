@@ -284,6 +284,11 @@ pub fn class_head_coords(head: &DeclName) -> DeclCoords {
     (head.root(), DeclPath::Class(item_path(head)))
 }
 
+/// The coordinates of the enum a type template's head names.
+pub fn enum_head_coords(head: &DeclName) -> DeclCoords {
+    (head.root(), DeclPath::Enum(item_path(head)))
+}
+
 /// The coordinates of the interface a type template's head names.
 pub fn interface_head_coords(head: &DeclName) -> DeclCoords {
     (head.root(), DeclPath::Interface(item_path(head)))
