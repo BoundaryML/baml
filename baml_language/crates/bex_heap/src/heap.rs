@@ -167,6 +167,11 @@ pub struct BexHeap {
     /// A card is marked dirty when a write barrier detects that a Gen2 object
     /// holds a reference to a Gen0 or Gen1 object. Used during partial collections.
     pub(crate) gen2_cards: UnsafeCell<CardTable>,
+    /// Whether write barriers keep [`Self::gen2_cards`]. Only a minor
+    /// collection reads the cards; a heap whose policy runs only full
+    /// collections turns this off (`disable_card_marking`) and its stores
+    /// skip the barrier's two generation lookups.
+    card_marking: bool,
 
     /// Handle table for external/FFI boundary.
     ///
@@ -360,6 +365,7 @@ impl BexHeap {
             inactive: UnsafeCell::new(ChunkedVec::new()),
             gen0_next_chunk: AtomicUsize::new(0),
             gen2_cards: UnsafeCell::new(CardTable::new()),
+            card_marking: true,
             handles: RwLock::new(HashMap::new()),
             handles_by_ptr: RwLock::new(HashMap::new()),
             next_handle_key: AtomicUsize::new(0),
@@ -388,6 +394,20 @@ impl BexHeap {
         );
         heap.max_tlab_size = crate::gc_policy::MAX_TLAB_SLOTS;
         heap
+    }
+
+    /// Stop keeping the card table: for a heap whose collections are all
+    /// full ones (the VM's policy, `should_collect`), which never read it.
+    /// Only before the heap is shared, so no store ever ran with marking on.
+    /// A minor collection on such a heap would miss old-to-young references.
+    pub fn disable_card_marking(&mut self) {
+        self.card_marking = false;
+    }
+
+    /// Whether write barriers keep the card table a minor collection reads.
+    #[must_use]
+    pub fn card_marking(&self) -> bool {
+        self.card_marking
     }
 
     /// Freeze the heap behind the shared `Arc`. Compile-time slots can no
@@ -771,6 +791,9 @@ impl BexHeap {
     /// is in Gen0 (no card table for Gen0).
     #[inline]
     pub fn write_barrier(&self, container_ptr: HeapPtr, written_value: Value) {
+        if !self.card_marking {
+            return;
+        }
         if let Some(ref_ptr) = written_value.as_object_ptr() {
             let container_gen = self.generation_of(container_ptr);
             let ref_gen = self.generation_of(ref_ptr);
@@ -790,6 +813,9 @@ impl BexHeap {
     /// but it is always safe and the cost is negligible since most objects are Gen0.
     #[inline]
     pub fn conservative_write_barrier(&self, container_ptr: HeapPtr) {
+        if !self.card_marking {
+            return;
+        }
         let container_gen = self.generation_of(container_ptr);
         if container_gen > Generation::Gen0 {
             self.mark_card_for_ptr(container_ptr);

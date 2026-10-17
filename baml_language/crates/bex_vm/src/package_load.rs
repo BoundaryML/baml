@@ -848,6 +848,9 @@ pub fn build_heap_with_packages(
 ) -> (Arc<BexHeap>, PackageIndex) {
     let layout = reserve_package_slots(&mut compile_time_objects, packages);
     let mut heap = BexHeap::build_unsealed_default(compile_time_objects);
+    // The VM's collection policy runs only full collections, which never read
+    // the card table its write barriers would keep.
+    heap.disable_card_marking();
     let index = fill_package_slots(&mut heap, packages, root, &layout);
     // Every slot is now real (impl rules carry heads in their patterns), so
     // this is the one point where the whole image can bind — and prove it
