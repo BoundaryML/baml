@@ -60,6 +60,36 @@ impl BexVm {
         })
     }
 
+    /// The type the `ConstValue::Type` constant `index` of `function` names
+    /// in the running compiled frame (`depth`, see [`Self::frame_depth`]):
+    /// its template substituted with the frame's type arguments, as
+    /// bytecode's `LoadType` substitutes it.
+    pub fn frame_type_constant(
+        &self,
+        depth: usize,
+        function: HeapPtr,
+        index: usize,
+    ) -> Result<RealizedTy, Box<VmError>> {
+        let Object::Function(function) = self.get_object(function) else {
+            unreachable!("compiled code names its own function object");
+        };
+        let ConstValue::Type(template) = &function.bytecode.constants[index] else {
+            return Err(Box::new(VmInternalError::UnexpectedConstantKind.into()));
+        };
+        let type_args: &[RealizedTy] = match depth.checked_sub(1).and_then(|top| self.frames.get(top)) {
+            Some(crate::vm::Frame::Bytecode(frame)) => &frame.type_args,
+            _ => &[],
+        };
+        template.substitute(type_args, self).map_err(|error| {
+            Box::new(
+                VmInternalError::TypeSubstitution {
+                    message: error.to_string(),
+                }
+                .into(),
+            )
+        })
+    }
+
     /// `value is T` for the type constant `index` of `function` (a structural
     /// template, a literal type, or a type tag), in a function with no frame
     /// type arguments: bytecode's `IsType`.

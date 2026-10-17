@@ -133,9 +133,11 @@ impl Analysis {
                     if let Some(code) = static_realized(index, template) {
                         let primitive = is_primitive(template);
                         static_types.insert(local.0, StaticTy { code, primitive });
-                    } else if reads_frame(template)
-                        && realized_expr(index, template, true).is_some()
-                    {
+                    } else {
+                        // Built where it is used: from its parts when this
+                        // backend builds them, else from the constant
+                        // bytecode's own `LoadType` reads
+                        // (`Generator::realized`).
                         frame_types.insert(local.0, template.clone());
                     }
                 }

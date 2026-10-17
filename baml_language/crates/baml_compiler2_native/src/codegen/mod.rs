@@ -406,17 +406,14 @@ impl<'db> Generator<'_, 'db> {
     /// is a clone of the local built on entry (`frame_templates`), or built
     /// where it is used when the body binds types (`hoist_types`).
     pub(super) fn realized(&mut self, template: &baml_compiler2_mir::TyTemplate) -> Gen<String> {
-        let blocked = || {
-            unsupported(format!(
-                "type template with {}",
-                template_blocker(self.index, template)
-            ))
-        };
         if !reads_frame(template) {
-            return realized_expr(self.index, template, false).map_or_else(blocked, Ok);
+            return match realized_expr(self.index, template, false) {
+                Some(code) => Ok(code),
+                None => self.pooled_type(template),
+            };
         }
         let Some(code) = realized_expr(self.index, template, true) else {
-            return blocked();
+            return self.pooled_type(template);
         };
         if !self.hoist_types {
             let name = format!("t{}", self.temps);
@@ -433,6 +430,36 @@ impl<'db> Generator<'_, 'db> {
             }
         };
         Ok(format!("ty{k}.clone()"))
+    }
+
+    /// A type this backend does not build from its parts (an interface, a
+    /// recursive alias, a function type, an opaque type, ...): the constant
+    /// bytecode's own `LoadType` of the same template reads, substituted with
+    /// the frame's type arguments as that instruction substitutes it, bound
+    /// to a temporary.
+    fn pooled_type(&mut self, template: &baml_compiler2_mir::TyTemplate) -> Gen<String> {
+        let blocked = || {
+            unsupported(format!(
+                "type template with {}",
+                template_blocker(self.index, template)
+            ))
+        };
+        let Some(anchored) = self.index.anchor(template)? else {
+            return blocked();
+        };
+        let Some(index) = self
+            .index
+            .pooled_constant(self.object, &bex_vm_types::types::ConstValue::Type(anchored))
+        else {
+            return blocked();
+        };
+        let name = format!("t{}", self.temps);
+        self.temps += 1;
+        self.pending.push(format!(
+            "let {name}: RealizedTy = vm.frame_type_constant(depth, vm.idx_to_ptr(ObjectIndex::from_raw({})), {index})?;",
+            self.object
+        ));
+        Ok(name)
     }
 
     /// [`Self::realized`] for each of `templates`.
