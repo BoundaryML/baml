@@ -21,7 +21,7 @@ use std::{
     },
 };
 
-use ::bex_vm_types::{Value, errors::StackFrame, types::FutureId};
+use ::bex_vm_types::{ForwardingMap, Value, errors::StackFrame, types::FutureId};
 use bex_external_types::{Handle, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object, WriteBarrier};
 
@@ -250,6 +250,10 @@ pub struct BexHeap {
     #[cfg(feature = "gc_profiling")]
     allocs_since_gc: AtomicUsize,
 
+    /// Survivors of the last collection: the forwarding map of the next one
+    /// is sized for as many entries before the trace starts.
+    pub(crate) last_survivors: AtomicUsize,
+
     /// Debug instrumentation state and config.
     debug_state: HeapDebuggerState,
 }
@@ -376,6 +380,7 @@ impl BexHeap {
             growth_lock: Mutex::new(()),
             #[cfg(feature = "gc_profiling")]
             allocs_since_gc: AtomicUsize::new(0),
+            last_survivors: AtomicUsize::new(0),
             debug_state: HeapDebuggerState::new(debug),
         }
     }
@@ -1160,7 +1165,7 @@ impl BexHeap {
     /// relocated or identity-mapped). A missing entry means the caller broke
     /// the contract; we panic rather than silently invalidate and expose the
     /// caller to dangling pointers.
-    pub fn update_handles(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    pub fn update_handles(&self, forwarding: &ForwardingMap) {
         // Validate every handle under a read lock first. A panic while the
         // write guard is held would poison the `RwLock` and then cascade into
         // a double-panic when the panicking `Handle`'s destructor tries to
