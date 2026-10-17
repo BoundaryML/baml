@@ -340,8 +340,10 @@ fn finalize_dispatch(
     };
 
     // Spawned tasks run on the workers. Give them the main thread's stack, so
-    // a task's compiled code recurses as deep as the root call's before it
-    // raises `StackOverflow`; only touched pages cost memory.
+    // a task's compiled code recurses as deep as the root call's before the
+    // VM moves it to a fresh stack segment (deep compiled recursion reaches
+    // the frame limit on any stack; the first segment is what this sizes);
+    // only touched pages cost memory.
     let rt = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .thread_stack_size(WORKER_STACK)

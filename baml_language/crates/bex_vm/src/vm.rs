@@ -1150,6 +1150,68 @@ pub(crate) mod tests {
         }
     }
 
+    /// Compiled recursion through bodies with large Rust frames reaches the
+    /// frame limit, not the thread's stack: the floor is reached long before
+    /// 256 frames (here on a 2 MiB thread, with 64 KiB frames), and the call
+    /// continues on a fresh segment, so the catchable `StackOverflow` lands at
+    /// the bytecode depth exactly, with telemetry off and on.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn compiled_recursion_grows_the_stack_to_the_frame_limit() {
+        use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+        static DEEP: AtomicU32 = AtomicU32::new(0);
+        static DEEPEST: AtomicUsize = AtomicUsize::new(0);
+        fn deep(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let n = test_int(args[0]);
+            DEEPEST.fetch_max(vm.frame_depth(), Ordering::Relaxed);
+            if n == 0 {
+                return Ok(Value::int(0));
+            }
+            // A frame of 64 KiB that stays live across the call.
+            let mut pad = [0u64; 8192];
+            let slot = usize::try_from(n).unwrap() % pad.len();
+            pad[slot] = 1;
+            std::hint::black_box(&mut pad);
+            let me = vm.idx_to_ptr(ObjectIndex::from_raw(DEEP.load(Ordering::Relaxed) as usize));
+            let below = vm.call_compiled(me, deep, &[Value::int(n - 1)])?;
+            let one = std::hint::black_box(&pad)[slot];
+            Ok(Value::int(test_int(below) + i64::try_from(one).unwrap()))
+        }
+        const SOURCE: &str = r#"
+            function Deep(n: int) -> int { if (n == 0) { 0 } else { 1 + Deep(n - 1) } }
+            function Main() -> string {
+                let shallow = Deep(100);
+                let d = Deep(300) catch (e) { baml.panics.StackOverflow => -7 };
+                let huge = Deep(1000000) catch (e) { baml.panics.StackOverflow => -8 };
+                `${shallow}|${d}|${huge}`
+            }
+        "#;
+        let run = || {
+            for telemetry in [false, true] {
+                DEEPEST.store(0, Ordering::Relaxed);
+                let out = run_with_compiled_bodies(
+                    SOURCE,
+                    &[("user.Deep", crate::compiled_rt::CompiledFn::Inline(deep))],
+                    &[("user.Deep", &DEEP)],
+                    telemetry,
+                );
+                assert_eq!(out, "100|-7|-8", "telemetry: {telemetry}");
+                assert_eq!(
+                    DEEPEST.load(Ordering::Relaxed),
+                    crate::vm::MAX_FRAMES,
+                    "telemetry: {telemetry}"
+                );
+            }
+        };
+        run();
+        std::thread::Builder::new()
+            .stack_size(2 << 20)
+            .spawn(run)
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
     /// A compiled `catch` around a compiled callee that throws pops the
     /// callee's frame: the program continues normally and calls again.
     #[cfg(not(target_arch = "wasm32"))]
@@ -8080,7 +8142,7 @@ impl BexVm {
                         if let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] {
                             frame.instruction_ptr = crate::compiled_rt::RUNNING;
                         }
-                        let outcome = body(self, &args);
+                        let outcome = self.with_stack_room(|vm| body(vm, &args));
                         self.settle();
                         match outcome {
                             Ok(value) => {
@@ -8204,7 +8266,7 @@ impl BexVm {
                 let args: SmallVec<[Value; 4]> = (0..function.arity)
                     .map(|i| self.stack.get_at(StackIndex::from_raw(locals_offset + i)))
                     .collect();
-                let outcome = body(self, &args);
+                let outcome = self.with_stack_room(|vm| body(vm, &args));
                 self.settle();
                 self.complete_compiled(frame_idx, function, outcome.map_err(|error| *error))
             }

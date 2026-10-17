@@ -223,12 +223,26 @@ collection, and an allocating one grows Gen0 until it returns.
 
 Stack: compiled-to-compiled calls recurse on the Rust stack, whose size the
 VM does not choose (a 2 MiB tokio worker, an 8 MiB main thread, a host's own
-thread). call_compiled compares the stack address on every call against a
-floor the VM reads once per exec (the thread's limit plus a 256 KiB red
-zone) and raises StackOverflow below it, so deep compiled recursion is a
-catchable panic on any thread, never a crash. The pack host gives its
-workers the main thread's 8 MiB, so a spawned task recurses as deep as the
-root call before that.
+thread), and a compiled frame can be large (a body with thousands of locals
+takes tens of KiB), so the frame limit's 256 frames need not fit. The limit
+is still the only one a program sees: it is checked first, and it alone
+raises StackOverflow. Below it, every path that runs a compiled body on the
+Rust stack (call_compiled with telemetry off, the call funnel's inline arm
+with it on or from bytecode, an inline entry body) compares the stack
+address against a floor (the running stack's limit plus a 256 KiB red zone)
+and, below the floor, runs the body on a fresh 8 MiB segment (stacker::grow)
+with the floor set to that segment's for the duration; the segment is
+mapped on entry and unmapped on return, and the frames that fit in one keep
+that cold. The floor is read once per exec and once per segment, so the hot
+path is one compare and branch. So deep compiled recursion reaches the
+frame limit on any thread, exactly as bytecode does, never the thread's
+limit; on wasm32 the floor is unknown (0) and nothing grows, as before. Open:
+a call sitting right at the floor pays a map and unmap per call; the red
+zone makes that a frame's worth of depth, not a line.
+
+The pack host still gives its workers the main thread's 8 MiB: a task's
+compiled recursion then goes as deep as the root call's before its first
+segment, and most programs never map one.
 
 
 8. Admission

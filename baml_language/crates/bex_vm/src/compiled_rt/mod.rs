@@ -172,17 +172,25 @@ pub(crate) const RUNNING: usize = usize::MAX;
 
 /// The Rust stack a compiled call leaves for what runs above it: the
 /// callee's own frame (a body with thousands of locals takes tens of KiB),
-/// the builtins it calls, the unwinder. Less than this and the call raises
-/// `StackOverflow` instead of overflowing the thread's stack, whose size (a
-/// 2 MiB tokio worker, an 8 MiB main thread, a host's own thread) the VM does
-/// not choose.
+/// the builtins it calls, the unwinder. Less than this and the call
+/// continues on a fresh stack segment ([`STACK_SEGMENT`]) instead of
+/// overflowing the thread's stack, whose size (a 2 MiB tokio worker, an
+/// 8 MiB main thread, a host's own thread) the VM does not choose.
 #[cfg(not(target_arch = "wasm32"))]
 const STACK_RED_ZONE: usize = 256 << 10;
 
-/// The lowest stack address compiled code on this thread may reach before a
-/// call raises `StackOverflow`: the thread's stack limit plus
-/// [`STACK_RED_ZONE`]. Read once per `exec`, so a compiled call compares one
-/// address instead of looking the thread's stack up. 0 when unknown.
+/// The stack segment a compiled call continues on below the floor; see
+/// `BexVm::with_stack_room`. Mapped lazily, so only the pages the frames
+/// touch cost memory; big enough that the recursion the frame limit admits
+/// (256 frames of tens of KiB) fits in a couple.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) const STACK_SEGMENT: usize = 8 << 20;
+
+/// The lowest stack address compiled code may reach on the stack it is
+/// running on (the thread's, or a segment a call grew) before the next call
+/// moves to a fresh segment: that stack's limit plus [`STACK_RED_ZONE`]. Read
+/// once per `exec` and once per segment, so a compiled call compares one
+/// address instead of looking the stack up. 0 when unknown.
 pub(crate) fn stack_floor() -> usize {
     #[cfg(not(target_arch = "wasm32"))]
     {

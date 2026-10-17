@@ -190,6 +190,9 @@ impl BexVm {
     /// VM's call path, so records, call paths and `$trace` behave exactly as
     /// for a bytecode call.
     ///
+    /// The frame limit is the only limit a program sees: the Rust stack the
+    /// callee runs on is the VM's concern ([`Self::with_stack_room`]).
+    ///
     /// On `Err` the callee's frame stays pushed, as the VM's call path leaves
     /// it: the unwinder pops it if the error escapes, [`Self::catch`] if a
     /// compiled handler lands it.
@@ -200,11 +203,22 @@ impl BexVm {
         body: CompiledBody,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
-        if self.frames.len() >= crate::vm::MAX_FRAMES || stack_address() < self.stack_floor {
+        if self.frames.len() >= crate::vm::MAX_FRAMES {
             return Err(Box::new(VmError::thrown_fresh(
                 self.panic_to_exception_value(VmPanic::StackOverflow),
             )));
         }
+        self.with_stack_room(|vm| vm.call_compiled_here(callee, body, args))
+    }
+
+    /// [`Self::call_compiled`] on the Rust stack where it stands.
+    #[inline]
+    fn call_compiled_here(
+        &mut self,
+        callee: HeapPtr,
+        body: CompiledBody,
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
         if self.telemetry.is_some() {
             return self.call_compiled_observed(callee, args);
         }
@@ -219,6 +233,43 @@ impl BexVm {
             self.stack.truncate(locals_offset.raw());
         }
         result
+    }
+
+    /// Run `f`, which runs a compiled body, where the Rust stack has room for
+    /// it: here when the stack is above the floor (one compare), else on a
+    /// fresh segment. Every path that runs a compiled body on the Rust stack
+    /// goes through this, so deep compiled recursion reaches the frame limit
+    /// on any thread, never the thread's stack limit.
+    #[inline]
+    pub(crate) fn with_stack_room<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        if stack_address() < self.stack_floor {
+            return self.on_fresh_segment(f);
+        }
+        f(self)
+    }
+
+    /// [`Self::with_stack_room`] below the floor: `f` runs on a fresh
+    /// [`STACK_SEGMENT`](super::STACK_SEGMENT), with the floor set to that
+    /// segment's while it does. The segment is mapped on entry and unmapped
+    /// on return; the frames that fit in one are what make the cost cold.
+    /// On wasm32 the floor is unknown (0), so this is never reached.
+    #[cold]
+    #[inline(never)]
+    fn on_fresh_segment<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let floor = self.stack_floor;
+            let result = stacker::grow(super::STACK_SEGMENT, || {
+                self.stack_floor = super::stack_floor();
+                f(self)
+            });
+            self.stack_floor = floor;
+            result
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            f(self)
+        }
     }
 
     /// [`Self::call_compiled`] through the VM's call path, for telemetry.
