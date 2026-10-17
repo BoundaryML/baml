@@ -17,7 +17,7 @@ fn compile_with_program(source: &str) -> (NativeModule, Program) {
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
         baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
-    let module = compile_program(&db, root, &program, OptLevel::Two, "program.bexa");
+    let module = compile_program(&db, root, &program, OptLevel::Two, "program.bexa", None);
     (module, program)
 }
 
@@ -397,7 +397,7 @@ fn functions_whose_names_render_alike_compile_to_their_own_objects() {
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
         baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
-    let module = compile_program(&db, root, &program, OptLevel::Two, "program.bexa");
+    let module = compile_program(&db, root, &program, OptLevel::Two, "program.bexa", None);
 
     let alike: Vec<_> = module
         .functions
@@ -549,4 +549,80 @@ function bound(t: reflect.Type) -> bool { type U = unreflect(t); reflect.Type.of
     let is_int_t = compact("user.is_int_t");
     assert!(is_int_t.contains("ty0.clone()"), "{is_int_t}");
     syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
+/// With entry points, only what they reach compiles: the rest is reported
+/// as unreached, not as unsupported, and nothing an entry calls is lost
+/// (`main` reaches the stdlib's string building; `fib` reaches itself).
+#[test]
+fn entry_points_prune_admission_to_what_they_reach() {
+    let db = baml_test_support::setup_test_db(FIXTURE);
+    let root = db.workspace_root().expect("test db has a workspace root");
+    let program =
+        baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
+    let callables = program.rendered_callables();
+    let entries = [callables["user.fib"].object.raw()];
+    let module = compile_program(
+        &db,
+        root,
+        &program,
+        OptLevel::Two,
+        "program.bexa",
+        Some(&entries),
+    );
+    let admitted: Vec<&str> = module.functions.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(admitted, ["user.fib"], "only the entry's closure compiles");
+    assert!(matches!(
+        rejection(&module, "user.sum"),
+        Rejection::Unreached
+    ));
+    assert!(matches!(
+        rejection(&module, "user.main"),
+        Rejection::Unreached
+    ));
+    assert!(
+        module
+            .rejected
+            .iter()
+            .any(|(name, rejection)| !name.starts_with("user.")
+                && matches!(rejection, Rejection::Unreached)),
+        "the stdlib is pruned too"
+    );
+    // Closures stay bytecode, but what they reach is still reached.
+    assert!(matches!(
+        rejection(&module, "user.uses_closure"),
+        Rejection::Unreached
+    ));
+
+    let entries = [callables["user.main"].object.raw()];
+    let module = compile_program(
+        &db,
+        root,
+        &program,
+        OptLevel::Two,
+        "program.bexa",
+        Some(&entries),
+    );
+    let admitted: Vec<&str> = module.functions.iter().map(|f| f.name.as_str()).collect();
+    for name in [
+        "user.main",
+        "user.sum",
+        "user.fib",
+        "user.manhattan",
+        "user.safe_div",
+        "user.mean",
+    ] {
+        assert!(
+            admitted.contains(&name),
+            "{name} is reached from main: {admitted:?}"
+        );
+    }
+    assert!(
+        admitted.iter().any(|name| name.starts_with("baml.")),
+        "main's string building reaches the stdlib: {admitted:?}"
+    );
+    assert!(matches!(
+        rejection(&module, "user.build"),
+        Rejection::Unreached
+    ));
 }

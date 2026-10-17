@@ -19,6 +19,7 @@
 mod admit;
 mod analysis;
 mod codegen;
+mod reach;
 mod render;
 mod structure;
 

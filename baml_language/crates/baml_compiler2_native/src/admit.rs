@@ -9,15 +9,25 @@ use baml_compiler2_emit::{
     enum_head_coords, function_coords, interface_head_coords,
 };
 use baml_compiler2_hir::{
-    item_data::{file_functions, is_required_interface_method},
+    item_data::{file_functions, file_lets, is_required_interface_method},
     loc::FunctionLoc,
     package::{edge_table, world_files},
 };
 use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef, FunctionRef};
-use baml_compiler2_mir::{MirFunction, MirFunctionBody, MirFunctionKind, OptLevel, lower_function};
-use bex_vm_types::{ConstValue, DeclPath, FunctionKind, Object, ObjectIndex, Program};
+use baml_compiler2_mir::{
+    MirFunction, MirFunctionBody, MirFunctionKind, OptLevel, lower_function, lower_let_body,
+};
+use bex_vm_types::{
+    ConstValue, DeclPath, FnPath, FunctionKind, Object, ObjectIndex, Program,
+    types::{FunctionIdentity, PackageKind},
+};
 
-use crate::{analysis::Analysis, codegen::Generator, render::render_module};
+use crate::{
+    analysis::Analysis,
+    codegen::Generator,
+    reach::{reachable, references},
+    render::render_module,
+};
 
 /// Why a function stays bytecode.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +37,10 @@ pub enum Rejection {
     /// The MIR violated an invariant a checked program must hold: a compiler
     /// bug, reported rather than compiled around.
     Invalid(String),
+    /// Compilable, but nothing the pack's entry points reach calls it
+    /// (`compile_program`'s `entries`); compiling it would only cost build
+    /// time and binary size.
+    Unreached,
 }
 
 impl std::fmt::Display for Rejection {
@@ -34,6 +48,7 @@ impl std::fmt::Display for Rejection {
         match self {
             Self::Unsupported(reason) => write!(f, "unsupported: {reason}"),
             Self::Invalid(reason) => write!(f, "invalid MIR: {reason}"),
+            Self::Unreached => write!(f, "unreached from the entry points"),
         }
     }
 }
@@ -82,18 +97,30 @@ pub struct NativeModule {
 /// in; names and object indices are read from it so the generated module
 /// refers to exactly this build (the generated crate embeds it as
 /// `PROGRAM_ARTIFACT`, read from `artifact_path`).
+///
+/// `entries` are the object indices of the functions the pack runs (its
+/// targets): only what they reach is compiled (see [`crate::reach`]), along
+/// with what every top-level `let` initializer reaches (`$init` runs them
+/// all at startup) and every method a non-stdlib package declares, which the
+/// stdlib may dispatch to without naming it. `None` compiles every admitted
+/// function, for a report of the backend's coverage.
 pub fn compile_program<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     root: SourceRoot,
     program: &Program,
     opt: OptLevel,
     artifact_path: &str,
+    entries: Option<&[usize]>,
 ) -> NativeModule {
     let index = ProgramIndex::new(db, root, program);
     // Admission works on object indices: the identity generated code bakes
     // in, unique across packages where a rendered name need not be.
     let mut units: BTreeMap<usize, Unit<'db>> = BTreeMap::new();
     let mut rejected: Vec<(String, Rejection)> = Vec::new();
+    // What each lowered function refers to, admitted or not: a rejected
+    // function stays bytecode and still calls what it calls.
+    let mut refs: HashMap<usize, BTreeSet<usize>> = HashMap::new();
+    let mut seeds: BTreeSet<usize> = entries.into_iter().flatten().copied().collect();
 
     for &file in world_files(db, root) {
         let lines: std::sync::Arc<[u32]> =
@@ -129,6 +156,9 @@ pub fn compile_program<'db>(
                     continue;
                 }
             };
+            if entries.is_some() {
+                refs.insert(object, references(db, &index, body, &mir.lambdas));
+            }
             let name = index.name(object).to_owned();
             let info = index.info(object);
             if !matches!(info.kind, FunctionKind::Bytecode) {
@@ -148,6 +178,25 @@ pub fn compile_program<'db>(
                 Err(rejection) => rejected.push((name, rejection)),
             }
         }
+        if entries.is_some() {
+            for &binding in file_lets(db, file) {
+                if let Ok(Some((body, lambdas))) = lower_let_body(db, binding, opt) {
+                    seeds.extend(references(db, &index, &body, &lambdas));
+                }
+            }
+        }
+    }
+
+    if entries.is_some() {
+        seeds.extend(index.user_methods.iter().copied());
+        let reached = reachable(seeds, &refs);
+        units.retain(|object, _| {
+            let keep = reached.contains(object);
+            if !keep {
+                rejected.push((index.name(*object).to_owned(), Rejection::Unreached));
+            }
+            keep
+        });
     }
 
     // Admission is one fixpoint. A function is admitted when its body
@@ -328,6 +377,11 @@ pub(crate) struct ProgramIndex {
     /// loader renders it.
     infos: HashMap<usize, FunctionInfo>,
     names: HashMap<usize, String>,
+    /// Methods and interface bodies by method name: what an interface
+    /// dispatch of that name can reach.
+    methods: HashMap<String, Vec<usize>>,
+    /// The methods and interface bodies of every non-stdlib package.
+    user_methods: Vec<usize>,
     /// String literal → the compile-time string object bytecode loads it from.
     pub(crate) strings: HashMap<String, usize>,
     /// Function object → the global slot its object is loaded from: what a
@@ -354,6 +408,24 @@ impl ProgramIndex {
                         continue;
                     };
                     index.names.insert(object, name);
+                    let method = match &function.identity {
+                        FunctionIdentity::Declared(FnPath::Method { name, .. }) => Some(name),
+                        FunctionIdentity::InterfaceBody(_) => function.identity.declared_name(),
+                        _ => None,
+                    };
+                    if let Some(method) = method {
+                        index
+                            .methods
+                            .entry(method.as_str().to_owned())
+                            .or_default()
+                            .push(object);
+                        let user = program
+                            .package_placing(ObjectIndex::from_raw(object))
+                            .is_some_and(|package| package.kind == PackageKind::Ordinary);
+                        if user {
+                            index.user_methods.push(object);
+                        }
+                    }
                     index.infos.insert(
                         object,
                         FunctionInfo {
@@ -568,6 +640,12 @@ impl ProgramIndex {
     /// The name of the function at `object` as the loader renders it.
     pub(crate) fn name(&self, object: usize) -> &str {
         &self.names[&object]
+    }
+
+    /// Every method and interface body named `method`, whichever class or
+    /// interface declares it: what a dispatch of that name can reach.
+    pub(crate) fn methods_named(&self, method: &str) -> impl Iterator<Item = usize> + '_ {
+        self.methods.get(method).into_iter().flatten().copied()
     }
 
     fn lookup<T: Copy>(

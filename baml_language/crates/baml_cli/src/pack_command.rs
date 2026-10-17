@@ -240,26 +240,6 @@ impl PackArgs {
             .prepare(&mut telemetry, default_environment, "pack")?;
 
         let (db, root, program, needs_format_hint) = self.load_and_compile(reporter)?;
-        // Compile admitted functions to Rust against this exact program; the
-        // generated crate embeds the packed program below, so the two can
-        // never drift apart.
-        let native = if self.native {
-            reporter.spin("Compiling", "native bodies");
-            let module = baml_db::native::compile_program(
-                &db,
-                root,
-                &program,
-                crate::bytecode_cache::CLI_OPT_LEVEL,
-                "program.bexa",
-            );
-            if self.native_report {
-                reporter.suspend(|| report_native(&module));
-            }
-            Some(module)
-        } else {
-            None
-        };
-        drop(db);
         // Mirror `baml run`'s format advisory: if any source file
         // round-trips through `baml fmt` differently, surface a
         // non-fatal warning so users learn to keep packaged
@@ -281,6 +261,39 @@ impl PackArgs {
         for t in &targets {
             validate_help_param(&engine, &t.qualified_name)?;
         }
+
+        // Compile admitted functions to Rust against this exact program; the
+        // generated crate embeds the packed program below, so the two can
+        // never drift apart. Only what the targets reach is compiled; a
+        // target the program's tables do not name (none today) compiles
+        // everything rather than nothing.
+        let native = if self.native {
+            reporter.spin("Compiling", "native bodies");
+            let callables = program.rendered_callables();
+            let entries: Option<Vec<usize>> = targets
+                .iter()
+                .map(|target| {
+                    callables
+                        .get(&target.qualified_name)
+                        .map(|callable| callable.object.raw())
+                })
+                .collect();
+            let module = baml_db::native::compile_program(
+                &db,
+                root,
+                &program,
+                crate::bytecode_cache::CLI_OPT_LEVEL,
+                "program.bexa",
+                entries.as_deref(),
+            );
+            if self.native_report {
+                reporter.suspend(|| report_native(&module));
+            }
+            Some(module)
+        } else {
+            None
+        };
+        drop(db);
         let label = label_for(&targets);
         reporter.spin("Packaging", &label);
 
