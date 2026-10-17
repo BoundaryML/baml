@@ -1,0 +1,5 @@
+name = "method chain 100k"
+description = "100,000 chained method calls that each return the receiver"
+expect = "4950000000"
+jobs = 16
+warmup = 1

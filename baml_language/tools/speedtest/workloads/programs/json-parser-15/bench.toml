@@ -1,0 +1,6 @@
+name = "json parser 15"
+description = "a hand-written recursive-descent JSON parser over a 25 KB document, 15 times, plus malformed inputs"
+origin = "Are We Fast Yet Json (minimal-json)"
+expect = "959160"
+jobs = 1
+warmup = 1

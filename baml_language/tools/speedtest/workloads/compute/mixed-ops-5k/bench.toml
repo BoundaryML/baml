@@ -1,0 +1,5 @@
+name = "mixed ops 5k"
+description = "a mix of arithmetic, comparison and array operations in a loop"
+expect = "62499999"
+jobs = 200
+warmup = 12

@@ -1,0 +1,5 @@
+name = "call chain 100x10k"
+description = "a chain of 100 generated functions, called 10,000 times"
+expect = "990000"
+jobs = 16
+warmup = 1

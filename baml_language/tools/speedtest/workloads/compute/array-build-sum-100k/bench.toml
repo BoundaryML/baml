@@ -1,0 +1,5 @@
+name = "array build sum 100k"
+description = "push 100,000 integers onto an array, then sum it"
+expect = "4999950000"
+jobs = 16
+warmup = 1

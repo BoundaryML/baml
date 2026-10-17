@@ -1,0 +1,5 @@
+name = "collatz 100k"
+description = "Collatz sequence lengths for the first 100,000 integers"
+expect = "10753712"
+jobs = 2
+warmup = 1

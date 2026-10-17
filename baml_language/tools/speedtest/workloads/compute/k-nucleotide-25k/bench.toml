@@ -1,0 +1,6 @@
+name = "k-nucleotide 25k"
+description = "count every k-mer of a 25,000-base DNA string in a map, k = 1..18"
+origin = "Benchmarks Game k-nucleotide"
+expect = "162546735"
+jobs = 2
+warmup = 1

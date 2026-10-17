@@ -1,0 +1,5 @@
+name = "polymorphic dispatch 100k"
+description = "100,000 interface method calls over two implementors"
+expect = "166669166700000"
+jobs = 16
+warmup = 1

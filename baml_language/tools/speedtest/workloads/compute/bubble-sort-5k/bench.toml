@@ -1,0 +1,5 @@
+name = "bubble sort 5k"
+description = "bubble sort 5,000 integers in BAML code"
+expect = "5001"
+jobs = 1
+warmup = 1

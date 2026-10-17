@@ -2,14 +2,16 @@
 
 
 def fmt_ms(seconds):
-    """Format seconds as a human-readable ms string."""
+    """Format seconds as a human-readable ms string (µs below 0.1 ms)."""
     ms = seconds * 1000
     if ms >= 100:
         return f"{ms:.0f}ms"
     elif ms >= 10:
         return f"{ms:.1f}ms"
-    else:
+    elif ms >= 0.1:
         return f"{ms:.2f}ms"
+    else:
+        return f"{ms * 1000:.2f}µs"
 
 
 def fmt_ms_sd(med, sd):

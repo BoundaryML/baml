@@ -1,0 +1,5 @@
+name = "agent loop 300"
+description = "an agent loop over 300 recorded conversations: typed decode into a union, match dispatch, retries"
+expect = "592308425"
+jobs = 8
+warmup = 1
