@@ -249,7 +249,7 @@ impl BexVm {
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         if self.telemetry.is_some() {
-            return self.call_compiled_observed(callee, body, args);
+            return self.call_compiled_cold(callee, body, args);
         }
         let context = self.current_context().clone();
         let locals_offset = StackIndex::from_raw(self.stack.len());
@@ -381,6 +381,21 @@ impl BexVm {
         }
     }
 
+    /// [`Self::call_compiled`] with telemetry on, as the branch
+    /// [`Self::call_compiled`] does not expect: `cold` lays the direct path
+    /// out as the fall-through without sizing the observed path's own code
+    /// for coldness.
+    #[cold]
+    #[inline(never)]
+    fn call_compiled_cold(
+        &mut self,
+        callee: HeapPtr,
+        body: CompiledBody,
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
+        self.call_compiled_observed(callee, body, args)
+    }
+
     /// [`Self::call_compiled`] with telemetry on.
     ///
     /// A plain compiled callee (a `Function`, not `$trace`-hooked, called
@@ -389,11 +404,13 @@ impl BexVm {
     /// the call site is [`COMPILED_CALLER_PC`], the visible caller is the
     /// running compiled frame's function, the callee's context is inherited.
     /// The frame is pushed with the invocation `enter_bytecode_with_trace`
-    /// opened, the body runs, and the frame completes through the same
-    /// epilogue as `finish_bytecode_frame`: the records are those the call
+    /// opened, the body runs, and the frame completes as
+    /// `finish_bytecode_frame` completes one: the records are those the call
     /// path would write, without its argument copy, callee dispatch and
-    /// call-site bookkeeping. Every other callee goes through the call path
-    /// ([`Self::call_compiled_funnelled`]).
+    /// call-site bookkeeping. The context the call path selects on entry and
+    /// restores on completion is the one already selected, the caller's, so
+    /// it is reselected only when it is not. Every other callee goes through
+    /// the call path ([`Self::call_compiled_funnelled`]).
     #[inline(never)]
     #[allow(unsafe_code)]
     fn call_compiled_observed(
@@ -443,7 +460,9 @@ impl BexVm {
             .telemetry
             .as_mut()
             .expect("observed compiled call has telemetry");
-        telemetry.set_context(context.clone());
+        if !telemetry.has_context(&context) {
+            telemetry.set_context(context.clone());
+        }
         // SAFETY: the arguments and the callee stay live under the heap
         // permit: the caller holds them in its locals.
         let frame_telemetry = unsafe {
@@ -467,25 +486,33 @@ impl BexVm {
             context,
             frame_telemetry,
         )));
-        let frame_idx = top + 1;
         let result = body(self, args);
         if let Ok(value) = result {
-            let Frame::Bytecode(frame) = &mut self.frames[frame_idx] else {
+            let Some(Frame::Bytecode(frame)) = self.frames.pop() else {
                 unreachable!("a compiled callee has a bytecode frame");
             };
-            // Completion reads the frame and its function, as
-            // `finish_bytecode_frame` does, before the frame is popped.
-            if let Some(frame_telemetry) = frame.telemetry.take() {
-                self.complete_bytecode_invocation_with_function(
-                    frame_idx,
-                    function,
-                    frame_telemetry,
-                    InvocationOutcome::Ok,
-                    Some(value),
-                );
-            }
-            self.frames.pop();
             self.stack.truncate(locals_offset.raw());
+            if let Some(frame_telemetry) = frame.telemetry {
+                let telemetry = self
+                    .telemetry
+                    .as_mut()
+                    .expect("observed compiled call has telemetry");
+                // The callee's context is the caller's: selected for the
+                // completion and left selected for the caller.
+                if !telemetry.has_context(&frame.context) {
+                    telemetry.set_context(frame.context);
+                }
+                // SAFETY: completion holds the heap permit and the result
+                // is live.
+                unsafe {
+                    telemetry.complete_invocation(
+                        frame_telemetry,
+                        function,
+                        InvocationOutcome::Ok,
+                        Some(value),
+                    );
+                }
+            }
         }
         result
     }

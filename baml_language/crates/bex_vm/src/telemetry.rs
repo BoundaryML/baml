@@ -232,6 +232,13 @@ impl TelemetryState {
         }
         options
     }
+    /// Whether `context` is the version already selected: a frame that
+    /// inherits its caller's context unchanged need not reselect it.
+    #[inline(always)]
+    pub(crate) fn has_context(&self, context: &btel_types::context::Context) -> bool {
+        context.same_version(&self.context)
+    }
+
     pub fn set_context(&mut self, context: btel_types::context::Context) {
         #[cfg(all(not(test), not(target_arch = "wasm32")))]
         if !context.same_version(&self.context) {

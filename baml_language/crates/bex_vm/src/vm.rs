@@ -321,7 +321,7 @@ pub struct BytecodeFrame {
     pub(crate) faulting_pc: usize,
     /// Producer-only invocation state. `None` means the invocation is hidden.
     pub(crate) telemetry: Option<FrameTelemetry>,
-    context: Context,
+    pub(crate) context: Context,
 }
 
 impl BytecodeFrame {
