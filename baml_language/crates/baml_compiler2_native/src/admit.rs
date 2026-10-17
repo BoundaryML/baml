@@ -3,7 +3,10 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use baml_compiler2_hir::item_data::{file_functions, is_required_interface_method};
+use baml_compiler2_hir::{
+    item_data::{file_functions, is_required_interface_method},
+    package::world_files,
+};
 use baml_compiler2_mir::{MirFunction, MirFunctionBody, MirFunctionKind, OptLevel, lower_function};
 use bex_vm_types::{FunctionKind, Object, ObjectIndex, Program};
 
@@ -57,11 +60,13 @@ pub struct NativeModule {
     pub source: String,
     /// The functions it compiles, in emission order.
     pub functions: Vec<CompiledFunction>,
-    /// Root-package functions it does not compile, with the reason.
+    /// Functions of any package it does not compile, with the reason.
     pub rejected: Vec<(String, Rejection)>,
 }
 
-/// Compile every admitted function of `root`'s package.
+/// Compile every admitted function of `root`'s program: the root's package,
+/// the stdlib, and every dependency it reaches ([`world_files`]), the file
+/// set bytecode emit covers.
 ///
 /// `program` is the linked program the bytecode of these same functions lives
 /// in; names and object indices are read from it so the generated module
@@ -78,7 +83,7 @@ pub fn compile_program<'db>(
     let mut units: BTreeMap<String, Unit<'db>> = BTreeMap::new();
     let mut rejected: Vec<(String, Rejection)> = Vec::new();
 
-    for &file in root.files(db) {
+    for &file in world_files(db, root) {
         let lines: std::sync::Arc<[u32]> =
             baml_compiler2_emit::build_line_starts(file.text(db)).into();
         for &function in file_functions(db, file) {

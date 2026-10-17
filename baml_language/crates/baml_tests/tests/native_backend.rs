@@ -165,24 +165,36 @@ fn generated_module_is_well_formed_rust() {
     syn::parse_file(&module.source).expect("generated module parses as Rust");
     assert!(module.source.contains("pub static NATIVE_BODIES"));
     assert!(module.source.contains("include_bytes!(\"program.bexa\")"));
-    let compact: String = module.source.split_whitespace().collect();
+    // Compacted: whitespace out, and a trailing comma `prettyplease` adds to
+    // a wrapped argument list with it, so the formatting of a long entry
+    // cannot fail the check.
+    let compact: String = module
+        .source
+        .split_whitespace()
+        .collect::<String>()
+        .replace(",)", ")");
     for function in &module.functions {
+        // Compacted like the source: an impl body's name has spaces in it
+        // (`<(ai.Prompt as baml.ToString)>.to_string`).
+        let entry: String = format!(
+            "CompiledEntry{{object:{},name:{:?},arity:{},body:CompiledFn::{}({}),\
+             slots:{},cause_slot:{:?},}}",
+            function.object,
+            function.name,
+            function.arity,
+            if function.resumable {
+                "Resumable"
+            } else {
+                "Inline"
+            },
+            function.symbol,
+            function.slots,
+            function.cause_slot,
+        )
+        .split_whitespace()
+        .collect();
         assert!(
-            compact.contains(&format!(
-                "CompiledEntry{{object:{},name:{:?},arity:{},body:CompiledFn::{}({}),\
-                 slots:{},cause_slot:{:?},}}",
-                function.object,
-                function.name,
-                function.arity,
-                if function.resumable {
-                    "Resumable"
-                } else {
-                    "Inline"
-                },
-                function.symbol,
-                function.slots,
-                function.cause_slot,
-            )),
+            compact.contains(&entry),
             "{} is registered under its object index",
             function.name
         );
