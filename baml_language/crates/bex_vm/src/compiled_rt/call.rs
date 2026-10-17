@@ -413,7 +413,7 @@ impl BexVm {
     /// the call path ([`Self::call_compiled_funnelled`]).
     #[inline(never)]
     #[allow(unsafe_code)]
-    fn call_compiled_observed(
+    pub(super) fn call_compiled_observed(
         &mut self,
         callee: HeapPtr,
         body: CompiledBody,
