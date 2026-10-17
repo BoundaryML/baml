@@ -915,3 +915,62 @@ fn closures_compile() {
     assert!(outer.contains("vm.capture_cell(depth,0)?"), "{outer}");
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
+
+const RUNTIME_TYPES: &str = r#"
+interface Conv<T> {
+    function describe(self) -> string throws never
+}
+
+class Both {
+    implements Conv<int> {
+        function describe(self) -> string throws never { "as int" }
+    }
+}
+
+class Square {
+    side int
+    function scaled(self, k: int) -> int { self.side * k }
+}
+
+type Tree = int | Tree[]
+
+function generic_describe<T>(c: Conv<T>) -> string throws never { c.describe() }
+
+function fns() -> int {
+    let fs: ((int) -> int throws never)[] = [];
+    fs.push((x: int) -> int { x + 1 });
+    fs.length()
+}
+
+function is_tree(x: int | string | Tree[]) -> bool { x is Tree }
+
+function bound() -> int {
+    let sq = Square { side: 5 };
+    let f = sq.scaled;
+    f(3)
+}
+"#;
+
+/// Types the backend does not build from their parts are the constant
+/// bytecode's own `LoadType` reads; a dispatch instantiated from the frame
+/// resolves every time instead of through the site's cache; a method value
+/// is a bound method.
+#[test]
+fn runtime_types_dispatch_and_bound_methods_compile() {
+    let module = compile(RUNTIME_TYPES);
+    let compact = |name: &str| {
+        body_of(&module, name)
+            .split_whitespace()
+            .collect::<String>()
+    };
+    let describe = compact("user.generic_describe");
+    assert!(describe.contains("vm.virtual_target_uncached("), "{describe}");
+    assert!(!describe.contains("staticS"), "{describe}");
+    let fns = compact("user.fns");
+    assert!(fns.contains("vm.frame_type_constant(depth,"), "{fns}");
+    let is_tree = compact("user.is_tree");
+    assert!(is_tree.contains("vm.is_type_constant("), "{is_tree}");
+    let bound = compact("user.bound");
+    assert!(bound.contains("vm.make_bound_method("), "{bound}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
