@@ -1878,8 +1878,11 @@ impl Container {
             }
         }
         self.values_mut(&mut |value| {
-            if let Some(moved) = value.as_object_ptr().and_then(|ptr| forwarding.get(&ptr)) {
-                *value = Value::object(*moved);
+            if let Some(moved) = value
+                .as_object_ptr()
+                .and_then(|ptr| forwarding.get(&ptr).copied())
+            {
+                *value = Value::object(moved);
             }
         });
         if let Self::Class { class, .. } = self

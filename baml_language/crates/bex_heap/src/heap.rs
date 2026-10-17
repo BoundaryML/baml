@@ -250,10 +250,6 @@ pub struct BexHeap {
     #[cfg(feature = "gc_profiling")]
     allocs_since_gc: AtomicUsize,
 
-    /// Survivors of the last collection: the forwarding map of the next one
-    /// is sized for as many entries before the trace starts.
-    pub(crate) last_survivors: AtomicUsize,
-
     /// Debug instrumentation state and config.
     debug_state: HeapDebuggerState,
 }
@@ -380,7 +376,6 @@ impl BexHeap {
             growth_lock: Mutex::new(()),
             #[cfg(feature = "gc_profiling")]
             allocs_since_gc: AtomicUsize::new(0),
-            last_survivors: AtomicUsize::new(0),
             debug_state: HeapDebuggerState::new(debug),
         }
     }
@@ -648,6 +643,12 @@ impl BexHeap {
         let start = self.compile_time.as_ptr();
         let end = unsafe { start.add(self.compile_time.len()) };
         raw_ptr >= start && raw_ptr < end
+    }
+
+    /// The addresses the compile-time pool spans: first slot, one past the last.
+    pub(crate) fn compile_time_range(&self) -> std::ops::Range<usize> {
+        let start = self.compile_time.as_ptr() as usize;
+        start..start + self.compile_time.len() * size_of::<Object>()
     }
 
     /// Get a HeapPtr to a compile-time object by index.
@@ -1183,7 +1184,7 @@ impl BexHeap {
         // Safe to mutate now; every entry is guaranteed to be in `forwarding`.
         let mut handles = self.handles.write().expect("handles lock poisoned");
         for ptr in handles.values_mut() {
-            *ptr = forwarding[ptr];
+            *ptr = forwarding.forwarded(*ptr);
         }
         // The reverse index is keyed by the pointers that just moved, so it is
         // rebuilt rather than mutated in place. Keys are untouched: a handle's
@@ -1191,7 +1192,7 @@ impl BexHeap {
         let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
         *by_ptr = std::mem::take(&mut *by_ptr)
             .into_iter()
-            .map(|(ptr, entry)| (forwarding[&ptr], entry))
+            .map(|(ptr, entry)| (forwarding.forwarded(ptr), entry))
             .collect();
     }
 
