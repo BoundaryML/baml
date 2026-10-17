@@ -2,6 +2,11 @@ use ::std::{collections::HashMap, marker::PhantomData};
 
 use crate::{HeapPtr, Value};
 
+/// Where a collection moved each object: old address to new. A pointer's
+/// address is the key, so the hash is one multiply rather than SipHash; a
+/// collection touches the map once per survivor and once per reference.
+pub type ForwardingMap = HashMap<HeapPtr, HeapPtr, rustc_hash::FxBuildHasher>;
+
 /// A trait for types that have heap roots.
 ///
 /// Allows the GC to find all roots and update them when the GC moves objects.
@@ -13,12 +18,12 @@ pub trait RootHaver: Send {
     /// Collect all heap roots in this object.
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>);
     /// Forward the heap pointers of all roots in this object.
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>);
+    fn forward_roots(&mut self, roots: &ForwardingMap);
 }
 
 impl RootHaver for () {
     fn collect_roots(&self, _roots: &mut Vec<HeapPtr>) {}
-    fn forward_roots(&mut self, _roots: &HashMap<HeapPtr, HeapPtr>) {}
+    fn forward_roots(&mut self, _roots: &ForwardingMap) {}
 }
 
 /// Generational write-barrier hook for heap mutations that touch a [`Value`].
