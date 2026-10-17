@@ -192,6 +192,7 @@ impl BexVm {
         &mut self,
         callee: HeapPtr,
         args: &[Value],
+        line: u32,
     ) -> Result<Option<Value>, Box<VmError>> {
         if !self.call_type_args.is_empty() {
             return Ok(None);
@@ -204,7 +205,7 @@ impl BexVm {
         }
         match super::native_body_fn(function) {
             Some(super::CompiledFn::Inline(body)) => {
-                self.call_compiled(callee, body, args).map(Some)
+                self.call_compiled(callee, body, args, line).map(Some)
             }
             _ => Ok(None),
         }
@@ -564,7 +565,7 @@ mod tests {
                     let receiver = vm.slot(depth, 0);
                     let iface = vm.idx_to_ptr(object(&SHAPE));
                     let callee = vm.virtual_target(&SITE, receiver, iface, &[], "area", &[])?;
-                    if let Some(value) = vm.call_inline(callee, &[receiver])? {
+                    if let Some(value) = vm.call_inline(callee, &[receiver], 0)? {
                         return Ok(Step::Return(value));
                     }
                     vm.set_slot(depth, 2, Value::int(1));

@@ -148,6 +148,16 @@ impl BexVm {
     /// it suspends, so stack traces name the statement that raised, at no
     /// cost otherwise. A compiled frame keeps its line in `faulting_pc`; see
     /// `stub`.
+    /// Record `line` as the running compiled function's call site, in the
+    /// top frame (the caller's, before it pushes its callee); see
+    /// [`Self::call_compiled`].
+    #[inline(always)]
+    pub(crate) fn note_call_line(&mut self, line: u32) {
+        if let Some(crate::vm::Frame::Bytecode(frame)) = self.frames.last_mut() {
+            frame.faulting_pc = line as usize;
+        }
+    }
+
     #[cold]
     pub fn note_line(&mut self, depth: usize, line: u32) {
         if let Some(crate::vm::Frame::Bytecode(frame)) = depth
@@ -193,6 +203,11 @@ impl BexVm {
     /// The frame limit is the only limit a program sees: the Rust stack the
     /// callee runs on is the VM's concern ([`Self::with_stack_room`]).
     ///
+    /// `line` is the call's source line. It goes into the caller's frame
+    /// before the callee runs, as the interpreter records a caller's call
+    /// site on every call: a stack trace taken while the callee runs (an
+    /// error caught below, a `StackOverflow`) names the line of this call.
+    ///
     /// On `Err` the callee's frame stays pushed, as the VM's call path leaves
     /// it: the unwinder pops it if the error escapes, [`Self::catch`] if a
     /// compiled handler lands it.
@@ -202,7 +217,9 @@ impl BexVm {
         callee: HeapPtr,
         body: CompiledBody,
         args: &[Value],
+        line: u32,
     ) -> Result<Value, Box<VmError>> {
+        self.note_call_line(line);
         if self.frames.len() >= crate::vm::MAX_FRAMES {
             return Err(Box::new(VmError::thrown_fresh(
                 self.panic_to_exception_value(VmPanic::StackOverflow),

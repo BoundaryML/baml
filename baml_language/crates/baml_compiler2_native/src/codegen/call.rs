@@ -71,7 +71,7 @@ impl<'db> Generator<'_, 'db> {
                 self.fallible(
                     block,
                     &format!(
-                        "vm.call_compiled(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, {args})"
+                        "vm.call_compiled(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, {args}, line)"
                     ),
                 )
             }
@@ -300,7 +300,7 @@ impl<'db> Generator<'_, 'db> {
             None => {
                 let call = self.fallible(
                     block,
-                    &format!("vm.call_inline(callee, &[{}])", values.join(", ")),
+                    &format!("vm.call_inline(callee, &[{}], line)", values.join(", ")),
                 )?;
                 let store = self.store(block, destination, &Expr::new("v", Repr::Value))?;
                 let jump = self.jump_to(target.0);

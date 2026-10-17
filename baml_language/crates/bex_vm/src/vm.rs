@@ -1152,7 +1152,7 @@ pub(crate) mod tests {
                 return Ok(Value::int(0));
             }
             let me = vm.idx_to_ptr(ObjectIndex::from_raw(DEEP.load(Ordering::Relaxed) as usize));
-            let below = vm.call_compiled(me, deep, &[Value::int(n - 1)])?;
+            let below = vm.call_compiled(me, deep, &[Value::int(n - 1)], 0)?;
             Ok(Value::int(test_int(below) + 1))
         }
         const SOURCE: &str = r#"
@@ -1198,7 +1198,7 @@ pub(crate) mod tests {
             pad[slot] = 1;
             std::hint::black_box(&mut pad);
             let me = vm.idx_to_ptr(ObjectIndex::from_raw(DEEP.load(Ordering::Relaxed) as usize));
-            let below = vm.call_compiled(me, deep, &[Value::int(n - 1)])?;
+            let below = vm.call_compiled(me, deep, &[Value::int(n - 1)], 0)?;
             let one = std::hint::black_box(&pad)[slot];
             Ok(Value::int(test_int(below) + i64::try_from(one).unwrap()))
         }
@@ -1253,7 +1253,7 @@ pub(crate) mod tests {
             let depth = vm.frame_depth();
             let work_ptr =
                 vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
-            match vm.call_compiled(work_ptr, work, &[args[0]]) {
+            match vm.call_compiled(work_ptr, work, &[args[0]], 0) {
                 Ok(v) => Ok(v),
                 Err(e) => {
                     let (thrown, ctx) = vm.catch(e, depth)?;
@@ -1283,6 +1283,62 @@ pub(crate) mod tests {
                 telemetry,
             );
             assert_eq!(out, "-1|-1|-1", "telemetry: {telemetry}");
+        }
+    }
+
+    /// A compiled caller's frame names the line of its call while the callee
+    /// runs, as a bytecode caller's names its call instruction: a trace taken
+    /// below it (an error caught there) points at the call, not at the line
+    /// the caller last reported or at the interpreter's stale `cur_pc`.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn a_compiled_caller_names_its_call_line_while_the_callee_runs() {
+        use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+        static INNER: AtomicU32 = AtomicU32::new(0);
+        static MIDDLE: AtomicU32 = AtomicU32::new(0);
+        static OUTER_LINE: AtomicUsize = AtomicUsize::new(0);
+        static MIDDLE_LINE: AtomicUsize = AtomicUsize::new(0);
+        #[allow(clippy::unnecessary_wraps)] // the compiled-body signature
+        fn inner(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let trace = vm.capture_stack_trace();
+            let line_of = |name: &str| {
+                trace
+                    .iter()
+                    .find(|frame| frame.function_name == name)
+                    .map_or(usize::MAX, |frame| frame.error_line)
+            };
+            OUTER_LINE.store(line_of("user.Outer"), Ordering::Relaxed);
+            MIDDLE_LINE.store(line_of("user.Middle"), Ordering::Relaxed);
+            Ok(Value::int(1))
+        }
+        fn middle(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let callee = vm.idx_to_ptr(ObjectIndex::from_raw(INNER.load(Ordering::Relaxed) as usize));
+            vm.call_compiled(callee, inner, &[], 23)
+        }
+        fn outer(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let callee = vm.idx_to_ptr(ObjectIndex::from_raw(MIDDLE.load(Ordering::Relaxed) as usize));
+            vm.call_compiled(callee, middle, &[], 17)
+        }
+        const SOURCE: &str = r#"
+            function Inner() -> int { 1 }
+            function Middle() -> int { Inner() }
+            function Outer() -> int { Middle() }
+            function Main() -> string { `${Outer()}` }
+        "#;
+        for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[
+                    ("user.Inner", crate::compiled_rt::CompiledFn::Inline(inner)),
+                    ("user.Middle", crate::compiled_rt::CompiledFn::Inline(middle)),
+                    ("user.Outer", crate::compiled_rt::CompiledFn::Inline(outer)),
+                ],
+                &[("user.Inner", &INNER), ("user.Middle", &MIDDLE)],
+                telemetry,
+            );
+            assert_eq!(out, "1", "telemetry: {telemetry}");
+            assert_eq!(OUTER_LINE.load(Ordering::Relaxed), 17, "telemetry: {telemetry}");
+            assert_eq!(MIDDLE_LINE.load(Ordering::Relaxed), 23, "telemetry: {telemetry}");
         }
     }
 
@@ -1469,7 +1525,7 @@ pub(crate) mod tests {
         fn safe(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
             let work_ptr =
                 vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
-            vm.call_compiled(work_ptr, work, &[args[0]])
+            vm.call_compiled(work_ptr, work, &[args[0]], 0)
         }
         const SOURCE: &str = r#"
             function Work(n: int) -> int { n / 0 }
@@ -1509,7 +1565,7 @@ pub(crate) mod tests {
             let depth = vm.frame_depth();
             let work_ptr =
                 vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
-            match vm.call_compiled(work_ptr, work, &[args[0]]) {
+            match vm.call_compiled(work_ptr, work, &[args[0]], 0) {
                 Ok(v) => Ok(v),
                 Err(e) => {
                     let (thrown, ctx) = vm.catch(e, depth)?;
@@ -7843,8 +7899,8 @@ impl BexVm {
         // and stack traces. `cur_pc` holds this call instruction's start.
         let call_site = self.cur_pc;
 
-        // A compiled caller keeps its line here instead; its call sites
-        // (`compiled_caller_call`) put it back.
+        // A compiled caller keeps its line here instead, and passes it as
+        // `cur_pc` (`compiled_caller_call`).
         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
             bf.faulting_pc = call_site;
         }
@@ -8460,6 +8516,12 @@ impl BexVm {
             Frame::Bytecode(frame) => frame.faulting_pc,
             Frame::Native(_) => unreachable!("a compiled caller has a bytecode frame"),
         };
+        // The call path records the caller's call site from `cur_pc` into its
+        // `faulting_pc`, where a compiled frame keeps its line, and a trace
+        // taken while the callee runs reads it there. A compiled caller has no
+        // live `cur_pc` of its own (it holds whatever bytecode last ran), so
+        // hand the call path the caller's line as its call site.
+        let saved_pc = std::mem::replace(&mut self.cur_pc, line);
         let outcome = if type_args.is_empty() {
             self.execute_call_from_locals_offset(callee, locals_offset, argc, frame_idx, function)
         } else {
@@ -8475,6 +8537,7 @@ impl BexVm {
                 function,
             )
         };
+        self.cur_pc = saved_pc;
         if let Some(Frame::Bytecode(frame)) = self.frames.get_mut(caller) {
             frame.faulting_pc = line;
         }
