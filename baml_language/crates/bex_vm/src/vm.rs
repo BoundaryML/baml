@@ -307,14 +307,20 @@ pub struct BytecodeFrame {
 
 impl BytecodeFrame {
     /// The frame of a compiled-to-compiled call made with telemetry off: no
-    /// telemetry, no type arguments, and no locals region (compiled code keeps
-    /// its locals in Rust), its body running.
-    pub(crate) fn compiled(function: HeapPtr, locals_offset: StackIndex, context: Context) -> Self {
+    /// telemetry, the call's type arguments (a pooled vector, or an empty one
+    /// for a non-generic call), and no locals region (compiled code keeps its
+    /// locals in Rust), its body running.
+    pub(crate) fn compiled(
+        function: HeapPtr,
+        locals_offset: StackIndex,
+        type_args: Vec<bex_vm_types::RealizedTy>,
+        context: Context,
+    ) -> Self {
         Self {
             function,
             instruction_ptr: crate::compiled_rt::RUNNING,
             locals_offset,
-            type_args: Vec::new(),
+            type_args,
             type_metadata: None,
             faulting_pc: 0,
             telemetry: None,
@@ -541,6 +547,7 @@ pub(crate) mod tests {
             pending_call_type_args: Vec::new(),
             compiled_type_args: Vec::new(),
             call_type_args: Vec::new(),
+            type_arg_pool: Vec::new(),
             compiled_delivery: None,
             stack_floor: 0,
             pending_call_type_values: Vec::new(),
@@ -1308,6 +1315,64 @@ pub(crate) mod tests {
                 telemetry,
             );
             assert_eq!(out, "int|string|int[]|string", "telemetry: {telemetry}");
+        }
+    }
+
+    /// A compiled caller passes a generic compiled callee its type arguments
+    /// (`call_compiled_with_types`): the callee's frame starts with them, on
+    /// the direct path (telemetry off) and through the VM's call path
+    /// (telemetry on), and a compiled caller called with its own type
+    /// arguments forwards them on.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn compiled_caller_passes_type_arguments_to_a_compiled_callee() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        static NAME_OF: AtomicU32 = AtomicU32::new(0);
+        fn frame_type_arg(vm: &BexVm) -> bex_vm_types::RealizedTy {
+            let Some(Frame::Bytecode(frame)) = vm.frames.last() else {
+                unreachable!("the body runs in its own frame")
+            };
+            assert_eq!(frame.type_args.len(), 1, "{:?}", frame.type_args);
+            frame.type_args[0].clone()
+        }
+        #[allow(clippy::unnecessary_wraps)]
+        fn name_of(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let text = match frame_type_arg(vm) {
+                bex_vm_types::RealizedTy::Int => "int",
+                bex_vm_types::RealizedTy::String => "string",
+                other => panic!("unexpected frame type argument {other:?}"),
+            };
+            Ok(vm.string_value(text))
+        }
+        fn forward(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let ty = frame_type_arg(vm);
+            let callee = vm.idx_to_ptr(ObjectIndex::from_raw(
+                NAME_OF.load(Ordering::Relaxed) as usize
+            ));
+            vm.call_compiled_with_types(callee, name_of, &[ty], &[args[0]])
+        }
+        const SOURCE: &str = r#"
+            function NameOf<T>(x: T) -> string { "bytecode" }
+            function Forward<T>(x: T) -> string { NameOf<T>(x) }
+            function Main() -> string { `${Forward<int>(1)}|${Forward<string>("a")}` }
+        "#;
+        for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[
+                    (
+                        "user.NameOf",
+                        crate::compiled_rt::CompiledFn::Inline(name_of),
+                    ),
+                    (
+                        "user.Forward",
+                        crate::compiled_rt::CompiledFn::Inline(forward),
+                    ),
+                ],
+                &[("user.NameOf", &NAME_OF)],
+                telemetry,
+            );
+            assert_eq!(out, "int|string", "telemetry: {telemetry}");
         }
     }
 
@@ -2566,6 +2631,11 @@ pub struct BexVm {
     /// The type arguments of the call a resumable compiled body requests
     /// (`compiled_rt::BexVm::push_type_arg`), reused across calls.
     pub(crate) call_type_args: Vec<bex_vm_types::RealizedTy>,
+    /// Spare type-argument vectors, kept for their capacity: a generic call
+    /// made by or into compiled code takes a frame's vector here and gives it
+    /// back when the frame pops (`compiled_rt::BexVm::pooled_type_args`),
+    /// allocating nothing in the steady state.
+    pub(crate) type_arg_pool: Vec<Vec<bex_vm_types::RealizedTy>>,
     /// An error the unwinder delivered to a suspended compiled body, which the
     /// run loop hands it when resuming it.
     compiled_delivery: Option<Box<VmError>>,
@@ -3354,6 +3424,7 @@ impl BexVm {
             pending_call_type_args: Vec::new(),
             compiled_type_args: Vec::new(),
             call_type_args: Vec::new(),
+            type_arg_pool: Vec::new(),
             compiled_delivery: None,
             stack_floor: 0,
             pending_call_type_values: Vec::new(),
@@ -8356,6 +8427,9 @@ impl BexVm {
                         self.settle();
                         match outcome {
                             Ok(value) => {
+                                if passes_type_args {
+                                    self.recycle_frame_type_args(*frame_idx);
+                                }
                                 // The epilogue replaces the frame's region with
                                 // the result, which `Return` has on the stack;
                                 // so does this, even for a function with no
@@ -8788,8 +8862,12 @@ impl BexVm {
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
+        // The pending lane holds a copy for the funnel (the caller's slice
+        // may be a frame's own vector); a pooled vector carries it.
+        let mut pending_type_args = self.pooled_type_args();
+        pending_type_args.extend_from_slice(options.type_args);
         let previous_type_args =
-            std::mem::replace(&mut self.pending_call_type_args, options.type_args.to_vec());
+            std::mem::replace(&mut self.pending_call_type_args, pending_type_args);
         let previous_type_values = std::mem::replace(
             &mut self.pending_call_type_values,
             options.type_values.to_vec(),
@@ -8803,7 +8881,9 @@ impl BexVm {
             frame_idx,
             function,
         );
-        self.pending_call_type_args = previous_type_args;
+        let pending_type_args =
+            std::mem::replace(&mut self.pending_call_type_args, previous_type_args);
+        self.recycle_type_args(pending_type_args);
         self.pending_call_type_values = previous_type_values;
         // FOLLOW-UP (not a defect today): the rooted copy of the values is
         // dropped one line above, and the writes below read `options`, which
@@ -8846,11 +8926,30 @@ impl BexVm {
         let Frame::Bytecode(frame) = &mut self.frames[frame_idx] else {
             unreachable!("a compiled frame is a bytecode frame");
         };
+        // A frame that carried nothing holds an empty, unallocated vector;
+        // a pooled one takes its place and returns when the body completes.
+        if frame.type_args.capacity() == 0
+            && let Some(pooled) = self.type_arg_pool.pop()
+        {
+            frame.type_args = pooled;
+        }
         append_passed_type_args(
             frame,
             &self.pending_call_type_args,
             &self.pending_call_type_values,
         );
+    }
+
+    /// Return the type-argument vector of the compiled frame at `frame_idx`
+    /// to the pool, before the frame pops.
+    #[cold]
+    #[inline(never)]
+    fn recycle_frame_type_args(&mut self, frame_idx: usize) {
+        let Frame::Bytecode(frame) = &mut self.frames[frame_idx] else {
+            unreachable!("a compiled frame is a bytecode frame");
+        };
+        let type_args = std::mem::take(&mut frame.type_args);
+        self.recycle_type_args(type_args);
     }
 
     fn init_spread(

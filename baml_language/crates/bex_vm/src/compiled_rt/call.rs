@@ -237,12 +237,12 @@ impl BexVm {
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         if self.telemetry.is_some() {
-            return self.call_compiled_observed(callee, args);
+            return self.call_compiled_observed(callee, &[], args);
         }
         let context = self.current_context().clone();
         let locals_offset = StackIndex::from_raw(self.stack.len());
         self.frames.push(crate::vm::Frame::Bytecode(
-            crate::vm::BytecodeFrame::compiled(callee, locals_offset, context),
+            crate::vm::BytecodeFrame::compiled(callee, locals_offset, Vec::new(), context),
         ));
         let result = body(self, args);
         if result.is_ok() {
@@ -252,6 +252,76 @@ impl BexVm {
         result
     }
 
+    /// [`Self::call_compiled`] for a generic callee: its frame starts with
+    /// `type_args`, the call's type arguments in the callee's De Bruijn
+    /// order (a plain function carries none of its own, so these are all of
+    /// them). The frame's vector comes from the pool and returns to it when
+    /// the frame pops, so the call allocates nothing in the steady state.
+    #[inline]
+    pub fn call_compiled_with_types(
+        &mut self,
+        callee: HeapPtr,
+        body: CompiledBody,
+        type_args: &[RealizedTy],
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
+        if self.frames.len() >= crate::vm::MAX_FRAMES {
+            return Err(Box::new(VmError::thrown_fresh(
+                self.panic_to_exception_value(VmPanic::StackOverflow),
+            )));
+        }
+        self.with_stack_room(|vm| vm.call_compiled_with_types_here(callee, body, type_args, args))
+    }
+
+    /// [`Self::call_compiled_with_types`] on the Rust stack where it stands.
+    #[inline]
+    fn call_compiled_with_types_here(
+        &mut self,
+        callee: HeapPtr,
+        body: CompiledBody,
+        type_args: &[RealizedTy],
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
+        if self.telemetry.is_some() {
+            return self.call_compiled_observed(callee, type_args, args);
+        }
+        let context = self.current_context().clone();
+        let locals_offset = StackIndex::from_raw(self.stack.len());
+        let mut frame_type_args = self.pooled_type_args();
+        frame_type_args.extend_from_slice(type_args);
+        self.frames.push(crate::vm::Frame::Bytecode(
+            crate::vm::BytecodeFrame::compiled(callee, locals_offset, frame_type_args, context),
+        ));
+        let result = body(self, args);
+        if result.is_ok() {
+            if let Some(crate::vm::Frame::Bytecode(frame)) = self.frames.pop() {
+                self.recycle_type_args(frame.type_args);
+            }
+            self.stack.truncate(locals_offset.raw());
+        }
+        result
+    }
+
+    /// A spare type-argument vector: one the pool holds, or a new one.
+    #[inline]
+    pub(crate) fn pooled_type_args(&mut self) -> Vec<RealizedTy> {
+        self.type_arg_pool.pop().unwrap_or_default()
+    }
+
+    /// Give a frame's type-argument vector back to the pool, cleared. The
+    /// pool keeps a few: as many as calls nest in practice, and an
+    /// unallocated vector is not worth keeping.
+    #[inline]
+    pub(crate) fn recycle_type_args(&mut self, mut type_args: Vec<RealizedTy>) {
+        const POOL: usize = 16;
+        if type_args.capacity() != 0 && self.type_arg_pool.len() < POOL {
+            type_args.clear();
+            self.type_arg_pool.push(type_args);
+        }
+    }
+
+    /// [`Self::call_compiled`] through the VM's call path, for telemetry,
+    /// with the call's type arguments recorded as a bytecode call's.
     /// Run `f`, which runs a compiled body, where the Rust stack has room for
     /// it: here when the stack is above the floor (one compare), else on a
     /// fresh segment. Every path that runs a compiled body on the Rust stack
@@ -289,13 +359,13 @@ impl BexVm {
         }
     }
 
-    /// [`Self::call_compiled`] through the VM's call path, for telemetry.
     #[cold]
     #[inline(never)]
     #[allow(unsafe_code)]
     fn call_compiled_observed(
         &mut self,
         callee: HeapPtr,
+        type_args: &[RealizedTy],
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         let top = self.frames.len() - 1;
@@ -312,7 +382,7 @@ impl BexVm {
             callee,
             locals_offset,
             args.len(),
-            &[],
+            type_args,
             &mut frame_idx,
             &mut function,
         );
@@ -346,5 +416,42 @@ impl BexVm {
         resolved_const: Value,
     ) -> Result<bool, VmInternalError> {
         self.value_matches_type_constant_with_type_args(type_args, value, raw_const, resolved_const)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, atomic::AtomicBool};
+
+    use bex_vm_types::RealizedTy;
+
+    use crate::vm::BexVm;
+
+    fn vm() -> BexVm {
+        let program = baml_test_support::compile_source("function Main() -> int { 1 }");
+        BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap()
+    }
+
+    /// A recycled vector comes back cleared with its capacity; an
+    /// unallocated one is not kept, and the pool is bounded.
+    #[test]
+    fn type_arg_vectors_are_pooled_by_capacity() {
+        let mut vm = vm();
+        let mut first = vm.pooled_type_args();
+        assert_eq!(first.capacity(), 0, "an empty pool hands out a new vector");
+        first.extend_from_slice(&[RealizedTy::Int, RealizedTy::String]);
+        let capacity = first.capacity();
+        vm.recycle_type_args(first);
+        vm.recycle_type_args(Vec::new());
+        assert_eq!(vm.type_arg_pool.len(), 1);
+        let again = vm.pooled_type_args();
+        assert!(again.is_empty());
+        assert_eq!(again.capacity(), capacity);
+        assert!(vm.type_arg_pool.is_empty());
+        vm.recycle_type_args(again);
+        for _ in 0..40 {
+            vm.recycle_type_args(Vec::with_capacity(4));
+        }
+        assert_eq!(vm.type_arg_pool.len(), 16);
     }
 }
