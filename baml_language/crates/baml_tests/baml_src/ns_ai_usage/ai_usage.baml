@@ -82,7 +82,7 @@ class UsageClient {
         ai.events.ModelCall {
             resolved_model: ai.events.ModelKey { provider: self.provider, model: self.model },
             usage: null,
-            timing: ai.events.Timing { start_time_utc_ms: null, duration_ms: null, ttft_ms: null },
+            timing: ai.events.Timing { start_time: null, duration: null, ttft: null },
             http_request: null,
             http_response: null,
             sse_responses: null,
@@ -502,7 +502,7 @@ function openai_call() -> ai.events.ModelCall {
     ai.events.ModelCall {
         resolved_model: ai.events.ModelKey { provider: "openai", model: "gpt-5" },
         usage: null,
-        timing: ai.events.Timing { start_time_utc_ms: null, duration_ms: null, ttft_ms: null },
+        timing: ai.events.Timing { start_time: null, duration: null, ttft: null },
         http_request: null,
         http_response: null,
         sse_responses: null,

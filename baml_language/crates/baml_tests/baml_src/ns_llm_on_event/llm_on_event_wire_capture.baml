@@ -5,7 +5,7 @@
 //     `sse_responses` are null while status/headers/timing are still real;
 //     with it on, both bodies appear and credential-bearing query params in
 //     the request URL are redacted (`key=abc` -> `key=REDACTED`);
-//   * test 9 — the streaming settle record carries `ttft_ms` and the open
+//   * test 9 — the streaming settle record carries `ttft` and the open
 //     status/headers, and `sse_responses` only under capture_wire.
 //
 // Per the ns_llm_mock README every case body is a top-level `function` and
@@ -68,7 +68,7 @@ function _wire_unary_run(capture: bool) -> string {
                 },
                 if (call.sse_responses == null) { "sse=null" } else { "sse=set" },
                 if (resp.headers.get("content-type") == null) { "hdr=missing" } else { "hdr=set" },
-                if (call.timing.duration_ms == null) { "dur=null" } else { "dur=set" },
+                if (call.timing.duration == null) { "dur=null" } else { "dur=set" },
             ].join("|")
         },
     )
@@ -127,8 +127,8 @@ function _wire_stream_run(capture: bool) -> string {
             };
             [
                 value,
-                if (call.timing.ttft_ms == null) { "ttft=null" } else { "ttft=set" },
-                if (call.timing.duration_ms == null) { "dur=null" } else { "dur=set" },
+                if (call.timing.ttft == null) { "ttft=null" } else { "ttft=set" },
+                if (call.timing.duration == null) { "dur=null" } else { "dur=set" },
                 `status=${resp.status}`,
                 `ct=${resp.headers.get("content-type") ?? "missing"}`,
                 sse_state,

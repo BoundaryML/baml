@@ -67,7 +67,7 @@ def test_on_event_plain_call_delivers_model_call_model():
     assert call_at > assistant_at
     call = calls[0]
     assert isinstance(call.timing, events.Timing)
-    assert call.timing.duration_ms == 42
+    assert call.timing.duration.field_nanoseconds == 42_000_000
     assert isinstance(call.http_response, events.HttpResponse)
     assert call.http_response.status == 200
     assert call.http_request is None

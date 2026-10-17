@@ -1855,9 +1855,9 @@ function invoke_stream(
         resolved_model: ai.events.ModelKey { provider: client.provider(), model: client.model },
         usage: null,
         timing: ai.events.Timing {
-            start_time_utc_ms: started.to_timestamp_milliseconds(),
-            duration_ms: null,
-            ttft_ms: null,
+            start_time: started,
+            duration: null,
+            ttft: null,
         },
         http_request: if (client.capture_wire) {
             baml.http.Request {

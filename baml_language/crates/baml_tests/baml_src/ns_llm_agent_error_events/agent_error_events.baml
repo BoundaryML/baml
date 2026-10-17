@@ -79,7 +79,7 @@ class AeeScriptedClient {
                     ai.events.ModelCall {
                         resolved_model: ai.events.ModelKey { provider: "agent-error-events-client", model: null },
                         usage: null,
-                        timing: ai.events.Timing { start_time_utc_ms: null, duration_ms: null, ttft_ms: null },
+                        timing: ai.events.Timing { start_time: null, duration: null, ttft: null },
                         http_request: null,
                         http_response: null,
                         sse_responses: null,

@@ -342,9 +342,9 @@ class TurnStream {
     /// (internal) Stamp time-to-first-token on this stream's wire record, once.
     function _stamp_first_delta(self) -> void {
         if let call: root.events.ModelCall = self._wire_call {
-            if (call.timing.ttft_ms == null) {
+            if (call.timing.ttft == null) {
                 if let base: baml.time.Instant = self._ttft_from ?? self._call_started {
-                    call.timing.ttft_ms = base.elapsed().to_milliseconds();
+                    call.timing.ttft = base.elapsed();
                 }
             }
         }
@@ -629,9 +629,9 @@ class TurnStream {
             child_turns: self._child_turns,
         };
         if let call: root.events.ModelCall = self._wire_call {
-            if (call.timing.duration_ms == null) {
+            if (call.timing.duration == null) {
                 if let started: baml.time.Instant = self._call_started {
-                    call.timing.duration_ms = started.elapsed().to_milliseconds();
+                    call.timing.duration = started.elapsed();
                 }
             }
             // As a whole response finishes: the model it named, else the one

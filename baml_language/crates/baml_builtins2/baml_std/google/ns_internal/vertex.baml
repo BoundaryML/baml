@@ -446,9 +446,9 @@ function vertex_invoke_stream(
         resolved_model: ai.events.ModelKey { provider: c.provider(), model: c.model },
         usage: null,
         timing: ai.events.Timing {
-            start_time_utc_ms: started.to_timestamp_milliseconds(),
-            duration_ms: null,
-            ttft_ms: null,
+            start_time: started,
+            duration: null,
+            ttft: null,
         },
         http_request: if (c.capture_wire) {
             baml.http.Request {

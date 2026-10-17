@@ -988,7 +988,7 @@ async fn a_hidden_invokes_usage_reaches_its_owned_operation() {
                         ai.events.ModelCall {
                             resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-opus-5-5" },
                             usage: null,
-                            timing: ai.events.Timing { start_time_utc_ms: null, duration_ms: null, ttft_ms: null },
+                            timing: ai.events.Timing { start_time: null, duration: null, ttft: null },
                             http_request: null,
                             http_response: null,
                             sse_responses: null,
@@ -1080,7 +1080,7 @@ async fn panics_names_and_sysop_time_reach_the_tables() {
                         ai.events.ModelCall {
                             resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-opus-5-5" },
                             usage: null,
-                            timing: ai.events.Timing { start_time_utc_ms: null, duration_ms: null, ttft_ms: null },
+                            timing: ai.events.Timing { start_time: null, duration: null, ttft: null },
                             http_request: null,
                             http_response: null,
                             sse_responses: null,

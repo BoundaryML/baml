@@ -24,7 +24,11 @@ class WireClient {
                     ai.events.ModelCall {
                         resolved_model: ai.events.ModelKey { provider: "scripted", model: null },
                         usage: null,
-                        timing: ai.events.Timing { start_time_utc_ms: 1000n, duration_ms: 42n, ttft_ms: null },
+                        timing: ai.events.Timing {
+                            start_time: baml.time.Instant.from_timestamp_milliseconds(1000n),
+                            duration: baml.time.Duration.from_milliseconds(42n),
+                            ttft: null,
+                        },
                         http_request: null,
                         http_response: ai.events.HttpResponse { status: 200, headers: {}, body: null },
                         sse_responses: null,

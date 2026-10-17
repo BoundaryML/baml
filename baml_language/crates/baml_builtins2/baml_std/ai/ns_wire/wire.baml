@@ -206,9 +206,9 @@ function send_as_with_wire<T>(
         resolved_model: model,
         usage: null,
         timing: root.events.Timing {
-            start_time_utc_ms: started.to_timestamp_milliseconds(),
-            duration_ms: started.elapsed().to_milliseconds(),
-            ttft_ms: null,
+            start_time: started,
+            duration: started.elapsed(),
+            ttft: null,
         },
         http_request: if (capture_wire) {
             baml.http.Request {

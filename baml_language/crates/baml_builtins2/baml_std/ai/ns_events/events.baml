@@ -187,14 +187,13 @@ class FinalProduced {
 // including the calls of failed retry/fallback attempts.
 
 class Timing {
-    // Wall-clock UTC start of the exchange; from baml.time.Instant.now().
-    // Null for a failed attempt's call, whose start was never measured —
-    // never fabricated.
-    start_time_utc_ms: bigint?,
-    // Total duration; null when the attempt failed before it was measured.
-    duration_ms: bigint?,
+    // Wall-clock start of the call. Null for a failed attempt's call, whose
+    // start was never measured — never fabricated.
+    start_time: baml.time.Instant?,
+    // Null when the attempt failed before it was measured.
+    duration: baml.time.Duration?,
     // Time to first data event; streams only.
-    ttft_ms: bigint?,
+    ttft: baml.time.Duration?,
 }
 
 /// Response snapshot; baml.http.Response holds a native body handle and

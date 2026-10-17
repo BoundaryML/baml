@@ -199,7 +199,7 @@ function _failed_attempt(member: root.Client, f: Retryable) -> root.ModelTurn {
             root.events.ModelCall {
                 resolved_model: root.events.ModelKey { provider: member.provider(), model: null },
                 usage: null,
-                timing: root.events.Timing { start_time_utc_ms: null, duration_ms: null, ttft_ms: null },
+                timing: root.events.Timing { start_time: null, duration: null, ttft: null },
                 http_request: null,
                 http_response: root.events.HttpResponse { status: s, headers: {}, body: raw },
                 sse_responses: null,
