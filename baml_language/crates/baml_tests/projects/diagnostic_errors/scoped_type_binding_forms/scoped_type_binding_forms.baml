@@ -28,10 +28,18 @@ function operand_solved_to_int() -> int {
     1
 }
 
-// The operand contract is a `reflect.Type | reflect.TypeView` (or a builder's
-// pending type); a nullable one is not narrowed yet.
+// The operand contract is a `reflect.Type | reflect.TypeView`; a nullable one
+// is not narrowed yet.
 function nullable_operand(t: reflect.Type?) -> int {
     let type T = t;
+    1
+}
+
+// A class builder's pending type is not a type until the builder is built,
+// so it is not an operand either: bind the class `build()` returns.
+function pending_operand() -> int {
+    let builder = reflect.Class.builder("Node");
+    let type T = builder.type();
     1
 }
 

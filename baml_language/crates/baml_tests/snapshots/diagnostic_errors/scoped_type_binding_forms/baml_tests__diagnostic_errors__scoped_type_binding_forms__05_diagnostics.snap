@@ -29,74 +29,82 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                  ╰── expected `reflect.TypeView`, found `reflect.Type | null`
     ╰────
 
+  [type] E0001
+
+  × `let type` cannot bind a class builder's pending type; call `build()` and bind the class it returns
+    ╭─[scoped_type_binding_forms.baml:42:18]
+ 42 │     let type T = builder.type();
+    ·                  ──────────────
+    ╰────
+
   [type] E0145
 
   × generic bound `Wrapper<int>` is not an interface; bounds must be interfaces
-    ╭─[scoped_type_binding_forms.baml:43:24]
- 43 │     let type A extends Wrapper<int> = t else { return 0 };
+    ╭─[scoped_type_binding_forms.baml:51:24]
+ 51 │     let type A extends Wrapper<int> = t else { return 0 };
     ·                        ────────────
     ╰────
 
   [type] E0002
 
   × unresolved type: Missing
-    ╭─[scoped_type_binding_forms.baml:44:24]
- 44 │     let type B extends Missing = t else { return 0 };
+    ╭─[scoped_type_binding_forms.baml:52:24]
+ 52 │     let type B extends Missing = t else { return 0 };
     ·                        ───────
     ╰────
 
   [type] E0154
 
   × `reflect.AnyFunction` cannot be used as a generic bound; use it as a value type instead (e.g. `f: reflect.AnyFunction`)
-    ╭─[scoped_type_binding_forms.baml:45:24]
- 45 │     let type C extends reflect.AnyFunction = t else { return 0 };
+    ╭─[scoped_type_binding_forms.baml:53:24]
+ 53 │     let type C extends reflect.AnyFunction = t else { return 0 };
     ·                        ───────────────────
     ╰────
 
   [type] E0147
 
   × type inference failed; write the type explicitly
-    ╭─[scoped_type_binding_forms.baml:46:39]
- 46 │     let type D extends Named & Holder<_> = t else { return 0 };
+    ╭─[scoped_type_binding_forms.baml:54:39]
+ 54 │     let type D extends Named & Holder<_> = t else { return 0 };
     ·                                       ─
     ╰────
 
   [type] E0002
 
   × unresolved type: T
-    ╭─[scoped_type_binding_forms.baml:53:31]
- 53 │     let type T extends Holder<T> = t else {
+    ╭─[scoped_type_binding_forms.baml:61:31]
+ 61 │     let type T extends Holder<T> = t else {
     ·                               ─
     ╰────
 
   [type] E0002
 
   × unresolved type: T
-    ╭─[scoped_type_binding_forms.baml:54:21]
- 54 │         let unseen: T? = null;
+    ╭─[scoped_type_binding_forms.baml:62:21]
+ 62 │         let unseen: T? = null;
     ·                     ──
     ╰────
 
   [type] E0113
 
   × `let … else` requires a diverging else block (`return`, `throw`, `break`, or `continue`); got `0`
-    ╭─[scoped_type_binding_forms.baml:63:39]
- 63 │     let type T extends Named = t else { 0 };
+    ╭─[scoped_type_binding_forms.baml:71:39]
+ 71 │     let type T extends Named = t else { 0 };
     ·                                       ─────
     ╰────
 
   [type] E0111
 
   × `let type T extends …` checks its bounds when it runs, so it needs an `else` block for a type that misses them
-    ╭─[scoped_type_binding_forms.baml:71:5]
- 71 │     let type T extends Named = t;
+    ╭─[scoped_type_binding_forms.baml:79:5]
+ 79 │     let type T extends Named = t;
     ·     ─────────────────────────────
     ╰────
 
   [type] E0111
 
   × `let type U extends …` checks its bounds when it runs, so it needs an `else` block for a type that misses them
-    ╭─[scoped_type_binding_forms.baml:72:5]
- 72 │     let type U extends Named & Holder<int> = t;
+    ╭─[scoped_type_binding_forms.baml:80:5]
+ 80 │     let type U extends Named & Holder<int> = t;
     ·     ───────────────────────────────────────────
     ╰────

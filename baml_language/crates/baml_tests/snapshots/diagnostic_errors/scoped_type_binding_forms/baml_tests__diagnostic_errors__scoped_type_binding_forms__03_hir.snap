@@ -26,6 +26,9 @@ function user.nullable_operand(t: reflect.Type?) -> int  [expr] {
 function user.operand_solved_to_int() -> int  [expr] {
   { let v = ident(1); let type T = v } 1
 }
+function user.pending_operand() -> int  [expr] {
+  { let builder = reflect.Class.builder("Node"); let type T = builder.type() } 1
+}
 function user.the_binding_is_not_in_scope_yet(t: reflect.Type) -> int  [expr] {
   { let type T extends Holder<T> = t else { let unseen: T? = null; return 0 } } 1
 }

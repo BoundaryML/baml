@@ -620,8 +620,8 @@ pub struct CallTypeArgPlan<T = baml_type::Ty> {
 pub struct ScopedTypeBinding {
     pub name: baml_type::Name,
     pub parameter: baml_type::ParamTy,
-    /// The `reflect.Type`, kind view, or pending builder type the slot is
-    /// bound from, evaluated once when the statement runs.
+    /// The `reflect.Type` or `reflect.TypeView` the slot is bound from,
+    /// evaluated once when the statement runs.
     pub operand: ExprId,
     /// The declared `extends` bounds, in written order. The statement checks
     /// each one at run time, and `T` satisfies them statically afterwards. A
@@ -948,6 +948,10 @@ enum PendingDiag<'db> {
     BoundedLetTypeRequiresElse {
         stmt: StmtId,
         name: baml_type::Name,
+    },
+    /// A `let type` operand that is a class builder's pending type.
+    LetTypePendingOperand {
+        expr: ExprId,
     },
     /// A constant pattern argument that does not compile.
     InvalidRegexPattern {
@@ -5762,19 +5766,24 @@ impl<'db> InferenceContext<'db> {
             return;
         }
         let got = self.infer_expr(body, operand, &Expectation::None);
+        // A diagnosed operand stays quiet. Nothing else is exempt: an
+        // `unknown` must be narrowed to a type with `match` or `is` before it
+        // binds, since a value the checker has not typed may not be erased
+        // into the frame and fail at run time. An open operand deposits the
+        // contract as a bound and is re-judged here once it solves.
+        if got.has_error() {
+            return;
+        }
+        // A builder's pending type is not a type until the builder is built,
+        // and binding it then could fail at run time; it gets its own message
+        // naming the fix.
         let pending_type = matches!(got.kind(), InferTy::Class(name, _)
-            if self.lang().is(baml_base::LangPackage::Reflect, name.root())
-                && name.namespace().iter().map(baml_type::Name::as_str)
-                    .eq(["class"])
-                && name.name().as_str() == "PendingType");
-        // A diagnosed operand stays quiet; a pending builder type is a
-        // known value the VM resolves (or refuses) at the boundary. Nothing
-        // else is exempt: an `unknown` must be narrowed to a type with
-        // `match` or `is` before it binds, since a value the checker has not
-        // typed may not be erased into the frame and fail at run time. An
-        // open operand deposits the contract as a bound and is re-judged
-        // here once it solves.
-        if pending_type || got.has_error() {
+            if self
+                .lang_decl(baml_base::LangPackage::Reflect, &["class"], "PendingType")
+                .is_some_and(|pending| pending == *name));
+        if pending_type {
+            self.pending_diags
+                .push(PendingDiag::LetTypePendingOperand { expr: operand });
             return;
         }
         // The operand contract is `reflect.Type | reflect.TypeView`: a kind
@@ -12220,6 +12229,9 @@ impl<'db> InferenceContext<'db> {
                         TirTypeError::ComputedGenericArgumentRequiresLetType { name },
                         expr,
                     ),
+                    PendingDiag::LetTypePendingOperand { expr } => {
+                        (TirTypeError::LetTypePendingOperand, expr)
+                    }
                     PendingDiag::MountedPackageCallUnsupported { expr, path } => {
                         (TirTypeError::MountedPackageCallUnsupported { path }, expr)
                     }

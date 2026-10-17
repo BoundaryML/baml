@@ -430,7 +430,7 @@ Because type parameters are real run-time values, a body can introduce one of it
 
 ```baml
 let type T = e;                             // `e: reflect.Type | reflect.TypeView`, evaluated once when the statement runs
-                                            // (a builder's pending type is accepted too, once the builder is built)
+                                            // (not a class builder's pending type: bind the class `build()` returns)
 let type V extends I = e else { return x }; // bounded: each bound is checked when the statement runs,
                                             // and a miss runs the diverging `else` block
 ```

@@ -1,14 +1,3 @@
-client TestClient = openai.ResponsesClient.new(
-            model = "gpt-4o-mini",
-            api_key = "test-key",
-            base_url = "http://localhost:1234",
-        );
-
-function Extract<T>() -> T {
-    client: TestClient
-    prompt: `${ctx.output_format()}`
-}
-
 function main() -> string {
     let frozen = reflect.Class.builder("FrozenEmployee");
     frozen.field("name", string.type());
@@ -17,12 +6,14 @@ function main() -> string {
         reflect.errors.CompilationError => e.diagnostics[0].message
     };
 
-    let unresolved = reflect.Class.builder("UnbuiltTenant");
-    let pending = unresolved.type();
-    let pending_error = {
-        let type Pending = pending;
-        Extract@render_prompt<Pending>()
-    } catch (e) {
+    // A builder's pending type is not a `let type` operand: the binding is
+    // refused when it compiles, not when it runs.
+    let session = reflect.Session.new();
+    let pending_error = session.eval<int>(
+        `let unbuilt = reflect.Class.builder("UnbuiltTenant");
+        let type Pending = unbuilt.type();
+        1`,
+    ) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].message
     };
 
@@ -37,9 +28,8 @@ function main() -> string {
     return left + "|" + right;
 }
 
-test "frozen_mutation_and_unresolved_call_name_the_builder" {
+test "frozen_mutation_and_pending_let_type" {
     let result = main();
     assert.contains(result, "`FrozenEmployee` is frozen");
-    assert.contains(result, "`UnbuiltTenant`");
-    assert.contains(result, "call build()")
+    assert.contains(result, "cannot bind a class builder's pending type; call `build()`")
 }

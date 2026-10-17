@@ -2796,10 +2796,10 @@ impl BexVm {
 
     /// The `type` value a type-operand position received. Every such
     /// position's contract is `reflect.Type | reflect.TypeView`: a kind view
-    /// converts to the `type` it wraps, and a pending builder reference
-    /// resolves to its built type (or throws naming the un-frozen builder).
-    /// Shared by the call type-argument lane and `BindType`, so the two
-    /// boundaries cannot drift on what a type operand may be.
+    /// converts to the `type` it wraps, and any other view has already been
+    /// through its own `as_type()` in BAML. Shared by the call type-argument
+    /// lane and `BindType`, so the two boundaries cannot drift on what a type
+    /// operand may be. It never throws.
     fn type_operand_value(&mut self, value: Value) -> Result<TypeValue, VmError> {
         let value =
             crate::package_reflect::type_kinds::as_view_type_value(self, value).unwrap_or(value);
@@ -2812,14 +2812,8 @@ impl BexVm {
         if let Some(type_value) = direct {
             return Ok(type_value);
         }
-        if let Some(result) =
-            crate::package_reflect::runtime_class_builder::coerce_pending_type_arg(self, value)
-        {
-            return result.map_err(VmError::thrown_fresh);
-        }
-        // Static checking admits only `reflect.Type | reflect.TypeView` and a
-        // pending builder type here, so any other value is a compiler bug,
-        // not a program error.
+        // Static checking admits only `reflect.Type | reflect.TypeView` here,
+        // so any other value is a compiler bug, not a program error.
         Err(VmInternalError::TypeError {
             expected: Type::Object(ObjectType::Type),
             got: self.type_of(&value),

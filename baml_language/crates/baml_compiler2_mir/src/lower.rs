@@ -9644,25 +9644,19 @@ impl<'db> LoweringContext<'db> {
 
     /// Whether a `let type` operand of static type `ty` needs its own
     /// `as_type()` before the VM binds it. The VM's type-operand boundary
-    /// unwraps `reflect.Type`, the nine kind views and a builder's pending
-    /// type itself; every other `reflect.TypeView` (a class of the user's
-    /// own, the interface, a type parameter bounded by it) does not reach it
-    /// as a `type` value otherwise. The checker admits a pending type only on
-    /// its own, never in a union with a view, so an operand that needs the
-    /// call holds a `reflect.TypeView` whatever its value.
+    /// unwraps `reflect.Type` and the nine kind views itself; every other
+    /// `reflect.TypeView` (a class of the user's own, the interface, a type
+    /// parameter bounded by it) does not reach it as a `type` value
+    /// otherwise. The checker admits only `reflect.Type | reflect.TypeView`,
+    /// so an operand that needs the call holds a `reflect.TypeView` whatever
+    /// its value.
     fn type_operand_needs_as_type(&self, ty: &Tir2Ty) -> bool {
         let lang = self.lang();
-        let is_lang_class = |name: &DeclName, item: baml_base::LangItem| {
-            DeclName::of_lang_item(lang, item).is_some_and(|decl| decl == *name)
-        };
         let unwrapped_by_vm = |member: &Tir2Ty| match member {
             Tir2Ty::Type | Tir2Ty::Never => true,
-            Tir2Ty::Class(name, _) => {
-                is_lang_class(name, baml_base::lang_item!(Reflect: class.PendingType))
-                    || baml_type::type_kind::TypeKind::ALL
-                        .iter()
-                        .any(|kind| is_lang_class(name, kind.class()))
-            }
+            Tir2Ty::Class(name, _) => baml_type::type_kind::TypeKind::ALL.iter().any(|kind| {
+                DeclName::of_lang_item(lang, kind.class()).is_some_and(|decl| decl == *name)
+            }),
             _ => false,
         };
         match ty {
