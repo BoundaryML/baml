@@ -37,7 +37,7 @@ class ChatClient {
     top_p: float?,
     stop: string[]?,
     seed: int?,
-    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // Record request/response bodies (and raw SSE events) on the ModelCall wire
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
@@ -99,7 +99,7 @@ class ChatClient {
     /// about this endpoint.
     function compat(self) -> root.internal.ChatCompat {
         root.internal.ChatCompat.new(
-            provider = "openai-chat",
+            provider = self.provider(),
             base_url = self.resolved_base_url(),
             api_key_env = "OPENAI_API_KEY",
             api_key_required = true,
@@ -136,8 +136,12 @@ class ChatClient {
     }
 
     implements ai.Client {
-        function id(self) -> string {
-            `openai-chat/${self.model}`
+        function requested_model(self) -> string {
+            self.model
+        }
+
+        function provider(self) -> string {
+            "openai-chat"
         }
 
         /// What a `${cache()}` sends as `prompt_cache_breakpoint` on the part

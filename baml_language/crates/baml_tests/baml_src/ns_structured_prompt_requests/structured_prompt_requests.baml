@@ -762,8 +762,11 @@ test "default_cache_args per client" {
 // method costs an existing implementer nothing.
 class NoCacheClient {
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "no-cache"
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

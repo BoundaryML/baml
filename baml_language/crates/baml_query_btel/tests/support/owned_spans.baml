@@ -19,8 +19,11 @@ class Scripted {
     chunks: string[],
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "scripted"
+        }
+        function provider(self) -> string {
+            "test"
         }
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
             baml.http.Request {
@@ -34,8 +37,8 @@ class Scripted {
             ai.ModelTurn {
                 content: [ai.content.Text { text: self.chunks.join("") }],
                 calls: [],
+                child_turns: [],
                 stop_reason: ai.content.StopReason.Complete,
-                usage: null,
             }
         }
     }

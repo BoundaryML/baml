@@ -531,6 +531,7 @@ fn start_span_impl(
                 namespace: vec![],
                 argument_layout: None,
                 source_map: None,
+                model_invoke: false,
             }
         } else {
             let function = target

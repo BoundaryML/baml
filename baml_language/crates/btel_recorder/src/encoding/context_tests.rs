@@ -178,6 +178,7 @@ fn largest_completion_and_context_fit_admitted_capacity() {
                 low: u64::MAX,
                 high: u64::MAX,
             }),
+            usage: Vec::new(),
         }),
     );
     assert_eq!(writer.capacity(), capacity);

@@ -228,14 +228,6 @@ pub fn validate_file(
             }
         }
     }
-    if let Some(usage) = &file.usage
-        && usage
-            .entries
-            .iter()
-            .any(|entry| entry.node_id == 0 || entry.thread_id == 0)
-    {
-        return Err("invalid model usage".into());
-    }
     if let Some(end) = file.end.as_ref().and_then(|end| end.process_end.as_ref())
         && !(1..=4).contains(&end.status)
     {

@@ -52,9 +52,15 @@ pub(crate) struct ManualSpan {
     inner: Mutex<Option<Option<Recording>>>,
 }
 
+/// Model usage charged to an owned span by the threads that ran under it,
+/// written just before its completion.
+type OwnedUsage = Arc<Mutex<Vec<btel_records::ModelUsage>>>;
+
 #[derive(Clone)]
 struct ManualContext {
     await_time: Arc<Mutex<AwaitDuration>>,
+    // Present for a span; a Timing operation's usage belongs to its parent.
+    usage: Option<OwnedUsage>,
     clock: Arc<btel_clock::ClockEpoch>,
     id: TelemetryId,
     call_path: CallPathId,
@@ -65,6 +71,9 @@ struct ManualContext {
 /// Only ancestry and context change inside `run()`; execution and its clock stay put.
 pub(crate) struct ManualScope {
     await_time: Arc<Mutex<AwaitDuration>>,
+    // The span this scope ran under and its usage, which leaves the thread
+    // when the scope does.
+    usage: Option<(TelemetryId, OwnedUsage)>,
     clock: Arc<btel_clock::ClockEpoch>,
     parent_id: TelemetryId,
     call_path: CallPathId,
@@ -85,6 +94,16 @@ impl ManualScope {
     }
 
     pub(crate) fn restore(self, state: &mut TelemetryState) {
+        if let Some((id, usage)) = &self.usage
+            && let Some(entries) = state.take_model_usage(*id)
+        {
+            super::merge_usage(
+                &mut usage
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+                entries,
+            );
+        }
         state.thread.active_id = self.parent_id;
         state.thread.active_call_path = self.call_path;
         state.set_context(self.context);
@@ -97,6 +116,7 @@ impl ManualScope {
 )]
 struct Recording {
     await_time: Arc<Mutex<AwaitDuration>>,
+    usage: Option<OwnedUsage>,
     options: OperationOptions,
     thread: btel_types::TelemetryId,
     context: ContextReference,
@@ -175,8 +195,11 @@ impl ManualSpan {
                 let (recorded_context, context_payload) = (ContextReference::Unavailable, None);
                 state.set_context(old_context);
                 let await_time = Arc::new(Mutex::new(AwaitDuration::ZERO));
+                let usage = (options.mode == InvocationMode::Span)
+                    .then(|| Arc::new(Mutex::new(Vec::new())));
                 template = Some(ManualContext {
                     await_time: await_time.clone(),
+                    usage: usage.clone(),
                     clock: state.clock.clone(),
                     id: if options.mode == InvocationMode::Span {
                         id
@@ -190,6 +213,7 @@ impl ManualSpan {
                 state.clock.attach_thread();
                 Recording {
                     await_time,
+                    usage,
                     options,
                     thread: state.thread.id,
                     context: recorded_context,
@@ -263,6 +287,7 @@ impl ManualSpan {
         let template = self.template.as_ref()?;
         let saved = ManualScope {
             await_time: template.await_time.clone(),
+            usage: template.usage.clone().map(|usage| (template.id, usage)),
             clock: template.clock.clone(),
             parent_id: state.thread.active_id,
             call_path: state.thread.active_call_path,
@@ -425,6 +450,26 @@ impl Recording {
         } else {
             SpanRecord::ManualSpanCompletion(Box::new(completion))
         };
+        // The usage rides the completion written next.
+        let entries = self.usage.as_ref().map_or_else(Vec::new, |usage| {
+            std::mem::take(
+                &mut *usage
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner),
+            )
+        });
+        if !entries.is_empty() {
+            let usage = SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
+                node: self.completion.id,
+                entries,
+            }));
+            if deferred {
+                self.runtime.defer_span(self.thread, self.context, usage);
+            } else {
+                self.runtime
+                    .write_span_with_context(self.thread, self.context, None, usage);
+            }
+        }
         if deferred {
             // A deferred record cannot carry the snapshot it would name.
             let context = if self.context_payload.is_some() {

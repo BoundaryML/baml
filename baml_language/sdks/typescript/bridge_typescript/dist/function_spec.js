@@ -54,11 +54,11 @@ export class BamlFunctionSpec {
     async toolsAsync(options) {
         return await this._callAsync('ai.FunctionSpec.tools', {}, options);
     }
-    clientId(options) {
-        return this._callSync('ai.FunctionSpec.client_id', {}, options);
+    requestedModel(options) {
+        return this._callSync('ai.FunctionSpec.requested_model', {}, options);
     }
-    async clientIdAsync(options) {
-        return await this._callAsync('ai.FunctionSpec.client_id', {}, options);
+    async requestedModelAsync(options) {
+        return await this._callAsync('ai.FunctionSpec.requested_model', {}, options);
     }
     buildRequest(options) {
         return this._callSync('ai.FunctionSpec.build_request', suppliedOptions(options), options);

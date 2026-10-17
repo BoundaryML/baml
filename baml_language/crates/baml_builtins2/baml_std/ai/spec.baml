@@ -200,8 +200,8 @@ class FunctionSpec<Out> {
         self.toolbox
     }
 
-    function client_id(self) -> string {
-        self.default_client.id()
+    function requested_model(self) -> string {
+        self.default_client.requested_model()
     }
 
     // NOTE: `client` is a keyword, so the default client is read as the

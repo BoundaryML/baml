@@ -57,8 +57,7 @@ function contract_decode(batch: string) -> ai.stream.Event[] throws ai.errors.In
             let _ = out.push(
                 ai.stream.TurnMeta {
                     stop_reason: ai.content.StopReason.Complete,
-                    input_tokens: 7,
-                    output_tokens: 3,
+                    usage: ai.events.Usage { input_tokens: 7, output_tokens: 3 },
                 },
             );
         }

@@ -438,8 +438,7 @@ function invoke(c: root.DecisionsClient, input: ai.ModelTurnInput) -> ai.ModelTu
     // No streaming here: only the two transport deadlines apply.
     let sent = ai.wire.send_as_with_wire<Response>(
         ai.LlmTimeoutOptions._resolve(c.timeout)._apply(request(c, input, p, false)),
-        "openai-decisions",
-        c.id(),
+        ai.events.ModelKey { provider: c.provider(), model: c.model },
         capture_wire = c.capture_wire,
     );
     if (sent.value.answers.length() != p.leaves.length()) {
@@ -463,28 +462,34 @@ function invoke(c: root.DecisionsClient, input: ai.ModelTurnInput) -> ai.ModelTu
         let _ = values.set(leaf.id, decode(leaf, answer));
     }
     let value = assemble(input.output_type, [], values);
-    ai.ModelTurn {
-        model: sent.value.model ?? c.model,
-        content: [ai.content.Text { text: baml.json.to_string(value) }],
-        parsed_output: ai.ParsedOutput { value: value },
-        stop_reason: ai.content.StopReason.Complete,
-        calls: [sent.call],
-        usage: match (sent.value.usage) {
-            let usage: root.internal.OaUsage => {
-                ai.events.Usage {
-                    input_tokens: usage.input_tokens ?? 0,
-                    output_tokens: usage.output_tokens ?? 0,
-                    cached_input_tokens: usage.input_tokens_details?.cached_tokens,
-                    reasoning_tokens: usage.output_tokens_details?.reasoning_tokens,
-                    cache_write_input_tokens: usage.input_tokens_details?.cache_write_tokens,
-                    uncached_input_tokens: ai.internal.uncached_input_tokens(
-                        usage.input_tokens,
-                        usage.input_tokens_details?.cached_tokens,
-                        cache_write = usage.input_tokens_details?.cache_write_tokens,
-                    ),
-                }
-            },
-            null => null,
+    let usage: ai.events.Usage? = match (sent.value.usage) {
+        let reported: root.internal.OaUsage => {
+            ai.events.Usage {
+                input_tokens: reported.input_tokens,
+                output_tokens: reported.output_tokens,
+                cached_input_tokens: reported.input_tokens_details?.cached_tokens,
+                reasoning_tokens: reported.output_tokens_details?.reasoning_tokens,
+                cache_write_input_tokens: reported.input_tokens_details?.cache_write_tokens,
+                uncached_input_tokens: ai.internal.uncached_input_tokens(
+                    reported.input_tokens,
+                    reported.input_tokens_details?.cached_tokens,
+                    cache_write = reported.input_tokens_details?.cache_write_tokens,
+                ),
+            }
         },
-    }
+        null => null,
+    };
+    ai.internal.with_own_call(
+        ai.ModelTurn {
+            content: [ai.content.Text { text: baml.json.to_string(value) }],
+            parsed_output: ai.ParsedOutput { value: value },
+            stop_reason: ai.content.StopReason.Complete,
+            calls: [],
+            child_turns: [],
+        },
+        sent.call,
+        usage,
+        c.model,
+        sent.value.model,
+    )
 }

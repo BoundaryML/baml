@@ -1174,6 +1174,36 @@ fn attach_function_metadata<'db>(
         compiled_fn.body_meta = Some(FunctionMeta::Llm {
             client: client.to_string(),
         });
+    } else if is_model_invoke(db, func_loc) {
+        compiled_fn.body_meta = Some(FunctionMeta::ModelInvoke);
+    }
+}
+
+/// An `ai.Client.invoke` implementation, or `ai.stream.TurnStream._settle`:
+/// the functions whose returned turn telemetry charges as model usage.
+fn is_model_invoke<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> bool {
+    use baml_compiler2_hir::loc::DeclRef;
+    use baml_compiler2_hir_ty::callable::{callable_display_name, callable_owner_type};
+    let function = DeclRef::Source(func_loc);
+    let Some(owner) = callable_owner_type(db, function) else {
+        return false;
+    };
+    if !baml_compiler2_hir::package::lang_roots(db).is(baml_base::LangPackage::Ai, owner.root()) {
+        return false;
+    }
+    let namespace: Vec<&str> = owner.namespace().iter().map(Name::as_str).collect();
+    match (
+        namespace.as_slice(),
+        owner.name().as_str(),
+        callable_display_name(db, function).as_str(),
+    ) {
+        // The interface's own `invoke` is abstract, so only implementations
+        // reach codegen.
+        ([], "Client", "invoke") | (["stream"], "TurnStream", "_settle") => true,
+        _ => false,
     }
 }
 

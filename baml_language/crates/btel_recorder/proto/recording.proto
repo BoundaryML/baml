@@ -21,9 +21,9 @@ message RecordingFile {
   // Minor 2. Exception evidence. One unwind's raise, links and end can be
   // in different files; readers join them by raise ID.
   ErrorBatch errors = 8;
-  // Minor 3. Tokens each model turn used. Only read now: since minor 7 a
-  // request's cost comes from its network span, and nothing writes this.
-  UsageBatch usage = 9;
+  // Minor 3 to 10 carried per-turn model usage here; since minor 13 usage
+  // rides the completion of the span it is charged to.
+  reserved 9;
 }
 
 message RecordingHeader {
@@ -40,6 +40,8 @@ message RecordingHeader {
                                  // 10 adds completion with an unknown host outcome.
                                  // 11 adds manual span completions.
                                  // 12 adds general owned-function closure and named input roots.
+                                 // 13 adds model usage on completions and model
+                                 // invoke functions.
   bytes recording_id = 3;       // Exactly 16 random bytes, not all zero.
   optional bytes source_snapshot_id = 4; // Exactly 32 bytes when supplied; not identity.
   // Minor 3. The OS process that ran this engine. Every engine of one
@@ -96,6 +98,9 @@ message FunctionMetadata {
   // Minor 2. Absent: no map was recorded (older producers, functions without
   // compact bytecode). Never inferred from today's source.
   SourceMap source_map = 15;
+  // Minor 13. An ai.Client.invoke implementation or a stream's settle step:
+  // the usage on its spans is the usage of the calls it made itself.
+  bool model_invoke = 16;
 }
 
 // Line table of the code the VM executed, sorted by strictly increasing PC.
@@ -357,6 +362,7 @@ message ThreadCompletion {
   fixed64 completed_at_ticks = 1;
   InvocationOutcome outcome = 2;
   bool panicked = 3;            // Minor 3. Only with ERRORED: a panic ended it.
+  repeated ModelUsage usage = 4; // Minor 13. Usage charged to the thread node.
 }
 
 message FunctionAnnouncement {
@@ -392,6 +398,10 @@ message FunctionCompletion {
   // Minor 3. Only with an ERRORED outcome: a panic ended it. Since minor 3
   // an errored value is the baml.errors.Context a handler would bind.
   bool panicked = 9;
+  // Minor 13. Model usage charged to this span: its own calls when its
+  // function is a model invoke, else those of invocations under it that
+  // were not spans.
+  repeated ModelUsage usage = 10;
 }
 
 // Minor 7. One HTTP request the runtime made, as its own span. Its events
@@ -595,22 +605,17 @@ enum ProcessStatus {
   PROCESS_STATUS_UNKNOWN = 4;
 }
 
-// Minor 3. Model usage, outside span sections: a model name has no bound.
-// Only read now: nothing writes it since minor 7.
-message UsageBatch {
-  repeated ModelUsage entries = 1;
-}
-
-// Tokens one model turn reported. Several entries can name one node.
+// Minor 13. The tokens one model's calls reported, summed. A count is absent
+// when no call reported it, which is not the same as zero.
 message ModelUsage {
-  uint64 node_id = 1;           // The span or thread that made the call.
-  uint64 thread_id = 2;         // The thread that recorded it.
-  optional string model = 3;
-  uint64 input_tokens = 4;      // Full-rate input: cache reads and writes excluded.
-  uint64 output_tokens = 5;
-  optional uint64 cache_read_tokens = 6;
-  optional uint64 cache_write_tokens = 7;
-  optional uint64 reasoning_tokens = 8;
+  string provider = 8; // The calling client's provider, as `ai.events.ModelKey` names it.
+  optional string model = 1;
+  uint64 calls = 2;
+  optional uint64 input_tokens = 3; // Full-rate input: cache reads and writes excluded.
+  optional uint64 output_tokens = 4;
+  optional uint64 cache_read_tokens = 5;
+  optional uint64 cache_write_tokens = 6;
+  optional uint64 reasoning_tokens = 7;
 }
 
 // BCS control plane only. Telemetry bytes go directly to S3 using the returned PUT URL.

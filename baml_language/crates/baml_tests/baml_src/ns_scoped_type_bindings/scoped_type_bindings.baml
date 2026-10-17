@@ -426,8 +426,11 @@ class ProbeClient {
     reply: string,
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "probe"
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -438,10 +441,10 @@ class ProbeClient {
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             ai.ModelTurn {
+                child_turns: [],
                 calls: [],
                 content: [ai.content.Text { text: self.reply }],
                 stop_reason: ai.content.StopReason.Complete,
-                usage: null,
             }
         }
     }

@@ -103,6 +103,7 @@ impl BexEngine {
                     namespace: vec![definition.language.clone()],
                     argument_layout: None,
                     source_map: None,
+                    model_invoke: false,
                 });
                 definitions.insert(definition.key(), Arc::clone(&metadata));
                 metadata

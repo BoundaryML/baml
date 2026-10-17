@@ -730,6 +730,8 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
                 self.owned_spans.remove(&completion.id);
                 return;
             }
+            // It rides the owned span's completion, which stays local too.
+            SpanRecord::SpanUsage(usage) if self.owned_spans.contains_key(&usage.node) => return,
             _ => {}
         }
         if !self.owned_spans.is_empty()

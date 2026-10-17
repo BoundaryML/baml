@@ -204,6 +204,9 @@ pub struct TelemetryState {
     runtime: Arc<btel_processor::TelemetryRuntime>,
     /// Exception-path bookkeeping, allocated by the first recorded raise.
     errors: Option<Box<ErrorBook>>,
+    /// Model usage charged to open spans (or the thread), one entry per model,
+    /// written just before the node completes. Empty without model calls.
+    usage: Vec<(TelemetryId, Vec<btel_records::ModelUsage>)>,
     #[cfg(test)]
     timing_records: Vec<TimingRecord>,
     #[cfg(test)]
@@ -363,6 +366,7 @@ impl TelemetryState {
             #[cfg(not(target_arch = "wasm32"))]
             runtime,
             errors: None,
+            usage: Vec::new(),
             #[cfg(test)]
             timing_records: Vec::new(),
             #[cfg(test)]
@@ -737,9 +741,7 @@ impl TelemetryState {
             if self.auto_level == AutoTelemetryLevel::Low {
                 return None;
             }
-            if self.auto_level == AutoTelemetryLevel::Medium
-                && !matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }))
-            {
+            if self.auto_level == AutoTelemetryLevel::Medium && function.body_meta.is_none() {
                 return Some(self.enter_timing(
                     callee,
                     visible_caller,
@@ -980,6 +982,7 @@ impl TelemetryState {
             let captured_value =
                 capture_value.and_then(|value| self.capture(snapshot::Input::Value(value)));
             let id = telemetry.span_id().expect("span frame owns its identity");
+            self.flush_model_usage(id);
             match (
                 outcome,
                 telemetry.is_reentry(),
@@ -1269,6 +1272,45 @@ impl TelemetryState {
         self.thread.active_call_path = telemetry.saved_call_path;
     }
 
+    /// Charge model usage to the innermost span, or the thread when none is
+    /// open. Entries for one provider's model are summed.
+    #[cold]
+    pub fn charge_model_usage(&mut self, entries: Vec<btel_records::ModelUsage>) {
+        let node = self.thread.active_id;
+        let index = match self.usage.iter().position(|(id, _)| *id == node) {
+            Some(index) => index,
+            None => {
+                self.usage.push((node, Vec::new()));
+                self.usage.len() - 1
+            }
+        };
+        merge_usage(&mut self.usage[index].1, entries);
+    }
+
+    /// Remove and return the usage charged to `node`, for a node whose
+    /// completion this thread does not write (an owned span).
+    pub(crate) fn take_model_usage(
+        &mut self,
+        node: TelemetryId,
+    ) -> Option<Vec<btel_records::ModelUsage>> {
+        let index = self.usage.iter().position(|(id, _)| *id == node)?;
+        Some(self.usage.swap_remove(index).1)
+    }
+
+    /// Write the usage charged to `node`, just before its completion.
+    fn flush_model_usage(&mut self, node: TelemetryId) {
+        if self.usage.is_empty() {
+            return;
+        }
+        if let Some(index) = self.usage.iter().position(|(id, _)| *id == node) {
+            let (_, entries) = self.usage.swap_remove(index);
+            self.write_span(SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
+                node,
+                entries,
+            })));
+        }
+    }
+
     pub fn complete_thread(&mut self, outcome: InvocationOutcome) {
         if self.thread.completed {
             return;
@@ -1288,6 +1330,7 @@ impl TelemetryState {
             self.thread.running = true;
             self.write_span(SpanRecord::ThreadSpanRunning { at: completed_at });
         }
+        self.flush_model_usage(self.thread.id);
         self.write_span(SpanRecord::ThreadSpanCompletion {
             id: self.thread.id,
             parent_id: self.thread.parent_id,
@@ -1555,11 +1598,7 @@ fn default_mode(function: &Function, policy: TelemetryPolicy) -> InvocationMode 
             NATIVE_DEFAULT_MODE
         }
         FunctionKind::Bytecode if policy.span_from_entry => InvocationMode::Span,
-        FunctionKind::Bytecode
-            if matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. })) =>
-        {
-            AI_DEFAULT_MODE
-        }
+        FunctionKind::Bytecode if function.body_meta.is_some() => AI_DEFAULT_MODE,
         FunctionKind::Bytecode => BYTECODE_DEFAULT_MODE,
     }
 }
@@ -1573,7 +1612,7 @@ pub(crate) fn ordinary_settings(
         mode: Some(if config.reserved_id.is_some() {
             InvocationMode::Span
         } else {
-            config.mode.unwrap_or(if ai {
+            config.mode.unwrap_or(if function.body_meta.is_some() {
                 AI_DEFAULT_MODE
             } else {
                 BYTECODE_DEFAULT_MODE
@@ -1616,6 +1655,36 @@ pub(crate) fn test_runtime() -> Arc<btel_processor::TelemetryRuntime> {
     static RUNTIME: std::sync::OnceLock<Arc<btel_processor::TelemetryRuntime>> =
         std::sync::OnceLock::new();
     Arc::clone(RUNTIME.get_or_init(|| btel_processor::TelemetryRuntime::new().unwrap()))
+}
+
+/// Add `entries` into `charged`, summing the entries for one provider's model.
+pub(crate) fn merge_usage(
+    charged: &mut Vec<btel_records::ModelUsage>,
+    entries: Vec<btel_records::ModelUsage>,
+) {
+    for entry in entries {
+        match charged
+            .iter_mut()
+            .find(|known| known.provider == entry.provider && known.model == entry.model)
+        {
+            Some(known) => add_usage(known, &entry),
+            None => charged.push(entry),
+        }
+    }
+}
+
+/// Sum `added` into `into`. A count stays `None` only when both are.
+fn add_usage(into: &mut btel_records::ModelUsage, added: &btel_records::ModelUsage) {
+    let sum = |a: Option<u64>, b: Option<u64>| match (a, b) {
+        (None, None) => None,
+        (a, b) => Some(a.unwrap_or(0).saturating_add(b.unwrap_or(0))),
+    };
+    into.calls = into.calls.saturating_add(added.calls);
+    into.input_tokens = sum(into.input_tokens, added.input_tokens);
+    into.output_tokens = sum(into.output_tokens, added.output_tokens);
+    into.cache_read_tokens = sum(into.cache_read_tokens, added.cache_read_tokens);
+    into.cache_write_tokens = sum(into.cache_write_tokens, added.cache_write_tokens);
+    into.reasoning_tokens = sum(into.reasoning_tokens, added.reasoning_tokens);
 }
 
 #[cfg(test)]

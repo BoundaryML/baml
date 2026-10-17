@@ -633,8 +633,8 @@ class BodyParams {
     thinking: root.ThinkingConfig?,
     tool_choice: root.ToolChoice?,
     request_body: baml.json.json?,
-    // The id journal sanitization is performed against — `Client.id()`.
-    client_id: string,
+    // The provider journal sanitization compares against, with `model`.
+    provider: string,
     // What a `${cache()}` in the prompt sends as `cache_control` — the host
     // client's `default_cache_args()`.
     default_cache_args: baml.json.json,
@@ -658,7 +658,7 @@ function _body_params(c: root.Client) -> BodyParams {
         thinking: c.thinking,
         tool_choice: c.tool_choice,
         request_body: c.request_body,
-        client_id: c.id(),
+        provider: "anthropic",
         default_cache_args: c.default_cache_args(),
     }
 }
@@ -717,7 +717,7 @@ function messages_request(
     // orphaned tool calls are repaired once, in ai.wire, for every provider.
     for (
         let message in _lower_journal(
-            ai.wire.sanitize_for_client(input.journal, params.client_id),
+            ai.wire.sanitize_for_client(input.journal, params.provider, params.model),
             preview = preview,
         )
     ) {
@@ -895,7 +895,7 @@ function _stop_reason(s: string) -> ai.content.StopReason {
     }
 }
 
-/// One decoded response -> canonical content blocks, stop reason and usage.
+/// One decoded response -> canonical content blocks and stop reason.
 function parse(resp: Response) -> ai.ModelTurn {
     let content: ai.content.ModelBlock[] = [];
     for (let b in resp.content) {
@@ -930,41 +930,64 @@ function parse(resp: Response) -> ai.ModelTurn {
         let s: string => _stop_reason(s),
     };
 
-    let usage: ai.events.Usage? = match (resp.usage) {
+    ai.ModelTurn { calls: [], child_turns: [], content: content, stop_reason: stop }
+}
+
+/// One decoded response's usage, null when it reported none.
+function usage(resp: Response) -> ai.events.Usage? {
+    match (resp.usage) {
         let u: Usage => {
-            ai.events.Usage {
-                // Anthropic's input_tokens excludes both cache counts.
-                input_tokens: ai.internal.total_input_tokens(
-                    u.input_tokens,
-                    u.cache_read_input_tokens,
-                    u.cache_creation_input_tokens,
-                )
-                    ?? 0,
-                output_tokens: u.output_tokens ?? 0,
-                // Cache READS are the cached-input tokens. Cache WRITES
-                // (cache_creation_input_tokens) are billed above the normal
-                // input rate, so folding them in here would misreport cost;
-                // ai.events.Usage needs its own slot for them.
-                cached_input_tokens: u.cache_read_input_tokens,
-                // Extended thinking: the reasoning share of output_tokens.
-                reasoning_tokens: u.output_tokens_details?.thinking_tokens,
-                cache_write_input_tokens: u.cache_creation_input_tokens,
-                // Anthropic's input_tokens already excludes both cache counts.
-                uncached_input_tokens: u.input_tokens,
-            }
+            _events_usage(
+                u.input_tokens,
+                u.output_tokens,
+                u.cache_read_input_tokens,
+                u.cache_creation_input_tokens,
+                u.output_tokens_details?.thinking_tokens,
+            )
         },
         null => null,
-    };
+    }
+}
 
-    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
+/// (internal) Anthropic's counts, as a response or a stream event reports
+/// them, in `ai.events.Usage`'s terms.
+function _events_usage(
+    input: int?,
+    output: int?,
+    cache_read: int?,
+    cache_creation: int?,
+    thinking: int?,
+) -> ai.events.Usage {
+    ai.events.Usage {
+        // Anthropic's input_tokens excludes both cache counts.
+        input_tokens: ai.internal.total_input_tokens(input, cache_read, cache_creation),
+        output_tokens: output,
+        // Cache READS are the cached-input tokens. Cache WRITES
+        // (cache_creation_input_tokens) are billed above the normal input
+        // rate, so they have their own count.
+        cached_input_tokens: cache_read,
+        // Extended thinking: the reasoning share of output_tokens.
+        reasoning_tokens: thinking,
+        cache_write_input_tokens: cache_creation,
+        uncached_input_tokens: input,
+    }
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
 function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(_request(c, input, false, preview = false));
-    let sent = ai.wire.send_as_with_wire<Response>(req, "anthropic", c.id(), capture_wire = c.capture_wire);
-    let turn = parse(sent.value);
-    ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
+    let sent = ai.wire.send_as_with_wire<Response>(
+        req,
+        ai.events.ModelKey { provider: c.provider(), model: c.model },
+        capture_wire = c.capture_wire,
+    );
+    ai.internal.with_own_call(
+        parse(sent.value),
+        sent.call,
+        usage(sent.value),
+        c.model,
+        sent.value.model,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -988,24 +1011,28 @@ class AnthStreamUsage {
     output_tokens_details: AnthOutputTokensDetails?,
 }
 
-/// One event's usage, with the meanings a non-streamed turn's usage has.
+/// One event's usage, with the meanings a non-streamed turn's usage has, and
+/// the model it names.
 function _anth_stream_meta(
     stop: ai.content.StopReason?,
     usage: AnthStreamUsage?,
+    resolved_model: string? = null,
 ) -> ai.stream.TurnMeta {
     ai.stream.TurnMeta {
         stop_reason: stop,
-        input_tokens: ai.internal.total_input_tokens(
-            usage?.input_tokens,
-            usage?.cache_read_input_tokens,
-            usage?.cache_creation_input_tokens,
-        ),
-        output_tokens: usage?.output_tokens,
-        cached_input_tokens: usage?.cache_read_input_tokens,
-        cache_write_input_tokens: usage?.cache_creation_input_tokens,
-        // Anthropic's input_tokens already excludes both cache counts.
-        uncached_input_tokens: usage?.input_tokens,
-        reasoning_tokens: usage?.output_tokens_details?.thinking_tokens,
+        resolved_model: resolved_model,
+        usage: match (usage) {
+            let u: AnthStreamUsage => {
+                _events_usage(
+                    u.input_tokens,
+                    u.output_tokens,
+                    u.cache_read_input_tokens,
+                    u.cache_creation_input_tokens,
+                    u.output_tokens_details?.thinking_tokens,
+                )
+            },
+            null => null,
+        },
     }
 }
 
@@ -1161,7 +1188,9 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
                         if let message: AnthStreamMessage = event.message {
                             state.model = message.model;
                         }
-                        out.push(_anth_stream_meta(null, event.message?.usage));
+                        out.push(
+                            _anth_stream_meta(null, event.message?.usage, resolved_model = event.message?.model),
+                        );
                         null
                     },
                     "content_block_start" => {
@@ -1337,14 +1366,10 @@ function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.Tu
         timeout_options = limits,
         dispatched = started,
     );
-    let call = ai.events.LLMCall {
-        client_name: c.id(),
-        provider: "anthropic",
-        timing: ai.events.Timing {
-            start_time_utc_ms: started.to_timestamp_milliseconds(),
-            duration_ms: null,
-            ttft_ms: null,
-        },
+    let call = ai.events.ModelCall {
+        resolved_model: ai.events.ModelKey { provider: c.provider(), model: c.model },
+        usage: null,
+        timing: ai.events.Timing { start_time: started, duration: null, ttft: null },
         http_request: if (c.capture_wire) {
             baml.http.Request {
                 method: req.method,
@@ -1356,16 +1381,14 @@ function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.Tu
             null
         },
         http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
-        usage: null,
-        selected: true,
         sse_responses: if (c.capture_wire) {
             []
         } else {
             null
         },
     };
-    stream._calls = [call];
     stream._wire_call = call;
+    stream._requested_model = c.model;
     stream._call_started = started;
     stream._ttft_from = baml.time.Instant.now();
     stream._capture_sse = c.capture_wire;

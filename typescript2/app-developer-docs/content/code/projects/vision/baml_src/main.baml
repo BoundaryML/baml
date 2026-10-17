@@ -228,7 +228,7 @@ function compare_models() -> ModelReceipt[] {
         google.GeminiClient.new(model = "gemini-2.5-flash"),
     ];
     models.map((model) -> {
-        ModelReceipt { model: model.id(), receipt: read_receipt(photo, client = model) }
+        ModelReceipt { model: model.requested_model(), receipt: read_receipt(photo, client = model) }
     })
 }
 
@@ -286,8 +286,12 @@ class CloudflareVisionClient {
     api_token: ai.Credential,
 
     implements ai.Client {
-        function id(self) -> string {
-            "cloudflare/llama-3.2-11b-vision-instruct"
+        function requested_model(self) -> string {
+            "llama-3.2-11b-vision-instruct"
+        }
+
+        function provider(self) -> string {
+            "cloudflare"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -301,7 +305,7 @@ class CloudflareVisionClient {
                 let request = self.build_request(input, preview = false).set_timeout(
                     baml.time.Duration.from_seconds(60),
                 );
-                let response = ai.wire.send_as<CloudflareResponse>(request, self.id());
+                let response = ai.wire.send_as<CloudflareResponse>(request, "cloudflare");
                 self.to_turn(response)
             } catch_all (error) {
                 _ => throw ai.errors.normalize(error),
@@ -310,7 +314,7 @@ class CloudflareVisionClient {
     }
 
     function invalid_request(self, detail: string) -> ai.errors.InvalidRequest {
-        ai.errors.InvalidRequest { provider: self.id(), status_code: null, detail, raw_body: null }
+        ai.errors.InvalidRequest { provider: "cloudflare", status_code: null, detail, raw_body: null }
     }
 
     function build_request(self, input: ai.ModelTurnInput, preview: bool) -> baml.http.Request {
@@ -347,7 +351,7 @@ class CloudflareVisionClient {
                         };
                         let data = media.base64
                             ?? throw ai.errors.PreviewUnsupported {
-                            provider: self.id(),
+                            provider: "cloudflare",
                             detail: "Use a base64 image to preview this request.",
                         };
                         image_data = `data:${media.mime_type};base64,${data}`;
@@ -382,12 +386,12 @@ class CloudflareVisionClient {
         }
         let result = response.result
             ?? throw ai.errors.ParseFailed {
-            provider: self.id(), raw_output: baml.json.to_string(response),
+            provider: "cloudflare", raw_output: baml.json.to_string(response),
         };
         ai.ModelTurn {
+            child_turns: [],
             content: [ai.content.Text { text: result.response }],
             stop_reason: ai.content.StopReason.Complete,
-            usage: null,
             calls: [],
         }
     }

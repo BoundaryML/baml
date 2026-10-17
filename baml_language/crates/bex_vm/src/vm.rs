@@ -10021,6 +10021,14 @@ impl BexVm {
                         let locals_offset = bf.locals_offset;
                         let frame_telemetry = bf.telemetry.take();
 
+                        // Charged before the frame completes, so an invoke that
+                        // is a span carries its own usage.
+                        if matches!(
+                            function.body_meta,
+                            Some(bex_vm_types::FunctionMeta::ModelInvoke)
+                        ) {
+                            self.charge_model_usage(result);
+                        }
                         if let Some(frame_telemetry) = frame_telemetry {
                             self.complete_bytecode_invocation_with_function(
                                 *frame_idx,

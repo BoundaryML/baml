@@ -78,16 +78,13 @@ class TextDelta {
 
 /// Turn metadata as it arrives on the wire. Providers send stop_reason and
 /// token counts on different events; each TurnMeta carries what its event had
-/// and TurnStream folds non-null fields together (last write wins). The token
-/// counts mean what they mean in `ai.events.Usage`.
+/// and TurnStream folds the non-null values together, count by count (last
+/// write wins).
 class TurnMeta {
     stop_reason: root.content.StopReason?,
-    input_tokens: int?,
-    output_tokens: int?,
-    cached_input_tokens: int?,
-    cache_write_input_tokens: int?,
-    uncached_input_tokens: int?,
-    reasoning_tokens: int?,
+    usage: root.events.Usage?,
+    // The model the response names, when this event names it.
+    resolved_model: string?,
 }
 
 /// The provider's explicit end-of-turn marker — the decoded form of `[DONE]`,
@@ -155,12 +152,7 @@ class TurnStream {
     // folded state.
     _text: string,
     _stop_reason: root.content.StopReason?,
-    _input_tokens: int?,
-    _output_tokens: int?,
-    _cached_input_tokens: int?,
-    _cache_write_input_tokens: int?,
-    _uncached_input_tokens: int?,
-    _reasoning_tokens: int?,
+    _usage: root.events.Usage?,
     _done: bool,
     // strict termination (see the contract at the top of this file): the
     // provider id when this stream requires an explicit TurnDone, null when a
@@ -168,13 +160,18 @@ class TurnStream {
     _require_terminal: string?,
     // whether a TurnDone was actually decoded before the stream ended.
     _saw_terminal: bool,
-    // Wire telemetry (LLMCall records), surfaced by final_turn().calls.
-    // _calls is the full oldest-first list; composite relays share it by
-    // reference to prepend failed legs. _wire_call is THIS stream's own
-    // exchange record (set by provider invoke_stream implementations), which
-    // ttft/duration stamping and SSE capture mutate in place.
-    _calls: root.events.LLMCall[],
-    _wire_call: root.events.LLMCall?,
+    // Surfaced by final_turn(). _wire_call is this stream's own call record,
+    // which provider invoke_stream implementations set and ttft/duration
+    // stamping, SSE capture and the folded usage mutate in place. A stream
+    // with token counts and no call records no usage. _child_turns holds a
+    // composite relay's member attempts, shared by reference with the relay.
+    _wire_call: root.events.ModelCall?,
+    _requested_model: string?,
+    // The model the response named, latest event winning; the call's
+    // resolved model when it names one.
+    _resolved_model: string?,
+    _child_turns: root.ModelTurn[],
+    _settled: root.ModelTurn?,
     _call_started: baml.time.Instant?,
     // TTFT base: stamped when the SSE response opened (legacy TTFT semantics);
     // falls back to _call_started when a provider did not set it.
@@ -246,17 +243,15 @@ class TurnStream {
             _pcursor: 0,
             _text: "",
             _stop_reason: null,
-            _input_tokens: null,
-            _output_tokens: null,
-            _cached_input_tokens: null,
-            _cache_write_input_tokens: null,
-            _uncached_input_tokens: null,
-            _reasoning_tokens: null,
+            _usage: null,
             _done: false,
             _require_terminal: require_terminal,
             _saw_terminal: false,
-            _calls: [],
             _wire_call: null,
+            _requested_model: null,
+            _resolved_model: null,
+            _child_turns: [],
+            _settled: null,
             _call_started: null,
             _ttft_from: null,
             _first_token_timeout: first_token_timeout,
@@ -282,17 +277,15 @@ class TurnStream {
             _pcursor: 0,
             _text: "",
             _stop_reason: null,
-            _input_tokens: null,
-            _output_tokens: null,
-            _cached_input_tokens: null,
-            _cache_write_input_tokens: null,
-            _uncached_input_tokens: null,
-            _reasoning_tokens: null,
+            _usage: null,
             _done: false,
             _require_terminal: null,
             _saw_terminal: false,
-            _calls: [],
             _wire_call: null,
+            _requested_model: null,
+            _resolved_model: null,
+            _child_turns: [],
+            _settled: null,
             _call_started: null,
             _ttft_from: null,
             _first_token_timeout: null,
@@ -308,7 +301,15 @@ class TurnStream {
     /// retaining TurnStream's ordinary accumulation and termination behavior.
     /// The source itself owns any retry/fallback policy; once it returns a
     /// TextDelta, that delta is immediately visible to the caller.
-    function from_event_source(next_event: EventSource) -> TurnStream {
+    ///
+    /// `call` records the model call behind the source, when there is one: it
+    /// is the turn's call, and the token counts the source's `TurnMeta`
+    /// events carry are its usage. A relay that makes no call itself leaves
+    /// it null.
+    function from_event_source(
+        next_event: EventSource,
+        call: root.events.ModelCall? = null,
+    ) -> TurnStream {
         TurnStream {
             _event_source: next_event,
             _sse: null,
@@ -319,17 +320,15 @@ class TurnStream {
             _pcursor: 0,
             _text: "",
             _stop_reason: null,
-            _input_tokens: null,
-            _output_tokens: null,
-            _cached_input_tokens: null,
-            _cache_write_input_tokens: null,
-            _uncached_input_tokens: null,
-            _reasoning_tokens: null,
+            _usage: null,
             _done: false,
             _require_terminal: null,
             _saw_terminal: false,
-            _calls: [],
-            _wire_call: null,
+            _wire_call: call,
+            _requested_model: null,
+            _resolved_model: null,
+            _child_turns: [],
+            _settled: null,
             _call_started: null,
             _ttft_from: null,
             _first_token_timeout: null,
@@ -342,10 +341,10 @@ class TurnStream {
 
     /// (internal) Stamp time-to-first-token on this stream's wire record, once.
     function _stamp_first_delta(self) -> void {
-        if let call: root.events.LLMCall = self._wire_call {
-            if (call.timing.ttft_ms == null) {
+        if let call: root.events.ModelCall = self._wire_call {
+            if (call.timing.ttft == null) {
                 if let base: baml.time.Instant = self._ttft_from ?? self._call_started {
-                    call.timing.ttft_ms = base.elapsed().to_milliseconds();
+                    call.timing.ttft = base.elapsed();
                 }
             }
         }
@@ -413,7 +412,7 @@ class TurnStream {
         if (!self._capture_sse) {
             return;
         }
-        if let call: root.events.LLMCall = self._wire_call {
+        if let call: root.events.ModelCall = self._wire_call {
             let none: SseEvent[] = [];
             let decoded = decode_sse_batch(batch) catch_all (e) {
                 _ => none,
@@ -433,6 +432,8 @@ class TurnStream {
         if let sse: baml.http.SseStream = self._sse {
             sse.close();
         }
+        // A stream nobody finalizes still bills; settle it as it ends.
+        let _ = self._settled_turn();
     }
 
     /// (internal) The strict-termination check: a no-op unless this stream required an
@@ -497,23 +498,11 @@ class TurnStream {
                         if let s: root.content.StopReason = m.stop_reason {
                             self._stop_reason = s;
                         }
-                        if let i: int = m.input_tokens {
-                            self._input_tokens = i;
+                        if let u: root.events.Usage = m.usage {
+                            self._usage = _overlay_usage(self._usage, u);
                         }
-                        if let o: int = m.output_tokens {
-                            self._output_tokens = o;
-                        }
-                        if let c: int = m.cached_input_tokens {
-                            self._cached_input_tokens = c;
-                        }
-                        if let w: int = m.cache_write_input_tokens {
-                            self._cache_write_input_tokens = w;
-                        }
-                        if let u: int = m.uncached_input_tokens {
-                            self._uncached_input_tokens = u;
-                        }
-                        if let r: int = m.reasoning_tokens {
-                            self._reasoning_tokens = r;
+                        if let model: string = m.resolved_model {
+                            self._resolved_model = model;
                         }
                         null
                     },
@@ -613,31 +602,68 @@ class TurnStream {
         // covers a stream finished by some other route (a Done delivered from
         // an already-closed stream) before the terminal event was seen.
         self._check_terminal();
-        let usage: root.events.Usage? = if (self._input_tokens != null || self._output_tokens != null) {
-            root.events.Usage {
-                input_tokens: self._input_tokens ?? 0,
-                output_tokens: self._output_tokens ?? 0,
-                cached_input_tokens: self._cached_input_tokens,
-                reasoning_tokens: self._reasoning_tokens,
-                cache_write_input_tokens: self._cache_write_input_tokens,
-                uncached_input_tokens: self._uncached_input_tokens,
-            }
-        } else {
-            null
-        };
-        if let call: root.events.LLMCall = self._wire_call {
-            if (call.timing.duration_ms == null) {
-                if let started: baml.time.Instant = self._call_started {
-                    call.timing.duration_ms = started.elapsed().to_milliseconds();
-                }
-            }
+        self._settled_turn()
+    }
+
+    /// (internal) The turn, settled once: when the stream finishes, or here when
+    /// it ended by another route.
+    function _settled_turn(self) -> root.ModelTurn {
+        match (self._settled) {
+            let turn: root.ModelTurn => turn,
+            null => {
+                let turn = self._settle();
+                self._settled = turn;
+                turn
+            },
         }
-        root.ModelTurn {
+    }
+
+    /// (internal) Fold the stream into its turn. Runs exactly once per stream
+    /// (`_settled_turn`): telemetry charges the usage of the turn's own calls
+    /// when it returns, as it does for `ai.Client.invoke`.
+    function _settle(self) -> root.ModelTurn {
+        let turn = root.ModelTurn {
             content: [root.content.Text { text: self._text }],
             stop_reason: self._stop_reason ?? root.content.StopReason.Complete,
-            usage: usage,
-            calls: self._calls,
+            calls: [],
+            child_turns: self._child_turns,
+        };
+        if let call: root.events.ModelCall = self._wire_call {
+            if (call.timing.duration == null) {
+                if let started: baml.time.Instant = self._call_started {
+                    call.timing.duration = started.elapsed();
+                }
+            }
+            // As a whole response finishes: the model it named, else the one
+            // asked for.
+            return root.internal.with_own_call(
+                turn,
+                call,
+                self._usage,
+                self._requested_model,
+                self._resolved_model,
+            );
         }
+        // A relay answers as the member attempt that succeeded, the last one.
+        if (self._child_turns.length() > 0) {
+            let answered = self._child_turns[self._child_turns.length() - 1];
+            turn.resolved_model = answered.resolved_model;
+            turn.requested_model = answered.requested_model;
+        }
+        turn
+    }
+}
+
+/// (internal) `base` with every count `next` reports replaced: a provider
+/// reports its counts across several events, the latest value of each winning.
+function _overlay_usage(base: root.events.Usage?, next: root.events.Usage) -> root.events.Usage {
+    root.events.Usage {
+        input_tokens: next.input_tokens ?? base?.input_tokens,
+        output_tokens: next.output_tokens ?? base?.output_tokens,
+        cached_input_tokens: next.cached_input_tokens ?? base?.cached_input_tokens,
+        reasoning_tokens: next.reasoning_tokens ?? base?.reasoning_tokens,
+        cache_write_input_tokens: next.cache_write_input_tokens ?? base?.cache_write_input_tokens,
+        uncached_input_tokens: next.uncached_input_tokens ?? base?.uncached_input_tokens,
     }
 }
 
@@ -881,7 +907,7 @@ function from_spec<T>(
                 let s: StreamingClient => s,
                 _ => {
                     throw root.errors.StreamingUnsupported {
-                        client_id: spec.default_client.id(),
+                        requested_model: spec.default_client.requested_model(),
                     }
                 },
             }
@@ -901,10 +927,6 @@ function from_spec<T>(
                 message: `streaming does not run the tool loop yet: ${spec.name()} has a non-empty toolbox`,
             }
         }
-        // StreamingClient requires Client, so the downcast always succeeds.
-        let provider = match (selected) {
-            let c: root.Client => c.id(),
-        };
         let emit = root.events.guard(on_event);
         let settled = false;
         if let cb: (root.events.Event) -> void throws never = emit {
@@ -918,6 +940,8 @@ function from_spec<T>(
                 output_type: spec.output_type(),
             },
         );
+        // A relay has no call of its own until a member answers.
+        let provider = turns._wire_call?.resolved_model?.provider ?? "unknown";
         // The host-facing stream is `ai.stream.Stream`. It is provider-agnostic:
         // all it needs is a way to pull the next text delta from TurnStream.
         Stream {
@@ -937,13 +961,11 @@ function from_spec<T>(
                                 cb(
                                     root.events.AssistantMessage {
                                         content: turn.content,
-                                        client_id: provider,
+                                        resolved_model: turn.resolved_model,
+                                        requested_model: turn.requested_model,
                                     },
                                 );
-                                if let u: root.events.Usage = turn.usage {
-                                    cb(u);
-                                }
-                                for (let call in turn.calls) {
+                                for (let call in turn.all_calls()) {
                                     cb(call);
                                 }
                             }

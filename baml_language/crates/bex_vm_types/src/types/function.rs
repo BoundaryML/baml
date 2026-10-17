@@ -91,10 +91,16 @@ impl BorshDeserialize for FunctionKind {
     }
 }
 
-/// LLM-specific metadata for a function.
+/// What kind of model-facing function this is, when it is one.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum FunctionMeta {
-    Llm { client: String },
+    Llm {
+        client: String,
+    },
+    /// An `ai.Client.invoke` implementation, or the step that settles a
+    /// stream's turn: it returns an `ai.ModelTurn` whose own calls telemetry
+    /// charges as model usage.
+    ModelInvoke,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
@@ -812,6 +818,7 @@ impl Function {
             namespace,
             argument_layout: self.telemetry_argument_layout(),
             source_map: self.telemetry_source_map(),
+            model_invoke: matches!(self.body_meta, Some(FunctionMeta::ModelInvoke)),
         })
     }
 

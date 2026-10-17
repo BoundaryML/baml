@@ -177,20 +177,20 @@ async def test_function_spec_uses_canonical_method_fqns_and_wire_argument_names(
     monkeypatch.setattr(BamlFunctionSpec, "_call_async", capture_async)
 
     assert spec.output_type() == "ai.FunctionSpec.output_type"
-    assert spec.client_id() == "ai.FunctionSpec.client_id"
+    assert spec.requested_model() == "ai.FunctionSpec.requested_model"
     assert spec.parse("{}") == "ai.FunctionSpec.parse"
     assert await spec.output_type_async() == "ai.FunctionSpec.output_type"
-    assert await spec.client_id_async() == "ai.FunctionSpec.client_id"
+    assert await spec.requested_model_async() == "ai.FunctionSpec.requested_model"
     assert await spec.parse_async("[]") == "ai.FunctionSpec.parse"
 
     assert sync_calls == [
         ("ai.FunctionSpec.output_type", None),
-        ("ai.FunctionSpec.client_id", None),
+        ("ai.FunctionSpec.requested_model", None),
         ("ai.FunctionSpec.parse", {"json": "{}"}),
     ]
     assert async_calls == [
         ("ai.FunctionSpec.output_type", None),
-        ("ai.FunctionSpec.client_id", None),
+        ("ai.FunctionSpec.requested_model", None),
         ("ai.FunctionSpec.parse", {"json": "[]"}),
     ]
 

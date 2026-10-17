@@ -33,6 +33,7 @@ use crate::{Error, store};
 mod bulk;
 mod context;
 mod profile;
+mod totals;
 
 #[derive(Clone, Debug)]
 pub struct RefreshOptions {
@@ -847,6 +848,7 @@ fn apply_fresh<'p>(
             [rec],
         )?;
     }
+    let charged = merged.charged();
     merged.write(&tx, rec, applied.last().is_some_and(|file| file.end))?;
     let mut terminal = None;
     let mut source_snapshot = None;
@@ -895,6 +897,7 @@ fn apply_fresh<'p>(
         }
         metrics.files_applied += 1;
     }
+    totals::apply(&tx, rec, &charged)?;
     if rebuild || !applied.is_empty() {
         mark_profile_pending(&tx, rec)?;
     }
@@ -1028,6 +1031,8 @@ struct Applier<'t> {
     /// Functions whose metadata replaced an "unavailable" observation: the
     /// profiler nodes named after them change.
     renamed_functions: HashSet<u64>,
+    /// Calls and threads whose usage this transaction stored, for the totals.
+    charged: Vec<([u8; 8], Vec<crate::usage::ModelUsage>)>,
 }
 
 impl<'t> Applier<'t> {
@@ -1041,6 +1046,7 @@ impl<'t> Applier<'t> {
             entries: Vec::new(),
             sysops: HashMap::new(),
             renamed_functions: HashSet::new(),
+            charged: Vec::new(),
         }
     }
 
@@ -1128,27 +1134,6 @@ impl<'t> Applier<'t> {
                 entry.1 = entry.1.saturating_add(u128::from(time.total_ticks));
             }
         }
-        if let Some(usage) = &file.usage {
-            let mut insert = self.tx.prepare_cached(
-                "INSERT INTO model_usage (rec, sequence, position, node_id, model, input_tokens,
-                   output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            )?;
-            for (position, entry) in usage.entries.iter().enumerate() {
-                insert.execute(params![
-                    self.rec,
-                    sequence_i64(sequence)?,
-                    saturating(position as u64),
-                    id(entry.node_id),
-                    entry.model,
-                    saturating(entry.input_tokens),
-                    saturating(entry.output_tokens),
-                    entry.cache_read_tokens.map(saturating),
-                    entry.cache_write_tokens.map(saturating),
-                    entry.reasoning_tokens.map(saturating)
-                ])?;
-            }
-        }
         if let Some(spans) = &file.spans {
             // Each network event's position among the file's.
             let mut network_events = 0_u32;
@@ -1198,10 +1183,12 @@ impl<'t> Applier<'t> {
                                      VALUES (?1, ?2, 0)",
                                 )?
                                 .execute(params![self.rec, id(section.thread_id)])?;
+                            let usage = crate::usage::from_proto(&done.usage);
                             let changed = self
                                 .tx
                                 .prepare_cached(
-                                    "UPDATE thread SET completed_ticks = ?3, outcome = ?4, panicked = ?5
+                                    "UPDATE thread SET completed_ticks = ?3, outcome = ?4, panicked = ?5,
+                                       usage = ?6
                                      WHERE rec = ?1 AND thread_id = ?2 AND outcome IS NULL",
                                 )?
                                 .execute(params![
@@ -1209,8 +1196,12 @@ impl<'t> Applier<'t> {
                                     id(section.thread_id),
                                     completed,
                                     done.outcome,
-                                    done.panicked
+                                    done.panicked,
+                                    crate::usage::to_json(&usage)
                                 ])?;
+                            if changed > 0 && !usage.is_empty() {
+                                self.charged.push((id(section.thread_id), usage));
+                            }
                             if changed == 0 {
                                 let existing: Option<(Option<i64>, Option<i64>)> = self
                                     .tx
@@ -1342,12 +1333,21 @@ impl<'t> Applier<'t> {
             evidence::completion(done, late).expect("validated completion flags");
         let (path, reentry) = evidence::split_node(done.node);
         self.references.paths.insert(path);
+        let usage = crate::usage::from_proto(&done.usage);
+        // The first usage stored wins: a second completion is a conflict.
+        let charges = !usage.is_empty()
+            && self
+                .tx
+                .prepare_cached("SELECT usage IS NULL FROM call WHERE rec = ?1 AND call_id = ?2")?
+                .query_row(params![self.rec, id(done.id)], |r| r.get::<_, bool>(0))
+                .optional()?
+                .unwrap_or(true);
         self.tx
             .prepare_cached(
                 "INSERT INTO call (rec, call_id, thread_id, parent_id, call_path_id, reentry,
                    completed_sequence, late, entered_ticks, exited_ticks, self_await_ticks,
-                   outcome, needs_announcement, value_cas, panicked, manual)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+                   outcome, needs_announcement, value_cas, panicked, manual, usage)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
                  ON CONFLICT (rec, call_id) DO UPDATE SET
                    conflict = CASE WHEN conflict > 0 THEN conflict
                      WHEN completed_sequence IS NOT NULL
@@ -1367,7 +1367,8 @@ impl<'t> Applier<'t> {
                    outcome = excluded.outcome,
                    needs_announcement = excluded.needs_announcement,
                    value_cas = excluded.value_cas,
-                   panicked = excluded.panicked",
+                   panicked = excluded.panicked,
+                   usage = COALESCE(usage, excluded.usage)",
             )?
             .execute(params![
                 self.rec,
@@ -1385,8 +1386,12 @@ impl<'t> Applier<'t> {
                 needs_announcement,
                 done.value_cas_id.as_ref().map(cas_id),
                 done.panicked,
-                done.completion_flags & 32 != 0
+                done.completion_flags & 32 != 0,
+                crate::usage::to_json(&usage)
             ])?;
+        if charges {
+            self.charged.push((id(done.id), usage));
+        }
         Ok(())
     }
 
@@ -1582,9 +1587,9 @@ impl<'t> Applier<'t> {
                            definition_key, kind, kind_detail, origin, source_file, source_file_id,
                            source_start, source_end, package, namespace, namespace_json,
                            owner_type_key, parent_function_key, lambda_path, argument_names,
-                           parameter_count, metadata, source_map, source_map_state)
+                           parameter_count, metadata, source_map, source_map_state, model_invoke)
                          VALUES (?1, ?2, 2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14,
-                           ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)
+                           ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)
                          ON CONFLICT (rec, function_id) DO UPDATE SET
                            state = 2, fqn = excluded.fqn, display_name = excluded.display_name,
                            definition_key = excluded.definition_key, kind = excluded.kind,
@@ -1601,7 +1606,8 @@ impl<'t> Applier<'t> {
                            parameter_count = excluded.parameter_count,
                            metadata = excluded.metadata,
                            source_map = excluded.source_map,
-                           source_map_state = excluded.source_map_state",
+                           source_map_state = excluded.source_map_state,
+                           model_invoke = excluded.model_invoke",
                     )?
                     .execute(params![
                         self.rec,
@@ -1626,7 +1632,8 @@ impl<'t> Applier<'t> {
                         layout.map(|l| i64::try_from(l.slots.len()).unwrap_or(i64::MAX)),
                         encoded,
                         map_blob,
-                        map_state
+                        map_state,
+                        metadata.model_invoke
                     ])?;
                 if let Some(layout) = layout {
                     let mut insert = self.tx.prepare_cached(
@@ -2032,7 +2039,7 @@ impl<'t> Applier<'t> {
             .execute([self.rec])?;
         forget_nodes(self.tx, self.rec, &self.renamed_functions)?;
         resolve_nodes(self.tx, self.rec)?;
-        Ok(())
+        totals::apply(self.tx, self.rec, &self.charged)
     }
 }
 

@@ -103,8 +103,11 @@ function source_4() -> string {
             requests: string[],
 
             implements ai.Client {
-                function id(self) -> string {
+                function requested_model(self) -> string {
                     "probe"
+                }
+                function provider(self) -> string {
+                    "test"
                 }
 
                 function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -116,10 +119,10 @@ function source_4() -> string {
                 function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
                     let _ = self.render(input);
                     ai.ModelTurn {
+                        child_turns: [],
                         calls: [],
                         content: [ai.content.Text { text: self.reply }],
                         stop_reason: ai.content.StopReason.Complete,
-                        usage: null,
                     }
                 }
             }
@@ -163,8 +166,11 @@ function source_5() -> string {
             requests: string[],
 
             implements ai.Client {
-                function id(self) -> string {
+                function requested_model(self) -> string {
                     "probe"
+                }
+                function provider(self) -> string {
+                    "test"
                 }
 
                 function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -176,10 +182,10 @@ function source_5() -> string {
                 function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
                     let _ = self.render(input);
                     ai.ModelTurn {
+                        child_turns: [],
                         calls: [],
                         content: [ai.content.Text { text: self.reply }],
                         stop_reason: ai.content.StopReason.Complete,
-                        usage: null,
                     }
                 }
             }

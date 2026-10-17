@@ -81,6 +81,7 @@ impl<I, V> SpanRecord<I, V> {
             | Self::ThreadSelected { .. }
             | Self::ContextSelected { .. }
             | Self::ContextReferenced { .. }
+            | Self::SpanUsage(_)
             | Self::ContextCleared
             | Self::ThreadSpanRunning { .. }
             | Self::NetworkEvent(_)
@@ -216,6 +217,10 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         clock: Arc<ClockEpoch>,
         name: Option<ThreadName>,
     },
+    /// Rare: the model usage charged to a span or thread node, written just
+    /// before that node's completion, which carries it. Boxed so the model
+    /// names never widen the slot.
+    SpanUsage(Box<SpanUsage>),
     /// An HTTP request started. Boxed, like the event and completion below,
     /// so its method and URL never widen the slot.
     NetworkSpanAnnouncement(Box<NetworkAnnouncement<InputCapture>>),
@@ -558,6 +563,28 @@ pub struct ManualSpanCompletion<V> {
     pub outcome: Option<InvocationOutcome>,
     pub requires_announcement: bool,
     pub captured_value: Option<V>,
+}
+
+/// The model usage charged to one span or thread node, one entry per model.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpanUsage {
+    pub node: TelemetryId,
+    pub entries: Vec<ModelUsage>,
+}
+
+/// The tokens one model's calls reported, summed. A count is `None` when no
+/// call reported it, which is not the same as zero.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelUsage {
+    pub provider: Box<str>,
+    pub model: Option<Box<str>>,
+    pub calls: u64,
+    /// Input tokens billed at the full rate: cache reads and writes excluded.
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub cache_read_tokens: Option<u64>,
+    pub cache_write_tokens: Option<u64>,
+    pub reasoning_tokens: Option<u64>,
 }
 
 /// One HTTP request's span: its parent is the innermost span (or thread)
@@ -1416,6 +1443,7 @@ macro_rules! capture_slots {
             | Self::ThreadSpanAnnouncement { .. }
             | Self::ThreadSpanCompletion { .. }
             | Self::ThreadSpanRunning { .. }
+            | Self::SpanUsage(_)
             | Self::CallPathDefined { .. }
             | Self::ErrorRaiseOrigin { .. }
             | Self::ErrorRaiseStack(_)

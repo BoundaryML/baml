@@ -200,7 +200,9 @@ use sha2::{Digest, Sha256};
 /// rendered name (`name`, `declared_name`, `is_interface_body` are gone), and
 /// a `ProgramPackage` carries `objects`, the pool range the linker placed it
 /// as, which owns every function in it.
-pub const FORMAT_VERSION: u32 = 20;
+///
+/// Version 21: `FunctionMeta` gained the appended `ModelInvoke` variant.
+pub const FORMAT_VERSION: u32 = 21;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
