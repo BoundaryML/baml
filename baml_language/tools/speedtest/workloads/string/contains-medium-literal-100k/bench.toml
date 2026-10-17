@@ -1,0 +1,5 @@
+name = "contains medium literal 100k"
+description = "100,000 substring searches in a medium string"
+expect = "100000"
+jobs = 100
+warmup = 6

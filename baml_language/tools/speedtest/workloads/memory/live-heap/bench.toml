@@ -1,0 +1,6 @@
+name = "live heap"
+description = "65,536 replace-and-walk steps beside a live graph of 500,000 items (1M objects)"
+origin = "native-bench 13_live_heap"
+expect = "500000,730600339"
+jobs = 2
+warmup = 1

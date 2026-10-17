@@ -1,0 +1,5 @@
+name = "default method 100k"
+description = "100,000 calls of an interface default method that calls a required one"
+expect = "7500000000"
+jobs = 8
+warmup = 1

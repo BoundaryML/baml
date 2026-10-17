@@ -1,0 +1,6 @@
+name = "generate sort 8k"
+description = "generate 8,192 numbers, sort them with the library sort, serialize to JSON"
+origin = "native-bench 11_generate_sort"
+expect = "399579787"
+jobs = 20
+warmup = 1

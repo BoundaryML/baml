@@ -1,0 +1,6 @@
+name = "binary trees 14"
+description = "Benchmarks Game binary-trees: many short-lived trees beside a long-lived one, depth 14"
+origin = "Benchmarks Game binary-trees"
+expect = "3222190"
+jobs = 1
+warmup = 1

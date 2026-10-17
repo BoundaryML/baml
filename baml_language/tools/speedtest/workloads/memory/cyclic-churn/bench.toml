@@ -1,0 +1,6 @@
+name = "cyclic churn"
+description = "build, walk and drop 64 request-scoped graphs of 256 nodes where every node is on a cycle"
+origin = "native-bench 12_cyclic_churn"
+expect = "16384,756179704"
+jobs = 10
+warmup = 1

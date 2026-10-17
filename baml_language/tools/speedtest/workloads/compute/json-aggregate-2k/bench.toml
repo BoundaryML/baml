@@ -1,0 +1,6 @@
+name = "json aggregate 2k"
+description = "decode 2,048 JSON rows into typed classes, validate, group, sort, serialize; 20 times"
+origin = "native-bench 03_json_aggregate"
+expect = "145562452"
+jobs = 3
+warmup = 1

@@ -1,0 +1,6 @@
+name = "startup"
+description = "a program whose main returns at once: process start, runtime load, one call"
+origin = "native-bench 00_startup"
+expect = "1"
+jobs = 1
+warmup = 0

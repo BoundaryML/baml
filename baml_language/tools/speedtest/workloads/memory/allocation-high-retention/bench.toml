@@ -1,0 +1,6 @@
+name = "allocation high retention"
+description = "allocate 128 batches of 2,048 objects, keep the last 64 batches alive"
+origin = "native-bench 04_allocation_retention"
+expect = "553779200,281083904"
+jobs = 2
+warmup = 1

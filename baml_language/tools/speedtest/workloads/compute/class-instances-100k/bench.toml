@@ -1,0 +1,5 @@
+name = "class instances 100k"
+description = "construct 100,000 small class instances and read their fields"
+expect = "14999850000"
+jobs = 50
+warmup = 3

@@ -1,0 +1,5 @@
+name = "pure call 1m"
+description = "1,000,000 calls of a one-line function"
+expect = "499999500000"
+jobs = 10
+warmup = 1
