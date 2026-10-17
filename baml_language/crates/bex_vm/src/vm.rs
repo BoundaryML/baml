@@ -7500,7 +7500,8 @@ impl BexVm {
                     Frame::Bytecode(frame) if self.compiled_at(idx).is_some() => Some(StackFrame {
                         function_name: func.name(),
                         file_path: func.source_file.clone(),
-                        error_line: frame.faulting_pc,
+                        error_line: frame.faulting_pc
+                            & !(crate::compiled_rt::SHIELDED_LINE as usize),
                     }),
                     Frame::Bytecode(frame) => {
                         let pc = if Some(idx) == top_bc {
@@ -9045,6 +9046,18 @@ impl BexVm {
             frame.faulting_pc = line;
         }
         outcome
+    }
+
+    /// Whether the compiled frame at `idx` stands in a shielded (`defer`)
+    /// region: the line its body last recorded carries
+    /// [`crate::compiled_rt::SHIELDED_LINE`]. `false` for any other frame.
+    pub fn frame_compiled_shielded(&self, idx: usize) -> bool {
+        self.compiled_at(idx).is_some()
+            && matches!(
+                self.frames.get(idx),
+                Some(Frame::Bytecode(frame))
+                    if frame.faulting_pc & crate::compiled_rt::SHIELDED_LINE as usize != 0
+            )
     }
 
     /// Where the compiled body of the frame at `idx` stands; `None` for a

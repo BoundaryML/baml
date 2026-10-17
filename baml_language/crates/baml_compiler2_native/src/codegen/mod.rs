@@ -84,6 +84,12 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) declared_at: Option<baml_base::Span>,
     /// The line the code emitted so far in the current leaf has set.
     pub(crate) current_line: Option<usize>,
+    /// Whether any block of the body is shielded (`defer`): only then does a
+    /// block's entry set or clear the shield bit of `line`.
+    pub(crate) any_shielded: bool,
+    /// Whether the block being emitted is shielded; its lines carry
+    /// `SHIELDED_LINE`.
+    pub(crate) in_shielded: bool,
     pub(crate) out: String,
     /// `let` bindings to emit before the statement being generated: every
     /// operand that is not an atom is bound first, so no call's argument list
@@ -1139,7 +1145,14 @@ impl<'db> Generator<'_, 'db> {
         );
         if self.current_line != Some(line) {
             self.current_line = Some(line);
-            self.line(depth, &format!("line = {line};"));
+            if self.in_shielded {
+                self.line(
+                    depth,
+                    &format!("line = {line} | bex_vm::compiled_rt::SHIELDED_LINE;"),
+                );
+            } else {
+                self.line(depth, &format!("line = {line};"));
+            }
         }
     }
 

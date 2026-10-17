@@ -265,6 +265,8 @@ pub fn compile_program<'db>(
                 lines: &unit.lines,
                 declared_at: unit.mir.span,
                 current_line: None,
+                any_shielded: body_of(unit.mir).blocks.iter().any(|block| block.shielded),
+                in_shielded: false,
                 out: String::new(),
                 pending: Vec::new(),
                 temps: 0,

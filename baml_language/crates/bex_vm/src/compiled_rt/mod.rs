@@ -40,6 +40,11 @@ pub(crate) use call::FORCE_CALL_FUNNEL;
 use bex_vm_types::{HeapPtr, Value, types::Function};
 pub use r#virtual::VirtualSite;
 
+/// The bit a compiled body sets in the line it records while it runs a
+/// shielded (`defer`) region: the engine reads it as bytecode's shield table
+/// for a compiled frame, and a stack trace masks it off.
+pub const SHIELDED_LINE: u32 = 1 << 31;
+
 use crate::{
     errors::{ThrowKind, VmError, VmInternalError, VmThrown},
     vm::{BexVm, value_as_float},

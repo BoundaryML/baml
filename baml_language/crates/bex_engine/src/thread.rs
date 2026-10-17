@@ -229,13 +229,13 @@ impl BexThread {
                     return false;
                 };
                 let pc = match self.vm.frame_position(index) {
-                    // A compiled body has no bytecode position and no
-                    // shielded (`defer`) regions.
-                    None
-                    | Some(
+                    None => return false,
+                    // A compiled body has no bytecode position; the line it
+                    // recorded says whether it stands in a `defer` region.
+                    Some(
                         bex_vm::FramePosition::CompiledRunning
                         | bex_vm::FramePosition::CompiledStub(_),
-                    ) => return false,
+                    ) => return self.vm.frame_compiled_shielded(index),
                     Some(bex_vm::FramePosition::Bytecode(_)) if Some(index) == innermost => {
                         self.vm.cur_pc
                     }

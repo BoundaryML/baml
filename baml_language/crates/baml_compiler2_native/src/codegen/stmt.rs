@@ -118,6 +118,20 @@ impl Generator<'_, '_> {
         // A leaf can be entered from several places; nothing about `line` is
         // known on entry.
         self.current_line = None;
+        // A `defer` body runs shielded: every line it records, at a
+        // suspension, an error or a call, carries the shield bit the engine
+        // reads (`vm_thread_is_shielded`), and a block outside one clears it.
+        if self.any_shielded {
+            self.in_shielded = block.shielded;
+            self.line(
+                depth,
+                if block.shielded {
+                    "line |= bex_vm::compiled_rt::SHIELDED_LINE;"
+                } else {
+                    "line &= !bex_vm::compiled_rt::SHIELDED_LINE;"
+                },
+            );
+        }
         // A resumable body lets the scheduler in from its loops. It counts
         // iterations in a register and takes the VM's control-flow check
         // every `YIELD_EVERY`th: a compiled iteration is a fraction of an
