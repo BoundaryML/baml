@@ -1,15 +1,27 @@
 //! Calls and the frame: builtins, compiled callees, the slots a resumable body
 //! keeps, and what a body reports to the VM.
 
-use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::ConstValue};
+use bex_vm_types::{
+    HeapPtr, Object, RealizedTy, StackIndex, Value,
+    types::{ConstValue, Function},
+};
 
 use super::{CompiledBody, stack_address};
 use crate::{
     errors::{VmError, VmInternalError, VmPanic},
     indexable::EvalStackTrait,
     package_baml::{NativeCallResult, NativeFunction},
-    vm::{BexVm, VmExecState},
+    telemetry::{CallTypeArgs, InvocationOutcome},
+    vm::{BexVm, BytecodeFrame, COMPILED_CALLER_PC, Frame, VmExecState},
 };
+
+#[cfg(test)]
+thread_local! {
+    /// Send every observed compiled-to-compiled call through the VM's call
+    /// path instead of [`BexVm::call_compiled_observed`]'s inline entry: the
+    /// records the two produce must not differ.
+    pub(crate) static FORCE_CALL_FUNNEL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
 
 impl BexVm {
     // ── Calls ─────────────────────────────────────────────────────────────────
@@ -237,12 +249,12 @@ impl BexVm {
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         if self.telemetry.is_some() {
-            return self.call_compiled_observed(callee, &[], args);
+            return self.call_compiled_observed(callee, body, args);
         }
         let context = self.current_context().clone();
         let locals_offset = StackIndex::from_raw(self.stack.len());
         self.frames.push(crate::vm::Frame::Bytecode(
-            crate::vm::BytecodeFrame::compiled(callee, locals_offset, Vec::new(), context),
+            crate::vm::BytecodeFrame::compiled(callee, locals_offset, Vec::new(), context, None),
         ));
         let result = body(self, args);
         if result.is_ok() {
@@ -285,14 +297,14 @@ impl BexVm {
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         if self.telemetry.is_some() {
-            return self.call_compiled_observed(callee, type_args, args);
+            return self.call_compiled_funnelled(callee, type_args, args);
         }
         let context = self.current_context().clone();
         let locals_offset = StackIndex::from_raw(self.stack.len());
         let mut frame_type_args = self.pooled_type_args();
         frame_type_args.extend_from_slice(type_args);
         let mut frame =
-            crate::vm::BytecodeFrame::compiled(callee, locals_offset, frame_type_args, context);
+            crate::vm::BytecodeFrame::compiled(callee, locals_offset, frame_type_args, context, None);
         // A type naming a runtime declaration rides beside the frame's
         // arguments as an exact value, as a bytecode call carries it.
         let type_values = crate::vm::exact_type_values(type_args);
@@ -369,10 +381,123 @@ impl BexVm {
         }
     }
 
-    #[cold]
+    /// [`Self::call_compiled`] with telemetry on.
+    ///
+    /// A plain compiled callee (a `Function`, not `$trace`-hooked, called
+    /// without a `$trace` attachment or type arguments) is entered here with
+    /// what the VM's call path would establish for it, but known statically:
+    /// the call site is [`COMPILED_CALLER_PC`], the visible caller is the
+    /// running compiled frame's function, the callee's context is inherited.
+    /// The frame is pushed with the invocation `enter_bytecode_with_trace`
+    /// opened, the body runs, and the frame completes through the same
+    /// epilogue as `finish_bytecode_frame`: the records are those the call
+    /// path would write, without its argument copy, callee dispatch and
+    /// call-site bookkeeping. Every other callee goes through the call path
+    /// ([`Self::call_compiled_funnelled`]).
     #[inline(never)]
     #[allow(unsafe_code)]
     fn call_compiled_observed(
+        &mut self,
+        callee: HeapPtr,
+        body: CompiledBody,
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
+        // SAFETY: a compiled callee is a function object in the compile-time
+        // heap, which is never collected; see `load_function`.
+        let function: &'static Function = match unsafe { callee.get() } {
+            Object::Function(function) => function,
+            _ => return self.call_compiled_funnelled(callee, &[], args),
+        };
+        let hooked = function
+            .bytecode
+            .compact
+            .as_ref()
+            .is_some_and(|code| code.trace_hook_finish_pc.is_some());
+        #[cfg(test)]
+        let forced = FORCE_CALL_FUNNEL.with(std::cell::Cell::get);
+        #[cfg(not(test))]
+        let forced = false;
+        if hooked
+            || forced
+            || self.pending_call_trace.is_some()
+            || self.pending_call_passes_type_args
+        {
+            return self.call_compiled_funnelled(callee, &[], args);
+        }
+        debug_assert_eq!(args.len(), function.arity);
+
+        let top = self.frames.len() - 1;
+        let caller_frame_idx = self.bytecode_caller_index(top);
+        let visible_caller = self
+            .visible_bytecode_caller_index(top)
+            .and_then(|index| self.frame_function_identity(index));
+        let caller_is_observed = matches!(
+            self.frames.get(caller_frame_idx),
+            Some(Frame::Bytecode(BytecodeFrame {
+                telemetry: Some(_),
+                ..
+            }))
+        );
+        let context = self.current_context().clone();
+        let telemetry = self
+            .telemetry
+            .as_mut()
+            .expect("observed compiled call has telemetry");
+        telemetry.set_context(context.clone());
+        // SAFETY: the arguments and the callee stay live under the heap
+        // permit: the caller holds them in its locals.
+        let frame_telemetry = unsafe {
+            telemetry.enter_bytecode_with_trace(
+                function,
+                callee,
+                visible_caller,
+                COMPILED_CALLER_PC,
+                caller_is_observed,
+                args,
+                None,
+                CallTypeArgs::default(),
+                |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
+            )
+        };
+        let locals_offset = StackIndex::from_raw(self.stack.len());
+        self.frames.push(Frame::Bytecode(BytecodeFrame::compiled(
+            callee,
+            locals_offset,
+            Vec::new(),
+            context,
+            frame_telemetry,
+        )));
+        let frame_idx = top + 1;
+        let result = body(self, args);
+        if let Ok(value) = result {
+            let Frame::Bytecode(frame) = &mut self.frames[frame_idx] else {
+                unreachable!("a compiled callee has a bytecode frame");
+            };
+            // Completion reads the frame and its function, as
+            // `finish_bytecode_frame` does, before the frame is popped.
+            if let Some(frame_telemetry) = frame.telemetry.take() {
+                self.complete_bytecode_invocation_with_function(
+                    frame_idx,
+                    function,
+                    frame_telemetry,
+                    InvocationOutcome::Ok,
+                    Some(value),
+                );
+            }
+            self.frames.pop();
+            self.stack.truncate(locals_offset.raw());
+        }
+        result
+    }
+
+    /// [`Self::call_compiled`] through the VM's call path, for a callee the
+    /// inline observed entry does not cover (a generic, `$trace`-hooked or
+    /// `$trace`-attached callee, a non-`Function` callee), with the call's
+    /// type arguments recorded as a bytecode call's.
+    #[cold]
+    #[inline(never)]
+    #[allow(unsafe_code)]
+    fn call_compiled_funnelled(
         &mut self,
         callee: HeapPtr,
         type_args: &[RealizedTy],

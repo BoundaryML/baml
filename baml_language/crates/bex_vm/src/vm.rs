@@ -173,7 +173,7 @@ pub const MAX_FRAMES: usize = 256;
 /// The `caller_pc` a call path records for a call made by compiled code,
 /// which has no bytecode offset. Telemetry source maps are keyed by compact
 /// byte offset, so such call sites share this one coordinate per caller.
-const COMPILED_CALLER_PC: u32 = u32::MAX;
+pub(crate) const COMPILED_CALLER_PC: u32 = u32::MAX;
 
 #[derive(Clone, Copy)]
 struct CallOptions<'a> {
@@ -325,15 +325,17 @@ pub struct BytecodeFrame {
 }
 
 impl BytecodeFrame {
-    /// The frame of a compiled-to-compiled call made with telemetry off: no
-    /// telemetry, the call's type arguments (a pooled vector, or an empty one
-    /// for a non-generic call), and no locals region (compiled code keeps its
-    /// locals in Rust), its body running.
+    /// The frame of a compiled-to-compiled call: the call's type arguments
+    /// (a pooled vector, or an empty one for a non-generic call) and no
+    /// locals region (compiled code keeps its locals in Rust), its body
+    /// running. `telemetry` is `None` with telemetry off or for a hidden
+    /// invocation, else what `enter_bytecode_with_trace` returned for it.
     pub(crate) fn compiled(
         function: HeapPtr,
         locals_offset: StackIndex,
         type_args: Vec<bex_vm_types::RealizedTy>,
         context: Context,
+        telemetry: Option<FrameTelemetry>,
     ) -> Self {
         Self {
             function,
@@ -342,7 +344,7 @@ impl BytecodeFrame {
             type_args,
             type_metadata: None,
             faulting_pc: 0,
-            telemetry: None,
+            telemetry,
             context,
         }
     }
@@ -362,7 +364,7 @@ pub enum FramePosition {
     CompiledStub(usize),
 }
 
-struct CallTrace {
+pub(crate) struct CallTrace {
     telemetry: crate::telemetry::TraceConfig,
     context: Option<Arc<ContextPatch>>,
 }
@@ -961,6 +963,7 @@ pub(crate) mod tests {
                 add_native,
                 std::slice::from_ref(&t),
                 &[args[0], args[1]],
+                0,
             )?;
             Ok(Value::bool(vm.value_is_member_of(args[1], &t)))
         }
@@ -1173,6 +1176,19 @@ pub(crate) mod tests {
         objects: &[(&str, &std::sync::atomic::AtomicU32)],
         telemetry: bool,
     ) -> String {
+        let level = telemetry.then_some(btel_settings::mode::AutoTelemetryLevel::Medium);
+        exec_with_compiled_bodies(source, bodies, objects, level).0
+    }
+
+    /// [`run_with_compiled_bodies`] at a telemetry level (`None` for off),
+    /// returning the VM with its records.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn exec_with_compiled_bodies(
+        source: &str,
+        bodies: &[(&str, crate::compiled_rt::CompiledFn)],
+        objects: &[(&str, &std::sync::atomic::AtomicU32)],
+        level: Option<btel_settings::mode::AutoTelemetryLevel>,
+    ) -> (String, BexVm) {
         let mut program = baml_test_support::compile_source(source);
         let callables = program.rendered_callables();
         let entry = callables["user.Main"].object.raw();
@@ -1237,11 +1253,15 @@ pub(crate) mod tests {
             function.native_body = Some(test_body(*body, slots));
         }
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
-        if !telemetry {
-            vm.telemetry = None;
-        }
+        vm.telemetry = level.map(|level| {
+            TelemetryState::new_root(
+                Arc::new(TelemetryPolicies::with_auto_level(level)),
+                btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
+                crate::telemetry::test_runtime(),
+            )
+        });
         vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
-        loop {
+        let out = loop {
             match vm.exec() {
                 Ok(VmExecState::EarlyYield) => {}
                 Ok(VmExecState::Complete(value)) => {
@@ -1250,7 +1270,8 @@ pub(crate) mod tests {
                 Ok(other) => panic!("unexpected execution state: {other:?}"),
                 Err(error) => break format!("error: {error:?}"),
             }
-        }
+        };
+        (out, vm)
     }
 
     /// Compiled recursion counts toward the frame limit: the caller sees a
@@ -1565,6 +1586,254 @@ pub(crate) mod tests {
             assert_eq!(out, "1", "telemetry: {telemetry}");
             assert_eq!(OUTER_LINE.load(Ordering::Relaxed), 17, "telemetry: {telemetry}");
             assert_eq!(MIDDLE_LINE.load(Ordering::Relaxed), 23, "telemetry: {telemetry}");
+        }
+    }
+
+    /// With telemetry on, a compiled-to-compiled call entered inline
+    /// (`call_compiled_observed`) records what the VM's call path records
+    /// for it: the same call paths, outcomes and reentry flags, and the same
+    /// span records, across nested calls, a callee that throws into a
+    /// compiled `catch`, and recursion, at both auto levels that observe.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn inline_observed_compiled_calls_record_as_the_call_path_does() {
+        use std::{
+            fmt::Write,
+            sync::atomic::{AtomicU32, Ordering},
+        };
+
+        use btel_settings::mode::AutoTelemetryLevel;
+
+        use crate::{
+            compiled_rt::FORCE_CALL_FUNNEL,
+            telemetry::{InvocationOutcome, SpanRecord, TimingRecord},
+        };
+
+        static LEAF: AtomicU32 = AtomicU32::new(0);
+        static MID: AtomicU32 = AtomicU32::new(0);
+        static REC: AtomicU32 = AtomicU32::new(0);
+        static PANIC: AtomicU32 = AtomicU32::new(0);
+        fn object(vm: &BexVm, index: &AtomicU32) -> HeapPtr {
+            vm.idx_to_ptr(ObjectIndex::from_raw(index.load(Ordering::Relaxed) as usize))
+        }
+        fn leaf(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let n = test_int(args[0]);
+            if n < 0 {
+                return Ok(Value::int(vm.div_i64(n, 0)?));
+            }
+            Ok(Value::int(n + 1))
+        }
+        fn mid(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let leaf_ptr = object(vm, &LEAF);
+            let a = vm.call_compiled(leaf_ptr, leaf, &[args[0]], 0)?;
+            let b = vm.call_compiled(leaf_ptr, leaf, &[args[0]], 0)?;
+            Ok(Value::int(test_int(a) + test_int(b)))
+        }
+        fn rec(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let n = test_int(args[0]);
+            if n == 0 {
+                return Ok(Value::int(0));
+            }
+            let rec_ptr = object(vm, &REC);
+            let below = vm.call_compiled(rec_ptr, rec, &[Value::int(n - 1)], 0)?;
+            Ok(Value::int(test_int(below) + 1))
+        }
+        fn safe(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let depth = vm.frame_depth();
+            let mid_ptr = object(vm, &MID);
+            match vm.call_compiled(mid_ptr, mid, &[args[0]], 0) {
+                Ok(v) => Ok(v),
+                Err(e) => {
+                    let (thrown, ctx) = vm.catch(e, depth)?;
+                    let class = object(vm, &PANIC);
+                    if vm.is_instance_of(thrown, class) {
+                        Ok(Value::int(-1))
+                    } else {
+                        Err(crate::compiled_rt::rethrow(thrown, ctx))
+                    }
+                }
+            }
+        }
+        const SOURCE: &str = r#"
+            function Leaf(n: int) -> int { if (n < 0) { n / 0 } else { n + 1 } }
+            function Mid(n: int) -> int { Leaf(n) + Leaf(n) }
+            function Rec(n: int) -> int { if (n == 0) { 0 } else { 1 + Rec(n - 1) } }
+            function Safe(n: int) -> int { Mid(n) catch (e) { baml.panics.DivisionByZero => -1 } }
+            function Main() -> string { `${Safe(1)}|${Safe(-1)}|${Rec(3)}` }
+        "#;
+
+        type NamedPath = (Option<String>, String);
+
+        /// The records of one run, with every run-specific id resolved: a
+        /// call path to its `(caller, callee)` names, a telemetry id to its
+        /// ordinal of first appearance, and clock readings dropped.
+        fn records(vm: &BexVm) -> (Vec<(NamedPath, InvocationOutcome, bool)>, Vec<String>) {
+            let telemetry = vm.telemetry.as_ref().unwrap();
+            let mut paths: HashMap<btel_types::CallPathId, NamedPath> = HashMap::new();
+            for event in telemetry.span_records() {
+                if let SpanRecord::CallPathDefined {
+                    call_path,
+                    visible_caller,
+                    callee,
+                    ..
+                } = event
+                {
+                    let callee = vm.heap.function_metadata(vm.proof(), *callee).unwrap();
+                    let caller = visible_caller
+                        .map(|id| vm.heap.function_metadata(vm.proof(), id).unwrap().fqn);
+                    paths.insert(*call_path, (caller, callee.fqn));
+                }
+            }
+            let timings = telemetry
+                .timing_records()
+                .iter()
+                .filter_map(|event| match event {
+                    TimingRecord::FunctionTimingCompletion {
+                        call_path,
+                        outcome,
+                        reentry,
+                        ..
+                    } => Some((paths[call_path].clone(), *outcome, *reentry)),
+                    TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
+                })
+                .collect();
+            let mut ids: HashMap<u64, usize> = HashMap::new();
+            let spans = telemetry
+                .span_records()
+                .iter()
+                // The thread's own span quotes its clock epoch, which is
+                // the run's.
+                .filter(|event| !format!("{event:?}").starts_with("Thread"))
+                .map(|event| {
+                    let mut out = String::new();
+                    let text = format!("{event:?}");
+                    let mut rest = text.as_str();
+                    while let Some(open) = rest.find('(') {
+                        let (head, tail) = rest.split_at(open + 1);
+                        let name = head[..open]
+                            .rsplit(|c: char| !c.is_alphanumeric())
+                            .next()
+                            .unwrap();
+                        let close = tail.find(')').unwrap_or(tail.len());
+                        let (inner, after) = tail.split_at(close);
+                        out.push_str(head);
+                        match name {
+                            "TelemetryId" => {
+                                let raw: u64 = inner.parse().unwrap();
+                                let next = ids.len();
+                                let _ = write!(out, "#{}", ids.entry(raw).or_insert(next));
+                            }
+                            "CallPathId" => {
+                                let raw: u32 = inner.parse().unwrap();
+                                let path = paths.iter().find(|(id, _)| id.get() == raw);
+                                match path {
+                                    Some((_, (caller, callee))) => {
+                                        let _ = write!(out, "{caller:?}->{callee}");
+                                    }
+                                    None => out.push_str("root"),
+                                }
+                            }
+                            "ClockInstant" | "ClockDuration" => out.push('_'),
+                            _ => out.push_str(inner),
+                        }
+                        rest = after;
+                    }
+                    out.push_str(rest);
+                    out
+                })
+                .collect();
+            (timings, spans)
+        }
+
+        for level in [AutoTelemetryLevel::Medium, AutoTelemetryLevel::High] {
+            let mut runs = Vec::new();
+            for funnel in [true, false] {
+                FORCE_CALL_FUNNEL.with(|force| force.set(funnel));
+                let (out, vm) = exec_with_compiled_bodies(
+                    SOURCE,
+                    &[
+                        ("user.Leaf", crate::compiled_rt::CompiledFn::Inline(leaf)),
+                        ("user.Mid", crate::compiled_rt::CompiledFn::Inline(mid)),
+                        ("user.Rec", crate::compiled_rt::CompiledFn::Inline(rec)),
+                        ("user.Safe", crate::compiled_rt::CompiledFn::Inline(safe)),
+                    ],
+                    &[
+                        ("user.Leaf", &LEAF),
+                        ("user.Mid", &MID),
+                        ("user.Rec", &REC),
+                        ("baml.panics.DivisionByZero", &PANIC),
+                    ],
+                    Some(level),
+                );
+                FORCE_CALL_FUNNEL.with(|force| force.set(false));
+                assert_eq!(out, "4|-1|3", "level {level:?}, funnel {funnel}");
+                runs.push(records(&vm));
+            }
+            let (funnel, inline) = (&runs[0], &runs[1]);
+            assert_eq!(inline.0, funnel.0, "timing records at {level:?}");
+            assert_eq!(inline.1, funnel.1, "span records at {level:?}");
+
+            // The sequence covers what it claims to: the compiled calls
+            // (Safe→Mid, Mid→Leaf twice, Rec recursing) complete innermost
+            // first, the second Mid and its Leaf in error, and the recursion
+            // folds into the call path that entered it, as reentry.
+            let named: Vec<_> = inline
+                .0
+                .iter()
+                .map(|((caller, callee), outcome, reentry)| {
+                    (
+                        caller.as_deref().unwrap_or(""),
+                        callee.as_str(),
+                        *outcome,
+                        *reentry,
+                    )
+                })
+                .collect();
+            let ok = InvocationOutcome::Ok;
+            let errored = InvocationOutcome::Panicked;
+            let expected = [
+                ("user.Mid", "user.Leaf", ok, false),
+                ("user.Mid", "user.Leaf", ok, false),
+                ("user.Safe", "user.Mid", ok, false),
+                ("user.Main", "user.Safe", ok, false),
+                ("user.Mid", "user.Leaf", errored, false),
+                ("user.Safe", "user.Mid", errored, false),
+                ("user.Main", "user.Safe", ok, false),
+                ("user.Main", "user.Rec", ok, true),
+                ("user.Main", "user.Rec", ok, true),
+                ("user.Main", "user.Rec", ok, true),
+                ("user.Main", "user.Rec", ok, false),
+                ("", "user.Main", ok, false),
+            ];
+            let user: Vec<_> = named
+                .iter()
+                .filter(|(_, callee, _, _)| callee.starts_with("user."))
+                .copied()
+                .collect();
+            assert!(
+                inline.1.iter().any(|span| span.contains("CallPathDefined")),
+                "call paths are defined at {level:?}"
+            );
+            let completions = |pattern: &str| {
+                inline
+                    .1
+                    .iter()
+                    .filter(|span| {
+                        span.starts_with("FunctionSpanCompletion") && span.contains(pattern)
+                    })
+                    .count()
+            };
+            match level {
+                AutoTelemetryLevel::Medium => assert_eq!(user, expected),
+                // Spans instead of timings: the same calls, as span completions.
+                AutoTelemetryLevel::High => {
+                    assert!(user.is_empty());
+                    assert_eq!(completions("->user."), expected.len());
+                    assert_eq!(completions("Panicked"), 2);
+                    assert_eq!(completions("Reentry"), 3);
+                }
+                AutoTelemetryLevel::Low => unreachable!(),
+            }
         }
     }
 
@@ -2703,7 +2972,7 @@ pub struct BexVm {
     /// Saved/restored across nested `Call` instructions; native handlers that
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
-    pending_call_trace: Option<CallTrace>,
+    pub(crate) pending_call_trace: Option<CallTrace>,
     pending_trace_hooks: Vec<PendingTraceHook>,
     /// Inherited by a spawned BAML task independently of the parent's lifetime.
     inherited_hook_suppression: bool,
@@ -2734,7 +3003,7 @@ pub struct BexVm {
     /// Set by a call that passes type arguments, for its callee's entry
     /// only: telemetry records the frame's type arguments before the call's
     /// writeback appends `pending_call_type_args` to the new frame.
-    pending_call_passes_type_args: bool,
+    pub(crate) pending_call_passes_type_args: bool,
 
     /// Created-once immutable type objects for fully realized `LoadType`
     /// constants in static functions. The compact numeric key keeps the
@@ -9213,7 +9482,7 @@ impl BexVm {
 
     /// The caller must hold this heap's execution permit. Called only when a
     /// new telemetry call path is about to publish function references.
-    unsafe fn register_call_path_functions(
+    pub(crate) unsafe fn register_call_path_functions(
         heap: &BexHeap,
         caller: Option<HeapPtr>,
         callee: HeapPtr,
@@ -9230,7 +9499,7 @@ impl BexVm {
 
     /// Resolve a frame's callable wrapper to the underlying function object
     /// used as stable call-path identity.
-    fn frame_function_identity(&self, frame_idx: usize) -> Option<HeapPtr> {
+    pub(crate) fn frame_function_identity(&self, frame_idx: usize) -> Option<HeapPtr> {
         self.callable_function_identity(self.frames.get(frame_idx)?.function())
     }
 
@@ -9331,7 +9600,7 @@ impl BexVm {
 
     #[allow(clippy::inline_always, reason = "measured producer return fast path")]
     #[inline(always)]
-    fn complete_bytecode_invocation_with_function(
+    pub(crate) fn complete_bytecode_invocation_with_function(
         &mut self,
         frame_idx: usize,
         function: &Function,
@@ -9503,7 +9772,7 @@ impl BexVm {
     }
 
     /// Resolve native continuations and pending hook targets to their caller.
-    fn bytecode_caller_index(&self, frame_idx: usize) -> usize {
+    pub(crate) fn bytecode_caller_index(&self, frame_idx: usize) -> usize {
         let index = match &self.frames[frame_idx] {
             Frame::Bytecode(_) => frame_idx,
             Frame::Native(frame) => frame.bytecode_caller,
@@ -9522,7 +9791,7 @@ impl BexVm {
     /// A root entry's pending target is bookkeeping, not a visible caller of
     /// its hook. Keep the physical frame for execution without inventing a
     /// target-to-hook edge in the recorded call path.
-    fn visible_bytecode_caller_index(&self, frame_idx: usize) -> Option<usize> {
+    pub(crate) fn visible_bytecode_caller_index(&self, frame_idx: usize) -> Option<usize> {
         let index = self.bytecode_caller_index(frame_idx);
         match self
             .pending_trace_hooks

@@ -32,6 +32,9 @@ mod r#virtual;
 /// builds, re-exported so the generated crate needs only this one.
 pub use baml_base::Literal;
 pub use baml_type::Freshness;
+#[cfg(test)]
+pub(crate) use call::FORCE_CALL_FUNNEL;
+
 use bex_vm_types::{HeapPtr, Value, types::Function};
 pub use r#virtual::VirtualSite;
 

@@ -295,6 +295,7 @@ mod tests {
             StackIndex::from_raw(0),
             type_args.to_vec(),
             context,
+            None,
         )));
         vm
     }
