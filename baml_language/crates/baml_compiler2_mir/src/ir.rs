@@ -1011,15 +1011,6 @@ pub enum Rvalue<'db> {
         bound: TyTemplateInterface,
     },
 
-    /// The `reflect.errors.TypeMismatch` a missed [`Rvalue::SatisfiesBound`]
-    /// throws when its statement has no `else` block, naming `ty` and
-    /// `bound`. Lowers like it, to `BoundMismatch`; the value is thrown by an
-    /// ordinary `Throw` terminator.
-    BoundMismatch {
-        ty: Operand<'db>,
-        bound: TyTemplateInterface,
-    },
-
     /// Allocate a closure object from a child lambda function.
     ///
     /// `lambda_idx` indexes into `MirFunction::lambdas` of the enclosing function.
@@ -1209,7 +1200,7 @@ impl Rvalue<'_> {
             Self::IsType { operand: arg, .. } | Self::IsTypeTag { operand: arg, .. } => {
                 operand(arg)
             }
-            Self::SatisfiesBound { ty, .. } | Self::BoundMismatch { ty, .. } => operand(ty),
+            Self::SatisfiesBound { ty, .. } => operand(ty),
             Self::TypeTag(place) | Self::Discriminant(place) | Self::Len(place) => {
                 read(place, &in_bounds)
             }

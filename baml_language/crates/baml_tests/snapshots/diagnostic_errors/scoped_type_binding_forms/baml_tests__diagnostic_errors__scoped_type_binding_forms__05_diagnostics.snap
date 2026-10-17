@@ -33,7 +33,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × generic bound `Wrapper<int>` is not an interface; bounds must be interfaces
     ╭─[scoped_type_binding_forms.baml:43:24]
- 43 │     let type A extends Wrapper<int> = t;
+ 43 │     let type A extends Wrapper<int> = t else { return 0 };
     ·                        ────────────
     ╰────
 
@@ -41,7 +41,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × unresolved type: Missing
     ╭─[scoped_type_binding_forms.baml:44:24]
- 44 │     let type B extends Missing = t;
+ 44 │     let type B extends Missing = t else { return 0 };
     ·                        ───────
     ╰────
 
@@ -49,7 +49,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × `reflect.AnyFunction` cannot be used as a generic bound; use it as a value type instead (e.g. `f: reflect.AnyFunction`)
     ╭─[scoped_type_binding_forms.baml:45:24]
- 45 │     let type C extends reflect.AnyFunction = t;
+ 45 │     let type C extends reflect.AnyFunction = t else { return 0 };
     ·                        ───────────────────
     ╰────
 
@@ -57,7 +57,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × type inference failed; write the type explicitly
     ╭─[scoped_type_binding_forms.baml:46:39]
- 46 │     let type D extends Named & Holder<_> = t;
+ 46 │     let type D extends Named & Holder<_> = t else { return 0 };
     ·                                       ─
     ╰────
 
@@ -85,10 +85,18 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                                       ─────
     ╰────
 
-  [type] E0096
+  [type] E0111
 
-  × declared throws is `never`, but this function may also throw `reflect.errors.TypeMismatch`
-    ╭─[scoped_type_binding_forms.baml:70:32]
- 70 │     let type T extends Named = t;
-    ·                                ─
+  × `let type T extends …` checks its bounds when it runs, so it needs an `else` block for a type that misses them
+    ╭─[scoped_type_binding_forms.baml:71:5]
+ 71 │     let type T extends Named = t;
+    ·     ─────────────────────────────
+    ╰────
+
+  [type] E0111
+
+  × `let type U extends …` checks its bounds when it runs, so it needs an `else` block for a type that misses them
+    ╭─[scoped_type_binding_forms.baml:72:5]
+ 72 │     let type U extends Named & Holder<int> = t;
+    ·     ───────────────────────────────────────────
     ╰────

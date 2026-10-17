@@ -271,6 +271,9 @@ pub enum TirTypeError {
     /// lifted into a type position only by a `let type T = value;` binding;
     /// the slot then names `T`.
     ComputedGenericArgumentRequiresLetType { name: Name },
+    /// A `let type T extends … = …` statement has no `else` block. Its bounds
+    /// are checked when it runs, so it must say what a miss does.
+    BoundedLetTypeRequiresElse { name: Name },
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
@@ -1195,6 +1198,13 @@ impl TirTypeError {
                     baml_compiler_diagnostics::runtime_type::computed_generic_argument_requires_let_type(
                         name.as_str(),
                     );
+                    f.write_str(diagnostic.message.as_str())
+                }
+                TirTypeError::BoundedLetTypeRequiresElse { name } => {
+                    let diagnostic =
+                        baml_compiler_diagnostics::runtime_type::bounded_let_type_requires_else(
+                            name.as_str(),
+                        );
                     f.write_str(diagnostic.message.as_str())
                 }
                 TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {

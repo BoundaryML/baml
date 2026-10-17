@@ -2304,7 +2304,7 @@ mod tests {
     #[test]
     fn a_bounded_let_type_value_reaches_the_bound_member() {
         let test = CursorTest::new(
-            "interface Named { name string }\nfunction f(t: reflect.Type) -> string {\n  let type T extends Named = t;\n  let v = baml.json.to<T>({});\n  v.na<[CURSOR]me\n}\n",
+            "interface Named { name string }\nfunction f(t: reflect.Type) -> string {\n  let type T extends Named = t else { return \"\" };\n  let v = baml.json.to<T>({});\n  v.na<[CURSOR]me\n}\n",
         );
         assert_eq!(info_at(&test).to_describe_block(), "name: string");
     }

@@ -2,8 +2,8 @@
 // has type `T` only if it came from a `T`-typed source, and a bounded slot is
 // an ordinary static obligation that an unbounded `T` does not satisfy.
 // Nothing is deferred to a runtime gate. (The bounded form,
-// `let type T extends I = …`, checks `I` where it binds and then satisfies
-// it: `ns_let_type_bounds`.)
+// `let type T extends I = … else { … }`, checks `I` where it binds and then
+// satisfies it: `ns_let_type_bounds`.)
 
 interface Named { name string }
 

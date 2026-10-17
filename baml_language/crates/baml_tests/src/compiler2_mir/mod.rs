@@ -807,8 +807,8 @@ function f(t: reflect.Type, value: unknown) -> bool {
 /// constructor (`Bound?`). Each `extends` bound is then checked against the
 /// type now in the slot, in written order, by `satisfies_bound`: the bound
 /// travels as an interface constraint (only the associated types it pins),
-/// never as a type. A miss branches into the `else` block or, without one,
-/// throws the `bound_mismatch` error.
+/// never as a type. A miss of any bound branches into the `else` block, which
+/// a bounded binding must have.
 #[test]
 fn bounded_type_binding_checks_its_bounds_after_binding_the_slot() {
     let mut db = make_db();
@@ -821,7 +821,7 @@ interface Tagged { tag string }
 function erase<T>() -> string { "ok" }
 
 function checked(t: reflect.Type) -> bool {
-    let type Bound extends Named & Tagged = t;
+    let type Bound extends Named & Tagged = t else { return false };
     let annotated: Bound? = null;
     erase<Bound>() == "ok" && annotated == null
 }

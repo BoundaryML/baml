@@ -1,7 +1,7 @@
 // The contracts a `let type` statement has beyond scoping: its operand is a
 // `reflect.Type | reflect.TypeView` value, each `extends` bound is an
-// interface written in full, its `else` block diverges, and its bound check
-// is a throw a declared clause must name.
+// interface written in full, and a bounded statement has an `else` block,
+// which diverges.
 
 interface Named { name string }
 
@@ -40,10 +40,10 @@ function nullable_operand(t: reflect.Type?) -> int {
 // function interface is not a bound (E0154), and a `_` has nothing to infer
 // from. Each bound is reported on its own; the binding keeps the rest.
 function bounds_are_interfaces(t: reflect.Type) -> int {
-    let type A extends Wrapper<int> = t;
-    let type B extends Missing = t;
-    let type C extends reflect.AnyFunction = t;
-    let type D extends Named & Holder<_> = t;
+    let type A extends Wrapper<int> = t else { return 0 };
+    let type B extends Missing = t else { return 0 };
+    let type C extends reflect.AnyFunction = t else { return 0 };
+    let type D extends Named & Holder<_> = t else { return 0 };
     1
 }
 
@@ -64,9 +64,18 @@ function else_must_diverge(t: reflect.Type) -> int {
     1
 }
 
-// Without an `else` block a miss throws `reflect.errors.TypeMismatch` from
-// the statement, which a declared clause must name.
-function declared_clause_names_the_bound_check(t: reflect.Type) -> int throws never {
+// The bounds are checked when the statement runs, so a bounded statement
+// must say what a miss does: without an `else` block it is an error (E0111),
+// as a refutable `let` pattern is. A miss never throws.
+function bounded_needs_else(t: reflect.Type) -> int throws never {
     let type T extends Named = t;
+    let type U extends Named & Holder<int> = t;
+    1
+}
+
+// Every miss runs the `else` block, so a bounded statement adds nothing to
+// the throws a declared clause must name.
+function bound_check_does_not_throw(t: reflect.Type) -> int throws never {
+    let type T extends Named = t else { return 0 };
     1
 }

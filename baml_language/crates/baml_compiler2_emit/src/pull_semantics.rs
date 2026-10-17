@@ -88,9 +88,6 @@ pub(crate) trait PullSink<'db> {
     /// value, push whether the type satisfies the bound
     /// (`Rvalue::SatisfiesBound`).
     fn satisfies_bound(&mut self) -> Result<(), Self::Error>;
-    /// Pop a bound and a type value as [`Self::satisfies_bound`], push the
-    /// `reflect.errors.TypeMismatch` naming them (`Rvalue::BoundMismatch`).
-    fn bound_mismatch(&mut self) -> Result<(), Self::Error>;
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
 
     /// Same as `make_closure` but with an additional `ntypeargs` count for
@@ -477,11 +474,6 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
             walk_operand_pull(sink, ty)?;
             sink.load_type(&bound.to_template())?;
             sink.satisfies_bound()
-        }
-        Rvalue::BoundMismatch { ty, bound } => {
-            walk_operand_pull(sink, ty)?;
-            sink.load_type(&bound.to_template())?;
-            sink.bound_mismatch()
         }
         Rvalue::MakeClosure {
             lambda_idx,

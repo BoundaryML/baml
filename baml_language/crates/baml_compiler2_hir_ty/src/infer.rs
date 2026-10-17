@@ -943,6 +943,12 @@ enum PendingDiag<'db> {
         expr: ExprId,
         name: baml_type::Name,
     },
+    /// A `let type T extends … = …` statement without an `else` block: its
+    /// bounds are checked when it runs, so a miss needs somewhere to go.
+    BoundedLetTypeRequiresElse {
+        stmt: StmtId,
+        name: baml_type::Name,
+    },
     /// A constant pattern argument that does not compile.
     InvalidRegexPattern {
         expr: ExprId,
@@ -3152,9 +3158,16 @@ impl<'db> InferenceContext<'db> {
             Stmt::TypeBinding {
                 name,
                 operand,
+                bounds,
                 else_branch,
-                ..
             } => {
+                if !bounds.is_empty() && else_branch.is_none() {
+                    self.pending_diags
+                        .push(PendingDiag::BoundedLetTypeRequiresElse {
+                            stmt,
+                            name: name.clone(),
+                        });
+                }
                 self.bind_scoped_type(body, stmt, name.clone(), *operand, *else_branch);
             }
             Stmt::Let {
@@ -3397,20 +3410,9 @@ impl<'db> InferenceContext<'db> {
         self.validate_runtime_type_operand(body, operand);
         let bounds = self.scoped_type_bounds(stmt);
         // The statement checks each bound at run time. A miss runs the
-        // `else` block, which must diverge like a `let … else`; without one
-        // it throws `reflect.errors.TypeMismatch` from the statement.
+        // `else` block, which must diverge like a `let … else`; a bounded
+        // statement without one is reported where it is visited.
         self.finish_let_else(body, else_branch);
-        if else_branch.is_none() && !bounds.is_empty() {
-            let mismatch = match self.lang_decl(
-                baml_base::LangPackage::Reflect,
-                &["errors"],
-                "TypeMismatch",
-            ) {
-                Some(decl) => Ty::intern(InferTy::Class(decl, Box::new([]))),
-                None => Ty::error(),
-            };
-            self.record_throw(operand, &mismatch);
-        }
         // The parameter's identity is its statement's index in the body:
         // exact (two statements never share an index) and source-derived,
         // so it is stable across runs. A scoped parameter never leaves its
@@ -12534,6 +12536,15 @@ impl<'db> InferenceContext<'db> {
                             },
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Expr(at),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::BoundedLetTypeRequiresElse { stmt, name } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::BoundedLetTypeRequiresElse { name },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Stmt(stmt),
                             related: Vec::new(),
                         });
                         continue;

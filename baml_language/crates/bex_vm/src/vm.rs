@@ -2868,20 +2868,6 @@ impl BexVm {
         )
     }
 
-    /// The `reflect.errors.TypeMismatch` a missed bound throws when its
-    /// statement has no `else` block, naming the type and the bound.
-    fn bound_mismatch(&mut self, value: Value, bound: Value) -> Result<Value, VmError> {
-        let ty = self.type_operand_value(value)?.ty;
-        let (head, args, assoc) = self.bound_parts(bound)?;
-        let message = format!(
-            "type {ty} does not implement interface {}",
-            bex_vm_types::RealizedTy::Interface(head, args, assoc)
-        );
-        let message = Value::object(self.alloc_string(message));
-        let class = self.lang_object(crate::lang_items::REFLECT_ERRORS_TYPE_MISMATCH);
-        Ok(Value::object(self.alloc_instance(class, vec![message])))
-    }
-
     fn take_type_args(&mut self, start: usize, count: usize) -> Result<TakenTypeArgs, VmError> {
         let end = start
             .checked_add(count)
@@ -10299,18 +10285,12 @@ impl BexVm {
                         self.stack.push(value);
                     }
 
-                    // ── `let type T extends I = …` bound checks ─────────────────
+                    // ── `let type T extends I = …` bound check ──────────────────
                     OpCode::SatisfiesBound => {
                         let bound = self.stack.ensure_pop();
                         let value = self.stack.ensure_pop();
                         let satisfied = self.satisfies_bound(value, bound)?;
                         self.stack.push(Value::bool(satisfied));
-                    }
-                    OpCode::BoundMismatch => {
-                        let bound = self.stack.ensure_pop();
-                        let value = self.stack.ensure_pop();
-                        let error = self.bound_mismatch(value, bound)?;
-                        self.stack.push(error);
                     }
 
                     // ── Lexical runtime type binding ────────────────────────────

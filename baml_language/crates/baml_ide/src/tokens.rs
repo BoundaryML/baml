@@ -1189,15 +1189,15 @@ function projection(b: B) -> string throws never { (B as Shows).show(b) }
         assert_eq!(painted.token_type, SemanticTokenType::Method);
     }
 
-    /// `let type T extends Named = t;`: the keywords are keywords, `T` is a
-    /// type-parameter declaration, and the bound is a type reference.
+    /// `let type T extends Named = t else { … };`: the keywords are keywords,
+    /// `T` is a type-parameter declaration, and the bound is a type reference.
     #[test]
     fn let_type_declares_a_type_parameter() {
         let (db, file) = test_db(
             r#"interface Named { name string }
 
 function f(t: reflect.Type) -> reflect.Type {
-    let type T extends Named = t;
+    let type T extends Named = t else { return t };
     reflect.Type.of<T>()
 }
 "#,

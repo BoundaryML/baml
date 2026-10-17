@@ -1643,6 +1643,11 @@ fn new_tir_diagnostic(
             .with_primary_span(span)
             .with_phase(DiagnosticPhase::Type);
     }
+    if let TirTypeError::BoundedLetTypeRequiresElse { name } = error {
+        return runtime_type::bounded_let_type_requires_else(name.as_str())
+            .with_primary_span(span)
+            .with_phase(DiagnosticPhase::Type);
+    }
     if let TirTypeError::CannotConstructReflectionKind { class_name } = error {
         return runtime_type::cannot_construct_reflection_kind(&vp.path(class_name))
             .with_primary_span(span)
@@ -1958,6 +1963,9 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::ComputedGenericArgumentRequiresLetType { name } => {
             runtime_type::computed_generic_argument_requires_let_type(name.as_str()).id
+        }
+        TirTypeError::BoundedLetTypeRequiresElse { name } => {
+            runtime_type::bounded_let_type_requires_else(name.as_str()).id
         }
         TirTypeError::MountedPackageCallUnsupported { path } => {
             runtime_type::mounted_package_call_unsupported(path.as_str()).id

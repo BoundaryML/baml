@@ -9577,8 +9577,7 @@ impl<'db> LoweringContext<'db> {
     /// order. A bound is a constraint, not a type: it travels as its interface,
     /// type arguments and the associated types it pins, and the VM asks of it
     /// exactly what a generic parameter's bound asks. A miss runs the `else`
-    /// block (which TIR made diverge) or, without one, throws
-    /// `reflect.errors.TypeMismatch` naming the bound.
+    /// block, which TIR requires on a bounded statement and made diverge.
     fn emit_scoped_type_binding(
         &mut self,
         binding: &crate::inference_provider::ScopedTypeBinding,
@@ -9600,9 +9599,15 @@ impl<'db> LoweringContext<'db> {
         if binding.bounds.is_empty() {
             return Ok(());
         }
+        let Some(else_expr) = else_branch else {
+            return Err(self.internal_error(
+                "a bounded `let type` reached lowering without the `else` block TIR requires",
+                binding.operand,
+            ));
+        };
         let bound_type =
             self.load_type_value(&Tir2Ty::TypeVar(binding.parameter.clone()), &generic_params);
-        let else_block = else_branch.map(|_| self.builder.create_block());
+        let miss = self.builder.create_block();
         for bound in &binding.bounds {
             let bound = tir2_interface_to_template(
                 &bound.name,
@@ -9620,35 +9625,20 @@ impl<'db> LoweringContext<'db> {
                 },
             );
             let next = self.builder.create_block();
-            let miss = else_block.unwrap_or_else(|| self.builder.create_block());
             self.builder
                 .branch(Operand::Copy(Place::local(satisfied)), next, miss);
-            if else_block.is_none() {
-                self.builder.set_current_block(miss);
-                let mismatch = self.builder.temp(self.type_mismatch_ty());
-                self.builder.assign(
-                    Place::local(mismatch),
-                    Rvalue::BoundMismatch {
-                        ty: bound_type.clone(),
-                        bound,
-                    },
-                );
-                self.emit_throw(Operand::Copy(Place::local(mismatch)));
-            }
             self.builder.set_current_block(next);
         }
-        if let (Some(miss), Some(else_expr)) = (else_block, else_branch) {
-            let bound = self.builder.current_block();
-            self.builder.set_current_block(miss);
-            let else_ty = self.expr_ty(else_expr)?;
-            let else_dest = self.builder.temp(else_ty);
-            self.lower_expr(else_expr, Place::local(else_dest))?;
-            // As for `let … else`: a recovery state could leave a fall-through.
-            if !self.builder.is_current_terminated() {
-                self.builder.unreachable();
-            }
-            self.builder.set_current_block(bound);
+        let bound = self.builder.current_block();
+        self.builder.set_current_block(miss);
+        let else_ty = self.expr_ty(else_expr)?;
+        let else_dest = self.builder.temp(else_ty);
+        self.lower_expr(else_expr, Place::local(else_dest))?;
+        // As for `let … else`: a recovery state could leave a fall-through.
+        if !self.builder.is_current_terminated() {
+            self.builder.unreachable();
         }
+        self.builder.set_current_block(bound);
         Ok(())
     }
 
@@ -9718,15 +9708,6 @@ impl<'db> LoweringContext<'db> {
             Place::local(converted),
         );
         Ok(Operand::Copy(Place::local(converted)))
-    }
-
-    /// `reflect.errors.TypeMismatch`, the error a missed `let type` bound
-    /// throws.
-    fn type_mismatch_ty(&self) -> RuntimeTy {
-        let item = baml_base::lang_item!(Reflect: errors.TypeMismatch);
-        DeclName::of_lang_item(self.lang(), item).map_or(RuntimeTy::Unknown, |name| {
-            RuntimeTy::Class(name, Box::new([]))
-        })
     }
 
     /// A `reflect.Type` value for `ty`, realized in the enclosing frame.

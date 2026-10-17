@@ -21,56 +21,49 @@ fn user.checked(t: reflect.Type) -> bool {
     let _1: reflect.Type // t // param
     let _2: reflect.Type
     let _3: bool
-    let _4: reflect.errors.TypeMismatch
+    let _4: bool
     let _5: bool
-    let _6: reflect.errors.TypeMismatch
-    let _7: bool
-    let _8: bool
-    let _9: string
-    let _10: reflect.Type
+    let _6: bool
+    let _7: string
+    let _8: reflect.Type
 
     bb0: {
         bind_type(0, copy _1);
         _2 = load_type(#0);
         _3 = satisfies_bound(copy _2, user.Named);
-        branch copy _3 -> [bb2, bb1];
+        branch copy _3 -> [bb1, bb2];
     }
 
     bb1: {
-        _4 = bound_mismatch(copy _2, user.Named);
-        throw copy _4;
+        _4 = satisfies_bound(copy _2, user.Tagged);
+        branch copy _4 -> [bb3, bb2];
     }
 
     bb2: {
-        _5 = satisfies_bound(copy _2, user.Tagged);
-        branch copy _5 -> [bb4, bb3];
+        _0 = const false;
+        goto -> bb7;
     }
 
     bb3: {
-        _6 = bound_mismatch(copy _2, user.Tagged);
-        throw copy _6;
+        _8 = load_type(#0);
+        _7 = call const fn user.erase<copy _8>() -> [bb4];
     }
 
     bb4: {
-        _10 = load_type(#0);
-        _9 = call const fn user.erase<copy _10>() -> [bb5];
+        _6 = copy _7 == const "ok";
+        _5 = short_circuit(&&) copy _6 -> [eval: bb5, join: bb6];
     }
 
     bb5: {
-        _8 = copy _9 == const "ok";
-        _7 = short_circuit(&&) copy _8 -> [eval: bb6, join: bb7];
+        _5 = call const fn baml.ops.equals_equals(const null, const null) -> [bb6];
     }
 
     bb6: {
-        _7 = call const fn baml.ops.equals_equals(const null, const null) -> [bb7];
+        _0 = copy _5;
+        goto -> bb7;
     }
 
     bb7: {
-        _0 = copy _7;
-        goto -> bb8;
-    }
-
-    bb8: {
         return;
     }
 }
