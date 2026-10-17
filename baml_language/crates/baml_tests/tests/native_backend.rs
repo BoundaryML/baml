@@ -224,6 +224,150 @@ fn generated_module_is_well_formed_rust() {
     assert!(compact.contains("vm.float_value("));
 }
 
+/// Maps, enum variants, bigints, byte arrays, a top-level `client`,
+/// structural type tests, a class-tag `match` and `Package.current` compile,
+/// each to the runtime helper that does what the bytecode instruction does.
+#[test]
+fn small_constructs_compile_to_their_runtime_helpers() {
+    let module = compile(
+        r#"
+enum Color {
+  Red
+  Green
+}
+
+class Circle { r: int }
+class Square { s: int }
+class Tri { a: int }
+class Hex { h: int }
+
+client Probe = openai.ResponsesClient.new(model = "m", api_key = "k", base_url = "http://localhost:1/v1");
+
+function words(xs: string[]) -> map<string, int> {
+  let counts: map<string, int> = {};
+  for (let x in xs) { counts[x] = (counts.get(x) ?? 0) + 1; }
+  counts
+}
+
+function squares(n: int) -> map<int, int> {
+  let m: map<int, int> = {};
+  let i = 0;
+  while (i < n) { m[i] = i * i; i += 1; }
+  m
+}
+
+function keyed(m: map<Circle, int>, c: Circle) -> int { m[c] }
+
+function green() -> Color { Color.Green }
+
+function big(n: bigint) -> bigint { n * 123456789012345678901234567890n }
+
+function bytes() -> int {
+  let b = b"\x01\x02";
+  b[0] = 9;
+  b[0]
+}
+
+function model() -> string { Probe.model }
+
+function kind(x: int[] | string[] | map<string, int> | int) -> string {
+  if (x is int[]) { "ints" } else if (x is map<string, int>) { "map" } else if (x is int) { "int" } else { "strings" }
+}
+
+function area(s: Circle | Square | Tri | Hex) -> int {
+  match (s) {
+    Circle => s.r,
+    Square => s.s,
+    Tri => s.a,
+    Hex => s.h,
+  }
+}
+
+function here() -> reflect.Package { reflect.Package.current() }
+"#,
+    );
+    let resumable = |name: &str| {
+        module
+            .functions
+            .iter()
+            .find(|f| f.name == name)
+            .unwrap_or_else(|| {
+                panic!(
+                    "{name} should compile; rejected: {:?}",
+                    module
+                        .rejected
+                        .iter()
+                        .filter(|(n, _)| n.starts_with("user."))
+                        .collect::<Vec<_>>()
+                )
+            })
+            .resumable
+    };
+    let compact = |name: &str| {
+        body_of(&module, name)
+            .split_whitespace()
+            .collect::<String>()
+    };
+
+    // A string-keyed map: the literal allocates, and every key operation is
+    // a direct builtin call (no suspension). Any other key hashes through its
+    // `baml.Hash` implementation, which runs BAML code, so an int-keyed map's
+    // operations suspend.
+    assert!(!resumable("user.words"));
+    assert!(resumable("user.squares"));
+    let words = compact("user.words");
+    assert!(
+        words.contains("vm.new_map(RealizedTy::String,RealizedTy::Int)"),
+        "{words}"
+    );
+    assert!(words.contains("vm.call_builtin(native_"), "{words}");
+    // A class-keyed map may run a user `hash`/`eq`: its index suspends.
+    assert!(resumable("user.keyed"));
+
+    let green = compact("user.green");
+    assert!(
+        green.contains("vm.new_variant(vm.idx_to_ptr(ObjectIndex::from_raw("),
+        "{green}"
+    );
+    assert!(green.contains(")),1);"), "variant #1 is Green: {green}");
+
+    // A bigint literal is the program's own object; the product goes through
+    // the VM's generic operator.
+    let big = compact("user.big");
+    assert!(!big.contains("vm.string_value("), "{big}");
+    assert!(big.contains("vm.binop(BinOp::Mul,"), "{big}");
+
+    // A byte array literal is its pooled template deep-copied.
+    let bytes = compact("user.bytes");
+    assert!(bytes.contains("vm.call_builtin(native_"), "{bytes}");
+    assert!(
+        module.source.contains("\"baml.deep_copy\""),
+        "deep_copy is bound by key"
+    );
+    assert!(bytes.contains("vm.store_array_element("), "{bytes}");
+
+    let model = compact("user.model");
+    assert!(
+        model.contains("vm.load_global(vm.idx_to_ptr(ObjectIndex::from_raw("),
+        "{model}"
+    );
+
+    // Structural tests read the function's own pooled type constants; the
+    // `int` leaf is a tag compare.
+    let kind = compact("user.kind");
+    assert_eq!(kind.matches("vm.is_type_constant(").count(), 2, "{kind}");
+    assert!(kind.contains("bex_vm::compiled_rt::type_tag("), "{kind}");
+
+    // A class-tag switch matches the classes' linker-assigned tags.
+    let area = compact("user.area");
+    assert!(area.contains("matchd"), "{area}");
+    assert!(area.contains("i64=>{"), "{area}");
+    assert!(area.contains("bex_vm::compiled_rt::type_tag("), "{area}");
+
+    let here = compact("user.here");
+    assert!(here.contains("vm.current_package("), "{here}");
+}
+
 /// The generated body of one function, for shape assertions.
 fn body_of(module: &NativeModule, name: &str) -> String {
     let symbol = &module

@@ -1,9 +1,9 @@
 //! Constants.
 
-use baml_compiler2_mir::{Constant, function_display_name};
+use baml_compiler2_mir::{Constant, enum_display_name, function_display_name};
 
 use super::{Expr, Gen, Generator, unsupported};
-use crate::{analysis::Repr, render::float_literal};
+use crate::{admit::Rejection, analysis::Repr, render::float_literal};
 
 impl<'db> Generator<'_, 'db> {
     pub(super) fn constant(&self, constant: &Constant<'db>) -> Gen<Expr> {
@@ -22,7 +22,18 @@ impl<'db> Generator<'_, 'db> {
                 ),
                 None => Expr::new(format!("vm.string_value({s:?})"), Repr::Value),
             },
-            Constant::Bigint(_) => return unsupported("bigint literal"),
+            // Its compile-time bigint object, as bytecode loads it.
+            Constant::Bigint(value) => match self.index.bigints.get(&value.to_string()) {
+                Some(object) => Expr::new(
+                    format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
+                    Repr::Value,
+                ),
+                None => {
+                    return Err(Rejection::Invalid(
+                        "bigint literal not in the program's pool".into(),
+                    ));
+                }
+            },
             // A named function as a value: the program's pooled wrapper over
             // it, as bytecode loads it, so `f === f` holds as there.
             Constant::Function(func) => {
@@ -55,8 +66,40 @@ impl<'db> Generator<'_, 'db> {
                     Repr::Value,
                 )
             }
-            Constant::GlobalItem(_) => return unsupported("top-level let"),
-            Constant::EnumVariant { .. } => return unsupported("enum variant literal"),
+            // A top-level `let`: the value `$init` left in its global slot,
+            // read as this function reads globals.
+            Constant::GlobalItem(binding) => {
+                let Some(slot) = self.index.let_slot(self.db, *binding)? else {
+                    return unsupported("top-level let not found in the program");
+                };
+                Expr::new(
+                    format!(
+                        "vm.load_global(vm.idx_to_ptr(ObjectIndex::from_raw({})), {slot})",
+                        self.object
+                    ),
+                    Repr::Value,
+                )
+            }
+            // A fresh variant object, as bytecode's `AllocVariant` allocates;
+            // its range check is done here, against the enum's declaration.
+            Constant::EnumVariant { enum_ref, index } => {
+                let Some(object) = self.index.enum_(self.db, *enum_ref)? else {
+                    let name = enum_display_name(self.db, *enum_ref);
+                    return unsupported(format!("enum `{name}` not found in the program"));
+                };
+                let variants = self.index.enum_variants(object);
+                if *index as usize >= variants {
+                    return Err(Rejection::Invalid(format!(
+                        "variant #{index} of an enum with {variants} variants"
+                    )));
+                }
+                Expr::new(
+                    format!(
+                        "vm.new_variant(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {index})"
+                    ),
+                    Repr::Value,
+                )
+            }
         })
     }
 }

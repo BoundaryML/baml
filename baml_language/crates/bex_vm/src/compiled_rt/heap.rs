@@ -301,9 +301,84 @@ impl BexVm {
         Value::object(self.alloc_array(element_ty, values))
     }
 
+    /// Allocate an empty map of `key_ty` to `value_ty`: a map literal, whose
+    /// entries follow as `baml.Map.set` calls, as bytecode's `AllocMap(0)`.
+    #[inline]
+    pub fn new_map(&mut self, key_ty: RealizedTy, value_ty: RealizedTy) -> Value {
+        Value::object(
+            self.tlab
+                .alloc_map(key_ty, value_ty, indexmap::IndexMap::new()),
+        )
+    }
+
+    /// Allocate variant `index` of the enum `enm`: an enum variant literal.
+    /// The compiler checked `index` against the enum's declaration, so no
+    /// range check runs here (bytecode's `AllocVariant` checks a stack
+    /// operand it cannot trust the same way).
+    #[inline]
+    pub fn new_variant(&mut self, enm: HeapPtr, index: usize) -> Value {
+        Value::object(self.tlab.alloc_variant(enm, index))
+    }
+
     /// Allocate a string from a literal.
     #[inline]
     pub fn string_value(&mut self, text: &str) -> Value {
         Value::object(self.alloc_string(text))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bex_vm_types::{
+        Object, ObjectIndex, RealizedTy, Value,
+        types::{Enum, EnumVariant, Owner},
+    };
+    use indexmap::IndexMap;
+
+    use crate::vm::tests::test_vm;
+
+    fn color() -> Object {
+        let variant = |name: &str| EnumVariant {
+            name: name.to_string(),
+            description: None,
+            alias: None,
+            docstring: None,
+            other: IndexMap::default(),
+            skip: false,
+        };
+        Object::Enum(Box::new(Enum {
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Color")),
+            type_tag: baml_type::typetag::TypeTag::of_static_index(0),
+            variants: vec![variant("Red"), variant("Green")],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: IndexMap::default(),
+            owner: Owner::default(),
+        }))
+    }
+
+    #[test]
+    fn a_new_map_is_empty_and_typed() {
+        let mut vm = test_vm(Vec::new());
+        let map = vm.new_map(RealizedTy::String, RealizedTy::Int);
+        assert_eq!(vm.container_len(map).unwrap(), Value::int(0));
+        let Object::Map(object) = vm.get_object(map.as_object_ptr().unwrap()) else {
+            panic!("a map object");
+        };
+        assert_eq!(*object.key_ty, RealizedTy::String);
+        assert_eq!(*object.value_ty, RealizedTy::Int);
+    }
+
+    #[test]
+    fn a_new_variant_is_of_its_enum_at_its_index() {
+        let mut vm = test_vm(vec![color()]);
+        let color = vm.idx_to_ptr(ObjectIndex::from_raw(0));
+        let green = vm.new_variant(color, 1);
+        assert!(vm.is_variant_of(green, color));
+        assert_eq!(vm.discriminant(green).unwrap(), 1);
+        let red = vm.new_variant(color, 0);
+        assert_eq!(vm.discriminant(red).unwrap(), 0);
+        assert_ne!(red, green, "each literal is a fresh object");
     }
 }

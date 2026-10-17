@@ -25,7 +25,7 @@ use std::{
 
 use baml_compiler2_mir::{
     BlockId, Constant, Local, MirFunction, MirFunctionBody, Operand, Place, StatementKind,
-    SwitchKey, Terminator, function_display_name,
+    Terminator, function_display_name,
 };
 
 use crate::{
@@ -56,6 +56,12 @@ impl Expr {
 pub(crate) struct Generator<'a, 'db> {
     pub(crate) db: &'db dyn baml_compiler2_mir::Db,
     pub(crate) index: &'a ProgramIndex,
+    /// Object index of the bytecode function this body replaces: the
+    /// function whose constant pool and package the body reads.
+    pub(crate) object: usize,
+    /// The ordinal of the package the function belongs to, when the program
+    /// places it.
+    pub(crate) package: Option<u32>,
     /// The admitted functions' symbols, by object index.
     pub(crate) symbols: &'a HashMap<usize, String>,
     /// The admitted functions that can suspend, by object index.
@@ -889,10 +895,8 @@ impl<'db> Generator<'_, 'db> {
             } => {
                 let mut arms_code = String::new();
                 for (key, target) in arms {
-                    let SwitchKey::Int(key) = key else {
-                        unreachable!("rejected by flow_of")
-                    };
-                    let _ = write!(arms_code, "{key}i64 => {}, ", target.0);
+                    let pattern = self.switch_pattern(key)?;
+                    let _ = write!(arms_code, "{pattern} => {}, ", target.0);
                 }
                 format!(
                     "bb = match d{b} {{ {arms_code}_ => {} }}; continue;",
@@ -1110,7 +1114,13 @@ impl<'db> Generator<'_, 'db> {
     /// Whether a `Call` terminator suspends: see [`suspends_directly`]; a
     /// call to a user function suspends unless it is compiled and inline.
     fn call_suspends(&self, terminator: &Terminator<'db>) -> bool {
-        if suspends_directly(self.db, self.index, terminator, &self.analysis.static_types) {
+        if suspends_directly(
+            self.db,
+            self.index,
+            self.body,
+            terminator,
+            &self.analysis.static_types,
+        ) {
             return true;
         }
         let Terminator::Call { callee, .. } = terminator else {

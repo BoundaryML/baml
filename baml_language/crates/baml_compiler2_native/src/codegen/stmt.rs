@@ -3,7 +3,7 @@
 
 use baml_compiler2_mir::{
     BlockId, IntrinsicOp, Local, Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
-    Terminator,
+    Terminator, class_display_name,
 };
 
 use super::{Expr, Gen, Generator, YIELD_EVERY, unsupported};
@@ -63,13 +63,10 @@ impl Generator<'_, '_> {
                 };
                 self.line(depth, &format!("match d{block} {{"));
                 for (indices, body) in arms {
-                    let pattern: Vec<String> = indices
-                        .iter()
-                        .map(|&i| match keys[i].0 {
-                            SwitchKey::Int(key) => format!("{key}i64"),
-                            SwitchKey::Class(_) => unreachable!("rejected by flow_of"),
-                        })
-                        .collect();
+                    let mut pattern = Vec::with_capacity(indices.len());
+                    for &i in indices {
+                        pattern.push(self.switch_pattern(&keys[i].0)?);
+                    }
                     self.line(depth + 1, &format!("{} => {{", pattern.join(" | ")));
                     self.stmts(body, depth + 2)?;
                     self.line(depth + 1, "}");
@@ -94,6 +91,24 @@ impl Generator<'_, '_> {
             }
             Stmt::Exit(block) => self.exit(BlockId(*block), depth),
         }
+    }
+
+    /// The pattern a switch arm's key matches against the discriminant: an
+    /// enum's variant index, or a class's dispatch tag (what `Rvalue::TypeTag`
+    /// reads off an instance, which the linker fixed for every class of the
+    /// program). Two keys with one tag match in order, as bytecode's solved
+    /// table does: the later arm is unreachable.
+    pub(super) fn switch_pattern(&self, key: &SwitchKey<'_>) -> Gen<String> {
+        Ok(match key {
+            SwitchKey::Int(key) => format!("{key}i64"),
+            SwitchKey::Class(class) => {
+                let Some((object, _)) = self.index.class(self.db, *class)? else {
+                    let name = class_display_name(self.db, *class);
+                    return unsupported(format!("class `{name}` not found in the program"));
+                };
+                format!("{}i64", self.index.class_tag(object))
+            }
+        })
     }
 
     /// The statements of a block and whatever its terminator computes before

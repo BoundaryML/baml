@@ -12,9 +12,10 @@ use baml_compiler2_emit::{
     enum_head_coords, function_coords, function_identity, interface_head_coords,
 };
 use baml_compiler2_hir::{
+    contributions::Definition,
     file_package::file_package,
-    item_data::{file_functions, file_lets, is_required_interface_method},
-    loc::FunctionLoc,
+    item_data::{file_functions, file_lets, is_required_interface_method, let_data},
+    loc::{FunctionLoc, LetLoc},
     package::{edge_table, world_files},
 };
 use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef, FunctionRef};
@@ -22,9 +23,10 @@ use baml_compiler2_mir::{
     FunctionOwner, MirFunction, MirFunctionBody, MirFunctionId, MirFunctionKind, OptLevel,
     lower_function, lower_let_body,
 };
+use baml_type::{DeclName, typetag::TypeTag};
 use bex_vm_types::{
-    ConstValue, DeclPath, FnPath, FunctionKind, Object, ObjectIndex, Program,
-    types::{FunctionIdentity, PackageKind},
+    ConstValue, DeclPath, FnPath, FunctionKind, Object, ObjectIndex, Program, TypeHead,
+    types::{FunctionIdentity, LocalName, PackageKind},
 };
 
 use crate::{
@@ -134,6 +136,7 @@ pub fn compile_program<'db>(
     for &file in world_files(db, root) {
         let lines: std::sync::Arc<[u32]> =
             baml_compiler2_emit::build_line_starts(file.text(db)).into();
+        let package = index.package_of(file_package(db, file).root);
         for &function in file_functions(db, file) {
             if is_required_interface_method(db, function) {
                 continue;
@@ -154,7 +157,7 @@ pub fn compile_program<'db>(
             // Its lambdas are units of their own, whatever becomes of it: a
             // closure over a bytecode lambda is still a closure, and a
             // compiled lambda is entered through the VM either way.
-            admit_lambdas(db, &index, &mut units, &mut rejected, mir, &[], &lines);
+            admit_lambdas(db, &index, &mut units, &mut rejected, mir, &[], &lines, package);
             let object = match index.declared(db, function) {
                 Ok(Some(object)) => object,
                 Ok(None) => {
@@ -182,6 +185,7 @@ pub fn compile_program<'db>(
                 body,
                 Vec::new(),
                 &lines,
+                package,
             );
         }
         if entries.is_some() {
@@ -248,6 +252,8 @@ pub fn compile_program<'db>(
             let mut generator = Generator {
                 db,
                 index: &index,
+                object,
+                package: unit.package,
                 symbols: &symbols,
                 resumable: &resumable,
                 suspends: resumable.contains(&object),
@@ -325,6 +331,7 @@ fn admit_unit<'db>(
     body: &'db MirFunctionBody<'db>,
     captures: Vec<Repr>,
     lines: &std::sync::Arc<[u32]>,
+    package: Option<u32>,
 ) {
     let name = index.display(object).to_owned();
     let info = index.info(object);
@@ -339,6 +346,7 @@ fn admit_unit<'db>(
                     mir,
                     analysis,
                     lines: lines.clone(),
+                    package,
                 },
             );
         }
@@ -357,6 +365,7 @@ fn admit_lambdas<'db>(
     parent: &'db MirFunction<'db>,
     captures: &[Repr],
     lines: &std::sync::Arc<[u32]>,
+    package: Option<u32>,
 ) {
     let MirFunctionKind::Bytecode(parent_body) = &parent.kind else {
         return;
@@ -381,9 +390,9 @@ fn admit_lambdas<'db>(
                 continue;
             }
         };
-        admit_lambdas(db, index, units, rejected, lambda, &captures, lines);
+        admit_lambdas(db, index, units, rejected, lambda, &captures, lines, package);
         admit_unit(
-            db, index, units, rejected, object, lambda, body, captures, lines,
+            db, index, units, rejected, object, lambda, body, captures, lines, package,
         );
     }
 }
@@ -417,6 +426,9 @@ struct Unit<'db> {
     analysis: Analysis,
     /// Line starts of the function's source file, for reported lines.
     lines: std::sync::Arc<[u32]>,
+    /// The ordinal of the package the function belongs to, when the program
+    /// places it.
+    package: Option<u32>,
 }
 
 // ─── The program's objects by identity ──────────────────────────────────────
@@ -462,8 +474,12 @@ pub(crate) struct ProgramIndex {
     classes: HashMap<DeclKey, (usize, usize)>,
     /// Enum object by identity.
     enums: HashMap<DeclKey, usize>,
-    /// Interface object by identity.
+    /// Interface and recursive alias objects by identity: heads a type
+    /// template can name, anchored like classes and enums.
     interfaces: HashMap<DeclKey, usize>,
+    aliases: HashMap<DeclKey, usize>,
+    /// The global slot of each top-level `let`, by identity.
+    lets: HashMap<DeclKey, usize>,
     /// Lambda (closure body) object by identity.
     lambdas: HashMap<LambdaKey, usize>,
     /// Identities more than one object claimed: a malformed program. Every
@@ -493,6 +509,21 @@ pub(crate) struct ProgramIndex {
     /// The program's pooled `foo<..>` values, as (function global slot,
     /// type arguments, object index).
     generic_functions: Vec<(usize, Box<[bex_vm_types::RealizedTy]>, usize)>,
+    /// Bigint literal (as decimal text) → its pooled `Object::Bigint`.
+    pub(crate) bigints: HashMap<String, usize>,
+    /// Byte array literal → its pooled `Object::Uint8Array` template, which
+    /// bytecode deep-copies on every evaluation.
+    pub(crate) byte_arrays: HashMap<Vec<u8>, usize>,
+    /// Each class object's dispatch tag (`Class::type_tag`), the value a
+    /// class-tag switch matches on.
+    class_tags: HashMap<usize, i64>,
+    /// Each enum object's variant count.
+    enum_variant_counts: HashMap<usize, usize>,
+    /// The type constants (`ConstValue::Type`, `ConstValue::Literal`) of each
+    /// bytecode function's constant pool, with their indices: what its
+    /// `IsType` and `LoadType` instructions read, and what a compiled body
+    /// reads for the same test or allocation (`BexVm::type_constant`).
+    type_constants: HashMap<usize, Vec<(usize, ConstValue)>>,
 }
 
 impl ProgramIndex {
@@ -577,11 +608,24 @@ impl ProgramIndex {
                         object,
                     ));
                 }
+                Object::Bigint(value) => {
+                    index.bigints.entry(value.to_string()).or_insert(object);
+                }
+                Object::Uint8Array(bytes) => {
+                    index
+                        .byte_arrays
+                        .entry(bytes.lock().clone())
+                        .or_insert(object);
+                }
                 Object::Class(class) => {
                     index.heads.insert(object, class.type_tag);
+                    index.class_tags.insert(object, class.type_tag.as_i64());
                 }
                 Object::Enum(declaration) => {
                     index.heads.insert(object, declaration.type_tag);
+                    index
+                        .enum_variant_counts
+                        .insert(object, declaration.variants.len());
                 }
                 _ => {}
             }
@@ -593,6 +637,27 @@ impl ProgramIndex {
                 index.globals.entry(object.raw()).or_insert(slot);
             }
         }
+        for (object, item) in program.objects.iter().enumerate() {
+            let Object::Function(function) = item else {
+                continue;
+            };
+            if !matches!(function.kind, FunctionKind::Bytecode) {
+                continue;
+            }
+            let constants: Vec<(usize, ConstValue)> = function
+                .bytecode
+                .constants
+                .iter()
+                .enumerate()
+                .filter(|(_, constant)| {
+                    matches!(constant, ConstValue::Type(_) | ConstValue::Literal(_))
+                })
+                .map(|(i, constant)| (i, constant.clone()))
+                .collect();
+            if !constants.is_empty() {
+                index.type_constants.insert(object, constants);
+            }
+        }
         for (ordinal, package) in (0u32..).zip(&program.packages) {
             let key = |path: DeclPath| DeclKey {
                 package: ordinal,
@@ -600,10 +665,17 @@ impl ProgramIndex {
             };
             // A function's cell holds its object; a `let`'s holds its value.
             for (path, &cell) in &package.globals {
+                let slot = package.slot_base.raw() + cell as usize;
+                if matches!(path, DeclPath::Let(_)) {
+                    collisions.extend(
+                        claim(&mut index.lets, &mut index.ambiguous, key(path.clone()), slot)
+                            .map(|key| format!("{key:?}")),
+                    );
+                    continue;
+                }
                 if !matches!(path, DeclPath::Function(_) | DeclPath::InterfaceBody(_)) {
                     continue;
                 }
-                let slot = package.slot_base.raw() + cell as usize;
                 let Some(ConstValue::Object(object)) = program.globals.get(slot) else {
                     continue;
                 };
@@ -651,6 +723,17 @@ impl ProgramIndex {
                         &mut index.interfaces,
                         &mut index.ambiguous,
                         key(DeclPath::Interface(path.clone())),
+                        object.raw(),
+                    )
+                    .map(|key| format!("{key:?}")),
+                );
+            }
+            for (path, &object) in &package.type_aliases {
+                collisions.extend(
+                    claim(
+                        &mut index.aliases,
+                        &mut index.ambiguous,
+                        key(DeclPath::TypeAlias(path.clone())),
                         object.raw(),
                     )
                     .map(|key| format!("{key:?}")),
@@ -791,6 +874,103 @@ impl ProgramIndex {
         self.lookup(&self.enums, enum_coords(db, enum_ref))
     }
 
+    /// The global slot of the top-level `let` `binding`, if the program has
+    /// it.
+    pub(crate) fn let_slot<'db>(
+        &self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        binding: LetLoc<'db>,
+    ) -> Result<Option<usize>, Rejection> {
+        let head = baml_compiler2_hir_ty::lower::qualify_def(
+            db,
+            Definition::Let(binding),
+            &let_data(db, binding).name,
+        );
+        let root = file_package(db, binding.file(db)).root;
+        self.lookup(&self.lets, (root, DeclPath::Let(item_path(&head))))
+    }
+
+    /// The ordinal of the package emitted from `root`, if the program places
+    /// it.
+    pub(crate) fn package_of(&self, root: SourceRoot) -> Option<u32> {
+        self.packages.get(&root).copied()
+    }
+
+    /// The dispatch tag of the class at `object`, which [`Self::class`]
+    /// found: what `Rvalue::TypeTag` reads off its instances.
+    pub(crate) fn class_tag(&self, object: usize) -> i64 {
+        self.class_tags[&object]
+    }
+
+    /// The variant count of the enum at `object`, which [`Self::enum_`]
+    /// found.
+    pub(crate) fn enum_variants(&self, object: usize) -> usize {
+        self.enum_variant_counts[&object]
+    }
+
+    /// `template` as the program's constant pool spells it: every head
+    /// replaced by the tag the linker gave its declaration, which is how a
+    /// pooled `ConstValue::Type` compares. `None` when a head names no
+    /// declaration of the program.
+    pub(crate) fn anchor(
+        &self,
+        template: &baml_compiler2_mir::TyTemplate,
+    ) -> Result<Option<bex_vm_types::TyTemplate>, Rejection> {
+        let mut missing = None;
+        let mut failed = None;
+        let anchored = template.map_heads(&mut |head: &DeclName| {
+            let tag = match self.head_object(head) {
+                Ok(Some(object)) => TypeTag::of_static_index(object),
+                Ok(None) => {
+                    missing = Some(head.clone());
+                    TypeTag::of_static_index(0)
+                }
+                Err(rejection) => {
+                    failed = Some(rejection);
+                    TypeTag::of_static_index(0)
+                }
+            };
+            TypeHead::unresolved(tag)
+        });
+        if let Some(rejection) = failed {
+            return Err(rejection);
+        }
+        Ok(missing.is_none().then_some(anchored))
+    }
+
+    /// The object of the declaration `head` names: a class, enum, interface
+    /// or recursive alias.
+    fn head_object(&self, head: &DeclName) -> Result<Option<usize>, Rejection> {
+        let path = item_path(head);
+        let root = head.root();
+        if let Some((object, _)) =
+            self.lookup(&self.classes, (root, DeclPath::Class(path.clone())))?
+        {
+            return Ok(Some(object));
+        }
+        for (table, path) in [
+            (&self.enums, DeclPath::Enum(path.clone())),
+            (&self.interfaces, DeclPath::Interface(path.clone())),
+            (&self.aliases, DeclPath::TypeAlias(path)),
+        ] {
+            if let Some(object) = self.lookup(table, (root, path))? {
+                return Ok(Some(object));
+            }
+        }
+        Ok(None)
+    }
+
+    /// The index in `function`'s constant pool of a constant equal to
+    /// `wanted`, if bytecode pooled one: the constant its own `IsType` or
+    /// `LoadType` of the same type reads.
+    pub(crate) fn pooled_constant(&self, function: usize, wanted: &ConstValue) -> Option<usize> {
+        self.type_constants
+            .get(&function)?
+            .iter()
+            .find(|(_, constant)| constant == wanted)
+            .map(|(index, _)| *index)
+    }
+
     /// Info of the function at `object`, which [`Self::declared`] or
     /// [`Self::function`] found.
     pub(crate) fn info(&self, object: usize) -> &FunctionInfo {
@@ -839,6 +1019,14 @@ fn lookup_key<K: Hash + Eq + std::fmt::Debug, T: Copy>(
         )));
     }
     Ok(table.get(key).copied())
+}
+
+/// The path of `head` within its package, as the program's tables key it.
+fn item_path(head: &DeclName) -> LocalName {
+    LocalName {
+        namespace: head.namespace().clone(),
+        name: head.name().clone(),
+    }
 }
 
 /// Record that `key` names `value`. A second, different claim on one key

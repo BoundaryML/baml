@@ -11,7 +11,7 @@ use bex_vm_types::FunctionKind;
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     admit::{FunctionInfo, Rejection},
-    analysis::{Repr, builtin_is_callable, static_realized},
+    analysis::{Repr, builtin_is_callable, call_shape, static_realized},
 };
 
 impl<'db> Generator<'_, 'db> {
@@ -30,8 +30,9 @@ impl<'db> Generator<'_, 'db> {
         let Some((object, info)) = self.index.function(self.db, *func)? else {
             return unsupported(format!("callee `{name}` not found in the program"));
         };
+        let shape = call_shape(self.body, args, ntypeargs, &self.analysis.static_types);
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
-        let (types, primitive) = self.call_type_args(type_args)?;
+        let (types, _) = self.call_type_args(type_args)?;
         let values = self.laid_out_args(block, &name, info, layout, args)?;
         let args = format!("&[{}]", values.join(", "));
         match info.kind {
@@ -63,7 +64,7 @@ impl<'db> Generator<'_, 'db> {
                 let Some(key) = info.native_key.as_deref() else {
                     return unsupported(format!("builtin `{name}` has no native key"));
                 };
-                if !builtin_is_callable(key, !types.is_empty() && primitive) {
+                if !builtin_is_callable(key, shape) {
                     return unsupported(format!("builtin `{key}` may yield"));
                 }
                 let next = self.natives.len();

@@ -1,15 +1,18 @@
 //! Rvalues: operators, type tests, and aggregates.
 
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BlockId, Rvalue, TypeTest, UnaryOp, class_display_name, enum_display_name,
+    AggregateKind, BinOp, BlockId, Rvalue, TyTemplate, TypeTest, UnaryOp, class_display_name,
+    enum_display_name,
 };
+use baml_type::typetag;
+use bex_vm_types::ConstValue;
 
 use baml_compiler2_mir::function_display_name;
 
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     Rejection,
-    analysis::{Repr, static_realized, template_blocker},
+    analysis::{CallShape, Repr, builtin_is_callable, reads_frame, static_realized, template_blocker},
     render::{binop_name, cmp_name},
 };
 
@@ -61,7 +64,7 @@ impl<'db> Generator<'_, 'db> {
                 Ok(Expr::new(code, Repr::Bool))
             }
             Rvalue::Array(template, elements) => {
-                let element_ty = self.realized(template)?;
+                let element_ty = self.realized_type(template)?;
                 let mut values = Vec::with_capacity(elements.len());
                 for element in elements {
                     let element = self.operand(block, element)?;
@@ -126,8 +129,60 @@ impl<'db> Generator<'_, 'db> {
                 kind: AggregateKind::Array,
                 ..
             } => unsupported("untyped array aggregate"),
-            Rvalue::Map(..) => unsupported("map literal"),
-            Rvalue::Uint8Array(_) => unsupported("byte array literal"),
+            // A map literal is an empty map followed by `baml.Map.set` calls.
+            Rvalue::Map(key, value, entries) => {
+                if !entries.is_empty() {
+                    return unsupported("map literal with inline entries");
+                }
+                let key = self.realized_type(key)?;
+                let value = self.realized_type(value)?;
+                Ok(Expr::new(
+                    format!("vm.new_map({key}, {value})"),
+                    Repr::Value,
+                ))
+            }
+            // The literal's pooled template, deep-copied on every evaluation
+            // so the value is mutable, as bytecode does.
+            Rvalue::Uint8Array(bytes) => {
+                let Some(&object) = self.index.byte_arrays.get(bytes) else {
+                    return Err(Rejection::Invalid(
+                        "byte array literal not in the program's pool".into(),
+                    ));
+                };
+                let deep_copy = baml_compiler2_hir_ty::callable::lang_function(
+                    self.db,
+                    baml_base::LangPackage::Baml,
+                    &[],
+                    "deep_copy",
+                );
+                let Some((_, info)) = deep_copy
+                    .map(|function| self.index.function(self.db, function))
+                    .transpose()?
+                    .flatten()
+                else {
+                    return unsupported("`baml.deep_copy` not found in the program");
+                };
+                let Some(key) = info.native_key.as_deref() else {
+                    return unsupported("builtin `baml.deep_copy` has no native key");
+                };
+                let shape = CallShape {
+                    type_args_primitive: false,
+                    map_key_primitive: false,
+                };
+                if !builtin_is_callable(key, shape) {
+                    return unsupported(format!("builtin `{key}` may yield"));
+                }
+                let ordinal = self.native_ordinal(key);
+                let template = self.hoist(Expr::new(
+                    format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
+                    Repr::Value,
+                ));
+                let code = self.fallible(
+                    block,
+                    &format!("vm.call_builtin(native_{ordinal}(), &[{}])", template.code),
+                )?;
+                Ok(Expr::new(code, Repr::Value))
+            }
             // A closure over a lambda, which is a unit of its own (compiled
             // or not: the object is the same): its cells, the enclosing
             // function's type arguments it captures, and the lambda's object.
@@ -280,7 +335,15 @@ impl<'db> Generator<'_, 'db> {
                 "type template with {}",
                 template_blocker(self.index, template)
             )),
-            Rvalue::CurrentPackage => unsupported("current package"),
+            Rvalue::CurrentPackage => {
+                let Some(ordinal) = self.package else {
+                    return unsupported("current package of a function the program does not place");
+                };
+                Ok(Expr::new(
+                    format!("vm.current_package({ordinal})"),
+                    Repr::Value,
+                ))
+            }
             Rvalue::TraceHookSettings { .. } => unsupported("trace hook"),
         }
     }
@@ -314,13 +377,104 @@ impl<'db> Generator<'_, 'db> {
                     "vm.is_variant_of({value}, vm.idx_to_ptr(ObjectIndex::from_raw({object})))"
                 ))
             }
-            // `is T` for a structural type: membership in the realized type,
-            // by the canonical algebra, as bytecode's `IsType` decides it.
-            TypeTest::Template(template) => {
+            // `is T` for a structural type. One that reads the frame (or a
+            // generic class instance) is membership in the realized type, by
+            // the canonical algebra; any other is decided through the constant
+            // the emitter pooled for it, as bytecode's `IsType` decides it.
+            TypeTest::Template(template)
+                if reads_frame(template)
+                    || matches!(template, TyTemplate::Class(..) | TyTemplate::Enum(..)) =>
+            {
                 let ty = self.realized_ref(template)?;
                 Ok(format!("vm.value_is_member_of({value}, {ty})"))
             }
+            TypeTest::Template(template) => self.template_test(value, template),
         }
+    }
+
+    /// `value is T` for a type template, deciding it as bytecode's emitter
+    /// does for the same template (`is_type_template`): a realized leaf by
+    /// its type tag, `unknown` as true, and a literal type or a structural
+    /// type (a container, union, interface, alias, …) through the constant
+    /// the emitter pooled for this test in the function's own constant pool,
+    /// so the VM's value matcher decides both the same way.
+    fn template_test(&mut self, value: &str, template: &TyTemplate) -> Gen<String> {
+        frame_free(template)?;
+        let tag = |tag: i64| format!("(bex_vm::compiled_rt::type_tag({value}) == {tag}i64)");
+        let constant = match template {
+            TyTemplate::Class(..) | TyTemplate::Enum(..) => {
+                return Err(Rejection::Invalid(
+                    "a class or enum test reaches the backend as a declaration test".into(),
+                ));
+            }
+            // The top type: every value inhabits it.
+            TyTemplate::Unknown => return Ok("true".to_string()),
+            TyTemplate::Int => return Ok(tag(typetag::INT)),
+            TyTemplate::Bigint => return Ok(tag(typetag::BIGINT)),
+            TyTemplate::Float => return Ok(tag(typetag::FLOAT)),
+            TyTemplate::String => return Ok(tag(typetag::STRING)),
+            TyTemplate::Bool => return Ok(tag(typetag::BOOL)),
+            TyTemplate::Null => return Ok(tag(typetag::NULL)),
+            TyTemplate::Uint8Array => return Ok(tag(typetag::UINT8ARRAY)),
+            TyTemplate::Type => return Ok(tag(typetag::TYPE)),
+            TyTemplate::Literal(literal, _) => ConstValue::Literal(literal.clone()),
+            _ => {
+                let Some(anchored) = self.index.anchor(template)? else {
+                    return unsupported(
+                        "structural type test naming a declaration outside the program",
+                    );
+                };
+                ConstValue::Type(anchored)
+            }
+        };
+        let Some(index) = self.index.pooled_constant(self.object, &constant) else {
+            return Err(Rejection::Invalid(
+                "type test constant not in the function's pool".into(),
+            ));
+        };
+        Ok(format!(
+            "vm.is_type_constant(vm.idx_to_ptr(ObjectIndex::from_raw({})), {index}, {value})?",
+            self.object
+        ))
+    }
+
+    /// The `RealizedTy` expression for a type template in this function:
+    /// built in place when it needs no declaration lookup
+    /// ([`static_realized`]), otherwise read from the constant the emitter
+    /// pooled for the same template (`LoadType`), bound to a temporary so it
+    /// can be a call's argument.
+    fn realized_type(&mut self, template: &TyTemplate) -> Gen<String> {
+        if reads_frame(template) {
+            return self.realized(template);
+        }
+        if let Some(code) = static_realized(self.index, template) {
+            return Ok(code);
+        }
+        frame_free(template)?;
+        let Some(anchored) = self.index.anchor(template)? else {
+            return unsupported("type naming a declaration outside the program");
+        };
+        let Some(index) = self
+            .index
+            .pooled_constant(self.object, &ConstValue::Type(anchored))
+        else {
+            return Err(Rejection::Invalid(
+                "type constant not in the function's pool".into(),
+            ));
+        };
+        let name = format!("ty{}", self.temps);
+        self.temps += 1;
+        self.pending.push(format!(
+            "let {name}: RealizedTy = vm.type_constant(vm.idx_to_ptr(ObjectIndex::from_raw({})), {index})?;",
+            self.object
+        ));
+        Ok(name)
+    }
+
+    /// The module's ordinal for the builtin `key`, binding it on first use.
+    fn native_ordinal(&mut self, key: &str) -> usize {
+        let next = self.natives.len();
+        *self.natives.entry(key.to_owned()).or_insert(next)
     }
 
     fn binary(&mut self, block: BlockId, op: BinOp, left: &Expr, right: &Expr) -> Gen<Expr> {
@@ -426,4 +580,15 @@ impl<'db> Generator<'_, 'db> {
             }
         })
     }
+}
+
+/// A template that reads no frame type argument: the only kind a body with
+/// no type arguments of its own can resolve.
+fn frame_free(template: &TyTemplate) -> Gen<()> {
+    let mut refs = 0;
+    template.for_each_type_arg_ref(&mut |_| refs += 1);
+    if refs > 0 {
+        return unsupported("type known only at runtime");
+    }
+    Ok(())
 }

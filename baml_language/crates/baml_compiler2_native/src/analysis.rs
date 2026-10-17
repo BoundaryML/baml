@@ -1,11 +1,14 @@
 //! Per-function analysis: how each local is held, the edge shape of each
 //! block, and what the function calls or suspends on.
 
-use std::collections::{BTreeSet, HashMap};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::OnceLock,
+};
 
 use baml_compiler2_mir::{
-    CellId, Constant, MirFunction, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
-    SwitchKey, Terminator,
+    CellId, Constant, MirFunction, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue,
+    StatementKind, Terminator,
 };
 use baml_type::{Literal, TyTemplate};
 use bex_vm_types::FunctionKind;
@@ -171,7 +174,7 @@ impl Analysis {
             // An interface method call resolves its callee at run time, so
             // the body requests it from the VM (`Step::Call`); only array
             // iteration is compiled in place.
-            suspends |= suspends_directly(db, index, terminator, &static_types)
+            suspends |= suspends_directly(db, index, body, terminator, &static_types)
                 || (matches!(terminator, Terminator::VirtualCall { .. }) && !array_iteration);
         }
         let cfg = Cfg {
@@ -347,18 +350,10 @@ fn flow_of(terminator: &Terminator<'_>) -> Result<Flow, Rejection> {
         },
         Terminator::Switch {
             arms, otherwise, ..
-        } => {
-            if arms
-                .iter()
-                .any(|(key, _)| !matches!(key, SwitchKey::Int(_)))
-            {
-                return Err(Rejection::Unsupported("switch on a class tag".into()));
-            }
-            Flow::Switch {
-                arms: arms.iter().map(|(_, target)| target.0).collect(),
-                otherwise: otherwise.0,
-            }
-        }
+        } => Flow::Switch {
+            arms: arms.iter().map(|(_, target)| target.0).collect(),
+            otherwise: otherwise.0,
+        },
         Terminator::Return | Terminator::Unreachable => Flow::Exit,
         Terminator::Throw { .. } | Terminator::Rethrow { .. } => Flow::Exit,
         Terminator::Call {
@@ -403,6 +398,7 @@ fn flow_of(terminator: &Terminator<'_>) -> Result<Flow, Rejection> {
 pub(crate) fn suspends_directly<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     index: &ProgramIndex,
+    body: &MirFunctionBody<'db>,
     terminator: &Terminator<'db>,
     static_types: &HashMap<usize, StaticTy>,
 ) -> bool {
@@ -429,13 +425,11 @@ pub(crate) fn suspends_directly<'db>(
                 FunctionKind::Bytecode => false,
                 FunctionKind::SysOp(_) => true,
                 FunctionKind::Native(_) | FunctionKind::NativeUnresolved => {
-                    let types_primitive = args[..(*ntypeargs).min(args.len())].iter().all(|arg| {
-                        matches!(arg, Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))
-                            if static_types.get(&local.0).is_some_and(|ty| ty.primitive))
-                    });
-                    !info.native_key.as_deref().is_some_and(|key| {
-                        builtin_is_callable(key, *ntypeargs > 0 && types_primitive)
-                    })
+                    let shape = call_shape(body, args, *ntypeargs, static_types);
+                    !info
+                        .native_key
+                        .as_deref()
+                        .is_some_and(|key| builtin_is_callable(key, shape))
                 }
             }
         }
@@ -516,25 +510,117 @@ pub(crate) fn loops(body: &MirFunctionBody<'_>) -> (BTreeSet<usize>, Vec<bool>) 
     (headers, in_loop)
 }
 
-/// VM-owned builtins that never yield to run a callback, by `native_key`.
-/// Anything not listed is rejected: a yielding builtin cannot run inside a
-/// compiled body. `primitive_types` says the call has type arguments, all
-/// statically known primitives or arrays of them.
-pub(crate) fn builtin_is_callable(key: &str, primitive_types: bool) -> bool {
-    const ARRAY: &[&str] = &[
-        "push", "pop", "first", "last", "is_empty", "reverse", "slice", "concat",
-    ];
-    // Structural rendering yields only to run a user `to_string` override,
-    // which a value of a primitive type cannot contain.
-    if key == "baml._to_string_default" {
-        return primitive_types;
+/// What is statically known about a call to a builtin that decides whether
+/// compiled code can call it directly; see [`builtin_is_callable`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CallShape {
+    /// The call has type arguments, all statically known primitives or
+    /// arrays of them.
+    pub(crate) type_args_primitive: bool,
+    /// The call's receiver is a map whose declared key type is primitive:
+    /// its keys hash and compare in Rust, never through a user `hash` or
+    /// `eq`.
+    pub(crate) map_key_primitive: bool,
+}
+
+/// The [`CallShape`] of a call with arguments `args`, the first `ntypeargs`
+/// of them type arguments.
+pub(crate) fn call_shape(
+    body: &MirFunctionBody<'_>,
+    args: &[Operand<'_>],
+    ntypeargs: usize,
+    static_types: &HashMap<usize, StaticTy>,
+) -> CallShape {
+    let ntypeargs = ntypeargs.min(args.len());
+    let local_of = |arg: &Operand<'_>| match arg {
+        Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => Some(local.0),
+        _ => None,
+    };
+    let type_args_primitive = ntypeargs > 0
+        && args[..ntypeargs].iter().all(|arg| {
+            local_of(arg)
+                .is_some_and(|local| static_types.get(&local).is_some_and(|ty| ty.primitive))
+        });
+    let map_key_primitive =
+        args.get(ntypeargs)
+            .and_then(local_of)
+            .is_some_and(|receiver| match body.locals[receiver].ty.strip_null() {
+                RuntimeTy::Map { key, .. } => is_primitive_key(&key),
+                _ => false,
+            });
+    CallShape {
+        type_args_primitive,
+        map_key_primitive,
     }
-    if let Some(method) = key.strip_prefix("baml.Array.") {
-        return ARRAY.contains(&method);
+}
+
+/// Whether every value of the map key type `ty` hashes and compares in Rust
+/// without yielding: a string, a string literal, or a union of those. The
+/// map's operations hash a string key and compare two string keys directly;
+/// every other key (an `int` too) hashes through its `baml.Hash`
+/// implementation and compares through the structural default, both of
+/// which can run BAML code, so the builtin yields.
+fn is_primitive_key(ty: &RuntimeTy) -> bool {
+    match ty {
+        RuntimeTy::String | RuntimeTy::Literal(Literal::String(_), _) => true,
+        RuntimeTy::Union(members) => members.iter().all(is_primitive_key),
+        _ => false,
     }
-    key.starts_with("baml.Int.")
-        || key.starts_with("baml.Float.")
-        || key.starts_with("baml.String.")
+}
+
+/// The stdlib packages whose `$rust_function` bodies the VM implements
+/// (`bex_vm::package_baml::VM_NATIVE_PACKAGES`): the only builtins compiled
+/// code can bind by key.
+const VM_PACKAGES: &[&str] = &["baml", "testing", "ai", "reflect", "trace"];
+
+/// Whether the VM-owned builtin `key` may yield to run a BAML callback,
+/// read off the `//baml:may_yield` directive on its declaration in the
+/// stdlib's own source — the same declaration that shapes the builtin's
+/// glue, so a builtin that can yield cannot be declared without it. `None`
+/// for a key no VM package declares.
+fn builtin_may_yield(key: &str) -> Option<bool> {
+    static TABLE: OnceLock<HashMap<String, bool>> = OnceLock::new();
+    TABLE
+        .get_or_init(|| {
+            let mut table = HashMap::new();
+            for package in VM_PACKAGES {
+                let (builtins, _, _) = baml_builtins2_codegen::extract_native_builtins_for(package)
+                    .unwrap_or_else(|error| {
+                        panic!("the stdlib's `{package}` builtins do not extract: {error}")
+                    });
+                for builtin in builtins {
+                    table.insert(builtin.path, builtin.may_yield);
+                }
+            }
+            table
+        })
+        .get(key)
+        .copied()
+}
+
+/// The `baml.Map` methods that yield only to hash or compare keys.
+const MAP_KEY_METHODS: &[&str] = &["has", "set", "get", "index", "delete", "get_or_insert"];
+
+/// Whether compiled code can call the VM-owned builtin `key` directly, with
+/// a call of `shape`: a builtin that cannot yield always can; one that
+/// yields only to run a callback a value of some type might carry can when
+/// the static types rule such a value out. Anything else — a builtin that
+/// takes a callback, one no VM package implements — is called through the
+/// VM as a suspension.
+pub(crate) fn builtin_is_callable(key: &str, shape: CallShape) -> bool {
+    match builtin_may_yield(key) {
+        None => false,
+        Some(false) => true,
+        // Structural rendering yields only to run a user `to_string`
+        // override, which a value of a primitive type cannot contain.
+        Some(true) if key == "baml._to_string_default" => shape.type_args_primitive,
+        // A map's key operations yield only to run a user `hash` or `eq` on
+        // a key; a primitive key has neither (strings hash in Rust, the
+        // rest take the structural default).
+        Some(true) => key
+            .strip_prefix("baml.Map.")
+            .is_some_and(|method| MAP_KEY_METHODS.contains(&method) && shape.map_key_primitive),
+    }
 }
 
 /// A type argument known statically: the `RealizedTy` expression that builds
@@ -699,4 +785,100 @@ pub(crate) fn template_blocker(
         })
     }
     blocker_of(index, template).unwrap_or("a type this backend does not build")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const DIRECT: CallShape = CallShape {
+        type_args_primitive: false,
+        map_key_primitive: false,
+    };
+
+    /// The allowlist is the stdlib's own `//baml:may_yield` directives: a
+    /// builtin without one is callable, one with it only when the static
+    /// types rule its callbacks out, and a key no VM package declares never.
+    #[test]
+    fn callable_builtins_follow_the_may_yield_directive() {
+        for key in [
+            "baml.Array.push",
+            "baml.Array.slice",
+            "baml.Int.abs",
+            "baml.String.byte_length",
+            "baml.Float.floor",
+            "baml.deep_copy",
+            "baml.Map.length",
+            "baml.Map.keys",
+        ] {
+            assert_eq!(builtin_may_yield(key), Some(false), "{key}");
+            assert!(builtin_is_callable(key, DIRECT), "{key}");
+        }
+        for key in [
+            "baml.Array.filter",
+            "baml.Array.sort_by",
+            "baml._equals_structural_default",
+        ] {
+            assert_eq!(builtin_may_yield(key), Some(true), "{key}");
+            assert!(!builtin_is_callable(key, DIRECT), "{key}");
+            assert!(
+                !builtin_is_callable(
+                    key,
+                    CallShape {
+                        type_args_primitive: true,
+                        map_key_primitive: true,
+                    }
+                ),
+                "{key} runs a callback whatever the types"
+            );
+        }
+        assert_eq!(
+            builtin_may_yield("baml.sys.sleep"),
+            None,
+            "a sys op is no VM builtin"
+        );
+        assert_eq!(builtin_may_yield("baml.no_such_builtin"), None);
+        assert!(!builtin_is_callable("baml.no_such_builtin", DIRECT));
+    }
+
+    #[test]
+    fn callback_free_yielders_are_callable_when_the_types_rule_callbacks_out() {
+        let primitive_types = CallShape {
+            type_args_primitive: true,
+            map_key_primitive: false,
+        };
+        assert!(builtin_is_callable(
+            "baml._to_string_default",
+            primitive_types
+        ));
+        assert!(!builtin_is_callable("baml._to_string_default", DIRECT));
+        let primitive_keys = CallShape {
+            type_args_primitive: false,
+            map_key_primitive: true,
+        };
+        for method in MAP_KEY_METHODS {
+            let key = format!("baml.Map.{method}");
+            assert_eq!(builtin_may_yield(&key), Some(true), "{key}");
+            assert!(builtin_is_callable(&key, primitive_keys), "{key}");
+            assert!(!builtin_is_callable(&key, DIRECT), "{key}");
+        }
+    }
+
+    #[test]
+    fn only_string_keys_skip_the_map_hash_dispatch() {
+        let literal =
+            RuntimeTy::Literal(Literal::String("a".into()), baml_type::Freshness::Regular);
+        assert!(is_primitive_key(&RuntimeTy::String));
+        assert!(is_primitive_key(&literal));
+        assert!(is_primitive_key(&RuntimeTy::Union(Box::new([
+            RuntimeTy::String,
+            literal
+        ]))));
+        assert!(!is_primitive_key(&RuntimeTy::Int));
+        assert!(!is_primitive_key(&RuntimeTy::Union(Box::new([
+            RuntimeTy::Int,
+            RuntimeTy::String
+        ]))));
+        assert!(!is_primitive_key(&RuntimeTy::Unknown));
+    }
 }

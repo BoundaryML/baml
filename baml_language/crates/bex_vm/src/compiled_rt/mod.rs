@@ -26,6 +26,7 @@ mod arith;
 mod call;
 mod cell;
 mod heap;
+mod program;
 mod types;
 mod r#virtual;
 

@@ -592,7 +592,7 @@ pub(crate) mod tests {
         NativeCallResult::Done(Value::int(42))
     }
 
-    fn native_function_object() -> Object {
+    pub(crate) fn native_function_object() -> Object {
         let native: NativeFunction = native_done;
         Object::Function(Box::new(Function {
             identity: bex_vm_types::types::FunctionIdentity::Declared(
@@ -4822,7 +4822,7 @@ impl BexVm {
             .unwrap_or_else(HeapPtr::null)
     }
 
-    fn load_global_in(&self, package: HeapPtr, index: GlobalIndex) -> Value {
+    pub(crate) fn load_global_in(&self, package: HeapPtr, index: GlobalIndex) -> Value {
         if package.as_ptr().is_null() {
             return self.globals.get(self.proof(), index);
         }

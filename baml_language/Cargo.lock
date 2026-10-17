@@ -844,6 +844,7 @@ name = "baml_compiler2_native"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "baml_builtins2_codegen",
  "baml_compiler2_emit",
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
