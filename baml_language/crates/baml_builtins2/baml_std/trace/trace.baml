@@ -189,8 +189,16 @@ class SpanError {
     message: string,
 }
 
-/// An explicitly owned operation. Inputs are captured at creation. The first
-/// terminal operation wins; close makes no claim about its outcome.
+/// An operation whose lifetime the code that starts it owns, instead of one
+/// function call's: for work that begins in one call and ends in another, such
+/// as a stream that is pulled step by step, or an agent run spanning many
+/// model turns. It is a span like a traced function call's, nested under the
+/// span active where it starts (or `parent`).
+///
+/// Start it with `trace.start_span`, run each piece of its work inside it with
+/// `run`, and end it once with `finish`, `fail`, `fail_with_context` or
+/// `close`. Inputs are captured at creation. The first ending wins; `close`
+/// makes no claim about the outcome.
 class Span {
     _handle: $rust_type,
 
@@ -240,6 +248,8 @@ class Span {
         body()
     }
 
+    /// (internal) Make this operation the active span for the rest of the
+    /// calling frame, which `run` scopes to its body.
     //baml:mut_vm
     function _activate(self) -> void throws SpanError {
         $rust_function
@@ -250,7 +260,7 @@ class Span {
 /// Creating it does not invoke the function or change the caller's active span.
 //baml:mut_vm
 function start_span(
-    target: unknown,
+    target: string | reflect.AnyFunction,
     inputs: map<string, unknown>? = null,
     parent: Span? = null,
     metadata: map<string, string | int | float | bool | null> = {},
@@ -269,7 +279,7 @@ function _passthrough() -> Options | ReservedSpan throws never {
 /// Internal: create the operation using an already-claimed reservation, if any.
 //baml:mut_vm
 function _create_span(
-    target: unknown,
+    target: string | reflect.AnyFunction,
     inputs: map<string, unknown>,
     config: Options | ReservedSpan,
 ) -> Span throws SpanError {

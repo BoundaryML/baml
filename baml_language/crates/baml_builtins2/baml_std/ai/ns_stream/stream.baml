@@ -806,12 +806,11 @@ class Stream<T> {
     function _parse_final_value(self) -> T {
         self._cache._parse_final(self._text) catch (e) {
             let parse: baml.errors.LlmClient => {
-                let failure = root.errors.ParseFailed {
+                throw root.errors.ParseFailed {
                     provider: self._provider,
                     raw_output: self._text,
                     message: parse.message,
-                };
-                throw failure;
+                }
             },
         }
     }

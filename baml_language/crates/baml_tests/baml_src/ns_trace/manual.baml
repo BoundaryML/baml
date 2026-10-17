@@ -39,14 +39,7 @@ test "manual span run restores context on return and throw" {
     span.close();
 }
 
-test "manual span rejects invalid targets and closed activation" {
-    let rejected = false;
-    trace.start_span(12) catch_all (e) {
-        _ => {
-            rejected = true;
-        }
-    };
-    assert.equal(rejected, true);
+test "manual span rejects closed activation" {
     let span = trace.start_span("operation");
     span.close();
     let called = false;

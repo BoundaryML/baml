@@ -135,7 +135,7 @@ function prompt(
 class FunctionSpec<Out> {
     spec_name: string,
     /// Original callable, retained for definition identity without invoking it.
-    target_function: unknown,
+    target_function: reflect.AnyFunction,
     args: map<string, unknown>,
     prompt_template: (OutputFormat) -> Prompt throws root.errors.PromptRenderError,
     toolbox: root.tools.Toolbox,
@@ -174,7 +174,7 @@ class FunctionSpec<Out> {
         )
     }
 
-    function target(self) -> unknown {
+    function target(self) -> reflect.AnyFunction {
         self.target_function
     }
 
