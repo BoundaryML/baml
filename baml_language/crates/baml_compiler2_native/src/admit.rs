@@ -1,14 +1,21 @@
 //! Admission: which functions of a program compile, and the module's
 //! index of the program they run in.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque, hash_map::Entry};
 
+use baml_base::SourceRoot;
+use baml_compiler2_emit::{
+    DeclCoords, class_coords, class_head_coords, declared_function_coords, enum_coords,
+    function_coords,
+};
 use baml_compiler2_hir::{
     item_data::{file_functions, is_required_interface_method},
-    package::world_files,
+    loc::FunctionLoc,
+    package::{edge_table, world_files},
 };
+use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef, FunctionRef};
 use baml_compiler2_mir::{MirFunction, MirFunctionBody, MirFunctionKind, OptLevel, lower_function};
-use bex_vm_types::{FunctionKind, Object, ObjectIndex, Program};
+use bex_vm_types::{ConstValue, DeclPath, FunctionKind, Object, ObjectIndex, Program};
 
 use crate::{analysis::Analysis, codegen::Generator, render::render_module};
 
@@ -34,7 +41,10 @@ impl std::fmt::Display for Rejection {
 /// One admitted function in the generated module.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompiledFunction {
-    /// `Function::name` of the bytecode function this body replaces.
+    /// `Function::name` of the bytecode function this body replaces, as the
+    /// loader renders it (`Program::function_name`): display only, repeated
+    /// in the module's table so a table from another build is refused at
+    /// load, never what the body is bound by.
     pub name: String,
     /// The Rust symbol of the body (`bex_vm::compiled_rt::CompiledBody`).
     pub symbol: String,
@@ -74,13 +84,15 @@ pub struct NativeModule {
 /// `PROGRAM_ARTIFACT`, read from `artifact_path`).
 pub fn compile_program<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
-    root: baml_base::SourceRoot,
+    root: SourceRoot,
     program: &Program,
     opt: OptLevel,
     artifact_path: &str,
 ) -> NativeModule {
-    let index = ProgramIndex::new(program);
-    let mut units: BTreeMap<String, Unit<'db>> = BTreeMap::new();
+    let index = ProgramIndex::new(db, root, program);
+    // Admission works on object indices: the identity generated code bakes
+    // in, unique across packages where a rendered name need not be.
+    let mut units: BTreeMap<usize, Unit<'db>> = BTreeMap::new();
     let mut rejected: Vec<(String, Rejection)> = Vec::new();
 
     for &file in world_files(db, root) {
@@ -100,17 +112,25 @@ pub fn compile_program<'db>(
                     continue;
                 }
             };
-            let name = mir.identity.display_name(db);
             let MirFunctionKind::Bytecode(body) = &mir.kind else {
                 continue;
             };
-            let Some(info) = index.functions.get(&name) else {
-                rejected.push((
-                    name,
-                    Rejection::Invalid("no function of this name in the program".into()),
-                ));
-                continue;
+            let object = match index.declared(db, function) {
+                Ok(Some(object)) => object,
+                Ok(None) => {
+                    rejected.push((
+                        mir.identity.display_name(db),
+                        Rejection::Invalid("no function of this identity in the program".into()),
+                    ));
+                    continue;
+                }
+                Err(rejection) => {
+                    rejected.push((mir.identity.display_name(db), rejection));
+                    continue;
+                }
             };
+            let name = index.name(object).to_owned();
+            let info = index.info(object);
             if info.generic {
                 rejected.push((name, Rejection::Unsupported("generic function".into())));
                 continue;
@@ -121,7 +141,7 @@ pub fn compile_program<'db>(
             match Analysis::new(db, &index, mir, body) {
                 Ok(analysis) => {
                     units.insert(
-                        name,
+                        object,
                         Unit {
                             mir,
                             analysis,
@@ -143,44 +163,43 @@ pub fn compile_program<'db>(
     // call directly (bytecode, a function value, a builtin that runs
     // callbacks, or a function that itself suspends).
     let (bodies, functions, natives) = loop {
-        let mut resumable: BTreeSet<String> = units
+        let mut resumable: BTreeSet<usize> = units
             .iter()
             .filter(|(_, unit)| unit.analysis.suspends)
-            .map(|(name, _)| name.clone())
+            .map(|(&object, _)| object)
             .collect();
         loop {
-            let grown: Vec<String> =
+            let grown: Vec<usize> =
                 units
                     .iter()
-                    .filter(|(name, unit)| {
-                        !resumable.contains(*name)
+                    .filter(|(object, unit)| {
+                        !resumable.contains(*object)
                             && unit.analysis.user_callees.iter().any(|callee| {
                                 !units.contains_key(callee) || resumable.contains(callee)
                             })
                     })
-                    .map(|(name, _)| name.clone())
+                    .map(|(&object, _)| object)
                     .collect();
             if grown.is_empty() {
                 break;
             }
             resumable.extend(grown);
         }
-        let symbols: HashMap<String, String> = units
+        let symbols: HashMap<usize, String> = units
             .keys()
-            .enumerate()
-            .map(|(ordinal, name)| (name.clone(), symbol_for(name, ordinal)))
+            .map(|&object| (object, symbol_for(index.name(object), object)))
             .collect();
         let mut bodies = String::new();
         let mut functions = Vec::new();
         let mut natives: BTreeMap<String, usize> = BTreeMap::new();
         let mut failed = Vec::new();
-        for (name, unit) in &units {
+        for (&object, unit) in &units {
             let mut generator = Generator {
                 db,
                 index: &index,
                 symbols: &symbols,
                 resumable: &resumable,
-                suspends: resumable.contains(name),
+                suspends: resumable.contains(&object),
                 in_loop: false,
                 natives: &mut natives,
                 body: body_of(unit.mir),
@@ -201,31 +220,30 @@ pub fn compile_program<'db>(
                 call_types: Vec::new(),
                 structured: None,
             };
-            match generator.function(&symbols[name]) {
+            match generator.function(&symbols[&object]) {
                 Ok(code) => {
                     bodies.push_str(&code);
-                    let info = &index.functions[name];
                     functions.push(CompiledFunction {
-                        name: name.clone(),
-                        symbol: symbols[name].clone(),
-                        object: index.objects[name],
-                        arity: info.arity,
-                        resumable: resumable.contains(name),
+                        name: index.name(object).to_owned(),
+                        symbol: symbols[&object].clone(),
+                        object,
+                        arity: index.info(object).arity,
+                        resumable: resumable.contains(&object),
                         slots: u32::try_from(generator.slots).unwrap_or(u32::MAX),
                         cause_slot: generator
                             .cause_slot
                             .map(|slot| u32::try_from(slot).unwrap_or(u32::MAX)),
                     });
                 }
-                Err(rejection) => failed.push((name.clone(), rejection)),
+                Err(rejection) => failed.push((object, rejection)),
             }
         }
         if failed.is_empty() {
             break (bodies, functions, natives);
         }
-        for (name, rejection) in failed {
-            units.remove(&name);
-            rejected.push((name, rejection));
+        for (object, rejection) in failed {
+            units.remove(&object);
+            rejected.push((index.name(object).to_owned(), rejection));
         }
     };
 
@@ -244,7 +262,12 @@ fn body_of<'a, 'db>(mir: &'a MirFunction<'db>) -> &'a MirFunctionBody<'db> {
     }
 }
 
-fn symbol_for(name: &str, ordinal: usize) -> String {
+/// The Rust symbol of the body of function `object`, named `name`: the name
+/// for readers, the object index for uniqueness. A rendered name repeats
+/// across packages and within one (two spellings can render alike, and a
+/// closure body renders under no package label); an object index is one
+/// function of the program.
+fn symbol_for(name: &str, object: usize) -> String {
     let mut symbol = String::with_capacity(name.len() + 8);
     for ch in name.chars() {
         if ch.is_ascii_alphanumeric() {
@@ -253,7 +276,7 @@ fn symbol_for(name: &str, ordinal: usize) -> String {
             symbol.push('_');
         }
     }
-    format!("{symbol}_{ordinal}")
+    format!("{symbol}_{object}")
 }
 
 struct Unit<'db> {
@@ -263,7 +286,7 @@ struct Unit<'db> {
     lines: std::sync::Arc<[u32]>,
 }
 
-// ─── The program's objects by name ──────────────────────────────────────────
+// ─── The program's objects by identity ──────────────────────────────────────
 
 pub(crate) struct FunctionInfo {
     pub(crate) kind: FunctionKind,
@@ -274,37 +297,56 @@ pub(crate) struct FunctionInfo {
     pub(crate) generic: bool,
 }
 
+/// A declaration's identity in the program: the package placing it, as its
+/// ordinal in `Program::packages`, and its path there — what the package
+/// tables key on. Two declarations of a linked program never share one; their
+/// rendered names can (a namespace `Foo` with a function `m` and a class `Foo`
+/// with a method `m` both read `pkg.Foo.m`), which is why nothing here is
+/// looked up by name.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct DeclKey {
+    package: u32,
+    path: DeclPath,
+}
+
+#[derive(Default)]
 pub(crate) struct ProgramIndex {
-    pub(crate) functions: HashMap<String, FunctionInfo>,
-    /// Function name → object index.
-    pub(crate) objects: HashMap<String, usize>,
-    /// Class link name → (object index, field count).
-    pub(crate) classes: HashMap<String, (usize, usize)>,
-    /// Enum link name → object index.
-    pub(crate) enums: HashMap<String, usize>,
+    /// Each package's ordinal by the source root it was emitted from, read
+    /// off the program's own edge tables from the root.
+    packages: HashMap<SourceRoot, u32>,
+    /// Function object by identity.
+    functions: HashMap<DeclKey, usize>,
+    /// Class (object, field count) by identity.
+    classes: HashMap<DeclKey, (usize, usize)>,
+    /// Enum object by identity.
+    enums: HashMap<DeclKey, usize>,
+    /// Identities more than one object claimed: a malformed program. Every
+    /// lookup of one is refused, so neither object is compiled against the
+    /// other's index.
+    ambiguous: HashSet<DeclKey>,
+    /// Every function of the program by object index, and its name as the
+    /// loader renders it.
+    infos: HashMap<usize, FunctionInfo>,
+    names: HashMap<usize, String>,
     /// String literal → the compile-time string object bytecode loads it from.
     pub(crate) strings: HashMap<String, usize>,
 }
 
 impl ProgramIndex {
-    fn new(program: &Program) -> Self {
-        let mut functions = HashMap::new();
-        let mut objects = HashMap::new();
-        let mut classes = HashMap::new();
-        let mut enums = HashMap::new();
-        let mut strings = HashMap::new();
-        // Names as the loader renders them: under the label of the package
-        // that placed the declaration. A pooled declaration's own `name()`
-        // has no owner until load, so it would render unqualified.
-        for (index, object) in program.objects.iter().enumerate() {
-            match object {
+    fn new(db: &dyn baml_compiler2_mir::Db, root: SourceRoot, program: &Program) -> Self {
+        let mut index = Self {
+            packages: package_ordinals(db, root, program),
+            ..Self::default()
+        };
+        for (object, item) in program.objects.iter().enumerate() {
+            match item {
                 Object::Function(function) => {
-                    let Some(name) = program.function_name(ObjectIndex::from_raw(index)) else {
+                    let Some(name) = program.function_name(ObjectIndex::from_raw(object)) else {
                         continue;
                     };
-                    objects.insert(name.clone(), index);
-                    functions.insert(
-                        name,
+                    index.names.insert(object, name);
+                    index.infos.insert(
+                        object,
                         FunctionInfo {
                             kind: function.kind,
                             layout: function.argument_layout(),
@@ -316,51 +358,259 @@ impl ProgramIndex {
                     );
                 }
                 Object::String(text) => {
-                    strings.entry(text.to_string()).or_insert(index);
+                    index.strings.entry(text.to_string()).or_insert(object);
                 }
                 _ => {}
             }
         }
-        for package in &program.packages {
-            for (path, &object) in &package.classes {
-                if let Object::Class(class) = &program.objects[object] {
-                    let name = qualified(&package.name, path);
-                    classes.insert(name, (object.raw(), class.fields.len()));
+        let mut collisions = Vec::new();
+        for (ordinal, package) in (0u32..).zip(&program.packages) {
+            let key = |path: DeclPath| DeclKey {
+                package: ordinal,
+                path,
+            };
+            // A function's cell holds its object; a `let`'s holds its value.
+            for (path, &cell) in &package.globals {
+                if !matches!(path, DeclPath::Function(_) | DeclPath::InterfaceBody(_)) {
+                    continue;
                 }
+                let slot = package.slot_base.raw() + cell as usize;
+                let Some(ConstValue::Object(object)) = program.globals.get(slot) else {
+                    continue;
+                };
+                if !index.infos.contains_key(&object.raw()) {
+                    continue;
+                }
+                collisions.extend(claim(
+                    &mut index.functions,
+                    &mut index.ambiguous,
+                    key(path.clone()),
+                    object.raw(),
+                ));
+            }
+            for (path, &object) in &package.classes {
+                let Object::Class(class) = &program.objects[object] else {
+                    continue;
+                };
+                collisions.extend(claim(
+                    &mut index.classes,
+                    &mut index.ambiguous,
+                    key(DeclPath::Class(path.clone())),
+                    (object.raw(), class.fields.len()),
+                ));
             }
             for (path, &object) in &package.enums {
-                let name = qualified(&package.name, path);
-                enums.insert(name, object.raw());
+                collisions.extend(claim(
+                    &mut index.enums,
+                    &mut index.ambiguous,
+                    key(DeclPath::Enum(path.clone())),
+                    object.raw(),
+                ));
             }
         }
-        Self {
-            functions,
-            objects,
-            classes,
-            enums,
-            strings,
+        debug_assert!(
+            collisions.is_empty(),
+            "the program's tables place two objects at one identity: {collisions:?}"
+        );
+        index
+    }
+
+    /// The object of the declared function `function`, if the program has
+    /// one. `Err` when its identity is ambiguous in the program.
+    pub(crate) fn declared(
+        &self,
+        db: &dyn baml_compiler2_mir::Db,
+        function: FunctionLoc<'_>,
+    ) -> Result<Option<usize>, Rejection> {
+        let Some(coords) = declared_function_coords(db, function) else {
+            return Ok(None);
+        };
+        self.lookup(&self.functions, coords)
+    }
+
+    /// The object and info of the callable `function`, if the program has
+    /// it. `Err` when its identity is ambiguous in the program.
+    pub(crate) fn function<'db>(
+        &self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        function: FunctionRef<'db>,
+    ) -> Result<Option<(usize, &FunctionInfo)>, Rejection> {
+        let Some(coords) = function_coords(db, function) else {
+            return Ok(None);
+        };
+        Ok(self
+            .lookup(&self.functions, coords)?
+            .map(|object| (object, self.info(object))))
+    }
+
+    /// The (object, field count) of `class`, if the program has it.
+    pub(crate) fn class<'db>(
+        &self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        class: ClassRef<'db>,
+    ) -> Result<Option<(usize, usize)>, Rejection> {
+        self.lookup(&self.classes, class_coords(db, class))
+    }
+
+    /// [`Self::class`] for the class a type template's head names.
+    pub(crate) fn class_at(
+        &self,
+        head: &baml_type::DeclName,
+    ) -> Result<Option<(usize, usize)>, Rejection> {
+        self.lookup(&self.classes, class_head_coords(head))
+    }
+
+    /// The object of `enum_ref`, if the program has it.
+    pub(crate) fn enum_<'db>(
+        &self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        enum_ref: EnumRef<'db>,
+    ) -> Result<Option<usize>, Rejection> {
+        self.lookup(&self.enums, enum_coords(db, enum_ref))
+    }
+
+    /// Info of the function at `object`, which [`Self::declared`] or
+    /// [`Self::function`] found.
+    pub(crate) fn info(&self, object: usize) -> &FunctionInfo {
+        &self.infos[&object]
+    }
+
+    /// The name of the function at `object` as the loader renders it.
+    pub(crate) fn name(&self, object: usize) -> &str {
+        &self.names[&object]
+    }
+
+    fn lookup<T: Copy>(
+        &self,
+        table: &HashMap<DeclKey, T>,
+        (root, path): DeclCoords,
+    ) -> Result<Option<T>, Rejection> {
+        // A root outside the program: nothing of it was linked.
+        let Some(&package) = self.packages.get(&root) else {
+            return Ok(None);
+        };
+        self.lookup_key(table, &DeclKey { package, path })
+    }
+
+    fn lookup_key<T: Copy>(
+        &self,
+        table: &HashMap<DeclKey, T>,
+        key: &DeclKey,
+    ) -> Result<Option<T>, Rejection> {
+        if self.ambiguous.contains(key) {
+            return Err(Rejection::Invalid(format!(
+                "ambiguous declaration {key:?}: more than one object of the program has it"
+            )));
+        }
+        Ok(table.get(key).copied())
+    }
+}
+
+/// Record that `key` names `value`. A second, different claim on one key
+/// marks the key ambiguous for every later lookup and is returned, so the
+/// caller can report every collision at once.
+fn claim<T: Copy + Eq>(
+    table: &mut HashMap<DeclKey, T>,
+    ambiguous: &mut HashSet<DeclKey>,
+    key: DeclKey,
+    value: T,
+) -> Option<DeclKey> {
+    match table.entry(key) {
+        Entry::Vacant(vacant) => {
+            vacant.insert(value);
+            None
+        }
+        Entry::Occupied(occupied) if *occupied.get() == value => None,
+        Entry::Occupied(occupied) => {
+            ambiguous.insert(occupied.key().clone());
+            Some(occupied.key().clone())
         }
     }
 }
 
-/// A declaration's fully qualified name, `package.ns.Name`: what MIR's
-/// `class_display_name` and `enum_display_name` spell. `TypeName`'s display
-/// name elides the local package and would miss them.
-fn qualified(package: &baml_type::Name, path: &bex_vm_types::types::LocalName) -> String {
-    std::iter::once(package.as_str())
-        .chain(path.namespace.iter().map(baml_type::Name::as_str))
-        .chain(std::iter::once(path.name.as_str()))
-        .collect::<Vec<_>>()
-        .join(".")
+/// Each package of `program` by the source root it was emitted from: the
+/// root is `program.root`, and every edge of a placed package names, in the
+/// program and in the database alike, the same dependency under the same
+/// manifest-fixed name. A package the root does not reach (one behind a
+/// dependency that emitted nothing) gets no ordinal, so nothing of it
+/// resolves.
+fn package_ordinals(
+    db: &dyn baml_compiler2_mir::Db,
+    root: SourceRoot,
+    program: &Program,
+) -> HashMap<SourceRoot, u32> {
+    let mut ordinals = HashMap::from([(root, program.root)]);
+    let mut queue = VecDeque::from([(program.root, root)]);
+    while let Some((ordinal, source)) = queue.pop_front() {
+        let Some(package) = program.packages.get(ordinal as usize) else {
+            continue;
+        };
+        let edges = edge_table(db, source);
+        for edge in &package.edges {
+            let Some((_, target)) = edges.iter().find(|(name, _)| *name == edge.name) else {
+                continue;
+            };
+            if let Entry::Vacant(vacant) = ordinals.entry(*target) {
+                vacant.insert(edge.target);
+                queue.push_back((edge.target, *target));
+            }
+        }
+    }
+    ordinals
 }
 
 #[cfg(test)]
 mod tests {
+    use baml_base::Name;
+    use bex_vm_types::{FnPath, types::LocalName};
+
     use super::*;
 
     #[test]
     fn symbols_are_identifiers() {
         assert_eq!(symbol_for("user.Add", 3), "user_Add_3");
         assert_eq!(symbol_for("pkg.ns.Class.m", 0), "pkg_ns_Class_m_0");
+        assert_eq!(
+            symbol_for("user.<(user.A as baml.Show)>.show", 12),
+            "user___user_A_as_baml_Show___show_12"
+        );
+    }
+
+    /// Two objects at one identity is a malformed program; the index then
+    /// compiles neither against the other's object: both resolve to an
+    /// `Invalid` rejection, while an identity claimed once still resolves.
+    #[test]
+    fn a_doubly_claimed_identity_is_rejected_on_lookup() {
+        let key = |name: &str| DeclKey {
+            package: 0,
+            path: DeclPath::Function(FnPath::Free(LocalName {
+                namespace: Vec::new(),
+                name: Name::new(name),
+            })),
+        };
+        let mut index = ProgramIndex::default();
+        assert_eq!(
+            claim(&mut index.functions, &mut index.ambiguous, key("f"), 3),
+            None
+        );
+        assert_eq!(
+            claim(&mut index.functions, &mut index.ambiguous, key("f"), 3),
+            None,
+            "the same object again is not a collision"
+        );
+        assert_eq!(
+            claim(&mut index.functions, &mut index.ambiguous, key("f"), 4),
+            Some(key("f"))
+        );
+        assert_eq!(
+            claim(&mut index.functions, &mut index.ambiguous, key("g"), 5),
+            None
+        );
+        assert!(matches!(
+            index.lookup_key(&index.functions, &key("f")),
+            Err(Rejection::Invalid(reason)) if reason.starts_with("ambiguous declaration")
+        ));
+        assert_eq!(index.lookup_key(&index.functions, &key("g")), Ok(Some(5)));
+        assert_eq!(index.lookup_key(&index.functions, &key("h")), Ok(None));
     }
 }

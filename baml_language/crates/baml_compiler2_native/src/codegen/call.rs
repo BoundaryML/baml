@@ -5,7 +5,10 @@ use baml_compiler2_mir::{BlockId, Constant, Operand, Place, function_display_nam
 use bex_vm_types::FunctionKind;
 
 use super::{Gen, Generator, unsupported};
-use crate::{admit::Rejection, analysis::builtin_is_callable};
+use crate::{
+    admit::{FunctionInfo, Rejection},
+    analysis::builtin_is_callable,
+};
 
 impl<'db> Generator<'_, 'db> {
     pub(super) fn call(
@@ -20,7 +23,7 @@ impl<'db> Generator<'_, 'db> {
             return unsupported("call through a function value");
         };
         let name = function_display_name(self.db, *func);
-        let Some(info) = self.index.functions.get(&name) else {
+        let Some((object, info)) = self.index.function(self.db, *func)? else {
             return unsupported(format!("callee `{name}` not found in the program"));
         };
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
@@ -45,7 +48,7 @@ impl<'db> Generator<'_, 'db> {
             };
             types.push(ty);
         }
-        let values = self.laid_out_args(block, &name, layout, args)?;
+        let values = self.laid_out_args(block, &name, info, layout, args)?;
         let args = format!("&[{}]", values.join(", "));
         match info.kind {
             FunctionKind::Bytecode => {
@@ -54,19 +57,13 @@ impl<'db> Generator<'_, 'db> {
                 }
                 let Some(symbol) = self
                     .symbols
-                    .get(&name)
-                    .filter(|_| !self.resumable.contains(&name))
+                    .get(&object)
+                    .filter(|_| !self.resumable.contains(&object))
                 else {
                     return Err(Rejection::Invalid(format!(
                         "suspending call to `{name}` emitted inline"
                     )));
                 };
-                let object = self
-                    .index
-                    .objects
-                    .get(&name)
-                    .copied()
-                    .ok_or_else(|| Rejection::Invalid(format!("`{name}` has no object")))?;
                 self.fallible(
                     block,
                     &format!(
@@ -107,8 +104,8 @@ impl<'db> Generator<'_, 'db> {
     pub(super) fn callee_ptr(&mut self, block: BlockId, callee: &Operand<'db>) -> Gen<()> {
         let code = match callee {
             Operand::Constant(Constant::Function(func)) => {
-                let name = function_display_name(self.db, *func);
-                let Some(object) = self.index.objects.get(&name) else {
+                let Some((object, _)) = self.index.function(self.db, *func)? else {
+                    let name = function_display_name(self.db, *func);
                     return unsupported(format!("callee `{name}` not found in the program"));
                 };
                 format!("vm.idx_to_ptr(ObjectIndex::from_raw({object}))")
@@ -126,20 +123,19 @@ impl<'db> Generator<'_, 'db> {
         Ok(())
     }
 
-    /// The argument `Value`s of a call to `name`, in the callee's slot order:
-    /// a call with named or omitted optionals is laid over the callee's
-    /// declared slots at compile time, as the VM's `remap_call_arguments` does
-    /// at run time, with `OMITTED_ARG` where the callee's default applies.
+    /// The argument `Value`s of a call to `name` (the callee `info`
+    /// describes), in the callee's slot order: a call with named or omitted
+    /// optionals is laid over the callee's declared slots at compile time, as
+    /// the VM's `remap_call_arguments` does at run time, with `OMITTED_ARG`
+    /// where the callee's default applies.
     pub(super) fn laid_out_args(
         &mut self,
         block: BlockId,
         name: &str,
+        info: &FunctionInfo,
         layout: Option<&baml_type::CallLayout>,
         args: &[Operand<'db>],
     ) -> Gen<Vec<String>> {
-        let Some(info) = self.index.functions.get(name) else {
-            return unsupported(format!("callee `{name}` not found in the program"));
-        };
         let mut values = Vec::with_capacity(args.len());
         for arg in args {
             let arg = self.operand(block, arg)?;

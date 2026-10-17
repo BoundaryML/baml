@@ -237,7 +237,16 @@ impl Generator<'_, '_> {
                     // `baml.iter.ArrayIterator.next`: the length is re-read on
                     // every step, so a loop that grows or shrinks the array
                     // sees it, and the end is a `Done` instance.
-                    let Some(&(done, _)) = self.index.classes.get("baml.iter.Done") else {
+                    let done = baml_compiler2_hir_ty::layout::lang_class(
+                        self.db,
+                        baml_base::LangPackage::Baml,
+                        &["iter"],
+                        "Done",
+                    )
+                    .map(|done| self.index.class(self.db, done))
+                    .transpose()?
+                    .flatten();
+                    let Some((done, _)) = done else {
                         return unsupported("`baml.iter.Done` not found in the program");
                     };
                     let step = format!(

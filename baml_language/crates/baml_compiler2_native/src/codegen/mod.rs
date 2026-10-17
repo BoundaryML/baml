@@ -30,7 +30,7 @@ use baml_compiler2_mir::{
 
 use crate::{
     admit::{ProgramIndex, Rejection},
-    analysis::{Analysis, Repr, loops, suspends_directly, user_callee_name},
+    analysis::{Analysis, Repr, loops, suspends_directly, user_callee},
     render::{coerce, is_atom},
     structure::{Structured, structurize},
 };
@@ -53,9 +53,10 @@ impl Expr {
 pub(crate) struct Generator<'a, 'db> {
     pub(crate) db: &'db dyn baml_compiler2_mir::Db,
     pub(crate) index: &'a ProgramIndex,
-    pub(crate) symbols: &'a HashMap<String, String>,
-    /// The admitted functions that can suspend.
-    pub(crate) resumable: &'a BTreeSet<String>,
+    /// The admitted functions' symbols, by object index.
+    pub(crate) symbols: &'a HashMap<usize, String>,
+    /// The admitted functions that can suspend, by object index.
+    pub(crate) resumable: &'a BTreeSet<usize>,
     /// Whether this function can suspend: it is emitted as a resumable state
     /// machine over its blocks rather than as structured code.
     pub(crate) suspends: bool,
@@ -576,7 +577,12 @@ impl<'db> Generator<'_, 'db> {
                 let args = match callee {
                     Operand::Constant(Constant::Function(func)) => {
                         let name = function_display_name(self.db, *func);
-                        self.laid_out_args(block, &name, argument_layout.as_ref(), args)?
+                        let Some((_, info)) = self.index.function(self.db, *func)? else {
+                            return unsupported(format!(
+                                "callee `{name}` not found in the program"
+                            ));
+                        };
+                        self.laid_out_args(block, &name, info, argument_layout.as_ref(), args)?
                     }
                     _ if argument_layout
                         .as_ref()
@@ -896,8 +902,9 @@ impl<'db> Generator<'_, 'db> {
         let Terminator::Call { callee, .. } = terminator else {
             return false;
         };
-        user_callee_name(self.db, self.index, callee)
-            .is_some_and(|name| !self.symbols.contains_key(&name) || self.resumable.contains(&name))
+        user_callee(self.db, self.index, callee).is_some_and(|object| {
+            !self.symbols.contains_key(&object) || self.resumable.contains(&object)
+        })
     }
 
     fn arity(&self) -> usize {

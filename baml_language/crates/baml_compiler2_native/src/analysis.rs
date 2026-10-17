@@ -5,7 +5,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use baml_compiler2_mir::{
     Constant, MirFunction, MirFunctionBody, Operand, Place, Rvalue, StatementKind, SwitchKey,
-    Terminator, function_display_name,
+    Terminator,
 };
 use baml_type::{Literal, TyTemplate};
 use bex_vm_types::FunctionKind;
@@ -61,8 +61,8 @@ pub(crate) struct Analysis {
     /// (`Generator::function`); a resumable body runs its blocks as a state
     /// machine and needs no structure.
     pub(crate) cfg: Cfg,
-    /// Link names of the user functions this function calls directly.
-    pub(crate) user_callees: BTreeSet<String>,
+    /// Objects of the user functions this function calls directly.
+    pub(crate) user_callees: BTreeSet<usize>,
     /// Locals assigned a statically known type (`LoadType` of a template that
     /// needs no frame type arguments), with the `RealizedTy` expression that
     /// builds it. Such a local is only ever a call's type argument.
@@ -123,7 +123,7 @@ impl Analysis {
                     }
                     Rvalue::LoadType(template) => {
                         if let (Place::Local(local), Some(code)) =
-                            (destination, static_realized(db, index, template))
+                            (destination, static_realized(index, template))
                         {
                             let primitive = is_primitive(template);
                             static_types.insert(local.0, StaticTy { code, primitive });
@@ -159,9 +159,9 @@ impl Analysis {
             flows.push(flow_of(terminator, array_iteration)?);
             unwinds.push(block.unwind.map(|b| b.0));
             if let Terminator::Call { callee, .. } = terminator
-                && let Some(name) = user_callee_name(db, index, callee)
+                && let Some(object) = user_callee(db, index, callee)
             {
-                user_callees.insert(name);
+                user_callees.insert(object);
             }
             suspends |= suspends_directly(db, index, terminator, &static_types);
         }
@@ -326,7 +326,9 @@ pub(crate) fn suspends_directly<'db>(
             let Operand::Constant(Constant::Function(func)) = callee else {
                 return true;
             };
-            let Some(info) = index.functions.get(&function_display_name(db, *func)) else {
+            // Not in the program, or ambiguous in it: generation rejects the
+            // call, so it does not matter what this says.
+            let Ok(Some((_, info))) = index.function(db, *func) else {
                 return false;
             };
             match info.kind {
@@ -347,17 +349,17 @@ pub(crate) fn suspends_directly<'db>(
     }
 }
 
-pub(crate) fn user_callee_name<'db>(
+/// The object of the user (bytecode) function `callee` names, if it names one.
+pub(crate) fn user_callee<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     index: &ProgramIndex,
     callee: &Operand<'db>,
-) -> Option<String> {
+) -> Option<usize> {
     let Operand::Constant(Constant::Function(func)) = callee else {
         return None;
     };
-    let name = function_display_name(db, *func);
-    let info = index.functions.get(&name)?;
-    matches!(info.kind, FunctionKind::Bytecode).then_some(name)
+    let (object, info) = index.function(db, *func).ok().flatten()?;
+    matches!(info.kind, FunctionKind::Bytecode).then_some(object)
 }
 
 /// `body`'s loops: the targets of its back edges (edges to a block on the
@@ -462,7 +464,6 @@ fn is_primitive(template: &baml_compiler2_mir::TyTemplate) -> bool {
 /// The `RealizedTy` expression for a type template that needs no frame type
 /// arguments: primitives, non-generic classes, and arrays of them.
 pub(crate) fn static_realized(
-    db: &dyn baml_compiler2_mir::Db,
     index: &ProgramIndex,
     template: &baml_compiler2_mir::TyTemplate,
 ) -> Option<String> {
@@ -474,13 +475,11 @@ pub(crate) fn static_realized(
         TyTemplate::List(element) => {
             format!(
                 "RealizedTy::List(Box::new({}))",
-                static_realized(db, index, element)?
+                static_realized(index, element)?
             )
         }
         TyTemplate::Class(name, args) if args.is_empty() => {
-            let &(object, _) = index
-                .classes
-                .get(&baml_compiler2_mir::decl_display_name(db, name))?;
+            let (object, _) = index.class_at(name).ok().flatten()?;
             format!("vm.class_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
         }
         _ => return None,

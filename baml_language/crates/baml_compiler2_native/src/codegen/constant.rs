@@ -25,8 +25,8 @@ impl<'db> Generator<'_, 'db> {
             Constant::Bigint(_) => return unsupported("bigint literal"),
             // A named function as a value: its object, as bytecode loads it.
             Constant::Function(func) => {
-                let name = function_display_name(self.db, *func);
-                let Some(object) = self.index.objects.get(&name) else {
+                let Some((object, _)) = self.index.function(self.db, *func)? else {
+                    let name = function_display_name(self.db, *func);
                     return unsupported(format!("function `{name}` not found in the program"));
                 };
                 Expr::new(

@@ -259,3 +259,50 @@ function two(a: int, b: int) -> int { baml.sys.sleep(dur()); a * 10 + b }
     let first_write = start.find("vm.set_slot(").unwrap_or(usize::MAX);
     assert!(last_read < first_write, "{start}");
 }
+
+/// A namespace `Foo` with a function `m` and a class `Foo` with a method `m`
+/// render alike (`user.Foo.m`). The backend binds a function by its identity
+/// in the program, so each compiles against its own object, and the name the
+/// loader checks each entry against is that object's own.
+#[test]
+fn functions_whose_names_render_alike_compile_to_their_own_objects() {
+    let db = baml_test_support::setup_multi_file_db(&[
+        (
+            "foo.baml",
+            "class Foo {\n  x int\n  function m(self) -> int { self.x + 1 }\n}\n",
+        ),
+        ("ns_Foo/m.baml", "function m(x: int) -> int { x + 2 }\n"),
+    ]);
+    let root = db.workspace_root().expect("test db has a workspace root");
+    let program =
+        baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
+    let module = compile_program(&db, root, &program, OptLevel::Two, "program.bexa");
+
+    let alike: Vec<_> = module
+        .functions
+        .iter()
+        .filter(|f| f.name == "user.Foo.m")
+        .collect();
+    assert_eq!(
+        alike.len(),
+        2,
+        "both compile under one rendered name: {:?}",
+        module
+            .functions
+            .iter()
+            .map(|f| &f.name)
+            .chain(module.rejected.iter().map(|(name, _)| name))
+            .collect::<Vec<_>>()
+    );
+    assert_ne!(alike[0].object, alike[1].object, "each has its own object");
+    assert_ne!(alike[0].symbol, alike[1].symbol, "each has its own symbol");
+    for function in &alike {
+        assert_eq!(
+            program
+                .function_name(bex_vm_types::ObjectIndex::from_raw(function.object))
+                .as_deref(),
+            Some(function.name.as_str()),
+            "the entry's name is what the loader renders for its object"
+        );
+    }
+}

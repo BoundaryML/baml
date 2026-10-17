@@ -59,10 +59,9 @@ impl<'db> Generator<'_, 'db> {
                 Ok(Expr::new(code, Repr::Bool))
             }
             Rvalue::Array(template, elements) => {
-                let element_ty =
-                    static_realized(self.db, self.index, template).ok_or_else(|| {
-                        Rejection::Unsupported("array of a non-primitive type".into())
-                    })?;
+                let element_ty = static_realized(self.index, template).ok_or_else(|| {
+                    Rejection::Unsupported("array of a non-primitive type".into())
+                })?;
                 let mut values = Vec::with_capacity(elements.len());
                 for element in elements {
                     let element = self.operand(block, element)?;
@@ -85,7 +84,7 @@ impl<'db> Generator<'_, 'db> {
                     return unsupported("instance of a generic class");
                 }
                 let name = class_display_name(self.db, *class);
-                let Some(&(object, field_count)) = self.index.classes.get(&name) else {
+                let Some((object, field_count)) = self.index.class(self.db, *class)? else {
                     return unsupported(format!("class `{name}` not found in the program"));
                 };
                 if fields.len() != field_count {
@@ -139,8 +138,8 @@ impl<'db> Generator<'_, 'db> {
                 if !args.is_empty() {
                     return unsupported("type test against a generic class");
                 }
-                let name = class_display_name(self.db, *class);
-                let Some(&(object, _)) = self.index.classes.get(&name) else {
+                let Some((object, _)) = self.index.class(self.db, *class)? else {
+                    let name = class_display_name(self.db, *class);
                     return unsupported(format!("class `{name}` not found in the program"));
                 };
                 Ok(format!(
@@ -148,8 +147,8 @@ impl<'db> Generator<'_, 'db> {
                 ))
             }
             TypeTest::Enum(enum_ref) => {
-                let name = enum_display_name(self.db, *enum_ref);
-                let Some(&object) = self.index.enums.get(&name) else {
+                let Some(object) = self.index.enum_(self.db, *enum_ref)? else {
+                    let name = enum_display_name(self.db, *enum_ref);
                     return unsupported(format!("enum `{name}` not found in the program"));
                 };
                 Ok(format!(

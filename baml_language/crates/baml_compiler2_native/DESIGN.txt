@@ -48,6 +48,13 @@ the wrong objects. Bodies were first bound by Function.name, which is display
 metadata and may repeat; that was the wrong identity. The names checked are
 the loader's (Program::function_name), so they match the compile side's.
 
+The compile side binds the same way: its index of the program maps a
+declaration's identity (the package placing it, its DeclPath there) to the
+object index, read off the program's own package tables; a rendered name is
+never looked up. Two declarations can render alike (a namespace Foo with a
+function m and a class Foo with a method m both read pkg.Foo.m), and an
+index keyed by name compiled one against the other's object.
+
 NativeBody is built only through an unsafe constructor whose contract is the
 cast the VM undoes; its fields are private.
 
