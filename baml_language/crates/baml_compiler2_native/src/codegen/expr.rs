@@ -119,13 +119,77 @@ impl<'db> Generator<'_, 'db> {
             Rvalue::Uint8Array(_) => unsupported("byte array literal"),
             Rvalue::MakeClosure { .. } => unsupported("closure"),
             Rvalue::MakeBoundMethod { .. }
-            | Rvalue::MakeVirtualBoundMethod { .. }
-            | Rvalue::MakeVirtualFunction { .. }
             | Rvalue::MakeGenericFunction { .. }
             | Rvalue::MakeGenericFunctionFromValue { .. } => {
                 unsupported("function used as a value")
             }
-            Rvalue::VirtualFieldAccess { .. } => unsupported("interface field access"),
+            // Interface dispatch resolved at run time against a statically
+            // known interface, as the interpreter's `MakeVirtual*` and
+            // `VirtualLoadField` do; see `bex_vm::compiled_rt::virtual`.
+            Rvalue::MakeVirtualBoundMethod {
+                iface,
+                method,
+                receiver,
+                type_args,
+            } => {
+                let (iface, iface_args) = self.static_interface(iface)?;
+                let mut types = Vec::with_capacity(type_args.len());
+                for template in type_args {
+                    let Some(ty) = static_realized(self.index, template) else {
+                        return unsupported(
+                            "interface method value with a type argument known only at runtime",
+                        );
+                    };
+                    types.push(ty);
+                }
+                let receiver = self.operand(block, receiver)?;
+                let receiver = self.value_arg(&receiver.code, receiver.repr);
+                let code = self.fallible(
+                    block,
+                    &format!(
+                        "vm.make_virtual_bound_method({receiver}, {iface}, {iface_args}, {method:?}, &[{}])",
+                        types.join(", ")
+                    ),
+                )?;
+                Ok(Expr::new(code, Repr::Value))
+            }
+            Rvalue::MakeVirtualFunction {
+                self_ty,
+                iface,
+                method,
+                type_args,
+            } => {
+                let Some(self_ty) = static_realized(self.index, self_ty) else {
+                    return unsupported("interface function value on a type known only at runtime");
+                };
+                let (iface, iface_args) = self.static_interface(iface)?;
+                let types = self.static_type_operands("interface function value", type_args)?;
+                let code = self.fallible(
+                    block,
+                    &format!(
+                        "vm.make_virtual_function(&{self_ty}, {iface}, {iface_args}, {method:?}, &[{}])",
+                        types.join(", ")
+                    ),
+                )?;
+                Ok(Expr::new(code, Repr::Value))
+            }
+            Rvalue::VirtualFieldAccess {
+                iface,
+                receiver,
+                field_index,
+                ..
+            } => {
+                let (iface, iface_args) = self.static_interface(iface)?;
+                let receiver = self.operand(block, receiver)?;
+                let receiver = self.value_arg(&receiver.code, receiver.repr);
+                let code = self.fallible(
+                    block,
+                    &format!(
+                        "vm.virtual_load_field({receiver}, {iface}, {iface_args}, {field_index})"
+                    ),
+                )?;
+                Ok(Expr::new(code, Repr::Value))
+            }
             Rvalue::LoadType(_) => unsupported("type value"),
             Rvalue::CurrentPackage => unsupported("current package"),
             Rvalue::TraceHookSettings { .. } => unsupported("trace hook"),

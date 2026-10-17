@@ -238,6 +238,115 @@ fn body_of(module: &NativeModule, name: &str) -> String {
     module.source[start..end].to_string()
 }
 
+const INTERFACES: &str = r#"
+interface Shape {
+  function area(self) -> int throws never
+  function scaled(self, by: int) -> int throws never { self.area() * by }
+}
+
+class Square {
+  side int
+  implements Shape {
+    function area(self) -> int throws never { self.side * self.side }
+  }
+}
+
+class Rect {
+  w int
+  h int
+  implements Shape {
+    function area(self) -> int throws never { self.w * self.h }
+  }
+}
+
+interface Named {
+  name: string
+}
+
+class Person {
+  name: string
+  implements Named {}
+}
+
+function total(shapes: Shape[]) -> int {
+  let sum = 0;
+  for (let s in shapes) { sum += s.area(); }
+  sum
+}
+
+function scaled(s: Shape, by: int) -> int { s.scaled(by) }
+
+function area_fn(s: Shape) -> () -> int throws never { s.area }
+
+function rename(n: Named, to: string) -> string {
+  n.name = to;
+  n.name
+}
+
+function describe(x: int) -> string { x.to_string() }
+"#;
+
+/// An interface method call on a receiver whose implementation is not known
+/// at compile time resolves it at run time, through the VM, so the function
+/// compiles as a resumable body that requests the call; interface fields and
+/// method values resolve inline.
+#[test]
+fn interface_dispatch_compiles_as_a_runtime_resolved_call() {
+    let module = compile(INTERFACES);
+    for name in [
+        "user.total",
+        "user.scaled",
+        "user.area_fn",
+        "user.rename",
+        "user.describe",
+    ] {
+        let function = module
+            .functions
+            .iter()
+            .find(|f| f.name == name)
+            .unwrap_or_else(|| panic!("{name} should compile; rejected: {:?}", module.rejected));
+        // Only the calls suspend; a method value, a field and a call on a
+        // primitive (devirtualized by MIR) resolve in place.
+        assert_eq!(
+            function.resumable,
+            name == "user.total" || name == "user.scaled",
+            "{name}"
+        );
+    }
+    assert!(
+        module
+            .rejected
+            .iter()
+            .all(|(_, rejection)| !rejection.to_string().contains("interface")),
+        "{:?}",
+        module.rejected
+    );
+    let compact = |name: &str| {
+        body_of(&module, name)
+            .split_whitespace()
+            .collect::<String>()
+    };
+    // The call site owns its inline cache, resolves through it, and lays the
+    // arguments over the callee it resolved before requesting the call.
+    let total = compact("user.total");
+    assert!(total.contains("staticS"), "{total}");
+    assert!(total.contains("vm.virtual_target(&S"), "{total}");
+    assert!(
+        total.contains("vm.push_virtual_args(callee,None,&["),
+        "{total}"
+    );
+    assert!(total.contains("Step::Call{callee,argc}"), "{total}");
+    let rename = compact("user.rename");
+    assert!(rename.contains("vm.virtual_store_field("), "{rename}");
+    assert!(rename.contains("vm.virtual_load_field("), "{rename}");
+    let area_fn = compact("user.area_fn");
+    assert!(
+        area_fn.contains("vm.make_virtual_bound_method("),
+        "{area_fn}"
+    );
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
 /// A resumable body's arguments arrive in slots `0..arity` while local `i`
 /// keeps slot `i`: its start reads every argument before it writes any slot,
 /// or writing local 1 would overwrite argument 2 before it is read.

@@ -158,8 +158,25 @@ impl Generator<'_, '_> {
                     return unsupported("captured local");
                 }
                 StatementKind::Intrinsic { .. } => return unsupported("compiler intrinsic"),
-                StatementKind::VirtualFieldStore { .. } => {
-                    return unsupported("interface field store");
+                StatementKind::VirtualFieldStore {
+                    iface,
+                    receiver,
+                    field_index,
+                    value,
+                    ..
+                } => {
+                    let (iface, iface_args) = self.static_interface(iface)?;
+                    let receiver = self.operand(id, receiver)?;
+                    let receiver = self.value_arg(&receiver.code, receiver.repr);
+                    let value = self.operand(id, value)?;
+                    let value = self.value_arg(&value.code, value.repr);
+                    let code = self.fallible(
+                        id,
+                        &format!(
+                            "vm.virtual_store_field({receiver}, {iface}, {iface_args}, {field_index}, {value})"
+                        ),
+                    )?;
+                    self.statement(depth, &format!("{code};"));
                 }
             }
         }
@@ -194,6 +211,8 @@ impl Generator<'_, '_> {
                 self.statement(depth, &format!("d{} = {code};", id.0));
             }
             terminator @ Terminator::Call { .. } if self.call_suspends(terminator) => {}
+            // Emitted by `pause`.
+            terminator @ Terminator::VirtualCall { .. } if !self.array_iteration(terminator) => {}
             Terminator::Call {
                 callee,
                 args,

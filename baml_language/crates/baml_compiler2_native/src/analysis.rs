@@ -156,14 +156,18 @@ impl Analysis {
             };
             let array_iteration = array_iter_call(body, terminator).is_some()
                 || array_next_call(terminator, &array_iters).is_some();
-            flows.push(flow_of(terminator, array_iteration)?);
+            flows.push(flow_of(terminator)?);
             unwinds.push(block.unwind.map(|b| b.0));
             if let Terminator::Call { callee, .. } = terminator
                 && let Some(object) = user_callee(db, index, callee)
             {
                 user_callees.insert(object);
             }
-            suspends |= suspends_directly(db, index, terminator, &static_types);
+            // An interface method call resolves its callee at run time, so
+            // the body requests it from the VM (`Step::Call`); only array
+            // iteration is compiled in place.
+            suspends |= suspends_directly(db, index, terminator, &static_types)
+                || (matches!(terminator, Terminator::VirtualCall { .. }) && !array_iteration);
         }
         let cfg = Cfg {
             entry: body.entry.0,
@@ -234,9 +238,7 @@ pub(crate) fn array_next_call(
 }
 
 /// The edge shape of a terminator, or why it keeps the function bytecode.
-/// `array_iteration` marks a virtual call this backend compiles as array
-/// iteration (see [`Analysis::array_iters`]).
-fn flow_of(terminator: &Terminator<'_>, array_iteration: bool) -> Result<Flow, Rejection> {
+fn flow_of(terminator: &Terminator<'_>) -> Result<Flow, Rejection> {
     Ok(match terminator {
         Terminator::Goto { target } => Flow::Goto(target.0),
         Terminator::Branch {
@@ -282,14 +284,15 @@ fn flow_of(terminator: &Terminator<'_>, array_iteration: bool) -> Result<Flow, R
             then_block: join.0,
             else_block: eval_rhs.0,
         },
-        Terminator::VirtualCall { target, method, .. } => {
-            if array_iteration {
-                Flow::Goto(target.0)
-            } else {
-                return Err(Rejection::Unsupported(format!(
-                    "interface method call `{method}` on a receiver that is not an array"
-                )));
+        Terminator::VirtualCall {
+            target, has_trace, ..
+        } => {
+            if *has_trace {
+                return Err(Rejection::Unsupported(
+                    "interface method call with a $trace attachment".into(),
+                ));
             }
+            Flow::Goto(target.0)
         }
         Terminator::SysOp { target, .. }
         | Terminator::Await { target, .. }

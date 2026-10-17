@@ -1,13 +1,17 @@
-//! Calls: an inline call's expression, and the callee and arguments of a
-//! request a resumable body hands the VM.
+//! Calls: an inline call's expression, the callee and arguments of a
+//! request a resumable body hands the VM, and the static operands of an
+//! interface dispatch.
 
-use baml_compiler2_mir::{BlockId, Constant, Operand, Place, function_display_name};
+use baml_compiler2_mir::{
+    BlockId, Constant, Operand, Place, TyTemplateInterface, decl_display_name,
+    function_display_name,
+};
 use bex_vm_types::FunctionKind;
 
 use super::{Gen, Generator, unsupported};
 use crate::{
     admit::{FunctionInfo, Rejection},
-    analysis::builtin_is_callable,
+    analysis::{builtin_is_callable, static_realized},
 };
 
 impl<'db> Generator<'_, 'db> {
@@ -172,5 +176,127 @@ impl<'db> Generator<'_, 'db> {
             values.push(self.value_arg(&arg.code, arg.repr));
         }
         Ok(values)
+    }
+
+    /// The `RealizedTy` expressions of a call's type-argument operands, each
+    /// a local holding a statically known type; `what` names the construct
+    /// in the rejection otherwise. A non-generic caller has no frame type
+    /// arguments to substitute, so a type known only at run time keeps the
+    /// function bytecode.
+    pub(super) fn static_type_operands(
+        &self,
+        what: &str,
+        operands: &[Operand<'db>],
+    ) -> Gen<Vec<String>> {
+        let mut types = Vec::with_capacity(operands.len());
+        for operand in operands {
+            let ty = match operand {
+                Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => self
+                    .analysis
+                    .static_types
+                    .get(&local.0)
+                    .map(|ty| ty.code.clone()),
+                _ => None,
+            };
+            let Some(ty) = ty else {
+                return unsupported(format!("{what} with a type argument known only at runtime"));
+            };
+            types.push(ty);
+        }
+        Ok(types)
+    }
+
+    /// The operands of a dispatch through `iface`: the interface object's
+    /// pointer and the `&[RealizedTy]` of its instantiation. Both are known
+    /// at compile time when the interface is in the program and every
+    /// argument is a static type; associated types are outputs of the
+    /// implementation, not part of its selection, so they are not spelled.
+    pub(super) fn static_interface(&self, iface: &TyTemplateInterface) -> Gen<(String, String)> {
+        let name = decl_display_name(self.db, &iface.name);
+        let Some(object) = self.index.interface_at(&iface.name)? else {
+            return unsupported(format!("interface `{name}` not found in the program"));
+        };
+        let mut args = Vec::with_capacity(iface.generics.len());
+        for template in &iface.generics {
+            let Some(ty) = static_realized(self.index, template) else {
+                return unsupported(format!(
+                    "interface `{name}` instantiated with a type known only at runtime"
+                ));
+            };
+            args.push(ty);
+        }
+        Ok((
+            format!("vm.idx_to_ptr(ObjectIndex::from_raw({object}))"),
+            format!("&[{}]", args.join(", ")),
+        ))
+    }
+
+    /// The request of an interface method call in a resumable body: bind
+    /// `callee` to the method's implementation for the receiver through the
+    /// site's inline cache (a `static` of this body, which also pushes the
+    /// call's type arguments), push the value arguments laid over that
+    /// callee's slots, and return the `Step` expression. `args` are the
+    /// method's type arguments then its value arguments in declared order;
+    /// `self_arg` indexes the receiver among the value arguments.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn virtual_request(
+        &mut self,
+        block: BlockId,
+        depth: usize,
+        iface: &TyTemplateInterface,
+        method: &str,
+        args: &[Operand<'db>],
+        ntypeargs: usize,
+        self_arg: usize,
+        layout: Option<&baml_type::CallLayout>,
+    ) -> Gen<String> {
+        let (iface, iface_args) = self.static_interface(iface)?;
+        let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
+        let types = self.static_type_operands("interface method call", type_args)?;
+        let values = self.arg_values(block, args)?;
+        let Some(receiver) = values.get(self_arg) else {
+            return Err(Rejection::Invalid(format!(
+                "virtual call dispatches on argument {self_arg} of {}",
+                values.len()
+            )));
+        };
+        // The slots this site pushes, for the VM to lay over the resolved
+        // callee's; a site that pushes the method's own slots needs none.
+        let layout = match layout {
+            Some(layout) if layout.0.iter().any(Option::is_some) => {
+                let slots: Vec<String> = layout
+                    .0
+                    .iter()
+                    .map(|slot| match slot {
+                        Some(name) => format!("Some({:?})", name.as_str()),
+                        None => "None".to_string(),
+                    })
+                    .collect();
+                format!("Some(&[{}])", slots.join(", "))
+            }
+            _ => "None".to_string(),
+        };
+        let site = format!("S{}", block.0);
+        self.statement(
+            depth,
+            &format!(
+                "static {site}: bex_vm::compiled_rt::VirtualSite = bex_vm::compiled_rt::VirtualSite::new();"
+            ),
+        );
+        self.statement(
+            depth,
+            &format!(
+                "let callee = vm.virtual_target(&{site}, {receiver}, {iface}, {iface_args}, {method:?}, &[{}])?;",
+                types.join(", ")
+            ),
+        );
+        self.statement(
+            depth,
+            &format!(
+                "let argc = vm.push_virtual_args(callee, {layout}, &[{}])?;",
+                values.join(", ")
+            ),
+        );
+        Ok("Step::Call { callee, argc }".to_string())
     }
 }

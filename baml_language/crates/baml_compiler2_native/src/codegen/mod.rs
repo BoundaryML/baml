@@ -30,7 +30,9 @@ use baml_compiler2_mir::{
 
 use crate::{
     admit::{ProgramIndex, Rejection},
-    analysis::{Analysis, Repr, loops, suspends_directly, user_callee},
+    analysis::{
+        Analysis, Repr, array_iter_call, array_next_call, loops, suspends_directly, user_callee,
+    },
     render::{coerce, is_atom},
     structure::{Structured, structurize},
 };
@@ -557,22 +559,7 @@ impl<'db> Generator<'_, 'db> {
                 ..
             } => {
                 let (type_args, args) = args.split_at((*ntypeargs).min(args.len()));
-                let mut types = Vec::with_capacity(type_args.len());
-                for arg in type_args {
-                    let ty = match arg {
-                        Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
-                            self.analysis
-                                .static_types
-                                .get(&local.0)
-                                .map(|ty| ty.code.clone())
-                        }
-                        _ => None,
-                    };
-                    let Some(ty) = ty else {
-                        return unsupported("call with a type argument known only at runtime");
-                    };
-                    types.push(ty);
-                }
+                let types = self.static_type_operands("call", type_args)?;
                 self.callee_ptr(block, callee)?;
                 let args = match callee {
                     Operand::Constant(Constant::Function(func)) => {
@@ -605,6 +592,29 @@ impl<'db> Generator<'_, 'db> {
                     format!("Step::Call {{ callee, argc: {} }}", args.len()),
                     args,
                 )
+            }
+            // The callee is resolved and the arguments pushed here, laid over
+            // the slots of whichever implementation resolved.
+            Terminator::VirtualCall {
+                iface,
+                method,
+                args,
+                ntypeargs,
+                self_arg,
+                argument_layout,
+                ..
+            } => {
+                let step = self.virtual_request(
+                    block,
+                    depth,
+                    iface,
+                    method,
+                    args,
+                    *ntypeargs,
+                    *self_arg,
+                    argument_layout.as_ref(),
+                )?;
+                (step, Vec::new())
             }
             Terminator::Await {
                 future,
@@ -763,6 +773,11 @@ impl<'db> Generator<'_, 'db> {
                     destination,
                     target,
                     ..
+                }
+                | Terminator::VirtualCall {
+                    destination,
+                    target,
+                    ..
                 },
             ) => Ok((destination.clone(), *target)),
             Some(Terminator::Spawn { future, resume, .. }) => Ok((future.clone(), *resume)),
@@ -889,8 +904,17 @@ impl<'db> Generator<'_, 'db> {
                 | Terminator::AwaitAny { .. },
             ) => true,
             Some(terminator @ Terminator::Call { .. }) => self.call_suspends(terminator),
+            Some(terminator @ Terminator::VirtualCall { .. }) => !self.array_iteration(terminator),
             _ => false,
         }
+    }
+
+    /// Whether a `VirtualCall` terminator is one this backend compiles in
+    /// place as array iteration (see [`Analysis::array_iters`]); any other
+    /// interface method call resolves its callee at run time and suspends.
+    pub(super) fn array_iteration(&self, terminator: &Terminator<'db>) -> bool {
+        array_iter_call(self.body, terminator).is_some()
+            || array_next_call(terminator, &self.analysis.array_iters).is_some()
     }
 
     /// Whether a `Call` terminator suspends: see [`suspends_directly`]; a

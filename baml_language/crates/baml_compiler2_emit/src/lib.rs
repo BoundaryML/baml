@@ -41,7 +41,7 @@ pub(crate) use emit::compile_mir_function;
 pub use package::{emit_package, emit_session_submission};
 pub use refs::{
     DeclCoords, class_coords, class_head_coords, declared_function_coords, enum_coords,
-    function_coords,
+    function_coords, interface_head_coords,
 };
 
 /// The wire origin of an emitted function: every function of a stdlib file

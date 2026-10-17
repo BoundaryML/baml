@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque, hash_map:
 use baml_base::SourceRoot;
 use baml_compiler2_emit::{
     DeclCoords, class_coords, class_head_coords, declared_function_coords, enum_coords,
-    function_coords,
+    function_coords, interface_head_coords,
 };
 use baml_compiler2_hir::{
     item_data::{file_functions, is_required_interface_method},
@@ -320,6 +320,8 @@ pub(crate) struct ProgramIndex {
     classes: HashMap<DeclKey, (usize, usize)>,
     /// Enum object by identity.
     enums: HashMap<DeclKey, usize>,
+    /// Interface object by identity.
+    interfaces: HashMap<DeclKey, usize>,
     /// Identities more than one object claimed: a malformed program. Every
     /// lookup of one is refused, so neither object is compiled against the
     /// other's index.
@@ -407,6 +409,14 @@ impl ProgramIndex {
                     object.raw(),
                 ));
             }
+            for (path, &object) in &package.interfaces {
+                collisions.extend(claim(
+                    &mut index.interfaces,
+                    &mut index.ambiguous,
+                    key(DeclPath::Interface(path.clone())),
+                    object.raw(),
+                ));
+            }
         }
         debug_assert!(
             collisions.is_empty(),
@@ -458,6 +468,15 @@ impl ProgramIndex {
         head: &baml_type::DeclName,
     ) -> Result<Option<(usize, usize)>, Rejection> {
         self.lookup(&self.classes, class_head_coords(head))
+    }
+
+    /// The object of the interface a dispatch template's head names, if the
+    /// program has it.
+    pub(crate) fn interface_at(
+        &self,
+        head: &baml_type::DeclName,
+    ) -> Result<Option<usize>, Rejection> {
+        self.lookup(&self.interfaces, interface_head_coords(head))
     }
 
     /// The object of `enum_ref`, if the program has it.

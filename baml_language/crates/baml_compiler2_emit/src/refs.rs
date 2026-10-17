@@ -284,6 +284,11 @@ pub fn class_head_coords(head: &DeclName) -> DeclCoords {
     (head.root(), DeclPath::Class(item_path(head)))
 }
 
+/// The coordinates of the interface a type template's head names.
+pub fn interface_head_coords(head: &DeclName) -> DeclCoords {
+    (head.root(), DeclPath::Interface(item_path(head)))
+}
+
 /// The coordinates of an enum, wherever it is declared.
 pub fn enum_coords<'db>(db: &'db dyn baml_compiler2_mir::Db, enum_ref: EnumRef<'db>) -> DeclCoords {
     let head = enum_head(db, enum_ref);
