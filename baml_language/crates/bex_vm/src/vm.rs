@@ -202,6 +202,28 @@ fn append_virtual_method_type_args(
     values
 }
 
+/// Append the type arguments a call passes (`type_args`, with the exact
+/// values beside them in `type_values`, sparse) to `frame`'s, after those the
+/// callee value carried: the layout `[carried.., passed..]` every reader of
+/// `BytecodeFrame::type_args` expects.
+fn append_passed_type_args(
+    frame: &mut BytecodeFrame,
+    type_args: &[bex_vm_types::RealizedTy],
+    type_values: &[Option<TypeValue>],
+) {
+    let initial_type_arg_count = frame.type_args.len();
+    frame.type_args.extend_from_slice(type_args);
+    if !type_values.is_empty() {
+        let metadata = frame
+            .type_metadata
+            .get_or_insert_with(|| Box::new(FrameTypeMetadata::default()));
+        metadata.values.resize(initial_type_arg_count, None);
+        metadata
+            .values
+            .extend((0..type_args.len()).map(|slot| type_values.get(slot).cloned().flatten()));
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct StaticVirtualCallKey {
     caller_function_addr: usize,
@@ -1235,6 +1257,58 @@ pub(crate) mod tests {
             .unwrap()
             .join()
             .unwrap();
+    }
+
+    /// An inline compiled body of a generic function reads the call's type
+    /// arguments off its frame: the funnel binds them before the body runs,
+    /// where a bytecode callee gets them once the funnel returns. Explicit,
+    /// inferred, and under a `catch` of what the body throws (the frame
+    /// then stays pushed, and the writeback must not bind them twice).
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn inline_body_of_a_generic_function_sees_the_type_arguments() {
+        fn name_of(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            let Some(Frame::Bytecode(frame)) = vm.frames.last() else {
+                unreachable!("the body runs in its own frame")
+            };
+            let text = match frame.type_args.as_slice() {
+                [bex_vm_types::RealizedTy::Int] => "int",
+                [bex_vm_types::RealizedTy::String] => "string",
+                [bex_vm_types::RealizedTy::List(element)]
+                    if **element == bex_vm_types::RealizedTy::Int =>
+                {
+                    "int[]"
+                }
+                other => panic!("unexpected frame type arguments {other:?}"),
+            };
+            let throws = args[0]
+                .as_object_ptr()
+                .is_some_and(|ptr| matches!(vm.get_object(ptr), Object::String(s) if s == "throw"));
+            if throws {
+                let thrown = vm.string_value(text);
+                return Err(crate::compiled_rt::throw(thrown));
+            }
+            Ok(vm.string_value(text))
+        }
+        const SOURCE: &str = r#"
+            function NameOf<T>(x: T) -> string { "bytecode" }
+            function Main() -> string {
+                let caught = NameOf<string>("throw") catch (e) { string => e };
+                `${NameOf<int>(1)}|${NameOf<string>("a")}|${NameOf([1])}|${caught}`
+            }
+        "#;
+        for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[(
+                    "user.NameOf",
+                    crate::compiled_rt::CompiledFn::Inline(name_of),
+                )],
+                &[],
+                telemetry,
+            );
+            assert_eq!(out, "int|string|int[]|string", "telemetry: {telemetry}");
+        }
     }
 
     /// A compiled `catch` around a compiled callee that throws pops the
@@ -5740,8 +5814,8 @@ impl BexVm {
 
                 // A compiled entry starts at its stub, where the run loop
                 // hands the frame to its body, as the call path does for a
-                // resumable compiled callee. The same two shapes keep the
-                // bytecode: a hooked entry and one with type arguments.
+                // resumable compiled callee; its type arguments are on the
+                // frame. The same shape keeps the bytecode: a hooked entry.
                 let stub = match self.get_object(dispatch_ptr) {
                     Object::Function(callee) => crate::compiled_rt::stub_start(callee),
                     _ => None,
@@ -5749,7 +5823,6 @@ impl BexVm {
                 if let Some(stub) = stub
                     && !hooked
                     && let Some(Frame::Bytecode(frame)) = self.frames.last_mut()
-                    && frame.type_args.is_empty()
                 {
                     frame.instruction_ptr = stub + crate::compiled_rt::stub::START;
                 }
@@ -8247,12 +8320,10 @@ impl BexVm {
 
                 // A natively compiled body runs here, in place of the bytecode,
                 // with the frame already pushed and telemetry already entered:
-                // to every observer this is a bytecode call. Two shapes keep
+                // to every observer this is a bytecode call. One shape keeps
                 // the bytecode: a `$trace`-hooked callee (its hook prologue is
-                // bytecode, and a `PendingTraceHook` is already queued for it)
-                // and a call passing explicit type arguments (they land on the
-                // frame only after this funnel returns).
-                let native = if hooked || passes_type_args {
+                // bytecode, and a `PendingTraceHook` is already queued for it).
+                let native = if hooked {
                     None
                 } else {
                     crate::compiled_rt::native_body_fn(callee)
@@ -8273,6 +8344,13 @@ impl BexVm {
                             .collect();
                         if let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] {
                             frame.instruction_ptr = crate::compiled_rt::RUNNING;
+                        }
+                        // The call's type arguments land on a bytecode frame
+                        // after this funnel returns; an inline body runs
+                        // inside it and reads them off its frame, so they
+                        // are bound first.
+                        if passes_type_args {
+                            self.bind_passed_type_args(*frame_idx);
                         }
                         let outcome = self.with_stack_room(|vm| body(vm, &args));
                         self.settle();
@@ -8742,25 +8820,37 @@ impl BexVm {
         // own — interface dispatch hands one down for a method that declares no
         // generics — so the metadata lane is written whenever any of the three
         // has something to say, not only when the frame widens.
+        //
+        // An inline compiled body had them bound before it ran (the funnel's
+        // `bind_passed_type_args`); the one way its frame is still here is an
+        // error that left it pushed for the unwinder, at `RUNNING`.
         if (!options.type_args.is_empty() || !options.type_values.is_empty())
             && self.frames.len() == frames_before + 1
             && *frame_idx == frames_before
             && let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frames_before)
+            && frame.instruction_ptr != crate::compiled_rt::RUNNING
         {
-            let initial_type_arg_count = frame.type_args.len();
-            frame.type_args.extend_from_slice(options.type_args);
-            if !options.type_values.is_empty() {
-                let metadata = frame
-                    .type_metadata
-                    .get_or_insert_with(|| Box::new(FrameTypeMetadata::default()));
-                metadata.values.resize(initial_type_arg_count, None);
-                metadata.values.extend(
-                    (0..options.type_args.len())
-                        .map(|slot| options.type_values.get(slot).cloned().flatten()),
-                );
-            }
+            append_passed_type_args(frame, options.type_args, options.type_values);
         }
         result
+    }
+
+    /// Bind the type arguments of the call being made (`pending_call_type_args`
+    /// and the exact values beside them) onto the frame at `frame_idx`, as
+    /// the writeback in `execute_call_from_locals_offset_with_type_args` does
+    /// once the funnel returns: for an inline compiled body, which runs
+    /// inside the funnel and reads its frame.
+    #[cold]
+    #[inline(never)]
+    fn bind_passed_type_args(&mut self, frame_idx: usize) {
+        let Frame::Bytecode(frame) = &mut self.frames[frame_idx] else {
+            unreachable!("a compiled frame is a bytecode frame");
+        };
+        append_passed_type_args(
+            frame,
+            &self.pending_call_type_args,
+            &self.pending_call_type_values,
+        );
     }
 
     fn init_spread(
