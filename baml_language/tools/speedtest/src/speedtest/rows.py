@@ -44,7 +44,7 @@ class Row:
         return env
 
 
-ROWS = [Row(f"vm-{lvl}", "VM · telemetry off" if lvl == "off" else f"VM · {lvl}", "BAML VM", "baml", lvl)
+ROWS = [Row(f"vm-{lvl}", f"VM({lvl})", "BAML VM", "baml", lvl)
         for lvl in TELEMETRY_LEVELS] + [
     Row("node", "Node", "references", "node"),
     Row("bun", "Bun", "references", "bun"),

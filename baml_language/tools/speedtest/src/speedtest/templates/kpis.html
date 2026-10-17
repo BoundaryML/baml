@@ -6,12 +6,12 @@
 <title>BAML Speedtest</title>
 <style>
 /* One page, one grid: header, one tile per charted KPI, the KPI boxes, KPIs with no data, every workload, the method. */
-:root{--bg:#fbfaf7;--fg:#1f2420;--muted:#5e665f;--line:#e2e1da;--grid:#ebeae3;--tint:#f2f1ec;--accent:#2a78d6;--good:#1f6f4a;--bad:#b23b3b;
+:root{--hl:#a87a00;--hl-bg:rgba(245,190,20,.16);--bg:#fbfaf7;--fg:#1f2420;--muted:#5e665f;--line:#e2e1da;--grid:#ebeae3;--tint:#f2f1ec;--accent:#2a78d6;--good:#1f6f4a;--bad:#b23b3b;
 --c-native:#2a78d6;--c-vm-off:#4f5661;--c-vm-low:#7c838d;--c-vm-medium:#a2a8b0;--c-vm-high:#c4c8cd;--c-rust:#6250d6;--c-go:#eb6834;--c-node:#1baf7a;--c-bun:#e87ba4;--c-python:#eda100;
 --font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#161a17;--fg:#e6e8e3;--muted:#9ba39c;--line:#2d332e;--grid:#242a26;--tint:#1d221e;--accent:#3987e5;--good:#7fc4a6;--bad:#e66767;
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--hl:#f2c94c;--hl-bg:rgba(242,201,76,.13);--bg:#161a17;--fg:#e6e8e3;--muted:#9ba39c;--line:#2d332e;--grid:#242a26;--tint:#1d221e;--accent:#3987e5;--good:#7fc4a6;--bad:#e66767;
 --c-native:#3987e5;--c-vm-off:#a9afb8;--c-vm-low:#878d97;--c-vm-medium:#686e78;--c-vm-high:#50555e;--c-rust:#9085e9;--c-go:#d95926;--c-node:#199e70;--c-bun:#d55181;--c-python:#c98500;color-scheme:dark}}
-:root[data-theme=dark]{--bg:#161a17;--fg:#e6e8e3;--muted:#9ba39c;--line:#2d332e;--grid:#242a26;--tint:#1d221e;--accent:#3987e5;--good:#7fc4a6;--bad:#e66767;
+:root[data-theme=dark]{--hl:#f2c94c;--hl-bg:rgba(242,201,76,.13);--bg:#161a17;--fg:#e6e8e3;--muted:#9ba39c;--line:#2d332e;--grid:#242a26;--tint:#1d221e;--accent:#3987e5;--good:#7fc4a6;--bad:#e66767;
 --c-native:#3987e5;--c-vm-off:#a9afb8;--c-vm-low:#878d97;--c-vm-medium:#686e78;--c-vm-high:#50555e;--c-rust:#9085e9;--c-go:#d95926;--c-node:#199e70;--c-bun:#d55181;--c-python:#c98500;color-scheme:dark}
 html,body{margin:0}body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px;line-height:1.45;padding:24px 16px 48px}
 main{max-width:1480px;margin:0 auto}a{color:var(--accent)}
@@ -49,6 +49,7 @@ dialog h2{margin:0 0 2px;font-size:1.2rem;padding-right:60px}dialog .measure{mar
 footer{margin-top:16px;color:var(--muted);font-size:.8rem}footer ol{margin:4px 0 0;padding-left:1.2em}footer code{font-family:var(--mono)}
 @media (max-width:1240px){.tiles{grid-template-columns:repeat(3,1fr)}.grid{grid-template-columns:repeat(2,1fr)}.box:last-child:nth-child(odd){grid-column:1/-1}}
 @media (max-width:820px){.grid{grid-template-columns:1fr}.box:last-child:nth-child(odd){grid-column:auto}.hd{min-height:0}}
+td.b,th.b{background:var(--hl-bg)}th.b{color:var(--hl)}td.p,th.p{font-weight:600}tr.b td{background:var(--hl-bg)}tr.b td:first-child{color:var(--hl);font-weight:500}tr.p td{font-weight:600}.lbl.baml{fill:var(--hl);font-weight:600}.fam.baml{fill:var(--hl)}
 .all{margin-top:16px;background:var(--tint);border-radius:6px;padding:16px}.all h2{font-size:1.05rem;font-weight:600;margin:0 0 4px}.all td.bad{color:var(--bad);font-style:italic}.all td.d{font-family:var(--font);color:var(--muted);white-space:normal;text-align:left}
 </style>
 </head>
@@ -81,6 +82,8 @@ const entryOf = k => k.scenarios.find(s => s.name === k.default) || k.scenarios[
 const has = st => st && st.median != null;
 const rowLabel = key => (D.rows.find(r => r.key === key) || {label: key}).label;
 const P = D.primary, PL = rowLabel(P);
+const isBaml = key => (D.rows.find(r => r.key === key) || {family: ''}).family.startsWith('BAML');
+const cls = key => [isBaml(key) ? 'b' : '', key === P ? 'p' : ''].join(' ').trim();
 
 // header
 const c = D.candidate, r = D.run, ok = r.trials_failed === 0 && !r.verify_failures;
@@ -132,10 +135,10 @@ function chart(k, e, big) {
   const ticks = log ? Array.from({length: Math.round(Math.log10(hi) - Math.log10(lo)) + 1}, (_, i) => lo * Math.pow(10, i)) : Array.from({length: Math.round(hi / niceStep(max)) + 1}, (_, i) => i * niceStep(max));
   ticks.forEach(tv => { if (tv > 0 || !log) s += `<line class="grid" x1="${x(tv).toFixed(1)}" x2="${x(tv).toFixed(1)}" y1="${TOP}" y2="${H - AX + 2}"/>`; });
   fams.forEach((f, fi) => {
-    s += `<text class="fam" x="${LEFT - 8}" y="${y + 10}" text-anchor="end">${esc(f.toUpperCase())}</text>`; y += 14;
+    s += `<text class="fam ${f.startsWith('BAML') ? 'baml' : ''}" x="${LEFT - 8}" y="${y + 10}" text-anchor="end">${esc(f.toUpperCase())}</text>`; y += 14;
     D.rows.filter(rw => rw.family === f).forEach(rw => {
       const st = e.values[rw.key], hi2 = rw.key === P;
-      s += `<g class="row"><text class="lbl ${hi2?'hi':''} ${has(st)?'':'dim'}" x="${LEFT - 8}" y="${y + BAR - 2}" text-anchor="end">${esc(rw.label)}</text>`;
+      s += `<g class="row"><text class="lbl ${hi2?'hi':''} ${isBaml(rw.key)?'baml':''} ${has(st)?'':'dim'}" x="${LEFT - 8}" y="${y + BAR - 2}" text-anchor="end">${esc(rw.label)}</text>`;
       if (has(st)) {
         const w = Math.max(1.5, x(st.median) - LEFT);
         s += `<rect x="${LEFT}" y="${y}" width="${w.toFixed(1)}" height="${BAR}" fill="${COLOR(rw.key)}"><title>${esc(rw.label)}: ${fmt(st.median, k.unit)}${st.us_per_job != null ? ' (' + fmtU(st.us_per_job) + ' per job)' : ''}${st.n ? ', n=' + st.n : ''}${st.min != null ? ', range ' + fmt(st.min, k.unit) + ' to ' + fmt(st.max, k.unit) : ''}</title></rect>`;
@@ -160,8 +163,8 @@ function table(k, e) {
   const t = k.unit === 'jobs/s';
   return `<table><tr><th>implementation</th><th>${esc(k.unit)}</th>${t ? '<th>per job</th>' : ''}<th>min</th><th>max</th><th>n</th></tr>` + D.rows.map(rw => {
     const st = e.values[rw.key];
-    if (!has(st)) return `<tr><td>${esc(rw.label)}</td><td class="n" colspan="${t ? 5 : 4}">${esc(placeholder(rw, st).text)}</td></tr>`;
-    return `<tr><td>${esc(rw.label)}</td><td>${fmt(st.median, k.unit)}</td>${t ? `<td>${fmtU(st.us_per_job)}</td>` : ''}<td>${st.min != null ? fmt(st.min, k.unit) : ''}</td><td>${st.max != null ? fmt(st.max, k.unit) : ''}</td><td>${st.n || ''}</td></tr>`;
+    if (!has(st)) return `<tr class="${cls(rw.key)}"><td>${esc(rw.label)}</td><td class="n" colspan="${t ? 5 : 4}">${esc(placeholder(rw, st).text)}</td></tr>`;
+    return `<tr class="${cls(rw.key)}"><td>${esc(rw.label)}</td><td>${fmt(st.median, k.unit)}</td>${t ? `<td>${fmtU(st.us_per_job)}</td>` : ''}<td>${st.min != null ? fmt(st.min, k.unit) : ''}</td><td>${st.max != null ? fmt(st.max, k.unit) : ''}</td><td>${st.n || ''}</td></tr>`;
   }).join('') + '</table>';
 }
 function idx(k, e) {
@@ -190,10 +193,10 @@ document.querySelectorAll('select[data-kpi]').forEach(s => s.addEventListener('c
 // every workload of the run: per-job time for each row
 const cols = D.rows.map(rw => rw.key);
 document.getElementById('all').innerHTML = `<h2>Every workload</h2><p class="q">Per-job time, median of trials; the ratio is ${esc(PL)} over the fastest other row.</p>
- <table><tr><th>workload</th>${cols.map(k => `<th>${esc(rowLabel(k))}</th>`).join('')}<th>vs fastest</th><th>what it does</th></tr>` + D.workloads.map(w => {
+ <table><tr><th>workload</th>${cols.map(k => `<th class="${cls(k)}">${esc(rowLabel(k))}</th>`).join('')}<th>vs fastest</th><th>what it does</th></tr>` + D.workloads.map(w => {
   const others = cols.filter(k => k !== P).map(k => w.values[k]).filter(v => v != null);
   const best = others.length ? Math.min(...others) : null, p = w.values[P];
-  return `<tr><td>${esc(w.name)}</td>${cols.map(k => w.values[k] != null ? `<td>${fmtNs(w.values[k])}</td>` : `<td class="bad">${esc(w.status[k])}</td>`).join('')}<td>${p != null && best ? fmtR(p / best) : '—'}</td><td class="d">${esc(w.description)}</td></tr>`;
+  return `<tr><td>${esc(w.name)}</td>${cols.map(k => w.values[k] != null ? `<td class="${cls(k)}">${fmtNs(w.values[k])}</td>` : `<td class="bad ${cls(k)}">${esc(w.status[k])}</td>`).join('')}<td>${p != null && best ? fmtR(p / best) : '—'}</td><td class="d">${esc(w.description)}</td></tr>`;
 }).join('') + '</table>';
 
 // click a chart to enlarge it; ?zoom=<kpi> opens one on load
