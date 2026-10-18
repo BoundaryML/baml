@@ -214,7 +214,9 @@ impl Generator<'_, '_> {
                     };
                     let value = self.operand(id, value)?;
                     let value = self.value_arg(&value.code, value.repr);
-                    self.statement(depth, &format!("vm.bind_type(depth, {slot}, {value})?;"));
+                    let code =
+                        self.fallible(id, &format!("vm.bind_type(depth, {slot}, {value})"))?;
+                    self.statement(depth, &format!("{code};"));
                 }
                 // `log.*`: the `$baml_log` record bytecode's `SendEvent`
                 // makes, queued for the engine (`vm.log_event`).

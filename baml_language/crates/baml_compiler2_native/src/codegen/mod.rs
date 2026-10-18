@@ -762,7 +762,8 @@ impl<'db> Generator<'_, 'db> {
                     };
                     let trace = self.operand(block, trace)?;
                     let trace = self.value_arg(&trace.code, trace.repr);
-                    self.statement(depth, &format!("vm.set_call_trace({trace})?;"));
+                    let code = self.fallible(block, &format!("vm.set_call_trace({trace})"))?;
+                    self.statement(depth, &format!("{code};"));
                     args
                 } else {
                     args
@@ -859,7 +860,8 @@ impl<'db> Generator<'_, 'db> {
                     };
                     let trace = self.operand(block, trace)?;
                     let trace = self.value_arg(&trace.code, trace.repr);
-                    self.statement(depth, &format!("vm.set_call_trace({trace})?;"));
+                    let code = self.fallible(block, &format!("vm.set_call_trace({trace})"))?;
+                    self.statement(depth, &format!("{code};"));
                     args
                 } else {
                     args
