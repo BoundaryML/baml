@@ -266,7 +266,11 @@ fn a_compiled_call_passes_its_call_instruction() {
             })
             .map(|(end, _)| end)
             .expect("the call is closed");
-        let last = args[..end].rsplit(',').next().expect("an argument");
+        let last = args[..end]
+            .trim_end_matches(',')
+            .rsplit(',')
+            .next()
+            .expect("an argument");
         let pc = last
             .parse::<usize>()
             .unwrap_or_else(|_| panic!("a literal PC: {last}"));

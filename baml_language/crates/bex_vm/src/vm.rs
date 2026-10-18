@@ -1579,9 +1579,10 @@ pub(crate) mod tests {
             for name in ["user.Outer", "user.Middle"] {
                 let idx = (0..vm.frames.len())
                     .rfind(|&idx| {
-                        vm.get_object(vm.frames[idx].function())
-                            .as_callable()
-                            .is_ok_and(|function| function.name() == name)
+                        matches!(
+                            vm.get_object(vm.frames[idx].function()),
+                            Object::Function(function) if function.name() == name
+                        )
                     })
                     .expect("the caller's frame");
                 let Frame::Bytecode(frame) = &vm.frames[idx] else {
