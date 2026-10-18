@@ -431,6 +431,9 @@ pub(crate) struct FunctionInfo {
     pub(crate) layout: baml_type::CallLayout,
     pub(crate) native_key: Option<String>,
     pub(crate) arity: usize,
+    /// Whether the function holds its caller's `$trace` controls
+    /// (`Function::trace_passthrough`), which the VM's call path sets up.
+    pub(crate) trace_passthrough: bool,
 }
 
 /// A declaration's identity in the program: the package placing it, as its
@@ -632,6 +635,7 @@ impl ProgramIndex {
                             layout: function.argument_layout(),
                             native_key: function.native_key.as_deref().map(str::to_owned),
                             arity: function.arity,
+                            trace_passthrough: function.trace_passthrough,
                         },
                     );
                 }

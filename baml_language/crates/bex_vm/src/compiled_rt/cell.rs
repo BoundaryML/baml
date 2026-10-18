@@ -105,8 +105,9 @@ impl BexVm {
     /// `argc` arguments runs, when compiled code can make the call directly:
     /// a closure (or a plain function) whose function has an inline compiled
     /// body and takes exactly `argc` arguments. Any other callee — bytecode,
-    /// a resumable body, a bound method, a generic function, a host closure,
-    /// an arity the VM's call path reports — goes through [`Step::Call`].
+    /// a resumable body, a pass-through function, a bound method, a generic
+    /// function, a host closure, an arity the VM's call path reports — goes
+    /// through [`Step::Call`].
     ///
     /// [`Step::Call`]: super::Step::Call
     #[inline]
@@ -120,7 +121,7 @@ impl BexVm {
         let Object::Function(function) = self.get_object(function) else {
             return None;
         };
-        if function.arity != argc {
+        if function.arity != argc || function.trace_passthrough {
             return None;
         }
         match super::native_body_fn(function)? {

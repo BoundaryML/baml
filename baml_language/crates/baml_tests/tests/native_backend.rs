@@ -639,6 +639,41 @@ function reservation_reuse_fails() -> bool {
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
 
+/// A call to a pass-through function (an LLM function's `@spec` companion)
+/// is requested from the VM, whose call path holds the call's trace controls
+/// for the callee and ends them, and its span activations, on return.
+#[test]
+fn a_pass_through_callee_is_called_through_the_vm() {
+    let module = compile(
+        r#"
+client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+function Describe(topic: string) -> string {
+    client: TestClient
+    prompt: `Describe ${topic}.`
+}
+
+function has_spec(topic: string) -> bool {
+  let spec = Describe@spec(topic);
+  true
+}
+"#,
+    );
+    let resumable = module
+        .functions
+        .iter()
+        .find(|f| f.display == "user.has_spec")
+        .expect("user.has_spec should compile")
+        .resumable;
+    assert!(resumable);
+    let body = body_of(&module, "user.has_spec");
+    assert!(!body.contains("vm.call_compiled"), "{body}");
+}
+
 /// A resumable body's arguments arrive in slots `0..arity` while local `i`
 /// keeps slot `i`: its start reads every argument before it writes any slot,
 /// or writing local 1 would overwrite argument 2 before it is read.

@@ -208,7 +208,9 @@ impl BexVm {
     /// compiled body that cannot suspend, called with no type arguments and
     /// with `args` as its slots: the implementation of a non-generic class,
     /// in the common case. Otherwise `None`, and the body requests the call
-    /// from the VM with the type arguments already pushed.
+    /// from the VM with the type arguments already pushed; so for a
+    /// pass-through implementation, whose held trace and span activations
+    /// the VM's call path sets up and ends.
     ///
     /// The call is [`Self::call_compiled`]'s: a frame, the depth limit, and
     /// on `Err` the callee's frame left for the caller's catch or the
@@ -226,7 +228,7 @@ impl BexVm {
         let Object::Function(function) = self.get_object(callee) else {
             return Ok(None);
         };
-        if function.arity != args.len() {
+        if function.arity != args.len() || function.trace_passthrough {
             return Ok(None);
         }
         match super::native_body_fn(function) {

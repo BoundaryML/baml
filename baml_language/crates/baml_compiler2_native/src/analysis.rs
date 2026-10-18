@@ -446,9 +446,9 @@ fn flow_of(terminator: &Terminator<'_>) -> Result<Flow, Rejection> {
 
 /// Whether `terminator` suspends whatever it calls: the suspending
 /// instructions, a call through a function value, a sys op called as a
-/// function, and a builtin compiled code cannot call directly. A call to a
-/// user function suspends when that function does, which the admission
-/// fixpoint decides.
+/// function, a builtin compiled code cannot call directly, and a call to a
+/// pass-through function. A call to any other user function suspends when
+/// that function does, which the admission fixpoint decides.
 pub(crate) fn suspends_directly<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     index: &ProgramIndex,
@@ -481,7 +481,10 @@ pub(crate) fn suspends_directly<'db>(
                 return false;
             };
             match info.kind {
-                FunctionKind::Bytecode => false,
+                // A pass-through callee holds the call's `$trace` controls
+                // and scopes its span activations to its frame, which the
+                // VM's call path sets up and ends.
+                FunctionKind::Bytecode => info.trace_passthrough,
                 FunctionKind::SysOp(_) => true,
                 FunctionKind::Native(_) | FunctionKind::NativeUnresolved => {
                     let shape = call_shape(body, args, *ntypeargs, static_types);
