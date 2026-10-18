@@ -257,22 +257,23 @@ impl<'db> Generator<'_, 'db> {
             )));
         };
         // The slots this site pushes, for the VM to lay over the resolved
-        // callee's; a site that pushes the method's own slots needs none,
-        // and only such a site calls an inline callee in place.
-        let layout = match layout {
-            Some(layout) if layout.0.iter().any(Option::is_some) => {
-                let slots: Vec<String> = layout
-                    .0
-                    .iter()
-                    .map(|slot| match slot {
-                        Some(name) => format!("Some({:?})", name.as_str()),
-                        None => "None".to_string(),
-                    })
-                    .collect();
-                Some(format!("Some(&[{}])", slots.join(", ")))
-            }
-            _ => None,
-        };
+        // callee's: an implementation may declare optionals the interface
+        // method does not, which the VM fills with `OMITTED_ARG` even when
+        // the site names none. Only a site naming no optional calls an
+        // inline callee in place, which `call_inline` declines unless the
+        // callee's arity is the site's.
+        let named = layout.is_some_and(|layout| layout.0.iter().any(Option::is_some));
+        let layout = layout.map(|layout| {
+            let slots: Vec<String> = layout
+                .0
+                .iter()
+                .map(|slot| match slot {
+                    Some(name) => format!("Some({:?})", name.as_str()),
+                    None => "None".to_string(),
+                })
+                .collect();
+            format!("Some(&[{}])", slots.join(", "))
+        });
         // The site's cache keys on the receiver alone, so only a dispatch
         // whose instantiation is the same on every pass uses it.
         if iface_fixed && types_fixed {
@@ -299,25 +300,21 @@ impl<'db> Generator<'_, 'db> {
                 ),
             );
         }
-        let layout = match layout {
-            Some(layout) => layout,
-            // A traced call reaches the VM's call path, which applies the
-            // attachment, so it is never run in place.
-            None if traced => "None".to_string(),
-            None => {
-                let call = self.fallible(
-                    block,
-                    &format!("vm.call_inline(callee, &[{}], line)", values.join(", ")),
-                )?;
-                let store = self.store(block, destination, &Expr::new("v", Repr::Value))?;
-                let jump = self.jump_to(target.0);
-                self.line(depth, &format!("if let Some(v) = {call} {{"));
-                self.line(depth + 1, &store);
-                self.line(depth + 1, &jump);
-                self.line(depth, "}");
-                "None".to_string()
-            }
-        };
+        // A traced call reaches the VM's call path, which applies the
+        // attachment, so it is never run in place.
+        if !named && !traced {
+            let call = self.fallible(
+                block,
+                &format!("vm.call_inline(callee, &[{}], line)", values.join(", ")),
+            )?;
+            let store = self.store(block, destination, &Expr::new("v", Repr::Value))?;
+            let jump = self.jump_to(target.0);
+            self.line(depth, &format!("if let Some(v) = {call} {{"));
+            self.line(depth + 1, &store);
+            self.line(depth + 1, &jump);
+            self.line(depth, "}");
+        }
+        let layout = layout.unwrap_or_else(|| "None".to_string());
         self.statement(
             depth,
             &format!(

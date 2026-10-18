@@ -488,7 +488,7 @@ fn interface_dispatch_compiles_as_a_runtime_resolved_call() {
         "{total}"
     );
     assert!(
-        total.contains("vm.push_virtual_args(callee,None,&["),
+        total.contains("vm.push_virtual_args(callee,Some(&[None]),&["),
         "{total}"
     );
     assert!(total.contains("Step::Call{callee,argc}"), "{total}");
@@ -499,6 +499,39 @@ fn interface_dispatch_compiles_as_a_runtime_resolved_call() {
     assert!(
         area_fn.contains("vm.make_virtual_bound_method("),
         "{area_fn}"
+    );
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
+/// An implementation may declare optionals its interface method does not.
+/// A site that names none still hands the VM its layout, so the arguments
+/// are laid over the resolved implementation's slots, its extra optionals
+/// omitted, as the interpreter's call path lays them.
+#[test]
+fn a_virtual_call_lays_its_arguments_over_the_implementation() {
+    let module = compile(
+        r#"
+interface Grows {
+  function grow(self, by: int) -> int throws never
+}
+
+class Plot {
+  side int
+  implements Grows {
+    function grow(self, by: int, extra: int = 1) -> int throws never { self.side * by + extra }
+  }
+}
+
+function grow_by(g: Grows, by: int) -> int { g.grow(by) }
+"#,
+    );
+    let body = body_of(&module, "user.grow_by")
+        .split_whitespace()
+        .collect::<String>();
+    assert!(body.contains("vm.call_inline(callee,&["), "{body}");
+    assert!(
+        body.contains("vm.push_virtual_args(callee,Some(&[None,None]),&["),
+        "{body}"
     );
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
