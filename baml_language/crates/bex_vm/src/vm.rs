@@ -571,6 +571,7 @@ pub(crate) mod tests {
             argv: Arc::from([]),
             pending_call_trace: None,
             pending_logs: Vec::new(),
+            compiled_collector: None,
             pending_trace_hooks: Vec::new(),
             held_traces: Vec::new(),
             trace_scope_frame: usize::MAX,
@@ -3057,6 +3058,10 @@ pub struct BexVm {
     /// the engine takes them (before anything else `exec` returns), so they
     /// keep their order with every other effect the engine performs.
     pub pending_logs: Vec<PendingLog>,
+    /// How compiled code collects garbage without leaving its body, installed
+    /// by the engine for a VM it runs; `None` keeps compiled code from
+    /// collecting at all (its checks find nothing to do).
+    pub compiled_collector: Option<Arc<dyn crate::compiled_rt::CompiledCollector>>,
     pending_trace_hooks: Vec<PendingTraceHook>,
     held_traces: Vec<(usize, CallTrace)>,
     /// Nearest frame with held configuration or an owned-span scope. Ordinary
@@ -3869,6 +3874,7 @@ impl BexVm {
             argv,
             pending_call_trace: None,
             pending_logs: Vec::new(),
+            compiled_collector: None,
             pending_trace_hooks: Vec::new(),
             held_traces: Vec::new(),
             trace_scope_frame: usize::MAX,

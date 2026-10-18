@@ -147,6 +147,57 @@ impl BexVm {
         self.should_early_yield()
     }
 
+    /// A compiled GC check (an allocating loop's header, an allocating
+    /// recursive function's entry): whether a collection may be due, by the
+    /// interpreter's own control-flow check. Under `BAML_GC_STRESS=1` every
+    /// check is due.
+    #[inline]
+    pub fn gc_due(&mut self) -> bool {
+        super::gc_stress() || self.should_early_yield()
+    }
+
+    /// Collect garbage at a compiled GC check, with `live` (the body's live
+    /// heap values) rooted on the VM stack for the collection and updated to
+    /// where it moved them. Collects only when this VM is the only one
+    /// running; otherwise the body carries on and collects at a later check.
+    #[cold]
+    #[inline(never)]
+    pub fn collect_here(&mut self, live: &mut [Value]) {
+        let Some(collector) = self.compiled_collector.clone() else {
+            return;
+        };
+        let base = self.stack.len();
+        self.stack.extend(live.iter().copied());
+        collector.collect_in_place(self);
+        live.copy_from_slice(&self.stack.0[base..base + live.len()]);
+        self.stack.truncate(base);
+    }
+
+    /// Root `values` on the VM stack around a call that may collect,
+    /// returning where they start: read them back with [`Self::spilled`]
+    /// after the call, then release them with [`Self::unspill`].
+    #[inline]
+    pub fn spill(&mut self, values: &[Value]) -> usize {
+        let base = self.stack.len();
+        self.stack.extend(values.iter().copied());
+        base
+    }
+
+    /// The `i`th value [`Self::spill`] rooted at `base`, where a collection
+    /// left it.
+    #[inline]
+    #[must_use]
+    pub fn spilled(&self, base: usize, i: usize) -> Value {
+        self.stack.0[base + i]
+    }
+
+    /// Release the values [`Self::spill`] rooted at `base`, with anything a
+    /// failed callee left above them.
+    #[inline]
+    pub fn unspill(&mut self, base: usize) {
+        self.stack.truncate(base);
+    }
+
     /// The frame count with the running compiled function's frame on top.
     /// A compiled body reads it on entry and hands it to [`Self::catch`].
     #[inline]

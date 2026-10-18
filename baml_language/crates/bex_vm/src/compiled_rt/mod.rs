@@ -32,6 +32,23 @@ mod r#virtual;
 
 /// The literal and freshness of a `RealizedTy::Literal` generated code
 /// builds, re-exported so the generated crate needs only this one.
+/// What lets compiled code collect garbage in place: the engine's view of
+/// every other mutator. Collecting moves objects, so `vm`'s stack (where
+/// compiled code roots its live values first) is a root and is forwarded.
+pub trait CompiledCollector: Send + Sync {
+    /// Collect now if every other mutator is parked and a collection is due;
+    /// whether it collected.
+    fn collect_in_place(&self, vm: &mut crate::BexVm) -> bool;
+}
+
+/// Whether `BAML_GC_STRESS=1` makes every compiled GC check collect, so a
+/// value compiled code failed to root is caught at once.
+#[must_use]
+pub fn gc_stress() -> bool {
+    static STRESS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *STRESS.get_or_init(|| std::env::var_os("BAML_GC_STRESS").is_some_and(|value| value == "1"))
+}
+
 pub use baml_base::Literal;
 pub use baml_type::Freshness;
 #[cfg(test)]
