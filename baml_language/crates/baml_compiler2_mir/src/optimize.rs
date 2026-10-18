@@ -12,29 +12,32 @@ use std::{
 };
 
 use crate::{
-    BasicBlock, BlockId, CellId, Local, MirFunction, MirFunctionBody, MirFunctionKind, Operand,
-    Place, Terminator, memory,
+    BasicBlock, BlockId, CellId, Local, MirFunction, MirFunctionBody, MirFunctionKind,
+    MirInternalError, Operand, Place, Terminator, memory,
 };
 
 mod effects;
 mod values;
 
-/// Run all optimization passes on a MIR function.
+/// Run all optimization passes on a MIR function. Fails if the result is
+/// not reducible.
 pub(crate) fn optimize_function(
     db: &dyn crate::Db,
     func: &mut MirFunction<'_>,
     opt: crate::OptLevel,
-) {
+) -> Result<(), MirInternalError> {
     let MirFunctionKind::Bytecode(body) = &mut func.kind else {
-        return; // nothing to clean up on builtins
+        return Ok(()); // nothing to clean up on builtins
     };
     optimize_body(body, func.arity, opt);
+    check_reducible(body, func.span)?;
 
     // `cfg!`, not `#[cfg]`: the verifier stays type-checked in every
     // profile and the call folds away in release.
     if cfg!(debug_assertions) {
         verify_mir(db, body, func.arity, &func.identity.display(db));
     }
+    Ok(())
 }
 
 /// Run all cleanup phases directly on a `MirFunctionBody`.
@@ -45,12 +48,33 @@ pub(crate) fn optimize_function_body(
     db: &dyn crate::Db,
     body: &mut MirFunctionBody,
     opt: crate::OptLevel,
-) {
+) -> Result<(), MirInternalError> {
     optimize_body(body, 0, opt);
+    check_reducible(body, None)?;
 
     if cfg!(debug_assertions) {
         verify_mir(db, body, 0, &"$init_let._");
     }
+    Ok(())
+}
+
+/// The builder guarantees a reducible CFG (see `Structure` in builder.rs);
+/// this checks that the passes kept it so. Runs in every profile.
+fn check_reducible(
+    body: &MirFunctionBody<'_>,
+    span: Option<baml_base::Span>,
+) -> Result<(), MirInternalError> {
+    crate::reducible::check(body).map_err(|blocks| MirInternalError {
+        message: format!(
+            "optimization left an irreducible CFG: a cycle with more than one entry among {}",
+            blocks
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        span,
+    })
 }
 
 fn optimize_body(body: &mut MirFunctionBody, arity: usize, opt: crate::OptLevel) {
