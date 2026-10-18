@@ -1290,9 +1290,9 @@ fn compiled_code_collects_where_it_allocates() {
     assert!(build.contains("vm.gc_due()"), "{build}");
     assert!(build.contains("vm.collect_here(&mutlive)"), "{build}");
     let keep = compact("user.keep");
-    assert!(keep.contains("vm.spill(&[l1"), "{keep}");
-    assert!(keep.contains("l1=vm.spilled("), "{keep}");
+    assert!(keep.contains("vm.set_slot(depth,0,l1);"), "{keep}");
+    assert!(keep.contains("l1=vm.slot(depth,0);"), "{keep}");
     let main = compact("user.main");
-    assert!(!main.contains("vm.spill("), "{main}");
+    assert!(!main.contains("vm.set_slot("), "{main}");
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }

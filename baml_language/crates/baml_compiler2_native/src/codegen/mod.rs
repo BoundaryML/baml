@@ -71,6 +71,9 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) may_collect: &'a BTreeSet<usize>,
     /// Where this body checks for a collection, if it is inline.
     pub(crate) gc_checks: crate::admit::GcChecks,
+    /// The first of the frame slots a call that may collect roots the
+    /// caller's live values in (`rooted_call`), after the body's own.
+    pub(crate) spill_base: usize,
     /// Whether this function can suspend: it is emitted as a resumable state
     /// machine over its blocks rather than as structured code.
     pub(crate) suspends: bool,
@@ -227,12 +230,11 @@ impl<'db> Generator<'_, 'db> {
         }
         // The cause slot: the context of the error a handler is handling,
         // which the VM's cause chain reads off the frame.
+        if self.slots > 0 {
+            let _ = writeln!(out, "    vm.reserve_slots(depth, {});", self.slots);
+        }
         if let Some(slot) = self.cause_slot {
-            let _ = writeln!(
-                out,
-                "    vm.reserve_slots(depth, {});\n    vm.set_slot(depth, {slot}, Value::NULL);",
-                self.slots
-            );
+            let _ = writeln!(out, "    vm.set_slot(depth, {slot}, Value::NULL);");
         }
         if self.gc_checks.loops {
             let _ = writeln!(out, "    let mut iterations: u32 = 0;");
@@ -589,6 +591,23 @@ impl<'db> Generator<'_, 'db> {
                 self.loop_headers = loops(self.body).0;
             }
         }
+        // Frame slots for the values live across a call that may collect: as
+        // many as the widest call site keeps.
+        self.spill_base = self.slots;
+        if self.may_collect.contains(&self.object) || (self.suspends && self.calls_in_place()) {
+            let widest = (0..blocks.len())
+                .filter(|&b| {
+                    matches!(
+                        blocks[b].terminator,
+                        Some(Terminator::Call { .. } | Terminator::VirtualCall { .. })
+                    )
+                })
+                .filter_map(|b| self.rooted_locals(BlockId(b)).ok())
+                .map(|live| live.len())
+                .max()
+                .unwrap_or(0);
+            self.slots += widest;
+        }
     }
 
     /// Whether a resumable body runs a callee in place that may collect: a
@@ -625,8 +644,10 @@ impl<'db> Generator<'_, 'db> {
 
     /// `call`, an expression of type `R<_>` that runs a callee which may
     /// collect, made with the value locals live across `block`'s call rooted
-    /// on the VM stack and read back after it (on either outcome: a handler
-    /// reads them too). The result, through `block`'s handler.
+    /// in the frame's spill slots and read back after it (on either outcome:
+    /// a handler reads them too, and the callee's frames, which an error
+    /// leaves pushed, stand above the slots). The result, through `block`'s
+    /// handler.
     pub(super) fn rooted_call(&mut self, block: BlockId, call: &str) -> Gen<String> {
         let live = self.rooted_locals(block)?;
         if live.is_empty() {
@@ -634,14 +655,16 @@ impl<'db> Generator<'_, 'db> {
         }
         let k = self.temps;
         self.temps += 1;
-        let values: Vec<String> = live.iter().map(|i| format!("l{i}")).collect();
-        self.pending
-            .push(format!("let gc{k} = vm.spill(&[{}]);", values.join(", ")));
+        let base = self.spill_base;
+        for (j, i) in live.iter().enumerate() {
+            self.pending
+                .push(format!("vm.set_slot(depth, {}, l{i});", base + j));
+        }
         self.pending.push(format!("let r{k} = {call};"));
         for (j, i) in live.iter().enumerate() {
-            self.pending.push(format!("l{i} = vm.spilled(gc{k}, {j});"));
+            self.pending
+                .push(format!("l{i} = vm.slot(depth, {});", base + j));
         }
-        self.pending.push(format!("vm.unspill(gc{k});"));
         self.fallible(block, &format!("r{k}"))
     }
 

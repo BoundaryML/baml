@@ -173,31 +173,6 @@ impl BexVm {
         self.stack.truncate(base);
     }
 
-    /// Root `values` on the VM stack around a call that may collect,
-    /// returning where they start: read them back with [`Self::spilled`]
-    /// after the call, then release them with [`Self::unspill`].
-    #[inline]
-    pub fn spill(&mut self, values: &[Value]) -> usize {
-        let base = self.stack.len();
-        self.stack.extend(values.iter().copied());
-        base
-    }
-
-    /// The `i`th value [`Self::spill`] rooted at `base`, where a collection
-    /// left it.
-    #[inline]
-    #[must_use]
-    pub fn spilled(&self, base: usize, i: usize) -> Value {
-        self.stack.0[base + i]
-    }
-
-    /// Release the values [`Self::spill`] rooted at `base`, with anything a
-    /// failed callee left above them.
-    #[inline]
-    pub fn unspill(&mut self, base: usize) {
-        self.stack.truncate(base);
-    }
-
     /// The frame count with the running compiled function's frame on top.
     /// A compiled body reads it on entry and hands it to [`Self::catch`].
     #[inline]

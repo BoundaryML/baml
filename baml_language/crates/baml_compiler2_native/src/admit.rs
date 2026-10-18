@@ -295,6 +295,7 @@ pub fn compile_program<'db>(
                 resumable: &resumable,
                 may_collect: &may_collect,
                 gc_checks: checks.get(&object).copied().unwrap_or_default(),
+                spill_base: 0,
                 suspends: resumable.contains(&object),
                 in_loop: false,
                 natives: &mut natives,
