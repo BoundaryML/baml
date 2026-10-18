@@ -2177,6 +2177,24 @@ pub struct ShieldRange {
     pub end_pc: usize,
 }
 
+/// Where one MIR block of a function landed in its instructions: the PC a
+/// natively compiled body of the function records as its frame's position
+/// at each statement and at the terminator, so the frame reads as the
+/// equivalent bytecode frame would. A PC here is an instruction index;
+/// `None` where the block emitted no instruction for that position.
+#[derive(Clone, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct BlockPcs {
+    /// Each statement's last instruction: where its final operation runs.
+    /// A statement defining a value bytecode computes at its use has the
+    /// last instruction of that computation.
+    pub statements: Vec<Option<usize>>,
+    /// The instruction that performs the terminator, for one that calls,
+    /// suspends, raises or returns.
+    pub terminator: Option<usize>,
+    /// The block's first instruction.
+    pub start: Option<usize>,
+}
+
 /// Whether `pc` lies in one of `ranges` (sorted, non-overlapping).
 fn pc_in_ranges(ranges: &[ShieldRange], pc: usize) -> bool {
     let next = ranges.partition_point(|range| range.start_pc <= pc);
@@ -2376,6 +2394,11 @@ pub struct Bytecode {
     /// Sorted by `start_pc`, non-overlapping. See [`ShieldRange`].
     pub shield_table: Vec<ShieldRange>,
 
+    /// Where each MIR block (by `BlockId`) of the function landed in
+    /// `instructions`: what a natively compiled body records as its frame's
+    /// PC. See [`BlockPcs`].
+    pub block_pcs: Vec<BlockPcs>,
+
     /// Compact bytecode encoding. Populated at engine load time by
     /// `lower_to_compact()`. `None` until lowering runs.
     #[borsh(skip)]
@@ -2403,6 +2426,7 @@ impl Bytecode {
             meta: Vec::new(),
             exception_table: Vec::new(),
             shield_table: Vec::new(),
+            block_pcs: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         }
@@ -3121,6 +3145,7 @@ mod compact_tests {
             meta,
             exception_table: Vec::new(),
             shield_table: Vec::new(),
+            block_pcs: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         }
@@ -3656,6 +3681,7 @@ mod compact_tests {
             meta: vec![InstructionMeta { operand: None }; 2],
             exception_table: Vec::new(),
             shield_table: Vec::new(),
+            block_pcs: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         };
@@ -3689,6 +3715,7 @@ mod compact_tests {
                 context_slot: 1,
             }],
             shield_table: Vec::new(),
+            block_pcs: Vec::new(),
             handler_context_table: vec![HandlerContextEntry {
                 start_pc: 2,
                 end_pc: 3, // one past the last instruction → mapped to total byte length

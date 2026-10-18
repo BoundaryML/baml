@@ -105,7 +105,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// throws.
 ///
 /// Version 21 adds pass-through tracing strategy to serialized function metadata.
-pub const FORMAT_VERSION: u32 = 21;
+///
+/// Version 22 adds `Bytecode::block_pcs`, where each MIR block's statements
+/// and terminator landed, which natively compiled bodies record as their
+/// frames' PCs.
+pub const FORMAT_VERSION: u32 = 22;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.
