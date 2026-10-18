@@ -9512,7 +9512,8 @@ impl BexVm {
         let frame_telemetry = bf.telemetry.take();
 
         // Completion reads the callee's `Function`; it must run before
-        // `function` is reloaded with the caller's.
+        // `function` is reloaded with the caller's. An unobserved frame still
+        // ends its held trace and span activation, as `Return` ends them.
         if let Some(frame_telemetry) = frame_telemetry {
             self.complete_bytecode_invocation_with_function(
                 *frame_idx,
@@ -9521,6 +9522,8 @@ impl BexVm {
                 InvocationOutcome::Ok,
                 Some(result),
             );
+        } else {
+            self.end_manual_activation(*frame_idx);
         }
 
         // SAFETY: the compiler guarantees a result at or above the callee's
