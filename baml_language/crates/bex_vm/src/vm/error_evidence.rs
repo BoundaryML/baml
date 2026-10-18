@@ -307,18 +307,15 @@ impl BexVm {
             .map(|idx| match &self.frames[idx] {
                 Frame::Bytecode(frame) => ErrorFrame {
                     function: self.frame_registered_function(idx),
-                    // A compiled body has no bytecode position.
-                    pc: self
-                        .compiled_at(idx)
-                        .is_none()
-                        .then(|| {
-                            if Some(idx) == raise_frame {
-                                self.cur_pc
-                            } else {
-                                frame.faulting_pc
-                            }
-                        })
-                        .map(|pc| u32::try_from(pc).unwrap_or(u32::MAX)),
+                    // A compiled body stands at the instruction it recorded.
+                    pc: (if self.compiled_at(idx).is_some() {
+                        self.compiled_pc(idx)
+                    } else if Some(idx) == raise_frame {
+                        Some(self.cur_pc)
+                    } else {
+                        Some(frame.faulting_pc)
+                    })
+                    .map(|pc| u32::try_from(pc).unwrap_or(u32::MAX)),
                     native: false,
                 },
                 Frame::Native(native) => ErrorFrame {

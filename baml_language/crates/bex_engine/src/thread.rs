@@ -230,12 +230,15 @@ impl BexThread {
                 };
                 let pc = match self.vm.frame_position(index) {
                     None => return false,
-                    // A compiled body has no bytecode position; the line it
-                    // recorded says whether it stands in a `defer` region.
+                    // A compiled body stands at the instruction it last
+                    // recorded: its call, if a callee runs above it.
                     Some(
                         bex_vm::FramePosition::CompiledRunning
                         | bex_vm::FramePosition::CompiledStub(_),
-                    ) => return self.vm.frame_compiled_shielded(index),
+                    ) => match self.vm.compiled_pc(index) {
+                        Some(pc) => pc,
+                        None => return false,
+                    },
                     Some(bex_vm::FramePosition::Bytecode(_)) if Some(index) == innermost => {
                         self.vm.cur_pc
                     }

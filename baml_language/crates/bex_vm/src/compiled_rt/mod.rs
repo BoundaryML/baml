@@ -40,11 +40,6 @@ pub(crate) use call::FORCE_CALL_FUNNEL;
 use bex_vm_types::{HeapPtr, Value, types::Function};
 pub use r#virtual::VirtualSite;
 
-/// The bit a compiled body sets in the line it records while it runs a
-/// shielded (`defer`) region: the engine reads it as bytecode's shield table
-/// for a compiled frame, and a stack trace masks it off.
-pub const SHIELDED_LINE: u32 = 1 << 31;
-
 use crate::{
     errors::{ThrowKind, VmError, VmInternalError, VmThrown},
     vm::{BexVm, value_as_float},
@@ -150,8 +145,10 @@ impl CompiledEntry {
 /// Its position is one of two things: [`RUNNING`], while its body is on the
 /// Rust stack, or an offset into [`STUB`], the code appended to its function's
 /// bytecode at load (`prepare_compact_code`): where the interpreter resumes it.
-/// Its `faulting_pc`, which only bytecode reads as a position, holds the
-/// source line the body last reported.
+/// Its `faulting_pc` holds the index of the instruction of its function's
+/// bytecode equivalent to where the body last reported, which a reader
+/// translates to a compact PC (`BexVm::compiled_pc`) and then reads as a
+/// bytecode frame's.
 pub(crate) mod stub {
     use bex_vm_types::bytecode::OpCode;
 

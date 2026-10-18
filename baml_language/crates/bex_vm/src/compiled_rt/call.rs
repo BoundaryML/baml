@@ -12,7 +12,8 @@ use crate::{
     indexable::EvalStackTrait,
     package_baml::{NativeCallResult, NativeFunction},
     telemetry::{CallTypeArgs, InvocationOutcome},
-    vm::{BexVm, BytecodeFrame, COMPILED_CALLER_PC, Frame, VmExecState},
+    types::ObjectTrait as _,
+    vm::{BexVm, BytecodeFrame, Frame, VmExecState},
 };
 
 #[cfg(test)]
@@ -154,29 +155,30 @@ impl BexVm {
         self.frames.len()
     }
 
-    /// Record `line` as the source position of the compiled function whose
-    /// frame count is `depth` (see [`Self::frame_depth`]). Compiled code calls
-    /// this only when an error leaves the function, lands in its `catch`, or
-    /// it suspends, so stack traces name the statement that raised, at no
-    /// cost otherwise. A compiled frame keeps its line in `faulting_pc`; see
-    /// `stub`.
-    /// Record `line` as the running compiled function's call site, in the
+    /// Record `pc` as the running compiled function's call site, in the
     /// top frame (the caller's, before it pushes its callee); see
     /// [`Self::call_compiled`].
     #[inline(always)]
-    pub(crate) fn note_call_line(&mut self, line: u32) {
+    pub(crate) fn note_call_pc(&mut self, pc: u32) {
         if let Some(crate::vm::Frame::Bytecode(frame)) = self.frames.last_mut() {
-            frame.faulting_pc = line as usize;
+            frame.faulting_pc = pc as usize;
         }
     }
 
+    /// Record `pc` as the position of the compiled function whose frame
+    /// count is `depth` (see [`Self::frame_depth`]). Compiled code calls
+    /// this only when an error leaves the function, lands in its `catch`, or
+    /// it suspends, so stack traces name the statement that raised, at no
+    /// cost otherwise. A compiled frame keeps in `faulting_pc` the index of
+    /// the equivalent instruction of its function's bytecode, which readers
+    /// translate to a compact PC (`BexVm::compiled_pc`); see `stub`.
     #[cold]
-    pub fn note_line(&mut self, depth: usize, line: u32) {
+    pub fn note_pc(&mut self, depth: usize, pc: u32) {
         if let Some(crate::vm::Frame::Bytecode(frame)) = depth
             .checked_sub(1)
             .and_then(|top| self.frames.get_mut(top))
         {
-            frame.faulting_pc = line as usize;
+            frame.faulting_pc = pc as usize;
         }
     }
 
@@ -215,18 +217,15 @@ impl BexVm {
     /// 0 info, 1 debug, 2 warn, 3 error): the record bytecode's `SendEvent`
     /// of the `$baml_log` payload makes, recorded for telemetry here and
     /// queued for the engine ([`Self::pending_logs`]) instead of returned,
-    /// since a compiled body cannot leave mid-statement. `line` is the body's
-    /// current line; `file_id`, `start` and `end` the statement's span.
-    #[allow(clippy::too_many_arguments)]
+    /// since a compiled body cannot leave mid-statement. `pc` is the
+    /// statement's in the function's bytecode, whose `SendEvent` line entry
+    /// locates the record as the interpreter locates it.
     pub fn log_event(
         &mut self,
         level: u8,
         data: Value,
         event_name: Value,
-        file_id: u32,
-        line: u32,
-        start: u32,
-        end: u32,
+        pc: u32,
     ) -> Result<(), Box<VmError>> {
         use btel_records::LogLevel;
         let level = match level {
@@ -245,17 +244,20 @@ impl BexVm {
         };
         let top = self.frames.len().saturating_sub(1);
         self.record_log(top, level, name.clone(), data);
+        let source_location = match self.frames.get(top) {
+            Some(Frame::Bytecode(frame)) => self
+                .get_object(frame.function)
+                .as_callable()
+                .ok()
+                .and_then(|function| function.bytecode.line_entry_for_pc(pc as usize))
+                .map(Self::event_source_location_for_line_entry),
+            _ => None,
+        };
         self.pending_logs.push(crate::vm::PendingLog {
             level,
             event_name: name,
             data,
-            source_location: Some(crate::vm::VmEventSourceLocation {
-                file_id,
-                line: line & !super::SHIELDED_LINE,
-                column: 0,
-                start_offset: start,
-                end_offset: end,
-            }),
+            source_location,
         });
         Ok(())
     }
@@ -273,10 +275,12 @@ impl BexVm {
     /// The frame limit is the only limit a program sees: the Rust stack the
     /// callee runs on is the VM's concern ([`Self::with_stack_room`]).
     ///
-    /// `line` is the call's source line. It goes into the caller's frame
-    /// before the callee runs, as the interpreter records a caller's call
-    /// site on every call: a stack trace taken while the callee runs (an
-    /// error caught below, a `StackOverflow`) names the line of this call.
+    /// `pc` is the call's: the index of its call instruction in the
+    /// caller's bytecode. It goes into the caller's frame before the callee
+    /// runs, as the interpreter records a caller's call site on every call:
+    /// a stack trace taken while the callee runs (an error caught below, a
+    /// `StackOverflow`) names the line of this call, and telemetry the same
+    /// call site the interpreter records.
     ///
     /// On `Err` the callee's frame stays pushed, as the VM's call path leaves
     /// it: the unwinder pops it if the error escapes, [`Self::catch`] if a
@@ -287,9 +291,9 @@ impl BexVm {
         callee: HeapPtr,
         body: CompiledBody,
         args: &[Value],
-        line: u32,
+        pc: u32,
     ) -> Result<Value, Box<VmError>> {
-        self.note_call_line(line);
+        self.note_call_pc(pc);
         if self.frames.len() >= crate::vm::MAX_FRAMES {
             return Err(Box::new(VmError::thrown_fresh(
                 self.panic_to_exception_value(VmPanic::StackOverflow),
@@ -334,9 +338,9 @@ impl BexVm {
         body: CompiledBody,
         type_args: &[RealizedTy],
         args: &[Value],
-        line: u32,
+        pc: u32,
     ) -> Result<Value, Box<VmError>> {
-        self.note_call_line(line);
+        self.note_call_pc(pc);
         if self.frames.len() >= crate::vm::MAX_FRAMES {
             return Err(Box::new(VmError::thrown_fresh(
                 self.panic_to_exception_value(VmPanic::StackOverflow),
@@ -459,13 +463,13 @@ impl BexVm {
     /// A plain compiled callee (a `Function`, not `$trace`-hooked, called
     /// without a `$trace` attachment or type arguments) is entered here with
     /// what the VM's call path would establish for it, but known statically:
-    /// the call site is [`COMPILED_CALLER_PC`], the visible caller is the
-    /// running compiled frame's function, the callee's context is inherited.
-    /// The frame is pushed with the invocation `enter_bytecode_with_trace`
-    /// opened, the body runs, and the frame completes as
-    /// `finish_bytecode_frame` completes one: the records are those the call
-    /// path would write, without its argument copy, callee dispatch and
-    /// call-site bookkeeping. The context the call path selects on entry and
+    /// the call site is the call instruction the caller recorded, the visible
+    /// caller is the running compiled frame's function, the callee's context
+    /// is inherited. The frame is pushed with the invocation
+    /// `enter_bytecode_with_trace` opened, the body runs, and the frame
+    /// completes as `finish_bytecode_frame` completes one: the records are
+    /// those the call path would write, without its argument copy, callee
+    /// dispatch and call-site bookkeeping. The context the call path selects on entry and
     /// restores on completion is the one already selected, the caller's, so
     /// it is reselected only when it is not. Every other callee goes through
     /// the call path ([`Self::call_compiled_funnelled`]).
@@ -513,6 +517,7 @@ impl BexVm {
                 ..
             }))
         );
+        let caller_pc = self.caller_pc(caller_frame_idx, top, 0);
         let context = self.current_context().clone();
         let telemetry = self
             .telemetry
@@ -528,7 +533,7 @@ impl BexVm {
                 function,
                 callee,
                 visible_caller,
-                COMPILED_CALLER_PC,
+                caller_pc,
                 caller_is_observed,
                 args,
                 None,

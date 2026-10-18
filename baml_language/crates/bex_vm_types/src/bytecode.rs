@@ -2280,9 +2280,18 @@ pub struct CompactCode {
     /// Jump tables with offsets translated to byte offsets.
     /// Parallel to `Bytecode::jump_tables`.
     pub jump_tables: Vec<CompactJumpTable>,
+    /// The byte offset of each instruction, kept only for a function whose
+    /// frames compiled code runs ([`Bytecode::lower_to_compact_with_offsets`]):
+    /// such a frame records the index of an instruction, not its offset.
+    pub instruction_offsets: Vec<usize>,
 }
 
 impl CompactCode {
+    /// The byte-offset PC of instruction `index`, when the offsets were kept.
+    pub fn offset_of(&self, index: usize) -> Option<usize> {
+        self.instruction_offsets.get(index).copied()
+    }
+
     /// Get the source mapping entry for a byte-offset PC.
     pub fn line_entry_for_pc(&self, pc: usize) -> Option<&LineTableEntry> {
         if self.line_table.is_empty() {
@@ -2491,13 +2500,23 @@ impl Bytecode {
     ///    from instruction-index-relative to byte-offset-relative.
     ///
     /// Also translates `line_table` and `exception_table` PCs to byte offsets.
+    pub fn lower_to_compact(&self) -> CompactCode {
+        self.lower(false)
+    }
+
+    /// [`Self::lower_to_compact`], keeping each instruction's byte offset
+    /// ([`CompactCode::instruction_offsets`]).
+    pub fn lower_to_compact_with_offsets(&self) -> CompactCode {
+        self.lower(true)
+    }
+
     #[allow(
         clippy::cast_possible_wrap,
         clippy::cast_sign_loss,
         clippy::cast_possible_truncation,
         clippy::cast_lossless
     )]
-    pub fn lower_to_compact(&self) -> CompactCode {
+    fn lower(&self, keep_offsets: bool) -> CompactCode {
         let n = self.instructions.len();
         // index_to_offset[i] = byte offset of instruction i
         // index_to_offset[n] = total byte count (sentinel for end-of-code)
@@ -2931,6 +2950,11 @@ impl Bytecode {
             handler_context_table,
             shield_table,
             jump_tables,
+            instruction_offsets: if keep_offsets {
+                index_to_offset
+            } else {
+                Vec::new()
+            },
         }
     }
 

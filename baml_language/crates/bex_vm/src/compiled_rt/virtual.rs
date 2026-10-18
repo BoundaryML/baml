@@ -218,7 +218,7 @@ impl BexVm {
         &mut self,
         callee: HeapPtr,
         args: &[Value],
-        line: u32,
+        pc: u32,
     ) -> Result<Option<Value>, Box<VmError>> {
         if !self.call_type_args.is_empty() {
             return Ok(None);
@@ -231,7 +231,7 @@ impl BexVm {
         }
         match super::native_body_fn(function) {
             Some(super::CompiledFn::Inline(body)) => {
-                self.call_compiled(callee, body, args, line).map(Some)
+                self.call_compiled(callee, body, args, pc).map(Some)
             }
             _ => Ok(None),
         }

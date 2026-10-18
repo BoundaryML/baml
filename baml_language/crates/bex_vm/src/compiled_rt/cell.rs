@@ -140,9 +140,9 @@ impl BexVm {
         callee: HeapPtr,
         body: CompiledBody,
         args: &[Value],
-        line: u32,
+        pc: u32,
     ) -> Result<Value, Box<VmError>> {
-        self.note_call_line(line);
+        self.note_call_pc(pc);
         if self.frames.len() >= crate::vm::MAX_FRAMES {
             return Err(Box::new(VmError::thrown_fresh(
                 self.panic_to_exception_value(VmPanic::StackOverflow),

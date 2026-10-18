@@ -170,11 +170,6 @@ impl Drop for ObjectMut<'_> {
 /// Max call stack size.
 pub const MAX_FRAMES: usize = 256;
 
-/// The `caller_pc` a call path records for a call made by compiled code,
-/// which has no bytecode offset. Telemetry source maps are keyed by compact
-/// byte offset, so such call sites share this one coordinate per caller.
-pub(crate) const COMPILED_CALLER_PC: u32 = u32::MAX;
-
 #[derive(Clone, Copy)]
 struct CallOptions<'a> {
     type_args: &'a [bex_vm_types::RealizedTy],
@@ -324,8 +319,8 @@ pub struct BytecodeFrame {
     /// In the legacy path this mirrors `instruction_ptr - 1` and is kept
     /// up-to-date before each `step()` call.
     /// Used by `capture_stack_trace`, `try_unwind_exception`, and event
-    /// source location capture. For a compiled frame, the source line its body
-    /// last reported instead.
+    /// source location capture. For a compiled frame, the index of the
+    /// instruction its body last reported instead (`BexVm::compiled_pc`).
     pub(crate) faulting_pc: usize,
     /// Producer-only invocation state. `None` means the invocation is hidden.
     pub(crate) telemetry: Option<FrameTelemetry>,
@@ -1555,38 +1550,62 @@ pub(crate) mod tests {
         }
     }
 
-    /// A compiled caller's frame names the line of its call while the callee
-    /// runs, as a bytecode caller's names its call instruction: a trace taken
-    /// below it (an error caught there) points at the call, not at the line
-    /// the caller last reported or at the interpreter's stale `cur_pc`.
+    /// A compiled caller's frame stands at its call instruction while the
+    /// callee runs, as a bytecode caller's does: the same PC (the call site
+    /// telemetry records) and so the same line in a trace taken below it,
+    /// not the line the caller last reported or the interpreter's stale
+    /// `cur_pc`.
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
-    fn a_compiled_caller_names_its_call_line_while_the_callee_runs() {
-        use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+    fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
+        use std::sync::{
+            Mutex,
+            atomic::{AtomicU32, Ordering},
+        };
+
+        use bex_vm_types::bytecode::Instruction;
         static INNER: AtomicU32 = AtomicU32::new(0);
         static MIDDLE: AtomicU32 = AtomicU32::new(0);
-        static OUTER_LINE: AtomicUsize = AtomicUsize::new(0);
-        static MIDDLE_LINE: AtomicUsize = AtomicUsize::new(0);
+        static MIDDLE_CALL: AtomicU32 = AtomicU32::new(0);
+        static OUTER_CALL: AtomicU32 = AtomicU32::new(0);
+        /// The (PC, trace line) of Outer's frame, then Middle's, as the
+        /// innermost body saw them.
+        static SEEN: Mutex<Vec<(usize, usize)>> = Mutex::new(Vec::new());
         #[allow(clippy::unnecessary_wraps)] // the compiled-body signature
         fn inner(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
             let trace = vm.capture_stack_trace();
-            let line_of = |name: &str| {
-                trace
+            let mut seen = SEEN.lock().unwrap();
+            seen.clear();
+            for name in ["user.Outer", "user.Middle"] {
+                let idx = (0..vm.frames.len())
+                    .rfind(|&idx| {
+                        vm.get_object(vm.frames[idx].function())
+                            .as_callable()
+                            .is_ok_and(|function| function.name() == name)
+                    })
+                    .expect("the caller's frame");
+                let Frame::Bytecode(frame) = &vm.frames[idx] else {
+                    unreachable!("a caller has a bytecode frame")
+                };
+                let pc = vm.compiled_pc(idx).unwrap_or(frame.faulting_pc);
+                let line = trace
                     .iter()
                     .find(|frame| frame.function_name == name)
-                    .map_or(usize::MAX, |frame| frame.error_line)
-            };
-            OUTER_LINE.store(line_of("user.Outer"), Ordering::Relaxed);
-            MIDDLE_LINE.store(line_of("user.Middle"), Ordering::Relaxed);
+                    .map_or(usize::MAX, |frame| frame.error_line);
+                seen.push((pc, line));
+            }
             Ok(Value::int(1))
         }
         fn middle(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
-            let callee = vm.idx_to_ptr(ObjectIndex::from_raw(INNER.load(Ordering::Relaxed) as usize));
-            vm.call_compiled(callee, inner, &[], 23)
+            let callee =
+                vm.idx_to_ptr(ObjectIndex::from_raw(INNER.load(Ordering::Relaxed) as usize));
+            vm.call_compiled(callee, inner, &[], MIDDLE_CALL.load(Ordering::Relaxed))
         }
         fn outer(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
-            let callee = vm.idx_to_ptr(ObjectIndex::from_raw(MIDDLE.load(Ordering::Relaxed) as usize));
-            vm.call_compiled(callee, middle, &[], 17)
+            let callee = vm.idx_to_ptr(ObjectIndex::from_raw(
+                MIDDLE.load(Ordering::Relaxed) as usize
+            ));
+            vm.call_compiled(callee, middle, &[], OUTER_CALL.load(Ordering::Relaxed))
         }
         const SOURCE: &str = r#"
             function Inner() -> int { 1 }
@@ -1594,20 +1613,55 @@ pub(crate) mod tests {
             function Outer() -> int { Middle() }
             function Main() -> string { `${Outer()}` }
         "#;
+        // The PC compiled code passes for a call: the index of the call
+        // instruction in the caller's bytecode.
+        let program = baml_test_support::compile_source(SOURCE);
+        let callables = program.rendered_callables();
+        let call_of = |name: &str| {
+            let Object::Function(function) = &program.objects[callables[name].object] else {
+                unreachable!("a callable is a function")
+            };
+            let index = function
+                .bytecode
+                .instructions
+                .iter()
+                .position(|instruction| matches!(instruction, Instruction::Call { .. }))
+                .expect("the caller's call");
+            u32::try_from(index).unwrap()
+        };
+        MIDDLE_CALL.store(call_of("user.Middle"), Ordering::Relaxed);
+        OUTER_CALL.store(call_of("user.Outer"), Ordering::Relaxed);
         for telemetry in [false, true] {
+            let out = run_with_compiled_bodies(
+                SOURCE,
+                &[("user.Inner", crate::compiled_rt::CompiledFn::Inline(inner))],
+                &[],
+                telemetry,
+            );
+            assert_eq!(out, "1", "telemetry: {telemetry}");
+            let bytecode_callers = SEEN.lock().unwrap().clone();
+            assert!(
+                bytecode_callers
+                    .iter()
+                    .all(|&(_, line)| line != 0 && line != usize::MAX),
+                "telemetry: {telemetry}: {bytecode_callers:?}"
+            );
             let out = run_with_compiled_bodies(
                 SOURCE,
                 &[
                     ("user.Inner", crate::compiled_rt::CompiledFn::Inline(inner)),
-                    ("user.Middle", crate::compiled_rt::CompiledFn::Inline(middle)),
+                    (
+                        "user.Middle",
+                        crate::compiled_rt::CompiledFn::Inline(middle),
+                    ),
                     ("user.Outer", crate::compiled_rt::CompiledFn::Inline(outer)),
                 ],
                 &[("user.Inner", &INNER), ("user.Middle", &MIDDLE)],
                 telemetry,
             );
             assert_eq!(out, "1", "telemetry: {telemetry}");
-            assert_eq!(OUTER_LINE.load(Ordering::Relaxed), 17, "telemetry: {telemetry}");
-            assert_eq!(MIDDLE_LINE.load(Ordering::Relaxed), 23, "telemetry: {telemetry}");
+            let compiled_callers = SEEN.lock().unwrap().clone();
+            assert_eq!(compiled_callers, bytecode_callers, "telemetry: {telemetry}");
         }
     }
 
@@ -3382,14 +3436,18 @@ fn disable_declared_trace_hooks(objects: &mut [Object]) {
 pub fn prepare_compact_code(objects: &mut [Object], globals: &[bex_vm_types::ConstValue]) {
     for object in objects.iter_mut() {
         if let Object::Function(function) = object {
-            let mut compact = function.bytecode.lower_to_compact();
             // A compiled function's frame parks at this code: where the
-            // interpreter hands it back to its body (`compiled_rt::stub`).
-            if function.native_body.is_some() {
+            // interpreter hands it back to its body (`compiled_rt::stub`). Its
+            // body names positions by instruction index, so it keeps offsets.
+            let compact = if function.native_body.is_some() {
+                let mut compact = function.bytecode.lower_to_compact_with_offsets();
                 compact
                     .code
                     .extend(crate::compiled_rt::stub::CODE.map(|op| op as u8));
-            }
+                compact
+            } else {
+                function.bytecode.lower_to_compact()
+            };
             function.bytecode.compact = Some(compact);
         }
     }
@@ -7770,14 +7828,10 @@ impl BexVm {
                 }
                 let func = self.get_object(frame.function()).as_callable().ok()?;
                 match frame {
-                    Frame::Bytecode(frame) if self.compiled_at(idx).is_some() => Some(StackFrame {
-                        function_name: func.name(),
-                        file_path: func.source_file.clone(),
-                        error_line: frame.faulting_pc
-                            & !(crate::compiled_rt::SHIELDED_LINE as usize),
-                    }),
                     Frame::Bytecode(frame) => {
-                        let pc = if Some(idx) == top_bc {
+                        let pc = if self.compiled_at(idx).is_some() {
+                            self.compiled_pc(idx).unwrap_or(0)
+                        } else if Some(idx) == top_bc {
                             self.cur_pc
                         } else {
                             frame.faulting_pc
@@ -8468,7 +8522,7 @@ impl BexVm {
         }
     }
 
-    fn event_source_location_for_line_entry(
+    pub(crate) fn event_source_location_for_line_entry(
         entry: &bytecode::LineTableEntry,
     ) -> VmEventSourceLocation {
         VmEventSourceLocation {
@@ -8667,8 +8721,8 @@ impl BexVm {
         // and stack traces. `cur_pc` holds this call instruction's start.
         let call_site = self.cur_pc;
 
-        // A compiled caller keeps its line here instead, and passes it as
-        // `cur_pc` (`compiled_caller_call`).
+        // A compiled caller passes the index of its call instruction as
+        // `cur_pc` (`compiled_caller_call`), which its frame keeps here.
         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
             bf.faulting_pc = call_site;
         }
@@ -9289,8 +9343,9 @@ impl BexVm {
 
     /// A call made by the compiled frame at `*frame_idx` through the VM's
     /// call path, with its `argc` arguments at `locals_offset`. The path
-    /// records the caller's call site in its `faulting_pc`, where a compiled
-    /// frame keeps its line; this puts the line back.
+    /// records the caller's call site from `cur_pc` in its `faulting_pc`,
+    /// where a compiled frame keeps the index of its call instruction; this
+    /// hands it that index and puts it back.
     pub(crate) fn compiled_caller_call(
         &mut self,
         callee: HeapPtr,
@@ -9301,16 +9356,14 @@ impl BexVm {
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
         let caller = *frame_idx;
-        let line = match &self.frames[caller] {
+        let pc = match &self.frames[caller] {
             Frame::Bytecode(frame) => frame.faulting_pc,
             Frame::Native(_) => unreachable!("a compiled caller has a bytecode frame"),
         };
-        // The call path records the caller's call site from `cur_pc` into its
-        // `faulting_pc`, where a compiled frame keeps its line, and a trace
-        // taken while the callee runs reads it there. A compiled caller has no
-        // live `cur_pc` of its own (it holds whatever bytecode last ran), so
-        // hand the call path the caller's line as its call site.
-        let saved_pc = std::mem::replace(&mut self.cur_pc, line);
+        // A compiled caller has no live `cur_pc` of its own (it holds
+        // whatever bytecode last ran), so hand the call path the call
+        // instruction the caller recorded as its call site.
+        let saved_pc = std::mem::replace(&mut self.cur_pc, pc);
         let outcome = if type_args.is_empty() {
             self.execute_call_from_locals_offset(callee, locals_offset, argc, frame_idx, function)
         } else {
@@ -9329,21 +9382,28 @@ impl BexVm {
         };
         self.cur_pc = saved_pc;
         if let Some(Frame::Bytecode(frame)) = self.frames.get_mut(caller) {
-            frame.faulting_pc = line;
+            frame.faulting_pc = pc;
         }
         outcome
     }
 
-    /// Whether the compiled frame at `idx` stands in a shielded (`defer`)
-    /// region: the line its body last recorded carries
-    /// [`crate::compiled_rt::SHIELDED_LINE`]. `false` for any other frame.
-    pub fn frame_compiled_shielded(&self, idx: usize) -> bool {
-        self.compiled_at(idx).is_some()
-            && matches!(
-                self.frames.get(idx),
-                Some(Frame::Bytecode(frame))
-                    if frame.faulting_pc & crate::compiled_rt::SHIELDED_LINE as usize != 0
-            )
+    /// The compact PC the compiled frame at `idx` stands at: the instruction
+    /// of its function's bytecode equivalent to where its body last reported
+    /// (`BexVm::note_pc`), which the body names by index. A reader takes it
+    /// as a bytecode frame's position: an outer frame's call instruction, or
+    /// the instruction that raised. `None` for any other frame.
+    #[must_use]
+    pub fn compiled_pc(&self, idx: usize) -> Option<usize> {
+        self.compiled_at(idx)?;
+        let Frame::Bytecode(frame) = &self.frames[idx] else {
+            return None;
+        };
+        let function = self.get_object(frame.function).as_callable().ok()?;
+        function
+            .bytecode
+            .compact
+            .as_ref()?
+            .offset_of(frame.faulting_pc)
     }
 
     /// Where the compiled body of the frame at `idx` stands; `None` for a
@@ -9407,10 +9467,17 @@ impl BexVm {
     /// The call-site offset a call path records for a call made from the
     /// frame at `caller_frame_idx`: the live `call_site` when that frame is
     /// the one calling, its recorded `faulting_pc` when a native continuation
-    /// sits between, and [`COMPILED_CALLER_PC`] for a compiled caller.
-    fn caller_pc(&self, caller_frame_idx: usize, frame_idx: usize, call_site: usize) -> u32 {
+    /// sits between, and the call instruction it recorded for a compiled
+    /// caller ([`Self::compiled_pc`]).
+    pub(crate) fn caller_pc(
+        &self,
+        caller_frame_idx: usize,
+        frame_idx: usize,
+        call_site: usize,
+    ) -> u32 {
         if self.compiled_at(caller_frame_idx).is_some() {
-            return COMPILED_CALLER_PC;
+            let pc = self.compiled_pc(caller_frame_idx).unwrap_or(0);
+            return u32::try_from(pc).unwrap_or(u32::MAX);
         }
         let Frame::Bytecode(caller) = &self.frames[caller_frame_idx] else {
             unreachable!("a native continuation retains its bytecode caller");
