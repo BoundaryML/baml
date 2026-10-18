@@ -66,6 +66,11 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) symbols: &'a HashMap<usize, String>,
     /// The admitted functions that can suspend, by object index.
     pub(crate) resumable: &'a BTreeSet<usize>,
+    /// The admitted inline functions that may collect garbage: a call to one
+    /// roots the caller's live values for its duration (`rooted_call`).
+    pub(crate) may_collect: &'a BTreeSet<usize>,
+    /// Where this body checks for a collection, if it is inline.
+    pub(crate) gc_checks: crate::admit::GcChecks,
     /// Whether this function can suspend: it is emitted as a resumable state
     /// machine over its blocks rather than as structured code.
     pub(crate) suspends: bool,
@@ -229,9 +234,16 @@ impl<'db> Generator<'_, 'db> {
                 self.slots
             );
         }
+        if self.gc_checks.loops {
+            let _ = writeln!(out, "    let mut iterations: u32 = 0;");
+        }
         let stmts = structured.stmts.clone();
         self.structured = Some(structured);
         self.out.clear();
+        if self.gc_checks.entry {
+            let live = self.live_in[self.body.entry.0].clone();
+            self.gc_check(&live, "vm.gc_due()", 1);
+        }
         self.stmts(&stmts, 1)?;
         self.declare_frame_types(&mut out, 1);
         out.push_str(&self.out);
@@ -552,6 +564,11 @@ impl<'db> Generator<'_, 'db> {
                 )
             })
         });
+        // A collection moves runtime declarations the hoisted types name;
+        // a body that may meet one builds each type where it is used.
+        if self.may_collect.contains(&self.object) || (self.suspends && self.calls_in_place()) {
+            self.hoist_types = false;
+        }
         if self.suspends {
             let arity = self.body.locals.len().min(self.arity());
             let base = self.analysis.reprs.len().max(arity) + self.iters().len();
@@ -565,7 +582,88 @@ impl<'db> Generator<'_, 'db> {
         } else {
             self.cause_slot = catches.then_some(0);
             self.slots = usize::from(catches);
+            if self.may_collect.contains(&self.object) {
+                self.live_in = baml_compiler2_mir::live_in_precise(self.body);
+            }
+            if self.gc_checks.loops {
+                self.loop_headers = loops(self.body).0;
+            }
         }
+    }
+
+    /// Whether a resumable body runs a callee in place that may collect: a
+    /// compiled function that may, or a closure or implementation it calls
+    /// directly before falling back to a request.
+    fn calls_in_place(&self) -> bool {
+        self.body.blocks.iter().any(|block| match &block.terminator {
+            Some(Terminator::Call {
+                callee: Operand::Constant(Constant::Function(func)),
+                ..
+            }) => self
+                .index
+                .function(self.db, *func)
+                .ok()
+                .flatten()
+                .is_some_and(|(object, _)| self.may_collect.contains(&object)),
+            Some(Terminator::Call { .. }) => true,
+            Some(terminator @ Terminator::VirtualCall { .. }) => {
+                !self.array_iteration(terminator)
+            }
+            _ => false,
+        })
+    }
+
+    /// The value locals live across `block`'s call: what a collection inside
+    /// the callee may move.
+    fn rooted_locals(&self, block: BlockId) -> Gen<Vec<usize>> {
+        let (locals, _) = self.saved_at(block)?;
+        Ok(locals
+            .into_iter()
+            .filter(|&i| self.repr(Local(i)) == Repr::Value)
+            .collect())
+    }
+
+    /// `call`, an expression of type `R<_>` that runs a callee which may
+    /// collect, made with the value locals live across `block`'s call rooted
+    /// on the VM stack and read back after it (on either outcome: a handler
+    /// reads them too). The result, through `block`'s handler.
+    pub(super) fn rooted_call(&mut self, block: BlockId, call: &str) -> Gen<String> {
+        let live = self.rooted_locals(block)?;
+        if live.is_empty() {
+            return self.fallible(block, call);
+        }
+        let k = self.temps;
+        self.temps += 1;
+        let values: Vec<String> = live.iter().map(|i| format!("l{i}")).collect();
+        self.pending
+            .push(format!("let gc{k} = vm.spill(&[{}]);", values.join(", ")));
+        self.pending.push(format!("let r{k} = {call};"));
+        for (j, i) in live.iter().enumerate() {
+            self.pending.push(format!("l{i} = vm.spilled(gc{k}, {j});"));
+        }
+        self.pending.push(format!("vm.unspill(gc{k});"));
+        self.fallible(block, &format!("r{k}"))
+    }
+
+    /// A compiled GC check: when a collection is due, collect with the value
+    /// locals in `live` rooted and read back.
+    pub(super) fn gc_check(&mut self, live: &[bool], guard: &str, depth: usize) {
+        let locals: Vec<usize> = (0..self.analysis.reprs.len())
+            .filter(|&i| {
+                live[i] && !self.analysis.is_type_local(i) && self.repr(Local(i)) == Repr::Value
+            })
+            .collect();
+        self.line(depth, &format!("if {guard} {{"));
+        let values: Vec<String> = locals.iter().map(|i| format!("l{i}")).collect();
+        self.line(
+            depth + 1,
+            &format!("let mut live = [{}];", values.join(", ")),
+        );
+        self.line(depth + 1, "vm.collect_here(&mut live);");
+        for (j, i) in locals.iter().enumerate() {
+            self.line(depth + 1, &format!("l{i} = live[{j}];"));
+        }
+        self.line(depth, "}");
     }
 
     /// The locals a resumable body writes through to their slots: each one
@@ -953,7 +1051,7 @@ impl<'db> Generator<'_, 'db> {
             ),
         );
         let site = self.site_pc(block);
-        let call = self.fallible(
+        let call = self.rooted_call(
             block,
             &format!(
                 "vm.call_closure_compiled(callee, body, &[{}], {site})",

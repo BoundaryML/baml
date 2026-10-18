@@ -238,6 +238,45 @@ pub fn compile_program<'db>(
             }
             resumable.extend(grown);
         }
+        // Garbage collection inside compiled code. An inline body checks for
+        // a collection at the headers of its allocating loops, and on entry
+        // when it is recursive and allocates, so memory stays bounded as the
+        // interpreter's does. A function may collect when it checks or calls
+        // one that may; its callers root their live values around such a
+        // call. A resumable body yields to the engine instead.
+        let recursive = recursive_units(&units);
+        let checks: HashMap<usize, GcChecks> = units
+            .iter()
+            .filter(|(object, _)| !resumable.contains(*object))
+            .map(|(&object, unit)| {
+                let checks = GcChecks {
+                    loops: unit.analysis.loop_allocates,
+                    entry: recursive.contains(&object) && unit.analysis.allocates,
+                };
+                (object, checks)
+            })
+            .filter(|(_, checks)| checks.loops || checks.entry)
+            .collect();
+        let mut may_collect: BTreeSet<usize> = checks.keys().copied().collect();
+        loop {
+            let grown: Vec<usize> = units
+                .iter()
+                .filter(|(object, unit)| {
+                    !may_collect.contains(*object)
+                        && !resumable.contains(*object)
+                        && unit
+                            .analysis
+                            .user_callees
+                            .iter()
+                            .any(|callee| may_collect.contains(callee))
+                })
+                .map(|(&object, _)| object)
+                .collect();
+            if grown.is_empty() {
+                break;
+            }
+            may_collect.extend(grown);
+        }
         let symbols: HashMap<usize, String> = units
             .keys()
             .map(|&object| (object, symbol_for(index.display(object), object)))
@@ -254,6 +293,8 @@ pub fn compile_program<'db>(
                 package: unit.package,
                 symbols: &symbols,
                 resumable: &resumable,
+                may_collect: &may_collect,
+                gc_checks: checks.get(&object).copied().unwrap_or_default(),
                 suspends: resumable.contains(&object),
                 in_loop: false,
                 natives: &mut natives,
@@ -1143,6 +1184,89 @@ fn package_ordinals(
         }
     }
     ordinals
+}
+
+/// Where an inline body checks for a garbage collection.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct GcChecks {
+    /// At the header of each loop: some loop of the body allocates.
+    pub(crate) loops: bool,
+    /// On entry: the function is recursive and allocates.
+    pub(crate) entry: bool,
+}
+
+/// The units on a cycle of direct calls between units (a function calling
+/// itself included): Tarjan's strongly connected components, iteratively.
+fn recursive_units(units: &BTreeMap<usize, Unit<'_>>) -> BTreeSet<usize> {
+    let edges = |object: usize| -> Vec<usize> {
+        units[&object]
+            .analysis
+            .user_callees
+            .iter()
+            .copied()
+            .filter(|callee| units.contains_key(callee))
+            .collect()
+    };
+    let mut index_of: HashMap<usize, usize> = HashMap::new();
+    let mut low: HashMap<usize, usize> = HashMap::new();
+    let mut on_stack: BTreeSet<usize> = BTreeSet::new();
+    let mut stack: Vec<usize> = Vec::new();
+    let mut recursive = BTreeSet::new();
+    for &root in units.keys() {
+        if index_of.contains_key(&root) {
+            continue;
+        }
+        let mut work: Vec<(usize, Vec<usize>, usize)> = Vec::new();
+        let start = index_of.len();
+        index_of.insert(root, start);
+        low.insert(root, start);
+        stack.push(root);
+        on_stack.insert(root);
+        work.push((root, edges(root), 0));
+        while let Some((node, successors, next)) = work.last_mut() {
+            let node = *node;
+            if let Some(&succ) = successors.get(*next) {
+                *next += 1;
+                if succ == node {
+                    recursive.insert(node);
+                }
+                if let Some(&succ_index) = index_of.get(&succ) {
+                    if on_stack.contains(&succ) {
+                        let lowest = low[&node].min(succ_index);
+                        low.insert(node, lowest);
+                    }
+                } else {
+                    let i = index_of.len();
+                    index_of.insert(succ, i);
+                    low.insert(succ, i);
+                    stack.push(succ);
+                    on_stack.insert(succ);
+                    work.push((succ, edges(succ), 0));
+                }
+                continue;
+            }
+            work.pop();
+            if let Some((parent, _, _)) = work.last() {
+                let lowest = low[parent].min(low[&node]);
+                low.insert(*parent, lowest);
+            }
+            if low[&node] == index_of[&node] {
+                let mut component = Vec::new();
+                loop {
+                    let member = stack.pop().expect("the component's members are stacked");
+                    on_stack.remove(&member);
+                    component.push(member);
+                    if member == node {
+                        break;
+                    }
+                }
+                if component.len() > 1 {
+                    recursive.extend(component);
+                }
+            }
+        }
+    }
+    recursive
 }
 
 #[cfg(test)]

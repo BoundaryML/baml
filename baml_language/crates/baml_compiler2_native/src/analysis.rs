@@ -93,6 +93,13 @@ pub(crate) struct Analysis {
     /// iterator local → array local. Compiled as an index walk with the
     /// semantics `baml.iter.ArrayIterator` documents.
     pub(crate) array_iters: HashMap<usize, usize>,
+    /// Whether a block inside a loop may allocate: the loop's header is where
+    /// an inline body checks for a collection.
+    pub(crate) loop_allocates: bool,
+    /// Whether the body may allocate other than through its calls to user
+    /// functions: a recursive function that does checks for a collection on
+    /// entry, so the recursion is bounded in memory as a loop is.
+    pub(crate) allocates: bool,
 }
 
 impl Analysis {
@@ -232,6 +239,15 @@ impl Analysis {
             flows,
             unwinds,
         };
+        let (_, in_loop) = loops(body);
+        let loop_allocates = body
+            .blocks
+            .iter()
+            .any(|block| in_loop[block.id.0] && block_allocates(db, index, &reprs, block, true));
+        let allocates = body
+            .blocks
+            .iter()
+            .any(|block| block_allocates(db, index, &reprs, block, false));
         Ok(Self {
             arity: mir.arity,
             reprs,
@@ -243,6 +259,8 @@ impl Analysis {
             frame_types,
             suspends,
             array_iters,
+            loop_allocates,
+            allocates,
         })
     }
 
@@ -250,6 +268,65 @@ impl Analysis {
     /// builds as a `RealizedTy`), with no `Value` of its own.
     pub(crate) fn is_type_local(&self, i: usize) -> bool {
         self.static_types.contains_key(&i) || self.frame_types.contains_key(&i)
+    }
+}
+
+/// Whether `block` may allocate on the heap: anything but a scalar computed
+/// into a scalar local, a value read into a value local, or a branch. Calls
+/// count, except calls to user functions unless `user_calls`. Conservative:
+/// a check where none was needed costs a counter; a missing one leaves a
+/// loop's garbage uncollected.
+fn block_allocates(
+    db: &dyn baml_compiler2_mir::Db,
+    index: &ProgramIndex,
+    reprs: &[Repr],
+    block: &baml_compiler2_mir::BasicBlock<'_>,
+    user_calls: bool,
+) -> bool {
+    let statement_allocates = |kind: &StatementKind<'_>| match kind {
+        StatementKind::Nop | StatementKind::Drop(_) => false,
+        StatementKind::Assign {
+            destination: Place::Local(local),
+            value,
+        } => {
+            if reprs[local.0] != Repr::Value {
+                !matches!(
+                    value,
+                    Rvalue::Use(_)
+                        | Rvalue::BinaryOp { .. }
+                        | Rvalue::UnaryOp { .. }
+                        | Rvalue::IsType { .. }
+                        | Rvalue::IsTypeTag { .. }
+                        | Rvalue::TypeTag(_)
+                        | Rvalue::Discriminant(_)
+                        | Rvalue::Len(_)
+                        | Rvalue::LoadType(_)
+                )
+            } else {
+                !match value {
+                    Rvalue::Use(Operand::Copy(place) | Operand::Move(place)) => match place {
+                        Place::Local(source) => reprs[source.0] == Repr::Value,
+                        _ => true,
+                    },
+                    Rvalue::Use(Operand::Constant(constant)) => {
+                        !matches!(constant, Constant::Float(_))
+                    }
+                    Rvalue::LoadType(_) => true,
+                    _ => false,
+                }
+            }
+        }
+        _ => true,
+    };
+    if block.statements.iter().any(|statement| statement_allocates(&statement.kind)) {
+        return true;
+    }
+    match &block.terminator {
+        Some(Terminator::Call { callee, .. }) => {
+            user_calls || user_callee(db, index, callee).is_none()
+        }
+        Some(Terminator::SysOp { .. } | Terminator::Spawn { .. }) => true,
+        _ => false,
     }
 }
 

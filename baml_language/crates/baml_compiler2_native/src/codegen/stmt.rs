@@ -144,6 +144,16 @@ impl Generator<'_, '_> {
             self.line(depth + 1, &format!("vm.note_pc(depth, {at});"));
             self.line(depth + 1, "return Ok(Step::Yield);");
             self.line(depth, "}");
+        } else if self.gc_checks.loops && self.loop_headers.contains(&id.0) {
+            // An inline body collects in place at an allocating loop's
+            // header, as often as a resumable one would yield.
+            let live = self.live_in[id.0].clone();
+            self.line(depth, "iterations = iterations.wrapping_add(1);");
+            self.gc_check(
+                &live,
+                &format!("iterations % {YIELD_EVERY} == 0 && vm.gc_due()"),
+                depth,
+            );
         }
         // Entering or leaving a handler's body: record the context of the
         // error it handles, which a raise here chains onto as its cause.

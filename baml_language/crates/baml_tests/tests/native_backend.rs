@@ -540,7 +540,7 @@ fn interface_dispatch_compiles_as_a_runtime_resolved_call() {
     assert!(total.contains("staticS"), "{total}");
     assert!(total.contains("vm.virtual_target(&S"), "{total}");
     assert!(
-        total.contains("ifletSome(v)=vm.call_inline(callee,&["),
+        total.contains("=vm.call_inline(callee,&[") && total.contains("ifletSome(v)=r"),
         "{total}"
     );
     assert!(
@@ -1240,5 +1240,59 @@ fn a_derived_type_keeps_its_binding_past_a_sibling_rebinding() {
     let built = body.find("vm.type_value(").expect("the type is built");
     let rebound = body.rfind("vm.bind_type(").expect("the slot is rebound");
     assert!(built < rebound, "{body}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
+const GC_CHECKS: &str = r#"
+class Point {
+  x: int
+  y: int
+}
+
+function sum_to(n: int) -> int {
+  let total = 0;
+  let i = 0;
+  while (i < n) { total += i; i += 1; }
+  total
+}
+
+function build(n: int) -> Point[] {
+  let out: Point[] = [];
+  let i = 0;
+  while (i < n) { out.push(Point { x: i, y: i }); i += 1; }
+  out
+}
+
+function keep(p: Point, n: int) -> int {
+  let points = build(n);
+  p.x + points.length()
+}
+
+function main() -> int {
+  sum_to(10) + keep(Point { x: 1, y: 2 }, 3)
+}
+"#;
+
+/// An allocating loop checks for a collection at its header and a loop that
+/// only computes scalars does not; a call to a function that may collect
+/// roots the caller's live values on the VM stack for its duration.
+#[test]
+fn compiled_code_collects_where_it_allocates() {
+    let module = compile(GC_CHECKS);
+    let compact = |name: &str| {
+        body_of(&module, name)
+            .split_whitespace()
+            .collect::<String>()
+    };
+    let sum_to = compact("user.sum_to");
+    assert!(!sum_to.contains("vm.gc_due()"), "{sum_to}");
+    let build = compact("user.build");
+    assert!(build.contains("vm.gc_due()"), "{build}");
+    assert!(build.contains("vm.collect_here(&mutlive)"), "{build}");
+    let keep = compact("user.keep");
+    assert!(keep.contains("vm.spill(&[l1"), "{keep}");
+    assert!(keep.contains("l1=vm.spilled("), "{keep}");
+    let main = compact("user.main");
+    assert!(!main.contains("vm.spill("), "{main}");
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }

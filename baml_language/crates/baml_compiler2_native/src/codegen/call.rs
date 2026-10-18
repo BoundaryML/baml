@@ -59,7 +59,11 @@ impl<'db> Generator<'_, 'db> {
                         types.join(", ")
                     )
                 };
-                self.fallible(block, &call)
+                if self.may_collect.contains(&object) {
+                    self.rooted_call(block, &call)
+                } else {
+                    self.fallible(block, &call)
+                }
             }
             FunctionKind::NativeUnresolved | FunctionKind::Native(_) => {
                 let Some(key) = info.native_key.as_deref() else {
@@ -305,10 +309,11 @@ impl<'db> Generator<'_, 'db> {
         // attachment, so it is never run in place.
         if !named && !traced {
             let site = self.site_pc(block);
-            let call = self.fallible(
+            let call = self.rooted_call(
                 block,
                 &format!("vm.call_inline(callee, &[{}], {site})", values.join(", ")),
             )?;
+            self.flush(depth);
             let store = self.store(block, destination, &Expr::new("v", Repr::Value))?;
             let jump = self.jump_to(target.0);
             self.line(depth, &format!("if let Some(v) = {call} {{"));
