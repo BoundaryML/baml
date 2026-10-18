@@ -222,6 +222,22 @@ impl Drop for AbortOnCollectionUnwind {
     }
 }
 
+/// The engine's [`bex_vm::compiled_rt::CompiledCollector`] for one thread's
+/// VM: `own` is that thread's permit cell, which the collection reads through
+/// the VM itself rather than through the guard.
+struct InPlaceCollector {
+    engine: std::sync::Weak<BexEngine>,
+    own: usize,
+}
+
+impl bex_vm::compiled_rt::CompiledCollector for InPlaceCollector {
+    fn collect_in_place(&self, vm: &mut bex_vm::BexVm) -> bool {
+        self.engine
+            .upgrade()
+            .is_some_and(|engine| engine.collect_in_place(vm, self.own))
+    }
+}
+
 use crate::logger::{TraceLogMetadata, TraceLogger};
 pub use crate::{
     future::{FutureManager, FutureManagerGuard, FutureManagerInner},
@@ -1068,6 +1084,8 @@ pub struct BexEngine {
     /// Used to prevent multiple threads from trying to run GC at the same time.
     /// Only one should run it, the rest should wait for it to complete.
     checking_gc: AtomicBool,
+    /// Set when compiled code collected in place; its awaited tail is owed.
+    gc_followup: AtomicBool,
     /// Used to notify long-running threads that they should park the VM even if they aren't at a typical yield point.
     #[cfg(not(target_arch = "wasm32"))]
     park_requested: Arc<AtomicBool>,
@@ -2210,6 +2228,7 @@ impl BexEngine {
             argv,
             heap_permit_manager,
             checking_gc: AtomicBool::new(false),
+            gc_followup: AtomicBool::new(false),
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
@@ -3003,6 +3022,107 @@ impl BexEngine {
         Box::pin(self.collect_garbage_parked(level, reason, heap_guard, cycle)).await
     }
 
+    /// Root object-valued unhandled spawn errors the collection just found
+    /// into handles, before the GC guard is released. The raw queue values
+    /// are post-copy pointers and must survive the await needed to reacquire
+    /// an ordinary permit for deep-copying.
+    fn root_unhandled_spawn_errors(&self) {
+        let unhandled_spawn_errors = self
+            .heap
+            .take_unhandled_spawn_errors()
+            .into_iter()
+            .map(|error| {
+                let value = error
+                    .value
+                    .as_object_ptr()
+                    .map_or(RootedUnhandledValue::Inline(error.value), |ptr| {
+                        RootedUnhandledValue::Handle(self.heap.create_handle(ptr))
+                    });
+                RootedUnhandledSpawnError {
+                    report_id: error.future_id.as_usize(),
+                    value,
+                    trace: error.trace,
+                    cancelled: error.cancelled,
+                }
+            })
+            .collect::<VecDeque<_>>();
+        self.rooted_unhandled_spawn_errors
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .extend(unhandled_spawn_errors);
+    }
+
+    /// A collection compiled code runs without leaving its body
+    /// ([`bex_vm::compiled_rt::CompiledCollector`]): `vm`, the running VM,
+    /// holds the one active permit, whose holder cell is `own`. It collects
+    /// only when every other mutator is already parked and a collection is
+    /// due; what follows a collection and needs `await` (host releases,
+    /// spawn-error reports, finalizers) runs at the VM's next safepoint.
+    fn collect_in_place(&self, vm: &mut bex_vm::BexVm, own: usize) -> bool {
+        let level = if bex_vm::compiled_rt::gc_stress() {
+            Some(bex_heap::CollectionLevel::Major)
+        } else {
+            self.heap.should_collect()
+        };
+        let Some(level) = level else {
+            return false;
+        };
+        if self
+            .checking_gc
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .is_err()
+        {
+            return false;
+        }
+        let _checking = GcCheckGuard(&self.checking_gc);
+        let Some(mut heap_guard) = self.heap_permit_manager.try_park_others() else {
+            return false;
+        };
+        let mut cycle = bex_heap::GcCycleProfiler::start();
+        #[cfg(not(target_arch = "wasm32"))]
+        let mut gc_telemetry = telemetry_state::GcTelemetry::start(self.telemetry.as_ref());
+        let cleanup_version = self.bex_work.cleanup_version();
+        cycle.parked();
+
+        let mut all_roots = self.heap.collect_handle_roots();
+        heap_guard.collect_roots_except(own, &mut all_roots);
+        vm.collect_roots(&mut all_roots);
+        cycle.roots_scanned();
+
+        let abort_on_unwind = AbortOnCollectionUnwind;
+        let (mut stats, _remapped_roots, forwarding) =
+            unsafe { self.heap.collect_garbage_generational(&all_roots, level) };
+        cycle.heap_done();
+        heap_guard.forward_roots_except(own, &forwarding);
+        vm.forward_roots(&forwarding);
+        self.heap.verify_quick();
+        drop(abort_on_unwind);
+
+        self.root_unhandled_spawn_errors();
+        if level == bex_heap::CollectionLevel::Major {
+            self.bex_work.collected(cleanup_version);
+        }
+        drop(heap_guard);
+        cycle.released();
+        #[cfg(not(target_arch = "wasm32"))]
+        gc_telemetry.finish(self.telemetry.as_ref(), &self.heap, &stats, "compiled");
+        self.gc_followup.store(true, Ordering::Release);
+        cycle.finish(&mut stats, "compiled", &self.heap);
+        true
+    }
+
+    /// What follows a collection compiled code ran in place
+    /// ([`Self::collect_in_place`]), run with no permit held, as
+    /// [`Self::collect_garbage_parked`] runs it after its guard drops.
+    async fn collect_in_place_followup(self: &Arc<Self>) {
+        if !self.gc_followup.swap(false, Ordering::AcqRel) {
+            return;
+        }
+        bex_external_types::host_value::host_release_dispatch::drain();
+        self.dispatch_unhandled_spawn_errors().await;
+        self.drain_finalizers().await;
+    }
+
     async fn collect_garbage_parked(
         self: &Arc<Self>,
         level: bex_heap::CollectionLevel,
@@ -3082,32 +3202,7 @@ impl BexEngine {
         // Roots are forwarded; a panic past this point leaves a readable heap.
         drop(abort_on_unwind);
 
-        // Root object-valued errors into handles before releasing the GC
-        // guard. The raw queue values are post-copy pointers and must survive
-        // the await needed to reacquire an ordinary permit for deep-copying.
-        let unhandled_spawn_errors = self
-            .heap
-            .take_unhandled_spawn_errors()
-            .into_iter()
-            .map(|error| {
-                let value = error
-                    .value
-                    .as_object_ptr()
-                    .map_or(RootedUnhandledValue::Inline(error.value), |ptr| {
-                        RootedUnhandledValue::Handle(self.heap.create_handle(ptr))
-                    });
-                RootedUnhandledSpawnError {
-                    report_id: error.future_id.as_usize(),
-                    value,
-                    trace: error.trace,
-                    cancelled: error.cancelled,
-                }
-            })
-            .collect::<VecDeque<_>>();
-        self.rooted_unhandled_spawn_errors
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .extend(unhandled_spawn_errors);
+        self.root_unhandled_spawn_errors();
 
         if level == bex_heap::CollectionLevel::Major {
             self.bex_work.collected(cleanup_version);
@@ -4790,6 +4885,7 @@ impl BexEngine {
     /// a `SetOnce`) — calling [`Self::gc_safepoint`] there would do an
     /// extra release-and-reacquire pair around the heuristic for nothing.
     async fn maybe_collect_garbage(self: &Arc<Self>) {
+        self.collect_in_place_followup().await;
         let i_am_checking = self
             .checking_gc
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
@@ -5686,6 +5782,19 @@ impl BexEngine {
             let mut thread = active.as_mut().expect("active execution permit");
 
             loop {
+                // A collection compiled code ran in place leaves its awaited
+                // tail to here, between `exec` calls, with no permit held.
+                if self.gc_followup.load(Ordering::Acquire) {
+                    let inactive = active.take().expect("active execution permit").release();
+                    self.collect_in_place_followup().await;
+                    thread = active.insert(inactive.acquire().await);
+                }
+                if thread.vm.compiled_collector.is_none() {
+                    thread.vm.compiled_collector = Some(Arc::new(InPlaceCollector {
+                        engine: Arc::downgrade(self),
+                        own: thread.cell_id(),
+                    }));
+                }
                 if let Some(telemetry) = &self.telemetry {
                     telemetry.validate(&thread.vm, false);
                 }
