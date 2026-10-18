@@ -335,7 +335,7 @@ test "symbolic_qualifier_dispatches_per_instantiation" {
     assert.equal(s, "two")
 }
 
-// A scoped runtime type (`type U = unreflect(t)`) flows through the qualified
+// A scoped runtime type (`let type U = t`) flows through the qualified
 // spellings exactly as a static type argument does. `U` is rigid, so a value
 // of type `U` comes from an explicit `match` downcast, never from a literal.
 interface Stamper {
@@ -357,8 +357,8 @@ class Press {
 
 test "runtime_type_arguments_flow_through_qualified_spellings" {
     let p = Press {}
-    let t = reflect.Type.of<int>()
-    type U = unreflect(t)
+    let t = int.type()
+    let type U = t;
     match (5) {
         let x: U => {
             assert.equal(Stamper.stamp<U>(p, x), "stamp int")
@@ -457,7 +457,7 @@ class Parcel {
 
     implements Labeler {
         function label_as<T>(self, tag: T) -> string throws never {
-            if reflect.Type.of<T>() == reflect.Type.of<int>() {
+            if reflect.Type.of<T>() == int.type() {
                 self.name + ":int"
             } else {
                 self.name + ":other"

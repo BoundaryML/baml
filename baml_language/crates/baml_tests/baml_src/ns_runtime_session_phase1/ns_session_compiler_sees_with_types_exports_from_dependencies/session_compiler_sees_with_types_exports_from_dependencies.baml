@@ -1,5 +1,5 @@
 function main() -> bool {
-    let mounted = reflect.class.new("MountedTicket", { "subject": reflect.Type.of<string>() });
+    let mounted = reflect.Class.new("MountedTicket", { "subject": string.type() });
     let app = reflect.Package.compile({ "empty.baml": "" }).with_types({ "MountedTicket": mounted });
     let s = reflect.Session.new(packages = { "app": app });
     s.eval(

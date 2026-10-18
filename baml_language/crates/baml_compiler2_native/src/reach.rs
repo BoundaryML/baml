@@ -175,6 +175,7 @@ impl<'db> Collector<'_, 'db> {
                 self.dispatch(method);
                 self.operands(type_args);
             }
+            Rvalue::SatisfiesBound { ty, .. } => self.operand(ty),
             Rvalue::TraceHookSettings { .. }
             | Rvalue::Uint8Array(_)
             | Rvalue::Discriminant(_)

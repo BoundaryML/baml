@@ -342,6 +342,27 @@ mod tests {
         (items, diags)
     }
 
+    /// Lower source written in a removed spelling: the parser's E0098 reports
+    /// are the only parse errors allowed, and lowering must add nothing.
+    fn lower_removed_syntax(source: &str) -> Vec<Item> {
+        let tokens = lex_lossless(source, FileId::new(0));
+        let (green, errors) = parse_file(&tokens);
+        assert!(
+            !errors.is_empty()
+                && errors.iter().all(|error| matches!(
+                    error,
+                    baml_compiler_diagnostics::ParseError::RemovedFeature { .. }
+                )),
+            "expected only removed-feature parse errors, got: {errors:#?}"
+        );
+        let (items, diags, _env_var_refs) = lower_file(&SyntaxNode::new_root(green));
+        assert!(
+            diags.is_empty(),
+            "unexpected lowering diagnostics: {diags:#?}"
+        );
+        items
+    }
+
     /// Generic parameters rendered back to source form (`T extends A & B`), so
     /// one assertion covers both the names and the full conjunction of bounds.
     fn rendered_generic_params(params: &[crate::ast::GenericParam]) -> Vec<String> {
@@ -370,87 +391,103 @@ mod tests {
             .expect("expected a FunctionDef")
     }
 
-    #[test]
-    fn type_binding_lowers_its_marker_to_a_runtime_operand() {
-        let function = first_function(parse_and_lower(
-            "function main(t: reflect.Type) -> reflect.Type { type T = unreflect(t); return reflect.Type.of<T>() }",
-        ));
-        let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = function.body else {
-            panic!("expected expression body")
-        };
-        let operand = body
+    fn only_type_binding(body: &crate::ast::ExprBody) -> &Stmt {
+        let mut bindings = body
             .stmts
             .iter()
-            .find_map(|(_, stmt)| match stmt {
-                Stmt::TypeBinding {
-                    value: crate::ast::TypeBindingValue::Runtime(operand),
-                    ..
-                } => Some(*operand),
-                _ => None,
-            })
-            .expect("expected a runtime type binding");
-        assert!(
-            matches!(&body.exprs[operand], Expr::Path(path) if path.len() == 1 && path[0].as_str() == "t"),
-            "unreflect operand lowered as {:?}",
-            body.exprs[operand]
-        );
+            .filter(|(_, stmt)| matches!(stmt, Stmt::TypeBinding { .. }));
+        let (_, stmt) = bindings.next().expect("expected a type binding");
+        assert!(bindings.next().is_none(), "expected one type binding");
+        stmt
     }
 
     #[test]
-    fn type_binding_with_a_static_type_keeps_the_type() {
+    fn let_type_lowers_its_operand_bounds_and_else_block() {
         let function = first_function(parse_and_lower(
-            "function main() -> int { type T = int[]; 0 }",
+            "function main(t: reflect.Type) -> int { let type T extends A & B = t else { return 0 }; 1 }",
         ));
         let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = function.body else {
             panic!("expected expression body")
         };
-        assert!(body.stmts.iter().any(|(_, stmt)| matches!(
-            stmt,
-            Stmt::TypeBinding {
-                value: crate::ast::TypeBindingValue::Static(ty),
-                ..
-            } if matches!(ty.kind, TypeExprKind::List { .. })
-        )));
+        let Stmt::TypeBinding {
+            name,
+            operand,
+            bounds,
+            else_branch,
+        } = only_type_binding(&body)
+        else {
+            unreachable!()
+        };
+        assert_eq!(name.as_str(), "T");
+        assert!(
+            matches!(&body.exprs[*operand], Expr::Path(path) if path.len() == 1 && path[0].as_str() == "t"),
+            "operand lowered as {:?}",
+            body.exprs[*operand]
+        );
+        let bounds: Vec<_> = bounds
+            .iter()
+            .map(|bound| match &bound.kind {
+                TypeExprKind::Path { path, .. } => path.to_string(),
+                other => panic!("unexpected bound {other:?}"),
+            })
+            .collect();
+        assert_eq!(bounds, ["A", "B"]);
+        assert!(matches!(
+            else_branch.map(|id| &body.exprs[id]),
+            Some(Expr::Block { .. })
+        ));
     }
 
     #[test]
-    fn unreflect_outside_a_type_binding_is_one_lowering_diagnostic_each() {
-        // Every inline position reports the same diagnostic and lowers to
-        // the error sentinel: a call slot, an annotation, a pattern, and a
-        // marker nested inside a binding's static type.
+    fn removed_type_statement_keeps_its_unreflect_operand() {
+        // The parser reports the removed statement; lowering keeps `T` bound
+        // to the old operand so its later uses do not cascade.
+        let items = lower_removed_syntax(
+            "function main(t: reflect.Type) -> reflect.Type { type T = unreflect(t); return reflect.Type.of<T>() }",
+        );
+        let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = first_function(items).body else {
+            panic!("expected expression body")
+        };
+        let Stmt::TypeBinding {
+            operand,
+            bounds,
+            else_branch,
+            ..
+        } = only_type_binding(&body)
+        else {
+            unreachable!()
+        };
+        assert!(
+            matches!(&body.exprs[*operand], Expr::Path(path) if path.len() == 1 && path[0].as_str() == "t"),
+            "operand lowered as {:?}",
+            body.exprs[*operand]
+        );
+        assert!(bounds.is_empty() && else_branch.is_none());
+    }
+
+    #[test]
+    fn removed_static_type_statement_lowers_to_a_missing_operand() {
+        let items = lower_removed_syntax("function main() -> int { type T = int[]; 0 }");
+        let Some(crate::ast::FunctionBodyDef::Expr(body, _)) = first_function(items).body else {
+            panic!("expected expression body")
+        };
+        let Stmt::TypeBinding { operand, .. } = only_type_binding(&body) else {
+            unreachable!()
+        };
+        assert!(matches!(body.exprs[*operand], Expr::Missing));
+    }
+
+    #[test]
+    fn removed_unreflect_lowers_to_the_error_type_without_a_second_diagnostic() {
+        // The parser reports every `unreflect` (E0098); lowering only turns
+        // each position into the error sentinel.
         let source = "function main(t: reflect.Type, v: int) -> int {\n  \
              let a = identity<unreflect(t)>(v)\n  \
              let b: unreflect(t)? = null\n  \
              let c = v is unreflect(t)\n  \
-             type T = Wrapper<unreflect(t)>\n  \
              0\n\
              }";
-        let (_, diags) = parse_and_lower_with_diagnostics(source);
-        let outside = diags
-            .iter()
-            .filter(|diag| {
-                matches!(
-                    diag,
-                    crate::LoweringDiagnostic::UnreflectOutsideTypeBinding { .. }
-                )
-            })
-            .count();
-        // The marker nested inside a binding's static type is the one
-        // position with its own advice: the statement it is already in.
-        let nested = diags
-            .iter()
-            .filter(|diag| {
-                matches!(
-                    diag,
-                    crate::LoweringDiagnostic::UnreflectNestedInTypeBinding { .. }
-                )
-            })
-            .count();
-        assert_eq!(
-            (outside, nested),
-            (3, 1),
-            "unexpected diagnostics: {diags:#?}"
-        );
+        lower_removed_syntax(source);
     }
 
     #[test]
@@ -2430,11 +2467,11 @@ mod traverse_coverage_tests {
   let branched = `${if (n > 0)}pos${else}neg${endif}`
   return plain + looped + branched
 }"#,
-            // A `type T = unreflect(t)` binding hides an ordinary expression
-            // node inside a statement. Canonical traversal must still see it
-            // exactly once.
+            // A `let type` binding hides ordinary expression nodes (its
+            // operand and `else` block) inside a statement. Canonical
+            // traversal must still see each exactly once.
             r#"function runtime_edges(t: reflect.Type, value: int) -> int throws never {
-  type T = unreflect(t)
+  let type T extends I = t else { return 0 }
   let called = identity<T>(value)
   let tested = value is T
   match (value) {

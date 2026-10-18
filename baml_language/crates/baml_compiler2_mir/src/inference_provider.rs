@@ -8,7 +8,7 @@ use baml_compiler2_hir::{
 use baml_compiler2_hir_ty::infer::infer_body;
 pub(crate) use baml_compiler2_hir_ty::infer::{
     CallPlan, InferenceResult, MemberResolution, MethodCallee, ParamBinding, Receiver,
-    ResolvedPath, ScopedTypeBinding, ScopedTypeSource,
+    ResolvedPath, ScopedTypeBinding,
 };
 
 /// The inference results behind the `tir_*` accessors, one per metadata scope.

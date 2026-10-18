@@ -66,7 +66,11 @@ pub(crate) fn specialize_calls(objects: &mut [Object], globals: &[ConstValue]) {
                         pc += op.encoded_size();
                         continue;
                     }
-                    if ntypeargs == 0
+                    // Pass-through entry holds configuration even without a
+                    // hook or explicit $trace. The exact-call path deliberately
+                    // does not allocate that state for ordinary functions.
+                    if !callee.trace_passthrough
+                        && ntypeargs == 0
                         && callee.generic_param_bounds.is_empty()
                         && callee.display_type_params.is_empty()
                         && compact

@@ -624,6 +624,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             }
             Rvalue::IsType { operand, .. }
             | Rvalue::IsTypeTag { operand, .. }
+            | Rvalue::SatisfiesBound { ty: operand, .. }
             | Rvalue::MakeBoundMethod {
                 receiver: operand, ..
             }
@@ -895,6 +896,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             origin: FunctionOrigin::Internal,
             native_key: None,
             body_meta: None,
+            trace_passthrough: false,
             owner: bex_vm_types::HeapPtr::null(),
         }
     }
@@ -1723,7 +1725,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             // Stack layout mirrors `MakeVirtualBoundMethod` with the `Self`
             // TYPE in the receiver's slot: `Self`, then the method-level type
             // args (already `Object::Type` OPERANDS — every one of them a
-            // `LoadType` temp, a scoped `type T = …` slot included),
+            // `LoadType` temp, a scoped `let type T = …` slot included),
             // then the interface type, then the method name — the opcode pops
             // in reverse.
             let self_template = self.refs.anchor_template(self_ty);
@@ -3449,6 +3451,11 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
 
     fn trace_hook_settings(&mut self, with_settings: bool) -> Result<(), Self::Error> {
         self.emit(Instruction::BeginTraceHook(with_settings));
+        Ok(())
+    }
+
+    fn satisfies_bound(&mut self) -> Result<(), Self::Error> {
+        self.emit(Instruction::SatisfiesBound);
         Ok(())
     }
 

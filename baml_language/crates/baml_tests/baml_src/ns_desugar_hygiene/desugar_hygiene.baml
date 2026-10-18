@@ -103,13 +103,13 @@ function hygiene_for_in(xs: int[]) -> int {
 }
 
 function hygiene_static_type_binding() -> int {
-    type baml = int;
+    let type baml = int.type();
     let task = spawn { 6 };
     await task
 }
 
 function hygiene_runtime_type_binding(t: reflect.Type) -> int {
-    type baml = unreflect(t);
+    let type baml = t;
     let task = spawn { 6 };
     await task
 }
@@ -206,7 +206,7 @@ test "a binding named like a package does not capture lowered syntax" {
     assert.equal(hygiene_destructured(HygieneBox { baml: 5 }), 6);
     assert.equal(hygiene_for_in([1, 2]), 5);
     assert.equal(hygiene_static_type_binding(), 6);
-    assert.equal(hygiene_runtime_type_binding(reflect.Type.of<string>()), 6);
+    assert.equal(hygiene_runtime_type_binding(string.type()), 6);
     assert.equal(hygiene_env("!"), "BAML_TEST_HYGIENE_VAR!");
     assert.equal(hygiene_prompt_tag(), 1)
 }

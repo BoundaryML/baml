@@ -75,6 +75,7 @@ fn companion_def(
     return_type: Option<crate::ast::TypeExpr>,
     body: (crate::ast::ExprBody, crate::ast::AstSourceMap),
 ) -> FunctionDef {
+    let trace_passthrough = name.as_str().ends_with("@spec") || name.as_str().ends_with("@stream");
     FunctionDef {
         name,
         generic_params: parent.generic_params.clone(),
@@ -84,7 +85,10 @@ fn companion_def(
         throws: None,
         body: Some(FunctionBodyDef::Expr(body.0, body.1)),
         declarative_meta: None,
-        metadata: crate::ast::FunctionMetadata::user_facing(crate::ast::FunctionOrigin::Companion),
+        metadata: crate::ast::FunctionMetadata {
+            trace_passthrough,
+            ..crate::ast::FunctionMetadata::user_facing(crate::ast::FunctionOrigin::Companion)
+        },
         attributes: vec![],
         docstring: parent.docstring.clone(),
         is_tagged_template_tag: parent.is_tagged_template_tag,

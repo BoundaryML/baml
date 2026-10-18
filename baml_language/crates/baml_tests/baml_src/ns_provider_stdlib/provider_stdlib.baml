@@ -5,7 +5,7 @@ class ProviderSchemaExample {
 }
 
 function provider_schema() -> json {
-  baml.json.schema(reflect.Type.of<ProviderSchemaExample>())
+  baml.json.schema(ProviderSchemaExample.type())
 }
 
 function provider_schema_values() -> string {
@@ -115,10 +115,10 @@ function provider_schema_pair<A, B>(first: A, second: B) -> string {
 }
 
 test "a reflected tool keeps same-name parameter definitions distinct" {
-  let left = reflect.class.new("Collision", { "left": reflect.Type.of<int>() });
-  let right = reflect.class.new("Collision", { "right": reflect.Type.of<string>() });
-  type Left = unreflect(left.as_type())
-  type Right = unreflect(right.as_type())
+  let left = reflect.Class.new("Collision", { "left": int.type() });
+  let right = reflect.Class.new("Collision", { "right": string.type() });
+  let type Left = left;
+  let type Right = right;
   let schema = baml.json.to_json(ai.tools.tool(provider_schema_pair<Left[], Right[]>).input_schema);
   let left_ref = baml.json.path<string>(schema, ".properties.first.items.$ref");
   let right_ref = baml.json.path<string>(schema, ".properties.second.items.$ref");

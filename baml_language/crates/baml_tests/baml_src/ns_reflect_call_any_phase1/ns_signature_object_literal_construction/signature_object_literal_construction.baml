@@ -4,7 +4,7 @@ function main() -> string throws never {
     let manual = reflect.Signature {
         args: [],
         opts: {},
-        returns: reflect.Type.of<int>(),
+        returns: int.type(),
         errors: reflect.Type.of<never>(),
         docstring: null,
     };

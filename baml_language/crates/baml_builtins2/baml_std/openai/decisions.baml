@@ -34,8 +34,12 @@ class DecisionsClient {
     }
 
     implements ai.Client {
-        function id(self) -> string {
-            `openai-decisions/${self.model}`
+        function requested_model(self) -> string {
+            self.model
+        }
+
+        function provider(self) -> string {
+            "openai-decisions"
         }
 
         /// Preview the request without resolving credentials or performing IO.

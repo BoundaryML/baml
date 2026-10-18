@@ -7,7 +7,7 @@ function source_1() -> string {
                 class Item { value string }
                 function Items() -> Item[] { [Item { value: "bound" }] }
             \` })
-            let item_ct = pkg.get_class("root.Item") ?? throw "missing Item"
+            let item_ct = pkg.get_class("root.Item")
             let binding_evaluations: int = 0
             let operand = () -> {
                 binding_evaluations += 1
@@ -15,12 +15,11 @@ function source_1() -> string {
             }
 
             let escaped: unknown = {
-                type T = unreflect(operand());
+                let type T = operand();
                 if (reflect.Type.of<T>() != item_ct.as_type()) {
                     throw "reflect.Type.of<T>() did not preserve the bound value"
                 }
                 let get_items = pkg.get_function<() -> T[]>("root.Items")
-                    ?? throw "missing root.Items"
                 let items: T[] = get_items()
                 let item: T = items[0]
                 if (reflect.Type.of_value(item) != reflect.Type.of<T>()) {
@@ -38,16 +37,16 @@ function source_1() -> string {
 function source_2() -> string {
     `
         function main() -> bool {
-            let string_t = reflect.Type.of<string>()
-            let int_t = reflect.Type.of<int>()
+            let string_t = string.type()
+            let int_t = int.type()
             let check = (bound: reflect.Type) -> {
-                type T = unreflect(bound);
+                let type T = bound;
                 reflect.Type.of<T>() == bound
             }
 
-            type T = unreflect(string_t);
+            let type T = string_t;
             let inner = {
-                type T = unreflect(int_t);
+                let type T = int_t;
                 reflect.Type.of<T>() == int_t
             }
             reflect.Type.of<T>() == string_t && inner && check(int_t)
@@ -79,14 +78,14 @@ function source_3() -> string {
         }
 
         function main() -> string {
-            let output_type = reflect.class.new("RuntimeOutput", {
-                "name": reflect.Type.of<string>(),
+            let output_type = reflect.Class.new("RuntimeOutput", {
+                "name": string.type(),
             }).as_type()
-            type Out = unreflect(output_type)
+            let type Out = output_type;
 
             let holder = Holder<Out>.new()
             let parsed = holder.parse_it(\`{"name":"Pixel"}\`)
-            \`\${holder.describe()}|\${reflect.class.get_field<string>(parsed, "name")}\`
+            \`\${holder.describe()}|\${reflect.Class.get_field<string>(parsed, "name")}\`
         }
     `
 }
@@ -104,8 +103,11 @@ function source_4() -> string {
             requests: string[],
 
             implements ai.Client {
-                function id(self) -> string {
+                function requested_model(self) -> string {
                     "probe"
+                }
+                function provider(self) -> string {
+                    "test"
                 }
 
                 function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -117,10 +119,10 @@ function source_4() -> string {
                 function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
                     let _ = self.render(input);
                     ai.ModelTurn {
+                        child_turns: [],
                         calls: [],
                         content: [ai.content.Text { text: self.reply }],
                         stop_reason: ai.content.StopReason.Complete,
-                        usage: null,
                     }
                 }
             }
@@ -132,10 +134,10 @@ function source_4() -> string {
         }
 
         function main() -> string {
-            let output_type = reflect.class.new("RuntimeOutput", {
-                "name": reflect.Type.of<string>(),
+            let output_type = reflect.Class.new("RuntimeOutput", {
+                "name": string.type(),
             }).as_type()
-            type Out = unreflect(output_type)
+            let type Out = output_type;
 
             // Control: the direct SAP call has always worked.
             let direct = baml.sap.parse<Out>(\`{"name":"Pixel"}\`)
@@ -144,8 +146,8 @@ function source_4() -> string {
                 client = ProbeClient { reply: \`{"name":"Pixel"}\`, requests: [] },
             ).run(DynamicOutput@spec<Out>())
 
-            let direct_name = reflect.class.get_field<string>(direct, "name")
-            let agent_name = reflect.class.get_field<string>(run.value, "name")
+            let direct_name = reflect.Class.get_field<string>(direct, "name")
+            let agent_name = reflect.Class.get_field<string>(run.value, "name")
             \`\${direct_name}|\${agent_name}\`
         }
     `
@@ -164,8 +166,11 @@ function source_5() -> string {
             requests: string[],
 
             implements ai.Client {
-                function id(self) -> string {
+                function requested_model(self) -> string {
                     "probe"
+                }
+                function provider(self) -> string {
+                    "test"
                 }
 
                 function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -177,10 +182,10 @@ function source_5() -> string {
                 function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
                     let _ = self.render(input);
                     ai.ModelTurn {
+                        child_turns: [],
                         calls: [],
                         content: [ai.content.Text { text: self.reply }],
                         stop_reason: ai.content.StopReason.Complete,
-                        usage: null,
                     }
                 }
             }
@@ -192,35 +197,35 @@ function source_5() -> string {
         }
 
         function main() -> string {
-            let minted_class = reflect.class.new("MintedRecord", {
-                "minted_field": reflect.Type.of<string>().meta(
+            let minted_class = reflect.Class.new("MintedRecord", {
+                "minted_field": string.type().meta(
                     docstring = "Minted runner field docs",
                 ),
             }).as_type()
-            type MintedRecord = unreflect(minted_class)
+            let type MintedRecord = minted_class;
             let class_client = ProbeClient { reply: \`{"minted_field":"ok"}\`, requests: [] }
             let _ = ai.Agent.new(
                 client = class_client,
             ).run(DynamicOutput@spec<MintedRecord>())
 
-            let minted_enum = reflect.enum.new(
+            let minted_enum = reflect.Enum.new(
                 "MintedChoice",
                 ["PENDING", "RUNNING"],
             ).as_type()
-            type MintedChoice = unreflect(minted_enum)
+            let type MintedChoice = minted_enum;
             let enum_client = ProbeClient { reply: \`"RUNNING"\`, requests: [] }
             let _ = ai.Agent.new(
                 client = enum_client,
             ).run(DynamicOutput@spec<MintedChoice>())
 
-            let alpha = reflect.class.new("AlphaShape", {
-                "alpha_only": reflect.Type.of<string>(),
+            let alpha = reflect.Class.new("AlphaShape", {
+                "alpha_only": string.type(),
             }).as_type()
-            let beta = reflect.class.new("BetaShape", {
-                "beta_only": reflect.Type.of<int>(),
+            let beta = reflect.Class.new("BetaShape", {
+                "beta_only": int.type(),
             }).as_type()
-            let union = reflect.union.new([alpha, beta]).as_type()
-            type MintedUnion = unreflect(union)
+            let union = reflect.Union.new([alpha, beta]).as_type()
+            let type MintedUnion = union;
             let union_client = ProbeClient { reply: \`{"alpha_only":"ok"}\`, requests: [] }
             let _ = ai.Agent.new(
                 client = union_client,
@@ -229,9 +234,8 @@ function source_5() -> string {
             let package = reflect.Package.compile({ "compiled.baml": \`
                 class CompiledRecord { compiled_field string }
             \` })
-            let compiled = (package.get_class("root.CompiledRecord")
-                ?? throw "missing CompiledRecord").as_type()
-            type CompiledRecord = unreflect(compiled)
+            let compiled = package.get_class("root.CompiledRecord").as_type()
+            let type CompiledRecord = compiled;
             let compiled_client = ProbeClient { reply: \`{"compiled_field":"ok"}\`, requests: [] }
             let _ = ai.Agent.new(
                 client = compiled_client,
@@ -280,10 +284,10 @@ function source_6() -> string {
         }
 
         function main() -> string {
-            let output_type = reflect.class.new("RuntimeOutput", {
-                "name": reflect.Type.of<string>(),
+            let output_type = reflect.Class.new("RuntimeOutput", {
+                "name": string.type(),
             }).as_type()
-            type Out = unreflect(output_type)
+            let type Out = output_type;
 
             let holder = Holder<Out>.new()
             let impl_method = holder.same(output_type)
@@ -325,14 +329,14 @@ function source_7() -> string {
         }
 
         function main() -> string {
-            let first_type = reflect.class.new("Shape", {
-                "name": reflect.Type.of<string>(),
+            let first_type = reflect.Class.new("Shape", {
+                "name": string.type(),
             }).as_type()
-            let second_type = reflect.class.new("Shape", {
-                "name": reflect.Type.of<string>(),
+            let second_type = reflect.Class.new("Shape", {
+                "name": string.type(),
             }).as_type()
-            type First = unreflect(first_type)
-            type Second = unreflect(second_type)
+            let type First = first_type;
+            let type Second = second_type;
 
             let first_entry = Entry { key: first_type, label: "first" }
             let second_entry = Entry { key: second_type, label: "second" }
@@ -363,21 +367,21 @@ function source_8() -> string {
         }
 
         function main() -> string {
-            let mine = reflect.class.new("Shape", {
-                "name": reflect.Type.of<string>(),
+            let mine = reflect.Class.new("Shape", {
+                "name": string.type(),
             }).as_type()
-            let other = reflect.class.new("Shape", {
-                "name": reflect.Type.of<string>(),
+            let other = reflect.Class.new("Shape", {
+                "name": string.type(),
             }).as_type()
-            type Mine = unreflect(mine)
+            let type Mine = mine;
 
             let holder = Holder<Mine>.new()
             let own_mint = holder.same(mine)
             let foreign_mint = holder.same(other)
 
             let static_holder = Holder<string>.new()
-            let static_match = static_holder.same(reflect.Type.of<string>())
-            let static_miss = static_holder.same(reflect.Type.of<int>())
+            let static_match = static_holder.same(string.type())
+            let static_miss = static_holder.same(int.type())
             \`\${own_mint}|\${foreign_mint}|\${static_match}|\${static_miss}\`
         }
     `
@@ -408,8 +412,8 @@ function source_9() -> string {
             let pkg = reflect.Package.compile({ "items.baml": \`
                 class Item { value string }
             \` })
-            let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
-            type Item = unreflect(item_type)
+            let item_type = pkg.get_class("root.Item").as_type()
+            let type Item = item_type;
 
             let holder = Holder<Item>.new()
             \`\${holder.same(item_type)}|\${holder.name()}\`
@@ -443,10 +447,10 @@ function source_10() -> string {
             let pkg = reflect.Package.compile({ "items.baml": \`
                 class Item { value string }
             \` })
-            let runtime_item = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
+            let runtime_item = pkg.get_class("root.Item").as_type()
             // Binding it merges \`user.Item\` into this frame's overlay, which is
             // what every type materialized here from now on carries.
-            type Shadow = unreflect(runtime_item)
+            let type Shadow = runtime_item;
             let _shadow_holder = Holder<Shadow>.new()
 
             let holder = Holder<Item>.new()
@@ -480,10 +484,10 @@ function source_11() -> string {
             let second = reflect.Package.compile({ "b.baml": \`
                 class Item { value string }
             \` })
-            let first_item = (first.get_class("root.Item") ?? throw "missing A").as_type()
-            let second_item = (second.get_class("root.Item") ?? throw "missing B").as_type()
-            type First = unreflect(first_item)
-            type Second = unreflect(second_item)
+            let first_item = first.get_class("root.Item").as_type()
+            let second_item = second.get_class("root.Item").as_type()
+            let type First = first_item;
+            let type Second = second_item;
 
             let _first_holder = Holder<First>.new()
             let holder = Holder<Second>.new()
@@ -514,14 +518,14 @@ function source_12() -> string {
         }
 
         function main() -> string {
-            let owner_type = reflect.class.new("Owner", {
-                "name": reflect.Type.of<string>(),
+            let owner_type = reflect.Class.new("Owner", {
+                "name": string.type(),
             }).as_type()
-            let method_type = reflect.class.new("Method", {
-                "name": reflect.Type.of<string>(),
+            let method_type = reflect.Class.new("Method", {
+                "name": string.type(),
             }).as_type()
-            type Owner = unreflect(owner_type)
-            type Method = unreflect(method_type)
+            let type Owner = owner_type;
+            let type Method = method_type;
 
             Holder<Owner>.new().pair<Method>(owner_type, method_type)
         }
@@ -547,9 +551,9 @@ function source_13() -> string {
         }
 
         function main() -> string {
-            let choice = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type()
-            let other = reflect.enum.new("Choice", ["FIRST", "SECOND"]).as_type()
-            type Choice = unreflect(choice)
+            let choice = reflect.Enum.new("Choice", ["FIRST", "SECOND"]).as_type()
+            let other = reflect.Enum.new("Choice", ["FIRST", "SECOND"]).as_type()
+            let type Choice = choice;
 
             let holder = Holder<Choice>.new()
             \`\${holder.same(choice)}|\${holder.same(other)}\`
@@ -577,8 +581,8 @@ function source_14() -> string {
                 class Item { value string, next Item? }
                 function Items() -> Item[] { [Item { value: "bound", next: null }] }
             \` })
-            let item_type = (pkg.get_class("root.Item") ?? throw "missing Item").as_type()
-            type Item = unreflect(item_type)
+            let item_type = pkg.get_class("root.Item").as_type()
+            let type Item = item_type;
 
             // A diagnostic that has to name the type it rejected.
             let contract = pkg.get_function<() -> Item>("root.Items") catch (e) {
@@ -606,10 +610,10 @@ function source_15() -> string {
             let second = reflect.Package.compile({ "b.baml": \`
                 class Item { value string }
             \` })
-            type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
-            type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
+            let type First = first.get_class("root.Item");
+            let type Second = second.get_class("root.Item");
 
-            let make = first.get_function<() -> First>("root.Make") ?? throw "missing root.Make"
+            let make = first.get_function<() -> First>("root.Make")
             let value: unknown = make()
             let own = if value is First { "yes" } else { "no" }
             let foreign = if value is Second { "yes" } else { "no" }
@@ -640,8 +644,8 @@ function source_16() -> string {
             let second = reflect.Package.compile({ "b.baml": \`
                 class Item { beta int, next Item? }
             \` })
-            type First = unreflect((first.get_class("root.Item") ?? throw "missing A").as_type())
-            type Second = unreflect((second.get_class("root.Item") ?? throw "missing B").as_type())
+            let type First = first.get_class("root.Item");
+            let type Second = second.get_class("root.Item");
 
             \`\${Render@render_prompt<First[]>()}~\${Render@render_prompt<Second[]>()}\`
         }

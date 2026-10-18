@@ -515,18 +515,11 @@ pub struct PathExpr {
     pub generic_args: Option<GenericArgs>,
 }
 
+/// Mirrors the segment set of `parse_path_or_ident` in `baml_compiler_parser`:
+/// every word-like keyword, so a member such as `reflect.Class.extends` keeps
+/// its path shape.
 fn is_path_segment_kind(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        SyntaxKind::WORD
-            | SyntaxKind::KW_CLIENT
-            | SyntaxKind::KW_SPAWN
-            | SyntaxKind::KW_AWAIT
-            | SyntaxKind::KW_CLASS
-            | SyntaxKind::KW_ENUM
-            | SyntaxKind::KW_INTERFACE
-            | SyntaxKind::KW_FUNCTION
-    )
+    t::is_word_like(kind)
 }
 
 fn path_segment_from_cst(elem: SyntaxElement) -> Result<t::Word, StrongAstError> {

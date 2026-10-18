@@ -41,7 +41,7 @@ function stream_schema_failure(drain_partials: bool) -> bool {
             false
         } catch_all (e) {
             let failed: ai.errors.ParseFailed => {
-                failed.provider == cl.id()
+                failed.provider == "openai"
                     && failed.raw_output == text
                     && (failed.message ?? "") != ""
             },
@@ -220,11 +220,12 @@ test "retry call retains status-less provider failure before success" {
             backoff = ai.clients.Backoff.new(initial_ms = 0, max_ms = 0),
         );
         let turn = cl.invoke(input());
-        let failed = turn.calls.at(0);
-        if let call: ai.events.LLMCall = failed {
-            assert.is_true(!call.selected);
-            assert.equal(call.http_response, null);
-            match (call.failure) {
+        let failed = turn.child_turns.at(0);
+        if let attempt: ai.ModelTurn = failed {
+            assert.equal(attempt.stop_reason, ai.content.StopReason.Failed);
+            // No response named a model.
+            assert.equal(attempt.resolved_model, null);
+            match (attempt.error) {
                 let reported: ai.errors.ProviderError => {
                     return reported.message == "overloaded"
                         && reported.error_code == "server_error"

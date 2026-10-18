@@ -18,8 +18,7 @@ function main() -> bool {
     let package = reflect.Package.current();
     let callable = package.get_function<AnyCallable>(
         "root.reflect_call_any_phase1.call_any_still_invokes_a_non_generic_companion.Plain@render_prompt",
-    )
-        ?? throw "expected the companion";
+    );
     let rendered = reflect.call_any<unknown, unknown>(callable, { "topic": "hello" });
     rendered is ai.Prompt
 }

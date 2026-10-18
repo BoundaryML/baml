@@ -1500,6 +1500,7 @@ mod tests {
             edges("baml"),
             vec![
                 ("log".to_string(), root_of("log")),
+                ("reflect".to_string(), root_of("reflect")),
                 ("trace".to_string(), root_of("trace")),
             ]
         );

@@ -1138,10 +1138,10 @@ fn reflect_resolves_as_an_ordinary_builtin_package() {
         "<builtin>/assert/reflect_probe.baml",
         "type DeclaredReflect = reflect.Signature\n",
     );
-    // `baml` declares no such edge: a package reaches only what its
-    // manifest lists, and no leak across undeclared packages exists.
-    let baml_file = db.file(
-        "<builtin>/baml/reflect_probe.baml",
+    // `log` declares no such edge, but stdlib packages reach their sibling
+    // language packages through the implicit language-package edges.
+    let log_file = db.file(
+        "<builtin>/log/reflect_probe.baml",
         "type UndeclaredReflect = reflect.Signature\n",
     );
     let user_file = db.file(
@@ -1156,17 +1156,11 @@ fn reflect_resolves_as_an_ordinary_builtin_package() {
         baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, assert_alias);
     assert!(assert_errors.is_empty(), "{assert_errors:?}");
 
-    let baml_alias = *baml_compiler2_hir::item_data::file_type_aliases(&db, baml_file)
+    let log_alias = *baml_compiler2_hir::item_data::file_type_aliases(&db, log_file)
         .first()
-        .expect("baml alias");
-    let baml_errors =
-        baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, baml_alias);
-    assert!(
-        baml_errors
-            .iter()
-            .any(|(_, error)| format!("{error:?}").contains("reflect.Signature")),
-        "an undeclared package must not resolve: {baml_errors:?}"
-    );
+        .expect("log alias");
+    let log_errors = baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(&db, log_alias);
+    assert!(log_errors.is_empty(), "{log_errors:?}");
 
     let user_alias = *baml_compiler2_hir::item_data::file_type_aliases(&db, user_file)
         .first()
@@ -1198,7 +1192,7 @@ fn reflect_package_resolution_uses_ordinary_builtin_items() {
 type ExportedShorthandType = reflect.RawOnly
 
 function exported_shorthand_value() -> reflect.Type throws never {
-    reflect.literal.new(1).as_type()
+    reflect.Literal.new(1).as_type()
 }
 
 function raw_only_value_is_available() -> string throws never {

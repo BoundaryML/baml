@@ -1,0 +1,5 @@
+name = "match dispatch 100k"
+description = "100,000 dispatches by matching on the implementing class"
+expect = "400000"
+jobs = 16
+warmup = 1

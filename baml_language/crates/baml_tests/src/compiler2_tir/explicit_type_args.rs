@@ -8,16 +8,17 @@ use crate::engine::TestDbExt;
 
 #[test]
 fn type_binding_rendering_matrix() {
-    // type_binding_renders_both_right_hand_side_kinds
+    // type_binding_renders_its_operand_bounds_and_else_block
     let mut db = make_db();
     let file = db.file(
         "test.baml",
         r#"
-class Wrapper<T> { value T }
+interface Named { name string }
+interface Tagged { tag string }
 
 function caller(t: reflect.Type) -> bool {
-    type R = unreflect(t)
-    type S = Wrapper<string>
+    let type R = t;
+    let type S extends Named & Tagged = t else { return false };
     true
 }
 "#,
@@ -25,21 +26,21 @@ function caller(t: reflect.Type) -> bool {
 
     let tir = render_tir(&db, file);
     assert!(
-        tir.contains("type R = unreflect(t) : reflect.Type"),
+        tir.contains("let type R = t : reflect.Type"),
         "typed rendering lost the runtime operand:\n{tir}"
     );
     assert!(
-        tir.contains("type S = Wrapper<string> : type"),
-        "typed rendering lost the static type:\n{tir}"
+        tir.contains("let type S extends Named & Tagged = t : reflect.Type"),
+        "typed rendering lost the bounds:\n{tir}"
     );
     let hir = render_hir(&db, file);
     assert!(
-        hir.contains("type R = unreflect(t)"),
+        hir.contains("let type R = t"),
         "HIR rendering lost the runtime operand:\n{hir}"
     );
     assert!(
-        hir.contains("type S = user.Wrapper<string>"),
-        "HIR rendering lost the static type:\n{hir}"
+        hir.contains("let type S extends Named & Tagged = t else { return false }"),
+        "HIR rendering lost the bounds or the else block:\n{hir}"
     );
 }
 

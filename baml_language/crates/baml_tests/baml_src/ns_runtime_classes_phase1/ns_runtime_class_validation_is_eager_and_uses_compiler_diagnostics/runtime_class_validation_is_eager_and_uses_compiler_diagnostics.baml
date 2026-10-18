@@ -1,12 +1,12 @@
 function main() -> string throws never {
-    let bad_name = reflect.class.new("bad name", {}) catch (e) {
+    let bad_name = reflect.Class.new("bad name", {}) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code
     };
-    let duplicate_wire_key = reflect.class.new(
+    let duplicate_wire_key = reflect.Class.new(
         "Collision",
         {
-            "wire": reflect.Type.of<string>(),
-            "internal": reflect.Type.of<int>().meta(alias = "wire"),
+            "wire": string.type(),
+            "internal": int.type().meta(alias = "wire"),
         },
     ) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code

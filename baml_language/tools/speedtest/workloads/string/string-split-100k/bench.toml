@@ -1,0 +1,5 @@
+name = "string split 100k"
+description = "100,000 splits of a short comma-separated string"
+expect = "600000"
+jobs = 8
+warmup = 1

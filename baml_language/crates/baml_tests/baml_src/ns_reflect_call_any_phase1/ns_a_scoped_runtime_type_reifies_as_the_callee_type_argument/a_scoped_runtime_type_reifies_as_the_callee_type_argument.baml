@@ -3,8 +3,8 @@ function inspect<T>() -> string throws never {
 }
 
 function main() -> string throws reflect.errors.CompilationError {
-    let t = reflect.enum.new("Category", ["RED", "BLUE"]);
-    type T = unreflect(t)
+    let t = reflect.Enum.new("Category", ["RED", "BLUE"]);
+    let type T = t;
     return inspect<T>();
 }
 

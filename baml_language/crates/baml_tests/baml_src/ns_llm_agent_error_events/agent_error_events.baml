@@ -33,8 +33,11 @@ class AeeScriptedClient {
     with_usage: bool,
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "agent-error-events-client"
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -69,12 +72,25 @@ class AeeScriptedClient {
             } else {
                 content.push(ai.content.Text { text: step });
             }
-            let usage: ai.events.Usage? = if (self.with_usage) {
-                ai.events.Usage { input_tokens: 3, output_tokens: 5, cached_input_tokens: null, reasoning_tokens: null }
+            let turn = ai.ModelTurn { child_turns: [], calls: [], content: content, stop_reason: stop_reason };
+            if (self.with_usage) {
+                ai.internal.with_own_call(
+                    turn,
+                    ai.events.ModelCall {
+                        resolved_model: ai.events.ModelKey { provider: "agent-error-events-client", model: null },
+                        usage: null,
+                        timing: ai.events.Timing { start_time: null, duration: null, ttft: null },
+                        http_request: null,
+                        http_response: null,
+                        sse_responses: null,
+                    },
+                    ai.events.Usage { input_tokens: 3, output_tokens: 5, cached_input_tokens: null, reasoning_tokens: null },
+                    "agent-error-events-model",
+                    null,
+                )
             } else {
-                null
-            };
-            ai.ModelTurn { calls: [], content: content, stop_reason: stop_reason, usage: usage }
+                turn
+            }
         }
     }
 }
@@ -87,8 +103,7 @@ function aee_label(event: ai.events.Event) -> string {
         let x: ai.events.ToolRequested => "ToolRequested",
         let x: ai.events.ToolCompleted => "ToolCompleted",
         let x: ai.events.ToolFailed => "ToolFailed",
-        let x: ai.events.Usage => "Usage",
-        let x: ai.events.LLMCall => "LLMCall",
+        let x: ai.events.ModelCall => "ModelCall",
         let x: ai.events.FinalProduced => "FinalProduced",
     }
 }
@@ -193,7 +208,7 @@ test "a cut-short turn and a refusal are delivered before their errors" {
 test "the usage of a failed turn is delivered with it" {
     assert.equal(
         aee_run(["prose"], 1, 12, ai.tools.ErrorMode.Report, true),
-        "ParseFailed: RunStarted,AssistantMessage,Usage",
+        "ParseFailed: RunStarted,AssistantMessage,ModelCall",
     )
 }
 

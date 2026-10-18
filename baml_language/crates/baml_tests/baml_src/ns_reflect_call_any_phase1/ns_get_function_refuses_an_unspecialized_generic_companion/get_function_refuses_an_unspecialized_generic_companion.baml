@@ -16,7 +16,7 @@ function GenericList<T>(topic: string) -> T[] {
 
 function main() -> string throws never {
     let package = reflect.Package.current();
-    let callable: PromptFn = package.get_function<PromptFn>(
+    let callable: PromptFn = package.find_function<PromptFn>(
         "root.reflect_call_any_phase1.get_function_refuses_an_unspecialized_generic_companion.GenericList@render_prompt",
     ) catch (e) {
         reflect.errors.CompilationError => {

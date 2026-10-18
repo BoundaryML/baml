@@ -156,7 +156,9 @@ pub fn walk_rvalue_places<'a>(rvalue: &'a Rvalue<'_>, f: &mut impl FnMut(&'a Pla
             }
         }
         Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => f(place),
-        Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
+        Rvalue::IsType { operand, .. }
+        | Rvalue::IsTypeTag { operand, .. }
+        | Rvalue::SatisfiesBound { ty: operand, .. } => {
             walk_operand_places(operand, f);
         }
         Rvalue::MakeClosure { captures, .. } => {
@@ -210,6 +212,7 @@ pub fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
             AggregateKind::Array => {}
         },
         Rvalue::IsType { test, .. } => test.for_each_type_arg_ref(f),
+        Rvalue::SatisfiesBound { bound, .. } => bound.for_each_type_arg_ref(f),
         Rvalue::MakeClosure {
             type_arg_templates, ..
         }
@@ -493,6 +496,8 @@ pub fn rvalue_reads(
         }
         // Some field of the receiver, resolved at run time — any field.
         Rvalue::VirtualFieldAccess { .. } => out.heap = true,
+        // The impl registry, which a runtime registration extends.
+        Rvalue::SatisfiesBound { .. } => out.heap = true,
         Rvalue::Use(_)
         | Rvalue::BinaryOp { .. }
         | Rvalue::UnaryOp { .. }
@@ -680,6 +685,7 @@ pub fn rvalue_allocates_identity(rvalue: &Rvalue<'_>) -> bool {
         | Rvalue::Len(_)
         | Rvalue::IsType { .. }
         | Rvalue::IsTypeTag { .. }
+        | Rvalue::SatisfiesBound { .. }
         | Rvalue::VirtualFieldAccess { .. }
         | Rvalue::MakeGenericFunction { .. }
         | Rvalue::MakeGenericFunctionFromValue { .. }
@@ -744,6 +750,7 @@ pub fn rvalue_can_trap<'db>(body: &MirFunctionBody<'db>, rvalue: &Rvalue<'db>) -
         | Rvalue::Len(_)
         | Rvalue::IsType { .. }
         | Rvalue::IsTypeTag { .. }
+        | Rvalue::SatisfiesBound { .. }
         | Rvalue::MakeClosure { .. }
         | Rvalue::MakeBoundMethod { .. }
         | Rvalue::MakeVirtualBoundMethod { .. }

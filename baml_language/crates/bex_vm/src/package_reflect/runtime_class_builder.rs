@@ -28,8 +28,9 @@ use super::{
     BamlClassClassBuilder, BamlClassClassPendingType, PackageReflectImpl,
     type_kinds::{
         ReflectedTypeRow, WitnessField, alloc_compilation_error, alloc_with_meta,
-        compiler_diagnostic, is_baml_identifier, prepare_class_witnesses, reflected_type_row,
-        register_class_witnesses, string_map_rows, validate_class_witnesses, with_meta_row,
+        compiler_diagnostic, is_baml_identifier, prepare_class_witnesses, reflected_class_fields,
+        reflected_type_row, register_class_witnesses, string_map_rows, validate_class_witnesses,
+        with_meta_row,
     },
 };
 use crate::{BexVm, errors::VmRustFnError};
@@ -75,6 +76,9 @@ struct BuilderState {
 struct BuilderField {
     name: String,
     root_index: usize,
+    /// `@skip`. A `WithMeta` row has no slot for it, so only `fields_from`,
+    /// which copies another class's fields, sets it.
+    skip: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -144,6 +148,7 @@ struct PreparedField {
     description: Option<String>,
     docstring: Option<String>,
     other: IndexMap<String, String>,
+    skip: bool,
 }
 
 type PreparedGroup = IndexMap<u64, Vec<PreparedField>>;
@@ -333,7 +338,7 @@ fn shared_compilation_error(vm: &mut BexVm, diagnostic: Diagnostic) -> VmRustFnE
 }
 
 impl BamlClassClassBuilder for PackageReflectImpl {
-    fn field(
+    fn _field(
         vm: &mut BexVm,
         builder: &Value,
         name: &bex_str::BexStr,
@@ -427,6 +432,7 @@ impl BamlClassClassBuilder for PackageReflectImpl {
         lock_state(&handle, vm).fields.push(BuilderField {
             name: name.to_string(),
             root_index,
+            skip: false,
         });
 
         for target in pending_builders {
@@ -435,6 +441,68 @@ impl BamlClassClassBuilder for PackageReflectImpl {
             append_unique_neighbor(vm, target, *builder)
                 .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
         }
+
+        Ok(*builder)
+    }
+
+    fn fields_from(
+        vm: &mut BexVm,
+        builder: &Value,
+        some_class: &Value,
+    ) -> Result<Value, VmRustFnError> {
+        let (_, handle) = builder_parts(vm, *builder)
+            .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
+        let copied = reflected_class_fields(vm, *some_class)?;
+        let builder_name = lock_state(&handle, vm).name.clone();
+        {
+            let state = lock_state(&handle, vm);
+            if state.frozen {
+                return Err(compilation_error(
+                    vm,
+                    DiagnosticId::TypeMismatch,
+                    format!("class builder `{builder_name}` is frozen and cannot be mutated"),
+                ));
+            }
+            // Check every name before appending any, so a collision leaves the
+            // builder as it was.
+            if let Some((field, _)) = copied
+                .iter()
+                .find(|(field, _)| state.fields.iter().any(|f| f.name == field.name))
+            {
+                return Err(shared_compilation_error(
+                    vm,
+                    runtime_type::duplicate_member(
+                        DuplicateMemberKind::Field,
+                        &builder_name,
+                        &field.name,
+                    ),
+                ));
+            }
+        }
+
+        let mut roots = instance_array_field(vm, *builder, 1)
+            .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
+        let mut fields = Vec::with_capacity(copied.len());
+        for (field, type_value) in copied {
+            let type_value = Value::object(vm.tlab.alloc_type(type_value));
+            let root = alloc_with_meta(
+                vm,
+                type_value,
+                field.alias.as_deref(),
+                field.description.as_deref(),
+                field.docstring.as_deref(),
+                &field.other,
+            );
+            fields.push(BuilderField {
+                name: field.name,
+                root_index: roots.len(),
+                skip: field.skip,
+            });
+            roots.push(root);
+        }
+        replace_array_field(vm, *builder, 1, roots)
+            .map_err(|message| compilation_error(vm, DiagnosticId::TypeMismatch, message))?;
+        lock_state(&handle, vm).fields.extend(fields);
 
         Ok(*builder)
     }
@@ -466,7 +534,7 @@ impl BamlClassClassPendingType for PackageReflectImpl {
         alloc_pending(vm, PendingOp::Optional, vec![*pendingtype])
     }
 
-    fn union(vm: &mut BexVm, pendingtype: &Value, others: &[Value]) -> Value {
+    fn _union(vm: &mut BexVm, pendingtype: &Value, others: &[Value]) -> Value {
         let mut roots = Vec::with_capacity(others.len() + 1);
         roots.push(*pendingtype);
         roots.extend_from_slice(others);
@@ -632,6 +700,7 @@ fn prepare_group(
                             description: meta.description,
                             docstring: meta.docstring,
                             other: meta.other,
+                            skip: field.skip,
                         }
                     }
                     Err(message) => {
@@ -654,6 +723,7 @@ fn prepare_group(
                         description,
                         docstring,
                         other,
+                        skip: field.skip,
                     },
                     Err(message) => {
                         diagnostics.push(compiler_diagnostic(DiagnosticId::TypeMismatch, message));
@@ -957,7 +1027,7 @@ fn build_group(
                 alias: field.alias.clone(),
                 docstring: field.docstring.clone(),
                 other: field.other.clone(),
-                skip: false,
+                skip: field.skip,
                 stream_done: false,
                 must_exist: false,
                 runtime_type: Some(type_value),
@@ -1054,64 +1124,4 @@ fn resolve_pending_if_ready(vm: &mut BexVm, pending: Value) -> Result<Option<Val
     };
     store_instance_field(vm, pending, 2, resolved)?;
     Ok(Some(resolved))
-}
-
-fn unresolved_builder_names(vm: &BexVm, pending: Value) -> Result<Vec<String>, String> {
-    let mut names = Vec::new();
-    for builder in direct_builders(vm, pending)? {
-        if instance_field(vm, builder, 3)?.is_null() {
-            let (_, handle) = builder_parts(vm, builder)?;
-            let name = lock_state(&handle, vm).name.clone();
-            if !names.contains(&name) {
-                names.push(name);
-            }
-        }
-    }
-    Ok(names)
-}
-
-/// Coerce a `PendingType` supplied through an `unknown` runtime type-argument
-/// position. `None` means the value is not a `PendingType`. A resolved pending is
-/// transparent; an unresolved one throws a structured diagnostic naming every
-/// builder that still needs to be frozen.
-pub(crate) fn coerce_pending_type_arg(
-    vm: &mut BexVm,
-    value: Value,
-) -> Option<Result<TypeValue, Value>> {
-    if !is_instance_of(vm, value, PENDING) {
-        return None;
-    }
-    match resolve_pending_if_ready(vm, value) {
-        Ok(Some(value)) => Some(cloned_type_value(vm, value).ok_or_else(|| {
-            alloc_compilation_error(
-                vm,
-                &[compiler_diagnostic(
-                    DiagnosticId::TypeMismatch,
-                    "pending type resolved to a non-type value".into(),
-                )],
-            )
-        })),
-        Ok(None) => {
-            let names = unresolved_builder_names(vm, value)
-                .unwrap_or_else(|_| vec!["<unknown>".to_string()]);
-            let names = names
-                .iter()
-                .map(|name| format!("`{name}`"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            Some(Err(alloc_compilation_error(
-                vm,
-                &[compiler_diagnostic(
-                    DiagnosticId::TypeMismatch,
-                    format!(
-                        "pending type references unresolved class builder {names}; call build() before using it as a runtime type"
-                    ),
-                )],
-            )))
-        }
-        Err(message) => Some(Err(alloc_compilation_error(
-            vm,
-            &[compiler_diagnostic(DiagnosticId::TypeMismatch, message)],
-        ))),
-    }
 }

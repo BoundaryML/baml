@@ -220,8 +220,11 @@ class ToolArgScriptedClient {
     turns: int,
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "tool-arguments-client"
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -244,7 +247,7 @@ class ToolArgScriptedClient {
             } else {
                 content.push(ai.content.Text { text: "saved" });
             }
-            ai.ModelTurn { calls: [], content: content, stop_reason: ai.content.StopReason.Complete, usage: null }
+            ai.ModelTurn { child_turns: [], calls: [], content: content, stop_reason: ai.content.StopReason.Complete }
         }
     }
 }
@@ -293,9 +296,9 @@ function tool_arg_coerce_mismatch() -> string {
     gym.name
 }
 
-// The type of a coercion can be data: `unreflect` names it.
+// The type of a coercion can be data: `let type` names it.
 function tool_arg_coerce_runtime_type(t: reflect.Type) -> string {
-    type T = unreflect(t);
+    let type T = t;
     let sent: baml.json.json = ["a", "b"];
     let aligned = baml.sap.coerce<T>(sent) catch (e) {
         baml.errors.ParseError => {
@@ -328,9 +331,9 @@ class ToolArgSkipsImage {
 function tool_arg_coerce_unmodelled() -> string {
     [
         tool_arg_coerce_runtime_type(reflect.Type.of<unknown[]>()),
-        tool_arg_coerce_runtime_type(reflect.Type.of<uint8array>()),
+        tool_arg_coerce_runtime_type(uint8array.type()),
         tool_arg_coerce_runtime_type(reflect.Type.of<ToolArgHandler>()),
-        tool_arg_coerce_runtime_type(reflect.Type.of<ToolArgSkipsImage>()),
+        tool_arg_coerce_runtime_type(ToolArgSkipsImage.type()),
     ]
         .join(",")
 }

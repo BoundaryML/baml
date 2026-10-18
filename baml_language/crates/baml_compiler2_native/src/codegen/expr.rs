@@ -357,6 +357,7 @@ impl<'db> Generator<'_, 'db> {
                 ))
             }
             Rvalue::TraceHookSettings { .. } => unsupported("trace hook"),
+            Rvalue::SatisfiesBound { .. } => unsupported("`let type` bound check"),
         }
     }
 

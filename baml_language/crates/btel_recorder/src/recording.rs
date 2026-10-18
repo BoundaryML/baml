@@ -264,7 +264,12 @@ impl RecordingBuilder {
                         } else {
                             0
                         },
-                    ),
+                    )
+                    .max(if defines_model_invoke(&ready.definitions) {
+                        btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR
+                    } else {
+                        0
+                    }),
                 recording_id: self.id.as_bytes().to_vec(),
                 source_snapshot_id: self.source_snapshot_id.map(|id| id.to_vec()),
                 process_id: self.process.as_ref().map(|p| p.info.process_id.to_vec()),
@@ -300,8 +305,6 @@ impl RecordingBuilder {
             }),
             // Appended below from its pre-encoded body.
             errors: None,
-            // Only read now: cost comes from network spans.
-            usage: None,
         };
         // Absent without exceptions, so error-free files keep their bytes.
         let errors_len = if ready.errors.is_empty() {
@@ -646,3 +649,12 @@ enum Sealing {
 mod tests;
 #[cfg(test)]
 use std::{num::NonZeroUsize, sync::Arc, time::Duration};
+
+fn defines_model_invoke(definitions: &proto::Definitions) -> bool {
+    definitions.functions.iter().any(|function| {
+        matches!(
+            &function.resolution,
+            Some(proto::function_definition::Resolution::Metadata(metadata)) if metadata.model_invoke
+        )
+    })
+}

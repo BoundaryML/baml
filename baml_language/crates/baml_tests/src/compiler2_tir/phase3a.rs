@@ -72,7 +72,7 @@ function main() -> string {
     );
     assert!(
         tir.contains(
-            "ai.Agent.new(client = client, on_event = on_event).run(Greet@spec(name, suffix = suffix)).value"
+            "ai.Agent.new(client = client, on_event = on_event).run(Greet@spec(name, suffix = suffix), $trace = trace._passthrough()).value"
         ),
         "the direct-call companion must name the defaulted spec argument and thread on_event:\n{tir}"
     );
@@ -86,7 +86,7 @@ function main() -> string {
     let window = &stream_call[..stream_call.len().min(200)];
     assert!(
         window
-            .contains("(Greet@spec(name, suffix = suffix), client = client, on_event = on_event)"),
+            .contains("(Greet@spec(name, suffix = suffix), client = client, on_event = on_event, $trace = trace._passthrough())"),
         "the stream companion must pass spec, client, and on_event to from_spec:\n{tir}"
     );
 }

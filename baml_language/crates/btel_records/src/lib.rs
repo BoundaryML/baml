@@ -43,10 +43,65 @@ impl LogLevel {
 }
 
 impl<I, V> SpanRecord<I, V> {
+    /// The node this record's span hangs under, for a record that names one.
+    pub fn parent_id_mut(&mut self) -> Option<&mut TelemetryId> {
+        match self {
+            Self::Log { parent_id, .. }
+            | Self::FunctionSpanAnnouncement { parent_id, .. }
+            | Self::FunctionSpanCompletionOk { parent_id, .. }
+            | Self::FunctionSpanCompletionOkNeedsAnnouncement { parent_id, .. }
+            | Self::FunctionSpanCompletionOkReentry { parent_id, .. }
+            | Self::FunctionSpanCompletionOkReentryNeedsAnnouncement { parent_id, .. }
+            | Self::FunctionSpanCompletionErrored { parent_id, .. }
+            | Self::FunctionSpanCompletionErroredNeedsAnnouncement { parent_id, .. }
+            | Self::FunctionSpanCompletionErroredReentry { parent_id, .. }
+            | Self::FunctionSpanCompletionErroredReentryNeedsAnnouncement { parent_id, .. }
+            | Self::FunctionSpanCompletionCancelled { parent_id, .. }
+            | Self::FunctionSpanCompletionPanicked { parent_id, .. }
+            | Self::FunctionSpanCompletionCancelledNeedsAnnouncement { parent_id, .. }
+            | Self::FunctionSpanCompletionPanickedNeedsAnnouncement { parent_id, .. }
+            | Self::FunctionSpanCompletionCancelledReentry { parent_id, .. }
+            | Self::FunctionSpanCompletionPanickedReentry { parent_id, .. }
+            | Self::FunctionSpanCompletionCancelledReentryNeedsAnnouncement { parent_id, .. }
+            | Self::FunctionSpanCompletionPanickedReentryNeedsAnnouncement { parent_id, .. }
+            | Self::LateFunctionSpanCompletionOk { parent_id, .. }
+            | Self::LateFunctionSpanCompletionOkReentry { parent_id, .. }
+            | Self::LateFunctionSpanCompletionErrored { parent_id, .. }
+            | Self::LateFunctionSpanCompletionErroredReentry { parent_id, .. }
+            | Self::LateFunctionSpanCompletionCancelled { parent_id, .. }
+            | Self::LateFunctionSpanCompletionPanicked { parent_id, .. }
+            | Self::LateFunctionSpanCompletionCancelledReentry { parent_id, .. }
+            | Self::LateFunctionSpanCompletionPanickedReentry { parent_id, .. } => Some(parent_id),
+            Self::ThreadSpanAnnouncement { parent_id, .. }
+            | Self::ThreadSpanCompletion { parent_id, .. } => parent_id.as_mut(),
+            Self::ManualSpanAnnouncement(announcement) => Some(&mut announcement.parent_id),
+            Self::ManualSpanCompletion(completion) => Some(&mut completion.parent_id),
+            Self::NetworkSpanAnnouncement(announcement) => Some(&mut announcement.parent_id),
+            Self::HostFunctionDefined(_)
+            | Self::ThreadSelected { .. }
+            | Self::ContextSelected { .. }
+            | Self::ContextReferenced { .. }
+            | Self::SpanUsage(_)
+            | Self::ContextCleared
+            | Self::ThreadSpanRunning { .. }
+            | Self::NetworkEvent(_)
+            | Self::NetworkSpanCompletion(_)
+            | Self::CallPathDefined { .. }
+            | Self::ErrorRaiseOrigin { .. }
+            | Self::ErrorRaiseStack(_)
+            | Self::ErrorRaised { .. }
+            | Self::ErrorRaisedAndEnded { .. }
+            | Self::ErrorRaiseFrameCompleted { .. }
+            | Self::ErrorUnwindEnded { .. } => None,
+        }
+    }
+
     pub fn is_context_observation(&self) -> bool {
         matches!(
             self,
-            Self::ThreadSpanAnnouncement { .. }
+            Self::ManualSpanCompletion(_)
+                | Self::ManualSpanAnnouncement(_)
+                | Self::ThreadSpanAnnouncement { .. }
                 | Self::ThreadSpanCompletion { .. }
                 | Self::FunctionSpanAnnouncement { .. }
                 | Self::NetworkSpanAnnouncement(_)
@@ -103,10 +158,15 @@ pub type ThreadName = Arc<Box<str>>;
 /// stay in `TimingRecord` so they do not pay this stride or compete for its cache.
 #[derive(Debug)]
 pub enum SpanRecord<InputCapture, ValueCapture> {
+    /// An explicitly owned operation. These are not population function calls.
+    ManualSpanCompletion(Box<ManualSpanCompletion<ValueCapture>>),
+    ManualSpanAnnouncement(Box<ManualSpanAnnouncement<InputCapture>>),
     /// Owned metadata for a host definition registered after recording startup.
     HostFunctionDefined(Box<btel_types::FunctionMetadata>),
     /// This ring needs its own thread context; the Timing ring's is independent.
-    ThreadSelected { thread_id: TelemetryId },
+    ThreadSelected {
+        thread_id: TelemetryId,
+    },
     /// Execution context for subsequent observations in this chunk and thread.
     /// None means unavailable. Producers must repeat selection in every chunk
     /// and after a thread switch; the publisher never inherits across chunks.
@@ -115,7 +175,9 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
     },
     /// Reselect an already handed-off snapshot without recapturing its values.
     /// The reference does not imply that delivery of the blob succeeded.
-    ContextReferenced { id: btel_snapshot::CasId },
+    ContextReferenced {
+        id: btel_snapshot::CasId,
+    },
     /// An explicitly empty execution context, distinct from an unavailable one.
     ContextCleared,
     /// A point observation with context selected by the surrounding run.
@@ -141,7 +203,9 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
     /// A spawned future's body began running, after waiting to be admitted
     /// (a `Limit`, the heap permit). Its announcement carries when it was
     /// scheduled. A future cancelled before it ran records its cancellation.
-    ThreadSpanRunning { at: ClockInstant },
+    ThreadSpanRunning {
+        at: ClockInstant,
+    },
     /// Completes an identified thread node; clock ownership keeps it here.
     ThreadSpanCompletion {
         id: TelemetryId,
@@ -153,6 +217,10 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         clock: Arc<ClockEpoch>,
         name: Option<ThreadName>,
     },
+    /// Rare: the model usage charged to a span or thread node, written just
+    /// before that node's completion, which carries it. Boxed so the model
+    /// names never widen the slot.
+    SpanUsage(Box<SpanUsage>),
     /// An HTTP request started. Boxed, like the event and completion below,
     /// so its method and URL never widen the slot.
     NetworkSpanAnnouncement(Box<NetworkAnnouncement<InputCapture>>),
@@ -460,7 +528,9 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
     /// Exception path only: the raise frame, which was timing-only and could
     /// be promoted, has completed. A late completion just before this marker
     /// is that frame's call.
-    ErrorRaiseFrameCompleted { raise_id: TelemetryId },
+    ErrorRaiseFrameCompleted {
+        raise_id: TelemetryId,
+    },
     /// Exception path only: unwinding stopped.
     ErrorUnwindEnded {
         raise_id: TelemetryId,
@@ -469,6 +539,52 @@ pub enum SpanRecord<InputCapture, ValueCapture> {
         handler_pc: Option<u32>,
         unwound_frames: u32,
     },
+}
+
+/// Terminal evidence for an object lifetime, including closure without an outcome.
+#[derive(Debug)]
+pub struct ManualSpanAnnouncement<I> {
+    pub id: TelemetryId,
+    pub parent_id: TelemetryId,
+    pub call_path: CallPathId,
+    pub entered_at: ClockInstant,
+    pub captured_inputs: Option<I>,
+    pub captured_type_args: Option<I>,
+}
+
+#[derive(Debug)]
+pub struct ManualSpanCompletion<V> {
+    pub await_time: AwaitDuration,
+    pub id: TelemetryId,
+    pub parent_id: TelemetryId,
+    pub call_path: CallPathId,
+    pub entered_at: ClockInstant,
+    pub exited_at: ClockInstant,
+    pub outcome: Option<InvocationOutcome>,
+    pub requires_announcement: bool,
+    pub captured_value: Option<V>,
+}
+
+/// The model usage charged to one span or thread node, one entry per model.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpanUsage {
+    pub node: TelemetryId,
+    pub entries: Vec<ModelUsage>,
+}
+
+/// The tokens one model's calls reported, summed. A count is `None` when no
+/// call reported it, which is not the same as zero.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelUsage {
+    pub provider: Box<str>,
+    pub model: Option<Box<str>>,
+    pub calls: u64,
+    /// Input tokens billed at the full rate: cache reads and writes excluded.
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub cache_read_tokens: Option<u64>,
+    pub cache_write_tokens: Option<u64>,
+    pub reasoning_tokens: Option<u64>,
 }
 
 /// One HTTP request's span: its parent is the innermost span (or thread)
@@ -702,6 +818,25 @@ mod layout_tests {
         assert_eq!(record.take_capture(), Some(1));
         assert_eq!(record.take_capture(), Some(2));
         assert_eq!(record.take_capture(), None);
+    }
+
+    #[test]
+    fn owned_announcement_transfers_inputs_and_types() {
+        let id = btel_types::allocate_telemetry_id();
+        let mut record =
+            SpanRecord::<u8, u8>::ManualSpanAnnouncement(Box::new(ManualSpanAnnouncement {
+                id,
+                parent_id: id,
+                call_path: CallPathId::ROOT,
+                entered_at: ClockInstant::from_ticks(1),
+                captured_inputs: Some(1),
+                captured_type_args: Some(2),
+            }));
+        assert_eq!(record.captures().copied().collect::<Vec<_>>(), vec![1, 2]);
+        assert_eq!(record.take_capture(), Some(1));
+        assert_eq!(record.take_capture(), Some(2));
+        assert_eq!(record.take_capture(), None);
+        assert_eq!(record.captures().count(), 0);
     }
 }
 
@@ -1249,11 +1384,13 @@ impl<I, V> SpanRecord<I, V> {
 /// The slots holding the captures a record owns, in the order
 /// `take_capture` hands them over, borrowed as `$record` is: `$borrow`
 /// repeats that borrow for a slot behind a box. Every variant is listed, so
-/// a new one must say what it carries. Only an announcement holds two: its
-/// inputs, then its type arguments.
+/// a new one must say what it carries. Announcements hold inputs and type arguments,
+/// in that order.
 macro_rules! capture_slots {
     ($record:expr, $($borrow:tt)+) => {
         match $record {
+            Self::ManualSpanAnnouncement(entry) => [Some($($borrow)+ entry.captured_inputs), Some($($borrow)+ entry.captured_type_args)],
+            Self::ManualSpanCompletion(done) => [Some($($borrow)+ done.captured_value), None],
             Self::Log { captured_data, .. } => [Some(captured_data), None],
             Self::ContextSelected { captured_context } => [Some(captured_context), None],
             Self::FunctionSpanAnnouncement {
@@ -1306,6 +1443,7 @@ macro_rules! capture_slots {
             | Self::ThreadSpanAnnouncement { .. }
             | Self::ThreadSpanCompletion { .. }
             | Self::ThreadSpanRunning { .. }
+            | Self::SpanUsage(_)
             | Self::CallPathDefined { .. }
             | Self::ErrorRaiseOrigin { .. }
             | Self::ErrorRaiseStack(_)

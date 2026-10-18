@@ -466,7 +466,7 @@ function sc_id<T>(value: T) -> T throws never { value }
 function sc_contract<F>() -> null throws never { null }
 
 function sc_bare() -> int throws never {
-    let runtime_t = reflect.Type.of<int>();
+    let runtime_t = int.type();
     sc_id<runtime_t>(1)
 }
 function sc_ordinary_contract() -> null throws never {
@@ -480,8 +480,8 @@ function sc_session(session: reflect.Session) -> null {
     let value = session.eval("1");
     null
 }
-function sc_sealed() -> reflect.class.Type throws never {
-    reflect.class.Type {}
+function sc_sealed() -> reflect.Class throws never {
+    reflect.Class {}
 }
 function sc_companion() -> baml.Map<string, int> throws never {
     baml.Map {}
@@ -530,13 +530,13 @@ function sc_companion() -> baml.Map<string, int> throws never {
     );
     assert!(errors.iter().any(|error| matches!(
         error,
-        TirTypeError::ComputedGenericArgumentRequiresUnreflect { name }
+        TirTypeError::ComputedGenericArgumentRequiresLetType { name }
             if name.as_str() == "runtime_t"
     )));
     assert!(errors.iter().any(|error| matches!(
         error,
         TirTypeError::CannotConstructReflectionKind { class_name }
-            if Viewpoint::canonical(&db).path(class_name) == "reflect.class.Type"
+            if Viewpoint::canonical(&db).path(class_name) == "reflect.Class"
     )));
     assert!(errors.iter().any(|error| matches!(
         error,
@@ -562,14 +562,14 @@ class ScopeT {}
 function scope_id<X>(value: unknown) -> reflect.Type throws never { reflect.Type.of<X>() }
 function scope_use(runtime_t: reflect.Type) -> reflect.Type throws never {
     let inner = {
-        type ScopeT = unreflect(runtime_t)
+        let type ScopeT = runtime_t;
         scope_id<ScopeT>(1)
     }
     scope_id<ScopeT>(3)
 }
 function scope_branch(runtime_t: reflect.Type, choose: bool) -> reflect.Type throws never {
     let branch_value = if choose {
-        type ScopeT = unreflect(runtime_t)
+        let type ScopeT = runtime_t;
         scope_id<ScopeT>(2)
     } else {
         scope_id<int>(0)
@@ -577,11 +577,11 @@ function scope_branch(runtime_t: reflect.Type, choose: bool) -> reflect.Type thr
     scope_id<ScopeT>(4)
 }
 function scope_bad() -> null throws never {
-    type Bad = unreflect(42)
+    let type Bad = 42;
     null
 }
 function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
-    type ShapeT = unreflect(runtime_t)
+    let type ShapeT = runtime_t;
     let impossible: ShapeT[] = 42
     null
 }
@@ -604,7 +604,7 @@ function scope_shape_bad(runtime_t: reflect.Type) -> null throws never {
             matches!(
                 &diag.error,
                 TirTypeError::TypeMismatch { expected, got }
-                    if expected.render_with(&Viewpoint::canonical(&db)) == "reflect.Type | reflect.TypeView" && got.render_with(&Viewpoint::canonical(&db)) == "42"
+                    if expected.render_with(&Viewpoint::canonical(&db)) == "reflect.TypeView" && got.render_with(&Viewpoint::canonical(&db)) == "42"
             )
         });
         saw_static_shape_error |= result.diagnostics.iter().any(|diag| {

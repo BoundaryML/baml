@@ -616,7 +616,7 @@ pub struct AstSourceMap {
     /// entry. Absent for binds the compiler synthesizes, which have no name
     /// token to point at.
     pub bind_name_spans: HashMap<PatId, TextRange>,
-    /// The NAME token of each body `type T = …` binding, as distinct from its
+    /// The NAME token of each body `let type T = …` binding, as distinct from its
     /// statement's span. Absent when the statement has no name token.
     pub type_binding_name_spans: HashMap<StmtId, TextRange>,
     pub match_arm_spans: Arena<TextRange>,
@@ -769,7 +769,7 @@ impl AstSourceMap {
         self.bind_name_spans.get(&id).copied()
     }
 
-    /// The name token of a body `type T = …` binding, when it was written.
+    /// The name token of a body `let type T = …` binding, when it was written.
     pub fn type_binding_name_span(&self, id: StmtId) -> Option<TextRange> {
         self.type_binding_name_spans.get(&id).copied()
     }
@@ -1147,28 +1147,23 @@ impl CallArg {
     }
 }
 
-/// The right-hand side of a body-level `type T = …;` binding.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypeBindingValue {
-    /// `unreflect(expr)`: the runtime type is the `reflect.Type` value the
-    /// operand evaluates to, evaluated once when the statement runs.
-    Runtime(ExprId),
-    /// A static type: the runtime type is its template, realized in the
-    /// enclosing frame when the statement runs.
-    Static(TypeExpr),
-}
-
 /// Statements — modeled after `Stmt` in `body.rs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
     Expr(ExprId),
-    /// `type T = …;` inside a body: bind a rigid, block-scoped type parameter
-    /// `T` for the remainder of the enclosing block. The parameter is opaque
-    /// to static checking either way; only where its runtime type comes from
-    /// differs (see [`TypeBindingValue`]).
+    /// `let type T [extends A & B] = operand [else { … }];` inside a body:
+    /// bind a rigid, block-scoped type parameter `T` for the remainder of the
+    /// enclosing block. Its runtime type is the `reflect.Type` (or
+    /// `reflect.TypeView`) `operand` evaluates to, evaluated once when the
+    /// statement runs. `T` is opaque to static checking apart from its
+    /// `bounds`, which the statement checks at run time: a type that misses
+    /// one runs `else_branch`, which must diverge and which a bounded
+    /// statement must have.
     TypeBinding {
         name: Name,
-        value: TypeBindingValue,
+        operand: ExprId,
+        bounds: Vec<TypeExpr>,
+        else_branch: Option<ExprId>,
     },
     Let {
         /// The binding pattern. A `: T` annotation lives inside the pattern
@@ -1473,6 +1468,10 @@ pub enum FunctionOrigin {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FunctionMetadata {
+    /// Retain call tracing controls without an automatic invocation span.
+    pub trace_passthrough: bool,
+    /// Source directive (as opposed to compiler-generated metadata), for validation.
+    pub explicit_trace_passthrough: bool,
     pub origin: FunctionOrigin,
     /// Marks compiler/runtime implementation details that are outside BAML's
     /// user-facing language surface.
@@ -1488,6 +1487,8 @@ impl FunctionMetadata {
         Self {
             origin,
             is_language_internal: false,
+            trace_passthrough: false,
+            explicit_trace_passthrough: false,
         }
     }
 
@@ -1495,6 +1496,8 @@ impl FunctionMetadata {
         Self {
             origin,
             is_language_internal: true,
+            trace_passthrough: false,
+            explicit_trace_passthrough: false,
         }
     }
 }

@@ -1823,7 +1823,7 @@ struct LoweringContext<'db> {
     // enclosing top-level function's (and class's) params, never a lambda's.
     lambda_generic_params: Vec<ParamTy>,
 
-    /// The lexical `type T = …` parameters currently visible, innermost last.
+    /// The lexical `let type T = …` parameters currently visible, innermost last.
     /// Pushed at the binding statement and truncated at the closing brace, so
     /// the frame layout this builds mirrors what inference had in scope.
     scoped_type_binding_params: Vec<ParamTy>,
@@ -3466,7 +3466,7 @@ impl<'db> LoweringContext<'db> {
                     // The dispatched road derives `Self` from the value of
                     // argument `self_arg`, so it needs only the interface VIEW
                     // (the static frame prefix); the method's own type args
-                    // — scoped `type T = …` slots included — are lowered by
+                    // — scoped `let type T = …` slots included — are lowered by
                     // the virtual-call machinery itself.
                     let Some(plan) = self.tir_call_plan(expr_id).cloned() else {
                         return Err(self.internal_error(
@@ -3806,7 +3806,7 @@ impl<'db> LoweringContext<'db> {
     /// syntax can make the prefix runtime — turbofish binds the method's
     /// OWN generics only), and
     /// the method's own type arguments as OPERANDS — written static args and
-    /// scoped runtime slots (`m<T>(…)` under `type T = unreflect(t)`) alike,
+    /// scoped runtime slots (`m<T>(…)` under `let type T = t`) alike,
     /// so neither shape can fall off this road.
     fn interface_item_slots(
         &mut self,
@@ -4155,6 +4155,7 @@ impl<'db> LoweringContext<'db> {
         recv_ty: &Tir2Ty,
         method: &Name,
     ) -> Vec<InterfaceTypeView> {
+        let lang = baml_compiler2_hir::package::lang_roots(self.db);
         let mut declarers = Vec::new();
         for view in self.member_root_views(recv_ty, method) {
             let InterfaceMember::Method { declaring } =
@@ -4162,6 +4163,11 @@ impl<'db> LoweringContext<'db> {
             else {
                 continue;
             };
+            // `baml.Concrete`'s `type` is a static: never a value receiver's
+            // member (TIR's `is_concrete_type_member` carve-out).
+            if baml_compiler2_hir_ty::impls::is_concrete_type_member(lang, &declaring.0, method) {
+                continue;
+            }
             if !declarers.contains(&declaring) {
                 declarers.push(declaring);
             }
@@ -9431,7 +9437,7 @@ impl<'db> LoweringContext<'db> {
         // Read from the call plan, never re-resolved from syntax: TIR bound
         // the written `T` at its lexical position to a `ParamTy` carrying its
         // identity, so a `defer` body replayed under a shadowing
-        // `type T = …` still names the parameter written at the defer site.
+        // `let type T = …` still names the parameter written at the defer site.
         let AstExpr::Call { type_args, .. } = &self.body.exprs[call_expr_id] else {
             return None;
         };
@@ -9541,8 +9547,16 @@ impl<'db> LoweringContext<'db> {
             return FxHashMap::default();
         };
         // hir_ty's one declaration-bounds road: class prefix, interface
-        // Self env, free-impl generics, own params.
-        baml_compiler2_hir_ty::lower::function_generic_bounds(self.db, fl)
+        // Self env, free-impl generics, own params; plus the bounds of the
+        // `let type` bindings lowered so far.
+        let mut bounds = baml_compiler2_hir_ty::lower::function_generic_bounds(self.db, fl);
+        bounds.extend(
+            self.generic_param_bounds
+                .iter()
+                .filter(|(param, _)| param.is_scoped())
+                .map(|(param, conjunction)| (param.clone(), conjunction.clone())),
+        );
+        bounds
     }
 
     /// Emit `LoadType` temps for a list of type args seeding a callee frame,
@@ -9568,25 +9582,22 @@ impl<'db> LoweringContext<'db> {
             .collect()
     }
 
-    /// `type T = …;`: evaluate (or load) the binding's runtime type and
-    /// store it in the frame slot reserved for `T`'s rigid parameter.
+    /// `let type T extends … = operand else { … };`: evaluate the operand and
+    /// store it in the frame slot reserved for `T`'s rigid parameter, then
+    /// check each declared bound against the type now bound to `T`, in written
+    /// order. A bound is a constraint, not a type: it travels as its interface,
+    /// type arguments and the associated types it pins, and the VM asks of it
+    /// exactly what a generic parameter's bound asks. A miss runs the `else`
+    /// block, which TIR requires on a bounded statement and made diverge.
     fn emit_scoped_type_binding(
         &mut self,
         binding: &crate::inference_provider::ScopedTypeBinding,
+        else_branch: Option<AstExprId>,
     ) -> Lowered<()> {
-        use crate::inference_provider::ScopedTypeSource;
-        let value = match &binding.source {
-            ScopedTypeSource::Runtime(operand) => self.lower_to_operand(*operand),
-            ScopedTypeSource::Static(template_ty) => {
-                let generic_params = self.enclosing_generic_params();
-                let template = self.ty_to_template(template_ty, &generic_params);
-                let temp = self.builder.temp(RuntimeTy::type_type());
-                self.builder
-                    .assign(Place::local(temp), Rvalue::LoadType(template));
-                Ok(Operand::Copy(Place::local(temp)))
-            }
-        }?;
-        let slot = RuntimeGenericLayout::new(&self.enclosing_generic_params())
+        let value = self.lower_to_operand(binding.operand)?;
+        let value = self.type_operand_as_type(binding.operand, value)?;
+        let generic_params = self.enclosing_generic_params();
+        let slot = RuntimeGenericLayout::new(&generic_params)
             .slot(&binding.parameter)
             .unwrap_or_else(|| unreachable!("a scoped type parameter has a frame slot"));
         self.builder.push_statement(
@@ -9596,7 +9607,121 @@ impl<'db> LoweringContext<'db> {
             },
             self.builder.current_source_span,
         );
+        if binding.bounds.is_empty() {
+            return Ok(());
+        }
+        let Some(else_expr) = else_branch else {
+            return Err(self.internal_error(
+                "a bounded `let type` reached lowering without the `else` block TIR requires",
+                binding.operand,
+            ));
+        };
+        let bound_type =
+            self.load_type_value(&Tir2Ty::TypeVar(binding.parameter.clone()), &generic_params);
+        let miss = self.builder.create_block();
+        for bound in &binding.bounds {
+            let bound = tir2_interface_to_template(
+                &bound.name,
+                &bound.generics,
+                &bound.associated_types,
+                &self.runtime(),
+                &generic_params,
+            );
+            let satisfied = self.builder.temp(RuntimeTy::Bool);
+            self.builder.assign(
+                Place::local(satisfied),
+                Rvalue::SatisfiesBound {
+                    ty: bound_type.clone(),
+                    bound: bound.clone(),
+                },
+            );
+            let next = self.builder.create_block();
+            self.builder
+                .branch(Operand::Copy(Place::local(satisfied)), next, miss);
+            self.builder.set_current_block(next);
+        }
+        let bound = self.builder.current_block();
+        self.builder.set_current_block(miss);
+        let else_ty = self.expr_ty(else_expr)?;
+        let else_dest = self.builder.temp(else_ty);
+        self.lower_expr(else_expr, Place::local(else_dest))?;
+        // As for `let … else`: a recovery state could leave a fall-through.
+        if !self.builder.is_current_terminated() {
+            self.builder.unreachable();
+        }
+        self.builder.set_current_block(bound);
         Ok(())
+    }
+
+    /// Whether a `let type` operand of static type `ty` needs its own
+    /// `as_type()` before the VM binds it. The VM's type-operand boundary
+    /// unwraps `reflect.Type` and the nine kind views itself; every other
+    /// `reflect.TypeView` (a class of the user's own, the interface, a type
+    /// parameter bounded by it) does not reach it as a `type` value
+    /// otherwise. The checker admits only `reflect.Type | reflect.TypeView`,
+    /// so an operand that needs the call holds a `reflect.TypeView` whatever
+    /// its value.
+    fn type_operand_needs_as_type(&self, ty: &Tir2Ty) -> bool {
+        let lang = self.lang();
+        let unwrapped_by_vm = |member: &Tir2Ty| match member {
+            Tir2Ty::Type | Tir2Ty::Never => true,
+            Tir2Ty::Class(name, _) => baml_type::type_kind::TypeKind::ALL.iter().any(|kind| {
+                DeclName::of_lang_item(lang, kind.class()).is_some_and(|decl| decl == *name)
+            }),
+            _ => false,
+        };
+        match ty {
+            Tir2Ty::Union(members) => !members.iter().all(unwrapped_by_vm),
+            other => !unwrapped_by_vm(other),
+        }
+    }
+
+    /// The `let type` operand `value` as the VM's type-operand boundary takes
+    /// it: a `reflect.TypeView` the VM does not unwrap itself goes through its
+    /// own `as_type()` ([`Self::type_operand_needs_as_type`]).
+    fn type_operand_as_type(
+        &mut self,
+        operand: AstExprId,
+        value: Operand<'db>,
+    ) -> Lowered<Operand<'db>> {
+        if !self
+            .tir_expr_type(operand)
+            .is_some_and(|ty| self.type_operand_needs_as_type(ty))
+        {
+            return Ok(value);
+        }
+        let type_view =
+            DeclName::of_lang_item(self.lang(), baml_base::lang_item!(Reflect: TypeView))
+                .ok_or_else(|| {
+                    self.internal_error(
+                        "`let type` takes a `reflect.TypeView`, but the `reflect` language \
+                         package is not installed",
+                        operand,
+                    )
+                })?;
+        // `TypeView` is non-generic and declares no associated types.
+        let iface = tir2_interface_to_template(&type_view, &[], &[], &self.runtime(), &[]);
+        let converted = self.builder.temp(RuntimeTy::type_type());
+        self.emit_virtual_call_with_operands(
+            iface,
+            "as_type",
+            vec![value],
+            /* ntypeargs */ 0,
+            /* self_arg */ 0,
+            /* argument_layout */ None,
+            RuntimeTy::type_type(),
+            Place::local(converted),
+        );
+        Ok(Operand::Copy(Place::local(converted)))
+    }
+
+    /// A `reflect.Type` value for `ty`, realized in the enclosing frame.
+    fn load_type_value(&mut self, ty: &Tir2Ty, generic_params: &[ParamTy]) -> Operand<'db> {
+        let template = self.ty_to_template(ty, generic_params);
+        let temp = self.builder.temp(RuntimeTy::type_type());
+        self.builder
+            .assign(Place::local(temp), Rvalue::LoadType(template));
+        Operand::Copy(Place::local(temp))
     }
 
     /// The owner frame a statically resolved callee expects ahead of its own
@@ -9753,9 +9878,9 @@ impl<'db> LoweringContext<'db> {
     /// Lower `foo<int>` (a `GenericApply` value). If the base resolves to a
     /// function and all type args are fully concrete, emit a pooled,
     /// interned `Constant::GenericFunction` (pointer-stable; seeds
-    /// `frame.type_args` when called). Otherwise fall back to lowering the base
-    /// value with type args erased — for exotic bases (bound methods, lambdas)
-    /// or param-dependent args (`foo<T>` inside a generic function).
+    /// `frame.type_args` when called). Runtime callable values (bound methods,
+    /// closures) and parameter-dependent arguments are specialized at runtime
+    /// while preserving their existing bindings.
     fn lower_generic_apply(
         &mut self,
         expr_id: AstExprId,
@@ -11738,7 +11863,9 @@ impl LoweringContext<'_> {
                 self.lower_expr(expr_id, Place::local(temp))?;
             }
 
-            AstStmt::TypeBinding { name, .. } => {
+            AstStmt::TypeBinding {
+                name, else_branch, ..
+            } => {
                 let binding = self.tir_type_binding(stmt_id).cloned().ok_or_else(|| {
                     self.internal_error_here(&format!(
                         "TIR recorded no binding plan for the scoped type `{name}`"
@@ -11750,13 +11877,21 @@ impl LoweringContext<'_> {
                         binding.name
                     )));
                 }
-                // The slot is reserved before the source is lowered: a static
-                // source's template may itself name earlier scoped bindings,
-                // and the layout must already contain this one for `T` to be
-                // addressable right after the statement.
+                // The slot is reserved before the operand is lowered: the
+                // layout must already contain this binding for `T` to be
+                // addressable by the bound checks and right after the
+                // statement.
                 self.scoped_type_binding_params
                     .push(binding.parameter.clone());
-                self.emit_scoped_type_binding(&binding)?;
+                // A bounded binding's members dispatch through its bounds as a
+                // declared generic parameter's do. The parameter is unique to
+                // this statement, so its entry outlives the block harmlessly
+                // (a lambda written in the block is lowered after it closes).
+                if !binding.bounds.is_empty() {
+                    self.generic_param_bounds
+                        .insert(binding.parameter.clone(), binding.bounds.clone());
+                }
+                self.emit_scoped_type_binding(&binding, else_branch)?;
             }
 
             // `let PATTERN = init else { … };` — refutable binding lowered

@@ -10,17 +10,17 @@ function Classify<T>(input: string) -> T {
 }
 
 function main() -> string {
-    let t = reflect.enum.new(
+    let t = reflect.Enum.new(
         "Category",
         [
-            reflect.enum.value("RED", alias = "k7", description = "warm"),
-            reflect.enum.value("BLUE", description = "cool"),
+            reflect.Enum.value("RED", alias = "k7", description = "warm"),
+            reflect.Enum.value("BLUE", description = "cool"),
         ],
     );
-    type T = unreflect(t)
+    let type T = t;
     let prompt = Classify@render_prompt<T>("sample").text();
     let parsed = Classify@parse<T>(`"k7"`);
-    return prompt + "\n<PARSED>" + reflect.enum.get_value(parsed);
+    return prompt + "\n<PARSED>" + reflect.Enum.get_value(parsed);
 }
 
 test "runtime_enum_renders_and_alias_round_trips_through_sap" {

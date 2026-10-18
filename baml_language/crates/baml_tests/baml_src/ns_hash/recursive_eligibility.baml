@@ -36,7 +36,7 @@ test "recursive conditional Equals membership terminates without Hash" {
             }
         `,
     });
-    let run = package.get_function<() -> bool>("root.run") ?? baml.sys.panic("missing run");
+    let run = package.get_function<() -> bool>("root.run");
     assert.equal(run(), false)
 }
 
@@ -93,7 +93,7 @@ test "proven explicit Hash overrides conditional Equals exclusion" {
     `;
     root.compiler.AssertCompiles({ "main.baml": source })
     let package = reflect.Package.compile({ "main.baml": source });
-    let run = package.get_function<() -> bool>("root.run") ?? baml.sys.panic("missing run");
+    let run = package.get_function<() -> bool>("root.run");
     assert.is_true(run())
 }
 
@@ -153,6 +153,6 @@ test "ordinary recursive classes and aliases retain Hash" {
     `;
     root.compiler.AssertCompiles({ "main.baml": source })
     let package = reflect.Package.compile({ "main.baml": source });
-    let run = package.get_function<() -> bool>("root.run") ?? baml.sys.panic("missing run");
+    let run = package.get_function<() -> bool>("root.run");
     assert.is_true(run())
 }

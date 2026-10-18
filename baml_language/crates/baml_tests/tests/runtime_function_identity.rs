@@ -107,7 +107,7 @@ function dependent(dep: reflect.Package) -> reflect.Package {
   reflect.Package.compile({"use.baml": "function use_leaf() -> int { dep.identity_leaf() }"}, packages = {"dep": dep})
 }
 function invoke(pkg: reflect.Package) -> int {
-  let f = pkg.get_function<() -> int>("root.use_leaf") ?? throw "missing function"
+  let f = pkg.get_function<() -> int>("root.use_leaf")
   f()
 }
 "#,

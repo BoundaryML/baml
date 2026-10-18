@@ -5,7 +5,7 @@
 
 use baml_base::Name;
 use baml_compiler2_ast as ast;
-use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Stmt, StmtId, TypeBindingValue};
+use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Stmt, StmtId};
 use baml_compiler2_hir::loc::FunctionLoc;
 use rustc_hash::FxHashSet;
 use text_size::TextRange;
@@ -477,15 +477,21 @@ fn collect_default_stmt_forward_references(
             collect_default_expr_forward_references(*expr, body, later_params, shadowed, refs);
         }
         Stmt::TypeBinding {
-            value: TypeBindingValue::Runtime(operand),
+            operand,
+            else_branch,
             ..
         } => {
             collect_default_expr_forward_references(*operand, body, later_params, shadowed, refs);
+            if let Some(else_expr) = else_branch {
+                collect_default_expr_forward_references(
+                    *else_expr,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
         }
-        Stmt::TypeBinding {
-            value: TypeBindingValue::Static(_),
-            ..
-        } => {}
         Stmt::Let {
             pattern,
             initializer,
@@ -594,7 +600,9 @@ mod tests {
             .alloc(Expr::Path(baml_base::Path::bare(Name::new("later"))));
         let stmt = binding_body.stmts.alloc(Stmt::TypeBinding {
             name: Name::new("T"),
-            value: TypeBindingValue::Runtime(value),
+            operand: value,
+            bounds: Vec::new(),
+            else_branch: None,
         });
         let block = binding_body.exprs.alloc(Expr::Block {
             stmts: vec![stmt],

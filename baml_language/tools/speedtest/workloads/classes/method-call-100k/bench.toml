@@ -1,0 +1,5 @@
+name = "method call 100k"
+description = "100,000 method calls on one object"
+expect = "666666666700000"
+jobs = 20
+warmup = 1

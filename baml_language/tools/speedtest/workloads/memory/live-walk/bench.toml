@@ -1,0 +1,6 @@
+name = "live walk"
+description = "a read-only recursive walk of a live tree of 262,144 nodes"
+origin = "native-bench 16_live_walk"
+expect = "130935848"
+jobs = 2
+warmup = 1

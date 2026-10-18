@@ -1,4 +1,4 @@
-// Nothing typed by a block-scoped `type T = …` binding may be observable
+// Nothing typed by a block-scoped `let type T = …` binding may be observable
 // outside the block that binds it (E0172): the binding re-executes on every
 // pass through its block and may bind `T` differently each time. A value
 // leaves only through a type that does not mention `T`, and a thrown type an
@@ -22,7 +22,7 @@ function as_t<T>(v: unknown) -> T throws string {
 // The block's value has type `T`, and nothing says what it may leave as.
 function unannotated_block_value(t: reflect.Type) -> unknown {
     let escaped = {
-        type T = unreflect(t)
+        let type T = t;
         as_t<T>(1)
     }
     escaped
@@ -30,20 +30,20 @@ function unannotated_block_value(t: reflect.Type) -> unknown {
 
 // The body's expected type `int` does not admit a `T`.
 function body_value_against_a_narrower_return(t: reflect.Type) -> int {
-    type T = unreflect(t)
+    let type T = t;
     as_t<T>(1)
 }
 
 // An omitted clause would publish `Boom<T>` as this function's surface.
 function inferred_throws_publish_the_binding(t: reflect.Type) -> int {
-    type T = unreflect(t)
+    let type T = t;
     risky<T>(as_t<T>("x"), false)
 }
 
 // A lambda with no clause of its own publishes its body's throws as its type.
 function lambda_infers_its_own_clause(t: reflect.Type) -> unknown throws never {
     let f = () -> {
-        type T = unreflect(t)
+        let type T = t;
         risky<T>(as_t<T>("x"), false)
     }
     f
@@ -52,7 +52,7 @@ function lambda_infers_its_own_clause(t: reflect.Type) -> unknown throws never {
 // A catch outside the block would bind the fact past the block.
 function catch_outside_the_block(t: reflect.Type) -> int throws never {
     let n = {
-        type T = unreflect(t)
+        let type T = t;
         risky<T>(as_t<T>("x"), true)
     } catch (e) {
         _ => 0
@@ -65,7 +65,7 @@ function catch_outside_the_block(t: reflect.Type) -> int throws never {
 function outer_container_takes_the_binding(t: reflect.Type) -> unknown {
     let xs = []
     {
-        type T = unreflect(t)
+        let type T = t;
         xs.push(as_t<T>(1))
     }
     xs
@@ -75,7 +75,7 @@ function outer_container_takes_the_binding(t: reflect.Type) -> unknown {
 // relaxed for the author: its nearest relaxation is `unknown` (an invariant
 // `T[]` collapses whole, never to `unknown[]`), which the clause must say.
 function thrown_list_without_a_clause(t: reflect.Type) -> string {
-    type T = unreflect(t)
+    let type T = t;
     let v: T = as_t<T>(1)
     let a: T[] = [v]
     throw a
@@ -85,14 +85,14 @@ function thrown_list_without_a_clause(t: reflect.Type) -> string {
 // `Boom<T>`: their arguments are invariant, so the clause must say `unknown`.
 // Each is judged at the throw against the clause as written.
 function list_relaxed_wrongly(t: reflect.Type) -> string throws unknown[] | string {
-    type T = unreflect(t)
+    let type T = t;
     let v: T = as_t<T>(1)
     let a: T[] = [v]
     throw a
 }
 
 function boom_relaxed_wrongly(t: reflect.Type) -> int throws Boom<unknown> | string {
-    type T = unreflect(t)
+    let type T = t;
     risky<T>(as_t<T>("x"), true)
 }
 
@@ -102,7 +102,7 @@ function ident<T>(v: T) -> T throws never { v }
 // `() -> T throws never` relaxes to `() -> unknown throws never` (the return
 // is covariant), and that is what the clause should say.
 function imprecise_unknown_clause(t: reflect.Type) -> int throws unknown {
-    type T = unreflect(t)
+    let type T = t;
     let v: T = as_t<T>(1)
     throw () -> { ident<T>(v) }
 }
@@ -111,7 +111,7 @@ function imprecise_unknown_clause(t: reflect.Type) -> int throws unknown {
 // declared return type would publish `T` as its result.
 function return_from_an_inferred_lambda(t: reflect.Type) -> unknown throws never {
     let f = () -> {
-        type T = unreflect(t)
+        let type T = t;
         return as_t<T>("x")
     }
     f
@@ -119,7 +119,7 @@ function return_from_an_inferred_lambda(t: reflect.Type) -> unknown throws never
 
 // The frame's declared `int` does not admit a `T`, so the return escapes.
 function return_against_a_narrower_type(t: reflect.Type) -> int {
-    type T = unreflect(t)
+    let type T = t;
     return as_t<T>(1)
 }
 
@@ -132,7 +132,7 @@ function return_against_a_narrower_type(t: reflect.Type) -> int {
 // block's value.
 function value_through_an_open_variable(t: reflect.Type) -> string {
     let v = {
-        type T = unreflect(t);
+        let type T = t;
         ident(as_t<T>(42))
     }
     let s: string = v
@@ -147,7 +147,7 @@ function value_through_an_open_variable(t: reflect.Type) -> string {
 // `ns_scoped_type_bindings`).
 function value_through_a_nested_open_variable(t: reflect.Type) -> unknown[] {
     let vs = {
-        type T = unreflect(t);
+        let type T = t;
         [ident(as_t<T>(42))]
     }
     vs
@@ -158,7 +158,7 @@ function value_through_a_nested_open_variable(t: reflect.Type) -> unknown[] {
 // allocated, and `T`'s frame slot is bound only when the statement executes.
 function block_local_list_before_the_binding(t: reflect.Type) -> int {
     let ys = []
-    type T = unreflect(t)
+    let type T = t;
     ys.push(as_t<T>(1))
     ys.length()
 }
@@ -166,7 +166,7 @@ function block_local_list_before_the_binding(t: reflect.Type) -> int {
 // A context that is itself an error is already reported; the value it would
 // have taken is not judged again, so the block's `T` is not a second report.
 function erroneous_context(t: reflect.Type) -> Undefined {
-    type T = unreflect(t)
+    let type T = t;
     as_t<T>(1)
 }
 
@@ -177,7 +177,7 @@ function erroneous_context(t: reflect.Type) -> Undefined {
 function outer_list_through_an_inner_variable(t: reflect.Type) -> unknown {
     let xs = []
     {
-        type T = unreflect(t)
+        let type T = t;
         let ys = []
         ys.push(ident(as_t<T>(1)))
         xs.push(ys)
@@ -188,7 +188,7 @@ function outer_list_through_an_inner_variable(t: reflect.Type) -> unknown {
 function outer_map_through_an_inner_variable(t: reflect.Type) -> unknown {
     let m = map {}
     {
-        type T = unreflect(t)
+        let type T = t;
         let ys = []
         ys.push(ident(as_t<T>(1)))
         m.set("k", ys)
@@ -200,7 +200,7 @@ function outer_map_through_an_inner_variable(t: reflect.Type) -> unknown {
 // so the block's value publishes it exactly as any other container would.
 function block_value_is_a_map_literal(t: reflect.Type) -> unknown {
     let escaped = {
-        type T = unreflect(t)
+        let type T = t;
         map { "key": as_t<T>(1) }
     }
     escaped
@@ -211,7 +211,7 @@ class Cell<T> { value T }
 function outer_list_through_a_class_literal(t: reflect.Type) -> unknown {
     let xs = []
     {
-        type T = unreflect(t)
+        let type T = t;
         xs.push(Cell { value: ident(as_t<T>(1)) })
     }
     xs
@@ -220,7 +220,7 @@ function outer_list_through_a_class_literal(t: reflect.Type) -> unknown {
 function outer_variable_through_assignment(t: reflect.Type) -> unknown {
     let xs = []
     {
-        type T = unreflect(t)
+        let type T = t;
         let ys = []
         ys.push(ident(as_t<T>(1)))
         xs = ys
@@ -233,7 +233,7 @@ function outer_variable_through_assignment(t: reflect.Type) -> unknown {
 // does not admit it, and the open remainder is not a name - it is what the
 // body fills, so it cannot absorb a binding the body opened.
 function partial_clause_too_narrow(t: reflect.Type) -> unknown throws string | _ {
-    type T = unreflect(t)
+    let type T = t;
     throw as_t<T>(1)
 }
 
@@ -243,7 +243,7 @@ function partial_clause_too_narrow(t: reflect.Type) -> unknown throws string | _
 // because a called lambda with a partial clause cannot run today.)
 function lambda_partial_clause_covers(t: reflect.Type) -> int throws unknown {
     let f = () -> int throws unknown | _ {
-        type T = unreflect(t)
+        let type T = t;
         throw as_t<T>(1)
     }
     f()
@@ -251,7 +251,7 @@ function lambda_partial_clause_covers(t: reflect.Type) -> int throws unknown {
 
 function lambda_partial_clause_too_narrow(t: reflect.Type) -> int throws unknown {
     let f = () -> int throws string | _ {
-        type T = unreflect(t)
+        let type T = t;
         throw as_t<T>(1)
     }
     f()

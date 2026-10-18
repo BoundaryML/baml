@@ -59,8 +59,8 @@ mod tests {
             "::baml_base::lang_item!(ClaudeCode: Client)"
         );
         assert_eq!(
-            lang_item_tokens("reflect.enum", "Type").to_string(),
-            ":: baml_base :: lang_item ! (Reflect : enum . Type)"
+            lang_item_tokens("reflect.enum", "Value").to_string(),
+            ":: baml_base :: lang_item ! (Reflect : enum . Value)"
         );
     }
 }

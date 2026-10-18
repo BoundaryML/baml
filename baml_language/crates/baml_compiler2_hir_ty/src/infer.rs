@@ -28,7 +28,7 @@ use std::{cell::RefCell, path::PathBuf, sync::Arc};
 
 use baml_compiler2_ast::{
     Expr, ExprBody, ExprId, ObjectExprField, PatId, Pattern, PropertySyntax, Stmt, StmtId,
-    TypeBindingValue, traverse::BodyNode,
+    traverse::BodyNode,
 };
 use baml_compiler2_hir::{
     body::BodyOwnerId,
@@ -613,23 +613,20 @@ pub struct CallTypeArgPlan<T = baml_type::Ty> {
     pub emission_ty: T,
 }
 
-/// One lexical `type T = …` binding: a rigid parameter whose identity is the
-/// binding statement, bound in the enclosing frame from `source` when the
+/// One lexical `let type T = …` binding: a rigid parameter whose identity is
+/// the binding statement, bound in the enclosing frame from `operand` when the
 /// statement runs.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ScopedTypeBinding<T = baml_type::Ty> {
+pub struct ScopedTypeBinding {
     pub name: baml_type::Name,
     pub parameter: baml_type::ParamTy,
-    pub source: ScopedTypeSource<T>,
-}
-
-/// Where a scoped binding's runtime type comes from.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ScopedTypeSource<T = baml_type::Ty> {
-    /// `unreflect(expr)`: the `reflect.Type` value the operand evaluates to.
-    Runtime(ExprId),
-    /// A static type, loaded as a template in the enclosing frame.
-    Static(T),
+    /// The `reflect.Type` or `reflect.TypeView` the slot is bound from,
+    /// evaluated once when the statement runs.
+    pub operand: ExprId,
+    /// The declared `extends` bounds, in written order. The statement checks
+    /// each one at run time, and `T` satisfies them statically afterwards. A
+    /// bound that is not an interface (already diagnosed) is left out.
+    pub bounds: Vec<baml_type::Interface>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -942,9 +939,19 @@ enum PendingDiag<'db> {
         specialization_example_is_safe: bool,
         specialization_syntax_available: bool,
     },
-    ComputedGenericArgumentRequiresUnreflect {
+    ComputedGenericArgumentRequiresLetType {
         expr: ExprId,
         name: baml_type::Name,
+    },
+    /// A `let type T extends … = …` statement without an `else` block: its
+    /// bounds are checked when it runs, so a miss needs somewhere to go.
+    BoundedLetTypeRequiresElse {
+        stmt: StmtId,
+        name: baml_type::Name,
+    },
+    /// A `let type` operand that is a class builder's pending type.
+    LetTypePendingOperand {
+        expr: ExprId,
     },
     /// A constant pattern argument that does not compile.
     InvalidRegexPattern {
@@ -957,7 +964,7 @@ enum PendingDiag<'db> {
         expr: ExprId,
         path: baml_type::Name,
     },
-    /// A value typed by a block-scoped `type T = …` binding would be
+    /// A value typed by a block-scoped `let type T = …` binding would be
     /// observable outside its block: the block's value (anchored at the
     /// tail), or a thrown type an inferred clause would publish (anchored
     /// at the throw). `value` is the escaping type, `name` the binding's.
@@ -1262,10 +1269,10 @@ pub struct InferenceResult<'db, T = baml_type::Ty> {
     /// CALL expression. S16: MIR's argument emission and `LoadType`
     /// operands read this instead of re-planning.
     pub call_plans: FxHashMap<ExprId, CallPlan<T>>,
-    /// Durable lexical `type T = …` bindings, keyed by the statement that
+    /// Durable lexical `let type T = …` bindings, keyed by the statement that
     /// evaluates and installs them. MIR consumes this identity instead of
     /// rebuilding a synthetic parameter from syntax.
-    pub type_bindings: FxHashMap<StmtId, ScopedTypeBinding<T>>,
+    pub type_bindings: FxHashMap<StmtId, ScopedTypeBinding>,
     /// Coercion steps per expression (r-a's `expr_adjustments` shape).
     /// S16: MIR synthesizes the recorded coercions instead of re-deciding.
     pub expr_adjustments: FxHashMap<ExprId, Box<[Adjustment<T>]>>,
@@ -1761,7 +1768,7 @@ enum Expectation {
     HasType(Ty),
     /// The value is not observed: a statement expression, a loop or
     /// `defer` body. It constrains nothing,
-    /// and nothing typed by a block-scoped `type T = …` binding can leave
+    /// and nothing typed by a block-scoped `let type T = …` binding can leave
     /// a block through it.
     Discarded,
     /// The context is an error-recovery sentinel, already diagnosed: the
@@ -1842,7 +1849,7 @@ struct InferenceContext<'db> {
     /// Active lexical runtime type names, innermost last. The declaration
     /// lowering context remains immutable; body-owned type lowering forks it
     /// with these rigid parameters.
-    scoped_type_bindings: Vec<ScopedTypeBinding<Ty>>,
+    scoped_type_bindings: Vec<ScopedTypeBinding>,
     /// Full owner identity for the Session top-level-let value tier. Keeping
     /// this lets a malformed self-reference fail closed instead of recursively
     /// asking Salsa for the inference result currently being built.
@@ -3152,8 +3159,20 @@ impl<'db> InferenceContext<'db> {
             Stmt::Expr(expr) => {
                 self.infer_expr(body, *expr, &Expectation::Discarded);
             }
-            Stmt::TypeBinding { name, value } => {
-                self.bind_scoped_type(body, stmt, name.clone(), value);
+            Stmt::TypeBinding {
+                name,
+                operand,
+                bounds,
+                else_branch,
+            } => {
+                if !bounds.is_empty() && else_branch.is_none() {
+                    self.pending_diags
+                        .push(PendingDiag::BoundedLetTypeRequiresElse {
+                            stmt,
+                            name: name.clone(),
+                        });
+                }
+                self.bind_scoped_type(body, stmt, name.clone(), *operand, *else_branch);
             }
             Stmt::Let {
                 pattern,
@@ -3379,43 +3398,25 @@ impl<'db> InferenceContext<'db> {
         )
     }
 
-    /// `type T = …;`: mint the block-scoped rigid parameter and record where
-    /// its runtime type comes from. The right-hand side is evaluated (or
-    /// lowered) BEFORE the new name enters scope, so it cannot refer to
-    /// itself.
+    /// `let type T extends … = operand else { … };`: mint the block-scoped
+    /// rigid parameter, give it its declared bounds, and record where its
+    /// runtime type comes from. The operand, the bounds and the `else` block
+    /// are judged BEFORE the new name enters scope, so none of them can refer
+    /// to `T`.
     fn bind_scoped_type(
         &mut self,
         body: &ExprBody,
         stmt: StmtId,
         name: baml_type::Name,
-        value: &TypeBindingValue,
+        operand: ExprId,
+        else_branch: Option<ExprId>,
     ) {
-        let source = match value {
-            TypeBindingValue::Runtime(operand) => {
-                self.validate_runtime_type_operand(body, *operand);
-                ScopedTypeSource::Runtime(*operand)
-            }
-            TypeBindingValue::Static(_) => {
-                let type_ref = self
-                    .type_refs
-                    .stmt_type_bindings
-                    .get(&stmt)
-                    .copied()
-                    .unwrap_or_else(|| {
-                        unreachable!("every static type binding is collected as a body type ref")
-                    });
-                // A static template is a stored/structural position: a `_`
-                // inside it has nothing to infer from, and is diagnosed at
-                // the hole, where the span is (`HolePolicy::Forbidden`).
-                let (ty, diagnostics) = self.lower_body_type_ref_at(
-                    type_ref,
-                    crate::lower::TypePosition::Existential,
-                    crate::lower::HolePolicy::Forbidden(crate::lower::NoInferReason::TypeBinding),
-                );
-                self.queue_body_lowering_diagnostics(diagnostics);
-                ScopedTypeSource::Static(Ty::from_plain(&crate::lower::reject_holes(&ty)))
-            }
-        };
+        self.validate_runtime_type_operand(body, operand);
+        let bounds = self.scoped_type_bounds(stmt);
+        // The statement checks each bound at run time. A miss runs the
+        // `else` block, which must diverge like a `let … else`; a bounded
+        // statement without one is reported where it is visited.
+        self.finish_let_else(body, else_branch);
         // The parameter's identity is its statement's index in the body:
         // exact (two statements never share an index) and source-derived,
         // so it is stable across runs. A scoped parameter never leaves its
@@ -3429,14 +3430,72 @@ impl<'db> InferenceContext<'db> {
         let binding = ScopedTypeBinding {
             name: name.clone(),
             parameter: baml_type::ParamTy::new(SCOPED_PARAM_BIT | index, name),
-            source,
+            operand,
+            bounds,
         };
+        // The bounds join the param env exactly as a declared generic
+        // parameter's do: obligations, member lookup, and the written-type
+        // well-formedness judgment all read `T`'s conjunction from there.
+        if !binding.bounds.is_empty() {
+            self.facts
+                .add_bounds(binding.parameter.clone(), binding.bounds.clone());
+            self.lower
+                .add_bounds(binding.parameter.clone(), binding.bounds.clone());
+        }
         self.result.type_bindings.insert(stmt, binding.clone());
         self.table.bind_scoped_param(&binding.parameter);
         self.scoped_type_bindings.push(binding);
     }
 
-    /// Close the `type T = …` bindings this block introduced. Nothing typed
+    /// The written `extends` bounds of a `let type` statement as interface
+    /// constraints. Each is judged like a generic parameter's bound: an
+    /// unresolved name or a `_` reports at the bound, and a type that is not
+    /// an interface (or is `reflect.AnyFunction`) reports and is left out.
+    fn scoped_type_bounds(&mut self, stmt: StmtId) -> Vec<baml_type::Interface> {
+        let Some(type_refs) = self.type_refs.stmt_type_binding_bounds.get(&stmt).cloned() else {
+            return Vec::new();
+        };
+        let mut bounds = Vec::with_capacity(type_refs.len());
+        for type_ref in type_refs.iter().copied() {
+            let (lowered, diagnostics) = self.lower_body_type_ref_at(
+                type_ref,
+                crate::lower::TypePosition::ConstraintHead,
+                crate::lower::HolePolicy::Forbidden(crate::lower::NoInferReason::TypeBinding),
+            );
+            self.queue_body_lowering_diagnostics(diagnostics);
+            let diagnosed = lowered.contains_error();
+            let lowered = crate::lower::reject_holes(&lowered);
+            match lowered.as_interface() {
+                // As for a generic parameter, the reflection-only function
+                // interface is not a bound.
+                Some(bound)
+                    if bound.name.is_lang_root_type(
+                        self.lang(),
+                        baml_base::LangPackage::Reflect,
+                        "AnyFunction",
+                    ) =>
+                {
+                    self.pending_diags.push(PendingDiag::AnnotWf {
+                        type_ref,
+                        error: crate::diagnostics::TirTypeError::BuiltinInterfaceNotABound {
+                            interface: bound.name,
+                        },
+                    });
+                }
+                Some(bound) => bounds.push(bound),
+                None if diagnosed => {}
+                None => self.pending_diags.push(PendingDiag::AnnotWf {
+                    type_ref,
+                    error: crate::diagnostics::TirTypeError::GenericBoundNotInterface {
+                        bound: lowered,
+                    },
+                }),
+            }
+        }
+        bounds
+    }
+
+    /// Close the `let type T = …` bindings this block introduced. Nothing typed
     /// by a closed binding may be observable afterwards: the binding
     /// re-executes on every pass through its block and may bind `T` to a
     /// different type each time, so a `T`-typed value that outlived the
@@ -3834,7 +3893,7 @@ impl<'db> InferenceContext<'db> {
             .map(|binding| &binding.parameter)
     }
 
-    /// Lower a body-owned type reference through the lexical `type T = …`
+    /// Lower a body-owned type reference through the lexical `let type T = …`
     /// overlay, so a scoped name resolves to its rigid parameter.
     fn lower_scoped_type_ref_at(
         &mut self,
@@ -3866,7 +3925,7 @@ impl<'db> InferenceContext<'db> {
 
     /// Lower a body type reference at `position`; `holes` says whether the
     /// position has something to infer a `_` from (a `let` annotation does,
-    /// a `type T = …` right-hand side does not).
+    /// a `let type T extends I = …` bound does not).
     fn lower_body_type_ref_at(
         &mut self,
         type_ref: BodyTypeRefId,
@@ -5707,19 +5766,24 @@ impl<'db> InferenceContext<'db> {
             return;
         }
         let got = self.infer_expr(body, operand, &Expectation::None);
+        // A diagnosed operand stays quiet. Nothing else is exempt: an
+        // `unknown` must be narrowed to a type with `match` or `is` before it
+        // binds, since a value the checker has not typed may not be erased
+        // into the frame and fail at run time. An open operand deposits the
+        // contract as a bound and is re-judged here once it solves.
+        if got.has_error() {
+            return;
+        }
+        // A builder's pending type is not a type until the builder is built,
+        // and binding it then could fail at run time; it gets its own message
+        // naming the fix.
         let pending_type = matches!(got.kind(), InferTy::Class(name, _)
-            if self.lang().is(baml_base::LangPackage::Reflect, name.root())
-                && name.namespace().iter().map(baml_type::Name::as_str)
-                    .eq(["class"])
-                && name.name().as_str() == "PendingType");
-        // A diagnosed operand stays quiet; a pending builder type is a
-        // known value the VM resolves (or refuses) at the boundary. Nothing
-        // else is exempt: an `unknown` must be narrowed to a type with
-        // `match` or `is` before it binds, since a value the checker has not
-        // typed may not be erased into the frame and fail at run time. An
-        // open operand deposits the contract as a bound and is re-judged
-        // here once it solves.
-        if pending_type || got.has_error() {
+            if self
+                .lang_decl(baml_base::LangPackage::Reflect, &["class"], "PendingType")
+                .is_some_and(|pending| pending == *name));
+        if pending_type {
+            self.pending_diags
+                .push(PendingDiag::LetTypePendingOperand { expr: operand });
             return;
         }
         // The operand contract is `reflect.Type | reflect.TypeView`: a kind
@@ -6690,7 +6754,7 @@ impl<'db> InferenceContext<'db> {
         let method_name = callable_display_name(self.db, method).clone();
         let class_count = class_args.len();
         let mut instantiation = class_args;
-        let position = if self.is_reflect_package_get_function(method) {
+        let position = if self.is_reflect_package_function_lookup(method) {
             crate::lower::TypePosition::ExtractionContract
         } else {
             crate::lower::TypePosition::Existential
@@ -7818,7 +7882,7 @@ impl<'db> InferenceContext<'db> {
         let callable = DeclRef::External(method);
         let row = extern_function_row(self.db, method);
         let frame = callable_generic_frame(self.db, callable).params;
-        let position = if self.is_reflect_package_get_function(callable) {
+        let position = if self.is_reflect_package_function_lookup(callable) {
             crate::lower::TypePosition::ExtractionContract
         } else {
             crate::lower::TypePosition::Existential
@@ -8030,7 +8094,7 @@ impl<'db> InferenceContext<'db> {
             })?;
         let signature = function_signature(self.db, method);
         let frame = crate::lower::class_generic_frame(self.db, class);
-        let position = if self.is_reflect_package_get_function(DeclRef::Source(method)) {
+        let position = if self.is_reflect_package_function_lookup(DeclRef::Source(method)) {
             crate::lower::TypePosition::ExtractionContract
         } else {
             crate::lower::TypePosition::Existential
@@ -8728,14 +8792,17 @@ impl<'db> InferenceContext<'db> {
         instantiation
     }
 
-    fn is_reflect_package_get_function(&self, function: FunctionRef<'db>) -> bool {
+    fn is_reflect_package_function_lookup(&self, function: FunctionRef<'db>) -> bool {
         let Some(qtn) = callable_owner_type(self.db, function) else {
             return false;
         };
         self.lang().is(baml_base::LangPackage::Reflect, qtn.root())
             && qtn.namespace().is_empty()
             && qtn.name().as_str() == "Package"
-            && callable_display_name(self.db, function).as_str() == "get_function"
+            && matches!(
+                callable_display_name(self.db, function).as_str(),
+                "get_function" | "find_function"
+            )
     }
 
     fn computed_generic_argument_name(
@@ -8802,7 +8869,7 @@ impl<'db> InferenceContext<'db> {
         }
         if replaced {
             self.pending_diags
-                .push(PendingDiag::ComputedGenericArgumentRequiresUnreflect {
+                .push(PendingDiag::ComputedGenericArgumentRequiresLetType {
                     expr: site,
                     name: name.clone(),
                 });
@@ -10514,13 +10581,29 @@ impl<'db> InferenceContext<'db> {
         // declared bounds. Hole-carrying annotations skip - their holes
         // solve first and the instantiation sites judge them.
         if !lowered.contains_hole() {
-            let env = self.wf_scope_env.get_or_init(|| match self.body_owner {
+            let owner_env = self.wf_scope_env.get_or_init(|| match self.body_owner {
                 Some(function) => crate::lower::function_generic_bounds(self.db, function)
                     .into_iter()
                     .collect(),
                 None => rustc_hash::FxHashMap::default(),
             });
-            for error in crate::interfaces::type_generic_bound_errors(self.db, env, &lowered) {
+            // A bounded `let type` binding in scope carries its own bounds.
+            let mut scoped_bounds = self
+                .scoped_type_bindings
+                .iter()
+                .filter(|binding| !binding.bounds.is_empty())
+                .peekable();
+            let env = if scoped_bounds.peek().is_none() {
+                std::borrow::Cow::Borrowed(owner_env)
+            } else {
+                let mut env = owner_env.clone();
+                env.extend(
+                    scoped_bounds
+                        .map(|binding| (binding.parameter.clone(), binding.bounds.clone())),
+                );
+                std::borrow::Cow::Owned(env)
+            };
+            for error in crate::interfaces::type_generic_bound_errors(self.db, &env, &lowered) {
                 self.pending_diags
                     .push(PendingDiag::AnnotWf { type_ref, error });
             }
@@ -12142,10 +12225,13 @@ impl<'db> InferenceContext<'db> {
                             expr,
                         )
                     }
-                    PendingDiag::ComputedGenericArgumentRequiresUnreflect { expr, name } => (
-                        TirTypeError::ComputedGenericArgumentRequiresUnreflect { name },
+                    PendingDiag::ComputedGenericArgumentRequiresLetType { expr, name } => (
+                        TirTypeError::ComputedGenericArgumentRequiresLetType { name },
                         expr,
                     ),
+                    PendingDiag::LetTypePendingOperand { expr } => {
+                        (TirTypeError::LetTypePendingOperand, expr)
+                    }
                     PendingDiag::MountedPackageCallUnsupported { expr, path } => {
                         (TirTypeError::MountedPackageCallUnsupported { path }, expr)
                     }
@@ -12462,6 +12548,15 @@ impl<'db> InferenceContext<'db> {
                             },
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Expr(at),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::BoundedLetTypeRequiresElse { stmt, name } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::BoundedLetTypeRequiresElse { name },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Stmt(stmt),
                             related: Vec::new(),
                         });
                         continue;
@@ -14135,7 +14230,7 @@ fn nearest_scoped_relaxation(ty: &baml_type::Ty, variance: RelaxationVariance) -
     }
 }
 
-/// Every block-scoped parameter (`type T = …`, marked by
+/// Every block-scoped parameter (`let type T = …`, marked by
 /// [`SCOPED_PARAM_BIT`]) that `ty` mentions, in walk order.
 fn scoped_params_in(ty: &Ty, visit: &mut impl FnMut(&baml_type::ParamTy)) {
     if !ty.has_typevar() {
@@ -14306,10 +14401,7 @@ impl<'db> InferenceContext<'db> {
                 .into_iter()
                 .map(|(expr, plan)| (expr, self.materialize_call_plan(plan)))
                 .collect(),
-            type_bindings: type_bindings
-                .into_iter()
-                .map(|(stmt, binding)| (stmt, self.materialize_scoped_binding(binding)))
-                .collect(),
+            type_bindings,
             expr_adjustments: expr_adjustments
                 .into_iter()
                 .map(|(expr, adjustments)| {
@@ -14395,22 +14487,6 @@ impl<'db> InferenceContext<'db> {
                     emission_ty: self.materialize_ty(&emission_ty),
                 })
                 .collect(),
-        }
-    }
-
-    fn materialize_scoped_binding(&mut self, binding: ScopedTypeBinding<Ty>) -> ScopedTypeBinding {
-        let ScopedTypeBinding {
-            name,
-            parameter,
-            source,
-        } = binding;
-        ScopedTypeBinding {
-            name,
-            parameter,
-            source: match source {
-                ScopedTypeSource::Runtime(operand) => ScopedTypeSource::Runtime(operand),
-                ScopedTypeSource::Static(ty) => ScopedTypeSource::Static(self.materialize_ty(&ty)),
-            },
         }
     }
 }
@@ -14595,7 +14671,7 @@ fn finalize_member_resolution(
 // `erase_compiler_only_ty`).
 //
 // The known undiagnosed producer is a generic call made in the scope of a
-// `type T = unreflect(expr)` binding, whose slots go unsolved (corpus:
+// `let type T = expr` binding, whose slots go unsolved (corpus:
 // `ns_runtime_type_binding_generic_calls`). That source is ILLEGAL, not
 // well-typed: the call needs type arguments it cannot get. Report every
 // unsolved variable and it is rejected at compile time, compilation stops

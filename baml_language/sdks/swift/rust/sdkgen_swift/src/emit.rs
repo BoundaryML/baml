@@ -424,23 +424,32 @@ pub(crate) fn render_callable(
             args_setup.push_str(wrapper);
         }
     }
+    // The local that collects the wire arguments must not shadow a parameter.
+    let mut args_name = "args".to_string();
+    while function
+        .arguments
+        .iter()
+        .any(|arg| arg.name.as_str() == args_name)
+    {
+        args_name.push('_');
+    }
     if has_optionals {
         let _ = writeln!(
             args_setup,
-            "\tvar args: [(Swift.String, (any BamlEncodable)?)] = [{required_pairs}]"
+            "\tvar {args_name}: [(Swift.String, (any BamlEncodable)?)] = [{required_pairs}]"
         );
         for p in &params {
             if let Param::Optional { name, .. } = p {
                 let _ = writeln!(
                     args_setup,
-                    "\t{name}._appendIfSet(\"{}\", to: &args)",
+                    "\t{name}._appendIfSet(\"{}\", to: &{args_name})",
                     name.trim_matches('`')
                 );
             }
         }
     }
     let args_expr = if has_optionals {
-        "args".to_string()
+        args_name
     } else {
         format!("[{required_pairs}]")
     };

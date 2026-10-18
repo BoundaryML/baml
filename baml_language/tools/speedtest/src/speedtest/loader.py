@@ -1,87 +1,89 @@
-"""Workload .md parser — loads ## eval-setup / ## BAML / ## Python / ## Typescript sections."""
+"""Workload loader.
 
-import re
+A workload is a directory under ``workloads/<category>/<slug>/``:
+
+    bench.toml   name, description, expected output, jobs and warmup per trial
+    main.baml    the BAML program; ``main()`` performs one job
+    main.py      the same program in Python; ``main()`` returns the same value
+    main.js      the same program in JavaScript (node and bun)
+
+``main()`` must be deterministic: every implementation returns the value in
+``bench.toml``'s ``expect``, and every trial is checked against it.
+"""
+
 import sys
+import tomllib
 from pathlib import Path
-from string import Template
+
+ROOT = Path(__file__).resolve().parent.parent.parent
+SOURCES = {"baml": "main.baml", "python": "main.py", "js": "main.js"}
+REQUIRED = ("name", "description", "expect")
 
 
-class _DDTemplate(Template):
-    """Template using $$var instead of $var, so single $ is literal."""
-    delimiter = '$$'
+def workloads_dir():
+    return ROOT / "workloads"
 
 
-def _workloads_dir():
-    """Return the workloads/ directory (sibling of the package)."""
-    return Path(__file__).resolve().parent.parent.parent / "workloads"
-
-
-def parse_workload_md(path):
-    """Parse a workload .md file.
-
-    Returns dict with keys: name, category, baml, python, js (expanded source code).
-    """
-    text = path.read_text()
-
-    title_match = re.match(r'^#\s+(.+)', text)
-    if not title_match:
-        return None
-    full_name = title_match.group(1).strip()
-
-    sections = {}
-    for m in re.finditer(
-        r'^##\s+([\w-]+)\s*\n```\w*\n(.*?)```',
-        text,
-        re.MULTILINE | re.DOTALL,
-    ):
-        sections[m.group(1).lower()] = m.group(2)
-
-    namespace = {}
-    setup = sections.get("eval-setup")
-    if setup:
-        exec(setup, {"__builtins__": __builtins__}, namespace)
-
-    def resolve(code):
-        if code is None:
-            return None
-        if namespace:
-            return _DDTemplate(code).safe_substitute(namespace)
-        return code
-
-    baml = resolve(sections.get("baml"))
-    python = resolve(sections.get("python"))
-    js = resolve(sections.get("typescript"))
-
-    if not baml or not python or not js:
-        return None
-
+def load_workload(path):
+    """Load one workload directory. Raises ValueError on a malformed workload."""
+    path = Path(path)
+    meta_path = path / "bench.toml"
+    with open(meta_path, "rb") as f:
+        meta = tomllib.load(f)
+    missing = [k for k in REQUIRED if k not in meta]
+    if missing:
+        raise ValueError(f"{meta_path}: missing {', '.join(missing)}")
+    sources = {}
+    for key, filename in SOURCES.items():
+        src = path / filename
+        if not src.exists():
+            raise ValueError(f"{path}: missing {filename}")
+        sources[key] = src.read_text()
+    category = path.parent.name
     return {
-        "name": full_name,
-        "category": path.parent.name,
-        "baml": baml,
-        "python": python,
-        "js": js,
+        "id": f"{category}/{path.name}",
+        # `category::name` is the stable identity: CodSpeed bench names and
+        # saved baselines are derived from it, so renaming a workload breaks
+        # its history.
+        "name": f"{category}::{meta['name']}",
+        "category": category,
+        "description": meta["description"],
+        "origin": meta.get("origin"),
+        "expect": str(meta["expect"]),
+        "jobs": int(meta.get("jobs", 1)),
+        "warmup": int(meta.get("warmup", 1)),
+        "path": path,
+        "files": {key: path / filename for key, filename in SOURCES.items()},
+        **sources,
     }
 
 
-def load_workloads(workloads_dir=None):
-    """Scan for .md workload files. Returns ordered list of workload dicts."""
-    wdir = Path(workloads_dir) if workloads_dir else _workloads_dir()
+def load_workloads(directory=None):
+    """Every workload under ``directory``, ordered by category then slug."""
+    wdir = Path(directory) if directory else workloads_dir()
     if not wdir.is_dir():
-        print(f"ERROR: workloads directory not found: {wdir}", file=sys.stderr)
-        sys.exit(1)
-
+        sys.exit(f"workloads directory not found: {wdir}")
     workloads = []
-    for md in sorted(wdir.rglob("*.md")):
-        w = parse_workload_md(md)
-        if w:
-            workloads.append(w)
-        else:
-            print(f"  WARN: skipping {md.relative_to(wdir)} (parse failed)", file=sys.stderr)
+    for meta in sorted(wdir.glob("*/*/bench.toml")):
+        try:
+            workloads.append(load_workload(meta.parent))
+        except (ValueError, tomllib.TOMLDecodeError) as e:
+            sys.exit(f"invalid workload: {e}")
+    names = [w["name"] for w in workloads]
+    dupes = sorted({n for n in names if names.count(n) > 1})
+    if dupes:
+        sys.exit(f"duplicate workload names: {', '.join(dupes)}")
     return workloads
 
 
-def cmd_list():
-    """Print all workload names and exit."""
+def select(workloads, filters):
+    """Workloads whose id or name contains any of ``filters`` (case-insensitive)."""
+    if not filters:
+        return workloads
+    fs = [f.lower() for f in filters]
+    return [w for w in workloads if any(f in w["id"].lower() or f in w["name"].lower() for f in fs)]
+
+
+def cmd_list(args=None):
     for w in load_workloads():
-        print(w["name"])
+        print(f"{w['id']:45s} {w['description']}")

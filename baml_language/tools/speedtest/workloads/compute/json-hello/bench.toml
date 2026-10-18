@@ -1,0 +1,6 @@
+name = "json hello"
+description = "serialize one small record to JSON: the smallest useful job"
+origin = "native-bench 09_json_hello"
+expect = "{\"message\":\"Hello, World!\"}"
+jobs = 4096
+warmup = 256

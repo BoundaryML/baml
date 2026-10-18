@@ -142,7 +142,7 @@ function openai_images_request_shape() -> string {
                 + `|prompt_has_schema=${text.includes("Return an image output")}`
                 + `|b64=${result.value.base64()}`
                 + `|mime=${result.value.mime_type() ?? "?"}`
-                + `|usage=${result.usage.input_tokens}/${result.usage.output_tokens}`
+                + `|usage=${_images_usage(result.usage, "openai-images", "gpt-image-1")}`
         },
     )
 }
@@ -751,6 +751,16 @@ test "gateway_images_data_url_not_base64" {
 
 // The v4 protocol's `usage` object is surfaced as the turn's usage (sys_llm
 // dropped it), and an unfamiliar `warnings[]` variant must not fail the decode.
+/// `input/output` of the usage a run billed to one image model.
+function _images_usage(
+    usage: ai.events.ModelUsage[],
+    provider: string,
+    model: string,
+) -> string {
+    let u = ai.events.usage_for(usage, ai.events.ModelKey { provider: provider, model: model });
+    `${u?.input_tokens ?? -1}/${u?.output_tokens ?? -1}`
+}
+
 function gateway_images_usage() -> string {
     let canned = `{"images":["aGVsbG8="],"warnings":[{"type":"unsupported","feature":"seed","details":"the provider ignores seed"},{"type":"martian","hue":7}],"usage":{"inputTokens":12,"outputTokens":34,"totalTokens":46}}`;
     root.llm_mock.mock_json_serve(
@@ -763,7 +773,7 @@ function gateway_images_usage() -> string {
             );
             let result = ai.Agent.new(client = cl).run(GatewayDraw@spec("a lamp"));
             `${result.value.base64()}`
-                + `|${result.usage.input_tokens}/${result.usage.output_tokens}`
+                + `|${_images_usage(result.usage, "ai-gateway-images", "bfl/flux-2-pro")}`
         },
     )
 }
@@ -1004,13 +1014,13 @@ function _stream_openai_images() -> string {
 
 function openai_images_streaming_unsupported() -> string {
     _stream_openai_images() catch_all (e) {
-        let unsupported: ai.errors.StreamingUnsupported => unsupported.client_id,
+        let unsupported: ai.errors.StreamingUnsupported => unsupported.requested_model,
         _ => "wrong error class",
     }
 }
 
 test "openai_images_streaming_unsupported" {
-    assert.equal(openai_images_streaming_unsupported(), "openai-images/gpt-image-1")
+    assert.equal(openai_images_streaming_unsupported(), "gpt-image-1")
 }
 
 function _stream_gateway_images() -> string {
@@ -1020,7 +1030,7 @@ function _stream_gateway_images() -> string {
 
 function gateway_images_streaming_unsupported() -> string {
     _stream_gateway_images() catch_all (e) {
-        let unsupported: ai.errors.StreamingUnsupported => unsupported.client_id,
+        let unsupported: ai.errors.StreamingUnsupported => unsupported.requested_model,
         _ => "wrong error class",
     }
 }
@@ -1028,7 +1038,7 @@ function gateway_images_streaming_unsupported() -> string {
 test "gateway_images_streaming_unsupported" {
     assert.equal(
         gateway_images_streaming_unsupported(),
-        "ai-gateway-images/bfl/flux-2-pro",
+        "bfl/flux-2-pro",
     )
 }
 

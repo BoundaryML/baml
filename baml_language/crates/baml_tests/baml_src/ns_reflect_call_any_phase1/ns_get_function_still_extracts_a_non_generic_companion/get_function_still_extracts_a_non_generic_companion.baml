@@ -18,8 +18,7 @@ function main() -> bool {
     let package = reflect.Package.current();
     let callable = package.get_function<PromptFn>(
         "root.reflect_call_any_phase1.get_function_still_extracts_a_non_generic_companion.Plain@render_prompt",
-    )
-        ?? throw "expected the companion";
+    );
     let rendered = callable("hello");
     rendered.text().length() > 0
 }

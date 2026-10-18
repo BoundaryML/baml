@@ -22,15 +22,21 @@ class Type {
         $rust_function
     }
 
+    implements root.TypeView {
+        function as_type(self) -> root.Type throws never {
+            self
+        }
+    }
+
     /// Construct an array type whose element is this type.
     //baml:mut_vm
-    function array(self) -> root.array.Type throws never {
+    function array(self) -> root.Array throws never {
         $rust_function
     }
 
     /// Construct the canonical union of this type and null.
     //baml:mut_vm
-    function optional(self) -> root.union.Type throws never {
+    function optional(self) -> root.Union throws never {
         $rust_function
     }
 
@@ -51,55 +57,55 @@ class Type {
     /// The class view of this type, or `null` when it does not describe
     /// a class.
     //baml:mut_vm
-    function as_class(self) -> root.class.Type? throws never {
+    function as_class(self) -> root.Class? throws never {
         $rust_function
     }
     /// The enum view of this type, or `null` when it does not describe
     /// an enum.
     //baml:mut_vm
-    function as_enum(self) -> root.enum.Type? throws never {
+    function as_enum(self) -> root.Enum? throws never {
         $rust_function
     }
     /// The union view of this type, or `null` when it does not describe
     /// a union.
     //baml:mut_vm
-    function as_union(self) -> root.union.Type? throws never {
+    function as_union(self) -> root.Union? throws never {
         $rust_function
     }
     /// The literal view of this type, or `null` when it does not describe
     /// a literal.
     //baml:mut_vm
-    function as_literal(self) -> root.literal.Type? throws never {
+    function as_literal(self) -> root.Literal? throws never {
         $rust_function
     }
     /// The array view of this type, or `null` when it does not describe
     /// an array.
     //baml:mut_vm
-    function as_array(self) -> root.array.Type? throws never {
+    function as_array(self) -> root.Array? throws never {
         $rust_function
     }
     /// The map view of this type, or `null` when it does not describe
     /// a map.
     //baml:mut_vm
-    function as_map(self) -> root.map.Type? throws never {
+    function as_map(self) -> root.Map? throws never {
         $rust_function
     }
     /// The interface view of this type, or `null` when it does not describe
     /// an interface.
     //baml:mut_vm
-    function as_interface(self) -> root.interface.Type? throws never {
+    function as_interface(self) -> root.Interface? throws never {
         $rust_function
     }
     /// The primitive view of this type, or `null` when it does not describe
     /// a primitive.
     //baml:mut_vm
-    function as_primitive(self) -> root.primitive.Type? throws never {
+    function as_primitive(self) -> root.Primitive? throws never {
         $rust_function
     }
     /// The function view of this type, or `null` when it does not describe
     /// a function.
     //baml:mut_vm
-    function as_function(self) -> root.function.Type? throws never {
+    function as_function(self) -> root.Function? throws never {
         $rust_function
     }
 
@@ -121,32 +127,48 @@ class Type {
         $rust_function
     }
 
-    /// (internal) `baml.ToString` is implemented for `reflect.Type` by an out-of-body
-    /// `implement` block beside the interface (baml/conversions.baml): the
-    /// `reflect` package deliberately references nothing from `baml`, so the
-    /// stdlib dependency graph stays acyclic by construction.
+    /// (internal) The rendering behind `baml.ToString` for every type value.
+    /// `reflect.Type` and each kind view implement `baml.ToString` by
+    /// out-of-body `implement` blocks beside the interface
+    /// (baml/conversions.baml): `baml` depends on `reflect`, never the reverse.
+    /// Code inside `reflect` cannot see those implementations, so it calls this
+    /// method directly.
     //baml:vm
     function _to_string_impl(self) -> string throws never {
         $rust_function
     }
 
     /// True iff the receiver type nominally implements the interface `other`
-    /// (BEP-044). Equivalent to: there is an `implements other { ... }` block
-    /// on the receiver class, either directly or via an interface in the
-    /// receiver's transitive `implements`/`extends` graph.
+    /// (BEP-044): an `implements other { ... }` block in the receiver's body,
+    /// or an `implement other for ...` block anywhere in the program, applies
+    /// to it with its bounds satisfied. The receiver can be any concrete type:
+    /// a class, an enum, a primitive, a list, a map, ...
     ///
-    /// Returns `false` when `other` is not an interface, or when the
-    /// receiver is not a class.
-    //baml:vm
-    function implements(self, other: root.Type) -> bool throws never {
-        $rust_function
+    /// `other` is an interface type, so it names every associated type the
+    /// interface declares without a default, and an omitted one takes its
+    /// default: `baml.iter.Iterator<Item = int>` is
+    /// `baml.iter.Iterator<Item = int, Error = never>`. Only an
+    /// implementation with exactly those associated types matches, so an int
+    /// iterator that throws does not implement `Iterator<Item = int>`, and
+    /// there is no way to ask "is this any iterator".
+    ///
+    /// Returns `false` when `other` is not an interface, or when the receiver
+    /// is not a concrete type (an interface does not implement itself).
+    function implements(self, other: root.TypeView) -> bool throws never {
+        self._implements(other.as_type())
     }
 
-    /// Reverse of [`implements`]: `iface.implemented_by(klass)` is the same
-    /// as `klass.implements(iface)`. Useful when the call-site naturally
-    /// reads "does this interface include that class?".
+    /// Reverse of [`implements`]: `iface.implemented_by(t)` is the same as
+    /// `t.implements(iface)`, with the same associated-type rule. Useful when
+    /// the call site naturally reads "does this interface include that type?".
+    function implemented_by(self, other: root.TypeView) -> bool throws never {
+        other.as_type()._implements(self)
+    }
+
+    /// (internal) Internal native backing `implements` and `implemented_by`;
+    /// both sides are `type` values.
     //baml:vm
-    function implemented_by(self, other: root.Type) -> bool throws never {
+    function _implements(self, other: root.Type) -> bool throws never {
         $rust_function
     }
 }

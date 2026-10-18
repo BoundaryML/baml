@@ -143,6 +143,7 @@ fn spans(events: Vec<Event>) -> proto::SpanBatch {
 
 fn announce(inputs: Option<[u8; 16]>) -> Event {
     Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+        manual: false,
         id: CALL,
         parent_id: THREAD,
         call_path_id: PATH,

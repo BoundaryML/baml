@@ -30,13 +30,75 @@ interface ToString {
 /// Renders a reflected type's name.
 ///
 /// Declared here beside the interface it implements rather than in the
-/// `reflect` package: `reflect.Type` is the compiler metatype, so naming it
-/// creates no package dependency, while `reflect` deliberately references
-/// nothing from `baml`. That keeps the stdlib dependency graph acyclic by
-/// construction.
+/// `reflect` package: `baml` depends on `reflect`, so `reflect` cannot name
+/// `baml.ToString` without a dependency cycle. The kind views below are
+/// declared here for the same reason.
 implement root.ToString for reflect.Type {
   function to_string(self) -> string throws never {
     self._to_string_impl()
+  }
+}
+
+/// Renders a `reflect.Class` as the type it wraps, like `reflect.Type`.
+implement root.ToString for reflect.Class {
+  function to_string(self) -> string throws never {
+    self.as_type()._to_string_impl()
+  }
+}
+
+/// Renders a `reflect.Enum` as the type it wraps, like `reflect.Type`.
+implement root.ToString for reflect.Enum {
+  function to_string(self) -> string throws never {
+    self.as_type()._to_string_impl()
+  }
+}
+
+/// Renders a `reflect.Union` as the type it wraps, like `reflect.Type`.
+implement root.ToString for reflect.Union {
+  function to_string(self) -> string throws never {
+    self.as_type()._to_string_impl()
+  }
+}
+
+/// Renders a `reflect.Literal` as the type it wraps, like `reflect.Type`.
+implement root.ToString for reflect.Literal {
+  function to_string(self) -> string throws never {
+    self.as_type()._to_string_impl()
+  }
+}
+
+/// Renders a `reflect.Array` as the type it wraps, like `reflect.Type`.
+implement root.ToString for reflect.Array {
+  function to_string(self) -> string throws never {
+    self.as_type()._to_string_impl()
+  }
+}
+
+/// Renders a `reflect.Map` as the type it wraps, like `reflect.Type`.
+implement root.ToString for reflect.Map {
+  function to_string(self) -> string throws never {
+    self.as_type()._to_string_impl()
+  }
+}
+
+/// Renders a `reflect.Interface` as the type it wraps, like `reflect.Type`.
+implement root.ToString for reflect.Interface {
+  function to_string(self) -> string throws never {
+    self.as_type()._to_string_impl()
+  }
+}
+
+/// Renders a `reflect.Primitive` as the type it wraps, like `reflect.Type`.
+implement root.ToString for reflect.Primitive {
+  function to_string(self) -> string throws never {
+    self.as_type()._to_string_impl()
+  }
+}
+
+/// Renders a `reflect.Function` as the type it wraps, like `reflect.Type`.
+implement root.ToString for reflect.Function {
+  function to_string(self) -> string throws never {
+    self.as_type()._to_string_impl()
   }
 }
 

@@ -100,6 +100,9 @@ pub struct FunctionMetadata {
     /// PC-to-source table of the code the VM executes; `None` when the
     /// function has no compact code (native functions, unlowered bytecode).
     pub source_map: Option<SourceMap>,
+    /// An `ai.Client.invoke` implementation or a stream's settle step: the
+    /// model calls its returned turn made are its own usage.
+    pub model_invoke: bool,
 }
 
 /// Line table of one function's compact bytecode. PCs are byte offsets into

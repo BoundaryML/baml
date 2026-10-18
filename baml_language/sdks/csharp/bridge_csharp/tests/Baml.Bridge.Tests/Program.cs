@@ -2452,9 +2452,9 @@ internal static unsafe class Program
 
         SetFakeResult(new BamlOutboundValue { StringValue = "client-id" });
         Require(
-            spec.ClientIdAsync().GetAwaiter().GetResult() == "client-id"
-                && lastFakeFunction == "ai.FunctionSpec.client_id",
-            "FunctionSpec.client_id async projection changed");
+            spec.RequestedModelAsync().GetAwaiter().GetResult() == "client-id"
+                && lastFakeFunction == "ai.FunctionSpec.requested_model",
+            "FunctionSpec.requested_model async projection changed");
 
         SetFakeResult(new BamlOutboundValue { StringValue = "called" });
         Require(

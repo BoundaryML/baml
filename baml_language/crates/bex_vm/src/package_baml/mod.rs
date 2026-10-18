@@ -498,6 +498,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmInternalError> {
                 origin: function.origin,
                 native_key: function.native_key,
                 body_meta: function.body_meta,
+                trace_passthrough: function.trace_passthrough,
                 owner: function.owner,
             }))
         }

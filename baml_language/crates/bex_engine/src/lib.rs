@@ -2827,6 +2827,7 @@ impl BexEngine {
                 // Transfer the shutdown guard to the joining task so it completes
                 // even if this awaiting caller is dropped.
                 match tokio::task::spawn_blocking(move || {
+                    runtime.close_span_owners();
                     let processing = runtime.finish();
                     // Drain delivery even when processing failed. No VM or
                     // heap permit survives here; cancellation cannot skip join.
@@ -4278,6 +4279,15 @@ impl BexEngine {
             thread.host_environment = host_environment;
         }
         let options = if let Some(reservation) = reservation {
+            // A host/prepared invocation is an independent execution, not the
+            // VM's explicit pass-through continuation. Never admit a forwarded
+            // view here merely because it carries an already-acquired claim.
+            if reservation.is_forwarded_claim() {
+                return Err(EngineError::TypeMismatch {
+                    message: "a forwarded reservation claim cannot start an independent invocation"
+                        .into(),
+                });
+            }
             reservation
                 .validate(self.trace_scope)
                 .map_err(|error| EngineError::TypeMismatch {
@@ -7096,10 +7106,18 @@ impl BexEngine {
         args: &[Value],
     ) -> Result<PendingRuntimeCompile, OpError> {
         let operation = SysOp::ReflectSessionCompile;
+        // `reflect` does not depend on `baml`, so a bad receiver throws
+        // `reflect.errors.InvalidArgument`, never `baml.errors.InvalidArgument`.
         let invalid = |message: String| {
-            OpError::new(
+            OpError::host_thrown_value(
                 operation,
-                bex_vm_types::errors::VmBamlError::InvalidArgument { message },
+                BexExternalValue::Instance {
+                    class_name: "reflect.errors.InvalidArgument".to_string(),
+                    type_args: Vec::new(),
+                    fields: indexmap::indexmap! {
+                        "message".to_string() => BexExternalValue::String(message.into()),
+                    },
+                },
             )
         };
         let receiver = args

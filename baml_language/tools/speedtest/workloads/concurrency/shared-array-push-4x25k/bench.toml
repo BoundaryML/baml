@@ -1,0 +1,5 @@
+name = "shared array push 4x25k"
+description = "four tasks each pushing 25,000 items onto a shared array"
+expect = "100000"
+jobs = 32
+warmup = 2

@@ -28,7 +28,7 @@ test "local interface implementation for a foreign receiver dispatches" {
         },
         packages = { "webhooks": webhooks },
     );
-    let main = app.get_function<() -> string>("main") ?? throw "missing main";
+    let main = app.get_function<() -> string>("main");
     assert.equal(main(), "webhook to https://example.com/hooks/deploy: Build passed")
 }
 

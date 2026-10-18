@@ -359,12 +359,16 @@ pub(crate) fn build_interface_def(
         })
         .collect();
     // This list is the interface's field *index space*: `RuntimeImplRule::field_links`
-    // is baked parallel to it, so every declared field keeps its slot.
-    let fields: Vec<(Name, RuntimeTy)> =
+    // is baked parallel to it, so every declared field keeps its slot. The
+    // resolved fields are parallel to the declared ones, which carry the docs.
+    let fields: Vec<(Name, RuntimeTy, Option<String>)> =
         baml_compiler2_hir_ty::interfaces::resolve_interface_fields(db, iface_loc)
             .fields
             .iter()
-            .map(|(name, ty)| (name.clone(), to_runtime(ty)))
+            .zip(&interface.fields)
+            .map(|((name, ty), declared)| {
+                (name.clone(), to_runtime(ty), declared.docstring.clone())
+            })
             .collect();
     // A method's runtime signature, read off `function_signature` — the one
     // signature road for required and default methods alike: required params
@@ -430,9 +434,10 @@ pub(crate) fn build_interface_def(
             .collect(),
         fields: fields
             .into_iter()
-            .map(|(name, ty)| InterfaceFieldDef {
+            .map(|(name, ty, docstring)| InterfaceFieldDef {
                 name,
                 ty: anchor.anchor_runtime_ty(&ty),
+                docstring,
             })
             .collect(),
         methods: methods
@@ -1021,6 +1026,7 @@ fn synthesized_function(
         origin: FunctionOrigin::Internal,
         native_key: None,
         body_meta: None,
+        trace_passthrough: false,
         owner: bex_vm_types::HeapPtr::null(),
     }
 }

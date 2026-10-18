@@ -5,8 +5,8 @@ use borsh::{BorshDeserialize, BorshSerialize};
 /// A declaration stores only its path inside its package. This is that path
 /// rendered: for a declaration a package owns, [`Declared`](Self::Declared) —
 /// the path under its package's display label, which is not an identity. A
-/// runtime-created declaration (`reflect.class.new`,
-/// `reflect.enum.new`, the class builder, host authoring) is
+/// runtime-created declaration (`reflect.Class.new`,
+/// `reflect.Enum.new`, the class builder, host authoring) is
 /// [`Anonymous`](Self::Anonymous): it has an item name for display, but no
 /// package and no namespace — no source world can spell it, so nothing may
 /// key on it or resolve by it. Its identity is its declaration object and the

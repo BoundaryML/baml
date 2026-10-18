@@ -136,7 +136,7 @@ function hs7_dynamic_extract<T>(text: string) -> T {
 // above while carrying unrelated fields. Identity, never this name, decides
 // whether results become generated Pydantic models or live RuntimeValues.
 function hs7_collision_type() -> reflect.Type {
-  reflect.class.new("Hs7Collision", {
+  reflect.Class.new("Hs7Collision", {
     "title": reflect.Type.of<string?>(),
     "body": reflect.Type.of<string?>(),
     "word_count": reflect.Type.of<int?>(),
@@ -152,7 +152,7 @@ function hs7_collision_type() -> reflect.Type {
 // next/final.
 function hs7_open_collision_stream(text: string) -> unknown {
   let output_type = hs7_collision_type();
-  type OutputType = unreflect(output_type);
+  let type OutputType = output_type;
   hs7_dynamic_extract@stream<OutputType>(text)
 }
 
@@ -162,7 +162,7 @@ function hs7_open_collision_stream(text: string) -> unknown {
 // same-name class.
 function hs7_open_collision_value(json: string) -> unknown {
   let output_type = hs7_collision_type();
-  type OutputType = unreflect(output_type);
+  let type OutputType = output_type;
   baml.json.from_string<OutputType>(json)
 }
 
@@ -170,7 +170,7 @@ function hs7_open_collision_value(json: string) -> unknown {
 // realized runtime type without constructing or reflecting any type itself.
 function hs7_open_collision_spec(text: string) -> unknown {
   let output_type = hs7_collision_type();
-  type OutputType = unreflect(output_type);
+  let type OutputType = output_type;
   hs7_dynamic_extract@spec<OutputType>(text)
 }
 
@@ -248,8 +248,11 @@ function stream_e2e_collect(text: string) -> StreamE2ECollectResult {
 // server instead (see customizable/test_on_event.py).
 class OnEventScriptedClient {
   implements ai.Client {
-    function id(self) -> string {
+    function requested_model(self) -> string {
       "scripted"
+    }
+    function provider(self) -> string {
+        "test"
     }
 
     function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -259,25 +262,31 @@ class OnEventScriptedClient {
 
     function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
       let _ = input;
-      ai.ModelTurn {
-        // One hand-made wire record so hosts can assert the generated
-        // ai.events.LLMCall model arrives through on_event.
-        calls: [
-          ai.events.LLMCall {
-            client_name: "scripted",
-            provider: "scripted",
-            timing: ai.events.Timing { start_time_utc_ms: 1000n, duration_ms: 42n, ttft_ms: null },
-            http_request: null,
-            http_response: ai.events.HttpResponse { status: 200, headers: {}, body: null },
-            usage: null,
-            selected: true,
-            sse_responses: null,
+      // One hand-made call record, with fixed usage, so hosts can assert the
+      // generated ai.events.ModelCall model arrives through on_event.
+      ai.internal.with_own_call(
+        ai.ModelTurn {
+          child_turns: [],
+          calls: [],
+          content: [ai.content.Text { text: "{\"name\": \"Ada\", \"email\": null}" }],
+          stop_reason: ai.content.StopReason.Complete,
+        },
+        ai.events.ModelCall {
+          resolved_model: ai.events.ModelKey { provider: "scripted", model: "scripted-model" },
+          usage: null,
+          timing: ai.events.Timing {
+            start_time: baml.time.Instant.from_timestamp_milliseconds(1000n),
+            duration: baml.time.Duration.from_milliseconds(42n),
+            ttft: null,
           },
-        ],
-        content: [ai.content.Text { text: "{\"name\": \"Ada\", \"email\": null}" }],
-        stop_reason: ai.content.StopReason.Complete,
-        usage: ai.events.Usage { input_tokens: 3, output_tokens: 5, cached_input_tokens: null, reasoning_tokens: null },
-      }
+          http_request: null,
+          http_response: ai.events.HttpResponse { status: 200, headers: {}, body: null },
+          sse_responses: null,
+        },
+        ai.events.Usage { input_tokens: 3, output_tokens: 5, cached_input_tokens: null, reasoning_tokens: null },
+        "scripted-model",
+        null,
+      )
     }
   }
 }
