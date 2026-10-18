@@ -525,6 +525,32 @@ function two(a: int, b: int) -> int { baml.sys.sleep(dur()); a * 10 + b }
     assert!(last_read < first_write, "{start}");
 }
 
+/// An array's iterator that the function returns leaves the body, so it is
+/// the `ArrayIterator` the dispatch builds rather than the index walk a
+/// local loop compiles to: a caller's `next` resolves against it.
+#[test]
+fn a_returned_array_iterator_is_dispatched() {
+    let module = compile(
+        r#"
+function iter_of(xs: int[]) -> baml.iter.Iterator<Item = int, Error = never> {
+  xs.iter()
+}
+
+function first(xs: int[]) -> int {
+  let total = 0;
+  for (let v in iter_of(xs)) { total += v; }
+  total
+}
+"#,
+    );
+    let body = body_of(&module, "user.iter_of")
+        .split_whitespace()
+        .collect::<String>();
+    assert!(body.contains("vm.virtual_target("), "{body}");
+    assert!(!body.contains("i0=0;"), "{body}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
 /// A namespace `Foo` with a function `m` and a class `Foo` with a method `m`
 /// render alike (`user.Foo.m`). The backend binds a function by its identity
 /// in the program, so each compiles against its own object, and the name the

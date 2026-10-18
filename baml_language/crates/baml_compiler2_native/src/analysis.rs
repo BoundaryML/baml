@@ -176,7 +176,7 @@ impl Analysis {
         let mut array_iters = HashMap::new();
         for block in &body.blocks {
             if let Some(terminator) = &block.terminator
-                && let Some((iter, array)) = array_iter_call(body, terminator)
+                && let Some((iter, array)) = array_iter_call(body, mir.arity, terminator)
             {
                 array_iters.insert(iter, array);
             }
@@ -193,7 +193,7 @@ impl Analysis {
                     block.id
                 )));
             };
-            let array_iteration = array_iter_call(body, terminator).is_some()
+            let array_iteration = array_iter_call(body, mir.arity, terminator).is_some()
                 || array_next_call(terminator, &array_iters).is_some();
             flows.push(flow_of(terminator)?);
             unwinds.push(block.unwind.map(|b| b.0));
@@ -311,9 +311,13 @@ pub(crate) fn capture_reprs(
     Vec::new()
 }
 
-/// `xs.iter()` on a local of array type, as `(iterator local, array local)`.
+/// `xs.iter()` on a local of array type, as `(iterator local, array local)`,
+/// in a function of `arity` parameters. An iterator bound to the return
+/// place or a parameter outlives the body (`implements Iterable` returns
+/// one), so it must be the real `ArrayIterator` the dispatch builds.
 pub(crate) fn array_iter_call(
     body: &MirFunctionBody<'_>,
+    arity: usize,
     terminator: &Terminator<'_>,
 ) -> Option<(usize, usize)> {
     let Terminator::VirtualCall {
@@ -332,6 +336,7 @@ pub(crate) fn array_iter_call(
         return None;
     };
     (method == "iter"
+        && iter.0 > arity
         && matches!(
             body.locals[array.0].ty,
             baml_compiler2_mir::RuntimeTy::List(_)

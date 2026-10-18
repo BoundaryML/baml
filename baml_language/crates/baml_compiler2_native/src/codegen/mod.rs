@@ -1211,7 +1211,7 @@ impl<'db> Generator<'_, 'db> {
     /// place as array iteration (see [`Analysis::array_iters`]); any other
     /// interface method call resolves its callee at run time and suspends.
     pub(super) fn array_iteration(&self, terminator: &Terminator<'db>) -> bool {
-        array_iter_call(self.body, terminator).is_some()
+        array_iter_call(self.body, self.analysis.arity, terminator).is_some()
             || array_next_call(terminator, &self.analysis.array_iters).is_some()
     }
 

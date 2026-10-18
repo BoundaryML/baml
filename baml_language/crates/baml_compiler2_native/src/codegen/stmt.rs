@@ -342,9 +342,11 @@ impl Generator<'_, '_> {
                 self.statement(depth, &format!("if c{} {{ {store} }}", id.0));
             }
             Terminator::VirtualCall { destination, .. } => {
-                if let Some((iter, array)) =
-                    array_iter_call(self.body, block.terminator.as_ref().expect("checked"))
-                {
+                if let Some((iter, array)) = array_iter_call(
+                    self.body,
+                    self.analysis.arity,
+                    block.terminator.as_ref().expect("checked"),
+                ) {
                     let array = coerce(&format!("l{array}"), self.repr(Local(array)), Repr::Value);
                     self.statement(depth, &format!("l{iter} = {array}; i{iter} = 0;"));
                 } else if let Some(iter) = array_next_call(
@@ -416,6 +418,9 @@ impl Generator<'_, '_> {
         let block = &self.body.blocks[id.0];
         match block.terminator.as_ref().expect("checked in Analysis") {
             Terminator::Return => {
+                if self.analysis.array_iters.contains_key(&0) {
+                    return unsupported("array iterator used as a value");
+                }
                 // A returned type local (`reflect.Type.of<T>()`) has no
                 // binding; its value is built here, as at any other read.
                 let result = if self.analysis.is_type_local(0) {
