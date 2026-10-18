@@ -25,7 +25,8 @@ use baml_compiler2_mir::{
 };
 use baml_type::{DeclName, typetag::TypeTag};
 use bex_vm_types::{
-    ConstValue, DeclPath, FnPath, FunctionKind, Object, ObjectIndex, Program, TypeHead,
+    Bytecode, ConstValue, DeclPath, FnPath, FunctionKind, Object, ObjectIndex, Program, TypeHead,
+    bytecode::BlockPcs,
     types::{FunctionIdentity, LocalName, PackageKind},
 };
 
@@ -134,8 +135,6 @@ pub fn compile_program<'db>(
     let mut seeds: BTreeSet<usize> = entries.into_iter().flatten().copied().collect();
 
     for &file in world_files(db, root) {
-        let lines: std::sync::Arc<[u32]> =
-            baml_compiler2_emit::build_line_starts(file.text(db)).into();
         let package = index.package_of(file_package(db, file).root);
         for &function in file_functions(db, file) {
             if is_required_interface_method(db, function) {
@@ -157,7 +156,7 @@ pub fn compile_program<'db>(
             // Its lambdas are units of their own, whatever becomes of it: a
             // closure over a bytecode lambda is still a closure, and a
             // compiled lambda is entered through the VM either way.
-            admit_lambdas(db, &index, &mut units, &mut rejected, mir, &[], &lines, package);
+            admit_lambdas(db, &index, &mut units, &mut rejected, mir, &[], package);
             let object = match index.declared(db, function) {
                 Ok(Some(object)) => object,
                 Ok(None) => {
@@ -184,7 +183,6 @@ pub fn compile_program<'db>(
                 mir,
                 body,
                 Vec::new(),
-                &lines,
                 package,
             );
         }
@@ -262,11 +260,8 @@ pub fn compile_program<'db>(
                 body: body_of(unit.mir),
                 lambdas: &unit.mir.lambdas,
                 analysis: &unit.analysis,
-                lines: &unit.lines,
-                declared_at: unit.mir.span,
-                current_line: None,
-                any_shielded: body_of(unit.mir).blocks.iter().any(|block| block.shielded),
-                in_shielded: false,
+                positions: index.positions(object),
+                current_mark: None,
                 out: String::new(),
                 pending: Vec::new(),
                 temps: 0,
@@ -332,7 +327,6 @@ fn admit_unit<'db>(
     mir: &'db MirFunction<'db>,
     body: &'db MirFunctionBody<'db>,
     captures: Vec<Repr>,
-    lines: &std::sync::Arc<[u32]>,
     package: Option<u32>,
 ) {
     let name = index.display(object).to_owned();
@@ -347,7 +341,6 @@ fn admit_unit<'db>(
                 Unit {
                     mir,
                     analysis,
-                    lines: lines.clone(),
                     package,
                 },
             );
@@ -366,7 +359,6 @@ fn admit_lambdas<'db>(
     rejected: &mut Vec<(String, Rejection)>,
     parent: &'db MirFunction<'db>,
     captures: &[Repr],
-    lines: &std::sync::Arc<[u32]>,
     package: Option<u32>,
 ) {
     let MirFunctionKind::Bytecode(parent_body) = &parent.kind else {
@@ -392,9 +384,9 @@ fn admit_lambdas<'db>(
                 continue;
             }
         };
-        admit_lambdas(db, index, units, rejected, lambda, &captures, lines, package);
+        admit_lambdas(db, index, units, rejected, lambda, &captures, package);
         admit_unit(
-            db, index, units, rejected, object, lambda, body, captures, lines, package,
+            db, index, units, rejected, object, lambda, body, captures, package,
         );
     }
 }
@@ -426,8 +418,6 @@ fn symbol_for(name: &str, object: usize) -> String {
 struct Unit<'db> {
     mir: &'db MirFunction<'db>,
     analysis: Analysis,
-    /// Line starts of the function's source file, for reported lines.
-    lines: std::sync::Arc<[u32]>,
     /// The ordinal of the package the function belongs to, when the program
     /// places it.
     package: Option<u32>,
@@ -526,6 +516,51 @@ pub(crate) struct ProgramIndex {
     /// `IsType` and `LoadType` instructions read, and what a compiled body
     /// reads for the same test or allocation (`BexVm::type_constant`).
     type_constants: HashMap<usize, Vec<(usize, ConstValue)>>,
+    /// Where each bytecode function's MIR positions landed in its bytecode:
+    /// the PCs its compiled body records.
+    positions: HashMap<usize, Positions>,
+}
+
+/// Where a bytecode function's MIR positions landed (`Bytecode::block_pcs`),
+/// with its line and shield tables to say what each PC reads as. A compiled
+/// body records the PC of each position it passes, so its frame reads as the
+/// bytecode frame would there.
+pub(crate) struct Positions(Bytecode);
+
+impl Positions {
+    fn of(bytecode: &Bytecode) -> Self {
+        Self(Bytecode {
+            line_table: bytecode.line_table.clone(),
+            shield_table: bytecode.shield_table.clone(),
+            block_pcs: bytecode.block_pcs.clone(),
+            ..Bytecode::default()
+        })
+    }
+
+    /// The PCs of MIR block `block`.
+    pub(crate) fn block(&self, block: usize) -> Option<&BlockPcs> {
+        self.0.block_pcs.get(block)
+    }
+
+    /// Whether these positions were emitted from `body`: one entry per block
+    /// and per statement. The bytecode and this backend lower the same MIR
+    /// (`lower_function` at one optimization level); a mismatch means they
+    /// did not, and no PC here can be trusted.
+    pub(crate) fn fit(&self, body: &baml_compiler2_mir::MirFunctionBody<'_>) -> bool {
+        self.0.block_pcs.len() == body.blocks.len()
+            && self
+                .0
+                .block_pcs
+                .iter()
+                .zip(&body.blocks)
+                .all(|(pcs, block)| pcs.statements.len() == block.statements.len())
+    }
+
+    /// What a frame standing at `pc` reads as: its source line and whether
+    /// it is shielded. A body records a new PC only where this changes.
+    pub(crate) fn reading(&self, pc: usize) -> (usize, bool) {
+        (self.0.source_line_for_pc(pc), self.0.pc_is_shielded(pc))
+    }
 }
 
 impl ProgramIndex {
@@ -659,6 +694,9 @@ impl ProgramIndex {
             if !constants.is_empty() {
                 index.type_constants.insert(object, constants);
             }
+            index
+                .positions
+                .insert(object, Positions::of(&function.bytecode));
         }
         for (ordinal, package) in (0u32..).zip(&program.packages) {
             let key = |path: DeclPath| DeclKey {
@@ -971,6 +1009,11 @@ impl ProgramIndex {
             .iter()
             .find(|(_, constant)| constant == wanted)
             .map(|(index, _)| *index)
+    }
+
+    /// Where the MIR positions of the bytecode function at `object` landed.
+    pub(crate) fn positions(&self, object: usize) -> &Positions {
+        &self.positions[&object]
     }
 
     /// Info of the function at `object`, which [`Self::declared`] or

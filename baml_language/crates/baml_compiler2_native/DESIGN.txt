@@ -86,13 +86,13 @@ telemetry the only optional part.
 
 A compiled frame is a BytecodeFrame with nothing added: the frame is the
 interpreter's hottest structure, and every byte and check on it is paid by
-every bytecode call. Its two position fields, which a compiled body never
-needs as positions, say where the body stands:
+every bytecode call. Its two position fields say where the body stands:
 
   instruction_ptr  RUNNING (usize::MAX) while the body runs on the Rust stack;
                    otherwise an offset into its stub (section 10), code the
                    loader appends to every compiled function.
-  faulting_pc      the source line the body last reported.
+  faulting_pc      the instruction of its own bytecode equivalent to where
+                   the body last reported, by index (positions, below).
 
 So "is this frame compiled" is derived (BexVm::compiled_at: RUNNING, or a
 position inside the stub), and only cold readers ask it. Every reader of a
@@ -101,23 +101,47 @@ position asks it first:
   unwinder         a running compiled frame has no bytecode handlers; the
                    error leaves it (its own catches land errors before the
                    unwinder runs). A suspended one takes the error itself.
-  stack traces     a compiled frame reports its line: compiled code keeps the
-                   current statement's line in a local and writes it to its
-                   frame when an error leaves the function, lands in its
-                   catch, or it suspends. Lines follow the bytecode rule
-                   (baml_compiler2_emit::span_line), so traces match.
+  stack traces     a compiled frame's position, translated to a compact PC
+                   (BexVm::compiled_pc), is read through the line table as a
+                   bytecode frame's.
+  shielding        the same PC against the shield table: a frame in a defer
+                   body, or at a call inside one, is shielded.
   cause walk       a compiled frame's cause slot (section 5).
-  raise evidence   no pc for a compiled frame; its raise kind comes from the
+  raise evidence   the same PC; a compiled frame's raise kind comes from the
                    throw (rethrow, panic instance, or throw).
-  call paths       a call made by compiled code records COMPILED_CALLER_PC:
-                   telemetry source maps are keyed by bytecode offset, so call
-                   sites inside one compiled caller share one coordinate.
+  call paths       the call instruction the compiled caller recorded,
+                   translated: the coordinate the interpreter records for the
+                   same call.
   innermost frame  cur_pc belongs to the innermost frame only when it runs
                    bytecode; below a compiled frame, every frame is at the
                    call it recorded in faulting_pc.
 
-The call path writes the caller's faulting_pc on every call; a compiled
-caller's call sites (compiled_caller_call) put its line back.
+The call path writes the caller's faulting_pc from cur_pc on every call; a
+compiled caller's call sites (compiled_caller_call) hand it the recorded
+index as cur_pc and put it back.
+
+Positions. A compiled function's bytecode is emitted from the MIR the body
+is generated from (lower_function, one optimization level), and the emitter
+records where each MIR block's positions landed (Bytecode::block_pcs): each
+statement's last instruction, where its final operation runs (for a
+definition bytecode inlines at its use, the last instruction of that
+computation), and the instruction performing a terminator that calls,
+suspends, raises or returns. Generated code passes a call its call
+instruction (a constant argument, as the line was), records it before
+suspending, and keeps its position in a local `pc` it stores at a statement
+or terminator only where the new PC's line or shielding differs from the
+last one stored in the block: a frame at either reads the same, so it stores
+no more often than it stored a line. A body starts at PC 0, as a bytecode
+frame does, and a loop's yield check records the loop header's first
+instruction. A body whose MIR does not fit its block_pcs (a different block
+or statement count) is refused as invalid MIR.
+
+The position is an instruction index, not a compact PC: the index is fixed
+by the program, but compact offsets change at load (float boxing, and trace
+hook instructions rewritten when telemetry is off). The loader keeps each
+compiled function's instruction offsets (CompactCode::instruction_offsets),
+and readers translate through them; translating on read keeps the store a
+constant.
 
 An earlier version added a FrameBody field (16 bytes, 112 -> 128) and checks
 on the interpreter's call and return paths. Recursive bytecode with no
@@ -125,9 +149,6 @@ compiled code at all ran 4-15% slower. Before that, a version parked cur_pc
 and faulting_pc on a sentinel no exception range covers, and two dozen
 readers interpreted a position that did not exist; the derived check and the
 rule that every position reader asks it first are what make reuse safe.
-
-Open: a compiled site coordinate in telemetry source maps, so call paths from
-compiled callers are as precise as bytecode's.
 
 The call fast path (call_specialize) skips callees with a native body; a
 bytecode loop calling a compiled leaf pays the general funnel. Open.
@@ -315,7 +336,7 @@ keeps, in stack slots the collector scans: its arguments, each local live
 across a suspension (local i in slot i, array-iterator positions after
 them), the point it suspended at, and its cause slot. At a suspension it
 saves the locals live once it resumes (MIR's backward liveness, plus every
-handler's context while it has a cause slot), records its point and line,
+handler's context while it has a cause slot), records its point and PC,
 pushes a call's arguments above its slots, and returns the request.
 
 A local that some suspension keeps but that is assigned only outside loops

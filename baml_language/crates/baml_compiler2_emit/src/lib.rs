@@ -754,7 +754,8 @@ pub fn build_line_starts(text: &str) -> Vec<u32> {
 /// The 1-based source line a statement or terminator whose span starts at
 /// byte `start` is attributed to: the line of its first token. Some spans start
 /// on the newline before that token, which counts from the next line. Bytecode
-/// line tables and natively compiled frames both report lines by this rule.
+/// line tables report lines by this rule (natively compiled frames read the
+/// same tables).
 #[must_use]
 pub fn statement_line(line_starts: &[u32], start: u32) -> usize {
     let start = if line_starts.binary_search(&(start + 1)).is_ok() {

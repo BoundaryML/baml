@@ -29,7 +29,7 @@ use baml_compiler2_mir::{
 };
 
 use crate::{
-    admit::{ProgramIndex, Rejection},
+    admit::{Positions, ProgramIndex, Rejection},
     analysis::{
         Analysis, Repr, array_iter_call, array_next_call, loops, reads_frame, realized_expr,
         suspends_directly, template_blocker, user_callee,
@@ -79,17 +79,12 @@ pub(crate) struct Generator<'a, 'db> {
     /// index.
     pub(crate) lambdas: &'a [MirFunction<'db>],
     pub(crate) analysis: &'a Analysis,
-    /// Line starts of the source file, and the function's declaration span.
-    pub(crate) lines: &'a [u32],
-    pub(crate) declared_at: Option<baml_base::Span>,
-    /// The line the code emitted so far in the current leaf has set.
-    pub(crate) current_line: Option<usize>,
-    /// Whether any block of the body is shielded (`defer`): only then does a
-    /// block's entry set or clear the shield bit of `line`.
-    pub(crate) any_shielded: bool,
-    /// Whether the block being emitted is shielded; its lines carry
-    /// `SHIELDED_LINE`.
-    pub(crate) in_shielded: bool,
+    /// Where the body's MIR positions landed in its function's bytecode: the
+    /// PCs it records (`pc`).
+    pub(crate) positions: &'a Positions,
+    /// What the PC the code emitted so far in the current leaf has set reads
+    /// as ([`Positions::reading`]).
+    pub(crate) current_mark: Option<(usize, bool)>,
     pub(crate) out: String,
     /// `let` bindings to emit before the statement being generated: every
     /// operand that is not an atom is bound first, so no call's argument list
@@ -144,6 +139,12 @@ const YIELD_EVERY: u32 = 16;
 /// array iterators with the slot of their position.
 type Saved = (Vec<usize>, Vec<(usize, usize)>);
 
+/// A PC argument of generated code: the position's own, or the last one the
+/// body set (`pc`) for a position the bytecode emitted nothing for.
+fn pc_arg(pc: Option<usize>) -> String {
+    pc.map_or_else(|| "pc".to_string(), |pc| pc.to_string())
+}
+
 fn unsupported<T>(what: impl Into<String>) -> Gen<T> {
     Err(Rejection::Unsupported(what.into()))
 }
@@ -154,6 +155,11 @@ impl<'db> Generator<'_, 'db> {
     }
 
     pub(crate) fn function(&mut self, symbol: &str) -> Gen<String> {
+        if !self.positions.fit(self.body) {
+            return Err(Rejection::Invalid(
+                "the function's bytecode was emitted from other MIR".into(),
+            ));
+        }
         self.prepare();
         if self.suspends {
             return self.resumable_function(symbol);
@@ -165,15 +171,15 @@ impl<'db> Generator<'_, 'db> {
         let arity = self.body.locals.len().min(self.arity());
         let mut out = String::new();
         // The body runs in a closure so every way out, `?` included, passes
-        // the wrapper: an error leaving the function records the line it was
-        // raised on in this function's frame. `depth` is the frame count with
+        // the wrapper: an error leaving the function records the PC it was
+        // raised at in this function's frame. `depth` is the frame count with
         // that frame on top; a catch also pops whatever compiled callees left
-        // above it.
-        let declared = self.declared_at.map_or(0, |span| self.line_of(span));
+        // above it. Before its first statement the body stands at PC 0, as a
+        // bytecode frame does.
         let _ = writeln!(
             out,
             "#[inline]\npub fn {symbol}(vm: &mut BexVm, args: &[Value]) -> R<Value> {{\n    \
-             let depth = vm.frame_depth();\n    let mut line: u32 = {declared};\n    \
+             let depth = vm.frame_depth();\n    let mut pc: u32 = 0;\n    \
              let result = (|| -> R<Value> {{"
         );
         for (i, repr) in self.analysis.reprs.iter().enumerate() {
@@ -233,7 +239,7 @@ impl<'db> Generator<'_, 'db> {
         // function well-typed if a leaf falls through after structuring.
         out.push_str(
             "    #[allow(unreachable_code)]\n    Ok(Value::NULL)\n    })();\n    \
-             if result.is_err() {\n        vm.note_line(depth, line);\n    }\n    result\n}\n",
+             if result.is_err() {\n        vm.note_pc(depth, pc);\n    }\n    result\n}\n",
         );
         Ok(out)
     }
@@ -248,12 +254,11 @@ impl<'db> Generator<'_, 'db> {
         let iters = self.iters();
         let slots = self.slots;
         let point_slot = self.point_slot;
-        let declared = self.declared_at.map_or(0, |span| self.line_of(span));
         self.out.clear();
         let _ = writeln!(
             self.out,
             "pub fn {symbol}(vm: &mut BexVm, resume: Resume) -> Result<Step, Box<VmError>> {{\n    \
-             let depth = vm.frame_depth();\n    let mut line: u32 = {declared};\n    \
+             let depth = vm.frame_depth();\n    let mut pc: u32 = 0;\n    \
              let result = (|| -> Result<Step, Box<VmError>> {{"
         );
         for (i, repr) in self.analysis.reprs.iter().enumerate() {
@@ -386,7 +391,7 @@ impl<'db> Generator<'_, 'db> {
         self.line(2, "}");
         self.line(1, "}");
         self.out.push_str(
-            "    })();\n    if result.is_err() {\n        vm.note_line(depth, line);\n    }\n    result\n}\n",
+            "    })();\n    if result.is_err() {\n        vm.note_pc(depth, pc);\n    }\n    result\n}\n",
         );
         let blocks = std::mem::take(&mut self.out);
         self.declare_frame_types(&mut prologue, 1);
@@ -926,7 +931,8 @@ impl<'db> Generator<'_, 'db> {
         for ty in std::mem::take(&mut self.call_types) {
             self.line(depth, &format!("vm.push_type_arg({ty});"));
         }
-        self.line(depth, "vm.note_line(depth, line);");
+        let site = self.site_pc(block);
+        self.line(depth, &format!("vm.note_pc(depth, {site});"));
         self.line(depth, &format!("return Ok({step});"));
         Ok(())
     }
@@ -946,10 +952,11 @@ impl<'db> Generator<'_, 'db> {
                 args.len()
             ),
         );
+        let site = self.site_pc(block);
         let call = self.fallible(
             block,
             &format!(
-                "vm.call_closure_compiled(callee, body, &[{}], line)",
+                "vm.call_closure_compiled(callee, body, &[{}], {site})",
                 args.join(", ")
             ),
         )?;
@@ -1163,35 +1170,24 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// Emit `line = N;` when the line bytecode attributes to code under
-    /// `span` differs from the one the current leaf last set. A terminator is
-    /// a sequence point; a statement's faulting instruction follows its
-    /// operands, where bytecode takes a span crossing one line break at its
-    /// end ([`baml_compiler2_emit::span_line`]).
-    fn set_line(&mut self, span: Option<baml_base::Span>, depth: usize, sequence_point: bool) {
-        let Some(span) = span else { return };
-        let line = baml_compiler2_emit::span_line(
-            self.lines,
-            span.range.start().into(),
-            span.range.end().into(),
-            sequence_point,
-        );
-        if self.current_line != Some(line) {
-            self.current_line = Some(line);
-            if self.in_shielded {
-                self.line(
-                    depth,
-                    &format!("line = {line} | bex_vm::compiled_rt::SHIELDED_LINE;"),
-                );
-            } else {
-                self.line(depth, &format!("line = {line};"));
-            }
+    /// Emit `pc = N;` for a position whose PC is `pc` when it reads
+    /// differently ([`Positions::reading`]: its line, its shielding) from
+    /// the one the current leaf last set: a frame at either reads the same,
+    /// so the body stores no more often than the line changes. A position
+    /// the bytecode emitted no instruction for keeps the last one.
+    fn set_pc(&mut self, pc: Option<usize>, depth: usize) {
+        let Some(pc) = pc else { return };
+        let mark = self.positions.reading(pc);
+        if self.current_mark != Some(mark) {
+            self.current_mark = Some(mark);
+            self.line(depth, &format!("pc = {pc};"));
         }
     }
 
-    /// The line bytecode attributes to a statement starting where `span` does.
-    fn line_of(&self, span: baml_base::Span) -> usize {
-        baml_compiler2_emit::statement_line(self.lines, span.range.start().into())
+    /// The PC of the call or suspension ending `block`, as generated code:
+    /// its instruction's, where a call records its call site.
+    fn site_pc(&self, block: BlockId) -> String {
+        pc_arg(self.positions.block(block.0).and_then(|pcs| pcs.terminator))
     }
 
     /// Whether `block` ends in a suspension point.

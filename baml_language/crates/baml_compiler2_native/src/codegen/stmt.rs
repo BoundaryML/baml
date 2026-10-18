@@ -6,7 +6,7 @@ use baml_compiler2_mir::{
     Terminator, class_display_name,
 };
 
-use super::{Expr, Gen, Generator, YIELD_EVERY, unsupported};
+use super::{Expr, Gen, Generator, YIELD_EVERY, pc_arg, unsupported};
 use crate::{
     admit::Rejection,
     analysis::{Repr, array_iter_call, array_next_call},
@@ -115,23 +115,12 @@ impl Generator<'_, '_> {
     /// control transfers.
     pub(super) fn leaf(&mut self, id: BlockId, depth: usize) -> Gen<()> {
         let block = &self.body.blocks[id.0];
-        // A leaf can be entered from several places; nothing about `line` is
-        // known on entry.
-        self.current_line = None;
-        // A `defer` body runs shielded: every line it records, at a
-        // suspension, an error or a call, carries the shield bit the engine
-        // reads (`vm_thread_is_shielded`), and a block outside one clears it.
-        if self.any_shielded {
-            self.in_shielded = block.shielded;
-            self.line(
-                depth,
-                if block.shielded {
-                    "line |= bex_vm::compiled_rt::SHIELDED_LINE;"
-                } else {
-                    "line &= !bex_vm::compiled_rt::SHIELDED_LINE;"
-                },
-            );
-        }
+        // A leaf can be entered from several places; nothing about `pc` is
+        // known on entry. Every PC of the leaf lies in its block's bytecode,
+        // so what it records says whether the block is a shielded `defer`
+        // body, as the engine reads it (`vm_thread_is_shielded`).
+        self.current_mark = None;
+        let pcs = self.positions.block(id.0).cloned().unwrap_or_default();
         // A resumable body lets the scheduler in from its loops. It counts
         // iterations in a register and takes the VM's control-flow check
         // every `YIELD_EVERY`th: a compiled iteration is a fraction of an
@@ -150,7 +139,9 @@ impl Generator<'_, '_> {
                 depth + 1,
                 &format!("vm.set_slot(depth, {point_slot}, Value::int({point}));"),
             );
-            self.line(depth + 1, "vm.note_line(depth, line);");
+            // It yields standing at the loop header.
+            let at = pc_arg(pcs.start);
+            self.line(depth + 1, &format!("vm.note_pc(depth, {at});"));
             self.line(depth + 1, "return Ok(Step::Yield);");
             self.line(depth, "}");
         }
@@ -168,8 +159,9 @@ impl Generator<'_, '_> {
             };
             self.statement(depth, &format!("vm.set_slot(depth, {slot}, {cause});"));
         }
-        for statement in &block.statements {
-            self.set_line(statement.span, depth, false);
+        for (index, statement) in block.statements.iter().enumerate() {
+            let pc = pcs.statements.get(index).copied().flatten();
+            self.set_pc(pc, depth);
             match &statement.kind {
                 StatementKind::Assign { destination, value } => {
                     // A type local is built where it is consumed (a call's
@@ -242,19 +234,11 @@ impl Generator<'_, '_> {
                         }
                         None => "Value::NULL".to_string(),
                     };
-                    let (file, start, end) = statement.span.map_or((0, 0, 0), |span| {
-                        (
-                            span.file_id.as_u32(),
-                            u32::from(span.range.start()),
-                            u32::from(span.range.end()),
-                        )
-                    });
-                    let code = self.fallible(
-                        id,
-                        &format!(
-                            "vm.log_event({level}, {data}, {name}, {file}, line, {start}, {end})"
-                        ),
-                    )?;
+                    // The statement's PC is its `SendEvent`'s, whose line entry
+                    // locates the record.
+                    let at = pc_arg(pc);
+                    let code =
+                        self.fallible(id, &format!("vm.log_event({level}, {data}, {name}, {at})"))?;
                     self.statement(depth, &format!("{code};"));
                 }
                 StatementKind::Intrinsic { .. } => return unsupported("compiler intrinsic"),
@@ -280,7 +264,7 @@ impl Generator<'_, '_> {
                 }
             }
         }
-        self.set_line(block.terminator_span, depth, true);
+        self.set_pc(pcs.terminator, depth);
         match block.terminator.as_ref().expect("checked in Analysis") {
             Terminator::Branch { condition, .. } => {
                 let condition = self.operand(id, condition)?;
@@ -510,7 +494,7 @@ impl Generator<'_, '_> {
             &Expr::new("context", Repr::Value),
         )?;
         let saved = std::mem::take(&mut self.out);
-        self.line(depth, "vm.note_line(depth, line);");
+        self.line(depth, "vm.note_pc(depth, pc);");
         self.line(
             depth,
             &format!("let (thrown, context) = vm.catch({error}, depth)?;"),

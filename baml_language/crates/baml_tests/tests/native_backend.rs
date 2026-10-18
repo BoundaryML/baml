@@ -6,7 +6,7 @@
 
 use baml_compiler2_emit::OptLevel;
 use baml_db::native::{NativeModule, Rejection, compile_program};
-use bex_vm_types::{Object, ObjectIndex, RealizedTy, types::Program};
+use bex_vm_types::{Instruction, Object, ObjectIndex, RealizedTy, types::Program};
 
 fn compile(source: &str) -> NativeModule {
     compile_with_program(source).0
@@ -205,8 +205,8 @@ fn generated_module_is_well_formed_rust() {
     }
     // Every compiled call gets a frame (depth limit, traces, telemetry).
     assert!(compact.contains("vm.call_compiled("));
-    // An error leaving a compiled function records the line it was raised on.
-    assert!(compact.contains("vm.note_line(depth,line)"));
+    // An error leaving a compiled function records the PC it was raised at.
+    assert!(compact.contains("vm.note_pc(depth,pc)"));
     // A string literal is the program's own string object, not a new one.
     assert!(!compact.contains("vm.string_value("));
     // A defaulted parameter stays a `Value` until MIR's `OmittedArg` test.
@@ -222,6 +222,58 @@ fn generated_module_is_well_formed_rust() {
     assert!(compact.contains("vm.add_i64("));
     // The float loop keeps raw floats and boxes only when storing a Value.
     assert!(compact.contains("vm.float_value("));
+}
+
+/// A compiled body records real bytecode PCs: each call passes the index of
+/// its call instruction in the function's own bytecode, so the caller's frame
+/// reads as the bytecode frame would there (the line of a trace, the shield
+/// table, the call site telemetry records).
+#[test]
+fn a_compiled_call_passes_its_call_instruction() {
+    let (module, program) = compile_with_program(FIXTURE);
+    let fib = module
+        .functions
+        .iter()
+        .find(|function| function.display == "user.fib")
+        .expect("fib compiles");
+    let Object::Function(function) = &program.objects[ObjectIndex::from_raw(fib.object)] else {
+        panic!("fib is a function");
+    };
+    let calls: Vec<usize> = function
+        .bytecode
+        .instructions
+        .iter()
+        .enumerate()
+        .filter(|(_, instruction)| matches!(instruction, Instruction::Call { .. }))
+        .map(|(pc, _)| pc)
+        .collect();
+    assert_eq!(calls.len(), 2, "{:?}", function.bytecode.instructions);
+    // The last argument of each `vm.call_compiled(..)`.
+    let body: String = body_of(&module, "user.fib").split_whitespace().collect();
+    let mut passed: Vec<usize> = Vec::new();
+    for (start, _) in body.match_indices("vm.call_compiled(") {
+        let args = &body[start + "vm.call_compiled(".len()..];
+        let mut depth = 0;
+        let end = args
+            .char_indices()
+            .find(|&(_, ch)| {
+                match ch {
+                    '(' | '[' => depth += 1,
+                    ')' | ']' => depth -= 1,
+                    _ => {}
+                }
+                depth < 0
+            })
+            .map(|(end, _)| end)
+            .expect("the call is closed");
+        let last = args[..end].rsplit(',').next().expect("an argument");
+        let pc = last
+            .parse::<usize>()
+            .unwrap_or_else(|_| panic!("a literal PC: {last}"));
+        passed.push(pc);
+    }
+    passed.sort_unstable();
+    assert_eq!(passed, calls, "{body}");
 }
 
 /// Maps, enum variants, bigints, byte arrays, a top-level `client`,

@@ -48,13 +48,14 @@ impl<'db> Generator<'_, 'db> {
                 };
                 // A generic callee's frame starts with the call's type
                 // arguments (a plain function carries none of its own).
+                let site = self.site_pc(block);
                 let call = if types.is_empty() {
                     format!(
-                        "vm.call_compiled(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, {args}, line)"
+                        "vm.call_compiled(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, {args}, {site})"
                     )
                 } else {
                     format!(
-                        "vm.call_compiled_with_types(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, &[{}], {args}, line)",
+                        "vm.call_compiled_with_types(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, &[{}], {args}, {site})",
                         types.join(", ")
                     )
                 };
@@ -303,9 +304,10 @@ impl<'db> Generator<'_, 'db> {
         // A traced call reaches the VM's call path, which applies the
         // attachment, so it is never run in place.
         if !named && !traced {
+            let site = self.site_pc(block);
             let call = self.fallible(
                 block,
-                &format!("vm.call_inline(callee, &[{}], line)", values.join(", ")),
+                &format!("vm.call_inline(callee, &[{}], {site})", values.join(", ")),
             )?;
             let store = self.store(block, destination, &Expr::new("v", Repr::Value))?;
             let jump = self.jump_to(target.0);
