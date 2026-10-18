@@ -297,6 +297,12 @@ impl BexVm {
             self.stack.extend(args.iter().copied());
             return Ok(count(args.len()));
         };
+        // Positional arguments filling every parameter need no mapping; only
+        // an implementation with extra optionals does.
+        if layout.iter().all(Option::is_none) && self.callee_params(callee)?.arity() == args.len() {
+            self.stack.extend(args.iter().copied());
+            return Ok(count(args.len()));
+        }
         let caller = baml_type::CallLayout(
             layout
                 .iter()
