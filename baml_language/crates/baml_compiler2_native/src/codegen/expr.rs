@@ -12,7 +12,7 @@ use baml_compiler2_mir::function_display_name;
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     Rejection,
-    analysis::{CallShape, Repr, builtin_is_callable, reads_frame, static_realized, template_blocker},
+    analysis::{CallShape, Repr, builtin_is_callable, reads_frame, static_realized},
     render::{binop_name, cmp_name},
 };
 
@@ -333,13 +333,20 @@ impl<'db> Generator<'_, 'db> {
                 )?;
                 Ok(Expr::new(code, Repr::Value))
             }
-            // A type local this backend builds is consumed where it is used
-            // (`Generator::realized`); one reaching here has a shape it does
-            // not build.
-            Rvalue::LoadType(template) => unsupported(format!(
-                "type template with {}",
-                template_blocker(self.index, template)
-            )),
+            // A type local is consumed where it is used (`Generator::load`);
+            // one reaching here is a local MIR also writes a value to, so the
+            // type is stored as a `type` value like any other.
+            Rvalue::LoadType(template) => {
+                let slot = match template {
+                    TyTemplate::TypeArgRef(slot) => format!("Some({slot})"),
+                    _ => "None".to_string(),
+                };
+                let ty = self.realized(template)?;
+                Ok(Expr::new(
+                    format!("vm.type_value(depth, {slot}, {ty})"),
+                    Repr::Value,
+                ))
+            }
             Rvalue::CurrentPackage => {
                 let Some(ordinal) = self.package else {
                     return unsupported("current package of a function the program does not place");

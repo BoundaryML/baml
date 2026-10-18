@@ -416,11 +416,17 @@ impl Generator<'_, '_> {
         let block = &self.body.blocks[id.0];
         match block.terminator.as_ref().expect("checked in Analysis") {
             Terminator::Return => {
-                let result = coerce("l0", self.repr(Local(0)), Repr::Value);
-                if self.suspends {
-                    self.line(depth, &format!("return Ok(Step::Return({result}));"));
+                // A returned type local (`reflect.Type.of<T>()`) has no
+                // binding; its value is built here, as at any other read.
+                let result = if self.analysis.is_type_local(0) {
+                    self.load(id, &Place::Local(Local(0)))?.code
                 } else {
-                    self.line(depth, &format!("return Ok({result});"));
+                    coerce("l0", self.repr(Local(0)), Repr::Value)
+                };
+                if self.suspends {
+                    self.statement(depth, &format!("return Ok(Step::Return({result}));"));
+                } else {
+                    self.statement(depth, &format!("return Ok({result});"));
                 }
             }
             Terminator::Throw { value } => {

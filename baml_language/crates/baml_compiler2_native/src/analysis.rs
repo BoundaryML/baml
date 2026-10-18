@@ -2,7 +2,7 @@
 //! block, and what the function calls or suspends on.
 
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap, HashSet},
     sync::OnceLock,
 };
 
@@ -143,6 +143,35 @@ impl Analysis {
                 }
             }
         }
+        // MIR may reuse a type temp for a runtime value; such a local is an
+        // ordinary binding, its type reads built from the value it holds.
+        let mut written = HashSet::new();
+        for block in &body.blocks {
+            for statement in &block.statements {
+                if let StatementKind::Assign {
+                    destination: Place::Local(local),
+                    value,
+                } = &statement.kind
+                    && !matches!(value, Rvalue::LoadType(_))
+                {
+                    written.insert(local.0);
+                }
+            }
+            if let Some(
+                Terminator::Call { destination, .. }
+                | Terminator::VirtualCall { destination, .. }
+                | Terminator::SysOp { destination, .. }
+                | Terminator::Await { destination, .. }
+                | Terminator::AwaitAny { destination, .. }
+                | Terminator::ShortCircuit { destination, .. },
+            ) = &block.terminator
+                && let Place::Local(local) = destination
+            {
+                written.insert(local.0);
+            }
+        }
+        static_types.retain(|local, _| !written.contains(local));
+        frame_types.retain(|local, _| !written.contains(local));
 
         let mut array_iters = HashMap::new();
         for block in &body.blocks {
