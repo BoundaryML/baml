@@ -13592,6 +13592,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
             roots.extend(transfer.handling.as_object_ptr());
             roots.extend(transfer.target.as_object_ptr());
         }
+        // Logs compiled code queued, which a collection it runs in place
+        // can meet before the engine takes them.
+        roots.extend(self.pending_logs.iter().filter_map(|log| log.data.as_object_ptr()));
 
         // Frame function pointers (needed once closures are heap-allocated)
         roots.extend(self.collect_frame_roots());
@@ -13668,6 +13671,13 @@ impl ::bex_vm_types::RootHaver for BexVm {
             if let Some(identity) = forward_identity(key.caller_function_addr) {
                 key.caller_function_addr = identity;
                 self.static_virtual_call_cache.insert(key, target);
+            }
+        }
+        for log in &mut self.pending_logs {
+            if let Some(ptr) = log.data.as_object_ptr()
+                && let Some(&new_ptr) = roots.get(&ptr)
+            {
+                log.data = Value::object(new_ptr);
             }
         }
         for transfer in &mut self.context_transfers {
