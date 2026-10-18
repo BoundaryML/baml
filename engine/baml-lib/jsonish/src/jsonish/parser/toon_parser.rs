@@ -24,6 +24,7 @@ pub(crate) fn parse(input: &str) -> Option<Vec<Value>> {
     let mut seen = HashSet::new();
     let values = candidates
         .into_iter()
+        .map(|candidate| strip_comment_lines(&candidate))
         .map(|candidate| dedent(&candidate))
         .map(|candidate| repair_inline_array_lengths(&candidate))
         .filter_map(|candidate| decode::<serde_json::Value>(&candidate, &options).ok())
@@ -61,6 +62,16 @@ fn dedent(input: &str) -> String {
     input
         .lines()
         .map(|line| line.get(indent..).unwrap_or(line))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The TOON schema renders descriptions as `//` lines, and models sometimes
+/// echo them back. TOON has no comment syntax, so drop them before decoding.
+fn strip_comment_lines(input: &str) -> String {
+    input
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -247,6 +258,17 @@ mod tests {
             value,
             Value::Object(fields, _) if
                 matches!(&fields[0].1, Value::Array(items, _) if items.len() == 2))));
+    }
+
+    #[test]
+    fn ignores_echoed_description_comments() {
+        let values = parse("// A person\nname: Ada\n// Their age\nage: 36").unwrap();
+        assert!(values.iter().any(|value| matches!(
+            value,
+            Value::Object(fields, _) if fields.len() == 2
+                && fields[0].0 == "name"
+                && fields[1].0 == "age"
+        )));
     }
 
     #[test]

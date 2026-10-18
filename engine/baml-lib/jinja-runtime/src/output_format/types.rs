@@ -905,7 +905,8 @@ impl OutputFormatContent {
                 let inner_str = self.render_possibly_hoisted_type(options, inner, render_ctx)?;
 
                 if matches!(options.format, OutputFormatMode::Toon) {
-                    if inner_str.contains('\n') {
+                    // A nested array header has to start its own list item.
+                    if inner_str.contains('\n') || inner_str.starts_with("[N]") {
                         let mut lines = inner_str.lines();
                         let first = lines.next().unwrap_or_default();
                         let rest = lines
@@ -1355,6 +1356,25 @@ mod tests {
             rendered,
             Some(
                 "Answer with a TOON array using this schema. Replace N with the actual array length:\n[N]: string"
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn render_toon_nested_array() {
+        let content =
+            OutputFormatContent::target(TypeIR::list(TypeIR::list(TypeIR::string()))).build();
+        let rendered = content
+            .render(RenderOptions {
+                format: OutputFormatMode::Toon,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(
+            rendered,
+            Some(
+                "Answer with a TOON array using this schema. Replace N with the actual array length:\n[N]:\n  - [N]: string"
                     .to_string()
             )
         );
