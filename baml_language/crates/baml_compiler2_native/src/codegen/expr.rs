@@ -357,7 +357,23 @@ impl<'db> Generator<'_, 'db> {
                 ))
             }
             Rvalue::TraceHookSettings { .. } => unsupported("trace hook"),
-            Rvalue::SatisfiesBound { .. } => unsupported("`let type` bound check"),
+            // The bound loads as bytecode loads it (`LoadType` of the
+            // constraint), then the VM's own check decides.
+            Rvalue::SatisfiesBound { ty, bound } => {
+                let value = self.operand(block, ty)?;
+                let value = self.value_arg(&value.code, value.repr);
+                let template = bound.to_template();
+                let realized = self.realized(&template)?;
+                let bound = self.hoist(Expr::new(
+                    format!("vm.type_value(depth, None, {realized})"),
+                    Repr::Value,
+                ));
+                self.fallible_expr(
+                    block,
+                    &format!("vm.bound_satisfied({value}, {})", bound.code),
+                    Repr::Bool,
+                )
+            }
         }
     }
 

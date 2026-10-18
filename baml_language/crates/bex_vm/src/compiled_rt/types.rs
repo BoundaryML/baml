@@ -120,6 +120,13 @@ impl BexVm {
         Value::object(ptr)
     }
 
+    /// A `let type T extends I = …` bound check, as bytecode's
+    /// `SatisfiesBound`: whether the type `value` holds satisfies `bound`,
+    /// the constraint as a `type` value.
+    pub fn bound_satisfied(&mut self, value: Value, bound: Value) -> Result<bool, Box<VmError>> {
+        self.satisfies_bound(value, bound).map_err(Box::new)
+    }
+
     /// `type T = value` in a block: bind the `type` value `value` into slot
     /// `slot` of the frame, as `BindType` does, so later templates reading
     /// the slot see it. Every derived type the body builds after this reads

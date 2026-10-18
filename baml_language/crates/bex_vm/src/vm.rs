@@ -4433,7 +4433,7 @@ impl BexVm {
     /// arguments and the associated types it pins (the others are free)? As
     /// statically, only a concrete type can: a union, an interface, `unknown`
     /// and `never` have no single runtime type to dispatch on.
-    fn satisfies_bound(&mut self, value: Value, bound: Value) -> Result<bool, VmError> {
+    pub(crate) fn satisfies_bound(&mut self, value: Value, bound: Value) -> Result<bool, VmError> {
         let ty = self.type_operand_value(value)?.ty;
         if matches!(
             ty,

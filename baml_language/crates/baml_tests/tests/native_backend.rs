@@ -974,3 +974,38 @@ fn runtime_types_dispatch_and_bound_methods_compile() {
     assert!(bound.contains("vm.make_bound_method("), "{bound}");
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
+
+const LET_TYPE_BOUND: &str = r#"
+interface Named {
+    name: string,
+}
+
+class Person {
+    name: string,
+
+    implements Named {}
+}
+
+function bind_named(t: reflect.Type) -> string {
+    let type T extends Named = t else {
+        return "missed";
+    };
+    "bound"
+}
+
+function main() -> string {
+    bind_named(Person.type())
+}
+"#;
+
+/// A `let type` bound check compiles to the VM's own check against the
+/// constraint, loaded as bytecode loads it.
+#[test]
+fn let_type_bound_checks_compile() {
+    let module = compile(LET_TYPE_BOUND);
+    let body = body_of(&module, "user.bind_named")
+        .split_whitespace()
+        .collect::<String>();
+    assert!(body.contains("vm.bound_satisfied("), "{body}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
