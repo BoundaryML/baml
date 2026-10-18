@@ -334,8 +334,9 @@ impl<'db> Generator<'_, 'db> {
                 Ok(Expr::new(code, Repr::Value))
             }
             // A type local is consumed where it is used (`Generator::load`);
-            // one reaching here is a local MIR also writes a value to, so the
-            // type is stored as a `type` value like any other.
+            // one reaching here is a local MIR also writes a value to, or a
+            // frame-derived type in a body that binds types (`Analysis`), so
+            // the type is stored as a `type` value like any other.
             Rvalue::LoadType(template) => {
                 let slot = match template {
                     TyTemplate::TypeArgRef(slot) => format!("Some({slot})"),

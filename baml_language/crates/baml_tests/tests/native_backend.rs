@@ -1119,3 +1119,35 @@ fn let_type_bound_checks_compile() {
     assert!(body.contains("vm.bound_satisfied("), "{body}");
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
+
+const SIBLING_BINDINGS: &str = r#"
+class Wrapper<T> { inner T }
+
+function sibling_bindings(a: reflect.Type, b: reflect.Type) -> reflect.Type[] {
+    let first: reflect.Type = {
+        let type T = a;
+        reflect.Type.of<Wrapper<T>>()
+    }
+    let second: reflect.Type = {
+        let type U = b;
+        reflect.Type.of<Wrapper<U>>()
+    }
+    [first, second]
+}
+"#;
+
+/// Sibling blocks reuse one frame slot for their bindings. A type derived
+/// from the first binding is built where it is loaded, as the interpreter
+/// evaluates `LoadType`, so the second block's rebinding of the slot does
+/// not reach it.
+#[test]
+fn a_derived_type_keeps_its_binding_past_a_sibling_rebinding() {
+    let module = compile(SIBLING_BINDINGS);
+    let body = body_of(&module, "user.sibling_bindings")
+        .split_whitespace()
+        .collect::<String>();
+    let built = body.find("vm.type_value(").expect("the type is built");
+    let rebound = body.rfind("vm.bind_type(").expect("the slot is rebound");
+    assert!(built < rebound, "{body}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}

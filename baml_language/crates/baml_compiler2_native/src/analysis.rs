@@ -7,7 +7,7 @@ use std::{
 };
 
 use baml_compiler2_mir::{
-    CellId, Constant, MirFunction, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue,
+    CellId, Constant, IntrinsicOp, MirFunction, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue,
     StatementKind, Terminator, UnaryOp,
 };
 use baml_type::{Literal, TyTemplate};
@@ -82,7 +82,8 @@ pub(crate) struct Analysis {
     pub(crate) static_types: HashMap<usize, StaticTy>,
     /// Locals assigned a type derived from the frame's type arguments
     /// (`LoadType` of a template with a `TypeArgRef`), by the template: a
-    /// call's type argument, or a `type` value (`Generator::realized`).
+    /// call's type argument, or a `type` value (`Generator::realized`). None
+    /// in a body that binds types, where each is an ordinary binding.
     pub(crate) frame_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
     /// Whether the body itself suspends (await, spawn, a sys op, or a call
     /// compiled code cannot make directly); callers of suspending functions
@@ -172,6 +173,24 @@ impl Analysis {
         }
         static_types.retain(|local, _| !written.contains(local));
         frame_types.retain(|local, _| !written.contains(local));
+        // A body that binds a frame slot (`type T = ..`) can rebind it
+        // between a `LoadType` and a read of its local, so each such type is
+        // built at its `LoadType`, as the interpreter evaluates it, and held
+        // as a `type` value.
+        let binds_types = body.blocks.iter().any(|block| {
+            block.statements.iter().any(|statement| {
+                matches!(
+                    statement.kind,
+                    StatementKind::Intrinsic {
+                        op: IntrinsicOp::BindType(_),
+                        ..
+                    }
+                )
+            })
+        });
+        if binds_types {
+            frame_types.clear();
+        }
 
         let mut array_iters = HashMap::new();
         for block in &body.blocks {
