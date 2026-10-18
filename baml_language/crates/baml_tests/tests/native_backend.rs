@@ -536,6 +536,26 @@ function grow_by(g: Grows, by: int) -> int { g.grow(by) }
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
 
+/// `a && b` with a non-bool `b` stores `b` into the expression's `bool`
+/// result and coerces it there; until then the result holds an `int`, so it
+/// is held as a `Value`, not read as a `bool`.
+#[test]
+fn a_short_circuit_holds_its_uncoerced_operand() {
+    let module = compile(
+        r#"
+function tr_and(a: string?, b: int) -> bool {
+  a && b
+}
+"#,
+    );
+    let body = body_of(&module, "user.tr_and")
+        .split_whitespace()
+        .collect::<String>();
+    assert!(body.contains("vm.is_truthy("), "{body}");
+    assert!(!body.contains("expect_bool(Value::int("), "{body}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
 /// A resumable body's arguments arrive in slots `0..arity` while local `i`
 /// keeps slot `i`: its start reads every argument before it writes any slot,
 /// or writing local 1 would overwrite argument 2 before it is read.

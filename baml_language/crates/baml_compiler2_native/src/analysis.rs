@@ -8,7 +8,7 @@ use std::{
 
 use baml_compiler2_mir::{
     CellId, Constant, MirFunction, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue,
-    StatementKind, Terminator,
+    StatementKind, Terminator, UnaryOp,
 };
 use baml_type::{Literal, TyTemplate};
 use bex_vm_types::FunctionKind;
@@ -237,7 +237,10 @@ impl Analysis {
 /// How the value each local of `body` names is held: its declared type's
 /// repr. A parameter with a default arrives as `OmittedArg` and MIR's
 /// prologue tests for that sentinel in the body; such a local stays a
-/// `Value` so the test sees the sentinel instead of an unboxed zero.
+/// `Value` so the test sees the sentinel instead of an unboxed zero. A
+/// `bool` local MIR coerces in place (`x = Truthy(x)`, the result of `a &&
+/// b` with a non-bool `b`) first holds the uncoerced value, so it is a
+/// `Value` too.
 pub(crate) fn value_reprs(body: &MirFunctionBody<'_>) -> Vec<Repr> {
     let mut values: Vec<Repr> = body
         .locals
@@ -246,6 +249,20 @@ pub(crate) fn value_reprs(body: &MirFunctionBody<'_>) -> Vec<Repr> {
         .collect();
     for block in &body.blocks {
         for statement in &block.statements {
+            if let StatementKind::Assign {
+                destination: Place::Local(destination),
+                value:
+                    Rvalue::UnaryOp {
+                        op: UnaryOp::Truthy,
+                        operand:
+                            Operand::Copy(Place::Local(source)) | Operand::Move(Place::Local(source)),
+                    },
+            } = &statement.kind
+                && destination == source
+                && values[destination.0] == Repr::Bool
+            {
+                values[destination.0] = Repr::Value;
+            }
             let StatementKind::Assign {
                 value: Rvalue::BinaryOp { left, right, .. },
                 ..
