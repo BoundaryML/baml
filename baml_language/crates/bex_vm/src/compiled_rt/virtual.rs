@@ -146,7 +146,14 @@ impl BexVm {
         method: &str,
         method_type_args: &[RealizedTy],
     ) -> Result<HeapPtr, Box<VmError>> {
-        self.virtual_target_in(Some(site), receiver, iface, iface_args, method, method_type_args)
+        self.virtual_target_in(
+            Some(site),
+            receiver,
+            iface,
+            iface_args,
+            method,
+            method_type_args,
+        )
     }
 
     /// [`Self::virtual_target`] for a site whose instantiation (`iface_args`,
@@ -185,14 +192,10 @@ impl BexVm {
         let resolver = ImplResolver::for_value(self, receiver);
         let implementation = resolver
             .resolve_implementation(&self_ty, head, iface_args)
-            .ok_or_else(|| {
-                Box::new(VmError::from(VmInternalError::UnresolvedVirtualCall {
-                    method: method.to_string(),
-                }))
+            .ok_or_else(|| VmInternalError::UnresolvedVirtualCall {
+                method: method.to_string(),
             })?;
-        let (callee, frame) = resolver
-            .implementation_method(&implementation, method)
-            .map_err(|error| Box::new(VmError::from(error)))?;
+        let (callee, frame) = resolver.implementation_method(&implementation, method)?;
         if implementation.is_static()
             && let (Some(site), Some(tag)) = (site, key)
             && let Some(index) = self.compile_time_index(callee)
@@ -258,7 +261,7 @@ impl BexVm {
                 // The type arguments `virtual_target` pushed belong to the
                 // call that will not happen.
                 self.call_type_args.clear();
-                Err(Box::new(error.into()))
+                Err(error)
             }
         }
     }
@@ -279,9 +282,12 @@ impl BexVm {
             return self.push_virtual_args(callee, Some(layout), args);
         };
         let receiver = method.receiver;
-        let full_layout: Vec<Option<&str>> =
-            std::iter::once(None).chain(layout.iter().copied()).collect();
-        let full_args: Vec<Value> = std::iter::once(receiver).chain(args.iter().copied()).collect();
+        let full_layout: Vec<Option<&str>> = std::iter::once(None)
+            .chain(layout.iter().copied())
+            .collect();
+        let full_args: Vec<Value> = std::iter::once(receiver)
+            .chain(args.iter().copied())
+            .collect();
         let base = self.stack.len();
         let count = self.push_virtual_args(callee, Some(&full_layout), &full_args)?;
         self.stack.0.remove(base);
@@ -293,7 +299,7 @@ impl BexVm {
         callee: HeapPtr,
         layout: Option<&[Option<&str>]>,
         args: &[Value],
-    ) -> Result<u32, VmInternalError> {
+    ) -> Result<u32, Box<VmError>> {
         let count = |count: usize| u32::try_from(count).expect("an argument count fits u32");
         let Some(layout) = layout else {
             self.stack.extend(args.iter().copied());
@@ -336,7 +342,7 @@ impl BexVm {
         iface: HeapPtr,
         iface_args: &[RealizedTy],
         field_index: usize,
-    ) -> Result<Value, VmError> {
+    ) -> Result<Value, Box<VmError>> {
         let head = self.interface_head(iface)?;
         let slot = self.resolve_virtual_field_slot(receiver, head, iface_args, field_index)?;
         self.load_field(receiver, slot)
@@ -351,7 +357,7 @@ impl BexVm {
         iface_args: &[RealizedTy],
         field_index: usize,
         value: Value,
-    ) -> Result<(), VmError> {
+    ) -> Result<(), Box<VmError>> {
         let head = self.interface_head(iface)?;
         let slot = self.resolve_virtual_field_slot(receiver, head, iface_args, field_index)?;
         self.store_field(receiver, slot, value)
@@ -367,7 +373,7 @@ impl BexVm {
         iface_args: &[RealizedTy],
         method: &str,
         method_type_args: &[RealizedTy],
-    ) -> Result<Value, VmError> {
+    ) -> Result<Value, Box<VmError>> {
         let self_ty = self.dispatch_self_ty(receiver)?;
         let resolver = ImplResolver::for_value(self, receiver);
         let (function, type_args) = resolve_method(
@@ -398,7 +404,7 @@ impl BexVm {
         iface_args: &[RealizedTy],
         method: &str,
         method_type_args: &[RealizedTy],
-    ) -> Result<Value, VmError> {
+    ) -> Result<Value, Box<VmError>> {
         // A static `Self` lives in the program image, whose implementations
         // the lexical world sees; a runtime package's type never reaches
         // compiled code (its heads are not known at compile time).
@@ -421,7 +427,7 @@ impl BexVm {
     }
 
     /// The head of the interface object `iface`.
-    fn interface_head(&self, iface: HeapPtr) -> Result<TypeHead, VmError> {
+    fn interface_head(&self, iface: HeapPtr) -> Result<TypeHead, Box<VmError>> {
         match self.get_object(iface) {
             Object::Interface(declaration) => Ok(TypeHead::new(iface, declaration.type_tag)),
             other => Err(VmInternalError::TypeError {
@@ -433,7 +439,7 @@ impl BexVm {
     }
 
     /// `Self` for a dispatch on `receiver`: its concrete type.
-    fn dispatch_self_ty(&self, receiver: Value) -> Result<RealizedTy, VmError> {
+    fn dispatch_self_ty(&self, receiver: Value) -> Result<RealizedTy, Box<VmError>> {
         self.value_concrete_ty(receiver)
             .map(RealizedTy::from)
             .ok_or_else(|| {
@@ -499,7 +505,7 @@ fn resolve_method(
     iface_args: &[RealizedTy],
     method: &str,
     method_type_args: &[RealizedTy],
-) -> Result<(HeapPtr, Vec<RealizedTy>), VmError> {
+) -> Result<(HeapPtr, Vec<RealizedTy>), Box<VmError>> {
     let head = vm.interface_head(iface)?;
     let implementation = resolver
         .resolve_implementation(self_ty, head, iface_args)

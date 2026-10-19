@@ -15,6 +15,8 @@
 pub(crate) mod array_index;
 mod call_specialize;
 pub mod compile_artifact;
+/// Generated-code ABI; not a stable public API.
+#[doc(hidden)]
 pub mod compiled_rt;
 pub mod debug;
 pub mod definitions;

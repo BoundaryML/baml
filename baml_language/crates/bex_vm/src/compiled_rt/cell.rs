@@ -49,9 +49,7 @@ impl BexVm {
     /// which its frame holds as its function.
     #[inline]
     pub fn capture_cell(&self, depth: usize, index: usize) -> Result<Value, Box<VmError>> {
-        let Frame::Bytecode(frame) = &self.frames[depth - 1] else {
-            unreachable!("a compiled body reads its own frame");
-        };
+        let frame = self.compiled_frame(depth);
         match self.get_object(frame.function) {
             Object::Closure(closure) => closure.captures.get(index).copied().ok_or_else(|| {
                 Box::new(

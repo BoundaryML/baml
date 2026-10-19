@@ -430,6 +430,12 @@ pub enum VmError {
     },
 }
 
+impl From<VmInternalError> for Box<VmError> {
+    fn from(error: VmInternalError) -> Self {
+        Box::new(VmError::from(error))
+    }
+}
+
 impl VmError {
     #[must_use]
     pub const fn thrown_fresh(value: Value) -> Self {

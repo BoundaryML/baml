@@ -1,10 +1,7 @@
 //! Calls and the frame: builtins, compiled callees, the slots a resumable body
 //! keeps, and what a body reports to the VM.
 
-use bex_vm_types::{
-    HeapPtr, Object, RealizedTy, StackIndex, Value,
-    types::{ConstValue, Function},
-};
+use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::Function};
 
 use super::{CompiledBody, stack_address};
 use crate::{
@@ -25,6 +22,24 @@ thread_local! {
 }
 
 impl BexVm {
+    #[inline]
+    pub(super) fn compiled_frame(&self, depth: usize) -> &BytecodeFrame {
+        debug_assert!(self.frame_is_compiled(depth - 1));
+        let Frame::Bytecode(frame) = &self.frames[depth - 1] else {
+            unreachable!("a compiled body accesses its own frame");
+        };
+        frame
+    }
+
+    #[inline]
+    pub(super) fn compiled_frame_mut(&mut self, depth: usize) -> &mut BytecodeFrame {
+        debug_assert!(self.frame_is_compiled(depth - 1));
+        let Frame::Bytecode(frame) = &mut self.frames[depth - 1] else {
+            unreachable!("a compiled body accesses its own frame");
+        };
+        frame
+    }
+
     // ── Calls ─────────────────────────────────────────────────────────────────
 
     /// Call a VM-owned builtin synchronously. A builtin that yields (to run a
@@ -75,9 +90,7 @@ impl BexVm {
     /// ones). Called once, on start; a resumable body's region then sits at
     /// the top of the stack whenever it suspends.
     pub fn reserve_slots(&mut self, depth: usize, slots: usize) {
-        let crate::vm::Frame::Bytecode(frame) = &self.frames[depth - 1] else {
-            unreachable!("a compiled body reserves slots in its own frame");
-        };
+        let frame = self.compiled_frame(depth);
         let end = frame.locals_offset.raw() + slots;
         self.stack.resize(end, Value::NULL);
     }
@@ -86,9 +99,7 @@ impl BexVm {
     #[inline]
     #[must_use]
     pub fn slot(&self, depth: usize, index: usize) -> Value {
-        let crate::vm::Frame::Bytecode(frame) = &self.frames[depth - 1] else {
-            unreachable!("a compiled body reads its own frame");
-        };
+        let frame = self.compiled_frame(depth);
         self.stack
             .get_at(StackIndex::from_raw(frame.locals_offset.raw() + index))
     }
@@ -97,9 +108,7 @@ impl BexVm {
     /// `depth`; see [`Self::slot`].
     #[inline]
     pub fn set_slot(&mut self, depth: usize, index: usize, value: Value) {
-        let crate::vm::Frame::Bytecode(frame) = &self.frames[depth - 1] else {
-            unreachable!("a compiled body writes its own frame");
-        };
+        let frame = self.compiled_frame(depth);
         let at = frame.locals_offset.raw() + index;
         self.stack.0[at] = value;
     }
@@ -239,33 +248,24 @@ impl BexVm {
         Ok(())
     }
 
-    /// `log.info(data, name?)` and its siblings in compiled code (`level` is
-    /// 0 info, 1 debug, 2 warn, 3 error): the record bytecode's `SendEvent`
-    /// of the `$baml_log` payload makes, recorded for telemetry here and
+    /// `log.info(data, name?)` and its siblings in compiled code: the record
+    /// bytecode's `SendEvent` of the `$baml_log` payload makes, recorded for
+    /// telemetry here and
     /// queued for the engine ([`Self::pending_logs`]) instead of returned,
     /// since a compiled body cannot leave mid-statement. `pc` is the
     /// statement's in the function's bytecode, whose `SendEvent` line entry
     /// locates the record as the interpreter locates it.
     pub fn log_event(
         &mut self,
-        level: u8,
+        level: super::LogLevel,
         data: Value,
         event_name: Value,
         pc: u32,
     ) -> Result<(), Box<VmError>> {
-        use btel_records::LogLevel;
-        let level = match level {
-            0 => LogLevel::Info,
-            1 => LogLevel::Debug,
-            2 => LogLevel::Warn,
-            _ => LogLevel::Error,
-        };
         let name = if event_name.is_null() || event_name.is_omitted() {
             None
         } else {
-            let name = self
-                .as_string(&event_name)
-                .map_err(|error| Box::new(VmError::from(error)))?;
+            let name = self.as_string(&event_name)?;
             Some(std::sync::Arc::<str>::from(name.as_str()))
         };
         let top = self.frames.len().saturating_sub(1);
@@ -305,8 +305,8 @@ impl BexVm {
     /// caller's bytecode. It goes into the caller's frame before the callee
     /// runs, as the interpreter records a caller's call site on every call:
     /// a stack trace taken while the callee runs (an error caught below, a
-    /// `StackOverflow`) names the line of this call, and telemetry the same
-    /// call site the interpreter records.
+    /// `StackOverflow`) resolves this bytecode PC to the call site, as telemetry
+    /// does for the interpreter.
     ///
     /// On `Err` the callee's frame stays pushed, as the VM's call path leaves
     /// it: the unwinder pops it if the error escapes, [`Self::catch`] if a
@@ -391,8 +391,13 @@ impl BexVm {
         let locals_offset = StackIndex::from_raw(self.stack.len());
         let mut frame_type_args = self.pooled_type_args();
         frame_type_args.extend_from_slice(type_args);
-        let mut frame =
-            crate::vm::BytecodeFrame::compiled(callee, locals_offset, frame_type_args, context, None);
+        let mut frame = crate::vm::BytecodeFrame::compiled(
+            callee,
+            locals_offset,
+            frame_type_args,
+            context,
+            None,
+        );
         // A type naming a runtime declaration rides beside the frame's
         // arguments as an exact value, as a bytecode call carries it.
         let type_values = crate::vm::exact_type_values(type_args);
@@ -625,10 +630,7 @@ impl BexVm {
         let mut frame_idx = top;
         // SAFETY: the running compiled frame's function object lives in the
         // compile-time heap, which is never collected; see `load_function`.
-        let mut function = unsafe {
-            self.load_function(top)
-                .map_err(|error| Box::new(VmError::InternalError(error)))?
-        };
+        let mut function = unsafe { self.load_function(top)? };
         let outcome = self.compiled_caller_call(
             callee,
             locals_offset,
@@ -652,21 +654,6 @@ impl BexVm {
             )),
             Err(error) => Err(Box::new(error)),
         }
-    }
-
-    // ── Type tests ────────────────────────────────────────────────────────────
-
-    /// `value is T` against a type constant from the function's constant pool,
-    /// with the caller's resolved generic type arguments (empty when the
-    /// enclosing function is not generic).
-    pub fn value_is_type(
-        &self,
-        type_args: &[RealizedTy],
-        value: Value,
-        raw_const: &ConstValue,
-        resolved_const: Value,
-    ) -> Result<bool, VmInternalError> {
-        self.value_matches_type_constant_with_type_args(type_args, value, raw_const, resolved_const)
     }
 }
 
