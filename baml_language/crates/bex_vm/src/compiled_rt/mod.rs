@@ -48,10 +48,11 @@ use crate::{
 
 /// A natively compiled BAML function body. Errors are the VM's own: a thrown
 /// BAML exception keeps its throw kind and context end to end, and an internal
-/// error keeps its own variant. Boxed so the `Result` stays two words wide;
-/// the box is paid only on throw.
+/// error keeps its own variant. Boxed so the `Result` stays two words wide
+/// on 64-bit targets; the box is paid only on throw.
 pub type CompiledBody = fn(&mut BexVm, &[Value]) -> Result<Value, Box<VmError>>;
 
+#[cfg(target_pointer_width = "64")]
 const _: () =
     assert!(std::mem::size_of::<Result<Value, Box<VmError>>>() == 2 * std::mem::size_of::<usize>());
 
