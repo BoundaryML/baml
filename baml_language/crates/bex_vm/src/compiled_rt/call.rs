@@ -682,6 +682,36 @@ mod tests {
         use crate::compiled_rt::{CompiledCollector, CompiledFn};
 
         const CHILD: &str = "BAML_COMPILED_GC_STRESS_TEST_CHILD";
+        struct Collector;
+        impl CompiledCollector for Collector {
+            fn collect_in_place(&self, vm: &mut BexVm) -> bool {
+                let mut roots = Vec::new();
+                vm.collect_roots(&mut roots);
+                // SAFETY: this test owns the heap's only VM; collect_here roots its
+                // compiled body's live values before entering the collector.
+                let (_, _, forwarding) = unsafe {
+                    vm.heap
+                        .collect_garbage_generational(&roots, CollectionLevel::Major)
+                };
+                vm.forward_roots(&forwarding);
+                true
+            }
+        }
+
+        #[allow(clippy::unnecessary_wraps, reason = "matches the compiled body ABI")]
+        fn body(vm: &mut BexVm, _: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            vm.compiled_collector = Some(Arc::new(Collector));
+            let mut live = [vm.string_value("still live")];
+            for _ in 0..3 {
+                assert!(vm.gc_due(), "stress must collect at every compiled check");
+                let before = live[0];
+                vm.collect_here(&mut live);
+                assert_ne!(live[0], before, "the live value must actually move");
+                assert_eq!(vm.as_string(&live[0]).unwrap().as_str(), "still live");
+            }
+            Ok(live[0])
+        }
+
         if std::env::var_os(CHILD).is_none() {
             let output = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([
@@ -700,35 +730,6 @@ mod tests {
                 String::from_utf8_lossy(&output.stderr),
             );
             return;
-        }
-
-        struct Collector;
-        impl CompiledCollector for Collector {
-            fn collect_in_place(&self, vm: &mut BexVm) -> bool {
-                let mut roots = Vec::new();
-                vm.collect_roots(&mut roots);
-                // SAFETY: this test owns the heap's only VM; collect_here roots its
-                // compiled body's live values before entering the collector.
-                let (_, _, forwarding) = unsafe {
-                    vm.heap
-                        .collect_garbage_generational(&roots, CollectionLevel::Major)
-                };
-                vm.forward_roots(&forwarding);
-                true
-            }
-        }
-
-        fn body(vm: &mut BexVm, _: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
-            vm.compiled_collector = Some(Arc::new(Collector));
-            let mut live = [vm.string_value("still live")];
-            for _ in 0..3 {
-                assert!(vm.gc_due(), "stress must collect at every compiled check");
-                let before = live[0];
-                vm.collect_here(&mut live);
-                assert_ne!(live[0], before, "the live value must actually move");
-                assert_eq!(vm.as_string(&live[0]).unwrap().as_str(), "still live");
-            }
-            Ok(live[0])
         }
 
         assert_eq!(

@@ -765,7 +765,7 @@ mod tests {
         static SHAPE: AtomicU32 = AtomicU32::new(0);
         fn area_fn(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
             let iface = vm.idx_to_ptr(object(&SHAPE));
-            Ok(vm.make_virtual_bound_method(args[0], iface, &[], "area", &[])?)
+            vm.make_virtual_bound_method(args[0], iface, &[], "area", &[])
         }
         const SOURCE: &str = r#"
             interface Shape { function area(self) -> int throws never }
@@ -797,7 +797,7 @@ mod tests {
         fn rename(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
             let iface = vm.idx_to_ptr(object(&NAMED));
             vm.virtual_store_field(args[0], iface, &[], 0, args[1])?;
-            Ok(vm.virtual_load_field(args[0], iface, &[], 0)?)
+            vm.virtual_load_field(args[0], iface, &[], 0)
         }
         const SOURCE: &str = r#"
             interface Named { name string }
