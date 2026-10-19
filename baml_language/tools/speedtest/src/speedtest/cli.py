@@ -16,8 +16,8 @@ def build_parser():
     run_p.add_argument("--kpi", action="store_true",
                        help="Run the workloads kpis.toml lists, with every telemetry level")
     run_p.add_argument("--filter", action="append", default=[], help="Only workloads whose id or name contains this (repeatable)")
-    run_p.add_argument("--rows", default=None, help="Comma-separated rows (default: vm-off,node,bun,python)")
-    run_p.add_argument("--telemetry", action="store_true", help="Add the VM at telemetry low, medium and high")
+    run_p.add_argument("--rows", default=None, help="Comma-separated rows (default: vm-off,node,bun,python); rust-off packs with --rust")
+    run_p.add_argument("--telemetry", action="store_true", help="Add every BAML row's backend at telemetry low, medium and high")
     run_p.add_argument("--trials", type=int, default=None, help="Trials per (workload, row) (default 5)")
     run_p.add_argument("--jobs", type=int, default=None, help="Override every workload's jobs per trial")
     run_p.add_argument("--seed", type=int, default=1, help="Seed for the trial order (default 1)")
