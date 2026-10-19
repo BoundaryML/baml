@@ -6,8 +6,8 @@ use std::{
 use bex_heap::CollectionLevel;
 use bex_vm_types::{FunctionKind, HeapPtr, Object, ObjectIndex, RootHaver, Value};
 
-use crate::errors::VmError;
 use crate::{
+    errors::VmError,
     telemetry::{TelemetryPolicies, TelemetryState},
     vm::{BexVm, Frame, VmExecState},
 };

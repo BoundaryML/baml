@@ -1,10 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
-use bex_vm_types::{HeapPtr, RealizedTy, RootHaver, Value};
+use bex_vm_types::{HeapPtr, RealizedTy, RootHaver, Value, types::TypeValue};
 
 use super::{CompiledCollector, PendingLog};
-use bex_vm_types::types::TypeValue;
-
 use crate::errors::VmError;
 
 /// VM state that only compiled code uses.
