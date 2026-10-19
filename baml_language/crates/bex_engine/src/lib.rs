@@ -90,8 +90,7 @@ mod telemetry;
 #[cfg(not(target_arch = "wasm32"))]
 pub use bcs_api::diagnostics::Diagnostic as CloudAuthorizationFailure;
 mod thread;
-/// Compiled bodies an engine runs in place of bytecode
-/// ([`EngineConfig::compiled_bodies`]).
+/// Compiled bodies supplied through [`EngineConfig::compiled_bodies`].
 pub use bex_vm::{CompiledBodies, CompiledBodyTable};
 #[cfg(not(target_arch = "wasm32"))]
 pub use btel_types::ProcessStatus;
@@ -1078,7 +1077,7 @@ pub struct BexEngine {
     /// Used to prevent multiple threads from trying to run GC at the same time.
     /// Only one should run it, the rest should wait for it to complete.
     checking_gc: AtomicBool,
-    /// Set when compiled code collected in place; its awaited tail is owed.
+    /// An in-place collection has cleanup pending at the next safepoint.
     gc_followup: AtomicBool,
     has_compiled_bodies: bool,
     /// Used to notify long-running threads that they should park the VM even if they aren't at a typical yield point.
@@ -3021,10 +3020,8 @@ impl BexEngine {
         Box::pin(self.collect_garbage_parked(level, reason, heap_guard, cycle)).await
     }
 
-    /// Root object-valued unhandled spawn errors the collection just found
-    /// into handles, before the GC guard is released. The raw queue values
-    /// are post-copy pointers and must survive the await needed to reacquire
-    /// an ordinary permit for deep-copying.
+    // These pointers must be rooted before releasing the GC guard.
+    // Reacquiring a permit for deep-copying may suspend.
     fn root_unhandled_spawn_errors(&self) {
         let unhandled_spawn_errors = self
             .heap
@@ -3051,12 +3048,8 @@ impl BexEngine {
             .extend(unhandled_spawn_errors);
     }
 
-    /// A collection compiled code runs without leaving its body
-    /// ([`bex_vm::compiled_rt::CompiledCollector`]): `vm`, the running VM,
-    /// holds the one active permit, whose holder cell is `own`. It collects
-    /// only when every other mutator is already parked and a collection is
-    /// due; what follows a collection and needs `await` (host releases,
-    /// spawn-error reports, finalizers) runs at the VM's next safepoint.
+    // `vm` must hold the only active permit, with holder cell `own`.
+    // Cleanup that awaits is deferred to the next VM safepoint.
     fn collect_in_place(&self, vm: &mut bex_vm::BexVm, own: usize) -> bool {
         let level = if bex_vm::compiled_rt::gc_stress() {
             Some(bex_heap::CollectionLevel::Major)

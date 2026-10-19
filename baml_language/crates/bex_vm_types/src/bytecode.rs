@@ -1314,9 +1314,7 @@ pub enum OpCode {
     // discriminants.
     SatisfiesBound,
 
-    /// Hand the frame back to its compiled body (load-time only,
-    /// like `CallExactArgs`: appended to a compiled function's code, never
-    /// emitted into serialized `Instruction` streams). No operands (1 byte).
+    /// Resume a compiled body through a stub appended at load time, never serialized.
     ResumeCompiled,
 }
 
@@ -2177,19 +2175,12 @@ pub struct ShieldRange {
     pub end_pc: usize,
 }
 
-/// Where one MIR block of a function landed in its instructions: the PC a
-/// compiled body of the function records as its frame's position
-/// at each statement and at the terminator, so the frame reads as the
-/// equivalent bytecode frame would. A PC here is an instruction index;
-/// `None` where the block emitted no instruction for that position.
+/// Instruction indices for a MIR block, with `None` for positions that emit no instruction.
 #[derive(Clone, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct BlockPcs {
-    /// Each statement's last instruction: where its final operation runs.
-    /// A statement defining a value bytecode computes at its use has the
-    /// last instruction of that computation.
+    /// Each statement's final instruction, at its use site for deferred computations.
     pub statements: Vec<Option<usize>>,
-    /// The instruction that performs the terminator, for one that calls,
-    /// suspends, raises or returns.
+    /// The terminator's instruction, if it calls, suspends, raises or returns.
     pub terminator: Option<usize>,
     /// The block's first instruction.
     pub start: Option<usize>,
@@ -2280,9 +2271,7 @@ pub struct CompactCode {
     /// Jump tables with offsets translated to byte offsets.
     /// Parallel to `Bytecode::jump_tables`.
     pub jump_tables: Vec<CompactJumpTable>,
-    /// The byte offset of each instruction, kept only for a function whose
-    /// frames compiled code runs ([`Bytecode::lower_to_compact_with_offsets`]):
-    /// such a frame records the index of an instruction, not its offset.
+    /// Instruction byte offsets retained by [`Bytecode::lower_to_compact_with_offsets`].
     pub instruction_offsets: Vec<usize>,
 }
 
@@ -2403,13 +2392,7 @@ pub struct Bytecode {
     /// Sorted by `start_pc`, non-overlapping. See [`ShieldRange`].
     pub shield_table: Vec<ShieldRange>,
 
-    /// Where each MIR block (by `BlockId`) of the function landed in
-    /// `instructions`: what a compiled body records as its frame's
-    /// PC. See [`BlockPcs`].
-    ///
-    /// Compile-time metadata for the Rust backend, which requires freshly
-    /// emitted bytecode. Runtime frames use `CompactCode::instruction_offsets`.
-    /// Deserialization leaves this empty.
+    /// Compile-time instruction positions indexed by MIR `BlockId`, empty after deserialization.
     #[borsh(skip)]
     pub block_pcs: Vec<BlockPcs>,
 
@@ -2509,8 +2492,7 @@ impl Bytecode {
         self.lower(false)
     }
 
-    /// [`Self::lower_to_compact`], keeping each instruction's byte offset
-    /// ([`CompactCode::instruction_offsets`]).
+    /// Lower to compact bytecode and retain [`CompactCode::instruction_offsets`].
     pub fn lower_to_compact_with_offsets(&self) -> CompactCode {
         self.lower(true)
     }

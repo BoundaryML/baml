@@ -248,8 +248,7 @@ impl HeapPermitManager {
         }
     }
 
-    /// The caller must hold one active permit and exclude its holder cell
-    /// from root scanning and forwarding through the returned guard.
+    /// The caller must hold one active permit and exclude its cell from the guard's root operations.
     pub fn try_park_others(&self) -> Option<HeapGuard<'_>> {
         let permits = self.active.try_acquire_many(MAX_PERMITS - 1).ok()?;
         let mut guard = self.holders.try_lock().ok()?;

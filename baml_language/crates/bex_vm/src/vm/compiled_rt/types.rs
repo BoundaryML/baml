@@ -1,12 +1,4 @@
-//! Types at run time: a generic body's type arguments and what it derives
-//! from them, type values, structural type tests, and generic callables.
-//!
-//! A compiled generic function is one body for every instantiation, as its
-//! bytecode is: it reads `T` off its frame's type arguments (seeded by the
-//! call, in the callee's De Bruijn order) and builds every type it needs
-//! from them, exactly as `LoadType` substitutes a template against the
-//! frame. The compiler renders each template as the `RealizedTy` it builds
-//! from these leaves, so a body allocates a derived type once per call.
+//! Runtime type arguments, type values, structural tests, and generic callables.
 
 use bex_vm_types::{
     GlobalIndex, HeapPtr, Object, ObjectType, RealizedTy, TyTemplate, TypeHead, Value,
@@ -19,12 +11,7 @@ use crate::{
 };
 
 impl BexVm {
-    // ── The frame's type arguments ────────────────────────────────────────────
-
-    /// The type arguments of the compiled function whose frame count is
-    /// `depth` (see [`Self::frame_depth`]), in its De Bruijn order: the
-    /// owner's (a class's parameters; for an interface body `Self`, then
-    /// the interface's), then the function's own.
+    /// Return frame type arguments in De Bruijn order, with owner arguments first.
     #[inline]
     #[must_use]
     pub fn frame_type_args(&self, depth: usize) -> &[RealizedTy] {
@@ -32,10 +19,7 @@ impl BexVm {
         &frame.type_args
     }
 
-    /// Type argument `slot` of the compiled function whose frame count is
-    /// `depth`: what `TyTemplate::TypeArgRef(slot)` substitutes to. A slot
-    /// the frame does not supply is a frame-layout bug, reported as the
-    /// substitution error bytecode raises.
+    /// Read a frame type argument, reporting a missing slot as a substitution error.
     #[inline]
     pub fn frame_type_arg(&self, depth: usize, slot: u32) -> Result<RealizedTy, Box<VmError>> {
         let type_args = self.frame_type_args(depth);
@@ -50,10 +34,7 @@ impl BexVm {
         }
     }
 
-    /// `template` realized against the frame's type arguments: what a
-    /// `LoadType` of it evaluates to. Compiled code builds the common shapes
-    /// directly from [`Self::frame_type_arg`]; this is the general path, for
-    /// a template with a projection.
+    /// Resolve a template against the frame's type arguments.
     pub fn substitute(
         &self,
         depth: usize,
@@ -64,10 +45,7 @@ impl BexVm {
             .map_err(|error| Box::new(substitution_error(&error)))
     }
 
-    /// `ty` as a `type` value. `slot` names the frame slot a bare
-    /// `TypeArgRef` read, whose exact value (an explicitly passed `type`,
-    /// kept beside the frame's type arguments) keeps its identity, as
-    /// bytecode's `LoadType` prefers it.
+    /// Create a type value, preserving the identity of an explicitly bound `slot`.
     pub fn type_value(&mut self, depth: usize, slot: Option<u32>, ty: RealizedTy) -> Value {
         let exact = slot.and_then(|slot| match &self.frames[depth - 1] {
             Frame::Bytecode(frame) => frame
@@ -81,13 +59,7 @@ impl BexVm {
         Value::object(self.tlab.alloc_type(type_value))
     }
 
-    /// `ty`, a statically known type, as a `type` value: the one object the
-    /// running function creates for it, as bytecode's `LoadType` of a fully
-    /// realized constant in a static function creates once per site
-    /// (`static_load_type_cache`), so two reads of the site are one value.
-    /// `ordinal` numbers the site within the compiled body, in a distinct
-    /// cache namespace from bytecode constants. A frame binding a runtime
-    /// declaration takes a fresh value, as there.
+    /// Cache a static type value by site ordinal unless the frame binds a runtime declaration.
     pub fn static_type_value(&mut self, depth: usize, ordinal: usize, ty: RealizedTy) -> Value {
         let frame = self.compiled_frame(depth);
         let cacheable = frame
@@ -115,17 +87,12 @@ impl BexVm {
         Value::object(ptr)
     }
 
-    /// A `let type T extends I = …` bound check, as bytecode's
-    /// `SatisfiesBound`: whether the type `value` holds satisfies `bound`,
-    /// the constraint as a `type` value.
+    /// Check whether the type held by `value` satisfies `bound`.
     pub fn bound_satisfied(&mut self, value: Value, bound: Value) -> Result<bool, Box<VmError>> {
         self.satisfies_bound(value, bound).map_err(Box::new)
     }
 
-    /// `type T = value` in a block: bind the `type` value `value` into slot
-    /// `slot` of the frame, as `BindType` does, so later templates reading
-    /// the slot see it. Every derived type the body builds after this reads
-    /// the frame again.
+    /// Bind a type value to a frame slot for subsequent template substitution.
     pub fn bind_type(&mut self, depth: usize, slot: u32, value: Value) -> Result<(), Box<VmError>> {
         let type_value = self.type_operand_value(value).map_err(Box::new)?;
         let frame = self.compiled_frame_mut(depth);
@@ -140,18 +107,13 @@ impl BexVm {
         Ok(())
     }
 
-    // ── Type tests ────────────────────────────────────────────────────────────
-
-    /// `value is T` for a realized `T`: membership in the type, by the
-    /// canonical algebra, as bytecode's structural type test decides it.
+    /// Test membership in a realized type.
     #[must_use]
     pub fn value_is_member_of(&self, value: Value, ty: &RealizedTy) -> bool {
         crate::type_match::value_is_member(self, value, ty.as_ty()).unwrap_or(false)
     }
 
-    /// `value is C<..>` for a generic class `C` at `type_args`: class
-    /// identity, then each argument invariantly equivalent to the instance's,
-    /// as the interpreter's test against a class with type arguments.
+    /// Test class identity and invariant equivalence of its type arguments.
     #[must_use]
     pub fn is_instance_of_at(
         &self,
@@ -174,10 +136,7 @@ impl BexVm {
         }
     }
 
-    // ── Declared types ────────────────────────────────────────────────────────
-
-    /// The type of instances of `class` at `type_args`; see
-    /// [`Self::class_type`].
+    /// Return the instance type of `class` at `type_args`.
     #[must_use]
     pub fn class_type_at(&self, class: HeapPtr, type_args: Box<[RealizedTy]>) -> RealizedTy {
         let Object::Class(declaration) = self.get_object(class) else {
@@ -195,8 +154,7 @@ impl BexVm {
         RealizedTy::Enum(TypeHead::new(enm, declaration.type_tag))
     }
 
-    /// Allocate an instance of the generic class `class` at `type_args`
-    /// with its fields in slot order.
+    /// Allocate a generic class instance with fields in slot order.
     #[inline]
     pub fn new_generic_instance(
         &mut self,
@@ -210,12 +168,7 @@ impl BexVm {
         )
     }
 
-    // ── Generic callables ─────────────────────────────────────────────────────
-
-    /// `foo<T>` as a value, in the compiled function whose frame count is
-    /// `depth`: a `GenericFunction` over the function in global slot
-    /// `function` at `type_args`, as `MakeGenericFunction` builds it. (A
-    /// fully concrete `foo<int>` is the program's pooled object instead.)
+    /// Create a generic function value in the running frame's package.
     pub fn make_generic_function(
         &mut self,
         depth: usize,
@@ -234,10 +187,7 @@ impl BexVm {
         Value::object(self.tlab.alloc(generic))
     }
 
-    /// `g<T>` on a callable value `callable`: a closure over its function
-    /// carrying its captures and type arguments, then `type_args`, as
-    /// `MakeGenericFunctionFromValue` builds it. A bound method passes
-    /// through unchanged, as there.
+    /// Append type arguments to a callable while preserving captures and bound methods.
     pub fn specialize_function_value(
         &mut self,
         callable: Value,
@@ -281,8 +231,6 @@ mod tests {
 
     use crate::vm::{BexVm, BytecodeFrame, Frame};
 
-    /// A VM with one compiled frame on top whose type arguments are
-    /// `type_args`, as `call_compiled_with_types` pushes it.
     fn vm_with_frame(type_args: &[RealizedTy]) -> BexVm {
         let program = baml_test_support::compile_source("function Main() -> int { 1 }");
         let entry = program.rendered_callables()["user.Main"].object.raw();
@@ -299,9 +247,6 @@ mod tests {
         vm
     }
 
-    /// A template over the frame substitutes to the realized type bytecode's
-    /// `LoadType` would build; a slot the frame does not supply is an
-    /// internal error, never an erasure.
     #[test]
     fn templates_substitute_against_the_frame() {
         let vm = vm_with_frame(&[RealizedTy::Int, RealizedTy::String]);
@@ -325,8 +270,6 @@ mod tests {
         assert!(vm.substitute(depth, &TyTemplate::TypeArgRef(7)).is_err());
     }
 
-    /// A value is a member of the type its frame argument names, as `is T`
-    /// decides it.
     #[test]
     fn values_are_tested_against_substituted_types() {
         let vm = vm_with_frame(&[RealizedTy::Int]);
@@ -337,8 +280,6 @@ mod tests {
         assert!(!vm.value_is_member_of(Value::NULL, &t));
     }
 
-    /// A statically known type read as a value is one object per site, as
-    /// bytecode's `LoadType` cache makes it; sites differ.
     #[test]
     fn static_type_values_are_one_object_per_site() {
         let mut vm = vm_with_frame(&[]);
@@ -350,8 +291,6 @@ mod tests {
         assert_ne!(first.as_object_ptr(), other.as_object_ptr());
     }
 
-    /// `type T = ..` widens the frame and every later read sees the bound
-    /// type; a `type` value of a bare slot carries the exact value bound.
     #[test]
     fn bound_types_widen_the_frame() {
         let mut vm = vm_with_frame(&[RealizedTy::Int]);

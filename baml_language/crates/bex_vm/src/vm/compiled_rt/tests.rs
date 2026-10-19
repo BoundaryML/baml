@@ -12,12 +12,7 @@ use crate::{
     vm::{BexVm, Frame, VmExecState},
 };
 
-/// A compiled body attached to a bytecode function is, to every
-/// observer, that bytecode function: same result, same telemetry records
-/// and call paths, same exception caught by the same bytecode `catch`, and
-/// the same innermost frame in the thrown error's stack trace.
-///
-/// Rust rather than a BAML test because only Rust can install a body.
+// Rust tests can install compiled bodies directly.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_body_is_indistinguishable_from_bytecode() {
@@ -31,9 +26,7 @@ fn compiled_body_is_indistinguishable_from_bytecode() {
         CALLS.fetch_add(1, Ordering::Relaxed);
         vm.add_int(args[0], args[1])
     }
-    // `Same<T>(x: T, y: T) -> bool { y is T }`: a generic body reading
-    // its frame, calling a compiled generic callee with its own type
-    // argument (`Add` stands in: it takes two ints).
+    // `Same<T>` forwards its type argument to the compiled `Add` body.
     fn same_compiled(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
         let depth = vm.frame_depth();
         let t = vm.frame_type_arg(depth, 0)?;
@@ -67,7 +60,6 @@ fn compiled_body_is_indistinguishable_from_bytecode() {
 
     type Timings = Vec<(btel_types::CallPathId, InvocationOutcome, bool)>;
     type NamedPaths = HashMap<btel_types::CallPathId, (Option<String>, String)>;
-    /// The type arguments each span announced, by callee name.
     type TypeArgs = Vec<(String, String)>;
 
     fn named(
@@ -105,9 +97,6 @@ fn compiled_body_is_indistinguishable_from_bytecode() {
         }
         let same = program.rendered_callables()["user.Same"].object.raw();
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
-        // `Same`'s spans capture inputs, so its announcement carries the
-        // call's type arguments: the record a compiled generic call must
-        // produce as a bytecode one does.
         let Object::Function(same) = vm.get_object(vm.heap.compile_time_ptr(same)) else {
             unreachable!()
         };
@@ -180,26 +169,16 @@ fn compiled_body_is_indistinguishable_from_bytecode() {
     let bytecode = run(false);
     assert_eq!(CALLS.load(Ordering::Relaxed), 0);
     let compiled = run(true);
-    // `Add` runs compiled from `AddStr` twice (the second overflows) and
-    // from the compiled `Same` once, on the first call only.
     assert_eq!(
         CALLS.load(Ordering::Relaxed),
         3,
         "the compiled bodies must run for every call"
     );
 
-    // Same value: the first call adds, the second overflows, is caught by
-    // the bytecode `catch` in `Caller`, and its trace's innermost frame is
-    // the compiled function.
     assert_eq!(bytecode.0, "3|true|user.Add");
     assert_eq!(compiled.0, bytecode.0);
 
-    // Same telemetry: the user functions (Main, Caller x2, AddStr x2,
-    // Add x3, Same x1) plus whatever stdlib bytecode the program reaches,
-    // with the second Add completing in error, on the same call paths;
-    // the generic call's announced type arguments included.
-    // Call-path ids come from a process-global counter, so compare the
-    // records by the (caller, callee) names the ids resolve to.
+    // Call-path IDs are process-global, so compare the caller and callee names.
     let bytecode_named = named(&bytecode);
     let compiled_named = named(&compiled);
     assert!(bytecode_named.len() >= 9);
@@ -221,13 +200,11 @@ fn compiled_body_is_indistinguishable_from_bytecode() {
     assert_ne!(add_outcomes[1], InvocationOutcome::Ok);
 }
 
-/// The int a hand-written compiled body reads from a value it knows is
-/// one.
+/// Read an integer from a test value.
 pub(crate) fn test_int(value: Value) -> i64 {
     value.as_int().expect("an int")
 }
 
-/// A hand-written compiled body that keeps `slots` slots in its frame.
 fn test_body(
     body: crate::compiled_rt::CompiledFn,
     slots: u32,
@@ -243,12 +220,7 @@ fn test_body(
     .erase()
 }
 
-/// Run `user.Main` of `source` with the named functions' bodies replaced
-/// by hand-written compiled bodies, shaped as `baml_compiler2_rust`
-/// emits them (a resumable one keeping 3 slots: its argument, one local
-/// and its point). `objects` receives each named function's, class's or
-/// interface's object index before the run, for bodies that call or
-/// name other objects.
+/// Run `user.Main` with compiled bodies installed and publish named object indices.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn run_with_compiled_bodies(
     source: &str,
@@ -260,8 +232,6 @@ pub(crate) fn run_with_compiled_bodies(
     exec_with_compiled_bodies(source, bodies, objects, level).0
 }
 
-/// [`run_with_compiled_bodies`] at a telemetry level (`None` for off),
-/// returning the VM with its records.
 #[cfg(not(target_arch = "wasm32"))]
 fn exec_with_compiled_bodies(
     source: &str,
@@ -281,8 +251,7 @@ fn exec_with_compiled_bodies(
                     .find_map(|package| {
                         package.classes.iter().chain(&package.interfaces).find_map(
                             |(path, object)| {
-                                // Spelled under its package: the display
-                                // name elides the root package.
+                                // Display names omit the root package.
                                 let qualified = std::iter::once(package.name.as_str())
                                     .chain(path.namespace.iter().map(baml_type::Name::as_str))
                                     .chain(std::iter::once(path.name.as_str()))
@@ -301,8 +270,7 @@ fn exec_with_compiled_bodies(
             std::sync::atomic::Ordering::Relaxed,
         );
     }
-    // An interface implementation's body keys no name map; it is found
-    // by its display name among the pooled functions.
+    // Interface implementations have display names but no callable map entries.
     let indices: Vec<usize> = bodies
         .iter()
         .map(|(name, _)| {
@@ -353,10 +321,6 @@ fn exec_with_compiled_bodies(
     (out, vm)
 }
 
-/// Compiled recursion counts toward the frame limit: the caller sees a
-/// catchable `StackOverflow` at the bytecode depth, never a Rust stack
-/// overflow, with telemetry off (the direct-call path) and on (the VM's
-/// call path).
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_recursion_hits_the_frame_limit() {
@@ -391,11 +355,7 @@ fn compiled_recursion_hits_the_frame_limit() {
     }
 }
 
-/// Compiled recursion through bodies with large Rust frames reaches the
-/// frame limit, not the thread's stack: the floor is reached long before
-/// 256 frames (here on a 2 MiB thread, with 64 KiB frames), and the call
-/// continues on a fresh segment, so the catchable `StackOverflow` lands at
-/// the bytecode depth exactly, with telemetry off and on.
+// Large frames force stack growth before the VM reaches its frame limit.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_recursion_grows_the_stack_to_the_frame_limit() {
@@ -408,7 +368,6 @@ fn compiled_recursion_grows_the_stack_to_the_frame_limit() {
         if n == 0 {
             return Ok(Value::int(0));
         }
-        // A frame of 64 KiB that stays live across the call.
         let mut pad = [0u64; 8192];
         let slot = usize::try_from(n).unwrap() % pad.len();
         pad[slot] = 1;
@@ -453,11 +412,7 @@ fn compiled_recursion_grows_the_stack_to_the_frame_limit() {
         .unwrap();
 }
 
-/// An inline compiled body of a generic function reads the call's type
-/// arguments off its frame: the funnel binds them before the body runs,
-/// where a bytecode callee gets them once the funnel returns. Explicit,
-/// inferred, and under a `catch` of what the body throws (the frame
-/// then stays pushed, and the writeback must not bind them twice).
+// Type arguments must be bound before an inline body runs, including when it throws.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn inline_body_of_a_generic_function_sees_the_type_arguments() {
@@ -505,11 +460,6 @@ fn inline_body_of_a_generic_function_sees_the_type_arguments() {
     }
 }
 
-/// A compiled caller passes a generic compiled callee its type arguments
-/// (`call_compiled_with_types`): the callee's frame starts with them, on
-/// the direct path (telemetry off) and through the VM's call path
-/// (telemetry on), and a compiled caller called with its own type
-/// arguments forwards them on.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_caller_passes_type_arguments_to_a_compiled_callee() {
@@ -563,8 +513,6 @@ fn compiled_caller_passes_type_arguments_to_a_compiled_callee() {
     }
 }
 
-/// A compiled `catch` around a compiled callee that throws pops the
-/// callee's frame: the program continues normally and calls again.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_catch_pops_the_frames_of_compiled_callees() {
@@ -611,11 +559,7 @@ fn compiled_catch_pops_the_frames_of_compiled_callees() {
     }
 }
 
-/// A compiled caller's frame stands at its call instruction while the
-/// callee runs, as a bytecode caller's does: the same PC (the call site
-/// telemetry records) and so the same line in a trace taken below it,
-/// not the line the caller last reported or the interpreter's stale
-/// `cur_pc`.
+// Suspended callers must retain the call instruction PC for traces and telemetry.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
@@ -629,8 +573,6 @@ fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
     static MIDDLE: AtomicU32 = AtomicU32::new(0);
     static MIDDLE_CALL: AtomicU32 = AtomicU32::new(0);
     static OUTER_CALL: AtomicU32 = AtomicU32::new(0);
-    /// The (PC, trace line) of Outer's frame, then Middle's, as the
-    /// innermost body saw them.
     static SEEN: Mutex<Vec<(usize, usize)>> = Mutex::new(Vec::new());
     #[allow(clippy::unnecessary_wraps)] // the compiled-body signature
     fn inner(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<VmError>> {
@@ -674,8 +616,6 @@ fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
         function Outer() -> int { Middle() }
         function Main() -> string { `${Outer()}` }
     "#;
-    // The PC compiled code passes for a call: the index of the call
-    // instruction in the caller's bytecode.
     let program = baml_test_support::compile_source(SOURCE);
     let callables = program.rendered_callables();
     let call_of = |name: &str| {
@@ -726,11 +666,6 @@ fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
     }
 }
 
-/// With telemetry on, a compiled-to-compiled call entered inline
-/// (`call_compiled_observed`) records what the VM's call path records
-/// for it: the same call paths, outcomes and reentry flags, and the same
-/// span records, across nested calls, a callee that throws into a
-/// compiled `catch`, and recursion, at both auto levels that observe.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn inline_observed_compiled_calls_record_as_the_call_path_does() {
@@ -801,9 +736,7 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
 
     type NamedPath = (Option<String>, String);
 
-    /// The records of one run, with every run-specific id resolved: a
-    /// call path to its `(caller, callee)` names, a telemetry id to its
-    /// ordinal of first appearance, and clock readings dropped.
+    // Resolve run-specific IDs and discard clock readings before comparison.
     fn records(vm: &BexVm) -> (Vec<(NamedPath, InvocationOutcome, bool)>, Vec<String>) {
         let telemetry = vm.telemetry.as_ref().unwrap();
         let mut paths: HashMap<btel_types::CallPathId, NamedPath> = HashMap::new();
@@ -838,8 +771,6 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
         let spans = telemetry
             .span_records()
             .iter()
-            // The thread's own span quotes its clock epoch, which is
-            // the run's.
             .filter(|event| !format!("{event:?}").starts_with("Thread"))
             .map(|event| {
                 let mut out = String::new();
@@ -910,10 +841,6 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
         assert_eq!(inline.0, funnel.0, "timing records at {level:?}");
         assert_eq!(inline.1, funnel.1, "span records at {level:?}");
 
-        // The sequence covers what it claims to: the compiled calls
-        // (Safe→Mid, Mid→Leaf twice, Rec recursing) complete innermost
-        // first, the second Mid and its Leaf in error, and the recursion
-        // folds into the call path that entered it, as reentry.
         let named: Vec<_> = inline
             .0
             .iter()
@@ -960,7 +887,6 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
         };
         match level {
             AutoTelemetryLevel::Medium => assert_eq!(user, expected),
-            // Spans instead of timings: the same calls, as span completions.
             AutoTelemetryLevel::High => {
                 assert!(user.is_empty());
                 assert_eq!(completions("->user."), expected.len());
@@ -1045,9 +971,6 @@ fn empty_native_table_still_requires_matching_artifact() {
     assert!(error.to_string().contains("fingerprint mismatch"));
 }
 
-/// A compiled function the host calls as the entry point runs its compiled
-/// body (not its bytecode), and an error it raises leaves the run as it
-/// would from bytecode.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_entry_points_run_their_bodies() {
@@ -1089,10 +1012,6 @@ fn compiled_entry_points_run_their_bodies() {
     );
 }
 
-/// A resumable compiled body calls a bytecode function mid-body: it
-/// saves what it needs in its frame's slots, returns `Step::Call`, and is
-/// resumed with the result. An error from the callee is delivered to it
-/// and lands in its catch; one it does not catch leaves its frame.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn resumable_bodies_call_bytecode_and_resume() {
@@ -1102,9 +1021,7 @@ fn resumable_bodies_call_bytecode_and_resume() {
     static HELPER: AtomicU32 = AtomicU32::new(0);
     type Out = Result<Step, Box<VmError>>;
 
-    // fn Twice(n) { let k = n * 10; let h = Helper(n); k + h }
-    // with `Helper` left as bytecode: `k` lives in slot 1 across the call,
-    // and the one point it suspends at in slot 2.
+    // Slot 1 preserves `k` across the call to bytecode; slot 2 holds the resume point.
     fn twice(vm: &mut BexVm, resume: Resume) -> Out {
         let depth = vm.frame_depth();
         match resume {
@@ -1127,7 +1044,6 @@ fn resumable_bodies_call_bytecode_and_resume() {
                 Ok(Step::Return(Value::int(k + test_int(h))))
             }
             Resume::Thrown(error) => {
-                // `catch (e) { _ => -1 }` around the call when n == 0.
                 if test_int(vm.slot(depth, 0)) == 0 {
                     let (_thrown, _ctx) = vm.catch(error, depth)?;
                     Ok(Step::Return(Value::int(-1)))
@@ -1153,9 +1069,6 @@ fn resumable_bodies_call_bytecode_and_resume() {
             &[("user.Helper", &HELPER)],
             telemetry,
         );
-        // Twice(5) = 50 + 20; Twice(0): Helper divides by zero, the
-        // compiled catch returns -1; Twice(3): the error is not caught
-        // there and reaches Main's catch.
         assert_eq!(out, "70|-1|-9", "telemetry: {telemetry}");
     }
 }
@@ -1209,8 +1122,7 @@ fn compiled_delivery_survives_collection_before_resume() {
     assert!(roots.contains(&thrown_ptr));
     assert!(roots.contains(&context_ptr));
 
-    // SAFETY: this test owns the only VM, which is suspended, and forwards
-    // its roots before resuming it.
+    // SAFETY: this test owns the only VM and keeps it suspended until its roots are forwarded.
     let (_, _, forwarding) = unsafe {
         vm.heap
             .collect_garbage_generational(&roots, CollectionLevel::Major)
@@ -1232,16 +1144,12 @@ fn compiled_delivery_survives_collection_before_resume() {
     assert!(vm.compiled.delivery.is_none());
 }
 
-/// A resumable body calling a bound method value requests the call with
-/// the method's visible arguments; the VM inserts the receiver, as
-/// `CallIndirect` does.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn resumable_bodies_call_bound_method_values() {
     use crate::compiled_rt::{CompiledFn, Resume, Step};
     type Out = Result<Step, Box<VmError>>;
 
-    // fn Apply(f, x) { f(x) } with `f` a bound method value.
     fn apply(vm: &mut BexVm, resume: Resume) -> Out {
         let depth = vm.frame_depth();
         match resume {
@@ -1280,9 +1188,7 @@ fn resumable_bodies_call_bound_method_values() {
     }
 }
 
-/// The unwinder never consults a compiled frame's bytecode handlers: the
-/// body runs in place of that bytecode, so an error its body does not
-/// catch leaves the frame even where the bytecode has a `catch`.
+// Compiled frames must never use exception handlers from their replaced bytecode.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn errors_leave_compiled_frames_past_their_bytecode_handlers() {
@@ -1292,8 +1198,7 @@ fn errors_leave_compiled_frames_past_their_bytecode_handlers() {
         let n = test_int(args[0]);
         Ok(Value::int(vm.div_i64(n, 0)?))
     }
-    // Safe's bytecode catches; its compiled body (as if built without
-    // that catch) lets the error through.
+    // Safe's bytecode catches this error; its compiled body lets it escape.
     fn safe(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
         let work_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
         vm.call_compiled(work_ptr, work, &[args[0]], 0)
@@ -1320,9 +1225,7 @@ fn errors_leave_compiled_frames_past_their_bytecode_handlers() {
     }
 }
 
-/// A compiled catch lands the error with its real context, and a rethrow
-/// carries it: a bytecode `catch (e, ctx)` above sees the trace of the
-/// original throw, whose innermost frame is the compiled thrower.
+// Rethrowing must preserve the original throw context across compiled and bytecode frames.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_rethrow_keeps_the_original_context() {

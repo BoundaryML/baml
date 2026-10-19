@@ -211,8 +211,7 @@ impl BexThread {
     /// A callee is shielded through its caller, so unwinding needs no
     /// bookkeeping.
     pub fn vm_thread_is_shielded(&self) -> bool {
-        // A compiled frame on top has no live `cur_pc` of its own; every
-        // frame below it is at its call instruction.
+        // `cur_pc` is valid only for the innermost bytecode frame.
         let innermost = self
             .vm
             .frames
@@ -230,8 +229,7 @@ impl BexThread {
                 };
                 let pc = match self.vm.frame_position(index) {
                     None => return false,
-                    // A compiled body stands at the instruction it last
-                    // recorded: its call, if a callee runs above it.
+                    // A compiled caller records its call instruction before entering the callee.
                     Some(
                         bex_vm::FramePosition::CompiledRunning
                         | bex_vm::FramePosition::CompiledStub(_),

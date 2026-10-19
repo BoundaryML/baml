@@ -1,15 +1,4 @@
-//! Interface dispatch from compiled code: the interpreter's `VirtualCall`,
-//! `VirtualLoadField`/`VirtualStoreField`, `MakeVirtualBoundMethod` and
-//! `MakeVirtualFunction`, for a call site whose interface and method are
-//! known at compile time and whose receiver is not.
-//!
-//! Resolution is the interpreter's: the receiver's concrete type and the
-//! interface select at most one implementation (`ImplResolver`), and the
-//! method's callee comes with the implementation's frame type arguments. What
-//! differs is the cache. The interpreter keys a program-wide table on the call
-//! site and the receiver; compiled code gives each site its own
-//! [`VirtualSite`], a `static` in the generated crate, so a hit is one atomic
-//! load and a compare instead of a hash probe.
+//! Interface dispatch with a per-site cache for static implementations.
 
 use std::sync::{
     OnceLock,
@@ -27,29 +16,11 @@ use crate::{
     vm::BexVm,
 };
 
-/// The inline cache of one virtual call site in compiled code.
-///
-/// Monomorphic: it remembers the last receiver type the site dispatched on
-/// and the callee that resolved for it, as one word, so readers on every
-/// thread see a receiver with its own callee or nothing. Only a static
-/// implementation (an `implements` rule in the program image) is cached, as
-/// in the interpreter: a structural default can be replaced by an
-/// implementation a later-loaded package registers. A receiver is keyed by
-/// its type tag when that alone decides the implementation: a primitive, or
-/// an instance of a non-generic class in the image. Anything else (a generic
-/// instance, an array, an enum variant) resolves on every call.
-///
-/// The implementation's frame type arguments ride beside the word in a
-/// `OnceLock`, set once for the receiver that first filled the site; a
-/// site that later sees another receiver with a non-empty frame resolves
-/// without caching, so a hit never pairs one receiver's callee with
-/// another's frame. The heads in a frame are compile-time objects, which
-/// never move, so a `static` may hold them; they belong to one heap's image,
-/// so a hit from a VM over another heap (the same program loaded again in
-/// this process) resolves instead.
+/// An atomic cache of a virtual call site's last receiver tag and callee.
 pub struct VirtualSite {
     /// `FILLED | HAS_FRAME? | receiver tag << 32 | callee object index`.
     entry: AtomicU64,
+    // Cached type heads belong to one immutable program image and never move.
     frame: OnceLock<SiteFrame>,
 }
 
@@ -62,8 +33,7 @@ struct SiteFrame {
 
 const FILLED: u64 = 1 << 63;
 const HAS_FRAME: u64 = 1 << 62;
-/// Receiver tags are declared heads' tags (`CLASS_BASE` plus an object index)
-/// or a primitive's: a few bits short of 30 in any program.
+// Declared and primitive receiver tags fit below the two flag bits.
 const TAG_LIMIT: u64 = 1 << 30;
 
 impl VirtualSite {
@@ -75,14 +45,12 @@ impl VirtualSite {
         }
     }
 
-    /// Whether the site has cached a target; for tests.
+    /// Return whether the site has cached a target.
     #[must_use]
     pub fn is_filled(&self) -> bool {
         self.entry.load(Ordering::Relaxed) & FILLED != 0
     }
 
-    /// The cached callee and frame for a receiver keyed `tag`, in the heap
-    /// whose compile-time image starts at `image`.
     fn get(&self, tag: u32, image: usize) -> Option<(u32, &[RealizedTy])> {
         let word = self.entry.load(Ordering::Acquire);
         if word & FILLED == 0 || (word >> 32) & (TAG_LIMIT - 1) != u64::from(tag) {
@@ -100,8 +68,7 @@ impl VirtualSite {
     fn set(&self, tag: u32, callee: u32, image: usize, type_args: &[RealizedTy]) {
         let mut word = FILLED | (u64::from(tag) << 32) | u64::from(callee);
         if !type_args.is_empty() {
-            // The frame slot belongs to the receiver that first filled it;
-            // another receiver's frame is not cached.
+            // The first receiver owns the frame slot for the site's lifetime.
             let _ = self.frame.set(SiteFrame {
                 receiver: tag,
                 image,
@@ -127,16 +94,7 @@ impl Default for VirtualSite {
 }
 
 impl BexVm {
-    /// The callee of interface method `method` for `receiver`, exactly as the
-    /// interpreter's `VirtualCall` resolves it, through `site`'s cache. The
-    /// callee's frame type arguments (the implementation's, then
-    /// `method_type_args`) are pushed as the type arguments of the call a
-    /// resumable body is about to request ([`Self::push_type_arg`]).
-    ///
-    /// `iface` is the interface's `Object::Interface`; `iface_args` its
-    /// instantiation, empty for a non-generic interface. Failing to resolve is
-    /// an internal error: the checker proved the receiver implements the
-    /// interface.
+    /// Resolve a cached interface method and push implementation and method type arguments.
     pub fn virtual_target(
         &mut self,
         site: &VirtualSite,
@@ -156,9 +114,7 @@ impl BexVm {
         )
     }
 
-    /// [`Self::virtual_target`] for a site whose instantiation (`iface_args`,
-    /// `method_type_args`) can differ between passes: resolved every time,
-    /// since a site's cache keys on the receiver alone.
+    /// Resolve without caching when the site's type arguments can vary.
     pub fn virtual_target_uncached(
         &mut self,
         receiver: Value,
@@ -179,6 +135,7 @@ impl BexVm {
         method: &str,
         method_type_args: &[RealizedTy],
     ) -> Result<HeapPtr, Box<VmError>> {
+        // The receiver tag must fully determine the implementation.
         let key = site.and(self.site_key(receiver));
         if let (Some(site), Some(tag)) = (site, key)
             && let Some((callee, frame)) = site.get(tag, self.image())
@@ -198,6 +155,7 @@ impl BexVm {
                 method: method.to_string(),
             })?;
         let (callee, frame) = resolver.implementation_method(&implementation, method)?;
+        // Later-loaded implementations can replace structural defaults.
         if implementation.is_static()
             && let (Some(site), Some(tag)) = (site, key)
             && let Some(index) = self.compile_time_index(callee)
@@ -211,17 +169,7 @@ impl BexVm {
         Ok(callee)
     }
 
-    /// Run the callee [`Self::virtual_target`] resolved in place when it is a
-    /// compiled body that cannot suspend, called with no type arguments and
-    /// with `args` as its slots: the implementation of a non-generic class,
-    /// in the common case. Otherwise `None`, and the body requests the call
-    /// from the VM with the type arguments already pushed; so for a
-    /// pass-through implementation, whose held trace and span activations
-    /// the VM's call path sets up and ends.
-    ///
-    /// The call is [`Self::call_compiled`]'s: a frame, the depth limit, and
-    /// on `Err` the callee's frame left for the caller's catch or the
-    /// unwinder.
+    /// Call an eligible inline callee, leaving its frame on error for the unwinder.
     #[inline]
     pub fn call_inline(
         &mut self,
@@ -246,13 +194,7 @@ impl BexVm {
         }
     }
 
-    /// Push `args`, the value arguments of a virtual call in the interface
-    /// method's declared slot order, as the arguments of the call a resumable
-    /// body is about to request ([`Self::push_arg`]), laid over `callee`'s
-    /// slots as the interpreter's `remap_call_arguments` does: `layout`
-    /// names the optional slot each argument fills (`None` for a required
-    /// one), and is `None` when the site pushes the method's own slots.
-    /// Returns the callee's argument count.
+    /// Map interface arguments to callee slots and return the argument count.
     pub fn push_virtual_args(
         &mut self,
         callee: HeapPtr,
@@ -262,20 +204,14 @@ impl BexVm {
         match self.lay_out_virtual_args(callee, layout, args) {
             Ok(count) => Ok(count),
             Err(error) => {
-                // The type arguments `virtual_target` pushed belong to the
-                // call that will not happen.
+                // Discard type arguments for the failed call.
                 self.compiled.call_type_args.clear();
                 Err(error)
             }
         }
     }
 
-    /// Push `args` for a call of the function value `callee` whose site
-    /// names some arguments (`layout`), laid over its slots as the
-    /// interpreter's `CallIndirect` lays them: a bound method's receiver
-    /// joins them as the leading required slot before the mapping, then is
-    /// left for the call path to insert, as it does for every compiled
-    /// request of a bound method. Returns the argument count pushed.
+    /// Map named arguments to callee slots while reserving a bound method's receiver slot.
     pub fn push_indirect_args(
         &mut self,
         callee: HeapPtr,
@@ -309,8 +245,7 @@ impl BexVm {
             self.stack.extend(args.iter().copied());
             return Ok(count(args.len()));
         };
-        // Positional arguments filling every parameter need no mapping; only
-        // an implementation with extra optionals does.
+        // Extra optional parameters require remapping even for positional arguments.
         if layout.iter().all(Option::is_none) && self.callee_params(callee)?.arity() == args.len() {
             self.stack.extend(args.iter().copied());
             return Ok(count(args.len()));
@@ -338,8 +273,7 @@ impl BexVm {
         Ok(count(target.len()))
     }
 
-    /// Read interface field `field_index` of `iface` off `receiver`: the
-    /// interpreter's `VirtualLoadField`.
+    /// Read an interface field from the receiver's mapped slot.
     pub fn virtual_load_field(
         &mut self,
         receiver: Value,
@@ -352,8 +286,7 @@ impl BexVm {
         self.load_field(receiver, slot)
     }
 
-    /// Write interface field `field_index` of `iface` on `receiver`: the
-    /// interpreter's `VirtualStoreField`.
+    /// Write an interface field in the receiver's mapped slot.
     pub fn virtual_store_field(
         &mut self,
         receiver: Value,
@@ -367,9 +300,7 @@ impl BexVm {
         self.store_field(receiver, slot, value)
     }
 
-    /// `receiver.method` as a value, for an interface method: the
-    /// interpreter's `MakeVirtualBoundMethod`. The bound method carries the
-    /// implementation's frame type arguments followed by `method_type_args`.
+    /// Bind an interface method with implementation type arguments followed by method arguments.
     pub fn make_virtual_bound_method(
         &mut self,
         receiver: Value,
@@ -397,10 +328,7 @@ impl BexVm {
         Ok(Value::object(self.tlab.alloc(bound)))
     }
 
-    /// `(Self as Iface).method` as a value, for a `Self` type known at
-    /// compile time: the interpreter's `MakeVirtualFunction`. A capture-less
-    /// closure whose captured type arguments are the implementation's frame
-    /// followed by `method_type_args`.
+    /// Create an interface method closure for a statically known `Self` type.
     pub fn make_virtual_function(
         &mut self,
         self_ty: &RealizedTy,
@@ -409,9 +337,7 @@ impl BexVm {
         method: &str,
         method_type_args: &[RealizedTy],
     ) -> Result<Value, Box<VmError>> {
-        // A static `Self` lives in the program image, whose implementations
-        // the lexical world sees; a runtime package's type never reaches
-        // compiled code (its heads are not known at compile time).
+        // Static `Self` types use implementations visible in the lexical world.
         let resolver = ImplResolver::new(self);
         let (function, type_args) = resolve_method(
             self,
@@ -430,7 +356,6 @@ impl BexVm {
         Ok(Value::object(self.tlab.alloc(closure)))
     }
 
-    /// The head of the interface object `iface`.
     fn interface_head(&self, iface: HeapPtr) -> Result<TypeHead, Box<VmError>> {
         match self.get_object(iface) {
             Object::Interface(declaration) => Ok(TypeHead::new(iface, declaration.type_tag)),
@@ -442,7 +367,6 @@ impl BexVm {
         }
     }
 
-    /// `Self` for a dispatch on `receiver`: its concrete type.
     fn dispatch_self_ty(&self, receiver: Value) -> Result<RealizedTy, Box<VmError>> {
         self.value_concrete_ty(receiver)
             .map(RealizedTy::from)
@@ -457,8 +381,6 @@ impl BexVm {
             })
     }
 
-    /// The tag a [`VirtualSite`] keys `receiver` by, when its type tag alone
-    /// decides the implementation.
     fn site_key(&self, receiver: Value) -> Option<u32> {
         let tag = match receiver.as_object_ptr() {
             None => crate::vm::value_type_tag(receiver),
@@ -481,8 +403,6 @@ impl BexVm {
             .filter(|&tag| u64::from(tag) < TAG_LIMIT)
     }
 
-    /// The object index of a compile-time object, which `compile_time_ptr`
-    /// takes back to the pointer; `None` for a runtime object.
     fn compile_time_index(&self, ptr: HeapPtr) -> Option<u32> {
         if !self.heap.is_compile_time_ptr(ptr) {
             return None;
@@ -491,16 +411,12 @@ impl BexVm {
         u32::try_from(offset / std::mem::size_of::<Object>()).ok()
     }
 
-    /// Where this heap's compile-time image starts: the identity of the image
-    /// the pointers in a cached frame belong to.
     fn image(&self) -> usize {
         self.heap.compile_time_ptr(0).as_ptr() as usize
     }
 }
 
-/// Resolve `method` of `iface<iface_args>` for `self_ty`: the callee and its
-/// complete frame, the implementation's type arguments followed by the
-/// method's own (`BexVm::resolve_virtual_method`).
+// Resolve the callee with implementation type arguments followed by method arguments.
 fn resolve_method(
     vm: &BexVm,
     resolver: ImplResolver<'_>,
@@ -543,8 +459,6 @@ mod tests {
         ObjectIndex::from_raw(index.load(Ordering::Relaxed) as usize)
     }
 
-    /// A resumable body `fn F(x) { x.method() }` dispatching through `site`
-    /// on the interface at `iface`, instantiated with `iface_args`.
     fn dispatch(
         vm: &mut BexVm,
         resume: Resume,
@@ -570,9 +484,6 @@ mod tests {
         }
     }
 
-    /// Explicit implementations: each receiver's own method runs, the site
-    /// caches the last one, and an error the implementation raises is
-    /// delivered to the compiled caller and leaves it.
     #[test]
     fn explicit_implementations_dispatch_and_cache() {
         static SHAPE: AtomicU32 = AtomicU32::new(0);
@@ -614,8 +525,6 @@ mod tests {
         }
     }
 
-    /// A callee that is itself a compiled body that cannot suspend runs in
-    /// place of the request; one that is not (bytecode here) is requested.
     #[test]
     fn inline_implementations_run_in_place() {
         static SHAPE: AtomicU32 = AtomicU32::new(0);
@@ -681,9 +590,6 @@ mod tests {
         }
     }
 
-    /// An adopted default body runs with the implementation's frame
-    /// (`[Self]`), which the site keeps beside the callee: the second call
-    /// is a hit that re-derives it.
     #[test]
     fn adopted_defaults_carry_their_frame_through_the_cache() {
         static GREETER: AtomicU32 = AtomicU32::new(0);
@@ -709,9 +615,6 @@ mod tests {
         assert!(SITE.is_filled());
     }
 
-    /// A structural default (`to_string` of a class with no override) is
-    /// the interpreter's, and is never cached: a later-loaded implementation
-    /// may replace it.
     #[test]
     fn structural_defaults_resolve_without_caching() {
         static TO_STRING: AtomicU32 = AtomicU32::new(0);
@@ -736,8 +639,6 @@ mod tests {
         assert!(!SITE.is_filled());
     }
 
-    /// A generic interface instantiated with a primitive selects the
-    /// implementation at that instantiation.
     #[test]
     fn generic_interfaces_dispatch_on_their_instantiation() {
         static CONV: AtomicU32 = AtomicU32::new(0);
@@ -763,7 +664,6 @@ mod tests {
         assert_eq!(out, "as int");
     }
 
-    /// `receiver.method` as a value binds the receiver's implementation.
     #[test]
     fn bound_method_values_resolve_at_bind_time() {
         static SHAPE: AtomicU32 = AtomicU32::new(0);
@@ -793,8 +693,6 @@ mod tests {
         assert_eq!(out, "10");
     }
 
-    /// An interface field reads and writes the slot the receiver's
-    /// implementation links it to, wherever the class keeps it.
     #[test]
     fn interface_fields_follow_the_implementation_links() {
         static NAMED: AtomicU32 = AtomicU32::new(0);

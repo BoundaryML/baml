@@ -1,14 +1,4 @@
-//! Cells and captures: the storage of a local a closure captures, the
-//! captures of the closure a compiled lambda body runs as, and a closure
-//! call made from compiled code.
-//!
-//! A captured local holds an `Object::Cell`, allocated where the binding is
-//! created (`MakeCell`) and shared with every closure that captures it; every
-//! read or write of the binding goes through the cell (`LoadDeref` /
-//! `StoreDeref` in the enclosing function, `LoadCapture` / `StoreCapture` in
-//! a lambda, which finds the cell in its closure's capture array). Compiled
-//! code keeps the cell pointer in a Rust local and composes the same
-//! primitives.
+//! Captured locals share cells between the enclosing scope and its closures.
 
 use bex_vm_types::{HeapPtr, Object, ObjectType, StackIndex, Value, types::Cell};
 
@@ -19,21 +9,20 @@ use crate::{
 };
 
 impl BexVm {
-    /// A fresh cell holding `value`: bytecode's `MakeCell`.
+    /// Allocate a cell holding `value`.
     #[inline]
     pub fn new_cell(&mut self, value: Value) -> Value {
         Value::object(self.tlab.alloc(Object::Cell(Cell::new(value))))
     }
 
-    /// The value in `cell`: `LoadDeref` / `LoadCapture`.
+    /// Read the value in a captured local's cell.
     #[inline]
     pub fn cell_load(&self, cell: Value) -> Result<Value, Box<VmError>> {
         let (_, cell) = self.cell_of(cell)?;
         Ok(cell.load())
     }
 
-    /// Store `value` in `cell`: `StoreDeref` / `StoreCapture`, with the
-    /// generational write barrier they apply.
+    /// Store `value` in a cell with a generational write barrier.
     #[inline]
     pub fn cell_store(&mut self, cell: Value, value: Value) -> Result<(), Box<VmError>> {
         let (ptr, _) = self.cell_of(cell)?;
@@ -43,10 +32,7 @@ impl BexVm {
         Ok(())
     }
 
-    /// The cell in capture `index` of the closure the compiled function whose
-    /// frame count is `depth` runs: `CaptureRef`. Only a lambda body reads
-    /// one, and a lambda is only ever entered through a closure over it,
-    /// which its frame holds as its function.
+    /// Read a capture from the closure stored as the frame's function.
     #[inline]
     pub fn capture_cell(&self, depth: usize, index: usize) -> Result<Value, Box<VmError>> {
         let frame = self.compiled_frame(depth);
@@ -72,8 +58,6 @@ impl BexVm {
         }
     }
 
-    /// `cell`'s pointer and object. A non-cell here is a checker hole, as
-    /// the interpreter reports it.
     #[inline]
     fn cell_of(&self, cell: Value) -> Result<(HeapPtr, &Cell), Box<VmError>> {
         let Some(ptr) = cell.as_object_ptr() else {
@@ -97,17 +81,7 @@ impl BexVm {
         }
     }
 
-    // ── Closure calls ─────────────────────────────────────────────────────────
-
-    /// The inline compiled body a call of the function value `callee` with
-    /// `argc` arguments runs, when compiled code can make the call directly:
-    /// a closure (or a plain function) whose function has an inline compiled
-    /// body and takes exactly `argc` arguments. Any other callee — bytecode,
-    /// a resumable body, a pass-through function, a bound method, a generic
-    /// function, a host closure, an arity the VM's call path reports — goes
-    /// through [`Step::Call`].
-    ///
-    /// [`Step::Call`]: super::Step::Call
+    /// Find an inline body eligible for a direct call with `argc` arguments.
     #[inline]
     #[must_use]
     pub fn closure_inline_body(&self, callee: HeapPtr, argc: usize) -> Option<InlineBody> {
@@ -128,11 +102,7 @@ impl BexVm {
         }
     }
 
-    /// Call the function value `callee` (a closure, or a plain function)
-    /// whose inline body [`Self::closure_inline_body`] found, from compiled
-    /// code: [`Self::call_compiled`] with the frame a closure call gets, its
-    /// function the closure itself (where the body's `capture_cell` finds the
-    /// captures) and its type arguments the closure's.
+    /// Call an inline body with the callee's captures and type arguments.
     #[inline]
     pub fn call_closure_compiled(
         &mut self,
@@ -150,7 +120,6 @@ impl BexVm {
         self.with_stack_room(|vm| vm.call_closure_compiled_here(callee, body, args))
     }
 
-    /// [`Self::call_closure_compiled`] on the Rust stack where it stands.
     #[inline]
     fn call_closure_compiled_here(
         &mut self,
@@ -199,8 +168,7 @@ mod tests {
         assert_eq!(vm.cell_load(cell).unwrap(), Value::int(1));
         vm.cell_store(cell, Value::int(2)).unwrap();
         assert_eq!(vm.cell_load(cell).unwrap(), Value::int(2));
-        // Two cells are two bindings: the enclosing scope and a closure share
-        // one, a new iteration gets its own (`FreshCell` with `carry_value`).
+        // A new loop iteration gets a separate binding with the carried value.
         let carried = vm.cell_load(cell).unwrap();
         let fresh = vm.new_cell(carried);
         vm.cell_store(fresh, Value::int(3)).unwrap();
@@ -218,8 +186,6 @@ mod tests {
         assert_eq!(vm.cell_load(cell).unwrap(), text);
     }
 
-    /// A non-cell where the checker typed a cell is reported as the
-    /// interpreter's internal type error, never read.
     #[test]
     fn a_non_cell_is_a_checker_hole() {
         let mut vm = vm();
@@ -238,9 +204,6 @@ mod tests {
         ));
     }
 
-    /// A closure's captures are the cells it was made over, in order; a
-    /// compiled lambda body reads them off its frame's function, which a
-    /// closure call sets to the closure.
     #[test]
     fn a_closure_call_frame_exposes_its_captures() {
         let mut vm = vm();
@@ -268,7 +231,6 @@ mod tests {
             *vm.capture_cell(depth, 2).unwrap_err(),
             VmError::InternalError(_)
         ));
-        // A frame running a plain function has no captures.
         let depth = depth - 1;
         vm.frames.pop();
         let frame = BytecodeFrame::compiled(

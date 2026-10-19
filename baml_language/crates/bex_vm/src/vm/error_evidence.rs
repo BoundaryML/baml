@@ -214,9 +214,6 @@ impl BexVm {
         }
     }
 
-    /// The kind of a raise from a compiled body, which has no opcode to
-    /// decode: a rethrow says so, a panic instance is a runtime failure, and
-    /// anything else is a `throw`.
     fn compiled_raise_kind(&self, thrown: &VmThrown) -> RaiseKind {
         if thrown.throw_kind == ThrowKind::Rethrow {
             return RaiseKind::Rethrow;
@@ -307,7 +304,6 @@ impl BexVm {
             .map(|idx| match &self.frames[idx] {
                 Frame::Bytecode(frame) => ErrorFrame {
                     function: self.frame_registered_function(idx),
-                    // A compiled body stands at the instruction it recorded.
                     pc: (if self.compiled_at(idx).is_some() {
                         self.compiled_pc(idx)
                     } else if Some(idx) == raise_frame {

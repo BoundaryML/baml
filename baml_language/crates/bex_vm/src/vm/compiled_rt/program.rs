@@ -1,10 +1,4 @@
-//! The program around a compiled body: its function's constant pool, the
-//! globals a top-level `let` lives in, and the package that owns it.
-//!
-//! A compiled body replaces a bytecode function but keeps that function's
-//! object: its constant pool is still in the program, so a type template the
-//! body tests against or allocates with is read from there by index, exactly
-//! the constant the bytecode's `IsType`/`LoadType` would read.
+//! Access to the compiled function's constant pool, globals, and package.
 
 use bex_vm_types::{GlobalIndex, HeapPtr, Object, RealizedTy, Value, types::ConstValue};
 
@@ -14,9 +8,7 @@ use crate::{
 };
 
 impl BexVm {
-    /// The value of global slot `index` as the function `function` reads it
-    /// (bytecode's `LoadGlobal`): a top-level `let`, initialized by its
-    /// package's `$init` before any body runs.
+    /// Read a global initialized by the owning package's `$init`.
     #[inline]
     #[must_use]
     pub fn load_global(&self, function: HeapPtr, index: usize) -> Value {
@@ -29,16 +21,13 @@ impl BexVm {
         )
     }
 
-    /// `Package.current` in the package at `ordinal` (bytecode's
-    /// `LoadCurrentPackage`, whose operand the linker wrote).
+    /// Return `Package.current` for the linked package ordinal.
     #[inline]
     pub fn current_package(&mut self, ordinal: usize) -> Value {
         crate::package_reflect::reflect::current_package_value(self, ordinal)
     }
 
-    /// The type a `ConstValue::Type` constant of `function` names, for a
-    /// function with no frame type arguments (bytecode's `LoadType`, less the
-    /// `type` object it allocates: compiled code wants the type itself).
+    /// Resolve a type constant without frame type arguments.
     pub fn type_constant(
         &self,
         function: HeapPtr,
@@ -60,10 +49,7 @@ impl BexVm {
         })
     }
 
-    /// The type the `ConstValue::Type` constant `index` of `function` names
-    /// in the running compiled frame (`depth`, see [`Self::frame_depth`]):
-    /// its template substituted with the frame's type arguments, as
-    /// bytecode's `LoadType` substitutes it.
+    /// Resolve a type constant using the frame's type arguments at `depth`.
     pub fn frame_type_constant(
         &self,
         depth: usize,
@@ -91,9 +77,7 @@ impl BexVm {
         })
     }
 
-    /// `value is T` for the type constant `index` of `function` (a structural
-    /// template, a literal type, or a type tag), in a function with no frame
-    /// type arguments: bytecode's `IsType`.
+    /// Test `value` against a type constant without frame type arguments.
     pub fn is_type_constant(
         &self,
         function: HeapPtr,
@@ -120,9 +104,7 @@ mod tests {
 
     use crate::vm::tests::{native_function_object, test_vm};
 
-    /// A bytecode function whose pool holds `constants`, resolved as
-    /// `resolved` (the loader resolves an `Int` to itself and leaves a type
-    /// or literal constant `NULL`).
+    // The loader leaves type and literal constants unresolved.
     fn function_with(constants: Vec<ConstValue>) -> Object {
         let Object::Function(mut function) = native_function_object() else {
             unreachable!()

@@ -205,8 +205,7 @@ fn append_virtual_method_type_args(
     values
 }
 
-/// Appends a call's type arguments (and their exact values, sparse) after those
-/// the callee value carried.
+// Call-site type arguments follow those carried by the callee.
 fn append_passed_type_args(
     frame: &mut BytecodeFrame,
     type_args: &[bex_vm_types::RealizedTy],
@@ -263,14 +262,12 @@ struct StaticVirtualCallTarget {
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
 }
 
-/// Bytecode call frame — pushed when entering a bytecode function, whether its
-/// bytecode or its compiled body runs. See `BexVm::compiled_at`.
+/// A bytecode function's call frame, also used by its compiled body.
 #[derive(Clone, Debug)]
 pub struct BytecodeFrame {
     /// Pointer to the running function (or closure) object.
     pub function: HeapPtr,
-    /// Instruction pointer (IP). Points to the next instruction. A compiled frame
-    /// holds `compiled_rt::RUNNING` or an offset into its resume stub.
+    /// The next instruction or resume-stub offset, or `compiled_rt::RUNNING` inside a body.
     instruction_ptr: usize,
     /// Local variables offset in the eval stack.
     pub(crate) locals_offset: StackIndex,
@@ -293,8 +290,8 @@ pub struct BytecodeFrame {
     /// In the legacy path this mirrors `instruction_ptr - 1` and is kept
     /// up-to-date before each `step()` call.
     /// Used by `capture_stack_trace`, `try_unwind_exception`, and event
-    /// source location capture. For a compiled frame, the index of the
-    /// instruction its body last reported instead (`BexVm::compiled_pc`).
+    /// source location capture. Compiled bodies store their last reported
+    /// instruction index here; see `BexVm::compiled_pc`.
     pub(crate) faulting_pc: usize,
     /// Producer-only invocation state. `None` means the invocation is hidden.
     pub(crate) telemetry: Option<FrameTelemetry>,
@@ -1959,8 +1956,7 @@ pub fn convert_program_with_trace_hooks(
     convert_program_with_compiled_bodies(program, enabled, None)
 }
 
-/// [`convert_program_with_trace_hooks`], additionally attaching natively
-/// compiled bodies to the bytecode functions they were compiled from.
+/// Convert a program with trace hooks and attach compiled bodies to their bytecode functions.
 pub fn convert_program_with_compiled_bodies(
     program: bex_vm_types::Program,
     enabled: bool,
@@ -2000,8 +1996,7 @@ pub fn convert_program_with_compiled_bodies(
         .map(crate::package_baml::attach_builtins)
         .collect::<Result<Vec<_>, _>>()?;
 
-    // Compiled bodies attach before compact code is prepared: call
-    // specialization reads the callee to choose a call fast path.
+    // Call specialization needs compiled bodies attached before compact lowering.
     if let Some(bodies) = compiled_bodies {
         compiled_rt::attach_compiled_bodies(&mut objects, bodies.table, &body_names)?;
     }
@@ -2081,8 +2076,6 @@ fn disable_declared_trace_hooks(objects: &mut [Object]) {
 pub fn prepare_compact_code(objects: &mut [Object], globals: &[bex_vm_types::ConstValue]) {
     for object in objects.iter_mut() {
         if let Object::Function(function) = object {
-            // Compiled functions get the resume stub appended and keep instruction
-            // offsets, which compiled positions are expressed in.
             let compact = if function.compiled_body.is_some() {
                 let mut compact = function.bytecode.lower_to_compact_with_offsets();
                 compact
@@ -5199,7 +5192,6 @@ impl BexVm {
                 self.allocate_real_locals_for_frame(dispatch_ptr)
                     .expect("entry point must be a valid function frame");
 
-                // A compiled entry starts at its stub unless a trace hook runs first.
                 let stub = match self.get_object(dispatch_ptr) {
                     Object::Function(callee) => crate::compiled_rt::stub_start(callee),
                     _ => None,
@@ -6494,8 +6486,7 @@ impl BexVm {
             .collect()
     }
 
-    /// The context an error raised at the current point lands with (BEP-042), and
-    /// whether it was converted from a handled error.
+    /// The landing context and whether it came from a handled error, per BEP-042.
     fn in_flight_context(
         &mut self,
         carried: Option<Value>,
@@ -6608,9 +6599,9 @@ impl BexVm {
                 unreachable!("non-Native frames already handled above");
             };
             let (frame_faulting_pc, frame_locals_offset) = (frame.faulting_pc, frame.locals_offset);
-            // A running compiled body has no bytecode handlers; the error leaves it.
+            // Running compiled bodies have no bytecode handlers.
             let compiled = self.compiled_at(depth);
-            // A suspended compiled body receives the error when resumed.
+            // Suspended bodies receive errors through the resume stub.
             if compiled == Some(crate::compiled_rt::CompiledAt::Suspended) {
                 // SAFETY: see `load_function`.
                 let frame_function = unsafe { self.load_function(depth)? };
@@ -6633,7 +6624,6 @@ impl BexVm {
                     frame.instruction_ptr = stub + crate::compiled_rt::stub::AFTER_CALL;
                 }
                 self.stack.truncate(frame_locals_offset.raw() + slots);
-                // Compiled landings record no raise evidence yet.
                 let _ = evidence.take();
                 *frame_idx = depth;
                 // SAFETY: see `load_function`.
@@ -6845,7 +6835,6 @@ impl BexVm {
             let Frame::Bytecode(bf) = &self.frames[depth] else {
                 continue; // native frames hold no handler bodies
             };
-            // A compiled body keeps its handled error's context in its cause slot.
             if self.compiled_at(depth).is_some() {
                 innermost_bc = false;
                 if let Some(context) = self.compiled_cause(depth) {
@@ -7283,15 +7272,13 @@ impl BexVm {
         // and stack traces. `cur_pc` holds this call instruction's start.
         let call_site = self.cur_pc;
 
-        // A compiled caller passes the index of its call instruction as
-        // `cur_pc` (`compiled_caller_call`), which its frame keeps here.
+        // `compiled_caller_call` sets `cur_pc` to the call's instruction index.
         if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
             bf.faulting_pc = call_site;
         }
 
-        // SAFETY: setup does not collect. An inline compiled body can collect
-        // once its frame is rooted; these borrowed objects must not be used
-        // after invoking that body.
+        // SAFETY: setup cannot collect. The body may collect after its frame
+        // is rooted, so these borrows must not be used after the call.
         let callee_object: &'static Object = unsafe { callee_ptr.get() };
 
         // A host closure isn't a Function/Closure/BoundMethod and dispatches via
@@ -7638,8 +7625,7 @@ impl BexVm {
 
                 *function = callee;
 
-                // A compiled body runs in place of the bytecode, unless the callee is
-                // trace-hooked: its hook prologue is bytecode.
+                // Trace-hooked callees must run their bytecode prologue first.
                 let native = if hooked {
                     None
                 } else {
@@ -7651,8 +7637,7 @@ impl BexVm {
                         self.stack.resize(new_len, Value::NULL);
                     }
                     Some(CompiledFn::Inline(body)) => {
-                        // Copy, never drain: the frame's stack region stays
-                        // rooted and is released by `finish_bytecode_frame`.
+                        // Keep arguments rooted on the stack until `finish_bytecode_frame`.
                         let args: SmallVec<[Value; 4]> = (0..arg_count)
                             .map(|i| {
                                 self.stack
@@ -7662,7 +7647,7 @@ impl BexVm {
                         if let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] {
                             frame.instruction_ptr = crate::compiled_rt::RUNNING;
                         }
-                        // An inline body reads its type arguments off the frame, so bind them first.
+                        // The body reads type arguments from its frame.
                         if passes_type_args {
                             self.bind_passed_type_args(*frame_idx);
                         }
@@ -7673,7 +7658,6 @@ impl BexVm {
                                 if passes_type_args {
                                     self.recycle_frame_type_args(*frame_idx);
                                 }
-                                // As `Return` does, leave the result on the stack.
                                 self.stack.push(value);
                                 if let Some(state) =
                                     self.finish_bytecode_frame(frame_idx, function, value)?
@@ -7681,11 +7665,9 @@ impl BexVm {
                                     return Ok(Some(state));
                                 }
                             }
-                            // The frames stay pushed for the unwinder.
                             Err(error) => return Err(*error),
                         }
                     }
-                    // A resumable body starts at its stub.
                     Some(CompiledFn::Resumable(_)) => {
                         let start = crate::compiled_rt::stub_start(callee)
                             .expect("a compiled function has a stub");
@@ -7795,8 +7777,7 @@ impl BexVm {
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
-        // The pending lane holds a copy for the funnel (the caller's slice
-        // may be a frame's own vector); a pooled vector carries it.
+        // The caller's slice may borrow a frame, so copy before entering the callee.
         let mut pending_type_args = self.pooled_type_args();
         pending_type_args.extend_from_slice(options.type_args);
         self.save_call_types();
@@ -7818,9 +7799,8 @@ impl BexVm {
         // generics — so the metadata lane is written whenever any of the three
         // has something to say, not only when the frame widens.
         //
-        // An inline compiled body had them bound before it ran (the funnel's
-        // `bind_passed_type_args`); the one way its frame is still here is an
-        // error that left it pushed for the unwinder, at `RUNNING`.
+        // A frame at `RUNNING` already has type arguments bound and is
+        // waiting for the unwinder after an inline body failed.
         if (!self.pending_call_type_args.is_empty() || !self.pending_call_type_values.is_empty())
             && self.frames.len() == frames_before + 1
             && *frame_idx == frames_before
@@ -8535,8 +8515,7 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
-        // A VM may run on a different thread each time; compiled calls check
-        // against this thread's stack.
+        // Execution may migrate between threads with different stack bounds.
         self.compiled.stack_floor = crate::compiled_rt::stack_floor();
         #[cfg(not(target_arch = "wasm32"))]
         self.stop_disabled_telemetry();
@@ -8671,7 +8650,6 @@ impl BexVm {
         Ok(())
     }
 
-    /// The comparison operator over two popped operands.
     fn cmpop_values(&mut self, op: CmpOp, left: Value, right: Value) -> Result<Value, VmError> {
         #[allow(clippy::cast_precision_loss)]
         let result = if let (Some(l), Some(r)) = (left.as_int(), right.as_int()) {
@@ -8826,7 +8804,6 @@ impl BexVm {
         Ok(())
     }
 
-    /// The binary arithmetic operator over two popped operands.
     fn binop_values(&mut self, op: BinOp, left: Value, right: Value) -> Result<Value, VmError> {
         #[allow(clippy::cast_precision_loss)]
         let result = if let (Some(l), Some(r)) = (left.as_int(), right.as_int()) {
@@ -9746,10 +9723,8 @@ impl BexVm {
                         let result = self.stack.ensure_pop();
                         self.finish_trace_hook(*frame_idx, result)?;
                     }
-                    // A compiled frame's stub: hand the frame to its body.
-                    // `pc` never leaves this loop (handing it to an outlined
-                    // call costs every opcode its register): the body parks
-                    // its frame, and `pc` follows the frame.
+                    // Passing `pc` to an outlined call prevents register allocation
+                    // across dispatch, so recover it from the parked frame.
                     OpCode::ResumeCompiled => {
                         let outcome = self.resume_compiled(frame_idx, function);
                         if let Some(Frame::Bytecode(frame)) = self.frames.get(*frame_idx) {
@@ -9797,9 +9772,7 @@ impl BexVm {
                             if let Object::Function(callee) = callee_object
                                 && matches!(callee.kind, FunctionKind::Bytecode)
                             {
-                                // Specialization skips compiled callees
-                                // (`call_specialize`): they take the general
-                                // path, whose Bytecode arm runs the body.
+                                // `call_specialize` routes compiled callees through the general call path.
                                 debug_assert!(callee.compiled_body.is_none());
                                 debug_assert_eq!(ntypeargs, 0);
                                 // Eager ok_or constructs/drops VmInternalError

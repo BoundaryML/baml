@@ -1,7 +1,6 @@
 use crate::vm::*;
 
-/// A `log.*` compiled code emitted; see [`CompiledState::pending_logs`](super::CompiledState::pending_logs). The fields
-/// are those of [`VmExecState::Log`].
+/// A log event queued for the engine in [`super::CompiledState::pending_logs`].
 #[derive(Debug, Clone)]
 pub struct PendingLog {
     pub level: btel_records::LogLevel,
@@ -10,8 +9,7 @@ pub struct PendingLog {
     pub source_location: Option<VmEventSourceLocation>,
 }
 
-/// Compiled bodies for one program, as the BAML-to-Rust compiler
-/// emits them; see [`super::CompiledEntry`].
+/// Compiled entry points for one program.
 pub struct CompiledBodyTable {
     pub fingerprint: [u8; 32],
     pub entries: &'static [crate::compiled_rt::CompiledEntry],
@@ -54,12 +52,7 @@ pub(crate) fn attach_compiled_bodies(
     Ok(())
 }
 
-/// The exact values a bytecode call carries beside `type_args`
-/// (`take_type_args`): none when every argument names only compiled
-/// declarations, which every consumer finds from the program; each argument
-/// as its own value when one names a runtime declaration. A compiled caller
-/// has its type arguments as realized types, and a `type` value is exactly
-/// its realized type, so the two lanes carry the same content.
+/// Type values required when any argument names a runtime declaration.
 pub(crate) fn exact_type_values(type_args: &[bex_vm_types::RealizedTy]) -> Vec<Option<TypeValue>> {
     if type_args
         .iter()
@@ -73,26 +66,19 @@ pub(crate) fn exact_type_values(type_args: &[bex_vm_types::RealizedTy]) -> Vec<O
         .collect()
 }
 
-/// Where a frame stands, for a reader outside the interpreter
-/// (`BexVm::frame_position`): a bytecode position, or where its compiled
-/// body is (see `crate::compiled_rt::stub`).
+/// A frame position returned by [`BexVm::frame_position`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FramePosition {
     /// The next bytecode instruction.
     Bytecode(usize),
     /// A compiled body on the Rust stack, or not yet started.
     CompiledRunning,
-    /// A compiled body suspended on a request, at this offset into its
-    /// function's stub.
+    /// A compiled body suspended at an offset into its function's stub.
     CompiledStub(usize),
 }
 
 impl BytecodeFrame {
-    /// The frame of a compiled-to-compiled call: the call's type arguments
-    /// (a pooled vector, or an empty one for a non-generic call) and no
-    /// locals region (compiled code keeps its locals in Rust), its body
-    /// running. `telemetry` is `None` with telemetry off or for a hidden
-    /// invocation, else what `enter_bytecode_with_trace` returned for it.
+    /// Create a running compiled frame whose locals live on the Rust stack.
     pub(crate) fn compiled(
         function: HeapPtr,
         locals_offset: StackIndex,
@@ -114,15 +100,9 @@ impl BytecodeFrame {
 }
 
 impl BexVm {
-    /// Land a thrown error in a compiled function's `catch`: build its
-    /// context exactly as the unwinder would (with every frame between the
-    /// throw and the handler still on the stack, so the trace is complete),
-    /// then pop the frames compiled callees left pushed above the handling
-    /// function's own frame, completing their telemetry with the error
-    /// outcome. `depth` is the frame count with the handling function's frame
-    /// on top. Returns the caught value and its `baml.errors.Context`.
+    /// Return the caught value and context after unwinding to `depth`.
     ///
-    /// Internal errors are not catchable and come back as `Err`.
+    /// Internal errors propagate without unwinding.
     pub(crate) fn land_compiled_catch(
         &mut self,
         error: Box<VmError>,
@@ -133,13 +113,14 @@ impl BexVm {
         };
         let value = thrown.value;
         let outcome = self.telemetry_outcome_for_exception(value);
+        // Capture the trace before removing any frames between the throw and handler.
         let (mut context, _) = self
             .in_flight_context(thrown.context, value)
             .map_err(Box::new)?;
         while self.frames.len() > depth {
             let top = self.frames.len() - 1;
-            // SAFETY: see `load_function`; compiled frames hold functions from
-            // the compile-time heap.
+            // SAFETY: compiled frames hold functions from the compile-time heap;
+            // see `load_function`.
             let function = unsafe { self.load_function(top) }
                 .map_err(|error| Box::new(VmError::InternalError(error)))?;
             let recorded = if self.frame_wants_error_capture(top, function) {
@@ -161,11 +142,7 @@ impl BexVm {
         Ok((value, ctx))
     }
 
-    /// `ResumeCompiled` (at `cur_pc`): hand the frame on top to its compiled
-    /// body, as the stub offset it is parked at says (see
-    /// `crate::compiled_rt::stub`), and carry out what the body returns,
-    /// parking the frame again when it stays on top. On `Err` the frame stays
-    /// pushed for the unwinder.
+    /// Resume a compiled body at its stub offset, retaining its frame on error.
     #[cold]
     #[inline(never)]
     pub(crate) fn resume_compiled(
@@ -188,8 +165,7 @@ impl BexVm {
             frame.instruction_ptr = crate::compiled_rt::RUNNING;
         }
         match body {
-            // Only an entry point starts an inline body here; a call runs it
-            // inside the call path.
+            // Inline calls execute in the call path; only entry points reach here.
             CompiledFn::Inline(body) => {
                 let Frame::Bytecode(frame) = &self.frames[*frame_idx] else {
                     unreachable!("a compiled frame is a bytecode frame");
@@ -203,8 +179,7 @@ impl BexVm {
                 self.complete_compiled(frame_idx, function, outcome.map_err(|error| *error))
             }
             CompiledFn::Resumable(body) => {
-                // A request leaves its result on the stack; the unwinder
-                // leaves an error here instead.
+                // Results arrive on the stack; errors arrive through `delivery`.
                 let resume = match offset {
                     stub::START => Resume::Start,
                     stub::AFTER_YIELD => Resume::Yielded,
@@ -220,8 +195,7 @@ impl BexVm {
         }
     }
 
-    /// Carry out the request a resumable body returned, parking its frame at
-    /// the stub offset that resumes it.
+    /// Handle a resumable body's request and park its frame at the resume offset.
     pub(crate) fn carry_out(
         &mut self,
         step: Step,
@@ -241,10 +215,8 @@ impl BexVm {
                 park(self, *frame_idx, stub::AFTER_CALL);
                 let mut argc = argc as usize;
                 let mut args_offset = self.stack.len() - argc;
-                // A bound method's receiver joins the pushed arguments as the
-                // leading slot, as `CallIndirect` inserts it; the call path
-                // resolves the inner function and seeds the receiver's type
-                // arguments from the bound method itself.
+                // The call path expects the receiver before the explicit arguments.
+                // It takes the receiver's type arguments from the bound method.
                 if let Object::BoundMethod(method) = self.get_object(callee) {
                     let receiver = method.receiver;
                     self.stack.insert(args_offset, receiver);
@@ -265,8 +237,7 @@ impl BexVm {
                 self.compiled.call_type_args = type_args;
                 outcome
             }
-            // The interpreter's own instruction, on this frame, then
-            // `ResumeCompiled` with its result.
+            // The stub executes the operation before resuming the compiled body.
             Step::Await(operand) | Step::AwaitAny(operand) | Step::Spawn(operand) => {
                 let offset = match step {
                     Step::Await(_) => stub::AWAIT,
@@ -284,9 +255,7 @@ impl BexVm {
         }
     }
 
-    /// Complete the compiled frame at `frame_idx` with a body's outcome, as
-    /// `Return` does: the result goes on the stack first, where the epilogue
-    /// expects it even for a function with no slots.
+    /// Complete a compiled frame with its result on the stack.
     pub(crate) fn complete_compiled(
         &mut self,
         frame_idx: &mut usize,
@@ -298,11 +267,7 @@ impl BexVm {
         self.finish_bytecode_frame(frame_idx, function, value)
     }
 
-    /// A call made by the compiled frame at `*frame_idx` through the VM's
-    /// call path, with its `argc` arguments at `locals_offset`. The path
-    /// records the caller's call site from `cur_pc` in its `faulting_pc`,
-    /// where a compiled frame keeps the index of its call instruction; this
-    /// hands it that index and puts it back.
+    /// Call through the VM with the compiled caller's recorded call site.
     pub(crate) fn compiled_caller_call(
         &mut self,
         callee: HeapPtr,
@@ -317,9 +282,8 @@ impl BexVm {
             Frame::Bytecode(frame) => frame.faulting_pc,
             Frame::Native(_) => unreachable!("a compiled caller has a bytecode frame"),
         };
-        // A compiled caller has no live `cur_pc` of its own (it holds
-        // whatever bytecode last ran), so hand the call path the call
-        // instruction the caller recorded as its call site.
+        // `cur_pc` belongs to the last bytecode execution. The call path needs
+        // the compiled caller's recorded instruction index instead.
         let saved_pc = std::mem::replace(&mut self.cur_pc, pc);
         let outcome = if type_args.is_empty() {
             self.execute_call_from_locals_offset(callee, locals_offset, argc, frame_idx, function)
@@ -344,11 +308,7 @@ impl BexVm {
         outcome
     }
 
-    /// The compact PC the compiled frame at `idx` stands at: the instruction
-    /// of its function's bytecode equivalent to where its body last reported
-    /// (`BexVm::note_pc`), which the body names by index. A reader takes it
-    /// as a bytecode frame's position: an outer frame's call instruction, or
-    /// the instruction that raised. `None` for any other frame.
+    /// Return the compact bytecode offset corresponding to the compiled frame's recorded PC.
     #[must_use]
     pub fn compiled_pc(&self, idx: usize) -> Option<usize> {
         self.compiled_at(idx)?;
@@ -363,10 +323,7 @@ impl BexVm {
             .offset_of(frame.faulting_pc)
     }
 
-    /// Where the compiled body of the frame at `idx` stands; `None` for a
-    /// frame whose bytecode runs, or a native continuation. Every reader of
-    /// a frame's position asks this first: a compiled frame's position fields
-    /// hold its stub offset and original bytecode PC, not a compact bytecode PC.
+    /// Identify compiled frames before interpreting their position fields as bytecode offsets.
     pub(crate) fn compiled_at(&self, idx: usize) -> Option<crate::compiled_rt::CompiledAt> {
         let Frame::Bytecode(frame) = &self.frames[idx] else {
             return None;
@@ -378,18 +335,13 @@ impl BexVm {
         crate::compiled_rt::compiled_at(frame.instruction_ptr, function)
     }
 
-    /// Whether a compiled body runs the frame at `idx`: its
-    /// position fields then hold no bytecode position (see
-    /// `crate::compiled_rt::stub`).
+    /// Return whether the frame at `idx` runs a compiled body.
     #[must_use]
     pub fn frame_is_compiled(&self, idx: usize) -> bool {
         self.compiled_at(idx).is_some()
     }
 
-    /// Where the frame at `idx` stands; `None` for a native continuation.
-    /// The one way out of the interpreter to a frame's position: it asks
-    /// `Self::compiled_at` first, so a compiled frame's stub offset is
-    /// never read as a bytecode position.
+    /// Return the frame's bytecode or compiled position, or `None` for a native continuation.
     #[must_use]
     pub fn frame_position(&self, idx: usize) -> Option<FramePosition> {
         let Frame::Bytecode(frame) = &self.frames[idx] else {
@@ -406,8 +358,7 @@ impl BexVm {
         })
     }
 
-    /// The context of the error the compiled frame at `idx` is handling, from
-    /// its cause slot: what a raise during that handling chains onto.
+    /// Return the error context used to chain errors raised in the current handler.
     pub(crate) fn compiled_cause(&self, idx: usize) -> Option<Value> {
         let Frame::Bytecode(frame) = &self.frames[idx] else {
             return None;
@@ -421,11 +372,7 @@ impl BexVm {
         (!context.is_null()).then_some(context)
     }
 
-    /// The call-site offset a call path records for a call made from the
-    /// frame at `caller_frame_idx`: the live `call_site` when that frame is
-    /// the one calling, its recorded `faulting_pc` when a native continuation
-    /// sits between, and the call instruction it recorded for a compiled
-    /// caller ([`Self::compiled_pc`]).
+    /// Resolve a caller's call site across compiled frames and native continuations.
     pub(crate) fn caller_pc(
         &self,
         caller_frame_idx: usize,
@@ -447,15 +394,7 @@ impl BexVm {
         u32::try_from(pc).unwrap_or(u32::MAX)
     }
 
-    /// Complete the bytecode frame at `frame_idx` with `result`: the shared
-    /// epilogue of `OpCode::Return` and of a compiled body.
-    ///
-    /// Finishes the frame's telemetry record, replaces the frame's stack region
-    /// with `result`, pops the frame, restores the caller's context, and selects
-    /// the caller into `frame_idx`/`function`. Never touches the run loop's
-    /// `pc`/`code` locals; the loop-side `Return` does that itself, and the
-    /// call funnel returns to a loop that still holds the caller's. Returns
-    /// `Some(Complete)` when this was the last frame.
+    /// Complete a frame and restore its caller without updating the run loop's `pc` or `code`.
     pub(crate) fn finish_bytecode_frame(
         &mut self,
         frame_idx: &mut usize,
@@ -468,9 +407,7 @@ impl BexVm {
         let locals_offset = bf.locals_offset;
         let frame_telemetry = bf.telemetry.take();
 
-        // Completion reads the callee's `Function`; it must run before
-        // `function` is reloaded with the caller's. An unobserved frame still
-        // ends its held trace and span activation, as `Return` ends them.
+        // Complete telemetry before replacing the callee's `Function` with the caller's.
         if let Some(frame_telemetry) = frame_telemetry {
             self.complete_bytecode_invocation_with_function(
                 *frame_idx,
@@ -483,12 +420,9 @@ impl BexVm {
             self.end_manual_activation(*frame_idx);
         }
 
-        // SAFETY: the compiler guarantees a result at or above the callee's
-        // locals base. That base is therefore an existing initialized slot,
-        // even for a zero-argument function with no locals. Value is Copy, so
-        // discarded slots need no drop. No allocation or GC point occurs
-        // between writing the result and shortening the stack to the caller's
-        // new top.
+        // SAFETY: the compiler guarantees a result at or above the locals base,
+        // so the base slot is initialized even when there are no arguments or locals.
+        // Value is Copy. No allocation or GC occurs before the stack is shortened.
         let consumed = self.stack.len() - locals_offset.raw();
         unsafe { self.stack.replace_top_n_dynamic(consumed, result) };
         // SAFETY: the frame accessed above is the one being completed; stack
@@ -501,8 +435,6 @@ impl BexVm {
         if self.frames.is_empty() {
             return Ok(Some(VmExecState::Complete(self.stack.ensure_pop())));
         }
-        // Select the restored caller. Native continuations and early yields
-        // still hand this frame back to the outer loop.
         *frame_idx = self.frames.len() - 1;
         if matches!(self.frames[*frame_idx], Frame::Bytecode(_)) {
             // SAFETY: the caller's function object lives in the compile-time
@@ -512,19 +444,13 @@ impl BexVm {
         Ok(None)
     }
 
-    /// Bind the type arguments of the call being made (`pending_call_type_args`
-    /// and the exact values beside them) onto the frame at `frame_idx`, as
-    /// the writeback in `execute_call_from_locals_offset_with_type_args` does
-    /// once the funnel returns: for an inline compiled body, which runs
-    /// inside the funnel and reads its frame.
+    /// Bind pending type arguments before an inline body runs inside the call path.
     #[cold]
     #[inline(never)]
     pub(crate) fn bind_passed_type_args(&mut self, frame_idx: usize) {
         let Frame::Bytecode(frame) = &mut self.frames[frame_idx] else {
             unreachable!("a compiled frame is a bytecode frame");
         };
-        // A frame that carried nothing holds an empty, unallocated vector;
-        // a pooled one takes its place and returns when the body completes.
         if frame.type_args.capacity() == 0
             && let Some(pooled) = self.compiled.type_arg_pool.pop()
         {
@@ -537,8 +463,7 @@ impl BexVm {
         );
     }
 
-    /// Return the type-argument vector of the compiled frame at `frame_idx`
-    /// to the pool, before the frame pops.
+    /// Return a compiled frame's type-argument vector to the pool before popping it.
     #[cold]
     #[inline(never)]
     pub(crate) fn recycle_frame_type_args(&mut self, frame_idx: usize) {

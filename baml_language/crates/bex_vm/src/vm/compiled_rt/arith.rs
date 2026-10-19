@@ -1,5 +1,4 @@
-//! Arithmetic over tagged values and over the raw `i64`/`f64` operands
-//! compiled code keeps for statically typed locals.
+//! Arithmetic over tagged values and unboxed numeric locals.
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{BinOp, CmpOp, Object, UnaryOp, Value};
@@ -11,26 +10,20 @@ use crate::{
 };
 
 impl BexVm {
-    // ── Arithmetic ────────────────────────────────────────────────────────────
-
-    /// The generic binary operator: total over every operand pair the
-    /// specialized opcodes accept, including `bigint`, the `bigint`/`int` mix,
-    /// mixed `int`/`float`, and string concatenation for `+`.
+    /// Apply a binary operator to tagged values, including mixed numeric types and string
+    /// concatenation.
     #[inline]
     pub fn binop(&mut self, op: BinOp, left: Value, right: Value) -> Result<Value, Box<VmError>> {
         self.binop_values(op, left, right).map_err(Box::new)
     }
 
-    /// The generic comparison operator, total over the same operand pairs as
-    /// [`Self::binop`] plus strings, byte arrays, enum variants, and `type`
-    /// values.
+    /// Compare numeric values, strings, byte arrays, enum variants, or types.
     #[inline]
     pub fn cmpop(&mut self, op: CmpOp, left: Value, right: Value) -> Result<Value, Box<VmError>> {
         self.cmpop_values(op, left, right).map_err(Box::new)
     }
 
-    /// `int + int`, overflow-checked into the i63 range. Operands are
-    /// `Int`-tagged values; the hot path neither untags nor retags.
+    /// Add tagged integers with i63 overflow checking.
     #[inline]
     pub fn add_int(&mut self, l: Value, r: Value) -> Result<Value, Box<VmError>> {
         match Value::tagged_int_add_checked(l, r) {
@@ -39,9 +32,7 @@ impl BexVm {
         }
     }
 
-    /// Box a float result. Floats live on the heap behind a `HeapPtr`; compiled
-    /// code keeps raw `f64` locals and boxes only when a value crosses into
-    /// `Value` form.
+    /// Box a float for use as a tagged value.
     #[inline]
     pub fn float_value(&mut self, f: f64) -> Value {
         Value::object(self.alloc_float(f))
@@ -50,9 +41,7 @@ impl BexVm {
     /// Unary minus over `int`, `float`, and `bigint`.
     pub fn neg(&mut self, val: Value) -> Result<Value, Box<VmError>> {
         if let Some(n) = val.as_int() {
-            // Negating INT_MIN = -2^62 yields 2^62, which fits i64
-            // (INT_MIN != i64::MIN) but not i63, so the range-check
-            // in try_int catches it.
+            // Negating -2^62 fits i64 but exceeds the i63 range.
             return match Value::try_int(n.wrapping_neg()) {
                 Some(v) => Ok(v),
                 None => Err(Box::new(
@@ -64,9 +53,6 @@ impl BexVm {
             return Ok(self.float_value(-n));
         }
         if let Some(ptr) = val.as_object_ptr() {
-            // Bigint negation. Compute the negated value into an owned `Arc`
-            // first so the immutable `get_object` borrow is released before
-            // the `&mut self` `alloc_bigint`.
             let negated = match self.get_object(ptr) {
                 Object::Bigint(bi) => Some(std::sync::Arc::new(-bi.as_ref().clone())),
                 _ => None,
@@ -91,12 +77,6 @@ impl BexVm {
             right: Value::int(r),
         }))
     }
-
-    // ── Raw-operand arithmetic ───────────────────────────────────────────────
-    //
-    // Compiled code keeps statically typed `int` locals as `i64` and `float`
-    // locals as `f64`; these are the checked operators over those, with the
-    // interpreter's exact overflow and divide-by-zero behaviour and messages.
 
     /// `l + r` on raw ints, overflow-checked into the i63 range.
     #[inline]

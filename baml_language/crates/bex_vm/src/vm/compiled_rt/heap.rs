@@ -1,5 +1,4 @@
-//! Heap objects: containers, instances, closures, enums and classes, and the
-//! allocations compiled code makes.
+//! Heap access and allocation for compiled code.
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{HeapPtr, Object, ObjectType, RealizedTy, Value, types::Closure};
@@ -10,9 +9,7 @@ use crate::{
 };
 
 impl BexVm {
-    // ── Containers ────────────────────────────────────────────────────────────
-
-    /// `.length()` of an array, byte array, map, or string (in bytes).
+    /// Return the length of a container, measuring strings in bytes.
     pub fn container_len(&self, container: Value) -> Result<Value, Box<VmError>> {
         let Some(ptr) = container.as_object_ptr() else {
             return Err(VmInternalError::TypeError {
@@ -38,9 +35,7 @@ impl BexVm {
         Ok(Value::int(len))
     }
 
-    /// `array[index]` for arrays and byte arrays. A negative index counts from
-    /// the end; one that still lands outside throws `IndexOutOfBounds` with
-    /// the original index.
+    /// Load an array or byte array element, counting negative indices from the end.
     pub fn load_array_element(
         &mut self,
         array: Value,
@@ -54,10 +49,7 @@ impl BexVm {
             }
             .into());
         };
-        // Acquire the array's read lock for the duration of the bounds-check
-        // + element load so it stays atomic against a racing `push`/grow. The
-        // guard drops at the end of the inner scope before any `&mut self`
-        // call.
+        // Hold the lock across bounds checking and loading to prevent races with growth.
         let load_result: Result<Value, (i64, usize)> = {
             match self.get_object(array_ptr) {
                 Object::Array(arr) => {
@@ -91,9 +83,8 @@ impl BexVm {
         }
     }
 
-    /// `array[index] = value` for arrays and byte arrays, with the same index
-    /// semantics as [`Self::load_array_element`]. Applies the generational
-    /// write barrier.
+    /// Store an array element with [`Self::load_array_element`] index semantics and a write
+    /// barrier.
     pub fn store_array_element(
         &mut self,
         array: Value,
@@ -165,8 +156,6 @@ impl BexVm {
         )
     }
 
-    // ── Instances ─────────────────────────────────────────────────────────────
-
     /// Read field `idx` of a class instance.
     pub fn load_field(&mut self, instance: Value, idx: usize) -> Result<Value, Box<VmError>> {
         let obj_ptr = self.as_object_ptr(instance, ObjectType::Instance)?;
@@ -218,8 +207,6 @@ impl BexVm {
         Ok(())
     }
 
-    // ── Closures ──────────────────────────────────────────────────────────────
-
     /// Allocate a closure over `function` with already-evaluated capture cells
     /// and already-resolved type arguments.
     pub fn make_closure(
@@ -236,9 +223,7 @@ impl BexVm {
         Value::object(self.tlab.alloc(closure))
     }
 
-    /// `receiver.method` as a value: a bound method over the function object
-    /// `function`, with the receiver's class type arguments curried in, as
-    /// bytecode's `MakeBoundMethod` builds it.
+    /// Bind a receiver and its class type arguments to `function`.
     pub fn make_bound_method(&mut self, function: HeapPtr, receiver: Value) -> Value {
         let type_args = self.bound_method_curried_type_args(receiver);
         let bound = Object::BoundMethod(bex_vm_types::BoundMethod {
@@ -248,8 +233,6 @@ impl BexVm {
         });
         Value::object(self.tlab.alloc(bound))
     }
-
-    // ── Enums and classes ─────────────────────────────────────────────────────
 
     /// The variant index of an enum value.
     pub fn discriminant(&self, value: Value) -> Result<i64, Box<VmError>> {
@@ -271,8 +254,7 @@ impl BexVm {
         }
     }
 
-    /// `value is C` for a non-generic class `C`: class identity, which is
-    /// exactly what the interpreter's type test decides for such a class.
+    /// Test instance identity against a non-generic class.
     #[inline]
     #[must_use]
     pub fn is_instance_of(&self, value: Value, class: HeapPtr) -> bool {
@@ -292,8 +274,7 @@ impl BexVm {
         }
     }
 
-    /// The type of instances of the non-generic class `class`, as a type
-    /// argument or an array's element type.
+    /// Return the instance type of a non-generic class.
     #[must_use]
     pub fn class_type(&self, class: HeapPtr) -> RealizedTy {
         let Object::Class(declaration) = self.get_object(class) else {
@@ -318,8 +299,7 @@ impl BexVm {
         Value::object(self.alloc_array(element_ty, values))
     }
 
-    /// Allocate an empty map of `key_ty` to `value_ty`: a map literal, whose
-    /// entries follow as `baml.Map.set` calls, as bytecode's `AllocMap(0)`.
+    /// Allocate an empty map with the given key and value types.
     #[inline]
     pub fn new_map(&mut self, key_ty: RealizedTy, value_ty: RealizedTy) -> Value {
         Value::object(
@@ -328,10 +308,7 @@ impl BexVm {
         )
     }
 
-    /// Allocate variant `index` of the enum `enm`: an enum variant literal.
-    /// The compiler checked `index` against the enum's declaration, so no
-    /// range check runs here (bytecode's `AllocVariant` checks a stack
-    /// operand it cannot trust the same way).
+    /// Allocate an enum variant at the compiler-validated `index`.
     #[inline]
     pub fn new_variant(&mut self, enm: HeapPtr, index: usize) -> Value {
         Value::object(self.tlab.alloc_variant(enm, index))

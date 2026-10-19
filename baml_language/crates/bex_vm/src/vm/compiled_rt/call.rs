@@ -1,5 +1,4 @@
-//! Calls and the frame: builtins, compiled callees, the slots a resumable body
-//! keeps, and what a body reports to the VM.
+//! Calls, frame slots, and control-flow checks for compiled bodies.
 
 use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::Function};
 
@@ -15,9 +14,7 @@ use crate::{
 
 #[cfg(test)]
 thread_local! {
-    /// Send every observed compiled-to-compiled call through the VM's call
-    /// path instead of [`BexVm::call_compiled_observed`]'s inline entry: the
-    /// records the two produce must not differ.
+    /// Force calls through the VM call path to test telemetry equivalence.
     pub(crate) static FORCE_CALL_FUNNEL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
@@ -40,11 +37,7 @@ impl BexVm {
         frame
     }
 
-    // ── Calls ─────────────────────────────────────────────────────────────────
-
-    /// Call a VM-owned builtin synchronously. A builtin that yields (to run a
-    /// callback) cannot be called from compiled code; the compiler admits only
-    /// builtins that never do.
+    /// Call a builtin that the compiler guarantees will not yield.
     pub fn call_builtin(
         &mut self,
         builtin: NativeFunction,
@@ -64,17 +57,13 @@ impl BexVm {
         }
     }
 
-    /// [`Self::call_builtin`] for a generic builtin (`Array.push`,
-    /// `json.to_string`, …), with its type arguments where the interpreter
-    /// puts them for a native callee: `current_call_type_args()`.
+    /// Call a generic builtin with type arguments available through `current_call_type_args()`.
     pub fn call_builtin_typed(
         &mut self,
         builtin: NativeFunction,
         type_args: &[RealizedTy],
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
-        // Reuse the buffer's capacity: a `push` in a loop allocates nothing
-        // here after the first call.
         self.save_call_types();
         let mut buffer = std::mem::take(&mut self.compiled.builtin_type_args);
         buffer.clear();
@@ -86,10 +75,7 @@ impl BexVm {
         result
     }
 
-    /// Size the slot region of the compiled function whose frame count is
-    /// `depth` to `slots` (a resumable body's arguments arrive in the first
-    /// ones). Called once, on start; a resumable body's region then sits at
-    /// the top of the stack whenever it suspends.
+    /// Reserve slots on entry, keeping the arguments in the leading slots.
     pub fn reserve_slots(&mut self, depth: usize, slots: usize) {
         let frame = self.compiled_frame(depth);
         let end = frame.locals_offset.raw() + slots;
@@ -105,8 +91,7 @@ impl BexVm {
             .get_at(StackIndex::from_raw(frame.locals_offset.raw() + index))
     }
 
-    /// Write slot `index` of the compiled function whose frame count is
-    /// `depth`; see [`Self::slot`].
+    /// Write slot `index` in the compiled frame at `depth`.
     #[inline]
     pub fn set_slot(&mut self, depth: usize, index: usize, value: Value) {
         let frame = self.compiled_frame(depth);
@@ -114,26 +99,19 @@ impl BexVm {
         self.stack.0[at] = value;
     }
 
-    /// Push an argument of the call a resumable body is about to request
-    /// ([`Step::Call`](super::Step::Call)); arguments sit above the body's slots, rooted.
+    /// Root an argument above the body's slots for the next [`super::Step::Call`].
     #[inline]
     pub fn push_arg(&mut self, value: Value) {
         self.stack.push(value);
     }
 
-    /// Push a type argument of the call a resumable body is about to request
-    /// ([`Step::Call`](super::Step::Call)), into a buffer the VM reuses: a generic call
-    /// allocates nothing for them.
+    /// Buffer a type argument for the next [`super::Step::Call`].
     #[inline]
     pub fn push_type_arg(&mut self, ty: RealizedTy) {
         self.compiled.call_type_args.push(ty);
     }
 
-    /// The value of `future` when it has settled with one and awaiting it
-    /// would not poll for a yield: `await`'s fast path, with no suspension.
-    /// `None` sends the body through the interpreter's own `Await`
-    /// ([`Step::Await`](super::Step::Await)), which raises, parks or yields exactly as bytecode
-    /// does. Counts the `Await`'s control-flow check, as bytecode does.
+    /// Return a settled future's value if awaiting it requires no yield.
     #[inline]
     pub fn ready(&mut self, future: Value) -> Option<Value> {
         if self.early_yield.is_due() {
@@ -150,26 +128,19 @@ impl BexVm {
         Some(value)
     }
 
-    /// Whether a resumable body should yield ([`Step::Yield`](super::Step::Yield)) at a loop back
-    /// edge: the interpreter's control-flow check.
+    /// Check whether a resumable body should yield at a loop back edge.
     #[inline]
     pub fn should_yield(&mut self) -> bool {
         self.should_early_yield()
     }
 
-    /// A compiled GC check (an allocating loop's header, an allocating
-    /// recursive function's entry): whether a collection may be due, by the
-    /// interpreter's own control-flow check. Under `BAML_GC_STRESS=1` every
-    /// check is due.
+    /// Check whether collection may be due, always returning true under `BAML_GC_STRESS=1`.
     #[inline]
     pub fn gc_due(&mut self) -> bool {
         super::gc_stress() || self.should_early_yield()
     }
 
-    /// Collect garbage at a compiled GC check, with `live` (the body's live
-    /// heap values) rooted on the VM stack for the collection and updated to
-    /// where it moved them. Collects only when this VM is the only one
-    /// running; otherwise the body carries on and collects at a later check.
+    /// Attempt collection with `live` rooted and update any moved values.
     #[cold]
     #[inline(never)]
     pub fn collect_here(&mut self, live: &mut [Value]) {
@@ -183,17 +154,14 @@ impl BexVm {
         self.stack.truncate(base);
     }
 
-    /// The frame count with the running compiled function's frame on top.
-    /// A compiled body reads it on entry and hands it to [`Self::catch`].
+    /// Return the frame depth to pass to [`Self::catch`].
     #[inline]
     #[must_use]
     pub fn frame_depth(&self) -> usize {
         self.frames.len()
     }
 
-    /// Record `pc` as the running compiled function's call site, in the
-    /// top frame (the caller's, before it pushes its callee); see
-    /// [`Self::call_compiled`].
+    /// Record the call instruction index before pushing the callee's frame.
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn note_call_pc(&mut self, pc: u32) {
@@ -202,13 +170,7 @@ impl BexVm {
         }
     }
 
-    /// Record `pc` as the position of the compiled function whose frame
-    /// count is `depth` (see [`Self::frame_depth`]). Compiled code calls
-    /// this only when an error leaves the function, lands in its `catch`, or
-    /// it suspends, so stack traces name the statement that raised, at no
-    /// cost otherwise. A compiled frame keeps in `faulting_pc` the index of
-    /// the equivalent instruction of its function's bytecode, which readers
-    /// translate to a compact PC (`BexVm::compiled_pc`); see `stub`.
+    /// Record a bytecode instruction index for stack traces at frame depth `depth`.
     #[cold]
     pub fn note_pc(&mut self, depth: usize, pc: u32) {
         if let Some(crate::vm::Frame::Bytecode(frame)) = depth
@@ -219,9 +181,7 @@ impl BexVm {
         }
     }
 
-    /// Land a thrown error in a compiled `catch`; see
-    /// `BexVm::land_compiled_catch`. Returns the caught value and its
-    /// `baml.errors.Context`; an internal error keeps propagating.
+    /// Return the caught value and its `baml.errors.Context`, propagating internal errors.
     #[inline]
     pub fn catch(
         &mut self,
@@ -231,8 +191,7 @@ impl BexVm {
         self.land_compiled_catch(error, depth)
     }
 
-    /// `unreachable` reached in compiled code: the catchable
-    /// `baml.panics.Unreachable` bytecode's `Unreachable` throws.
+    /// Create a catchable `baml.panics.Unreachable` error.
     #[cold]
     #[inline(never)]
     pub fn unreachable_panic(&mut self) -> Box<VmError> {
@@ -241,22 +200,14 @@ impl BexVm {
         ))
     }
 
-    /// A `$trace` attachment for the call the running body requests next,
-    /// as bytecode's `SetCallTrace` sets it: the VM's call path applies it to
-    /// that call (its context patch, its record), then clears it.
+    /// Set the `$trace` attachment consumed by the next call.
     pub fn set_call_trace(&mut self, value: Value) -> Result<(), Box<VmError>> {
         let trace = self.trace_config(value).map_err(Box::new)?;
         self.pending_call_trace = Some(trace);
         Ok(())
     }
 
-    /// `log.info(data, name?)` and its siblings in compiled code: the record
-    /// bytecode's `SendEvent` of the `$baml_log` payload makes, recorded for
-    /// telemetry here and
-    /// queued for the engine ([`CompiledState::pending_logs`](super::CompiledState::pending_logs)) instead of returned,
-    /// since a compiled body cannot leave mid-statement. `pc` is the
-    /// statement's in the function's bytecode, whose `SendEvent` line entry
-    /// locates the record as the interpreter locates it.
+    /// Record a log event and queue it for the engine because compiled bodies cannot suspend mid-statement.
     pub fn log_event(
         &mut self,
         level: super::LogLevel,
@@ -290,29 +241,7 @@ impl BexVm {
         Ok(())
     }
 
-    /// Call a compiled function from compiled code.
-    ///
-    /// Every call gets a frame, as in bytecode: it counts toward the depth
-    /// limit (a catchable `StackOverflow`, never a Rust stack overflow),
-    /// names the callee in stack traces, and roots the callee. With telemetry
-    /// off that frame is all the call costs: a struct push, then a direct
-    /// Rust call LLVM can inline. With telemetry on the call goes through the
-    /// VM's call path, so records, call paths and `$trace` behave exactly as
-    /// for a bytecode call.
-    ///
-    /// The frame limit is the only limit a program sees: the Rust stack the
-    /// callee runs on is the VM's concern (`Self::with_stack_room`).
-    ///
-    /// `pc` is the call's: the index of its call instruction in the
-    /// caller's bytecode. It goes into the caller's frame before the callee
-    /// runs, as the interpreter records a caller's call site on every call:
-    /// a stack trace taken while the callee runs (an error caught below, a
-    /// `StackOverflow`) resolves this bytecode PC to the call site, as telemetry
-    /// does for the interpreter.
-    ///
-    /// On `Err` the callee's frame stays pushed, as the VM's call path leaves
-    /// it: the unwinder pops it if the error escapes, [`Self::catch`] if a
-    /// compiled handler lands it.
+    /// Call a compiled body with a VM frame, retaining the frame on error for unwinding.
     #[inline]
     pub fn call_compiled(
         &mut self,
@@ -330,7 +259,6 @@ impl BexVm {
         self.with_stack_room(|vm| vm.call_compiled_here(callee, body, args))
     }
 
-    /// [`Self::call_compiled`] on the Rust stack where it stands.
     #[inline]
     fn call_compiled_here(
         &mut self,
@@ -354,11 +282,7 @@ impl BexVm {
         result
     }
 
-    /// [`Self::call_compiled`] for a generic callee: its frame starts with
-    /// `type_args`, the call's type arguments in the callee's De Bruijn
-    /// order (a plain function carries none of its own, so these are all of
-    /// them). The frame's vector comes from the pool and returns to it when
-    /// the frame pops, so the call allocates nothing in the steady state.
+    /// Call a compiled body with type arguments in the callee's De Bruijn order.
     #[inline]
     pub fn call_compiled_with_types(
         &mut self,
@@ -377,7 +301,6 @@ impl BexVm {
         self.with_stack_room(|vm| vm.call_compiled_with_types_here(callee, body, type_args, args))
     }
 
-    /// [`Self::call_compiled_with_types`] on the Rust stack where it stands.
     #[inline]
     fn call_compiled_with_types_here(
         &mut self,
@@ -400,8 +323,7 @@ impl BexVm {
             context,
             None,
         );
-        // A type naming a runtime declaration rides beside the frame's
-        // arguments as an exact value, as a bytecode call carries it.
+        // Runtime declarations need exact type values in addition to realized types.
         let type_values = super::frame::exact_type_values(type_args);
         if !type_values.is_empty() {
             frame.type_metadata = Some(Box::new(crate::vm::FrameTypeMetadata {
@@ -419,15 +341,13 @@ impl BexVm {
         result
     }
 
-    /// A spare type-argument vector: one the pool holds, or a new one.
+    /// Take a pooled type-argument vector or return an empty one.
     #[inline]
     pub(crate) fn pooled_type_args(&mut self) -> Vec<RealizedTy> {
         self.compiled.type_arg_pool.pop().unwrap_or_default()
     }
 
-    /// Give a frame's type-argument vector back to the pool, cleared. The
-    /// pool keeps a few: as many as calls nest in practice, and an
-    /// unallocated vector is not worth keeping.
+    /// Clear and pool an allocated type-argument vector.
     #[inline]
     pub(crate) fn recycle_type_args(&mut self, mut type_args: Vec<RealizedTy>) {
         const POOL: usize = 16;
@@ -437,13 +357,7 @@ impl BexVm {
         }
     }
 
-    /// [`Self::call_compiled`] through the VM's call path, for telemetry,
-    /// with the call's type arguments recorded as a bytecode call's.
-    /// Run `f`, which runs a compiled body, where the Rust stack has room for
-    /// it: here when the stack is above the floor (one compare), else on a
-    /// fresh segment. Every path that runs a compiled body on the Rust stack
-    /// goes through this, so deep compiled recursion reaches the frame limit
-    /// on any thread, never the thread's stack limit.
+    /// Run a compiled body with enough Rust stack space to reach the VM frame limit.
     #[inline]
     pub(crate) fn with_stack_room<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
         if stack_address() < self.compiled.stack_floor {
@@ -452,11 +366,7 @@ impl BexVm {
         f(self)
     }
 
-    /// [`Self::with_stack_room`] below the floor: `f` runs on a fresh
-    /// [`STACK_SEGMENT`](super::STACK_SEGMENT), with the floor set to that
-    /// segment's while it does. The segment is mapped on entry and unmapped
-    /// on return; the frames that fit in one are what make the cost cold.
-    /// On wasm32 the floor is unknown (0), so this is never reached.
+    /// Run on a fresh stack segment and restore the previous floor on return.
     #[cold]
     #[inline(never)]
     fn on_fresh_segment<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
@@ -476,10 +386,6 @@ impl BexVm {
         }
     }
 
-    /// [`Self::call_compiled`] with telemetry on, as the branch
-    /// [`Self::call_compiled`] does not expect: `cold` lays the direct path
-    /// out as the fall-through without sizing the observed path's own code
-    /// for coldness.
     #[cold]
     #[inline(never)]
     fn call_compiled_cold(
@@ -491,21 +397,7 @@ impl BexVm {
         self.call_compiled_observed(callee, body, args)
     }
 
-    /// [`Self::call_compiled`] with telemetry on.
-    ///
-    /// A plain compiled callee (a `Function`, not `$trace`-hooked, called
-    /// without a `$trace` attachment or type arguments) is entered here with
-    /// what the VM's call path would establish for it, but known statically:
-    /// the call site is the call instruction the caller recorded, the visible
-    /// caller is the running compiled frame's function, the callee's context
-    /// is inherited. The frame is pushed with the invocation
-    /// `enter_bytecode_with_trace` opened, the body runs, and the frame
-    /// completes as `finish_bytecode_frame` completes one: the records are
-    /// those the call path would write, without its argument copy, callee
-    /// dispatch and call-site bookkeeping. The context the call path selects on entry and
-    /// restores on completion is the one already selected, the caller's, so
-    /// it is reselected only when it is not. Every other callee goes through
-    /// the call path ([`Self::call_compiled_funnelled`]).
+    /// Enter a plain compiled callee with telemetry, falling back to the VM call path when needed.
     #[inline(never)]
     #[allow(unsafe_code)]
     pub(super) fn call_compiled_observed(
@@ -514,8 +406,8 @@ impl BexVm {
         body: InlineBody,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
-        // SAFETY: a compiled callee is a function object in the compile-time
-        // heap, which is never collected; see `load_function`.
+        // SAFETY: the callee lives in the compile-time heap, which is never
+        // collected; see `load_function`.
         let function: &'static Function = match unsafe { callee.get() } {
             Object::Function(function) => function,
             _ => return self.call_compiled_funnelled(callee, &[], args),
@@ -559,8 +451,8 @@ impl BexVm {
         if !telemetry.has_context(&context) {
             telemetry.set_context(context.clone());
         }
-        // SAFETY: the arguments and the callee stay live under the heap
-        // permit: the caller holds them in its locals.
+        // SAFETY: the heap permit is held, and the caller's locals keep the
+        // arguments and callee live.
         let frame_telemetry = unsafe {
             telemetry.enter_bytecode_with_trace(
                 function,
@@ -593,13 +485,10 @@ impl BexVm {
                     .telemetry
                     .as_mut()
                     .expect("observed compiled call has telemetry");
-                // The callee's context is the caller's: selected for the
-                // completion and left selected for the caller.
                 if !telemetry.has_context(&frame.context) {
                     telemetry.set_context(frame.context);
                 }
-                // SAFETY: completion holds the heap permit and the result
-                // is live.
+                // SAFETY: the heap permit is held and the result is live.
                 unsafe {
                     telemetry.complete_invocation(
                         frame_telemetry,
@@ -613,10 +502,7 @@ impl BexVm {
         result
     }
 
-    /// [`Self::call_compiled`] through the VM's call path, for a callee the
-    /// inline observed entry does not cover (a generic, `$trace`-hooked or
-    /// `$trace`-attached callee, a non-`Function` callee), with the call's
-    /// type arguments recorded as a bytecode call's.
+    /// Call through the VM for generic callees, trace hooks, trace attachments, or indirect callees.
     #[cold]
     #[inline(never)]
     #[allow(unsafe_code)]
@@ -630,8 +516,8 @@ impl BexVm {
         let locals_offset = StackIndex::from_raw(self.stack.len());
         self.stack.extend(args.iter().copied());
         let mut frame_idx = top;
-        // SAFETY: the running compiled frame's function object lives in the
-        // compile-time heap, which is never collected; see `load_function`.
+        // SAFETY: the frame's function lives in the compile-time heap, which
+        // is never collected; see `load_function`.
         let mut function = unsafe { self.load_function(top)? };
         let outcome = self.compiled_caller_call(
             callee,
@@ -642,9 +528,8 @@ impl BexVm {
             &mut function,
         );
         match outcome {
-            // The callee ran to completion inside the call path (its body is
-            // compiled), so its result is on the stack. An `EarlyYield`
-            // request is left armed for the enclosing loop.
+            // The call path leaves the result on the stack and any early yield
+            // pending for the enclosing loop.
             Ok(None | Some(VmExecState::EarlyYield)) if frame_idx == top => {
                 Ok(self.stack.ensure_pop())
             }
@@ -687,8 +572,8 @@ mod tests {
             fn collect_in_place(&self, vm: &mut BexVm) -> bool {
                 let mut roots = Vec::new();
                 vm.collect_roots(&mut roots);
-                // SAFETY: this test owns the heap's only VM; collect_here roots its
-                // compiled body's live values before entering the collector.
+                // SAFETY: this test owns the heap's only VM, and `collect_here`
+                // roots the compiled body's live values before collection.
                 let (_, _, forwarding) = unsafe {
                     vm.heap
                         .collect_garbage_generational(&roots, CollectionLevel::Major)
@@ -743,8 +628,6 @@ mod tests {
         );
     }
 
-    /// A recycled vector comes back cleared with its capacity; an
-    /// unallocated one is not kept, and the pool is bounded.
     #[test]
     fn type_arg_vectors_are_pooled_by_capacity() {
         let mut vm = vm();

@@ -10,16 +10,15 @@ use crate::errors::VmError;
 /// VM state that only compiled code uses.
 #[derive(Default)]
 pub struct CompiledState {
-    /// Logs compiled code emitted since `exec` last returned, in order. The
-    /// engine drains them before acting on whatever `exec` returned.
+    /// Logs drained by the engine before it handles the result of `exec`.
     pub pending_logs: Vec<PendingLog>,
-    /// Installed by the engine; with none, compiled code never collects.
+    /// The engine's collector, or `None` to disable collection.
     pub collector: Option<Arc<dyn CompiledCollector>>,
     /// Type arguments compiled code passes to a generic builtin.
     pub(crate) builtin_type_args: Vec<RealizedTy>,
     /// Type arguments of the call a resumable body requests.
     pub(crate) call_type_args: Vec<RealizedTy>,
-    /// Pending type lanes of outer calls while a nested compiled call runs.
+    /// Pending type arguments preserved across nested compiled calls.
     pub(crate) saved_call_types: Vec<SavedCallTypes>,
     /// Spare frame type-argument vectors, reused across generic calls.
     pub(crate) type_arg_pool: Vec<Vec<RealizedTy>>,
