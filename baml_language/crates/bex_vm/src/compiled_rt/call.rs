@@ -115,14 +115,14 @@ impl BexVm {
     }
 
     /// Push an argument of the call a resumable body is about to request
-    /// ([`Step::Call`]); arguments sit above the body's slots, rooted.
+    /// ([`Step::Call`](super::Step::Call)); arguments sit above the body's slots, rooted.
     #[inline]
     pub fn push_arg(&mut self, value: Value) {
         self.stack.push(value);
     }
 
     /// Push a type argument of the call a resumable body is about to request
-    /// ([`Step::Call`]), into a buffer the VM reuses: a generic call
+    /// ([`Step::Call`](super::Step::Call)), into a buffer the VM reuses: a generic call
     /// allocates nothing for them.
     #[inline]
     pub fn push_type_arg(&mut self, ty: RealizedTy) {
@@ -132,7 +132,7 @@ impl BexVm {
     /// The value of `future` when it has settled with one and awaiting it
     /// would not poll for a yield: `await`'s fast path, with no suspension.
     /// `None` sends the body through the interpreter's own `Await`
-    /// ([`Step::Await`]), which raises, parks or yields exactly as bytecode
+    /// ([`Step::Await`](super::Step::Await)), which raises, parks or yields exactly as bytecode
     /// does. Counts the `Await`'s control-flow check, as bytecode does.
     #[inline]
     pub fn ready(&mut self, future: Value) -> Option<Value> {
@@ -150,7 +150,7 @@ impl BexVm {
         Some(value)
     }
 
-    /// Whether a resumable body should yield ([`Step::Yield`]) at a loop back
+    /// Whether a resumable body should yield ([`Step::Yield`](super::Step::Yield)) at a loop back
     /// edge: the interpreter's control-flow check.
     #[inline]
     pub fn should_yield(&mut self) -> bool {
@@ -300,7 +300,7 @@ impl BexVm {
     /// for a bytecode call.
     ///
     /// The frame limit is the only limit a program sees: the Rust stack the
-    /// callee runs on is the VM's concern ([`Self::with_stack_room`]).
+    /// callee runs on is the VM's concern (`Self::with_stack_room`).
     ///
     /// `pc` is the call's: the index of its call instruction in the
     /// caller's bytecode. It goes into the caller's frame before the callee

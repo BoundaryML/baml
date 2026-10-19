@@ -472,10 +472,10 @@ impl<'db> Generator<'_, 'db> {
         let Some(anchored) = self.index.anchor(template)? else {
             return blocked();
         };
-        let Some(index) = self
-            .index
-            .pooled_constant(self.object, &bex_vm_types::types::ConstValue::Type(anchored))
-        else {
+        let Some(index) = self.index.pooled_constant(
+            self.object,
+            &bex_vm_types::types::ConstValue::Type(anchored),
+        ) else {
             return blocked();
         };
         let name = format!("t{}", self.temps);
@@ -614,22 +614,25 @@ impl<'db> Generator<'_, 'db> {
     /// compiled function that may, or a closure or implementation it calls
     /// directly before falling back to a request.
     fn calls_in_place(&self) -> bool {
-        self.body.blocks.iter().any(|block| match &block.terminator {
-            Some(Terminator::Call {
-                callee: Operand::Constant(Constant::Function(func)),
-                ..
-            }) => self
-                .index
-                .function(self.db, *func)
-                .ok()
-                .flatten()
-                .is_some_and(|(object, _)| self.may_collect.contains(&object)),
-            Some(Terminator::Call { .. }) => true,
-            Some(terminator @ Terminator::VirtualCall { .. }) => {
-                !self.array_iteration(terminator)
-            }
-            _ => false,
-        })
+        self.body
+            .blocks
+            .iter()
+            .any(|block| match &block.terminator {
+                Some(Terminator::Call {
+                    callee: Operand::Constant(Constant::Function(func)),
+                    ..
+                }) => self
+                    .index
+                    .function(self.db, *func)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|(object, _)| self.may_collect.contains(&object)),
+                Some(Terminator::Call { .. }) => true,
+                Some(terminator @ Terminator::VirtualCall { .. }) => {
+                    !self.array_iteration(terminator)
+                }
+                _ => false,
+            })
     }
 
     /// The value locals live across `block`'s call: what a collection inside

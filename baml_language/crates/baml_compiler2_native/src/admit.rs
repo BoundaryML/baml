@@ -111,7 +111,7 @@ pub struct NativeModule {
 /// `PROGRAM_ARTIFACT`, read from `artifact_path`).
 ///
 /// `entries` are the object indices of the functions the pack runs (its
-/// targets): only what they reach is compiled (see [`crate::reach`]), along
+/// targets): only what they reach is compiled (see `crate::reach`), along
 /// with what every top-level `let` initializer reaches (`$init` runs them
 /// all at startup) and every method a non-stdlib package declares, which the
 /// stdlib may dispatch to without naming it. `None` compiles every admitted
@@ -754,8 +754,13 @@ impl ProgramIndex {
                 let slot = package.slot_base.raw() + cell as usize;
                 if matches!(path, DeclPath::Let(_)) {
                     collisions.extend(
-                        claim(&mut index.lets, &mut index.ambiguous, key(path.clone()), slot)
-                            .map(|key| format!("{key:?}")),
+                        claim(
+                            &mut index.lets,
+                            &mut index.ambiguous,
+                            key(path.clone()),
+                            slot,
+                        )
+                        .map(|key| format!("{key:?}")),
                     );
                     continue;
                 }

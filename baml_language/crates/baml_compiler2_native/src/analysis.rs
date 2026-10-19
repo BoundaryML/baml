@@ -318,7 +318,11 @@ fn block_allocates(
         }
         _ => true,
     };
-    if block.statements.iter().any(|statement| statement_allocates(&statement.kind)) {
+    if block
+        .statements
+        .iter()
+        .any(|statement| statement_allocates(&statement.kind))
+    {
         return true;
     }
     match &block.terminator {
