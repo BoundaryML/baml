@@ -177,11 +177,8 @@ pub struct PackArgs {
 /// The cargo profile a `--native` build compiles the generated crate under.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum NativeProfile {
-    // The shipping build: slow to compile, fast to run.
     #[default]
     Release,
-    // A quick compile for correctness runs; not representative of release
-    // speed or size.
     Fast,
 }
 
@@ -422,14 +419,7 @@ impl PackArgs {
         self.load_and_compile_project(reporter)
     }
 
-    /// Generate the native crate for `module`, build it with cargo, and place
-    /// the resulting binary at `output_path`.
-    ///
-    /// The generated crate is a standalone cargo project (its own
-    /// `[workspace]`) with path dependencies into the `baml_language`
-    /// workspace: the VM the bodies call into and the pack host they run
-    /// under. It embeds `serialized`, the packed program, so the bodies and
-    /// the bytecode they replace always come from one build.
+    /// The generated crate embeds the program its compiled bodies replace.
     fn build_native(
         &self,
         module: &baml_db::native::NativeModule,
@@ -595,14 +585,7 @@ impl PackArgs {
     /// bytes), and emit determinism guarantees a reused image is byte-identical
     /// to a fresh compile, so serving from cache never changes the artifact.
     ///
-    /// Under `--native` the cache stores but never serves. The native bodies
-    /// are compiled from the MIR this command lowers out of its own database,
-    /// and they replace the bytecode of the same functions at run time; a
-    /// served `Program` (or served package output, or a seeded database) was
-    /// lowered by an earlier process. Emit determinism says the two agree,
-    /// but the point of a native pack is that bodies and bytecode are one
-    /// lowering's two outputs, and that is only true by construction when
-    /// nothing in the build was served.
+    /// Native bodies and bytecode must come from the same lowering.
     fn load_and_compile_project(
         &self,
         reporter: &Reporter,
@@ -866,9 +849,6 @@ fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
         .unwrap_or_else(|| name.to_string())
 }
 
-/// The generated native crate's `Cargo.toml`: a standalone package with path
-/// dependencies into `workspace` and the `[profile.release]` that `profile`
-/// stands for.
 fn native_manifest(workspace: &Path, profile: NativeProfile) -> String {
     let dep = |name: &str| {
         format!(
@@ -889,7 +869,6 @@ fn native_manifest(workspace: &Path, profile: NativeProfile) -> String {
     )
 }
 
-/// Print which functions compiled natively and why the others did not.
 fn report_native(module: &baml_db::native::NativeModule) {
     let mut out = String::new();
     for function in &module.functions {
@@ -903,7 +882,6 @@ fn report_native(module: &baml_db::native::NativeModule) {
         module.functions.len(),
         module.rejected.len()
     ));
-    // Report output is the command's product here, like `--list`.
     #[allow(clippy::print_stderr)]
     {
         eprint!("{out}");
@@ -1503,10 +1481,6 @@ mod tests {
         assert!(msg.contains("x86_64-unknown-linux-gnu"), "got: {msg}");
     }
 
-    // ── Native crate manifest ─────────────────────────────────────────
-
-    /// `release` is the shipping profile: the generated crate links the three
-    /// workspace crates by path and optimizes as hard as cargo allows.
     #[test]
     fn test_native_manifest_release_profile() {
         let manifest = native_manifest(Path::new("/ws"), NativeProfile::Release);
@@ -1525,8 +1499,6 @@ mod tests {
         toml::from_str::<toml::Value>(&manifest).expect("valid TOML");
     }
 
-    /// `fast` keeps the same package and dependencies and swaps only the
-    /// profile: cheap codegen, no LTO, line tables for a readable backtrace.
     #[test]
     fn test_native_manifest_fast_profile() {
         let manifest = native_manifest(Path::new("/ws"), NativeProfile::Fast);
@@ -1548,7 +1520,6 @@ mod tests {
         );
     }
 
-    /// `--native-profile` defaults to `release` and needs `--native`.
     #[test]
     fn test_native_profile_flag_parses_and_requires_native() {
         use clap::Parser;

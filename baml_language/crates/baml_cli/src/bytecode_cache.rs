@@ -103,7 +103,6 @@ pub(crate) struct CacheContext {
     /// from the entry stored under its key, reported by
     /// [`Self::verify_packages`]. Empty otherwise.
     package_mismatches: Mutex<Vec<PackageMismatch>>,
-    /// Whether this context serves anything (see [`Self::store_only`]).
     serve: bool,
 }
 
@@ -246,19 +245,12 @@ impl CacheContext {
         })
     }
 
-    /// This context stores what a compile produces and serves nothing: no
-    /// whole program, no package output, no stdlib seed, no check row — the
-    /// honest compile path of `DEV_BAML_BUILD_CACHE_VERIFY=always`, without
-    /// its byte-compares. For a command whose output must come from the one
-    /// lowering it runs itself (`pack --native`), while still warming the
-    /// cache for the commands after it.
+    /// Native bodies and bytecode must come from the same lowering.
     pub(crate) fn store_only(mut self) -> Self {
         self.serve = false;
         self
     }
 
-    /// Whether a cached artifact may stand in for a fresh derivation: not
-    /// for a [`Self::store_only`] context, and not under the verify tripwire.
     pub(crate) fn serves(&self) -> bool {
         self.serve && !Self::verify_enabled()
     }
@@ -1609,9 +1601,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// A store-only context over a warm cache serves nothing — not the
-    /// program, not a package, not the stdlib seed, not a check row — and
-    /// still stores what the compile emits.
     #[test]
     fn store_only_context_serves_nothing_and_still_stores() {
         if cache_disabled() {
@@ -1640,8 +1629,6 @@ mod tests {
         );
         assert_eq!(program_bytes(&program), honest_bytes(&r2));
 
-        // The honest compile's outputs were stored: a serving context over
-        // the same sources is warm.
         let (db3, pkg3) = crate::project_load::build_db_from_sources(&r2, |_| {});
         let ctx3 = open(&r2).expect("cache reopens");
         let _ = compile_program(&db3, pkg3, Some(&ctx3)).expect("warm compile");

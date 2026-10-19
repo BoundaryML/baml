@@ -42,10 +42,7 @@ pub(crate) enum CacheUse {
     /// Consume warm seeds, never store: introspection commands
     /// (`generate`). Shares the run/check keyspace.
     ReadOnly,
-    /// Store artifacts after a successful compile, never serve: a command
-    /// whose output must come from the one lowering it runs itself
-    /// (`pack --native`). Shares the run/check keyspace, so the compile
-    /// still warms the cache for the commands after it.
+    /// Native bodies and bytecode must come from the same lowering.
     StoreOnly,
     /// No cache at all (projectless fallback, tests).
     Off,
