@@ -1982,8 +1982,7 @@ pub(crate) mod tests {
             artifact_fingerprint: digest,
         };
         let error = super::convert_program_with_natives(changed, true, Some(bodies))
-            .err()
-            .expect("same signature with a different body must be refused");
+            .expect_err("same signature with a different body must be refused");
         assert!(error.to_string().contains("fingerprint mismatch"));
     }
 
@@ -2008,8 +2007,7 @@ pub(crate) mod tests {
                 artifact_fingerprint,
             }),
         )
-        .err()
-        .expect("an empty table must not bypass artifact validation");
+        .expect_err("an empty table must not bypass artifact validation");
         assert!(error.to_string().contains("fingerprint mismatch"));
     }
 
@@ -2186,8 +2184,8 @@ pub(crate) mod tests {
             vm.heap
                 .collect_garbage_generational(&roots, CollectionLevel::Major)
         };
-        let moved_value = *forwarding.get(&thrown_ptr).unwrap();
-        let moved_context = *forwarding.get(&context_ptr).unwrap();
+        let moved_value = forwarding[&thrown_ptr];
+        let moved_context = forwarding[&context_ptr];
         assert_ne!(moved_value, thrown_ptr);
         assert_ne!(moved_context, context_ptr);
         vm.forward_roots(&forwarding);
