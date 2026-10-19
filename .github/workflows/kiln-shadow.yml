@@ -1742,7 +1742,7 @@ jobs:
         if: matrix.sdk-label == 'ruby-sorbet'
         uses: ./.github/actions/setup-ruby
         with:
-          ruby-version: "3.2.11"
+          ruby-version: "3.2.2"
 
       - name: "Install .NET SDK"
         if: matrix.sdk-label == 'csharp'
