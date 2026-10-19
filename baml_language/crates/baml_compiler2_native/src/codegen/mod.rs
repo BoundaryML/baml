@@ -170,88 +170,41 @@ impl<'db> Generator<'_, 'db> {
         }
         self.prepare();
         if self.suspends {
-            return self.resumable_function(symbol);
+            self.resumable_function(symbol)
+        } else {
+            self.inline_function(symbol)
         }
-        // Only an inline body needs structured control flow; a graph the
-        // structurer refuses keeps just this body bytecode.
+    }
+
+    /// A body that cannot suspend: structured Rust that runs to completion.
+    fn inline_function(&mut self, symbol: &str) -> Gen<String> {
+        // A graph the structurer refuses keeps the function bytecode.
         let structured = structurize(&self.analysis.cfg)
             .map_err(|error| Rejection::Invalid(error.to_string()))?;
-        let arity = self.body.locals.len().min(self.arity());
-        let mut out = String::new();
-        // The body runs in a closure so every way out, `?` included, passes
-        // the wrapper: an error leaving the function records the PC it was
-        // raised at in this function's frame. `depth` is the frame count with
-        // that frame on top; a catch also pops whatever compiled callees left
-        // above it. Before its first statement the body stands at PC 0, as a
-        // bytecode frame does.
-        let _ = writeln!(
-            out,
-            "#[inline]\npub fn {symbol}(vm: &mut BexVm, args: &[Value]) -> R<Value> {{\n\
-             let depth = vm.frame_depth();\nlet mut pc: u32 = 0;\n\
-             let result = (|| -> R<Value> {{"
-        );
-        for (i, repr) in self.analysis.reprs.iter().enumerate() {
-            if self.analysis.is_type_local(i) {
-                continue;
-            }
-            let ty = repr.rust_type();
-            if (1..=arity).contains(&i) && self.body.locals[i].is_captured {
-                // A captured parameter gets its cell at entry (bytecode's
-                // preamble wraps it): the one binding without a `FreshCell`.
-                let _ = writeln!(out, "let mut l{i}: {ty} = vm.new_cell(args[{}]);", i - 1);
-            } else if (1..=arity).contains(&i) {
-                let arg = coerce(&format!("args[{}]", i - 1), Repr::Value, *repr);
-                let _ = writeln!(out, "let mut l{i}: {ty} = {arg};");
-            } else {
-                let _ = writeln!(out, "let mut l{i}: {ty} = {};", repr.default_value());
-            }
-        }
-        for iter in self.analysis.array_iters.keys() {
-            let _ = writeln!(out, "let mut i{iter}: i64 = 0;");
-        }
-        for block in &self.body.blocks {
-            match &block.terminator {
-                Some(
-                    Terminator::Branch { .. }
-                    | Terminator::NarrowBind { .. }
-                    | Terminator::ShortCircuit { .. },
-                ) => {
-                    let _ = writeln!(out, "let mut c{}: bool = false;", block.id.0);
-                }
-                Some(Terminator::Switch { .. }) => {
-                    let _ = writeln!(out, "let mut d{}: i64 = 0;", block.id.0);
-                }
-                _ => {}
-            }
-        }
-        // The cause slot: the context of the error a handler is handling,
-        // which the VM's cause chain reads off the frame.
-        if self.slots > 0 {
-            let _ = writeln!(out, "vm.reserve_slots(depth, {});", self.slots);
-        }
-        if let Some(slot) = self.cause_slot {
-            let _ = writeln!(out, "vm.set_slot(depth, {slot}, Value::NULL);");
-        }
-        if self.gc_checks.loops {
-            let _ = writeln!(out, "let mut iterations: u32 = 0;");
-        }
         let stmts = structured.stmts.clone();
         self.structured = Some(structured);
         self.out.clear();
+        self.header(&format!(
+            "#[inline]\npub fn {symbol}(vm: &mut BexVm, args: &[Value]) -> R<Value>"
+        ));
+        self.declare_locals(true, self.gc_checks.loops);
+        if self.slots > 0 {
+            self.line(&format!("vm.reserve_slots(depth, {});", self.slots));
+        }
+        if let Some(slot) = self.cause_slot {
+            self.line(&format!("vm.set_slot(depth, {slot}, Value::NULL);"));
+        }
+        let prologue = std::mem::take(&mut self.out);
         if self.gc_checks.entry {
             let live = self.live_in[self.body.entry.0].clone();
             self.gc_check(&live, "vm.gc_due()");
         }
         self.stmts(&stmts)?;
-        self.declare_frame_types(&mut out);
-        out.push_str(&self.out);
-        // Every path ends in an `Exit`; this is unreachable, and keeps the
-        // function well-typed if a leaf falls through after structuring.
-        out.push_str(
-            "#[allow(unreachable_code)]\nOk(Value::NULL)\n})();\n\
-             if result.is_err() {\nvm.note_pc(depth, pc);\n}\nresult\n}\n",
-        );
-        Ok(out)
+        // Every path ends in an `Exit`; this keeps the closure well-typed.
+        self.line("#[allow(unreachable_code)]");
+        self.line("Ok(Value::NULL)");
+        self.footer();
+        Ok(self.assemble(prologue))
     }
 
     /// A resumable function: the VM drives it through `Resume`/`Step`. Its
@@ -260,48 +213,14 @@ impl<'db> Generator<'_, 'db> {
     /// locals), so the GC sees them while it is suspended. The blocks run in a
     /// `loop { match bb }`, since a resume enters the middle of the function.
     fn resumable_function(&mut self, symbol: &str) -> Gen<String> {
-        let arity = self.body.locals.len().min(self.arity());
-        let iters = self.iters();
+        let arity = self.arity_locals();
         let slots = self.slots;
         let point_slot = self.point_slot;
         self.out.clear();
-        let _ = writeln!(
-            self.out,
-            "pub fn {symbol}(vm: &mut BexVm, resume: Resume) -> Result<Step, Box<VmError>> {{\n\
-             let depth = vm.frame_depth();\nlet mut pc: u32 = 0;\n\
-             let result = (|| -> Result<Step, Box<VmError>> {{"
-        );
-        for (i, repr) in self.analysis.reprs.iter().enumerate() {
-            if !self.analysis.is_type_local(i) {
-                let _ = writeln!(
-                    self.out,
-                    "let mut l{i}: {} = {};",
-                    repr.rust_type(),
-                    repr.default_value()
-                );
-            }
-        }
-        for iter in &iters {
-            let _ = writeln!(self.out, "let mut i{iter}: i64 = 0;");
-        }
-        if !self.loop_headers.is_empty() {
-            let _ = writeln!(self.out, "let mut iterations: u32 = 0;");
-        }
-        for block in &self.body.blocks {
-            match &block.terminator {
-                Some(
-                    Terminator::Branch { .. }
-                    | Terminator::NarrowBind { .. }
-                    | Terminator::ShortCircuit { .. },
-                ) => {
-                    let _ = writeln!(self.out, "let mut c{}: bool = false;", block.id.0);
-                }
-                Some(Terminator::Switch { .. }) => {
-                    let _ = writeln!(self.out, "let mut d{}: i64 = 0;", block.id.0);
-                }
-                _ => {}
-            }
-        }
+        self.header(&format!(
+            "pub fn {symbol}(vm: &mut BexVm, resume: Resume) -> R<Step>"
+        ));
+        self.declare_locals(false, !self.loop_headers.is_empty());
         // Prologue: start, or read the point this body suspended at, restore
         // what it saved and take the result of its request.
         self.in_loop = false;
@@ -313,35 +232,26 @@ impl<'db> Generator<'_, 'db> {
             self.line(&format!("vm.set_slot(depth, {cause}, Value::NULL);"));
         }
         // A write-through local's slot holds its value from its first
-        // assignment on; before that, its default, so a resume restoring it
-        // where liveness overapproximates (a local a terminator assigns)
-        // reads a well-typed value, as when every suspension saved it.
+        // assignment on, and its default before that, so a resume where
+        // liveness overapproximates still reads a well-typed value.
         for local in self.write_through.clone() {
             if local > arity {
-                let default = coerce(
-                    self.repr(Local(local)).default_value(),
-                    self.repr(Local(local)),
-                    Repr::Value,
-                );
+                let repr = self.repr(Local(local));
+                let default = coerce(repr.default_value(), repr, Repr::Value);
                 self.line(&format!("vm.set_slot(depth, {local}, {default});"));
             }
         }
-        // Argument `i` arrives in slot `i - 1`, but local `i` keeps slot
-        // `i`: read every argument before writing any write-through slot,
-        // which would land on the next argument.
+        // Argument `i` arrives in slot `i - 1` but local `i` keeps slot `i`:
+        // read every argument before writing any write-through slot.
         for i in 1..=arity {
+            let arg = format!("vm.slot(depth, {})", i - 1);
             if self.body.locals[i].is_captured {
-                // Its cell, as at an inline entry.
-                self.line(&format!("let arg = vm.slot(depth, {});", i - 1));
+                self.line(&format!("let arg = {arg};"));
                 self.line(&format!("l{i} = vm.new_cell(arg);"));
-                continue;
+            } else {
+                let arg = coerce(&arg, Repr::Value, self.repr(Local(i)));
+                self.line(&format!("l{i} = {arg};"));
             }
-            let arg = coerce(
-                &format!("vm.slot(depth, {})", i - 1),
-                Repr::Value,
-                self.repr(Local(i)),
-            );
-            self.line(&format!("l{i} = {arg};"));
         }
         let synced: Vec<usize> = (1..=arity)
             .filter(|i| self.write_through.contains(i))
@@ -350,8 +260,7 @@ impl<'db> Generator<'_, 'db> {
             let slot = coerce(&format!("l{i}"), self.repr(Local(i)), Repr::Value);
             self.line(&format!("vm.set_slot(depth, {i}, {slot});"));
         }
-        let entry = self.body.entry.0;
-        self.line(&format!("bb = {entry};"));
+        self.line(&format!("bb = {};", self.body.entry.0));
         self.line("}");
         // Each resume arm restores what its suspension saved (`saved_at`).
         self.line("resume => {");
@@ -379,11 +288,9 @@ impl<'db> Generator<'_, 'db> {
         self.line("}");
         self.line("}");
         self.line("}");
-        // The blocks. Every entry (a start or a resume) rebuilds the types
-        // the body derives from its frame, whose heads a collection may
-        // have moved while it was suspended; they are declared between the
-        // prologue and the loop once the blocks say which.
-        let mut prologue = std::mem::take(&mut self.out);
+        // Every entry rebuilds the frame-derived types, since a collection
+        // may have moved their heads while the body was suspended.
+        let prologue = std::mem::take(&mut self.out);
         self.in_loop = true;
         self.line("loop {");
         self.line("match bb {");
@@ -399,22 +306,92 @@ impl<'db> Generator<'_, 'db> {
         self.line("_ => return Err(bex_vm::compiled_rt::unreachable()),");
         self.line("}");
         self.line("}");
-        self.out
-            .push_str("})();\nif result.is_err() {\nvm.note_pc(depth, pc);\n}\nresult\n}\n");
-        let blocks = std::mem::take(&mut self.out);
-        self.declare_frame_types(&mut prologue);
-        prologue.push_str(&blocks);
-        Ok(prologue)
+        self.footer();
+        Ok(self.assemble(prologue))
     }
 
-    /// Declare the body's frame-derived types (`let ty{k}: RealizedTy`),
-    /// in the order the body first needed them.
-    fn declare_frame_types(&self, out: &mut String) {
-        for (k, template) in self.frame_templates.iter().enumerate() {
+    /// The number of parameters the body binds as locals.
+    fn arity_locals(&self) -> usize {
+        self.body.locals.len().min(self.arity())
+    }
+
+    /// Open the function and the closure its body runs in. Every way out of
+    /// the closure, `?` included, passes [`Self::footer`], which records the
+    /// PC an error was raised at in this function's frame. Before its first
+    /// statement a body stands at PC 0, as a bytecode frame does.
+    fn header(&mut self, signature: &str) {
+        let result = signature
+            .rsplit("-> ")
+            .next()
+            .expect("signature has a result");
+        self.line(&format!("{signature} {{"));
+        self.line("let depth = vm.frame_depth();");
+        self.line("let mut pc: u32 = 0;");
+        self.line(&format!("let result = (|| -> {result} {{"));
+    }
+
+    fn footer(&mut self) {
+        self.line("})();");
+        self.line("if result.is_err() {");
+        self.line("vm.note_pc(depth, pc);");
+        self.line("}");
+        self.line("result");
+        self.line("}");
+    }
+
+    /// Declare the body's locals, iterator positions, iteration counter and
+    /// per-block condition and discriminant temporaries. An inline body binds
+    /// its parameters from `args`; a resumable one reads them on `Start`.
+    fn declare_locals(&mut self, from_args: bool, iterations: bool) {
+        let analysis = self.analysis;
+        let arity = if from_args { self.arity_locals() } else { 0 };
+        for (i, &repr) in analysis.reprs.iter().enumerate() {
+            if analysis.is_type_local(i) {
+                continue;
+            }
+            let ty = repr.rust_type();
+            let init = if !(1..=arity).contains(&i) {
+                repr.default_value().to_string()
+            } else if self.body.locals[i].is_captured {
+                format!("vm.new_cell(args[{}])", i - 1)
+            } else {
+                coerce(&format!("args[{}]", i - 1), Repr::Value, repr)
+            };
+            self.line(&format!("let mut l{i}: {ty} = {init};"));
+        }
+        for iter in analysis.array_iters.keys() {
+            self.line(&format!("let mut i{iter}: i64 = 0;"));
+        }
+        if iterations {
+            self.line("let mut iterations: u32 = 0;");
+        }
+        for block in &self.body.blocks {
+            let declaration = match &block.terminator {
+                Some(
+                    Terminator::Branch { .. }
+                    | Terminator::NarrowBind { .. }
+                    | Terminator::ShortCircuit { .. },
+                ) => format!("let mut c{}: bool = false;", block.id.0),
+                Some(Terminator::Switch { .. }) => format!("let mut d{}: i64 = 0;", block.id.0),
+                _ => continue,
+            };
+            self.line(&declaration);
+        }
+    }
+
+    /// `prologue`, then the frame-derived types the body needed, then the
+    /// body generated since.
+    fn assemble(&mut self, prologue: String) -> String {
+        let body = std::mem::take(&mut self.out);
+        for (k, template) in self.frame_templates.clone().iter().enumerate() {
             let code = realized_expr(self.index, template, true)
                 .expect("a hoisted template was rendered when it was hoisted");
-            let _ = writeln!(out, "let ty{k}: RealizedTy = {code};");
+            self.line(&format!("let ty{k}: RealizedTy = {code};"));
         }
+        let mut out = prologue;
+        out.push_str(&std::mem::take(&mut self.out));
+        out.push_str(&body);
+        out
     }
 
     /// An expression of type `RealizedTy` for `template`, owned: a static
@@ -563,7 +540,7 @@ impl<'db> Generator<'_, 'db> {
             self.hoist_types = false;
         }
         if self.suspends {
-            let arity = self.body.locals.len().min(self.arity());
+            let arity = self.arity_locals();
             let base = self.analysis.reprs.len().max(arity) + self.iters().len();
             self.point_slot = base;
             self.cause_slot = catches.then_some(base + 1);
@@ -1199,9 +1176,7 @@ impl<'db> Generator<'_, 'db> {
     /// The array iterators, in the order their positions take slots after
     /// the locals'.
     fn iters(&self) -> Vec<usize> {
-        let mut iters: Vec<usize> = self.analysis.array_iters.keys().copied().collect();
-        iters.sort_unstable();
-        iters
+        self.analysis.array_iters.keys().copied().collect()
     }
 
     /// The point a resumable body records for a yield at loop header
