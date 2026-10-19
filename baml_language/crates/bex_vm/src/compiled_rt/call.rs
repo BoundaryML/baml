@@ -25,6 +25,24 @@ thread_local! {
 }
 
 impl BexVm {
+    #[inline]
+    pub(super) fn compiled_frame(&self, depth: usize) -> &BytecodeFrame {
+        debug_assert!(self.frame_is_compiled(depth - 1));
+        let Frame::Bytecode(frame) = &self.frames[depth - 1] else {
+            unreachable!("a compiled body accesses its own frame");
+        };
+        frame
+    }
+
+    #[inline]
+    pub(super) fn compiled_frame_mut(&mut self, depth: usize) -> &mut BytecodeFrame {
+        debug_assert!(self.frame_is_compiled(depth - 1));
+        let Frame::Bytecode(frame) = &mut self.frames[depth - 1] else {
+            unreachable!("a compiled body accesses its own frame");
+        };
+        frame
+    }
+
     // ── Calls ─────────────────────────────────────────────────────────────────
 
     /// Call a VM-owned builtin synchronously. A builtin that yields (to run a
@@ -75,9 +93,7 @@ impl BexVm {
     /// ones). Called once, on start; a resumable body's region then sits at
     /// the top of the stack whenever it suspends.
     pub fn reserve_slots(&mut self, depth: usize, slots: usize) {
-        let crate::vm::Frame::Bytecode(frame) = &self.frames[depth - 1] else {
-            unreachable!("a compiled body reserves slots in its own frame");
-        };
+        let frame = self.compiled_frame(depth);
         let end = frame.locals_offset.raw() + slots;
         self.stack.resize(end, Value::NULL);
     }
@@ -86,9 +102,7 @@ impl BexVm {
     #[inline]
     #[must_use]
     pub fn slot(&self, depth: usize, index: usize) -> Value {
-        let crate::vm::Frame::Bytecode(frame) = &self.frames[depth - 1] else {
-            unreachable!("a compiled body reads its own frame");
-        };
+        let frame = self.compiled_frame(depth);
         self.stack
             .get_at(StackIndex::from_raw(frame.locals_offset.raw() + index))
     }
@@ -97,9 +111,7 @@ impl BexVm {
     /// `depth`; see [`Self::slot`].
     #[inline]
     pub fn set_slot(&mut self, depth: usize, index: usize, value: Value) {
-        let crate::vm::Frame::Bytecode(frame) = &self.frames[depth - 1] else {
-            unreachable!("a compiled body writes its own frame");
-        };
+        let frame = self.compiled_frame(depth);
         let at = frame.locals_offset.raw() + index;
         self.stack.0[at] = value;
     }
