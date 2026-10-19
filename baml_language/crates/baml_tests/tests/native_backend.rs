@@ -187,7 +187,7 @@ fn compute_shaped_functions_are_admitted_and_the_rest_stay_bytecode() {
 
 #[test]
 fn generated_module_is_well_formed_rust() {
-    let module = compile(FIXTURE);
+    let (module, program) = compile_with_program(FIXTURE);
     syn::parse_file(&module.source).expect("generated module parses as Rust");
     assert!(module.source.contains("pub static NATIVE_BODIES"));
     assert!(module.source.contains("include_bytes!(\"program.bexa\")"));
@@ -198,13 +198,21 @@ fn generated_module_is_well_formed_rust() {
         .source
         .split_whitespace()
         .collect::<String>()
-        .replace(",)", ")");
+        .replace(",)", ")")
+        .replace(",]", "]");
+    let fingerprint = format!(
+        "program_fingerprint:{:?}",
+        program.bytecode_fingerprint().unwrap()
+    )
+    .split_whitespace()
+    .collect::<String>();
+    assert!(compact.contains(&fingerprint));
     for function in &module.functions {
         // Compacted like the source: an impl body's name has spaces in it
         // (`<(ai.Prompt as baml.ToString)>.to_string`).
         let entry: String = format!(
             "CompiledEntry{{object:{},name:{:?},arity:{},body:CompiledFn::{}({}),\
-             slots:{},cause_slot:{:?},}}",
+             slots:{},cause_slot:{:?},program_fingerprint:",
             function.object,
             function.name,
             function.arity,

@@ -1188,6 +1188,7 @@ pub(crate) mod tests {
         slots: u32,
     ) -> bex_vm_types::types::NativeBody {
         crate::compiled_rt::CompiledEntry {
+            program_fingerprint: [0; 32],
             object: 0,
             name: "",
             arity: 0,
@@ -1930,6 +1931,43 @@ pub(crate) mod tests {
                 AutoTelemetryLevel::Low => unreachable!(),
             }
         }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn compiled_bodies_require_the_original_program() {
+        use crate::compiled_rt::{CompiledEntry, CompiledFn};
+
+        fn body(_vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            unreachable!("load validation does not execute compiled bodies")
+        }
+
+        let program = baml_test_support::compile_source("function Main() -> int { 1 }");
+        let object = program.rendered_callables()["user.Main"].object;
+        let table = [CompiledEntry {
+            program_fingerprint: program.bytecode_fingerprint().unwrap(),
+            object: u32::try_from(object.raw()).unwrap(),
+            name: "user.Main",
+            arity: 0,
+            body: CompiledFn::Inline(body),
+            slots: 0,
+            cause_slot: None,
+        }];
+        let artifact =
+            baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
+        let decoded =
+            baml_artifact::decode(baml_artifact::ArtifactKind::Program, &artifact).unwrap();
+        let loaded = super::convert_program_with_natives(decoded, true, Some(&table)).unwrap();
+        let Object::Function(function) = &loaded.objects[object] else {
+            panic!("compiled entry must be a function")
+        };
+        assert!(function.native_body.is_some());
+
+        let changed = baml_test_support::compile_source("function Main() -> int { 2 }");
+        let error = super::convert_program_with_natives(changed, true, Some(&table))
+            .err()
+            .expect("same signature with a different body must be refused");
+        assert!(error.to_string().contains("fingerprint mismatch"));
     }
 
     /// A compiled function the host calls as the entry point runs its compiled
@@ -3422,6 +3460,12 @@ pub fn convert_program_with_natives(
     // checked against the format's laws here, and everything after — the
     // rendered views, the loader — indexes into a program that keeps them.
     program.validate()?;
+    let fingerprint = native_bodies
+        .map(|_| program.bytecode_fingerprint())
+        .transpose()
+        .map_err(|error| VmInternalError::CompiledBody {
+            message: format!("failed to fingerprint bytecode program: {error}"),
+        })?;
     let callables = program.rendered_callables();
     // The names compiled bodies were generated against, as the loader will
     // render them; pooled functions have no owner until load.
@@ -3445,8 +3489,8 @@ pub fn convert_program_with_natives(
 
     // Compiled bodies attach before compact code is prepared: call
     // specialization reads the callee to choose a call fast path.
-    if let Some(table) = native_bodies {
-        attach_native_bodies(&mut objects, table, &native_names)?;
+    if let (Some(table), Some(fingerprint)) = (native_bodies, fingerprint) {
+        attach_native_bodies(&mut objects, table, &native_names, fingerprint)?;
     }
 
     if !enabled {
@@ -3480,13 +3524,14 @@ pub fn convert_program_with_natives(
 ///
 /// An entry names its function by object index, the identity the generated
 /// code already depends on (it bakes callee and class indices in), and
-/// repeats the function's link name and arity so a table from another build
-/// is refused here instead of running against the wrong objects. A mismatch
+/// repeats the program fingerprint, function's link name and arity so a table
+/// from another build is refused instead of running stale code. A mismatch
 /// or a non-bytecode kind is a build inconsistency, not a user error.
 fn attach_native_bodies(
     objects: &mut [Object],
     table: &NativeBodyTable,
     names: &[Option<String>],
+    fingerprint: [u8; 32],
 ) -> Result<(), VmInternalError> {
     for (entry, name) in table.iter().zip(names) {
         let mismatch = |why: &str| VmInternalError::CompiledBody {
@@ -3495,6 +3540,11 @@ fn attach_native_bodies(
                 entry.name, entry.object
             ),
         };
+        if entry.program_fingerprint != fingerprint {
+            return Err(mismatch(
+                "was compiled from another program: fingerprint mismatch",
+            ));
+        }
         let Some(Object::Function(function)) = objects.get_mut(entry.object as usize) else {
             return Err(mismatch("does not name a function in this program"));
         };

@@ -12,6 +12,7 @@ pub(crate) fn render_module(
     functions: &[CompiledFunction],
     natives: &BTreeMap<String, usize>,
     artifact_path: &str,
+    program_fingerprint: [u8; 32],
 ) -> Result<String, String> {
     let mut out = String::new();
     out.push_str(
@@ -40,7 +41,7 @@ pub(crate) fn render_module(
         let _ = writeln!(
             out,
             "    CompiledEntry {{ object: {}, name: {:?}, arity: {}, body: CompiledFn::{}({}), \
-             slots: {}, cause_slot: {:?} }},",
+             slots: {}, cause_slot: {:?}, program_fingerprint: {program_fingerprint:?} }},",
             function.object,
             function.name,
             function.arity,
@@ -147,7 +148,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "native backend generated invalid Rust")]
     fn malformed_generated_rust_is_an_error() {
-        let _ = render_module("fn broken(", &[], &BTreeMap::new(), "program.bexa");
+        let _ = render_module("fn broken(", &[], &BTreeMap::new(), "program.bexa", [0; 32]);
     }
 
     #[test]

@@ -348,7 +348,10 @@ pub fn compile_program<'db>(
         }
     };
 
-    let source = render_module(&bodies, &functions, &natives, artifact_path)?;
+    let fingerprint = program
+        .bytecode_fingerprint()
+        .map_err(|error| format!("failed to fingerprint native bytecode program: {error}"))?;
+    let source = render_module(&bodies, &functions, &natives, artifact_path, fingerprint)?;
     Ok(NativeModule {
         source,
         functions,

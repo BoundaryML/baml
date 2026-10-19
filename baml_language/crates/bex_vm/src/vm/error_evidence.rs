@@ -722,6 +722,7 @@ mod tests {
         };
         function.native_body = Some(
             CompiledEntry {
+                program_fingerprint: [0; 32],
                 object: 0,
                 name: "user.Main",
                 arity: 0,

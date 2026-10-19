@@ -112,6 +112,8 @@ pub enum CompiledFn {
 /// One compiled function in a generated module's table.
 #[derive(Clone, Copy)]
 pub struct CompiledEntry {
+    /// Fingerprint of the serialized program this body was compiled from.
+    pub program_fingerprint: [u8; 32],
     /// Object index of the bytecode `Function` this body replaces: the
     /// identity the generated code bakes in for callees and classes.
     pub object: u32,
