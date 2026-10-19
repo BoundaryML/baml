@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[inferred_function_value_call.baml:10:62]
+ 10 │ function call_inferred_with_string() -> int { get_identity()("x") }
+    ·                                                              ─┬─
+    ·                                                               ╰── expected `int`, found `"x"`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[inferred_function_value_call.baml:12:69]
+ 12 │ function call_written_with_string() -> int { get_identity_written()("x") }
+    ·                                                                     ─┬─
+    ·                                                                      ╰── expected `int`, found `"x"`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[inferred_function_value_call.baml:16:7]
+ 16 │     f("x")
+    ·       ─┬─
+    ·        ╰── expected `int`, found `"x"`
+    ╰────

@@ -3926,23 +3926,16 @@ impl BexEngine {
                     Some(closure.function),
                     None,
                 ),
-                Object::BoundMethod(bm) => {
-                    let receiver = bm.receiver;
-                    let class_type_args = receiver
-                        .as_object_ptr()
-                        .and_then(|ptr| match thread.vm.get_object(ptr) {
-                            Object::Instance(inst) => Some(inst.class_type_args.to_vec()),
-                            _ => None,
-                        })
-                        .unwrap_or_default();
-                    (
-                        bm.function,
-                        Some(receiver),
-                        class_type_args,
-                        Some(bm.function),
-                        None,
-                    )
-                }
+                // The frame the bind curried, as `CallIndirect` seeds it: the
+                // receiver's class arguments (or a resolved impl's frame), then
+                // the method's own generics a specialization appended.
+                Object::BoundMethod(bm) => (
+                    bm.function,
+                    Some(bm.receiver),
+                    bm.type_args.to_vec(),
+                    Some(bm.function),
+                    None,
+                ),
                 Object::HostClosure(host) => {
                     let throws_type = match &*host.throws_ty {
                         bex_vm_types::RealizedTy::Never => None,

@@ -6939,9 +6939,10 @@ impl BexVm {
 
     /// The class-level type arguments to curry into a bound method whose
     /// receiver is `receiver`: the receiver instance's `class_type_args` (De
-    /// Bruijn class-param order — the method's `Self`), or empty for a
-    /// non-instance receiver (a primitive, `type`, `uint8array`, …, which has no
-    /// class generics). Captured at `MakeBoundMethod` time so the value is fully
+    /// Bruijn class-param order — the method's `Self`), a list's element type
+    /// or a map's key and value types (its carrier class's parameters), or
+    /// empty for any other receiver (a primitive, `type`, `uint8array`, …,
+    /// whose carrier has no class generics). Captured at `MakeBoundMethod` time so the value is fully
     /// realized; installed as the callee's `frame.type_args` at `CallIndirect`
     /// (see the `Object::BoundMethod` arm of `execute_call_from_locals_offset`).
     ///
@@ -6956,12 +6957,24 @@ impl BexVm {
         &self,
         receiver: Value,
     ) -> Box<[bex_vm_types::RealizedTy]> {
-        match receiver.as_object_ptr() {
-            Some(ptr) => match self.get_object(ptr) {
-                Object::Instance(inst) => inst.class_type_args.clone(),
-                _ => Box::new([]),
-            },
-            None => Box::new([]),
+        if let Some(ptr) = receiver.as_object_ptr()
+            && let Object::Instance(inst) = self.get_object(ptr)
+        {
+            return inst.class_type_args.clone();
+        }
+        // A builtin's methods live on its carrier class (`baml.Array<T>`,
+        // `baml.Map<K, V>`), whose frame takes the value's own element types:
+        // a list or map carries them, so the bound method is realized from
+        // the receiver as an instance's is from its class arguments.
+        match self.value_concrete_ty(receiver) {
+            Some(bex_vm_types::ConcreteRealizedTy::List(element)) => {
+                Box::new([bex_vm_types::RealizedTy::from(*element)])
+            }
+            Some(bex_vm_types::ConcreteRealizedTy::Map { key, value }) => Box::new([
+                bex_vm_types::RealizedTy::from(*key),
+                bex_vm_types::RealizedTy::from(*value),
+            ]),
+            _ => Box::new([]),
         }
     }
 

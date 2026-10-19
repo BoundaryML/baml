@@ -7131,6 +7131,7 @@ impl<'db> InferenceContext<'db> {
                     func: DeclRef::Source(function),
                 },
             );
+            self.write_value_type_args(expr, &instantiation, 0);
             return instantiate_callable_signature(
                 self.db,
                 DeclRef::Source(function),
@@ -7202,6 +7203,7 @@ impl<'db> InferenceContext<'db> {
                     });
             }
             self.write_member_resolution(expr, MemberResolution::Free { func: callable });
+            self.write_value_type_args(expr, &instantiation, 0);
             return instantiate_callable_signature(self.db, callable, &instantiation);
         }
         // Session submissions persist root bindings as top-level `let`s. A
@@ -7272,7 +7274,7 @@ impl<'db> InferenceContext<'db> {
             && root.as_str() == "default"
             && let Some(interface_member) = self.default_member(&member.clone())
         {
-            return self.interface_member_value(interface_member);
+            return self.interface_member_value(expr, interface_member);
         }
         // Enum VARIANT values (`Shape.Rectangle`): the variant's singleton
         // literal type - the same product the type-position path gives
@@ -7589,13 +7591,8 @@ impl<'db> InferenceContext<'db> {
             }
             OwnArgs::Fresh => {
                 // A VALUE reference has no call site, but MIR still needs the
-                // (eventually solved) frame to resolve the callable — record
-                // it as a plan keyed by the reference expression itself, the
-                // same channel a call's instantiation rides. Writeback
-                // grounds it once inference finishes.
-                let plan = self.result.call_plans.entry(anchor).or_default();
-                plan.type_args.clone_from(&instantiation);
-                plan.own_offset = 0;
+                // (eventually solved) frame to resolve the callable.
+                self.write_value_type_args(anchor, &instantiation, 0);
             }
         }
         self.register_callable_bounds(method, &instantiation, anchor);
@@ -7923,6 +7920,9 @@ impl<'db> InferenceContext<'db> {
             self.register_callable_bounds(callable, &instantiation, anchor);
             instantiation
         } else {
+            // No receiver supplies an alias-pinned owner prefix to a value:
+            // the value carries the whole frame.
+            self.write_value_type_args(anchor, &instantiation, 0);
             instantiation
         };
         if let Some(record_at) = record_at {
@@ -8140,6 +8140,9 @@ impl<'db> InferenceContext<'db> {
             ));
         }
         self.register_callable_bounds(DeclRef::Source(method), &instantiation, anchor);
+        // No receiver supplies an alias-pinned owner prefix to a value: the
+        // value carries the whole frame.
+        self.write_value_type_args(anchor, &instantiation, 0);
         if let Some(record_at) = record_at {
             self.write_member_resolution(
                 record_at,
@@ -9636,6 +9639,7 @@ impl<'db> InferenceContext<'db> {
             if self.member_probe_depth == 0 {
                 self.report_bare_output_format_reference(at, method);
             }
+            let receiver_prefix = class_args.len();
             let mut instantiation = class_args;
             let own: Vec<Ty> = callable_signature(self.db, method)
                 .generic_params
@@ -9643,6 +9647,7 @@ impl<'db> InferenceContext<'db> {
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
             instantiation.extend(own);
+            self.write_value_type_args(at, &instantiation, receiver_prefix);
             // r-a registers required obligations at EVERY value
             // instantiation, whatever the spelling - a method read as a
             // VALUE obligates its own generics' bounds exactly as a
@@ -9673,7 +9678,10 @@ impl<'db> InferenceContext<'db> {
                 }
                 let resolution =
                     self.declarer_resolution(&interface_member.declarer, member, Receiver::Bound);
-                return (self.interface_member_value(interface_member), resolution);
+                return (
+                    self.interface_member_value(at, interface_member),
+                    resolution,
+                );
             }
             crate::method_resolution::InterfaceMemberLookup::Ambiguous { sources, is_field } => {
                 if self.member_probe_depth == 0 {
@@ -9776,7 +9784,10 @@ impl<'db> InferenceContext<'db> {
                 }
                 let resolution =
                     self.declarer_resolution(&interface_member.declarer, member, Receiver::Bound);
-                (self.interface_member_value(interface_member), resolution)
+                (
+                    self.interface_member_value(at, interface_member),
+                    resolution,
+                )
             }
             crate::method_resolution::UnionMemberLookup::Ambiguous { sources, is_field } => {
                 if self.member_probe_depth == 0 {
@@ -10176,6 +10187,7 @@ impl<'db> InferenceContext<'db> {
 
     fn interface_member_value(
         &mut self,
+        at: ExprId,
         interface_member: crate::method_resolution::InterfaceMember<'db>,
     ) -> Ty {
         if let Some(crate::method_resolution::PendingOwnGenerics { callable, prefix }) =
@@ -10186,8 +10198,12 @@ impl<'db> InferenceContext<'db> {
                 .iter()
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
+            // The receiver's impl, resolved when the value is bound, supplies
+            // the prefix; the value carries the method's own generics.
+            let receiver_prefix = prefix.len();
             let mut instantiation = prefix;
             instantiation.extend(own);
+            self.write_value_type_args(at, &instantiation, receiver_prefix);
             return bind_receiver(instantiate_callable_signature(
                 self.db,
                 callable,
@@ -11361,6 +11377,31 @@ impl<'db> InferenceContext<'db> {
         plan.own_offset = own_offset;
         plan.explicit = explicit;
         type_args
+    }
+
+    /// Records a function VALUE reference's instantiation (raw; ground
+    /// after writeback), keyed by the reference expression itself - the
+    /// channel a call's instantiation rides. A value has no call site to
+    /// seed its frame, so it must carry every slot its receiver does not:
+    /// `receiver_prefix` is the leading run a bound receiver supplies (its
+    /// class or impl frame), zero for an unbound reference. This is how
+    /// `let c: (int) -> int = foo` becomes the same value `foo<int>` is.
+    ///
+    /// A member probe's `at` is the probing CALL, whose own plan this
+    /// must never overwrite, and a probe commits nothing.
+    fn write_value_type_args(
+        &mut self,
+        reference: ExprId,
+        instantiation: &[Ty],
+        receiver_prefix: usize,
+    ) {
+        debug_assert!(receiver_prefix <= instantiation.len());
+        if self.member_probe_depth > 0 || instantiation.len() == receiver_prefix {
+            return;
+        }
+        let plan = self.result.call_plans.entry(reference).or_default();
+        plan.type_args = instantiation.to_vec();
+        plan.own_offset = receiver_prefix;
     }
 
     /// Walks the MEMBER segments of a value-rooted path (everything after

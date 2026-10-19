@@ -899,6 +899,15 @@ impl BexEngine {
             | Object::Closure(_)
             | Object::BoundMethod(_)
             | Object::GenericFunction(_) => {
+                // Every function value is realized: the compiler seeds an
+                // inferred instantiation exactly as a written one, so one that
+                // reaches the host with a slot missing would state a type
+                // (`(int) -> int`) its frame cannot honor.
+                debug_assert!(
+                    callable_frame_is_complete(vm, obj),
+                    "a function value crossed to the host without a type argument for every \
+                     slot of its generic frame"
+                );
                 let handle = self.heap.create_handle(ptr);
                 Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
                     kind: bex_external_types::TaggedHeapHandleKind::Callable,
@@ -1944,6 +1953,28 @@ pub(crate) fn float_literal_matches(value: f64, source: &str) -> bool {
 /// For union types, find which member matches the actual runtime value.
 ///
 /// If the declared type is not a union, returns it unchanged.
+/// Whether a callable value carries a type argument for every runtime frame
+/// slot of the function it runs (`Function::type_param_names`; a synthetic
+/// effect parameter has none). A raw `Object::Function` is never a data value,
+/// so it has no frame to judge.
+fn callable_frame_is_complete(vm: &BexVm, callable: &Object) -> bool {
+    let (function, carried) = match callable {
+        Object::GenericFunction(generic) => match vm.generic_function_authored_ptr(generic) {
+            Ok(function) => (function, generic.type_args.len()),
+            Err(_) => return false,
+        },
+        Object::Closure(closure) => (closure.function, closure.captured_type_args.len()),
+        Object::BoundMethod(method) => (method.function, method.type_args.len()),
+        _ => return true,
+    };
+    // SAFETY: a callable's function pointer is live while the callable is,
+    // the invariant `call_callable` relies on when it unwraps one.
+    match unsafe { function.get() } {
+        Object::Function(function) => carried >= function.type_param_names.len(),
+        _ => false,
+    }
+}
+
 fn resolve_effective_type(value: Value, declared_type: &RuntimeTy) -> &RuntimeTy {
     match declared_type {
         RuntimeTy::Union(members) => find_matching_union_member(value, members)
