@@ -8,6 +8,12 @@ use baml_compiler2_emit::OptLevel;
 use baml_db::native::{NativeModule, Rejection, compile_program};
 use bex_vm_types::{Instruction, Object, ObjectIndex, RealizedTy, types::Program};
 
+fn fingerprint(program: &Program) -> [u8; 32] {
+    baml_artifact::encode_with_digest(baml_artifact::ArtifactKind::Program, program)
+        .unwrap()
+        .1
+}
+
 fn compile(source: &str) -> NativeModule {
     compile_with_program(source).0
 }
@@ -17,8 +23,16 @@ fn compile_with_program(source: &str) -> (NativeModule, Program) {
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
         baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
-    let module = compile_program(&db, root, &program, OptLevel::Two, "program.bexa", None)
-        .expect("native module renders");
+    let module = compile_program(
+        &db,
+        root,
+        &program,
+        OptLevel::Two,
+        "program.bexa",
+        fingerprint(&program),
+        None,
+    )
+    .expect("native module renders");
     (module, program)
 }
 
@@ -30,14 +44,30 @@ fn deserialized_program_cannot_supply_native_bodies() {
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
         baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
-    let fresh = compile_program(&db, root, &program, OptLevel::Two, "program.bexa", None)
-        .expect("native module renders");
+    let fresh = compile_program(
+        &db,
+        root,
+        &program,
+        OptLevel::Two,
+        "program.bexa",
+        fingerprint(&program),
+        None,
+    )
+    .expect("native module renders");
     assert!(fresh.functions.iter().any(|f| f.name == "user.answer"));
 
     let serialized = borsh::to_vec(&program).unwrap();
     let restored: Program = borsh::from_slice(&serialized).unwrap();
-    let cached = compile_program(&db, root, &restored, OptLevel::Two, "program.bexa", None)
-        .expect("native module renders");
+    let cached = compile_program(
+        &db,
+        root,
+        &restored,
+        OptLevel::Two,
+        "program.bexa",
+        fingerprint(&restored),
+        None,
+    )
+    .expect("native module renders");
     assert!(cached.functions.is_empty());
     assert!(matches!(
         rejection(&cached, "user.answer"),
@@ -202,19 +232,16 @@ fn generated_module_is_well_formed_rust() {
         .collect::<String>()
         .replace(",)", ")")
         .replace(",]", "]");
-    let fingerprint = format!(
-        "program_fingerprint:{:?}",
-        program.bytecode_fingerprint().unwrap()
-    )
-    .split_whitespace()
-    .collect::<String>();
-    assert!(compact.contains(&fingerprint));
+    let fingerprint = format!("fingerprint:{:?}", fingerprint(&program))
+        .split_whitespace()
+        .collect::<String>();
+    assert_eq!(compact.matches(&fingerprint).count(), 1);
     for function in &module.functions {
         // Compacted like the source: an impl body's name has spaces in it
         // (`<(ai.Prompt as baml.ToString)>.to_string`).
         let entry: String = format!(
             "CompiledEntry{{object:{},name:{:?},arity:{},body:CompiledFn::{}({}),\
-             slots:{},cause_slot:{:?},program_fingerprint:",
+             slots:{},cause_slot:{:?},",
             function.object,
             function.name,
             function.arity,
@@ -774,8 +801,16 @@ fn functions_whose_names_render_alike_compile_to_their_own_objects() {
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
         baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
-    let module = compile_program(&db, root, &program, OptLevel::Two, "program.bexa", None)
-        .expect("native module renders");
+    let module = compile_program(
+        &db,
+        root,
+        &program,
+        OptLevel::Two,
+        "program.bexa",
+        fingerprint(&program),
+        None,
+    )
+    .expect("native module renders");
 
     let alike: Vec<_> = module
         .functions
@@ -946,6 +981,7 @@ fn entry_points_prune_admission_to_what_they_reach() {
         &program,
         OptLevel::Two,
         "program.bexa",
+        fingerprint(&program),
         Some(&entries),
     )
     .expect("native module renders");
@@ -980,6 +1016,7 @@ fn entry_points_prune_admission_to_what_they_reach() {
         &program,
         OptLevel::Two,
         "program.bexa",
+        fingerprint(&program),
         Some(&entries),
     )
     .expect("native module renders");

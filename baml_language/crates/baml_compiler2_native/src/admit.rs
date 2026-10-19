@@ -110,6 +110,9 @@ pub struct NativeModule {
 /// refers to exactly this build (the generated crate embeds it as
 /// `PROGRAM_ARTIFACT`, read from `artifact_path`).
 ///
+/// `fingerprint` is the artifact payload digest returned by
+/// `baml_artifact::encode_with_digest` for the embedded artifact containing `program`.
+///
 /// `entries` are the object indices of the functions the pack runs (its
 /// targets): only what they reach is compiled (see [`crate::reach`]), along
 /// with what every top-level `let` initializer reaches (`$init` runs them
@@ -122,6 +125,7 @@ pub fn compile_program<'db>(
     program: &Program,
     opt: OptLevel,
     artifact_path: &str,
+    fingerprint: [u8; 32],
     entries: Option<&[usize]>,
 ) -> Result<NativeModule, String> {
     let index = ProgramIndex::new(db, root, program);
@@ -354,9 +358,6 @@ pub fn compile_program<'db>(
         }
     };
 
-    let fingerprint = program
-        .bytecode_fingerprint()
-        .map_err(|error| format!("failed to fingerprint native bytecode program: {error}"))?;
     let source = render_module(&bodies, &functions, &natives, artifact_path, fingerprint)?;
     Ok(NativeModule {
         source,
