@@ -49,12 +49,6 @@ pub(crate) enum GeneratorIdent {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ClassCodecDirection {
-    Encode,
-    Decode,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum EnumCodecDirection {
     Encode,
     Decode,
@@ -66,11 +60,11 @@ pub(crate) enum UnionCodecDirection {
     Decode,
 }
 
-/// A generator-owned package declaration. Projected BAML declarations are
+/// A generator-owned class decoder name. Projected BAML declarations are
 /// exported and can never start with `_`, so this namespace cannot collide
-/// with user code. The stable index comes from sorted BAML class FQNs.
+/// with user code. The stable index comes from sorted BAML class FQNs. A class
+/// has no encoder here: it encodes itself through its own `BAMLInput` method.
 pub(crate) struct ClassCodecIdent {
-    direction: ClassCodecDirection,
     index: usize,
 }
 
@@ -141,18 +135,14 @@ impl EnumCodecIdent {
 }
 
 impl ClassCodecIdent {
-    pub(crate) fn new(direction: ClassCodecDirection, index: usize) -> Self {
-        Self { direction, index }
+    pub(crate) fn new(index: usize) -> Self {
+        Self { index }
     }
 }
 
 impl fmt::Display for ClassCodecIdent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let direction = match self.direction {
-            ClassCodecDirection::Encode => "Encode",
-            ClassCodecDirection::Decode => "Decode",
-        };
-        write!(f, "_baml{direction}Class{}", self.index)
+        write!(f, "_bamlDecodeClass{}", self.index)
     }
 }
 
@@ -319,14 +309,7 @@ mod tests {
 
     #[test]
     fn class_codec_identifiers_are_generator_owned_and_stable() {
-        assert_eq!(
-            ClassCodecIdent::new(ClassCodecDirection::Encode, 7).to_string(),
-            "_bamlEncodeClass7"
-        );
-        assert_eq!(
-            ClassCodecIdent::new(ClassCodecDirection::Decode, 7).to_string(),
-            "_bamlDecodeClass7"
-        );
+        assert_eq!(ClassCodecIdent::new(7).to_string(), "_bamlDecodeClass7");
         assert_eq!(
             EnumCodecIdent::new(EnumCodecDirection::Encode, 4).to_string(),
             "_bamlEncodeEnum4"

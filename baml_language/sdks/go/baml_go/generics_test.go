@@ -28,7 +28,14 @@ func (genericTestNode[T]) BAMLClassName() string { return "user.tests.Node" }
 func (genericTestNode[T]) BAMLType() BAMLType {
 	return ClassBAMLType("user.tests.Node", TypeOf[T]())
 }
-func (value genericTestNode[T]) BAMLInput() Input { return GeneratedClassInput(value) }
+func (value genericTestNode[T]) BAMLInput() Input {
+	return GeneratedClass("user.tests.Node", []BAMLType{TypeOf[T]()}, func() map[string]Input {
+		return map[string]Input{
+			"value": AnyEncoder[T](value.Value),
+			"next":  OptionalEncoder(genericTestNode[T].BAMLInput)(value.Next),
+		}
+	})
+}
 func (genericTestNode[T]) BAMLDecode(value Value) (any, error) {
 	return DecodeGeneratedClass[genericTestNode[T]](value)
 }
@@ -37,7 +44,11 @@ func (genericTestBox[T]) BAMLClassName() string { return "user.tests.Box" }
 func (genericTestBox[T]) BAMLType() BAMLType {
 	return ClassBAMLType("user.tests.Box", TypeOf[T]())
 }
-func (value genericTestBox[T]) BAMLInput() Input { return GeneratedClassInput(value) }
+func (value genericTestBox[T]) BAMLInput() Input {
+	return GeneratedClass("user.tests.Box", []BAMLType{TypeOf[T]()}, func() map[string]Input {
+		return map[string]Input{"value": AnyEncoder[T](value.Value)}
+	})
+}
 func (genericTestBox[T]) BAMLDecode(value Value) (any, error) {
 	return DecodeGeneratedClass[genericTestBox[T]](value)
 }
@@ -140,12 +151,12 @@ func TestGenericAnyCannotReifyCanonicalJSONAliasTypeArgument(t *testing.T) {
 	}
 }
 
-func TestGenericClassEncodingRejectsCyclesWithoutResettingTraversal(t *testing.T) {
+func TestGenericClassEncodingRejectsCycles(t *testing.T) {
 	node := &genericTestNode[int64]{Value: 1}
 	node.Next = node
-	input := Any(node)
-	if input.err == nil || !strings.Contains(input.err.Error(), "cyclic") {
-		t.Fatalf("cyclic generic class input error = %v", input.err)
+	_, err := Any(node).encodeValue(&inputTransaction{})
+	if err == nil || !strings.Contains(err.Error(), "possible cycle") {
+		t.Fatalf("cyclic generic class input error = %v", err)
 	}
 }
 
@@ -182,7 +193,7 @@ func TestStructuredGenericTypeArgumentsRejectInvalidMetadata(t *testing.T) {
 
 func TestGenericClassAnyPreservesTypeArgumentsAndInputMarshaler(t *testing.T) {
 	input := Any(genericTestBox[int64]{Value: 42})
-	encoded, err := input.encodeValue(nil)
+	encoded, err := input.encodeValue(&inputTransaction{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,3 +282,114 @@ func TestDynamicGenericUnionPreservesNominalCandidateTypes(t *testing.T) {
 		t.Fatalf("dynamic enum = %#v, %v", decoded, err)
 	}
 }
+
+// genericTestJSONHolder models a generated non-generic class whose declared
+// field types Go's surface erases: `j json` is `any` and `tags "a"[]` is
+// `[]string`.
+type genericTestJSONHolder struct {
+	J    any      `baml:"j"`
+	Tags []string `baml:"tags"`
+}
+
+func (genericTestJSONHolder) BAMLClassName() string { return "user.tests.JsonHolder" }
+func (value genericTestJSONHolder) BAMLInput() Input {
+	return GeneratedClass("user.tests.JsonHolder", nil, func() map[string]Input {
+		return map[string]Input{
+			"j":    JSON(value.J),
+			"tags": ListEncoderWithType(StringLiteralBAMLType("a"), String)(value.Tags),
+		}
+	})
+}
+
+func TestTypeVariableSlotsEncodeGeneratedClassesUnderTheirDeclaredTypes(t *testing.T) {
+	json := TypeAliasBAMLType("baml.json.json")
+	for _, tc := range []struct {
+		name  string
+		j     any
+		wantJ *BAMLType
+	}{
+		{"empty map", map[string]any{}, ptr(MapBAMLType(PrimitiveBAMLType(StringType), json))},
+		{"empty list", []any{}, ptr(ListBAMLType(json))},
+		{"nested", map[string]any{"k": []any{int64(1), map[string]any{}}}, ptr(MapBAMLType(PrimitiveBAMLType(StringType), json))},
+		{"scalar", "text", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			box := genericTestBox[genericTestJSONHolder]{Value: genericTestJSONHolder{J: tc.j}}
+			encoded, err := Any(box).encodeValue(&inputTransaction{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantBox := ClassBAMLType("user.tests.Box", ClassBAMLType("user.tests.JsonHolder"))
+			if got := (BAMLType{value: encoded.GetValueType()}); !got.Equal(wantBox) {
+				t.Fatalf("box states %#v; want %#v", got.value, wantBox.value)
+			}
+			holder := classField(t, encoded, "value")
+			if got := (BAMLType{value: classField(t, holder, "tags").GetValueType()}); !got.Equal(ListBAMLType(StringLiteralBAMLType("a"))) {
+				t.Fatalf("tags state %#v", got.value)
+			}
+			j := classField(t, holder, "j")
+			if tc.wantJ == nil {
+				if j.GetValueType() != nil {
+					t.Fatalf("scalar json states %#v", j.GetValueType())
+				}
+				return
+			}
+			if got := (BAMLType{value: j.GetValueType()}); !got.Equal(*tc.wantJ) {
+				t.Fatalf("j states %#v; want %#v", got.value, tc.wantJ.value)
+			}
+			assertContainersStated(t, "j", j)
+		})
+	}
+}
+
+func TestDynamicUnionEncoderStatesTheMemberTheValueFills(t *testing.T) {
+	encode := DynamicUnionEncoder(
+		Any,
+		DynamicEncodeAs[genericTestJSONHolder](genericTestJSONHolder.BAMLInput),
+		DynamicEncodeAs[[]string](ListEncoderWithType(StringLiteralBAMLType("a"), String)),
+	)
+	list := ListEncoderWithType(UnionBAMLType(TypeOf[genericTestJSONHolder](), PrimitiveBAMLType(StringType)), encode)
+	encoded, err := list([]any{genericTestJSONHolder{J: map[string]any{}}, "text", []string{}, nil}).encodeValue(&inputTransaction{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantList := ListBAMLType(UnionBAMLType(ClassBAMLType("user.tests.JsonHolder"), PrimitiveBAMLType(StringType)))
+	if got := (BAMLType{value: encoded.GetValueType()}); !got.Equal(wantList) {
+		t.Fatalf("list states %#v; want %#v", got.value, wantList.value)
+	}
+	items := encoded.GetListValue().GetValues()
+	if len(items) != 4 {
+		t.Fatalf("items = %#v", items)
+	}
+	if got := (BAMLType{value: items[0].GetValueType()}); !got.Equal(ClassBAMLType("user.tests.JsonHolder")) {
+		t.Fatalf("class member states %#v", got.value)
+	}
+	if items[1].GetStringValue() != "text" || items[1].GetValueType() != nil {
+		t.Fatalf("string member = %#v", items[1])
+	}
+	if got := (BAMLType{value: items[2].GetValueType()}); !got.Equal(ListBAMLType(StringLiteralBAMLType("a"))) {
+		t.Fatalf("container member states %#v", got.value)
+	}
+	if items[3] == nil || items[3].Value != nil {
+		t.Fatalf("nil member = %#v; want null", items[3])
+	}
+}
+
+func TestGenericClassInputIsEncodedOnlyWithinATransaction(t *testing.T) {
+	if _, err := Any(genericTestBox[int64]{Value: 1}).encodeValue(nil); err == nil || !strings.Contains(err.Error(), "transaction") {
+		t.Fatalf("class encoded without a transaction: %v", err)
+	}
+}
+
+func classField(t *testing.T, class *cffi.InboundValue, name string) *cffi.InboundValue {
+	t.Helper()
+	for _, field := range class.GetClassValue().GetFields() {
+		if field.GetStringKey() == name {
+			return field.GetValue()
+		}
+	}
+	t.Fatalf("class %#v has no field %q", class, name)
+	return nil
+}
+
+func ptr[T any](value T) *T { return &value }

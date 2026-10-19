@@ -40,9 +40,8 @@ pub use formatting::GoGenerationError;
 use names::{BamlFqn, GoName, GoNameKind, GoNames, GoPackageName, GoVisibility};
 use packages::{GoPackage, GoPackages};
 use rendering::{
-    CallbackArgumentIdent, CallbackCodecIdent, ClassCodecDirection, ClassCodecIdent,
-    EnumCodecDirection, EnumCodecIdent, GeneratorIdent, GoImports, UnionCodecDirection,
-    UnionCodecIdent,
+    CallbackArgumentIdent, CallbackCodecIdent, ClassCodecIdent, EnumCodecDirection, EnumCodecIdent,
+    GeneratorIdent, GoImports, UnionCodecDirection, UnionCodecIdent,
 };
 use types::{
     GoCallbackThrows, GoFunctionKey, GoLiteral, GoTy, GoTypeProjection, GoUnionKey, literal_surface,
@@ -256,6 +255,7 @@ fn render_source_code_with_bytecode_and_options(
         let codecs = WireCodecs::for_functions(
             &functions,
             &classes,
+            &wireable_classes,
             &typed_unions,
             pool,
             &projection,
@@ -365,7 +365,7 @@ type CallOption = baml_go.CallOption
 func WithOptions(value BamlOptions) CallOption {{
     controls := baml_go.InvocationControls{{Timeout: value.Timeout}}
     if value.Trace != nil {{ controls.Trace = value.Trace.BAMLTraceSelection() }}
-    if value.Cancel != nil {{ controls.Cancel = baml_go.GeneratedClassInput(*value.Cancel) }}
+    if value.Cancel != nil {{ controls.Cancel = value.Cancel.BAMLInput() }}
     return baml_go.WithInvocationOptions(controls)
 }}
 type Target = baml_go.Target
@@ -397,8 +397,8 @@ import baml_go "{BAML_GO_MODULE}"
 type Selection interface {{ bamlTraceSelection(); BAMLTraceSelection() baml_go.Input }}
 func ({trace}) bamlTraceSelection() {{}}
 func ({reserved}) bamlTraceSelection() {{}}
-func (value {trace}) BAMLTraceSelection() baml_go.Input {{ return baml_go.GeneratedClassInput(value) }}
-func (value {reserved}) BAMLTraceSelection() baml_go.Input {{ return baml_go.GeneratedClassInput(value) }}
+func (value {trace}) BAMLTraceSelection() baml_go.Input {{ return value.BAMLInput() }}
+func (value {reserved}) BAMLTraceSelection() baml_go.Input {{ return value.BAMLInput() }}
 "#,
                 trace_package.go_name().as_str()
             ),
@@ -963,6 +963,9 @@ struct GeneratedField<'a> {
 }
 
 struct WireCodecs {
+    /// Classes declared in this package whose `BAMLInput` method it renders:
+    /// every wireable one, since any of them may fill a type variable's slot.
+    class_inputs: Vec<Name>,
     class_names: Vec<Name>,
     class_indexes: BTreeMap<Name, usize>,
     enum_names: Vec<Name>,
@@ -976,7 +979,8 @@ struct WireCodecs {
 
 impl WireCodecs {
     fn is_empty(&self) -> bool {
-        self.class_names.is_empty()
+        self.class_inputs.is_empty()
+            && self.class_names.is_empty()
             && self.enum_names.is_empty()
             && self.union_keys.is_empty()
             && self.callback_keys.is_empty()
@@ -985,6 +989,7 @@ impl WireCodecs {
     fn for_functions(
         functions: &[GeneratedFunction<'_>],
         declared_classes: &[GeneratedClass<'_>],
+        wireable_classes: &BTreeSet<Name>,
         declared_unions: &[GoUnionKey],
         pool: &SymbolPool,
         projection: &GoTypeProjection<'_>,
@@ -1037,8 +1042,16 @@ impl WireCodecs {
                 &mut collected,
             );
         }
+        let class_inputs = declared_classes
+            .iter()
+            .map(|class| class.name)
+            .filter(|name| !is_ai_prompt(name) && wireable_classes.contains(*name))
+            .cloned()
+            .collect::<Vec<_>>();
         for class in declared_classes {
-            if class.class.generic_params.is_empty() {
+            // A generic class decodes its dynamic fields here; a wireable class
+            // encodes every field here.
+            if class.class.generic_params.is_empty() && !class_inputs.contains(class.name) {
                 continue;
             }
             for field in &class.fields {
@@ -1080,6 +1093,7 @@ impl WireCodecs {
             .map(|(index, key)| (key, index))
             .collect();
         Self {
+            class_inputs,
             class_names,
             class_indexes,
             enum_names,
@@ -1092,9 +1106,8 @@ impl WireCodecs {
         }
     }
 
-    fn ident(&self, name: &Name, direction: ClassCodecDirection) -> ClassCodecIdent {
+    fn class_decoder(&self, name: &Name) -> ClassCodecIdent {
         ClassCodecIdent::new(
-            direction,
             *self
                 .class_indexes
                 .get(name)
@@ -1815,11 +1828,7 @@ fn render_functions(
     let error_type = GeneratorIdent::ErrorType;
     let mut out = String::from(BANNER);
     let _ = writeln!(out, "package {}\n", current_package.as_str());
-    let has_codecs = !codecs.class_names.is_empty()
-        || !codecs.enum_names.is_empty()
-        || !codecs.union_keys.is_empty()
-        || !codecs.callback_keys.is_empty();
-    if functions.is_empty() && !has_codecs {
+    if functions.is_empty() && codecs.is_empty() {
         return out;
     }
     let mut imports = GoImports::default();
@@ -1875,6 +1884,19 @@ fn render_functions(
                 &mut imports,
             );
         }
+        for argument in routed
+            .function
+            .arguments
+            .iter()
+            .filter(|argument| !argument.injected)
+        {
+            add_input_encoder_imports(
+                &projection.project(&argument.ty),
+                current_baml_package,
+                &import_context,
+                &mut imports,
+            );
+        }
     }
     for name in &codecs.class_names {
         let target = packages.get(name.package());
@@ -1886,6 +1908,19 @@ fn render_functions(
         };
         for field in &class.properties {
             add_class_field_codec_imports(
+                &projection.project(&field.ty),
+                name.package(),
+                &import_context,
+                &mut imports,
+            );
+        }
+    }
+    for name in &codecs.class_inputs {
+        let Symbol::Class(class) = &pool[name] else {
+            unreachable!("a class input is registered only for a class")
+        };
+        for field in &class.properties {
+            add_input_encoder_imports(
                 &projection.project(&field.ty),
                 name.package(),
                 &import_context,
@@ -1919,6 +1954,7 @@ fn render_functions(
             }
             for member in key.members() {
                 add_class_field_codec_imports(member, package, &import_context, &mut imports);
+                add_input_encoder_imports(member, package, &import_context, &mut imports);
             }
         }
     }
@@ -1933,6 +1969,7 @@ fn render_functions(
         packages,
         projection,
     );
+    render_class_inputs(&mut out, codecs, current_package, pool, names, projection);
     render_union_codecs(&mut out, codecs, current_package, names);
     render_callback_codecs(
         &mut out,
@@ -2644,6 +2681,7 @@ fn add_projected_surface_imports(
     }
 }
 
+/// Adds the imports a class decoder spells for a field of type `ty`.
 fn add_class_field_codec_imports(
     ty: &GoTy,
     codec_owner_package: &BaseName,
@@ -2651,8 +2689,8 @@ fn add_class_field_codec_imports(
     imports: &mut GoImports,
 ) {
     match ty {
-        // Parameterized classes are encoded and decoded through generic
-        // runtime helpers whose type argument spells this entire Go surface.
+        // Parameterized classes are decoded through a generic runtime helper
+        // whose type argument spells this entire Go surface.
         GoTy::Class(_, arguments) if !arguments.is_empty() => {
             add_projected_surface_imports(ty, codec_owner_package, context, imports);
         }
@@ -2665,6 +2703,59 @@ fn add_class_field_codec_imports(
         // All other field codecs call a generated codec or a runtime helper;
         // their projected field type is not named in the emitted expression.
         _ => {}
+    }
+}
+
+/// Adds the imports the input encoder of `ty` spells: a class encodes through
+/// a method expression on its Go type, a function spec or stream through a
+/// runtime helper instantiated at its Go type, and a dynamic union with a
+/// type-variable member asserts each candidate's Go type inline. Every other
+/// encoder is a generated codec or a runtime helper that names no Go type.
+fn add_input_encoder_imports(
+    ty: &GoTy,
+    owner_package: &BaseName,
+    context: &TypeImportContext<'_>,
+    imports: &mut GoImports,
+) {
+    match ty {
+        GoTy::Class(name, _) if is_ai_prompt(name) => {}
+        GoTy::Class(..) | GoTy::FunctionSpec { .. } | GoTy::Stream { .. } => {
+            add_projected_surface_imports(ty, owner_package, context, imports);
+        }
+        GoTy::List(inner) | GoTy::Optional(inner) => {
+            add_input_encoder_imports(inner, owner_package, context, imports);
+        }
+        GoTy::Map { value, .. } => {
+            add_input_encoder_imports(value, owner_package, context, imports);
+        }
+        GoTy::DynamicUnion { key, .. } if projected_contains_type_var(ty) => {
+            let direct_json = key.members().contains(&GoTy::Json);
+            for member in key.members() {
+                if dynamic_union_arm_is_asserted(member, direct_json) {
+                    add_projected_surface_imports(member, owner_package, context, imports);
+                    add_input_encoder_imports(member, owner_package, context, imports);
+                }
+            }
+        }
+        GoTy::DynamicUnion { .. }
+        | GoTy::TypedUnion(_)
+        | GoTy::Function(_)
+        | GoTy::String
+        | GoTy::Int
+        | GoTy::Bigint
+        | GoTy::Float
+        | GoTy::Bool
+        | GoTy::Null
+        | GoTy::Uint8Array
+        | GoTy::Media(_)
+        | GoTy::Json
+        | GoTy::ReflectedType
+        | GoTy::RustType
+        | GoTy::TypeVar(_)
+        | GoTy::Literal(_)
+        | GoTy::Enum(_)
+        | GoTy::EnumVariant(..)
+        | GoTy::Unsupported => {}
     }
 }
 
@@ -3064,22 +3155,18 @@ fn projected_input_encoder(
             type_vars.identifier(name, names, current_package)
         ),
         GoTy::Class(name, _) if is_ai_prompt(name) => format!("{runtime}.PromptInput"),
-        GoTy::Class(_, arguments) if !arguments.is_empty() => format!(
-            "{runtime}.AnyEncoder[{}]",
-            render_projected_go_type(ty, current_baml_package, current_package, names, type_vars,)
+        // A class encodes itself under its declared field types, so one
+        // encoder serves every package and every instantiation.
+        GoTy::Class(..) => format!(
+            "{}.{}",
+            render_projected_go_type(ty, current_baml_package, current_package, names, type_vars),
+            GeneratorIdent::InputMethod
         ),
-        GoTy::Class(name, _) => codecs.ident(name, ClassCodecDirection::Encode).to_string(),
         GoTy::Enum(name) | GoTy::EnumVariant(name, _) => codecs
             .enum_ident(name, EnumCodecDirection::Encode)
             .to_string(),
         GoTy::List(inner) => {
-            let descriptor = scoped_baml_type_descriptor(
-                inner,
-                current_baml_package,
-                current_package,
-                names,
-                type_vars,
-            );
+            let descriptor = scoped_baml_type_descriptor(inner, current_package, names, type_vars);
             format!(
                 "{runtime}.ListEncoderWithType({descriptor}, {})",
                 projected_input_encoder(
@@ -3093,13 +3180,7 @@ fn projected_input_encoder(
             )
         }
         GoTy::Map { value, .. } => {
-            let descriptor = scoped_baml_type_descriptor(
-                value,
-                current_baml_package,
-                current_package,
-                names,
-                type_vars,
-            );
+            let descriptor = scoped_baml_type_descriptor(value, current_package, names, type_vars);
             format!(
                 "{runtime}.MapEncoderWithType({descriptor}, {})",
                 projected_input_encoder(
@@ -3129,8 +3210,38 @@ fn projected_input_encoder(
         GoTy::TypedUnion(key) => codecs
             .union_ident(current_baml_package, key, UnionCodecDirection::Encode)
             .to_string(),
-        GoTy::DynamicUnion { .. } if projected_contains_type_var(ty) => {
-            format!("{runtime}.AnyEncoder[any]")
+        // No package-level codec can spell a member that is a type variable,
+        // so the candidates are listed inline, as the decoder lists them.
+        GoTy::DynamicUnion { key, .. } if projected_contains_type_var(ty) => {
+            let direct_json = key.members().contains(&GoTy::Json);
+            let fallback = if direct_json { "JSON" } else { "Any" };
+            let mut spelled = BTreeSet::new();
+            let candidates = key
+                .members()
+                .iter()
+                .filter(|member| dynamic_union_arm_is_asserted(member, direct_json))
+                .filter_map(|member| {
+                    let go_type = render_projected_go_type(
+                        member,
+                        current_baml_package,
+                        current_package,
+                        names,
+                        type_vars,
+                    );
+                    let encoder = projected_input_encoder(
+                        member,
+                        current_baml_package,
+                        current_package,
+                        names,
+                        codecs,
+                        type_vars,
+                    );
+                    spelled
+                        .insert(go_type.clone())
+                        .then(|| format!(", {runtime}.DynamicEncodeAs[{go_type}]({encoder})"))
+                })
+                .collect::<String>();
+            format!("{runtime}.DynamicUnionEncoder({runtime}.{fallback}{candidates})")
         }
         GoTy::DynamicUnion { key, .. } => codecs
             .union_ident(current_baml_package, key, UnionCodecDirection::Encode)
@@ -3222,7 +3333,7 @@ fn projected_output_decoder(
         GoTy::Class(name, _) if is_ai_prompt(name) => format!("{runtime}.Value.Prompt"),
         GoTy::Class(name, arguments) => {
             if arguments.is_empty() {
-                codecs.ident(name, ClassCodecDirection::Decode).to_string()
+                codecs.class_decoder(name).to_string()
             } else {
                 format!(
                     "{runtime}.DecodeAs[{}]",
@@ -3309,11 +3420,8 @@ fn projected_generic_output_decoder(
                         names,
                         type_vars,
                     );
-                    let descriptor = if projected_contains_type_var(member) {
-                        format!("{runtime}.TypeOf[{go_type}]()")
-                    } else {
-                        baml_type_descriptor(member, names)
-                    };
+                    let descriptor =
+                        scoped_baml_type_descriptor(member, current_package, names, type_vars);
                     format!(
                         "{runtime}.DynamicDecodeCandidate{{Type: {descriptor}, Decode: {runtime}.DynamicDecodeAs[{go_type}]}}"
                     )
@@ -3460,7 +3568,6 @@ fn render_class_codecs(
     projection: &GoTypeProjection<'_>,
 ) {
     let runtime_package = GeneratorIdent::RuntimePackage;
-    let string_type = GeneratorIdent::StringType;
     let error_type = GeneratorIdent::ErrorType;
     let error_local = GeneratorIdent::ErrorLocal;
     let zero_local = GeneratorIdent::ZeroLocal;
@@ -3486,8 +3593,7 @@ fn render_class_codecs(
             TypeVarScope::default(),
         );
         let owner_package = packages.get(name.package()).go_name();
-        let encoder = codecs.ident(name, ClassCodecDirection::Encode);
-        let decoder = codecs.ident(name, ClassCodecDirection::Decode);
+        let decoder = codecs.class_decoder(name);
         let codec_context = CodecRenderContext {
             current_baml_package: name.package(),
             current_package,
@@ -3496,35 +3602,6 @@ fn render_class_codecs(
             projection,
             type_vars: TypeVarScope::default(),
         };
-
-        let _ = writeln!(
-            out,
-            "func {encoder}({value_parameter} {go_type}) {runtime_package}.Input {{"
-        );
-        let _ = write!(
-            out,
-            "\treturn {runtime_package}.Class({:?}, map[{string_type}]{runtime_package}.Input{{",
-            class_name.wire().to_string()
-        );
-        if !class.properties.is_empty() {
-            out.push('\n');
-            for property in &class.properties {
-                let field = names.project(
-                    &class_fqn.member(&property.name),
-                    GoNameKind::Field,
-                    GoVisibility::Exported,
-                );
-                let field_value = format!("{value_parameter}.{}", field.identifier(owner_package));
-                let _ = writeln!(
-                    out,
-                    "\t\t{:?}: {},",
-                    field.wire().to_string(),
-                    input_expression(&property.ty, &field_value, &codec_context,),
-                );
-            }
-            out.push('\t');
-        }
-        out.push_str("})\n}\n\n");
 
         let _ = writeln!(
             out,
@@ -3569,6 +3646,104 @@ fn render_class_codecs(
             let _ = writeln!(out, "\t\treturn {zero_local}, {error_local}\n\t}}");
         }
         let _ = writeln!(out, "\treturn {decoded_local}, nil\n}}\n");
+    }
+}
+
+/// Renders the `BAMLInput` method of every class this package declares: the
+/// class's one encoder, which every package and every value-directed path
+/// (a type variable's slot, a union arm, `baml_go.Any`) reaches. Each field is
+/// encoded under its declared type, and a generic class states the bindings
+/// its Go type parameters spell.
+fn render_class_inputs(
+    out: &mut String,
+    codecs: &WireCodecs,
+    current_package: &GoPackageName,
+    pool: &SymbolPool,
+    names: &GoNames,
+    projection: &GoTypeProjection<'_>,
+) {
+    let runtime = GeneratorIdent::RuntimePackage;
+    let string_type = GeneratorIdent::StringType;
+    let value_parameter = GeneratorIdent::CodecValueParameter;
+    let input_method = GeneratorIdent::InputMethod;
+    for name in &codecs.class_inputs {
+        let Symbol::Class(class) = &pool[name] else {
+            unreachable!("a class input is registered only for a class")
+        };
+        let class_fqn = BamlFqn::symbol(name);
+        let class_name = names.project(&class_fqn, GoNameKind::Class, GoVisibility::Exported);
+        let type_parameters = class
+            .generic_params
+            .iter()
+            .map(|parameter| {
+                names
+                    .project(
+                        &class_fqn.member(parameter),
+                        GoNameKind::ClassTypeParameter,
+                        GoVisibility::Exported,
+                    )
+                    .identifier(current_package)
+                    .to_string()
+            })
+            .collect::<Vec<_>>();
+        let class_identifier = class_name.identifier(current_package);
+        let (receiver, type_args) = if type_parameters.is_empty() {
+            (class_identifier.to_string(), "nil".to_string())
+        } else {
+            (
+                format!("{class_identifier}[{}]", type_parameters.join(", ")),
+                format!(
+                    "[]{runtime}.BAMLType{{{}}}",
+                    type_parameters
+                        .iter()
+                        .map(|parameter| format!("{runtime}.TypeOf[{parameter}]()"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            )
+        };
+        let codec_context = CodecRenderContext {
+            current_baml_package: name.package(),
+            current_package,
+            names,
+            codecs,
+            projection,
+            type_vars: TypeVarScope {
+                helper: None,
+                callable: None,
+                class: Some(&class_fqn),
+            },
+        };
+        let _ = writeln!(
+            out,
+            "func ({value_parameter} {receiver}) {input_method}() {runtime}.Input {{"
+        );
+        let _ = writeln!(
+            out,
+            "\treturn {runtime}.GeneratedClass({:?}, {type_args}, func() map[{string_type}]{runtime}.Input {{",
+            class_name.wire().to_string()
+        );
+        let _ = write!(out, "\t\treturn map[{string_type}]{runtime}.Input{{");
+        if !class.properties.is_empty() {
+            out.push('\n');
+            for property in &class.properties {
+                let field = names.project(
+                    &class_fqn.member(&property.name),
+                    GoNameKind::Field,
+                    GoVisibility::Exported,
+                );
+                let field_value =
+                    format!("{value_parameter}.{}", field.identifier(current_package));
+                let _ = writeln!(
+                    out,
+                    "\t\t\t{:?}: {},",
+                    field.wire().to_string(),
+                    input_expression(&property.ty, &field_value, &codec_context),
+                );
+            }
+            out.push_str("\t\t");
+        }
+        out.push_str("}\n\t})\n}\n\n");
     }
 }
 
@@ -3784,13 +3959,16 @@ fn render_union_codecs(
 
 /// Whether a dynamic (`any`) union's encoder asserts `member`'s Go type and
 /// sends the value under that arm's declared type. A scalar arm needs no
-/// statement: the value says what it is. A container or class arm is sent
-/// under its declared type, so an empty container or one with `any` elements
-/// is exact. With a JSON arm every other arm is asserted first, so JSON
-/// encoding is the last resort.
+/// statement: the value says what it is. A container, class or type-variable
+/// arm is sent under its declared type, so an empty container or one with
+/// `any` elements is exact. With a JSON arm every other arm is asserted first,
+/// so JSON encoding is the last resort.
 fn dynamic_union_arm_is_asserted(member: &GoTy, direct_json: bool) -> bool {
     !matches!(member, GoTy::Json)
-        && (direct_json || projected_contains_class(member) || projected_is_container(member))
+        && (direct_json
+            || projected_contains_class(member)
+            || projected_is_container(member)
+            || projected_contains_type_var(member))
 }
 
 /// A list or map arm, possibly nullable.
@@ -4355,7 +4533,22 @@ fn function_baml_type_descriptor(key: &GoFunctionKey, names: &GoNames) -> String
     )
 }
 
+/// The `BAMLType` expression of `ty`, which mentions no type variable.
 fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
+    baml_type_descriptor_with(ty, names, &|name| {
+        unreachable!("type variable {name} has no descriptor outside its scope")
+    })
+}
+
+/// The `BAMLType` expression of `ty` with each type variable spelled by
+/// `type_var`. It is structural all the way down: Go spells a `json` or a
+/// dynamic-union position as `any` and a literal as its base type, so only a
+/// type variable itself may be reified from its Go type.
+fn baml_type_descriptor_with(
+    ty: &GoTy,
+    names: &GoNames,
+    type_var: &dyn Fn(&BaseName) -> String,
+) -> String {
     let runtime = GeneratorIdent::RuntimePackage;
     match ty {
         GoTy::String => format!("{runtime}.PrimitiveBAMLType({runtime}.StringType)"),
@@ -4371,11 +4564,11 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
         GoTy::RustType => format!("{runtime}.RustTypeBAMLType()"),
         GoTy::FunctionSpec { output } => format!(
             "{runtime}.ClassBAMLType(\"ai.FunctionSpec\", {})",
-            baml_type_descriptor(output, names),
+            baml_type_descriptor_with(output, names, type_var),
         ),
         GoTy::Stream { value } => format!(
             "{runtime}.ClassBAMLType(\"ai.stream.Stream\", {})",
-            baml_type_descriptor(value, names),
+            baml_type_descriptor_with(value, names, type_var),
         ),
         GoTy::Literal(GoLiteral::String(value)) => {
             format!("{runtime}.StringLiteralBAMLType({value:?})")
@@ -4392,9 +4585,7 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
         GoTy::Literal(GoLiteral::Bool(value)) => {
             format!("{runtime}.BoolLiteralBAMLType({value})")
         }
-        GoTy::TypeVar(_) => {
-            unreachable!("type-variable descriptors are emitted from their scoped GoName")
-        }
+        GoTy::TypeVar(name) => type_var(name),
         GoTy::Class(name, arguments) => {
             if is_ai_prompt(name) {
                 return format!("{runtime}.PromptBAMLType()");
@@ -4409,7 +4600,7 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
                 .to_string();
             let arguments = arguments
                 .iter()
-                .map(|argument| baml_type_descriptor(argument, names))
+                .map(|argument| baml_type_descriptor_with(argument, names, type_var))
                 .collect::<Vec<_>>()
                 .join(", ");
             if arguments.is_empty() {
@@ -4443,16 +4634,16 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
         ),
         GoTy::List(inner) => format!(
             "{runtime}.ListBAMLType({})",
-            baml_type_descriptor(inner, names)
+            baml_type_descriptor_with(inner, names, type_var)
         ),
         GoTy::Map { key, value } => format!(
             "{runtime}.MapBAMLType({}, {})",
-            baml_type_descriptor(key, names),
-            baml_type_descriptor(value, names)
+            baml_type_descriptor_with(key, names, type_var),
+            baml_type_descriptor_with(value, names, type_var)
         ),
         GoTy::Optional(inner) => format!(
             "{runtime}.OptionalBAMLType({})",
-            baml_type_descriptor(inner, names)
+            baml_type_descriptor_with(inner, names, type_var)
         ),
         GoTy::TypedUnion(key)
         | GoTy::DynamicUnion {
@@ -4462,7 +4653,7 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
             "{runtime}.UnionBAMLType({})",
             key.members()
                 .iter()
-                .map(|member| baml_type_descriptor(member, names))
+                .map(|member| baml_type_descriptor_with(member, names, type_var))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
@@ -4473,7 +4664,7 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
             "{runtime}.OptionalBAMLType({runtime}.UnionBAMLType({}))",
             key.members()
                 .iter()
-                .map(|member| baml_type_descriptor(member, names))
+                .map(|member| baml_type_descriptor_with(member, names, type_var))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
@@ -4482,21 +4673,21 @@ fn baml_type_descriptor(ty: &GoTy, names: &GoNames) -> String {
     }
 }
 
+/// The `BAMLType` expression of `ty`, each type variable spelled as the
+/// binding its Go type parameter names in `type_vars`.
 fn scoped_baml_type_descriptor(
     ty: &GoTy,
-    current_baml_package: &BaseName,
     current_package: &GoPackageName,
     names: &GoNames,
     type_vars: TypeVarScope<'_>,
 ) -> String {
-    if projected_contains_type_var(ty) {
-        let runtime = GeneratorIdent::RuntimePackage;
-        let go_type =
-            render_projected_go_type(ty, current_baml_package, current_package, names, type_vars);
-        format!("{runtime}.TypeOf[{go_type}]()")
-    } else {
-        baml_type_descriptor(ty, names)
-    }
+    let runtime = GeneratorIdent::RuntimePackage;
+    baml_type_descriptor_with(ty, names, &|name| {
+        format!(
+            "{runtime}.TypeOf[{}]()",
+            type_vars.identifier(name, names, current_package)
+        )
+    })
 }
 
 fn class_field_output_expression(
@@ -4754,10 +4945,6 @@ fn render_types(
                 body,
                 "func ({receiver_type}) BAMLType() {runtime}.BAMLType {{ return {runtime}.ClassBAMLType({:?}, {descriptor_args}) }}",
                 generated.go_name.wire().to_string()
-            );
-            let _ = writeln!(
-                body,
-                "func (value_ {receiver_type}) BAMLInput() {runtime}.Input {{ return {runtime}.GeneratedClassInput(value_) }}"
             );
             let _ = writeln!(
                 body,
@@ -5081,33 +5268,19 @@ fn render_union_type(body: &mut String, key: &GoUnionKey, renderer: &mut ClassTy
         .add_generator(GeneratorIdent::RuntimePackage, BAML_GO_MODULE);
     let runtime = GeneratorIdent::RuntimePackage;
     let descriptor = baml_type_descriptor(&GoTy::TypedUnion(key.clone()), renderer.names);
+    let encoder = renderer
+        .codecs
+        .union_ident(&package, key, UnionCodecDirection::Encode);
     let decoder = renderer
         .codecs
         .union_ident(&package, key, UnionCodecDirection::Decode);
+    // The codec encodes the selected arm under its declared type; Go's surface
+    // for the arm may erase it (a `"a"[]` arm is `[]string`).
     let _ = writeln!(
         body,
-        "func ({value_parameter} {type_name}) {}() {runtime}.Input {{",
+        "func ({value_parameter} {type_name}) {}() {runtime}.Input {{ return {encoder}({value_parameter}) }}\n",
         GeneratorIdent::InputMethod
     );
-    let _ = writeln!(
-        body,
-        "\tswitch {arm_local} := {value_parameter}.{variant_field}.(type) {{"
-    );
-    for member in key.members() {
-        let wrapper = names
-            .arm(member)
-            .wrapper()
-            .identifier(renderer.current_package);
-        let _ = writeln!(body, "\tcase {wrapper}:");
-        let _ = writeln!(body, "\t\treturn {runtime}.Any({arm_local}.Value)");
-    }
-    let _ = writeln!(body, "\tdefault:");
-    let _ = writeln!(
-        body,
-        "\t\treturn {runtime}.InvalidInput({:?})",
-        format!("zero or invalid {type_name} union value")
-    );
-    body.push_str("\t}\n}\n\n");
     let _ = writeln!(
         body,
         "func ({type_name}) BAMLType() {runtime}.BAMLType {{ return {descriptor} }}\n"
@@ -5581,9 +5754,14 @@ mod tests {
         assert!(types.contains("type Box[T any] struct"));
         assert!(types.contains("Value T `json:\"value\" baml:\"value\"`"));
         assert!(types.contains("return baml_go.ClassBAMLType(\"user.box\", baml_go.TypeOf[T]())"));
-        assert!(types.contains("return baml_go.GeneratedClassInput(value_)"));
+        assert!(!types.contains("BAMLInput"));
 
         let functions = &files[&PathBuf::from("functions.go")];
+        assert!(functions.contains("func (value_ Box[T]) BAMLInput() baml_go.Input {"));
+        assert!(functions.contains(
+            "baml_go.GeneratedClass(\"user.box\", []baml_go.BAMLType{baml_go.TypeOf[T]()}, func() map[string]baml_go.Input {"
+        ));
+        assert!(functions.contains("\"value\": baml_go.AnyEncoder[T](value_.Value)"));
         assert!(
             functions
                 .contains("func Identity[T any](ctx_ context.Context, value T, options_ ...IdentityOption) (Box[T], error)")
@@ -5594,6 +5772,82 @@ mod tests {
         );
         assert!(functions.contains("return baml_go.DecodeAs[Box[T]](result_)"));
         assert!(!functions.contains("func LiteralBox"));
+    }
+
+    /// Values in a type variable's slot are encoded by Go reflection, so a
+    /// class must encode itself under its declared field types (`json` is Go
+    /// `any`, `"a"[]` is `[]string`), and a container of a union with a type
+    /// variable must state that union, not reify Go's `any`.
+    #[test]
+    fn classes_and_type_variable_unions_encode_under_their_declared_types() {
+        let type_parameter = BaseName::new("T");
+        let json_name = Name::from_dotted_path("baml.json.json");
+        let holder_name = Name::new(BaseName::new("user"), vec![], BaseName::new("holder"));
+        let mixed_name = Name::new(BaseName::new("user"), vec![], BaseName::new("mixed"));
+        let mixed_union = ty_union(vec![ty_type_var(type_parameter.clone()), ty_string()]);
+        let holder_class = Class {
+            name: holder_name.clone(),
+            generic_params: vec![type_parameter.clone()],
+            docstring: None,
+            properties: vec![
+                ClassProperty {
+                    name: BaseName::new("payload"),
+                    docstring: None,
+                    ty: ty_alias(json_name.clone()),
+                },
+                ClassProperty {
+                    name: BaseName::new("tags"),
+                    docstring: None,
+                    ty: ty_list_boxed(Box::new(ty_literal(Literal::String("a".to_string())))),
+                },
+                ClassProperty {
+                    name: BaseName::new("mixed"),
+                    docstring: None,
+                    ty: ty_list_boxed(Box::new(mixed_union.clone())),
+                },
+            ],
+            static_methods: vec![],
+            instance_methods: vec![],
+            origin: origin(),
+        };
+        let mixed = Function {
+            name: BaseName::new("mixed"),
+            generic_params: vec![type_parameter],
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                injected: false,
+                name: BaseName::new("xs"),
+                docstring: None,
+                ty: ty_list_boxed(Box::new(mixed_union)),
+                default: None,
+            }],
+            return_type: ty_string(),
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        };
+        let pool = SymbolPool::from([
+            alias(json_name.clone(), ty_alias(json_name), true),
+            (holder_name, Symbol::Class(holder_class)),
+            (mixed_name, Symbol::Function(mixed)),
+        ]);
+
+        let files = to_source_code_with_bytecode(
+            &pool,
+            &[],
+            NamingConvention::Language,
+            "example.com/project/baml_sdk",
+        );
+        let functions = &files[&PathBuf::from("functions.go")];
+        let mixed_list = "baml_go.ListEncoderWithType(baml_go.UnionBAMLType(baml_go.PrimitiveBAMLType(baml_go.StringType), baml_go.TypeOf[T]()), baml_go.DynamicUnionEncoder(baml_go.Any, baml_go.DynamicEncodeAs[T](baml_go.AnyEncoder[T])))";
+        assert!(functions.contains(&format!("\"xs\": {mixed_list}(xs)")));
+        assert!(functions.contains("func (value_ Holder[T]) BAMLInput() baml_go.Input {"));
+        assert!(functions.contains("\"payload\": baml_go.JSON(value_.Payload)"));
+        assert!(functions.contains(
+            "\"tags\": baml_go.ListEncoderWithType(baml_go.StringLiteralBAMLType(\"a\"), baml_go.String)(value_.Tags)"
+        ));
+        assert!(functions.contains(&format!("\"mixed\": {mixed_list}(value_.Mixed)")));
+        assert!(!functions.contains("TypeOf[any]"));
     }
 
     #[test]
@@ -5842,7 +6096,9 @@ mod tests {
         let functions = &files[&PathBuf::from("packages/models/functions.go")];
         assert!(types.contains("BAMLDecode(value_ baml_go.Value)"));
         assert!(types.contains("_bamlDecodeUnion0(value_)"));
+        assert!(types.contains("BAMLInput() baml_go.Input { return _bamlEncodeUnion0(value_) }"));
         assert!(functions.contains("func _bamlDecodeUnion0"));
+        assert!(functions.contains("return Candidate.BAMLInput(arm_.Value)"));
         assert!(functions.contains("\"example.com/project/baml_sdk/packages/other\""));
         assert!(!functions.contains("\"math/big\""));
     }
@@ -6393,7 +6649,9 @@ mod tests {
         assert!(functions.contains(
             "func PeopleRoundTripPerson(ctx_ context.Context, ctx PeoplePersonRecord, options_ ...baml_go.CallOption) (PeoplePersonRecord, error)"
         ));
-        assert!(functions.contains("baml_go.Class(\"user.people.person_record\""));
+        assert!(functions.contains("func (value_ PeoplePersonRecord) BAMLInput() baml_go.Input {"));
+        assert!(functions.contains("baml_go.GeneratedClass(\"user.people.person_record\", nil,"));
+        assert!(functions.contains("\"ctx\": PeoplePersonRecord.BAMLInput(ctx)"));
         assert!(functions.contains("\"class_value\": baml_go.String(value_.ClassValue)"));
         assert!(functions.contains("value_.Class(\"user.people.person_record\")"));
         assert!(functions.contains("classValue_.String(\"class_value\")"));
@@ -6692,7 +6950,8 @@ mod tests {
             "example.com/project/baml_sdk",
         );
         let functions = &files[&PathBuf::from("functions.go")];
-        assert!(functions.contains("\"inner\": _bamlEncodeClass0(value_.Inner)"));
+        assert!(functions.contains("\"inner\": Inner.BAMLInput(value_.Inner)"));
+        assert!(!functions.contains("_bamlEncodeClass"));
         assert!(
             functions.contains("baml_go.DecodeField(classValue_, \"inner\", _bamlDecodeClass0)")
         );

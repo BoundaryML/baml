@@ -155,6 +155,9 @@ type inputEncoder struct {
 type inputTransaction struct {
 	keys          []uint64
 	hostValueKeys []uint64
+	// classDepth is how many generated classes enclose the value being
+	// encoded; GeneratedClass bounds it so a cyclic Go value is refused.
+	classDepth int
 }
 
 func (transaction *inputTransaction) own(key uint64) {
