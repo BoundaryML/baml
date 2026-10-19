@@ -30,12 +30,14 @@ fn deserialized_program_cannot_supply_native_bodies() {
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
         baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
-    let fresh = compile_program(&db, root, &program, OptLevel::Two, "program.bexa", None);
+    let fresh = compile_program(&db, root, &program, OptLevel::Two, "program.bexa", None)
+        .expect("native module renders");
     assert!(fresh.functions.iter().any(|f| f.name == "user.answer"));
 
     let serialized = borsh::to_vec(&program).unwrap();
     let restored: Program = borsh::from_slice(&serialized).unwrap();
-    let cached = compile_program(&db, root, &restored, OptLevel::Two, "program.bexa", None);
+    let cached = compile_program(&db, root, &restored, OptLevel::Two, "program.bexa", None)
+        .expect("native module renders");
     assert!(cached.functions.is_empty());
     assert!(matches!(
         rejection(&cached, "user.answer"),
