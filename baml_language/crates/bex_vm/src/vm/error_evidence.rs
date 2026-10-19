@@ -386,7 +386,9 @@ impl BexVm {
             (None, _) => None,
         };
         let raise_compiled = raise_frame.is_some_and(|idx| self.compiled_at(idx).is_some());
-        let kind = if raise_compiled {
+        let kind = if entry == RaiseEntry::Host {
+            RaiseKind::HostBoundary
+        } else if raise_compiled {
             self.compiled_raise_kind(thrown)
         } else {
             self.raise_kind(entry, raise_function, thrown)
@@ -705,6 +707,59 @@ mod tests {
         span_from_entry: true,
         ..TelemetryPolicy::NONE
     };
+
+    #[test]
+    fn host_error_in_suspended_compiled_frame_is_a_host_boundary() {
+        use bex_vm_types::{Value, errors::VmThrown};
+
+        use super::{Frame, RaiseEntry, RaiseKind};
+        use crate::compiled_rt::{CompiledAt, CompiledEntry, CompiledFn, stub, stub_start};
+
+        let mut program = baml_test_support::compile_source("function Main() -> int { 0 }");
+        let entry = program.rendered_callables()["user.Main"].object;
+        let Object::Function(function) = &mut program.objects[entry] else {
+            unreachable!()
+        };
+        function.native_body = Some(
+            CompiledEntry {
+                object: 0,
+                name: "user.Main",
+                arity: 0,
+                body: CompiledFn::Resumable(|_, _| unreachable!()),
+                slots: 0,
+                cause_slot: None,
+            }
+            .erase(),
+        );
+        let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+        vm.telemetry = Some(TelemetryState::new_root(
+            Arc::new(TelemetryPolicies::with_auto_level(AutoTelemetryLevel::Low)),
+            btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
+            test_runtime(),
+        ));
+        vm.set_entry_point(vm.heap.compile_time_ptr(entry.raw()), &[]);
+        // SAFETY: the entry frame roots the function under the heap permit.
+        let function = unsafe { vm.load_function(0) }.unwrap();
+        let Frame::Bytecode(frame) = &mut vm.frames[0] else {
+            unreachable!()
+        };
+        frame.instruction_ptr = stub_start(function).unwrap() + stub::AFTER_CALL;
+        assert_eq!(vm.compiled_at(0), Some(CompiledAt::Suspended));
+
+        FORCE_ERROR_EVIDENCE.with(|force| force.set(true));
+        let evidence = vm.begin_error_evidence(
+            &VmThrown::fresh(Value::int(1)),
+            RaiseEntry::Host,
+            None,
+            None,
+            false,
+        );
+        FORCE_ERROR_EVIDENCE.with(|force| force.set(false));
+        assert_eq!(
+            evidence.unwrap().held.unwrap().kind,
+            RaiseKind::HostBoundary
+        );
+    }
 
     /// Run `Main` of `SOURCE` at `level`, with `Thrower` promoted on error
     /// when `promote`, returning the exception-path span records.
