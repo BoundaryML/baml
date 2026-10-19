@@ -33,6 +33,8 @@ pub fn gc_stress() -> bool {
 pub use baml_base::Literal;
 /// The freshness of a `RealizedTy::Literal` built by generated code.
 pub use baml_type::Freshness;
+/// Severity of a log emitted by generated code.
+pub use btel_records::LogLevel;
 #[cfg(test)]
 pub(crate) use call::FORCE_CALL_FUNNEL;
 
@@ -177,6 +179,18 @@ pub(crate) mod stub {
     pub(crate) const AWAIT: usize = 3;
     pub(crate) const AWAIT_ANY: usize = 5;
     pub(crate) const SPAWN: usize = 7;
+
+    const _: () = {
+        assert!(matches!(CODE[START], OpCode::ResumeCompiled));
+        assert!(matches!(CODE[AFTER_CALL], OpCode::ResumeCompiled));
+        assert!(matches!(CODE[AFTER_YIELD], OpCode::ResumeCompiled));
+        assert!(matches!(CODE[AWAIT], OpCode::Await));
+        assert!(matches!(CODE[AWAIT_ANY], OpCode::AwaitAny));
+        assert!(matches!(CODE[SPAWN], OpCode::Spawn));
+        assert!(matches!(CODE[AWAIT + 1], OpCode::ResumeCompiled));
+        assert!(matches!(CODE[AWAIT_ANY + 1], OpCode::ResumeCompiled));
+        assert!(matches!(CODE[SPAWN + 1], OpCode::ResumeCompiled));
+    };
 }
 
 /// The `instruction_ptr` of a compiled frame whose body is running on the

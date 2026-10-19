@@ -327,6 +327,13 @@ pub struct BytecodeFrame {
     pub(crate) context: Context,
 }
 
+/// A type-value site, with disjoint bytecode and compiled namespaces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum TypeValueSite {
+    Constant(usize),
+    Compiled(usize),
+}
+
 impl BytecodeFrame {
     /// The frame of a compiled-to-compiled call: the call's type arguments
     /// (a pooled vector, or an empty one for a non-generic call) and no
@@ -3103,7 +3110,7 @@ pub struct BexVm {
     /// constants in static functions. The compact numeric key keeps the
     /// per-iteration lookup cheaper than re-hashing the full realized type.
     /// Entries are explicit VM GC roots.
-    pub(crate) static_load_type_cache: HashMap<(usize, usize), HeapPtr>,
+    pub(crate) static_load_type_cache: HashMap<(usize, TypeValueSite), HeapPtr>,
     /// Monomorphic static virtual-call results keyed by caller site and the
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
@@ -5992,7 +5999,7 @@ impl BexVm {
         frame_idx: usize,
         template: &bex_vm_types::TyTemplate,
         constant: usize,
-    ) -> Option<(usize, usize)> {
+    ) -> Option<(usize, TypeValueSite)> {
         if <&bex_vm_types::RealizedTy>::try_from(template).is_err()
             || !matches!(&self.frames[frame_idx],
                 Frame::Bytecode(frame)
@@ -6003,7 +6010,7 @@ impl BexVm {
         }
         Some((
             self.runtime_cache_function_addr(self.frames[frame_idx].function())?,
-            constant,
+            TypeValueSite::Constant(constant),
         ))
     }
 
@@ -12586,7 +12593,10 @@ impl BexVm {
                                         if frame.type_metadata.as_ref()
                                             .is_none_or(|metadata| !metadata.binds_runtime_declaration(&self.heap))) =>
                             {
-                                Some((std::ptr::from_ref(*function) as usize, idx))
+                                Some((
+                                    std::ptr::from_ref(*function) as usize,
+                                    TypeValueSite::Constant(idx),
+                                ))
                             }
                             ConstValue::Type(template) if !runtime_package.is_null() => {
                                 self.runtime_load_type_cache_key(*frame_idx, template, idx)
@@ -13594,7 +13604,11 @@ impl ::bex_vm_types::RootHaver for BexVm {
         }
         // Logs compiled code queued, which a collection it runs in place
         // can meet before the engine takes them.
-        roots.extend(self.pending_logs.iter().filter_map(|log| log.data.as_object_ptr()));
+        roots.extend(
+            self.pending_logs
+                .iter()
+                .filter_map(|log| log.data.as_object_ptr()),
+        );
 
         // Frame function pointers (needed once closures are heap-allocated)
         roots.extend(self.collect_frame_roots());

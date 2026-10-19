@@ -227,10 +227,10 @@ impl Generator<'_, '_> {
                     args,
                 } => {
                     let level = match level {
-                        baml_compiler2_mir::LogLevel::Info => 0,
-                        baml_compiler2_mir::LogLevel::Debug => 1,
-                        baml_compiler2_mir::LogLevel::Warn => 2,
-                        baml_compiler2_mir::LogLevel::Error => 3,
+                        baml_compiler2_mir::LogLevel::Info => "Info",
+                        baml_compiler2_mir::LogLevel::Debug => "Debug",
+                        baml_compiler2_mir::LogLevel::Warn => "Warn",
+                        baml_compiler2_mir::LogLevel::Error => "Error",
                     };
                     let Some(data) = args.first() else {
                         return Err(Rejection::Invalid("`log` without its data".into()));
@@ -248,7 +248,7 @@ impl Generator<'_, '_> {
                     // locates the record.
                     let at = pc_arg(pc);
                     let code =
-                        self.fallible(id, &format!("vm.log_event({level}, {data}, {name}, {at})"))?;
+                        self.fallible(id, &format!("vm.log_event(bex_vm::compiled_rt::LogLevel::{level}, {data}, {name}, {at})"))?;
                     self.statement(depth, &format!("{code};"));
                 }
                 StatementKind::Intrinsic { .. } => return unsupported("compiler intrinsic"),

@@ -85,10 +85,9 @@ impl BexVm {
     /// running function creates for it, as bytecode's `LoadType` of a fully
     /// realized constant in a static function creates once per site
     /// (`static_load_type_cache`), so two reads of the site are one value.
-    /// `ordinal` numbers the site within the compiled body; the key space
-    /// is the bytecode's, from its top, which the body's bytecode never
-    /// reaches. A frame binding a runtime declaration takes a fresh value,
-    /// as there.
+    /// `ordinal` numbers the site within the compiled body, in a distinct
+    /// cache namespace from bytecode constants. A frame binding a runtime
+    /// declaration takes a fresh value, as there.
     pub fn static_type_value(&mut self, depth: usize, ordinal: usize, ty: RealizedTy) -> Value {
         let frame = self.compiled_frame(depth);
         let cacheable = frame
@@ -101,7 +100,7 @@ impl BexVm {
             {
                 Some((
                     std::ptr::from_ref(function.as_ref()) as usize,
-                    usize::MAX - ordinal,
+                    crate::vm::TypeValueSite::Compiled(ordinal),
                 ))
             }
             _ => None,

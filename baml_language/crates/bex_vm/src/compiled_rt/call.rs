@@ -1,10 +1,7 @@
 //! Calls and the frame: builtins, compiled callees, the slots a resumable body
 //! keeps, and what a body reports to the VM.
 
-use bex_vm_types::{
-    HeapPtr, Object, RealizedTy, StackIndex, Value,
-    types::Function,
-};
+use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::Function};
 
 use super::{CompiledBody, stack_address};
 use crate::{
@@ -251,27 +248,20 @@ impl BexVm {
         Ok(())
     }
 
-    /// `log.info(data, name?)` and its siblings in compiled code (`level` is
-    /// 0 info, 1 debug, 2 warn, 3 error): the record bytecode's `SendEvent`
-    /// of the `$baml_log` payload makes, recorded for telemetry here and
+    /// `log.info(data, name?)` and its siblings in compiled code: the record
+    /// bytecode's `SendEvent` of the `$baml_log` payload makes, recorded for
+    /// telemetry here and
     /// queued for the engine ([`Self::pending_logs`]) instead of returned,
     /// since a compiled body cannot leave mid-statement. `pc` is the
     /// statement's in the function's bytecode, whose `SendEvent` line entry
     /// locates the record as the interpreter locates it.
     pub fn log_event(
         &mut self,
-        level: u8,
+        level: super::LogLevel,
         data: Value,
         event_name: Value,
         pc: u32,
     ) -> Result<(), Box<VmError>> {
-        use btel_records::LogLevel;
-        let level = match level {
-            0 => LogLevel::Info,
-            1 => LogLevel::Debug,
-            2 => LogLevel::Warn,
-            _ => LogLevel::Error,
-        };
         let name = if event_name.is_null() || event_name.is_omitted() {
             None
         } else {
@@ -403,8 +393,13 @@ impl BexVm {
         let locals_offset = StackIndex::from_raw(self.stack.len());
         let mut frame_type_args = self.pooled_type_args();
         frame_type_args.extend_from_slice(type_args);
-        let mut frame =
-            crate::vm::BytecodeFrame::compiled(callee, locals_offset, frame_type_args, context, None);
+        let mut frame = crate::vm::BytecodeFrame::compiled(
+            callee,
+            locals_offset,
+            frame_type_args,
+            context,
+            None,
+        );
         // A type naming a runtime declaration rides beside the frame's
         // arguments as an exact value, as a bytecode call carries it.
         let type_values = crate::vm::exact_type_values(type_args);
