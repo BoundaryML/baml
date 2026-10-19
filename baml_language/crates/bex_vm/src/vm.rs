@@ -333,6 +333,8 @@ pub(crate) enum TypeValueSite {
     Constant(usize),
     Compiled(usize),
 }
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(std::mem::size_of::<BytecodeFrame>() == 112);
 
 impl BytecodeFrame {
     /// The frame of a compiled-to-compiled call: the call's type arguments
