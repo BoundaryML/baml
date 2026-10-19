@@ -26,7 +26,7 @@ pub trait CompiledCollector: Send + Sync {
 #[must_use]
 pub fn gc_stress() -> bool {
     static STRESS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *STRESS.get_or_init(|| std::env::var_os("BAML_GC_STRESS").is_some_and(|value| value == "1"))
+    *STRESS.get_or_init(|| baml_env::os_var("BAML_GC_STRESS").is_some_and(|value| value == "1"))
 }
 
 /// The literal in a `RealizedTy::Literal` built by generated code.

@@ -199,6 +199,7 @@ impl std::fmt::Debug for ForwardingMap {
         f.debug_struct("ForwardingMap")
             .field("ranges", &self.ranges.len())
             .field("slots", &self.slots.len())
+            .field("others", &self.others.len())
             .field("len", &self.len)
             .finish()
     }

@@ -194,6 +194,7 @@ impl BexVm {
     /// Record `pc` as the running compiled function's call site, in the
     /// top frame (the caller's, before it pushes its callee); see
     /// [`Self::call_compiled`].
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn note_call_pc(&mut self, pc: u32) {
         if let Some(crate::vm::Frame::Bytecode(frame)) = self.frames.last_mut() {

@@ -221,7 +221,7 @@ impl Analysis {
             };
             let array_iteration = array_iter_call(body, mir.arity, terminator).is_some()
                 || array_next_call(terminator, &array_iters).is_some();
-            flows.push(flow_of(terminator)?);
+            flows.push(flow_of(terminator));
             unwinds.push(block.unwind.map(|b| b.0));
             if let Terminator::Call { callee, .. } = terminator
                 && let Some(object) = user_callee(db, index, callee)
@@ -484,9 +484,9 @@ pub(crate) fn array_next_call(
     (method == "next" && array_iters.contains_key(&iter.0)).then_some(iter.0)
 }
 
-/// The edge shape of a terminator, or why it keeps the function bytecode.
-fn flow_of(terminator: &Terminator<'_>) -> Result<Flow, Rejection> {
-    Ok(match terminator {
+/// The edge shape of a terminator.
+fn flow_of(terminator: &Terminator<'_>) -> Flow {
+    match terminator {
         Terminator::Goto { target } => Flow::Goto(target.0),
         Terminator::Branch {
             then_block,
@@ -522,7 +522,7 @@ fn flow_of(terminator: &Terminator<'_>) -> Result<Flow, Rejection> {
         // The panic case leaves through the block's unwind edge or the
         // function; the edge here is the not-a-panic continuation.
         Terminator::ThrowIfPanic { otherwise, .. } => Flow::Goto(otherwise.0),
-    })
+    }
 }
 
 /// Whether `terminator` suspends whatever it calls: the suspending

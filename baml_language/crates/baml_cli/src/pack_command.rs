@@ -542,7 +542,7 @@ impl PackArgs {
             // A BAML function with thousands of locals becomes one Rust
             // function as large, and rustc's default stack can overflow
             // generating its debug info; give it room unless the caller chose.
-            if std::env::var_os("RUST_MIN_STACK").is_none() {
+            if baml_env::os_var("RUST_MIN_STACK").is_none() {
                 cargo.env("RUST_MIN_STACK", (256usize << 20).to_string());
             }
             cargo
