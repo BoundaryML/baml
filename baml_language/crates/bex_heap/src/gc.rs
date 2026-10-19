@@ -41,10 +41,10 @@
 //! until root forwarding completes. A panic in that window must not resume
 //! execution; the engine aborts the process instead.
 
-use std::cell::UnsafeCell;
+use std::{cell::UnsafeCell, collections::HashMap};
 
 use bex_vm_types::{
-    ForwardingMap, FutureRead, HeapPtr, Meter, Object, SlotRange, Value,
+    FutureRead, HeapPtr, Meter, Object, Value,
     types::{Future, Objects, Slots},
 };
 
@@ -143,7 +143,7 @@ impl BexHeap {
     pub unsafe fn collect_garbage(
         &self,
         roots: &[HeapPtr],
-    ) -> (GcStats, Vec<HeapPtr>, ForwardingMap) {
+    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
         self.copy_collection(roots)
     }
 
@@ -171,7 +171,7 @@ impl BexHeap {
     /// still be intact.
     unsafe fn scan_dead_finalizers(
         &self,
-        forwarding: &ForwardingMap,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
         gens: &[&ChunkedVec<Object>],
     ) -> Vec<(HeapPtr, HeapPtr)> {
         // Fast path: if no class defines `cleanup`, no instance can ever be
@@ -226,7 +226,7 @@ impl BexHeap {
     /// locations, valid until the engine drains them at this same safepoint.
     ///
     /// SAFETY: GC safepoint, after the root trace, before the swap.
-    unsafe fn keepalive_finalizers_major(&self, forwarding: &mut ForwardingMap) {
+    unsafe fn keepalive_finalizers_major(&self, forwarding: &mut HashMap<HeapPtr, HeapPtr>) {
         let seeds = unsafe {
             self.scan_dead_finalizers(
                 forwarding,
@@ -259,10 +259,7 @@ impl BexHeap {
         }
         for (instance, cleanup) in seeds {
             // Both were seeded above, so both are now in `forwarding`.
-            self.push_pending_finalizer(
-                forwarding.forwarded(instance),
-                forwarding.forwarded(cleanup),
-            );
+            self.push_pending_finalizer(forwarding[&instance], forwarding[&cleanup]);
         }
     }
 
@@ -274,7 +271,7 @@ impl BexHeap {
     /// SAFETY: GC safepoint, after the root trace, before the swap.
     unsafe fn keepalive_finalizers_minor(
         &self,
-        forwarding: &mut ForwardingMap,
+        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
         promoted_to_gen2: &mut usize,
     ) {
         let seeds =
@@ -316,10 +313,7 @@ impl BexHeap {
         for (instance, cleanup) in seeds {
             // Both were seeded above, so both are now in `forwarding` — at
             // their own address if this collection did not move them.
-            self.push_pending_finalizer(
-                forwarding.forwarded(instance),
-                forwarding.forwarded(cleanup),
-            );
+            self.push_pending_finalizer(forwarding[&instance], forwarding[&cleanup]);
         }
     }
 
@@ -328,7 +322,7 @@ impl BexHeap {
     /// still intact.
     unsafe fn scan_unhandled_spawn_errors(
         &self,
-        forwarding: &ForwardingMap,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
         gens: &[&ChunkedVec<Object>],
     ) -> Vec<crate::UnhandledSpawnError> {
         let mut errors = Vec::new();
@@ -377,7 +371,10 @@ impl BexHeap {
 
     /// Preserve the payload graph of every unhandled error found by a major
     /// collection, then queue the remapped values for the engine.
-    unsafe fn keepalive_unhandled_spawn_errors_major(&self, forwarding: &mut ForwardingMap) {
+    unsafe fn keepalive_unhandled_spawn_errors_major(
+        &self,
+        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
+    ) {
         let errors = unsafe {
             self.scan_unhandled_spawn_errors(
                 forwarding,
@@ -416,7 +413,7 @@ impl BexHeap {
     /// [`Self::keepalive_unhandled_spawn_errors_major`].
     unsafe fn keepalive_unhandled_spawn_errors_minor(
         &self,
-        forwarding: &mut ForwardingMap,
+        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
         promoted_to_gen2: &mut usize,
     ) {
         let errors = unsafe {
@@ -457,58 +454,14 @@ impl BexHeap {
         }
     }
 
-    /// The forwarding map of a collection at `level`: every slot of the
-    /// generations it evacuates is indexed; the compile-time pool, and the
-    /// old generation in a minor collection, are left in place. Ranges are
-    /// tagged with their generation.
-    ///
-    /// # Safety
-    ///
-    /// Caller must hold exclusive heap access: the spaces' chunk lists are read.
-    unsafe fn new_forwarding_map(&self, level: CollectionLevel) -> ForwardingMap {
-        let mut ranges = Vec::new();
-        let mut add = |space: &ChunkedVec<Object>, moving: bool, generation: Generation| {
-            let bytes = ChunkedVec::<Object>::CHUNK_SIZE * size_of::<Object>();
-            for chunk in 0..space.num_chunks() {
-                // SAFETY: `chunk` is below `num_chunks`; the caller's exclusive
-                // access keeps the chunk list stable.
-                let start = unsafe { space.chunk_start_ptr(chunk) } as usize;
-                ranges.push(SlotRange {
-                    start,
-                    end: start + bytes,
-                    moving,
-                    tag: generation as u8,
-                });
-            }
-        };
-        // SAFETY: the caller holds exclusive heap access.
-        unsafe {
-            add(self.gen0_ref(), true, Generation::Gen0);
-            add(self.gen1_ref(), true, Generation::Gen1);
-            add(
-                self.gen2_ref(),
-                level == CollectionLevel::Major,
-                Generation::Gen2,
-            );
-        }
-        let compile_time = self.compile_time_range();
-        if !compile_time.is_empty() {
-            ranges.push(SlotRange {
-                start: compile_time.start,
-                end: compile_time.end,
-                moving: false,
-                tag: Generation::CompileTime as u8,
-            });
-        }
-        ForwardingMap::with_ranges(ranges)
-    }
-
-    fn copy_collection(&self, roots: &[HeapPtr]) -> (GcStats, Vec<HeapPtr>, ForwardingMap) {
+    fn copy_collection(
+        &self,
+        roots: &[HeapPtr],
+    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
         // SAFETY: collection caller guarantees exclusive heap access.
         let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self, roots.len()) };
         // Track old -> new pointer mappings (forwarding pointers)
-        // SAFETY: collection caller guarantees exclusive heap access.
-        let mut forwarding = unsafe { self.new_forwarding_map(CollectionLevel::Major) };
+        let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
 
         self.debug_verify_tlab_canaries();
 
@@ -698,7 +651,7 @@ impl BexHeap {
         &self,
         to: &UnsafeCell<ChunkedVec<Object>>,
         old_ptr: HeapPtr,
-        forwarding: &mut ForwardingMap,
+        forwarding: &mut HashMap<HeapPtr, HeapPtr>,
     ) -> HeapPtr {
         debug_assert!(
             !self.is_compile_time_ptr(old_ptr),
@@ -956,7 +909,7 @@ impl BexHeap {
     ///
     /// # Safety
     /// Must be called after all live objects have been moved to inactive.
-    unsafe fn fixup_and_measure_survivors(&self, forwarding: &ForwardingMap) -> usize {
+    unsafe fn fixup_and_measure_survivors(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) -> usize {
         let mut census = Meter::census();
         // SAFETY: All live objects have been moved to inactive, and no VMs are executing.
         unsafe {
@@ -970,7 +923,7 @@ impl BexHeap {
     }
 
     /// Fix up references within a single object.
-    fn fixup_object_references(&self, obj: &mut Object, forwarding: &ForwardingMap) {
+    fn fixup_object_references(&self, obj: &mut Object, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         match obj {
             // SAFETY: GC post-compaction fixup runs under STW with all
             // mutators parked; no concurrent reader/writer can race.
@@ -1161,7 +1114,7 @@ impl BexHeap {
     }
 
     /// Fix up a single Value reference.
-    fn fixup_value(&self, value: &mut Value, forwarding: &ForwardingMap) {
+    fn fixup_value(&self, value: &mut Value, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         if let Some(ptr) = value.as_object_ptr()
             && let Some(&new_ptr) = forwarding.get(&ptr)
         {
@@ -1181,7 +1134,7 @@ impl BexHeap {
     unsafe fn fixup_references_in_space(
         &self,
         space: &UnsafeCell<ChunkedVec<Object>>,
-        forwarding: &ForwardingMap,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
     ) {
         // SAFETY: Caller ensures exclusive access at a GC safepoint.
         unsafe {
@@ -1207,7 +1160,7 @@ impl BexHeap {
         &self,
         space: &UnsafeCell<ChunkedVec<Object>>,
         len_before: usize,
-        forwarding: &ForwardingMap,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
     ) {
         // SAFETY: Caller ensures exclusive access at a GC safepoint.
         unsafe {
@@ -1263,7 +1216,7 @@ impl BexHeap {
         card_table: &crate::card_table::CardTable,
         space: &UnsafeCell<ChunkedVec<Object>>,
         range: std::ops::Range<usize>,
-        forwarding: &ForwardingMap,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
     ) {
         // SAFETY: Caller ensures exclusive access at a GC safepoint.
         unsafe {
@@ -1535,11 +1488,10 @@ impl BexHeap {
     pub unsafe fn collect_garbage_minor(
         &self,
         roots: &[HeapPtr],
-    ) -> (GcStats, Vec<HeapPtr>, ForwardingMap) {
+    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
         // SAFETY: collection caller guarantees exclusive heap access.
         let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self, roots.len()) };
-        // SAFETY: collection caller guarantees exclusive heap access.
-        let mut forwarding = unsafe { self.new_forwarding_map(CollectionLevel::Minor) };
+        let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
 
         self.bump_epoch();
 
@@ -1732,7 +1684,7 @@ impl BexHeap {
         &self,
         roots: &[HeapPtr],
         level: CollectionLevel,
-    ) -> (GcStats, Vec<HeapPtr>, ForwardingMap) {
+    ) -> (GcStats, Vec<HeapPtr>, HashMap<HeapPtr, HeapPtr>) {
         match level {
             CollectionLevel::Minor => unsafe { self.collect_garbage_minor(roots) },
             CollectionLevel::Major => unsafe { self.collect_garbage(roots) },
@@ -1754,7 +1706,7 @@ fn trace_owner(owner: &bex_vm_types::types::Owner, worklist: &mut Vec<HeapPtr>) 
     worklist.extend(owner_edges(owner));
 }
 
-fn forward_owner(owner: &mut bex_vm_types::types::Owner, forwarding: &ForwardingMap) {
+fn forward_owner(owner: &mut bex_vm_types::types::Owner, forwarding: &HashMap<HeapPtr, HeapPtr>) {
     let edges: &mut dyn Iterator<Item = &mut HeapPtr> = match owner {
         bex_vm_types::types::Owner::Package(package) => &mut std::iter::once(package),
         bex_vm_types::types::Owner::Anonymous { witnesses } => &mut witnesses.iter_mut(),

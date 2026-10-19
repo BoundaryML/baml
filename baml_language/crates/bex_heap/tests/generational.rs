@@ -1425,9 +1425,9 @@ fn interface_owner_and_default_bodies_are_traced_and_forwarded() {
         let (stats, next_roots, forwarding) =
             unsafe { heap.collect_garbage_generational(&roots, level) };
         assert_eq!(stats.live_count, 4);
-        let next_body = forwarding.forwarded(expected_body);
-        let next_structural = forwarding.forwarded(expected_structural);
-        let next_owner = forwarding.forwarded(expected_owner);
+        let next_body = forwarding[&expected_body];
+        let next_structural = forwarding[&expected_structural];
+        let next_owner = forwarding[&expected_owner];
         assert_ne!(next_body, expected_body);
         assert_ne!(next_structural, expected_structural);
         assert_ne!(next_owner, expected_owner);
@@ -1500,8 +1500,8 @@ fn class_method_bodies_are_traced_and_forwarded() {
         let (stats, next_roots, forwarding) =
             unsafe { heap.collect_garbage_generational(&roots, level) };
         assert_eq!(stats.live_count, 3);
-        let next_body = forwarding.forwarded(expected_body);
-        let next_owner = forwarding.forwarded(expected_owner);
+        let next_body = forwarding[&expected_body];
+        let next_owner = forwarding[&expected_owner];
         assert_ne!(next_body, expected_body);
         assert_ne!(next_owner, expected_owner);
         expected_body = next_body;

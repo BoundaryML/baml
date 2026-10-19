@@ -20,8 +20,7 @@ use baml_compiler_diagnostics::{
 use baml_type::{normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    DeclPath, FnPath, ForwardingMap, HeapPtr, Interface, Object, RealizedTy, SessionEvalLease, Ty,
-    TyTemplate,
+    DeclPath, FnPath, HeapPtr, Interface, Object, RealizedTy, SessionEvalLease, Ty, TyTemplate,
     types::{
         Edge, EdgeKind, ExportSurface, LocalName, Objects, Package, PackageKind, SessionState,
         Slots, TypeAliasDef, TypeValue, Value,
@@ -964,7 +963,7 @@ impl Continuation for FinishPackage {
         vec![self.wrapper, self.package]
     }
 
-    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
+    fn apply_forwarding(&mut self, forwarding: &std::collections::HashMap<HeapPtr, HeapPtr>) {
         if let Some(&ptr) = forwarding.get(&self.wrapper) {
             self.wrapper = ptr;
         }
@@ -1011,7 +1010,7 @@ impl Continuation for RegisterPackageTests {
         vec![self.test_init]
     }
 
-    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
+    fn apply_forwarding(&mut self, forwarding: &std::collections::HashMap<HeapPtr, HeapPtr>) {
         if let Some(&ptr) = forwarding.get(&self.test_init) {
             self.test_init = ptr;
         }
@@ -1061,7 +1060,7 @@ impl Continuation for FinishPackageTests {
         vec![self.collector_ptr]
     }
 
-    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
+    fn apply_forwarding(&mut self, forwarding: &std::collections::HashMap<HeapPtr, HeapPtr>) {
         if let Some(&ptr) = forwarding.get(&self.collector_ptr) {
             self.collector_ptr = ptr;
         }
@@ -1584,7 +1583,7 @@ impl Continuation for SessionExecution {
             .collect()
     }
 
-    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         if let Some(&pointer) = forwarding.get(&self.package) {
             self.package = pointer;
         }
@@ -2021,7 +2020,7 @@ impl Continuation for CallAnyContinuation {
         roots
     }
 
-    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         self.expected.visit_heads_mut(&mut |head| {
             if head.is_resolved()
                 && let Some(&moved) = forwarding.get(&head.ptr())

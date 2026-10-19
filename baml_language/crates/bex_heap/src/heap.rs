@@ -21,7 +21,7 @@ use std::{
     },
 };
 
-use ::bex_vm_types::{ForwardingMap, Value, errors::StackFrame, types::FutureId};
+use ::bex_vm_types::{Value, errors::StackFrame, types::FutureId};
 use bex_external_types::{Handle, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object, WriteBarrier};
 
@@ -645,12 +645,6 @@ impl BexHeap {
         raw_ptr >= start && raw_ptr < end
     }
 
-    /// The addresses the compile-time pool spans: first slot, one past the last.
-    pub(crate) fn compile_time_range(&self) -> std::ops::Range<usize> {
-        let start = self.compile_time.as_ptr() as usize;
-        start..start + self.compile_time.len() * size_of::<Object>()
-    }
-
     /// Get a HeapPtr to a compile-time object by index.
     ///
     /// # Panics
@@ -1166,7 +1160,7 @@ impl BexHeap {
     /// relocated or identity-mapped). A missing entry means the caller broke
     /// the contract; we panic rather than silently invalidate and expose the
     /// caller to dangling pointers.
-    pub fn update_handles(&self, forwarding: &ForwardingMap) {
+    pub fn update_handles(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         // Validate every handle under a read lock first. A panic while the
         // write guard is held would poison the `RwLock` and then cascade into
         // a double-panic when the panicking `Handle`'s destructor tries to
@@ -1184,7 +1178,7 @@ impl BexHeap {
         // Safe to mutate now; every entry is guaranteed to be in `forwarding`.
         let mut handles = self.handles.write().expect("handles lock poisoned");
         for ptr in handles.values_mut() {
-            *ptr = forwarding.forwarded(*ptr);
+            *ptr = forwarding[ptr];
         }
         // The reverse index is keyed by the pointers that just moved, so it is
         // rebuilt rather than mutated in place. Keys are untouched: a handle's
@@ -1192,7 +1186,7 @@ impl BexHeap {
         let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
         *by_ptr = std::mem::take(&mut *by_ptr)
             .into_iter()
-            .map(|(ptr, entry)| (forwarding.forwarded(ptr), entry))
+            .map(|(ptr, entry)| (forwarding[&ptr], entry))
             .collect();
     }
 

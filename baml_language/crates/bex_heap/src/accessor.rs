@@ -795,7 +795,7 @@ pub trait BuiltinClass<'a>: Sized + From<BexClass<'a>> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{collections::HashMap, sync::Arc};
 
     use bex_external_types::BexExternalValue;
     use bex_str::BexStr;
@@ -810,7 +810,11 @@ mod tests {
     impl RootHaver for EmptyRoots {
         fn collect_roots(&self, _roots: &mut Vec<bex_vm_types::HeapPtr>) {}
 
-        fn forward_roots(&mut self, _forward: &bex_vm_types::ForwardingMap) {}
+        fn forward_roots(
+            &mut self,
+            _forward: &HashMap<bex_vm_types::HeapPtr, bex_vm_types::HeapPtr>,
+        ) {
+        }
     }
 
     impl TlabHolder for EmptyRoots {

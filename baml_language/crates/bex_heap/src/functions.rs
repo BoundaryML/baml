@@ -1,7 +1,9 @@
 //! Function identity lookup owned by the engine's heap. Dynamic entries are
 //! weak: they never participate in tracing and are repaired/pruned by GC.
 
-use bex_vm_types::{ForwardingMap, HeapPtr, Object, PermitProof};
+use std::collections::HashMap;
+
+use bex_vm_types::{HeapPtr, Object, PermitProof};
 use btel_types::{FunctionId, FunctionMetadata, FunctionMetadataTable};
 
 use crate::{BexHeap, CollectionLevel, Generation};
@@ -104,7 +106,7 @@ impl BexHeap {
     /// and before swapping or destroying from-space. Never marks anything live.
     pub(crate) fn update_function_lookup(
         &self,
-        forwarding: &ForwardingMap,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
         level: CollectionLevel,
     ) {
         self.functions.retain_dynamic(|ptr| {
