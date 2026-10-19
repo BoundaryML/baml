@@ -1,0 +1,206 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a class
+   ╭─[main.baml:7:7]
+ 7 │ class root {
+   ·       ──┬─
+   ·         ╰── `root` is reserved
+   ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a function
+    ╭─[main.baml:11:10]
+ 11 │ function root() -> int {
+    ·          ──┬─
+    ·            ╰── `root` is reserved
+    ╰────
+
+  [validation] E0011
+
+  × name `root` defined 2 times as: class, function
+   ╭─[main.baml:7:7]
+ 7 │ class root {
+   ·       ──┬─
+   ·         ╰── first defined as class here
+   ╰────
+    ╭─[main.baml:11:10]
+ 11 │ function root() -> int {
+    ·          ──┬─
+    ·            ╰── duplicate function definition
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a type parameter
+    ╭─[main.baml:15:18]
+ 15 │ function generic<root>(value: root) -> root {
+    ·                  ──┬─
+    ·                    ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a type parameter
+    ╭─[main.baml:19:14]
+ 19 │ class Holder<root> {
+    ·              ──┬─
+    ·                ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a type parameter
+    ╭─[main.baml:23:17]
+ 23 │ interface Bound<root> {
+    ·                 ──┬─
+    ·                   ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a type parameter
+    ╭─[main.baml:28:23]
+ 28 │     function required<root>(self, value: root) -> int throws never
+    ·                       ──┬─
+    ·                         ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a parameter
+    ╭─[main.baml:29:35]
+ 29 │     function required_param(self, root: int) -> int throws never
+    ·                                   ──┬─
+    ·                                     ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a type parameter
+    ╭─[main.baml:34:21]
+ 34 │     function method<root>(self, value: root) -> root {
+    ·                     ──┬─
+    ·                       ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a type parameter
+    ╭─[main.baml:39:12]
+ 39 │ implements<root> Bound<root> for Holder<root> {
+    ·            ──┬─
+    ·              ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a parameter
+    ╭─[main.baml:45:20]
+ 45 │ function parameter(root: string) -> string {
+    ·                    ──┬─
+    ·                      ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a binding
+    ╭─[main.baml:50:5]
+ 50 │     let root = 1
+    ·     ────┬───
+    ·         ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a parameter
+    ╭─[main.baml:55:14]
+ 55 │     let f = (root: int) => { root }
+    ·              ──┬─
+    ·                ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a binding
+    ╭─[main.baml:60:10]
+ 60 │     for (let root in items) {
+    ·          ────┬───
+    ·              ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a binding
+    ╭─[main.baml:69:14]
+ 69 │     } catch (root) {
+    ·              ──┬─
+    ·                ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a binding
+    ╭─[main.baml:76:9]
+ 76 │         let root: int => root,
+    ·         ──────┬──────
+    ·               ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a binding
+    ╭─[main.baml:82:30]
+ 82 │     let Holder<int> { value: let root } = holder
+    ·                              ────┬───
+    ·                                  ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a binding
+    ╭─[main.baml:88:10]
+ 88 │         [let root, ..] => root,
+    ·          ────┬───
+    ·              ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a type binding
+    ╭─[main.baml:94:14]
+ 94 │     let type root = reflect.Type.of<int>();
+    ·              ──┬─
+    ·                ╰── `root` is reserved
+    ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name a type alias
+   ╭─[ns_alias/item.baml:1:6]
+ 1 │ type root = int
+   ·      ──┬─
+   ·        ╰── `root` is reserved
+   ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name an enum
+   ╭─[ns_enum_item/item.baml:1:6]
+ 1 │ enum root {
+   ·      ──┬─
+   ·        ╰── `root` is reserved
+   ╰────
+
+  [hir] E0176
+
+  × `root` is a keyword and cannot name an interface
+   ╭─[ns_interface_item/item.baml:1:11]
+ 1 │ interface root {
+   ·           ──┬─
+   ·             ╰── `root` is reserved
+   ╰────

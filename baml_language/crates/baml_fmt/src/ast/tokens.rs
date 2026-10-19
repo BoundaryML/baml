@@ -80,7 +80,6 @@ define_keyword_tokens! {
     "catch" => SyntaxKind::KW_CATCH => Catch;
     "catch_all" => SyntaxKind::KW_CATCH_ALL => CatchAll;
     "catch_all_panics" => SyntaxKind::KW_CATCH_ALL_PANICS => CatchAllPanics;
-    "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
     "is" => SyntaxKind::KW_IS => Is;
     "spawn" => SyntaxKind::KW_SPAWN => Spawn;
     "with" => SyntaxKind::KW_WITH => With;
@@ -252,7 +251,6 @@ pub enum BinaryOp {
     And(And),
     Pipe(Pipe),
     Caret(Caret),
-    Instanceof(Instanceof),
     LessLess(LessLess),
     GreaterGreater(GreaterGreater),
     Plus(Plus),
@@ -289,7 +287,6 @@ impl BinaryOp {
             BinaryOp::OrOr(t) => t.span(),
             BinaryOp::Pipe(t) => t.span(),
             BinaryOp::Caret(t) => t.span(),
-            BinaryOp::Instanceof(t) => t.span(),
             BinaryOp::LessLess(t) => t.span(),
             BinaryOp::GreaterGreater(t) => t.span(),
             BinaryOp::Plus(t) => t.span(),
@@ -339,9 +336,6 @@ impl FromCST for BinaryOp {
             SyntaxKind::OR_OR => Ok(BinaryOp::OrOr(OrOr::new_from_span(token.text_range()))),
             SyntaxKind::PIPE => Ok(BinaryOp::Pipe(Pipe::new_from_span(token.text_range()))),
             SyntaxKind::CARET => Ok(BinaryOp::Caret(Caret::new_from_span(token.text_range()))),
-            SyntaxKind::KW_INSTANCEOF => Ok(BinaryOp::Instanceof(Instanceof::new_from_span(
-                token.text_range(),
-            ))),
             SyntaxKind::LESS_LESS => Ok(BinaryOp::LessLess(LessLess::new_from_span(
                 token.text_range(),
             ))),
@@ -412,7 +406,6 @@ impl Printable for BinaryOp {
             BinaryOp::And(t) => printer.print_raw_token(t),
             BinaryOp::Pipe(t) => printer.print_raw_token(t),
             BinaryOp::Caret(t) => printer.print_raw_token(t),
-            BinaryOp::Instanceof(t) => printer.print_raw_token(t),
             BinaryOp::LessLess(t) => printer.print_raw_token(t),
             BinaryOp::GreaterGreater(t) => printer.print_raw_token(t),
             BinaryOp::Plus(t) => printer.print_raw_token(t),
@@ -621,37 +614,10 @@ impl Word {
     }
 }
 
-/// True for token kinds the parser accepts as identifiers in name positions.
-///
-/// The lexer emits dedicated keyword kinds for these words, but the parser
-/// keeps them valid as field, parameter, method, and member-access names
-/// (e.g. a class field or parameter named `client`, or `x.implements(y)` on
-/// the reflection `type` value). The CST therefore contains the keyword kind
-/// where the strong AST expects a name, and [`Word::from_cst`] must accept it.
-/// Mirrors `at_member_name` and `parse_parameter` in `baml_compiler_parser`.
-#[must_use]
-pub fn is_word_like(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        SyntaxKind::WORD
-            | SyntaxKind::KW_CLIENT
-            | SyntaxKind::KW_CLASS
-            | SyntaxKind::KW_ENUM
-            | SyntaxKind::KW_FUNCTION
-            | SyntaxKind::KW_IMPLEMENTS
-            | SyntaxKind::KW_IMPLEMENT
-            | SyntaxKind::KW_EXTENDS
-            | SyntaxKind::KW_REQUIRES
-            | SyntaxKind::KW_INTERFACE
-            | SyntaxKind::KW_SPAWN
-            | SyntaxKind::KW_AWAIT
-    )
-}
-
 impl FromCST for Word {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let token = StrongAstError::assert_is_token(elem)?;
-        if !is_word_like(token.kind()) {
+        if token.kind() != SyntaxKind::WORD {
             return Err(StrongAstError::UnexpectedKind {
                 expected: SyntaxKind::WORD,
                 found: token.kind(),

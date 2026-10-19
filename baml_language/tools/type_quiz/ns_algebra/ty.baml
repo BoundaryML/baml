@@ -482,7 +482,7 @@ class AliasDecl {
 
     /// Declare a recursive alias. `body` receives the alias's own type so it
     /// can refer back to it:
-    /// `AliasDecl.recursive("Rec", (self) -> { Union.new([Prim.int(), Array.new(self)]) })`.
+    /// `AliasDecl.recursive("Rec", (rec) -> { Union.new([Prim.int(), Array.new(rec)]) })`.
     function recursive(name: string, body: (Ty) -> Ty throws never) -> AliasDecl throws never {
         let decl = AliasDecl { name, body: Never {} };
         decl.body = body(Alias { decl });

@@ -9,7 +9,9 @@ fn nz(n: usize) -> NonZeroUsize {
     NonZeroUsize::new(n).unwrap()
 }
 
+/// `root` holds the delivery's shared CAS; it must outlive the engine.
 fn engine_with_writer(
+    root: &std::path::Path,
     source: &str,
     write: impl FnMut(&SealedFile) -> Result<(), btel_file::LocalDeliveryError> + Send + 'static,
 ) -> Arc<BexEngine> {
@@ -34,7 +36,7 @@ fn engine_with_writer(
         |control| {
             let failure = control;
             let writer = btel_file::LocalDelivery::with_test_writer(
-                PathBuf::new(),
+                root.to_path_buf(),
                 btel_file::LocalDeliveryConfig::default(),
                 write,
                 move |error| failure.disable(btel_processor::RuntimeError(error.to_string())),
@@ -74,7 +76,9 @@ async fn disk_error_with_full_file_queue_and_chunk_pool_does_not_fail_applicatio
         let error =
             btel_file::LocalDeliveryError(std::io::Error::from_raw_os_error(errno).to_string());
         let expected = error.to_string();
+        let root = tempfile::tempdir().unwrap();
         let engine = engine_with_writer(
+            root.path(),
             r#"
             function leaf(n: int) -> int { n + 1 }
             function main() -> int {
@@ -168,7 +172,9 @@ async fn cancelling_shutdown_does_not_reopen_a_closed_transport() {
     let mut first = true;
     // A live manual owner also exercises terminal deferred publication without
     // reserving another producer from this deliberately tiny worker pool.
+    let root = tempfile::tempdir().unwrap();
     let engine = engine_with_writer(
+        root.path(),
         r#"function main() -> int { let span = trace.start_span("pending"); 1 }"#,
         move |_| {
             if std::mem::take(&mut first) {

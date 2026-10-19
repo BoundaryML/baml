@@ -58,20 +58,6 @@ pub enum TokenKind {
     Requires,
     #[token("function")]
     Function,
-    #[token("client")]
-    Client,
-    /// Deprecated: `generator` blocks moved to `baml.toml`. Still lexed so the
-    /// parser can recognize stale blocks and raise a migration diagnostic.
-    #[token("generator")]
-    Generator,
-    #[token("test")]
-    Test,
-    #[token("testset")]
-    TestSet,
-    #[token("retry_policy")]
-    RetryPolicy,
-    #[token("template_string")]
-    TemplateString,
     // Control flow keywords
     #[token("if")]
     If,
@@ -107,12 +93,26 @@ pub enum TokenKind {
     Await,
     #[token("defer")]
     Defer,
+    #[token("catch_all_panics")]
+    CatchAllPanics,
 
     // Other keywords
-    #[token("instanceof")]
-    Instanceof,
     #[token("is")]
     Is,
+    #[token("const")]
+    Const,
+    #[token("true")]
+    True,
+    #[token("false")]
+    False,
+    #[token("null")]
+    Null,
+    /// The method receiver, `self`.
+    #[token("self")]
+    SelfValue,
+    /// The path to the current package, as in `root.X`.
+    #[token("root")]
+    Root,
     // ============ Identifiers and Literals ============
     /// Any identifier-like word (non-keyword)
     /// Also matches $-prefixed identifiers and `$`-separated names.
@@ -342,6 +342,49 @@ pub enum TokenKind {
     Error,
 }
 
+impl TokenKind {
+    /// Whether this token is a keyword. Keywords never name a declaration;
+    /// after a `.` they are member and path-segment names like any word.
+    pub fn is_keyword(self) -> bool {
+        matches!(
+            self,
+            TokenKind::Class
+                | TokenKind::Enum
+                | TokenKind::Interface
+                | TokenKind::Implements
+                | TokenKind::Implement
+                | TokenKind::Extends
+                | TokenKind::Requires
+                | TokenKind::Function
+                | TokenKind::If
+                | TokenKind::Else
+                | TokenKind::For
+                | TokenKind::While
+                | TokenKind::Let
+                | TokenKind::In
+                | TokenKind::Break
+                | TokenKind::Continue
+                | TokenKind::Return
+                | TokenKind::Throw
+                | TokenKind::Match
+                | TokenKind::Catch
+                | TokenKind::CatchAll
+                | TokenKind::Throws
+                | TokenKind::Spawn
+                | TokenKind::Await
+                | TokenKind::Defer
+                | TokenKind::CatchAllPanics
+                | TokenKind::Is
+                | TokenKind::Const
+                | TokenKind::True
+                | TokenKind::False
+                | TokenKind::Null
+                | TokenKind::SelfValue
+                | TokenKind::Root
+        )
+    }
+}
+
 impl std::fmt::Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
@@ -354,12 +397,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Extends => "extends",
             TokenKind::Requires => "requires",
             TokenKind::Function => "function",
-            TokenKind::Client => "client",
-            TokenKind::Generator => "generator",
-            TokenKind::Test => "test",
-            TokenKind::TestSet => "testset",
-            TokenKind::RetryPolicy => "retry_policy",
-            TokenKind::TemplateString => "template_string",
             TokenKind::If => "if",
             TokenKind::Else => "else",
             TokenKind::For => "for",
@@ -377,8 +414,14 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Spawn => "spawn",
             TokenKind::Await => "await",
             TokenKind::Defer => "defer",
-            TokenKind::Instanceof => "instanceof",
+            TokenKind::CatchAllPanics => "catch_all_panics",
             TokenKind::Is => "is",
+            TokenKind::Const => "const",
+            TokenKind::True => "true",
+            TokenKind::False => "false",
+            TokenKind::Null => "null",
+            TokenKind::SelfValue => "self",
+            TokenKind::Root => "root",
             // Identifiers and literals
             TokenKind::Word => "identifier",
             TokenKind::Quote => "'\"'",
@@ -483,27 +526,18 @@ pub struct Token {
 
 /// Return whether `value` is one complete, non-keyword BAML identifier token.
 ///
-/// Lexer keywords are rejected automatically by their dedicated [`TokenKind`].
-/// The additional spellings are contextual parser keywords: they intentionally
-/// remain `Word` tokens so the parser can recognize them only in the grammar
-/// positions where they are meaningful.
+/// Every keyword has a dedicated [`TokenKind`], so this is the whole rule.
+/// Weak keywords (`client`, `test`, `type`, `as`, ...) lex as `Word` and are
+/// identifiers everywhere the parser does not read them as a declaration.
 pub fn is_baml_identifier(value: &str) -> bool {
-    const CONTEXTUAL_KEYWORDS: &[&str] = &[
-        "as",
-        "catch_all_panics",
-        "const",
-        "false",
-        "map",
-        "null",
-        "true",
-        "type",
-        "with",
-    ];
-
     let mut lexer = TokenKind::lexer(value);
-    matches!(lexer.next(), Some(Ok(TokenKind::Word)))
-        && lexer.next().is_none()
-        && !CONTEXTUAL_KEYWORDS.contains(&value)
+    matches!(lexer.next(), Some(Ok(TokenKind::Word))) && lexer.next().is_none()
+}
+
+/// Return whether `value` is exactly one keyword.
+pub fn is_keyword(value: &str) -> bool {
+    let mut lexer = TokenKind::lexer(value);
+    matches!(lexer.next(), Some(Ok(kind)) if kind.is_keyword()) && lexer.next().is_none()
 }
 
 /// Lossless lexer that preserves all source text.
@@ -1059,21 +1093,18 @@ mod tests {
     }
 
     #[test]
-    fn baml_identifiers_exclude_lexer_and_contextual_keywords() {
+    fn baml_identifiers_exclude_keywords() {
         for keyword in [
             "class",
-            "test",
             "return",
             "is",
-            "as",
             "catch_all_panics",
             "const",
             "false",
-            "map",
             "null",
             "true",
-            "type",
-            "with",
+            "self",
+            "root",
         ] {
             assert!(
                 !is_baml_identifier(keyword),
@@ -1081,7 +1112,6 @@ mod tests {
             );
         }
 
-        // `unreflect` was a contextual keyword until `let type` replaced it.
         for identifier in [
             "Thing",
             "field_name",
@@ -1089,6 +1119,19 @@ mod tests {
             "$companion",
             "Foo$bar",
             "unreflect",
+            "client",
+            "test",
+            "testset",
+            "template_string",
+            "retry_policy",
+            "type",
+            "as",
+            "with",
+            "map",
+            "instanceof",
+            "generator",
+            "self_ref",
+            "rooted",
         ] {
             assert!(
                 is_baml_identifier(identifier),
@@ -1102,9 +1145,11 @@ mod tests {
         let tokens = lex_no_whitespace("throw catch");
         assert_eq!(tokens, vec![TokenKind::Throw, TokenKind::Catch,]);
 
-        // catch_all is a keyword; catch_all_panics lexes as a plain identifier
         let tokens2 = lex_no_whitespace("catch_all catch_all_panics");
-        assert_eq!(tokens2, vec![TokenKind::CatchAll, TokenKind::Word,]);
+        assert_eq!(
+            tokens2,
+            vec![TokenKind::CatchAll, TokenKind::CatchAllPanics]
+        );
     }
 
     #[test]

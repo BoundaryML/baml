@@ -160,9 +160,7 @@ impl FromCST for Expression {
             SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => {
                 Literal::from_cst(elem).map(Expression::Literal)?
             }
-            SyntaxKind::WORD | SyntaxKind::KW_CLIENT => {
-                PathExpr::from_cst(elem).map(Expression::Path)?
-            }
+            SyntaxKind::WORD => PathExpr::from_cst(elem).map(Expression::Path)?,
             SyntaxKind::PATH_EXPR => {
                 // The parser wraps any postfix `<...>` in a PATH_EXPR. When the
                 // base is a plain path (word / nested PATH_EXPR) it is a
@@ -170,7 +168,7 @@ impl FromCST for Expression {
                 // is a generic instantiation on a non-path base.
                 let node = StrongAstError::assert_is_node(elem.clone())?;
                 let base_is_path = SyntaxNodeIter::new(&node).next().is_some_and(|c| {
-                    is_path_segment_kind(c.kind()) || c.kind() == SyntaxKind::PATH_EXPR
+                    c.kind() == SyntaxKind::WORD || c.kind() == SyntaxKind::PATH_EXPR
                 });
                 if base_is_path {
                     PathExpr::from_cst(elem).map(Expression::Path)?
@@ -515,16 +513,9 @@ pub struct PathExpr {
     pub generic_args: Option<GenericArgs>,
 }
 
-/// Mirrors the segment set of `parse_path_or_ident` in `baml_compiler_parser`:
-/// every word-like keyword, so a member such as `reflect.Class.extends` keeps
-/// its path shape.
-fn is_path_segment_kind(kind: SyntaxKind) -> bool {
-    t::is_word_like(kind)
-}
-
 fn path_segment_from_cst(elem: SyntaxElement) -> Result<t::Word, StrongAstError> {
     let token = StrongAstError::assert_is_token(elem)?;
-    if is_path_segment_kind(token.kind()) {
+    if token.kind() == SyntaxKind::WORD {
         Ok(t::Word::new_from_span(token.text_range()))
     } else {
         Err(StrongAstError::UnexpectedKindDesc {
@@ -537,7 +528,7 @@ fn path_segment_from_cst(elem: SyntaxElement) -> Result<t::Word, StrongAstError>
 
 impl FromCST for PathExpr {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
-        if is_path_segment_kind(elem.kind()) {
+        if elem.kind() == SyntaxKind::WORD {
             let first = path_segment_from_cst(elem)?;
             return Ok(PathExpr {
                 first,
@@ -557,7 +548,7 @@ impl FromCST for PathExpr {
             .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, it.parent))?;
 
         let (first, mut rest) = match next.kind() {
-            kind if is_path_segment_kind(kind) => (path_segment_from_cst(next)?, Vec::new()),
+            SyntaxKind::WORD => (path_segment_from_cst(next)?, Vec::new()),
             SyntaxKind::PATH_EXPR => {
                 let nested = PathExpr::from_cst(next)?;
                 if nested.generic_args.is_some() {
@@ -2776,7 +2767,7 @@ impl FromCST for CallArg {
             .collect();
 
         let (label, expr_elem) = if children.len() >= 3
-            && matches!(children[0].kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT)
+            && children[0].kind() == SyntaxKind::WORD
             && children[1].kind() == SyntaxKind::EQUALS
         {
             let name = t::Word::new_from_span(children[0].text_range());
@@ -4763,9 +4754,7 @@ impl FromCST for ObjectFieldKey {
             SyntaxKind::KW_TRUE | SyntaxKind::KW_FALSE | SyntaxKind::KW_NULL => Ok(
                 ObjectFieldKey::Expression(Box::new(Expression::from_cst(elem)?)),
             ),
-            // `client` (KW_CLIENT) is a keyword but a valid field name, e.g.
-            // `Agent { client: ... }` — mirror `parse_object_field`.
-            kind if t::is_word_like(kind) => Ok(ObjectFieldKey::Word(t::Word::from_cst(elem)?)),
+            SyntaxKind::WORD => Ok(ObjectFieldKey::Word(t::Word::from_cst(elem)?)),
             SyntaxKind::STRING_LITERAL => {
                 Ok(ObjectFieldKey::String(t::QuotedString::from_cst(elem)?))
             }

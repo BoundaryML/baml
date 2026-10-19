@@ -253,9 +253,7 @@ pub fn path_head(
     segments: &[Name],
 ) -> PathHead {
     match segments {
-        // `root` first: nothing may be named `root` (E0176), so a refused
-        // item of that name cannot take every `root.X` of its namespace
-        // down with it.
+        // `root` is a keyword, so no item can claim it.
         [first, _, ..] if first.as_str() == ROOT_SEGMENT => PathHead::Package(own),
         [first, _, ..] => {
             if crate::namespace::namespace_declares(db, own, namespace, first) {

@@ -86,11 +86,11 @@ class Plan<T, E> {
     /// Cancelling any of these tokens cancels the task.
     cancel_tokens: CancelToken[],
     /// Whether the task keeps running when its spawner is cancelled.
-    root: bool,
+    is_root: bool,
 
     /// A plan that runs `body`, with nothing added to it.
     function new(body: () -> T throws E, name: string? = null) -> Plan<T, E> throws never {
-        Plan { body: body, name: name, limits: [], cancel_tokens: [], root: false }
+        Plan { body: body, name: name, limits: [], cancel_tokens: [], is_root: false }
     }
 
     /// Returns this plan with a new body: `wrapper`, called with the old one.
@@ -112,7 +112,7 @@ class Plan<T, E> {
             name: self.name,
             limits: self.limits,
             cancel_tokens: self.cancel_tokens,
-            root: self.root,
+            is_root: self.is_root,
         }
     }
 
@@ -195,7 +195,7 @@ implements<T, E> Modifier<T, E> for Limit {
 
 implements<T, E> Modifier<T, E> for Root {
     function apply(self, plan: Plan<T, E>) -> Plan<T, E> throws never {
-        Plan { ...plan, root: true }
+        Plan { ...plan, is_root: true }
     }
 }
 

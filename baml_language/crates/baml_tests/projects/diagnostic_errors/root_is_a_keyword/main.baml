@@ -1,8 +1,7 @@
-// `root` is the path to the package itself (TYPE_SYSTEM.md § Declarations,
-// Packages, and Names) and names nothing else: no item, binding, or type
-// parameter may be called `root`, so `root.X` always means this package's `X`.
-// Every form that declares a name is refused, at the name. The other item
-// kinds named `root` live one per namespace (`ns_enum/`, `ns_interface/`,
+// `root` is a keyword: the path to the package itself (TYPE_SYSTEM.md
+// § Declarations, Packages, and Names), so `root.X` always means this
+// package's `X`. Every form that declares a name refuses it. The other item
+// kinds named `root` live one per namespace (`ns_enum_item/`, `ns_interface_item/`,
 // `ns_alias/`), so each reports once.
 
 class root {

@@ -11,12 +11,13 @@ use std::sync::Arc;
 use baml_base::{AttributePosition, Name, SourceFile};
 use baml_compiler_diagnostics::{diagnostic::DiagnosticId, runtime_type::SerializedKeyContainer};
 use baml_compiler2_ast::{self as ast, LoweringDiagnostic};
+use baml_type::reserved::ReservedName;
 use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::{TextRange, TextSize};
 
 use crate::{
     contributions::{Contribution, Definition, DefinitionKind, FileSymbolContributions},
-    diagnostic::{Hir2Diagnostic, MemberSite},
+    diagnostic::{Hir2Diagnostic, MemberSite, ReservedNameSite},
     file_package::file_package,
     ids::{FunctionMarker, LocalItemId},
     item_tree::{ImplBlock, ImplSubject, InterfaceFieldLink},
@@ -75,6 +76,9 @@ pub struct SemanticIndexBuilder<'db> {
     /// Depth of class scopes we're inside (> 0 means methods shouldn't
     /// contribute to top-level symbols — they belong to the class scope).
     class_depth: u32,
+    /// Whether the file belongs to a language package, which is exempt from
+    /// the reserved-name policy ([`ReservedName::of`]).
+    in_language_package: bool,
 
     /// Expression to lexical scope mappings, sorted by arena-safe key at the end.
     expr_scopes: Vec<(ExprMetadataKey, FileScopeId)>,
@@ -112,6 +116,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             item_scopes: FxHashMap::default(),
             scope_stack: Vec::new(),
             class_depth: 0,
+            in_language_package: false,
             expr_scopes: Vec::new(),
             lambda_scopes: Vec::new(),
             path_resolutions: Vec::new(),
@@ -150,6 +155,9 @@ impl<'db> SemanticIndexBuilder<'db> {
     pub fn build(mut self, items: &[ast::Item], file_range: TextRange) -> FileSemanticIndex<'db> {
         let pkg_info = file_package(self.db, self.file);
         self.namespace_path.clone_from(&pkg_info.namespace_path);
+        self.in_language_package = crate::package::lang_roots(self.db)
+            .package_of(pkg_info.root)
+            .is_some();
 
         // Build scope chain: Project → Package → Namespace* → File
         self.push_scope(ScopeKind::Project, None, file_range);
@@ -161,13 +169,12 @@ impl<'db> SemanticIndexBuilder<'db> {
             file_range,
         );
         for ns in &pkg_info.namespace_path {
-            // `ns_root/` would make `root.root.X` a path: refused like every
-            // other `root`, once per file in the directory.
-            if ns.as_str() == crate::package::ROOT_SEGMENT {
-                self.diagnostics.push(Hir2Diagnostic::RootNamespace {
-                    span: TextRange::empty(file_range.start()),
-                });
-            }
+            // Reported once per file in the directory.
+            self.reject_reserved_name(
+                ns,
+                TextRange::empty(file_range.start()),
+                ReservedNameSite::NamespaceDirectory,
+            );
             self.push_scope(ScopeKind::Namespace, Some(ns.clone()), file_range);
         }
         let file_name = self
@@ -326,9 +333,15 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// uniformly to positional and defaulted parameters — both share the
     /// same `params` vector, and any name collision among them would make
     /// later references to the name ambiguous within the body.
-    fn emit_duplicate_param_diagnostics(&mut self, params: &[ast::Param]) {
+    ///
+    /// Also rejects a keyword parameter name. `allows_receiver` admits
+    /// `self` as the first parameter of a method.
+    fn emit_duplicate_param_diagnostics(&mut self, params: &[ast::Param], allows_receiver: bool) {
         let mut seen: FxHashMap<Name, Vec<MemberSite>> = FxHashMap::default();
-        for param in params {
+        for (idx, param) in params.iter().enumerate() {
+            if !(allows_receiver && idx == 0 && param.name.as_str() == "self") {
+                self.reject_keyword_name(&param.name, param.name_span, "a parameter");
+            }
             seen.entry(param.name.clone())
                 .or_default()
                 .push(MemberSite {
@@ -339,28 +352,66 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.emit_duplicate_diagnostics(seen);
     }
 
-    /// `root` is the path to the package itself
-    /// ([`crate::package::ROOT_SEGMENT`]) and names nothing else: not a
-    /// binding, an item, or a type parameter — so `root.X` always means this
-    /// package's `X`.
-    fn reject_root_name(&mut self, name: &Name, span: TextRange) {
-        if name.as_str() == crate::package::ROOT_SEGMENT {
-            self.diagnostics
-                .push(Hir2Diagnostic::RootIsReserved { span });
+    /// Reject `name` if it is reserved ([`ReservedName::of`]): a keyword or
+    /// built-in type name declared outside a language package. Applies to
+    /// everything in the item and type namespaces, where a bare reference to
+    /// the name would read the keyword or built-in instead.
+    fn reject_reserved_name(&mut self, name: &Name, span: TextRange, site: ReservedNameSite) {
+        if self.in_language_package {
+            return;
+        }
+        if let Some(reason) = ReservedName::of(name.as_str()) {
+            self.diagnostics.push(Hir2Diagnostic::ReservedName {
+                name: name.clone(),
+                reason,
+                site,
+                span,
+            });
         }
     }
 
-    /// [`Self::reject_root_name`] over an item's type parameters.
-    fn reject_root_generics(&mut self, generics: &[ast::GenericParam]) {
+    /// Reject a keyword naming a member, parameter, or local, outside a
+    /// language package. Only keywords are reserved here: members are reached
+    /// after a `.` and locals shadow, so a built-in type name stays legal.
+    fn reject_keyword_name(&mut self, name: &Name, span: TextRange, kind: &'static str) {
+        if !self.in_language_package
+            && ReservedName::of(name.as_str()) == Some(ReservedName::Keyword)
+        {
+            self.diagnostics.push(Hir2Diagnostic::ReservedName {
+                name: name.clone(),
+                reason: ReservedName::Keyword,
+                site: ReservedNameSite::Declaration(kind),
+                span,
+            });
+        }
+    }
+
+    fn reject_reserved_generics(&mut self, generics: &[ast::GenericParam]) {
         for generic in generics {
-            self.reject_root_name(&generic.name, generic.name_span);
+            self.reject_reserved_name(
+                &generic.name,
+                generic.name_span,
+                ReservedNameSite::Declaration("a type parameter"),
+            );
         }
     }
 
-    /// Emit `DuplicateDefinition` diagnostics for any name with more than one site.
+    /// Emit `DuplicateDefinition` diagnostics for any name with more than one
+    /// site, and reject keyword member names. Methods are checked where they
+    /// are lowered, which also reaches those in `implements` blocks, and
+    /// parameters in [`Self::emit_duplicate_param_diagnostics`].
     fn emit_duplicate_diagnostics(&mut self, seen: FxHashMap<Name, Vec<MemberSite>>) {
         let scope = self.current_scope_path();
         for (name, sites) in seen {
+            for site in &sites {
+                let kind = match site.kind {
+                    DefinitionKind::Field => "a field",
+                    DefinitionKind::AssociatedType => "an associated type",
+                    DefinitionKind::Variant => "an enum variant",
+                    _ => continue,
+                };
+                self.reject_keyword_name(&name, site.range, kind);
+            }
             if sites.len() > 1 {
                 self.diagnostics.push(Hir2Diagnostic::DuplicateDefinition {
                     name,
@@ -463,7 +514,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                 ..
             } => {
                 if let Some(span) = source_map.type_binding_name_span(stmt_id) {
-                    self.reject_root_name(name, span);
+                    self.reject_reserved_name(
+                        name,
+                        span,
+                        ReservedNameSite::Declaration("a type binding"),
+                    );
                 }
                 // The operand and the `else` block are ordinary expressions
                 // in the enclosing scope (`T` is not yet in scope in either).
@@ -880,7 +935,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
 
         for (name, (name_range, bind_pattern)) in names.names {
-            self.reject_root_name(&name, name_range);
+            self.reject_keyword_name(&name, name_range, "a binding");
             self.scope_bindings[scope_id.index() as usize]
                 .bindings
                 .push(LocalBinding {
@@ -1170,12 +1225,11 @@ impl<'db> SemanticIndexBuilder<'db> {
         let scope_id = self.current_scope_id();
         self.lambda_scopes.push((key, scope_id));
         for (idx, param) in lambda.params.iter().enumerate() {
-            self.reject_root_name(&param.name, param.name_span);
             self.scope_bindings[scope_id.index() as usize]
                 .params
                 .push((param.name.clone(), idx));
         }
-        self.emit_duplicate_param_diagnostics(&lambda.params);
+        self.emit_duplicate_param_diagnostics(&lambda.params, false);
         self.lambda_stack.push(scope_id);
         self.walk_parameter_defaults(&lambda.params, &lambda.defaults);
 
@@ -1327,12 +1381,16 @@ impl<'db> SemanticIndexBuilder<'db> {
         );
         let local_id = self.item_tree.alloc_function(f);
         let loc = FunctionLoc::new(self.db, self.file, local_id);
-        self.reject_root_generics(&f.generic_params);
+        self.reject_reserved_generics(&f.generic_params);
 
         // Only contribute as a top-level symbol if not inside a class.
         // Methods belong to the class scope, not the package namespace.
         if self.class_depth == 0 {
-            self.reject_root_name(&f.name, f.name_span);
+            self.reject_reserved_name(
+                &f.name,
+                f.name_span,
+                ReservedNameSite::Declaration("a function"),
+            );
             self.value_contributions.push((
                 f.name.clone(),
                 Contribution {
@@ -1340,6 +1398,8 @@ impl<'db> SemanticIndexBuilder<'db> {
                     definition: Definition::Function(loc),
                 },
             ));
+        } else {
+            self.reject_keyword_name(&f.name, f.name_span, "a method");
         }
 
         self.push_scope(ScopeKind::Function, Some(f.name.clone()), f.span);
@@ -1347,12 +1407,12 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.record_scope_owner(scope_id, ItemScopeOwner::Function(local_id));
 
         for (idx, param) in f.params.iter().enumerate() {
-            self.reject_root_name(&param.name, param.name_span);
             self.scope_bindings[scope_id.index() as usize]
                 .params
                 .push((param.name.clone(), idx));
         }
-        self.emit_duplicate_param_diagnostics(&f.params);
+        let is_method = self.class_depth > 0;
+        self.emit_duplicate_param_diagnostics(&f.params, is_method);
         self.walk_parameter_defaults(&f.params, &f.defaults);
 
         if let Some(ast::FunctionBodyDef::Expr(ref body, ref source_map)) = f.body {
@@ -1385,8 +1445,12 @@ impl<'db> SemanticIndexBuilder<'db> {
         );
         let local_id = self.item_tree.alloc_class(c, attrs, field_attrs);
         let loc = ClassLoc::new(self.db, self.file, local_id);
-        self.reject_root_name(&c.name, c.name_span);
-        self.reject_root_generics(&c.generic_params);
+        self.reject_reserved_name(
+            &c.name,
+            c.name_span,
+            ReservedNameSite::Declaration("a class"),
+        );
+        self.reject_reserved_generics(&c.generic_params);
         self.type_contributions.push((
             c.name.clone(),
             Contribution {
@@ -1501,7 +1565,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_implements_for(&mut self, imp: &ast::ImplementsForDef) {
         self.class_depth += 1;
-        self.reject_root_generics(&imp.generic_params);
+        self.reject_reserved_generics(&imp.generic_params);
         // For blanket impls (implements<T> I for C<T>), push a class-like scope
         // so TIR can resolve `self` and type variables in method bodies.
         let has_generic_params = !imp.generic_params.is_empty();
@@ -1593,10 +1657,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                 AttributePosition::Function,
                 &mut self.diagnostics,
             );
-            self.reject_root_generics(&m.generic_params);
-            for param in &m.params {
-                self.reject_root_name(&param.name, param.name_span);
+            self.reject_keyword_name(&m.name, m.name_span, "a method");
+            for (idx, param) in m.params.iter().enumerate() {
+                if !(idx == 0 && param.name.as_str() == "self") {
+                    self.reject_keyword_name(&param.name, param.name_span, "a parameter");
+                }
             }
+            self.reject_reserved_generics(&m.generic_params);
             self.item_tree.alloc_function_signature(m)
         }));
 
@@ -1618,8 +1685,12 @@ impl<'db> SemanticIndexBuilder<'db> {
         let local_id = self.item_tree.alloc_interface(i, method_ids);
         self.record_scope_owner(interface_scope, ItemScopeOwner::Interface(local_id));
         let loc = InterfaceLoc::new(self.db, self.file, local_id);
-        self.reject_root_name(&i.name, i.name_span);
-        self.reject_root_generics(&i.generic_params);
+        self.reject_reserved_name(
+            &i.name,
+            i.name_span,
+            ReservedNameSite::Declaration("an interface"),
+        );
+        self.reject_reserved_generics(&i.generic_params);
         self.type_contributions.push((
             i.name.clone(),
             Contribution {
@@ -1685,7 +1756,11 @@ impl<'db> SemanticIndexBuilder<'db> {
         );
         let local_id = self.item_tree.alloc_enum(e, attrs, variant_attrs);
         let loc = EnumLoc::new(self.db, self.file, local_id);
-        self.reject_root_name(&e.name, e.name_span);
+        self.reject_reserved_name(
+            &e.name,
+            e.name_span,
+            ReservedNameSite::Declaration("an enum"),
+        );
         self.type_contributions.push((
             e.name.clone(),
             Contribution {
@@ -1716,7 +1791,11 @@ impl<'db> SemanticIndexBuilder<'db> {
     fn lower_type_alias(&mut self, ta: &ast::TypeAliasDef) {
         let local_id = self.item_tree.alloc_type_alias(ta);
         let loc = TypeAliasLoc::new(self.db, self.file, local_id);
-        self.reject_root_name(&ta.name, ta.name_span);
+        self.reject_reserved_name(
+            &ta.name,
+            ta.name_span,
+            ReservedNameSite::Declaration("a type alias"),
+        );
         self.type_contributions.push((
             ta.name.clone(),
             Contribution {
@@ -1734,7 +1813,11 @@ impl<'db> SemanticIndexBuilder<'db> {
     fn lower_let(&mut self, l: &ast::LetDef) {
         let local_id = self.item_tree.alloc_let(l);
         let loc = LetLoc::new(self.db, self.file, local_id);
-        self.reject_root_name(&l.name, l.name_span);
+        self.reject_reserved_name(
+            &l.name,
+            l.name_span,
+            ReservedNameSite::Declaration("a top-level `let`"),
+        );
         self.value_contributions.push((
             l.name.clone(),
             Contribution {

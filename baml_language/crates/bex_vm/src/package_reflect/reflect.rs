@@ -1213,7 +1213,7 @@ impl BamlClassPackage for PackageReflectImpl {
         let mut reached: Vec<crate::reachable::Reached> = Vec::new();
         for (export, value) in types {
             let export = export.to_string();
-            if !super::type_kinds::is_baml_identifier(&export) {
+            if !super::type_kinds::is_type_name(&export) {
                 let diagnostic =
                     runtime_type::invalid_identifier(InvalidIdentifierKind::ExportedType, &export)
                         .with_phase(DiagnosticPhase::Hir);

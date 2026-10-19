@@ -70,7 +70,7 @@ source: crates/baml_tests/src/generated_tests.rs
    ╭─[main.baml:6:43]
  6 │ function bad_param(v: v is int) -> bool { true }
    ·                                           ──┬─
-   ·                                             ╰── expected `top-level declaration`, found `identifier`
+   ·                                             ╰── expected `top-level declaration`, found `true`
    ╰────
 
   [parse] E0010
@@ -123,7 +123,7 @@ source: crates/baml_tests/src/generated_tests.rs
    ╭─[main.baml:9:37]
  9 │ function bad_return() -> v is int { true }
    ·                                     ──┬─
-   ·                                       ╰── expected `top-level declaration`, found `identifier`
+   ·                                       ╰── expected `top-level declaration`, found `true`
    ╰────
 
   [parse] E0010

@@ -467,7 +467,7 @@ fn mint_class(
     witnesses: Vec<Result<InterfaceWitness, String>>,
 ) -> Result<Value, crate::errors::VmRustFnError> {
     let mut diagnostics = Vec::new();
-    if !is_baml_identifier(class_name) {
+    if !is_type_name(class_name) {
         diagnostics.push(
             runtime_type::invalid_identifier(InvalidIdentifierKind::Class, class_name)
                 .with_phase(DiagnosticPhase::Hir),
@@ -975,7 +975,7 @@ impl BamlClassEnum for PackageReflectImpl {
     ) -> Result<Value, crate::errors::VmRustFnError> {
         let enum_name = name.as_str();
         let mut diagnostics = Vec::new();
-        if !is_baml_identifier(enum_name) {
+        if !is_type_name(enum_name) {
             diagnostics.push(
                 runtime_type::invalid_identifier(InvalidIdentifierKind::Enum, enum_name)
                     .with_phase(DiagnosticPhase::Hir),
@@ -1860,6 +1860,12 @@ fn string_map(
 
 pub(super) fn is_baml_identifier(value: &str) -> bool {
     runtime_type::is_baml_identifier(value)
+}
+
+/// Whether a runtime type may take the name `value`: an identifier a source
+/// declaration could use ([`baml_type::reserved::ReservedName::of`]).
+pub(super) fn is_type_name(value: &str) -> bool {
+    is_baml_identifier(value) && baml_type::reserved::ReservedName::of(value).is_none()
 }
 
 pub(crate) fn compiler_diagnostic(id: DiagnosticId, message: String) -> Diagnostic {

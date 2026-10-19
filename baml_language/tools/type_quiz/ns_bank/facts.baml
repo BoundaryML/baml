@@ -581,8 +581,8 @@ function alias_is_transparent(seed: root.engine.Seed) -> Derived throws never {
 
 /// `type A = leaf | A[]` under a seeded name.
 function list_alias(name: string, leaf: root.algebra.Ty) -> root.algebra.AliasDecl throws never {
-    root.algebra.AliasDecl.recursive(name, (self) -> {
-        root.algebra.Union.new([leaf, root.algebra.Array.new(self)])
+    root.algebra.AliasDecl.recursive(name, (rec) -> {
+        root.algebra.Union.new([leaf, root.algebra.Array.new(rec)])
     })
 }
 
@@ -620,11 +620,11 @@ function unfolds_once(seed: root.engine.Seed) -> Derived throws never {
 
 function unguarded_member_is_vacuous(seed: root.engine.Seed) -> Derived throws never {
     let names = root.engine.pick_distinct(seed, type_names(), 2);
-    let with_member = root.algebra.AliasDecl.recursive(names.value[0], (self) -> {
-        root.algebra.Union.new([self, root.algebra.Array.new(self)])
+    let with_member = root.algebra.AliasDecl.recursive(names.value[0], (rec) -> {
+        root.algebra.Union.new([rec, root.algebra.Array.new(rec)])
     });
-    let plain = root.algebra.AliasDecl.recursive(names.value[1], (self) -> {
-        root.algebra.Array.new(self)
+    let plain = root.algebra.AliasDecl.recursive(names.value[1], (rec) -> {
+        root.algebra.Array.new(rec)
     });
     derived(
         root.algebra.pair(
@@ -723,11 +723,11 @@ function unfolded_with_wrong_leaf(seed: root.engine.Seed) -> Derived throws neve
 function vacuous_beside_guarded(seed: root.engine.Seed) -> Derived throws never {
     let l = pick_leaves(seed, 1);
     let names = root.engine.pick_distinct(l.next, type_names(), 2);
-    let with_leaf = root.algebra.AliasDecl.recursive(names.value[0], (self) -> {
-        root.algebra.Union.new([self, root.algebra.Array.new(l.value[0])])
+    let with_leaf = root.algebra.AliasDecl.recursive(names.value[0], (rec) -> {
+        root.algebra.Union.new([rec, root.algebra.Array.new(l.value[0])])
     });
-    let plain = root.algebra.AliasDecl.recursive(names.value[1], (self) -> {
-        root.algebra.Array.new(self)
+    let plain = root.algebra.AliasDecl.recursive(names.value[1], (rec) -> {
+        root.algebra.Array.new(rec)
     });
     derived(
         root.algebra.pair(

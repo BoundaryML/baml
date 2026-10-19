@@ -32,7 +32,7 @@ const PREC = {
   BIT_XOR: 6, // ^
   BIT_AND: 7, // &
   EQUALITY: 8, //  == !=
-  COMPARE: 9, //   < > <= >= instanceof is
+  COMPARE: 9, //   < > <= >= is
   SHIFT: 10, //    << >>
   ADD: 11, //      + -
   MUL: 12, //      * / %
@@ -1085,7 +1085,6 @@ module.exports = grammar({
         ['>', PREC.COMPARE],
         ['<=', PREC.COMPARE],
         ['>=', PREC.COMPARE],
-        ['instanceof', PREC.COMPARE],
         ['<<', PREC.SHIFT],
         ['>>', PREC.SHIFT],
         ['+', PREC.ADD],

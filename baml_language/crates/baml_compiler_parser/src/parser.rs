@@ -35,12 +35,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Extends => SyntaxKind::KW_EXTENDS,
         TokenKind::Requires => SyntaxKind::KW_REQUIRES,
         TokenKind::Function => SyntaxKind::KW_FUNCTION,
-        TokenKind::Client => SyntaxKind::KW_CLIENT,
-        TokenKind::Generator => SyntaxKind::KW_GENERATOR,
-        TokenKind::Test => SyntaxKind::KW_TEST,
-        TokenKind::TestSet => SyntaxKind::KW_TESTSET,
-        TokenKind::RetryPolicy => SyntaxKind::KW_RETRY_POLICY,
-        TokenKind::TemplateString => SyntaxKind::KW_TEMPLATE_STRING,
         TokenKind::If => SyntaxKind::KW_IF,
         TokenKind::Else => SyntaxKind::KW_ELSE,
         TokenKind::For => SyntaxKind::KW_FOR,
@@ -51,7 +45,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Continue => SyntaxKind::KW_CONTINUE,
         TokenKind::Return => SyntaxKind::KW_RETURN,
         TokenKind::Throw => SyntaxKind::KW_THROW,
-        TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
         TokenKind::Is => SyntaxKind::KW_IS,
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
@@ -60,6 +53,14 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Spawn => SyntaxKind::KW_SPAWN,
         TokenKind::Await => SyntaxKind::KW_AWAIT,
         TokenKind::Defer => SyntaxKind::KW_DEFER,
+        TokenKind::CatchAllPanics => SyntaxKind::KW_CATCH_ALL_PANICS,
+        TokenKind::Const => SyntaxKind::KW_CONST,
+        TokenKind::True => SyntaxKind::KW_TRUE,
+        TokenKind::False => SyntaxKind::KW_FALSE,
+        TokenKind::Null => SyntaxKind::KW_NULL,
+        // `self` and `root` are reserved names rather than syntax: where they
+        // are legal they read exactly like any other name.
+        TokenKind::SelfValue | TokenKind::Root => SyntaxKind::WORD,
 
         // Literals
         TokenKind::Word => SyntaxKind::WORD,
@@ -175,6 +176,46 @@ enum BacktickInterpForm {
     Endif,
     /// Anything else — falls through to the M2 block-expression path.
     Expression,
+}
+
+/// A declaration introduced by a weak keyword. See
+/// [`Parser::weak_declaration_at`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WeakDeclaration {
+    Client,
+    /// Deprecated: generators moved to `baml.toml`. Still recognized so a
+    /// stale block gets a migration diagnostic.
+    Generator,
+    Test,
+    TestSet,
+    RetryPolicy,
+    TemplateString,
+}
+
+impl WeakDeclaration {
+    const ALL: [WeakDeclaration; 6] = [
+        WeakDeclaration::Client,
+        WeakDeclaration::Generator,
+        WeakDeclaration::Test,
+        WeakDeclaration::TestSet,
+        WeakDeclaration::RetryPolicy,
+        WeakDeclaration::TemplateString,
+    ];
+
+    fn keyword(self) -> (&'static str, SyntaxKind) {
+        match self {
+            WeakDeclaration::Client => ("client", SyntaxKind::KW_CLIENT),
+            WeakDeclaration::Generator => ("generator", SyntaxKind::KW_GENERATOR),
+            WeakDeclaration::Test => ("test", SyntaxKind::KW_TEST),
+            WeakDeclaration::TestSet => ("testset", SyntaxKind::KW_TESTSET),
+            WeakDeclaration::RetryPolicy => ("retry_policy", SyntaxKind::KW_RETRY_POLICY),
+            WeakDeclaration::TemplateString => ("template_string", SyntaxKind::KW_TEMPLATE_STRING),
+        }
+    }
+
+    fn from_keyword(text: &str) -> Option<WeakDeclaration> {
+        Self::ALL.into_iter().find(|d| d.keyword().0 == text)
+    }
 }
 
 /// Events for building the syntax tree.
@@ -398,9 +439,8 @@ impl<'a> Parser<'a> {
             .unwrap_or(false)
     }
 
-    /// Check if the current token is a `Word` with the given text.
-    /// Used for contextual keywords like `with` and binding-position `const`
-    /// that should not be reserved globally.
+    /// Check if the current token is a `Word` with the given text: a weak
+    /// keyword such as `with` or `type`, special only in its own syntax.
     fn at_contextual_kw(&self, kw: &str) -> bool {
         Self::token_is_contextual_kw(self.current(), kw)
     }
@@ -415,7 +455,9 @@ impl<'a> Parser<'a> {
     fn at_let_type_binding_stmt(&self) -> bool {
         self.at(TokenKind::Let)
             && self.peek_is_contextual_kw(1, "type")
-            && self.peek(2).map(|token| token.kind) == Some(TokenKind::Word)
+            && self
+                .peek(2)
+                .is_some_and(|token| Self::kind_is_member_name(token.kind))
     }
 
     /// The removed body-level `type Name = …` statement. `type` is contextual
@@ -428,10 +470,22 @@ impl<'a> Parser<'a> {
     }
 
     /// Consume the current contextual keyword token, re-labelling it as
-    /// `syntax_kind` in the syntax tree. Handles leading trivia just like
-    /// [`Self::bump`].
+    /// `syntax_kind` in the syntax tree.
     fn bump_contextual_kw_as(&mut self, kw: &str, syntax_kind: SyntaxKind) {
         debug_assert!(self.at_contextual_kw(kw));
+        self.bump_as(syntax_kind);
+    }
+
+    /// Consume the current token as a name: a word, or a keyword standing
+    /// where only a name can (`x.class`, `baml.spawn`). The syntax tree
+    /// holds it as a `WORD`, so every reader of names sees one kind.
+    fn bump_name(&mut self) {
+        self.bump_as(SyntaxKind::WORD);
+    }
+
+    /// Consume the current token, re-labelling it as `syntax_kind` in the
+    /// syntax tree. Handles leading trivia just like [`Self::bump`].
+    fn bump_as(&mut self, syntax_kind: SyntaxKind) {
         // Emit leading trivia (whitespace, newlines, comments) before the keyword,
         // matching the same pattern as `bump_impl`.
         while self.current < self.tokens.len() {
@@ -454,7 +508,6 @@ impl<'a> Parser<'a> {
             }
             break;
         }
-        // Emit the contextual Word token as the requested keyword kind.
         if self.current < self.tokens.len() {
             self.events.push(Event::Token {
                 kind: syntax_kind,
@@ -470,39 +523,16 @@ impl<'a> Parser<'a> {
         self.bump_contextual_kw_as("with", SyntaxKind::KW_WITH);
     }
 
-    fn binding_intro_follower(kind: Option<TokenKind>) -> bool {
-        matches!(kind, Some(TokenKind::Word | TokenKind::LBracket))
-    }
-
-    /// True at either `let` or contextual `const`.
+    /// True at `let` or `const`.
     fn at_binding_intro(&self) -> bool {
-        self.at(TokenKind::Let) || self.at_contextual_kw("const")
-    }
-
-    /// True for positions that dispatch to a binding statement or
-    /// statement-like binding head. `let` stays a real keyword; contextual
-    /// `const` only claims the position when a pattern-shaped token follows.
-    fn at_binding_intro_stmt(&self) -> bool {
-        self.at(TokenKind::Let)
-            || (self.at_contextual_kw("const")
-                && Self::binding_intro_follower(self.peek(1).map(|t| t.kind)))
-    }
-
-    fn at_binding_intro_pattern(&self) -> bool {
-        self.at(TokenKind::Let)
-            || (self.at_contextual_kw("const")
-                && Self::binding_intro_follower(self.peek(1).map(|t| t.kind)))
+        self.at(TokenKind::Let) || self.at(TokenKind::Const)
     }
 
     fn peek_is_binding_intro(&self, n: usize) -> bool {
-        self.peek(n).map(|t| t.kind) == Some(TokenKind::Let)
-            || self.peek_is_contextual_kw(n, "const")
-    }
-
-    fn peek_is_binding_intro_stmt(&self, n: usize) -> bool {
-        self.peek(n).map(|t| t.kind) == Some(TokenKind::Let)
-            || (self.peek_is_binding_intro(n)
-                && Self::binding_intro_follower(self.peek(n + 1).map(|t| t.kind)))
+        matches!(
+            self.peek(n).map(|t| t.kind),
+            Some(TokenKind::Let | TokenKind::Const)
+        )
     }
 
     fn binding_intro_is_followed_by_array_pattern(&self) -> bool {
@@ -510,10 +540,8 @@ impl<'a> Parser<'a> {
     }
 
     fn bump_binding_intro(&mut self) {
-        if self.at(TokenKind::Let) {
+        if self.at_binding_intro() {
             self.bump();
-        } else if self.at_contextual_kw("const") {
-            self.bump_contextual_kw_as("const", SyntaxKind::KW_CONST);
         } else {
             self.error_unexpected_token("'let' or 'const'".to_string());
         }
@@ -523,7 +551,7 @@ impl<'a> Parser<'a> {
     /// Valid type starts: Word (type name), string literal, integer/float literal,
     /// `-` followed by an integer/float literal (negative literal type), `LParen` (tuple).
     fn is_at_type_start(&self) -> bool {
-        self.at(TokenKind::Word)
+        self.at_type_name_start()
             || self.at(TokenKind::Quote) // string literal type
             || self.at(TokenKind::Hash) // removed hash string recovery
             || self.at(TokenKind::BigintLiteral)
@@ -549,41 +577,77 @@ impl<'a> Parser<'a> {
         matches!(kind, TokenKind::Whitespace | TokenKind::Newline)
     }
 
-    /// Token kinds legal as a `.member` name — identifiers plus the contextual
-    /// keywords a declaration may use as a member name (`parse_interface_method`
-    /// accepts the same set, so a method named `implements` must stay reachable
-    /// through every access spelling).
+    /// Token kinds legal as a `.member` name: any word or keyword. Keywords
+    /// never name a user declaration, but the stdlib may (`t.implements(u)`,
+    /// `baml.spawn`), and every such name stays reachable after a `.`.
     ///
     /// Kind-based so lookahead can test a token at an arbitrary index; see
     /// [`Self::at_member_name`] for the position-based form.
     fn kind_is_member_name(kind: TokenKind) -> bool {
-        matches!(
-            kind,
-            TokenKind::Word
-                | TokenKind::Class
-                | TokenKind::Enum
-                | TokenKind::Function
-                | TokenKind::Implements
-                | TokenKind::Implement
-                | TokenKind::Extends
-                | TokenKind::Requires
-                | TokenKind::Interface
-                // `client` is a keyword for LLM config/declarations, but stays
-                // valid as a class field name and member-access name so
-                // BEP-049 §10's `ctx.client` (on the `Context` type) parses.
-                // Unambiguous here: class bodies and `.member` access have no
-                // `client` construct.
-                | TokenKind::Client
-        )
+        kind == TokenKind::Word || kind.is_keyword()
     }
 
-    /// True when the current token can serve as a member name after `.`.
-    ///
-    /// Declaration keywords remain valid as member names — e.g.
-    /// `dog_t.implements(animal_t)` on the reflection `type` value.
     fn at_member_name(&self) -> bool {
         self.current()
             .is_some_and(|token| Self::kind_is_member_name(token.kind))
+    }
+
+    /// Whether the current token can be taken as a declared name: a word, or
+    /// a keyword standing where only a name can. Like rustc's identifier
+    /// recovery, the keyword is kept as the name, so the name check reports
+    /// it once (`baml_type::reserved::ReservedName`) instead of a cascade of
+    /// parse errors. A keyword that starts a declaration is left to it.
+    fn at_declared_name(&self) -> bool {
+        self.current().is_some_and(|t| {
+            t.kind == TokenKind::Word || (t.kind.is_keyword() && !self.at_top_level_keyword())
+        })
+    }
+
+    /// [`Self::at_declared_name`] for a field or enum variant, whose name
+    /// begins the member: a keyword counts only at the start of a line or
+    /// after `{`, `,`, or `;`, so a stray keyword after a complete member
+    /// (`a () -> int @stream.done throws never`) stays a parse error.
+    fn at_member_declared_name(&self) -> bool {
+        if self.at(TokenKind::Word) {
+            return true;
+        }
+        if !self.at_declared_name() {
+            return false;
+        }
+        let mut i = self.skip_trivia_and_comments_from(self.current);
+        while i > 0 {
+            i -= 1;
+            match self.tokens[i].kind {
+                TokenKind::Whitespace => {}
+                TokenKind::Newline
+                | TokenKind::LBrace
+                | TokenKind::Comma
+                | TokenKind::Semicolon => return true,
+                _ => return false,
+            }
+        }
+        true
+    }
+
+    /// Token kinds that can begin a path: a name, or one of the reserved
+    /// names `self` and `root`.
+    fn kind_is_path_head(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::Word | TokenKind::SelfValue | TokenKind::Root
+        )
+    }
+
+    fn at_path_head(&self) -> bool {
+        self.current()
+            .is_some_and(|token| Self::kind_is_path_head(token.kind))
+    }
+
+    fn at_type_name_start(&self) -> bool {
+        self.at_path_head()
+            || self.at(TokenKind::True)
+            || self.at(TokenKind::False)
+            || self.at(TokenKind::Null)
     }
 
     /// True for `field as class_field` inside an `implements` block.
@@ -592,15 +656,7 @@ impl<'a> Parser<'a> {
         let Some(first_token) = self.tokens.get(first) else {
             return false;
         };
-        if !matches!(
-            first_token.kind,
-            TokenKind::Word
-                | TokenKind::Implements
-                | TokenKind::Implement
-                | TokenKind::Extends
-                | TokenKind::Requires
-                | TokenKind::Interface
-        ) {
+        if first_token.kind != TokenKind::Word {
             return false;
         }
         let second = self.skip_trivia_and_comments_from(first + 1);
@@ -1236,45 +1292,124 @@ impl<'a> Parser<'a> {
 
     // ============ Error Recovery Helpers ============`
 
-    /// Check if the current token is a top-level keyword.
-    /// Used for error recovery to break out of malformed blocks.
-    fn at_top_level_keyword(&self) -> bool {
-        matches!(
-            self.current().map(|t| t.kind),
-            Some(
-                TokenKind::Class
-                    | TokenKind::Enum
-                    | TokenKind::Interface
-                    | TokenKind::Function
-                    | TokenKind::Implements
-                    | TokenKind::Implement
-                    | TokenKind::Client
-                    | TokenKind::Generator
-                    | TokenKind::Test
-                    | TokenKind::TestSet
-                    | TokenKind::RetryPolicy
-                    | TokenKind::TemplateString
-            )
-        )
+    /// The weak keyword that starts a declaration at token index `i`, if any.
+    ///
+    /// A weak keyword is a `Word` that reads as a keyword only where it begins
+    /// a declaration of its form, so the same word stays an ordinary
+    /// identifier everywhere else (`client.call()`, `test(x)`, `client: C?`).
+    fn weak_declaration_at(&self, i: usize) -> Option<WeakDeclaration> {
+        let token = self.tokens.get(i).filter(|t| t.kind == TokenKind::Word)?;
+        let after = self.skip_trivia_and_comments_from(i + 1);
+        let next = self.tokens.get(after).map(|t| t.kind);
+        let next_next = self
+            .tokens
+            .get(self.skip_trivia_and_comments_from(after + 1))
+            .map(|t| t.kind);
+        let declaration = WeakDeclaration::from_keyword(&token.text)?;
+        let starts = match declaration {
+            // `client<llm> Name { … }` or `client Name = …`.
+            WeakDeclaration::Client => {
+                next == Some(TokenKind::Less)
+                    || (next == Some(TokenKind::Word) && next_next == Some(TokenKind::Equals))
+            }
+            // A test name is any expression. `(` also continues `test` as a
+            // call, so a parenthesized name counts only when the test body
+            // follows it: `test (5 + i) { … }` but not `test(x)`.
+            WeakDeclaration::Test | WeakDeclaration::TestSet => match next {
+                Some(TokenKind::LParen) => self.paren_group_precedes_test_body(after),
+                Some(TokenKind::Backtick) => true,
+                Some(kind) => Self::is_start_of_expression(kind),
+                None => false,
+            },
+            WeakDeclaration::Generator => {
+                matches!(next, Some(TokenKind::Word | TokenKind::LBrace))
+            }
+            WeakDeclaration::RetryPolicy | WeakDeclaration::TemplateString => {
+                next == Some(TokenKind::Word)
+            }
+        };
+        starts.then_some(declaration)
     }
 
-    /// Distinguishes a top-level `client<llm> Name { … }` declaration (which,
-    /// inside a class body, signals a missing `}` to recover from) from a class
-    /// field named `client` (BEP-049 §10 `ctx.client`). The declaration form is
-    /// `client<…>`; a field is `client Type` / `client:`.
-    fn looks_like_client_declaration_start(&self) -> bool {
-        let current = self.skip_trivia_and_comments_from(self.current);
-        if self
-            .tokens
-            .get(current)
-            .is_none_or(|t| t.kind != TokenKind::Client)
-        {
-            return false;
+    /// Whether the parenthesized group opening at token index `open` is
+    /// followed by a test body: `{` or a `with` runner clause.
+    fn paren_group_precedes_test_body(&self, open: usize) -> bool {
+        let mut depth = 0_usize;
+        let mut i = open;
+        while let Some(token) = self.tokens.get(i) {
+            match token.kind {
+                TokenKind::LParen => depth += 1,
+                TokenKind::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        let next = self.skip_trivia_and_comments_from(i + 1);
+                        return self.tokens.get(next).is_some_and(|t| {
+                            t.kind == TokenKind::LBrace
+                                || (t.kind == TokenKind::Word && t.text == "with")
+                        });
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
         }
-        let next = self.skip_trivia_and_comments_from(current + 1);
-        self.tokens
-            .get(next)
-            .is_some_and(|t| t.kind == TokenKind::Less)
+        false
+    }
+
+    fn at_weak_declaration(&self) -> Option<WeakDeclaration> {
+        self.weak_declaration_at(self.skip_trivia_and_comments_from(self.current))
+    }
+
+    /// Whether a declaration starts at token index `i`.
+    ///
+    /// A declaration keyword starts one unless the next token can only follow
+    /// a name (`class C { function: int }`, `enum E { class }`,
+    /// `<let>`): then it is a keyword standing where a name was expected,
+    /// which [`Self::at_declared_name`] takes as the name.
+    fn declaration_starts_at(&self, i: usize) -> bool {
+        let Some(token) = self.tokens.get(i) else {
+            return false;
+        };
+        match token.kind {
+            TokenKind::Class
+            | TokenKind::Enum
+            | TokenKind::Interface
+            | TokenKind::Function
+            | TokenKind::Implements
+            | TokenKind::Implement => !matches!(
+                self.tokens
+                    .get(self.skip_trivia_and_comments_from(i + 1))
+                    .map(|t| t.kind),
+                Some(
+                    TokenKind::Colon
+                        | TokenKind::Comma
+                        | TokenKind::Semicolon
+                        | TokenKind::LBrace
+                        | TokenKind::RBrace
+                        | TokenKind::RParen
+                        | TokenKind::Greater
+                        | TokenKind::Equals
+                        | TokenKind::Question
+                )
+            ),
+            _ => self.weak_declaration_at(i).is_some(),
+        }
+    }
+
+    /// Check if the current token starts a top-level declaration.
+    /// Used for error recovery to break out of malformed blocks.
+    fn at_top_level_keyword(&self) -> bool {
+        self.declaration_starts_at(self.skip_trivia_and_comments_from(self.current))
+    }
+
+    /// Consume the weak keyword that starts `declaration`.
+    fn bump_weak_keyword(&mut self, declaration: WeakDeclaration) {
+        let (keyword, kind) = declaration.keyword();
+        if self.at_contextual_kw(keyword) {
+            self.bump_contextual_kw_as(keyword, kind);
+        } else {
+            self.error_unexpected_token(format!("`{keyword}`"));
+        }
     }
 
     fn looks_like_interface_declaration_start(&self) -> bool {
@@ -1318,27 +1453,19 @@ impl<'a> Parser<'a> {
         false
     }
 
-    /// [`at_top_level_keyword`] minus tokens that are valid in statement position:
-    /// - `client` can start `client.method(...)` (parameter named `client`)
-    /// - `test` starts an expression-body test (valid in blocks)
-    /// - `testset` with a string literal is a testset declaration (valid in blocks)
-    fn at_top_level_keyword_except_client(&self) -> bool {
-        if !self.at_top_level_keyword() {
-            return false;
-        }
-        if self.at(TokenKind::Client) {
-            return false;
-        }
-        // Expression-body test/testset are valid inside block expressions
-        if self.at(TokenKind::Test) || self.at(TokenKind::TestSet) {
-            return false;
-        }
-        true
+    /// [`Self::at_top_level_keyword`] minus `test` and `testset`, which are
+    /// also statements inside a testset body.
+    fn at_top_level_keyword_outside_testset(&self) -> bool {
+        self.at_top_level_keyword()
+            && !matches!(
+                self.at_weak_declaration(),
+                Some(WeakDeclaration::Test | WeakDeclaration::TestSet)
+            )
     }
 
     fn at_statement_recovery_boundary(&self) -> bool {
-        self.at_top_level_keyword_except_client()
-            || self.at_binding_intro_stmt()
+        self.at_top_level_keyword_outside_testset()
+            || self.at_binding_intro()
             || matches!(
                 self.current().map(|t| t.kind),
                 Some(
@@ -1616,7 +1743,7 @@ impl<'a> Parser<'a> {
                     _ => false,
                 }
         });
-        if !self.at(TokenKind::Test)
+        if !self.at_contextual_kw("test")
             || self.peek(1).map(|token| token.kind) != Some(TokenKind::Word)
             || self.peek(2).map(|token| token.kind) != Some(TokenKind::LBrace)
             || !starts_legacy_config
@@ -1684,18 +1811,7 @@ impl<'a> Parser<'a> {
             && !self.at(TokenKind::LBrace)
             && !self.at(TokenKind::RBrace)
         {
-            // Stop at keywords that would start a new declaration
-            if matches!(
-                self.current().map(|t| t.kind),
-                Some(
-                    TokenKind::Class
-                        | TokenKind::Enum
-                        | TokenKind::Function
-                        | TokenKind::Client
-                        | TokenKind::Generator
-                        | TokenKind::Test
-                )
-            ) {
+            if self.at_top_level_keyword() {
                 break;
             }
             self.bump();
@@ -2427,19 +2543,7 @@ impl<'a> Parser<'a> {
             // keyword *begins a line* (where module items actually start): a
             // keyword sitting mid-line is backtick content (e.g.
             // ````function name````) and must not suppress a valid close run.
-            if matches!(
-                self.tokens[i].kind,
-                TokenKind::Class
-                    | TokenKind::Enum
-                    | TokenKind::Function
-                    | TokenKind::Client
-                    | TokenKind::Generator
-                    | TokenKind::Test
-                    | TokenKind::TestSet
-                    | TokenKind::RetryPolicy
-                    | TokenKind::TemplateString
-            ) && self.token_starts_line(i)
-            {
+            if self.declaration_starts_at(i) && self.token_starts_line(i) {
                 return false;
             }
 
@@ -2825,7 +2929,7 @@ impl<'a> Parser<'a> {
             // Mirror the host `for` parser: a binding intro is `let` OR the
             // contextual `const`, so `${for (const x in xs)}` parses like host
             // syntax instead of falling into the C-style path and erroring.
-            if self.at_binding_intro_stmt() {
+            if self.at_binding_intro() {
                 if self.looks_like_for_in_loop() {
                     self.parse_for_in_pattern();
                     self.expect(TokenKind::In);
@@ -2985,10 +3089,11 @@ impl<'a> Parser<'a> {
         {
             // Expression block: {{ }}
             self.parse_expression_block();
-        } else if self.at(TokenKind::Word) {
-            // Unquoted string: only permit one word
+        } else if self.at_type_name_start() {
+            // Unquoted string: one word, `true`/`false`/`null` included
+            // (`@stream.starts_as(null)`), read by its text.
             self.with_node(SyntaxKind::UNQUOTED_STRING, |p| {
-                p.bump();
+                p.bump_name();
             });
         } else {
             self.error_unexpected_token("attribute argument".to_string());
@@ -3184,26 +3289,16 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        if self.at(TokenKind::Word) {
-            // Base type name, generic type, or boolean literal (true/false)
-            // Note: true/false are Word tokens, and they become BoolLiteral types
-            self.bump();
+        if self.at_type_name_start() {
+            // Type name, generic type, or a `true` / `false` / `null` type,
+            // which the type lowering reads by name.
+            self.bump_name();
 
-            // Consume dot-separated path segments (e.g., baml.http.Request).
-            // `spawn`/`await` are reserved keywords but valid as namespace
-            // segments after a `.` (e.g. `baml.spawn.Plan` in a type
-            // annotation), mirroring `parse_path_or_ident`'s segment set.
+            // Dot-separated path segments (e.g., baml.http.Request).
             while self.at(TokenKind::Dot) {
                 self.bump(); // dot
-                if self.at(TokenKind::Word)
-                    || self.at(TokenKind::Spawn)
-                    || self.at(TokenKind::Await)
-                    || self.at(TokenKind::Class)
-                    || self.at(TokenKind::Enum)
-                    || self.at(TokenKind::Interface)
-                    || self.at(TokenKind::Function)
-                {
-                    self.bump(); // next segment
+                if self.at_member_name() {
+                    self.bump_name();
                 } else {
                     self.error_unexpected_token("type name segment after '.'".to_string());
                     break;
@@ -3279,7 +3374,7 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::RParen);
         self.expect(TokenKind::Dot);
         if self.at_member_name() {
-            self.bump();
+            self.bump_name();
         } else {
             self.error_unexpected_token("projected item name".to_string());
         }
@@ -3435,7 +3530,7 @@ impl<'a> Parser<'a> {
     fn parse_function_type_param_inner(&mut self) -> bool {
         // Check if this is `name: type` by looking ahead
         // If we see WORD followed by COLON (skipping trivia), it's a named param
-        let is_named = (self.at(TokenKind::Word) || self.at(TokenKind::Client))
+        let is_named = self.at(TokenKind::Word)
             && matches!(
                 (self.peek(1).map(|t| t.kind), self.peek(2).map(|t| t.kind)),
                 (Some(TokenKind::Colon), _) | (Some(TokenKind::Question), Some(TokenKind::Colon))
@@ -3479,9 +3574,8 @@ impl<'a> Parser<'a> {
             // 'enum' keyword
             p.expect(TokenKind::Enum);
 
-            // Enum name
-            if p.at(TokenKind::Word) {
-                p.bump(); // name
+            if p.at_declared_name() {
+                p.bump_name();
             } else {
                 p.error_unexpected_token("enum name".to_string());
             }
@@ -3502,7 +3596,7 @@ impl<'a> Parser<'a> {
                 if p.at(TokenKind::AtAt) {
                     // Block attribute
                     p.parse_atat_attribute();
-                } else if p.at(TokenKind::Word) {
+                } else if p.at_member_declared_name() {
                     // Enum variant
                     p.parse_enum_variant();
                     // Optional delimiter after a variant. Commas are canonical,
@@ -3525,8 +3619,7 @@ impl<'a> Parser<'a> {
 
     fn parse_enum_variant(&mut self) {
         self.with_node(SyntaxKind::ENUM_VARIANT, |p| {
-            // Variant name
-            p.bump();
+            p.bump_name();
 
             // Check if a type expression follows (which is invalid for enum variants)
             // We need to distinguish between:
@@ -3608,9 +3701,8 @@ impl<'a> Parser<'a> {
             // 'class' keyword
             p.expect(TokenKind::Class);
 
-            // Class name
-            if p.at(TokenKind::Word) {
-                p.bump(); // name
+            if p.at_declared_name() {
+                p.bump_name();
             } else {
                 p.error_unexpected_token("class name".to_string());
             }
@@ -3636,12 +3728,6 @@ impl<'a> Parser<'a> {
                 // assume we missed a closing brace
                 let recover_top_level_item = if p.at(TokenKind::Interface) {
                     p.looks_like_interface_declaration_start()
-                } else if p.at(TokenKind::Client) {
-                    // `client` is a top-level keyword (`client<llm> Name { … }`),
-                    // but also a valid class field name (BEP-049 §10 `ctx.client`
-                    // on `Context`). Only treat it as a missing-brace recovery
-                    // when it's the `client<…>` declaration form.
-                    p.looks_like_client_declaration_start()
                 } else {
                     p.at_top_level_keyword()
                 };
@@ -3661,13 +3747,15 @@ impl<'a> Parser<'a> {
                 } else if p.at(TokenKind::AtAt) {
                     // Block attribute
                     p.parse_atat_attribute();
-                } else if p.at(TokenKind::Function) {
+                } else if p.at(TokenKind::Function) && p.at_top_level_keyword() {
                     // Method definition
                     p.parse_function();
-                } else if p.at(TokenKind::Implements) || p.at(TokenKind::Implement) {
+                } else if (p.at(TokenKind::Implements) || p.at(TokenKind::Implement))
+                    && p.at_top_level_keyword()
+                {
                     // Interface implementation block
                     p.parse_implements_block();
-                } else if p.at_member_name() {
+                } else if p.at_member_declared_name() {
                     // Field declaration
                     p.parse_field();
                     if !p.eat(TokenKind::Comma) {
@@ -3705,8 +3793,8 @@ impl<'a> Parser<'a> {
 
             p.expect(TokenKind::Interface);
 
-            if p.at(TokenKind::Word) {
-                p.bump(); // name
+            if p.at_declared_name() {
+                p.bump_name();
             } else {
                 p.error_unexpected_token("interface name".to_string());
             }
@@ -3742,14 +3830,14 @@ impl<'a> Parser<'a> {
                     p.parse_interface_method();
                 } else if p.at(TokenKind::AtAt) {
                     p.parse_atat_attribute();
-                } else if p.at(TokenKind::Function) {
+                } else if p.at(TokenKind::Function) && p.at_top_level_keyword() {
                     p.parse_interface_method();
                 } else if p.at_contextual_kw("type") {
                     p.parse_associated_type_decl(false);
                     if !p.eat(TokenKind::Comma) {
                         p.eat(TokenKind::Semicolon);
                     }
-                } else if p.at(TokenKind::Word) {
+                } else if p.at_member_declared_name() {
                     p.parse_field();
                     if !p.eat(TokenKind::Comma) {
                         p.eat(TokenKind::Semicolon);
@@ -3815,16 +3903,9 @@ impl<'a> Parser<'a> {
 
             p.expect(TokenKind::Function);
 
-            // Accept BEP-044 keyword tokens as method names — see
-            // the matching block in `parse_function`.
-            if p.at(TokenKind::Word)
-                || p.at(TokenKind::Implements)
-                || p.at(TokenKind::Implement)
-                || p.at(TokenKind::Extends)
-                || p.at(TokenKind::Requires)
-                || p.at(TokenKind::Interface)
-            {
-                p.bump();
+            // A keyword parses here for the same reason as in `parse_function`.
+            if p.at_member_name() {
+                p.bump_name();
             } else {
                 p.error_unexpected_token("method name".to_string());
             }
@@ -3992,7 +4073,7 @@ impl<'a> Parser<'a> {
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
-                if p.at(TokenKind::Function)
+                if (p.at(TokenKind::Function) && p.at_top_level_keyword())
                     || (p.at(TokenKind::AtAt)
                         && p.item_keyword_after_leading_block_attributes()
                             == Some(TokenKind::Function))
@@ -4008,7 +4089,7 @@ impl<'a> Parser<'a> {
                     if !p.eat(TokenKind::Comma) {
                         p.eat(TokenKind::Semicolon);
                     }
-                } else if p.at_member_name() {
+                } else if p.at_member_declared_name() {
                     p.parse_field();
                     if !p.eat(TokenKind::Comma) {
                         p.eat(TokenKind::Semicolon);
@@ -4029,7 +4110,7 @@ impl<'a> Parser<'a> {
     /// `interface_field as class_field`.
     fn parse_interface_field_link(&mut self) {
         self.with_node(SyntaxKind::INTERFACE_FIELD_LINK, |p| {
-            if p.at_member_name() {
+            if p.at(TokenKind::Word) {
                 p.bump();
             } else {
                 p.error_unexpected_token("interface field name".to_string());
@@ -4041,7 +4122,7 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("`as`".to_string());
             }
 
-            if p.at_member_name() {
+            if p.at(TokenKind::Word) {
                 p.bump();
             } else {
                 p.error_unexpected_token("class field name".to_string());
@@ -4094,7 +4175,7 @@ impl<'a> Parser<'a> {
                 if p.at_top_level_keyword() && !p.at(TokenKind::Function) {
                     break;
                 }
-                if p.at(TokenKind::Function)
+                if (p.at(TokenKind::Function) && p.at_top_level_keyword())
                     || (p.at(TokenKind::AtAt)
                         && p.item_keyword_after_leading_block_attributes()
                             == Some(TokenKind::Function))
@@ -4110,7 +4191,7 @@ impl<'a> Parser<'a> {
                     if !p.eat(TokenKind::Comma) {
                         p.eat(TokenKind::Semicolon);
                     }
-                } else if p.at_member_name() {
+                } else if p.at_member_declared_name() {
                     p.parse_field();
                     if !p.eat(TokenKind::Comma) {
                         p.eat(TokenKind::Semicolon);
@@ -4187,8 +4268,8 @@ impl<'a> Parser<'a> {
                     break;
                 }
                 p.with_node(SyntaxKind::GENERIC_PARAM, |p| {
-                    if p.at(TokenKind::Word) {
-                        p.bump(); // type parameter name
+                    if p.at_declared_name() {
+                        p.bump_name();
                     } else {
                         p.error_unexpected_token("type parameter name".to_string());
                     }
@@ -4259,7 +4340,7 @@ impl<'a> Parser<'a> {
             // Field name - capture span and text before bumping
             let field_name_span = p.current().map(|t| t.span);
             let field_name_text = p.current().map(|t| t.text.clone());
-            p.bump();
+            p.bump_name();
 
             let has_colon = p.eat(TokenKind::Colon);
 
@@ -4295,17 +4376,11 @@ impl<'a> Parser<'a> {
             // 'function' keyword
             p.expect(TokenKind::Function);
 
-            // Function name. The lexer produces dedicated keyword tokens for
-            // BEP-044 syntax, but those words remain valid as method names —
-            // notably on the `TypeValue` reflection class. Accept them here.
-            if p.at(TokenKind::Word)
-                || p.at(TokenKind::Implements)
-                || p.at(TokenKind::Implement)
-                || p.at(TokenKind::Extends)
-                || p.at(TokenKind::Requires)
-                || p.at(TokenKind::Interface)
-            {
-                p.bump();
+            // Function name. A keyword parses here so the name check can
+            // admit the stdlib's keyword-named methods (`t.implements(u)`)
+            // and reject every other one with a targeted diagnostic.
+            if p.at_member_name() {
+                p.bump_name();
             } else {
                 p.error_unexpected_token("function name".to_string());
                 // Recovery: skip until we see '(', '{', or '->'
@@ -4412,12 +4487,13 @@ impl<'a> Parser<'a> {
     fn parse_parameter(&mut self) {
         self.with_node(SyntaxKind::PARAMETER, |p| {
             p.reject_reserved_trace_parameter();
-            // Check if this is a 'self' parameter (no type annotation allowed)
-            let is_self = p.current().map(|t| t.text == "self").unwrap_or(false);
+            // The `self` receiver takes no type annotation; a `self: T`
+            // parameter parses like any other for the name check to reject.
+            let is_self = p.at(TokenKind::SelfValue)
+                && p.peek(1).is_none_or(|next| next.kind != TokenKind::Colon);
 
-            // Parameter name (`client` lexes as KW_CLIENT, not Word)
-            if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
-                p.bump();
+            if p.at_declared_name() {
+                p.bump_name();
             } else {
                 p.error_unexpected_token("parameter name".to_string());
             }
@@ -4479,8 +4555,9 @@ impl<'a> Parser<'a> {
         let second = self.tokens.get(second).map(|token| token.kind);
 
         match first {
-            Some((TokenKind::Client, _)) => second == Some(TokenKind::Colon),
-            Some((TokenKind::Word, "prompt" | "tools")) => second == Some(TokenKind::Colon),
+            Some((TokenKind::Word, "client" | "prompt" | "tools")) => {
+                second == Some(TokenKind::Colon)
+            }
             _ => false,
         }
     }
@@ -4494,13 +4571,12 @@ impl<'a> Parser<'a> {
             let mut has_tools = false;
 
             while !p.at(TokenKind::RBrace) && !p.at_end() {
-                // Error recovery: if we see a top-level keyword other than Client,
-                // assume we missed a closing brace.
-                if p.at_top_level_keyword() && !p.at(TokenKind::Client) {
+                // Error recovery: a declaration here means a missed closing brace.
+                if p.at_top_level_keyword() {
                     break;
                 }
 
-                if p.at(TokenKind::Client) {
+                if p.at_contextual_kw("client") {
                     if has_client {
                         p.error_unexpected_token("Duplicate 'client' field".to_string());
                     }
@@ -4564,7 +4640,7 @@ impl<'a> Parser<'a> {
 
     fn parse_client_field(&mut self) {
         self.with_node(SyntaxKind::CLIENT_FIELD, |p| {
-            p.expect(TokenKind::Client);
+            p.bump_weak_keyword(WeakDeclaration::Client);
             p.expect(TokenKind::Colon);
 
             // The client value is either:
@@ -4696,9 +4772,8 @@ impl<'a> Parser<'a> {
     fn parse_lambda_parameter(&mut self) {
         self.with_node(SyntaxKind::PARAMETER, |p| {
             p.reject_reserved_trace_parameter();
-            // Parameter name
-            if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
-                p.bump();
+            if p.at_declared_name() {
+                p.bump_name();
             } else {
                 p.error_unexpected_token("parameter name".to_string());
             }
@@ -4733,7 +4808,7 @@ impl<'a> Parser<'a> {
                 }
 
                 // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                if p.at_top_level_keyword_except_client() {
+                if p.at_top_level_keyword_outside_testset() {
                     break;
                 }
 
@@ -4755,7 +4830,7 @@ impl<'a> Parser<'a> {
 
         if self.at_let_type_binding_stmt() {
             self.parse_type_binding_stmt();
-        } else if self.at_binding_intro_stmt() {
+        } else if self.at_binding_intro() {
             self.parse_let_stmt();
         } else if self.at_removed_type_binding_stmt() {
             self.parse_removed_type_binding_stmt();
@@ -4773,7 +4848,7 @@ impl<'a> Parser<'a> {
             self.parse_throw_stmt();
         } else if self.at(TokenKind::Defer) {
             self.parse_defer_stmt();
-        } else if self.at(TokenKind::Test) {
+        } else if self.at_weak_declaration() == Some(WeakDeclaration::Test) {
             if self.testset_body_depth > 0 {
                 self.parse_test_expr();
             } else {
@@ -4782,7 +4857,7 @@ impl<'a> Parser<'a> {
                 );
                 self.parse_test_expr(); // still parse to recover
             }
-        } else if self.at(TokenKind::TestSet) {
+        } else if self.at_weak_declaration() == Some(WeakDeclaration::TestSet) {
             if self.testset_body_depth > 0 {
                 self.parse_testset();
             } else {
@@ -4809,8 +4884,8 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::TYPE_BINDING_STMT, |p| {
             p.expect(TokenKind::Let);
             p.bump_contextual_kw_as("type", SyntaxKind::KW_TYPE);
-            if p.at(TokenKind::Word) {
-                p.bump();
+            if p.at_declared_name() {
+                p.bump_name();
             } else {
                 p.error_unexpected_token("type binding name".to_string());
             }
@@ -4943,7 +5018,7 @@ impl<'a> Parser<'a> {
             // itself is permissive (it parses any pattern shape, including
             // ones with no binding), so we enforce the `let` keyword here
             // before delegating. The keyword is consumed inside parse_pattern.
-            if !p.at_binding_intro_stmt() {
+            if !p.at_binding_intro() {
                 p.error_unexpected_token("'let'".to_string());
             }
             if p.binding_intro_is_followed_by_array_pattern() {
@@ -5098,7 +5173,7 @@ impl<'a> Parser<'a> {
         // Decided here by peeking past `if` for a `let` token — patterns
         // always start with `let` (BAML's binding marker), and no normal
         // expression starts with `let`, so this is unambiguous.
-        if self.peek_is_binding_intro_stmt(1) {
+        if self.peek_is_binding_intro(1) {
             self.parse_if_let_expr();
             return;
         }
@@ -5246,7 +5321,7 @@ impl<'a> Parser<'a> {
                     }
 
                     // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                    if p.at_top_level_keyword_except_client() {
+                    if p.at_top_level_keyword_outside_testset() {
                         break;
                     }
                     let before = p.current;
@@ -5397,7 +5472,7 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        if self.at_binding_intro_pattern() {
+        if self.at_binding_intro() {
             self.parse_let_pattern();
             return;
         }
@@ -5428,7 +5503,7 @@ impl<'a> Parser<'a> {
         // In condition position (`if x is Class { … }`) we suppress this
         // so the `{` stays available for the outer block; users can still
         // write destructure via `(x is Class { f })`.
-        if self.at(TokenKind::Word)
+        if self.at_path_head()
             && self.suppress_destructure_pattern_depth == 0
             && self.looks_like_destructure_pattern()
         {
@@ -5589,6 +5664,11 @@ impl<'a> Parser<'a> {
             self.current().map(|t| t.kind),
             Some(
                 TokenKind::Word
+                    | TokenKind::SelfValue
+                    | TokenKind::Root
+                    | TokenKind::True
+                    | TokenKind::False
+                    | TokenKind::Null
                     | TokenKind::BigintLiteral
                     | TokenKind::IntegerLiteral
                     | TokenKind::FloatLiteral
@@ -5599,8 +5679,9 @@ impl<'a> Parser<'a> {
                     | TokenKind::LBracket
                     | TokenKind::Less
                     | TokenKind::Let
+                    | TokenKind::Const
             )
-        ) || self.at_contextual_kw("const")
+        )
     }
 
     /// Look ahead from the current position (which should be at `WORD`) past
@@ -5621,17 +5702,7 @@ impl<'a> Parser<'a> {
             match self.tokens[idx].kind {
                 TokenKind::Dot => {
                     let next = self.skip_trivia_and_comments_from(idx + 1);
-                    if next < self.tokens.len()
-                        && matches!(
-                            self.tokens[next].kind,
-                            TokenKind::Word
-                                | TokenKind::Spawn
-                                | TokenKind::Await
-                                | TokenKind::Class
-                                | TokenKind::Enum
-                                | TokenKind::Interface
-                                | TokenKind::Function
-                        )
+                    if next < self.tokens.len() && Self::kind_is_member_name(self.tokens[next].kind)
                     {
                         idx = self.skip_trivia_and_comments_from(next + 1);
                     } else {
@@ -5717,7 +5788,6 @@ impl<'a> Parser<'a> {
                     }
                 }
                 TokenKind::Word
-                | TokenKind::Dot
                 | TokenKind::Comma
                 | TokenKind::Equals
                 | TokenKind::LBracket
@@ -5739,15 +5809,22 @@ impl<'a> Parser<'a> {
                 | TokenKind::Colon
                 | TokenKind::Arrow
                 | TokenKind::FatArrow
-                // `spawn`/`await` are valid namespace segments inside type
-                // args (`foo<baml.spawn.Plan<T, E>>(x)`), mirroring
-                // the type-path parser's segment set.
-                | TokenKind::Spawn
-                | TokenKind::Await
-                | TokenKind::Class
-                | TokenKind::Enum
-                | TokenKind::Interface
-                | TokenKind::Function => {}
+                | TokenKind::True
+                | TokenKind::False
+                | TokenKind::Null
+                | TokenKind::Root => {}
+                // A path segment after `.` may be a keyword
+                // (`foo<baml.spawn.Plan<T, E>>(x)`).
+                TokenKind::Dot => {
+                    let next = self.skip_trivia_and_comments_from(i + 1);
+                    if self
+                        .tokens
+                        .get(next)
+                        .is_some_and(|t| Self::kind_is_member_name(t.kind))
+                    {
+                        i = next;
+                    }
+                }
                 _ => return None,
             }
             i = self.skip_trivia_and_comments_from(i + 1);
@@ -5764,26 +5841,16 @@ impl<'a> Parser<'a> {
         let start = self.events.len();
         self.bump_binding_intro();
 
-        if !self.at(TokenKind::Word) {
-            self.error_unexpected_token("identifier after 'let'".to_string());
-            self.wrap_events_in_node(start, SyntaxKind::BINDING_PATTERN);
-            self.finish_node();
-            return;
-        }
-
-        // `let _` is a wildcard, not a binding to a name called `_`.
-        if self.at_wildcard_word() {
-            self.bump(); // _
-            self.wrap_events_in_node(start, SyntaxKind::WILDCARD_PATTERN);
-            self.finish_node();
-            return;
-        }
-
         // Decide between simple binding (`let x`) and destructure
-        // (`let Class { ... }`) by peeking past dotted segments for `{`.
+        // (`let Class { ... }`, `let root.ns.Class { ... }`) by peeking past
+        // dotted segments for `{`. `let _` is a wildcard even before `{`.
         // Same condition-position suppression as `parse_pattern_atom` —
         // `if x is let Class { f }` would otherwise eat the then-block.
-        if self.suppress_destructure_pattern_depth == 0 && self.looks_like_destructure_pattern() {
+        if self.at_path_head()
+            && !self.at_wildcard_word()
+            && self.suppress_destructure_pattern_depth == 0
+            && self.looks_like_destructure_pattern()
+        {
             self.parse_path();
             if self.at(TokenKind::Less) && self.looks_like_generic_args() {
                 self.parse_type_args();
@@ -5794,7 +5861,21 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        self.bump(); // WORD
+        if !self.at_declared_name() {
+            self.error_unexpected_token("identifier after 'let'".to_string());
+            self.wrap_events_in_node(start, SyntaxKind::BINDING_PATTERN);
+            self.finish_node();
+            return;
+        }
+
+        if self.at_wildcard_word() {
+            self.bump(); // _
+            self.wrap_events_in_node(start, SyntaxKind::WILDCARD_PATTERN);
+            self.finish_node();
+            return;
+        }
+
+        self.bump_name();
         // Optional `: <pattern>` sub-pattern. Folded directly into the
         // BINDING_PATTERN node. The right side is any pattern — type
         // ascription (`let x: int`), aliasing chain (`let x: let y`),
@@ -5834,27 +5915,18 @@ impl<'a> Parser<'a> {
     /// Parse a dotted path: `WORD ('.' WORD)*`. Tokens are emitted into the
     /// current node — no wrapper node is added.
     fn parse_path(&mut self) {
-        if !self.at(TokenKind::Word) {
+        if !self.at_path_head() {
             self.error_unexpected_token("identifier".to_string());
             return;
         }
-        self.bump(); // first WORD
+        self.bump_name();
         while self.at(TokenKind::Dot)
-            && self.peek(1).is_some_and(|t| {
-                matches!(
-                    t.kind,
-                    TokenKind::Word
-                        | TokenKind::Spawn
-                        | TokenKind::Await
-                        | TokenKind::Class
-                        | TokenKind::Enum
-                        | TokenKind::Interface
-                        | TokenKind::Function
-                )
-            })
+            && self
+                .peek(1)
+                .is_some_and(|t| Self::kind_is_member_name(t.kind))
         {
             self.bump(); // .
-            self.bump(); // WORD
+            self.bump_name();
         }
     }
 
@@ -5865,7 +5937,7 @@ impl<'a> Parser<'a> {
         }
 
         while !self.at(TokenKind::RBrace) && !self.at_end() {
-            if self.at_top_level_keyword_except_client() {
+            if self.at_top_level_keyword_outside_testset() {
                 break;
             }
             self.parse_field_pattern();
@@ -5964,10 +6036,7 @@ impl<'a> Parser<'a> {
     fn at_catch_clause_start(&self) -> bool {
         self.at(TokenKind::Catch)
             || self.at(TokenKind::CatchAll)
-            // `catch_all_panics` is a contextual keyword: the lexer treats it as
-            // a plain identifier so it stays usable as one elsewhere, but in
-            // catch-clause position it introduces a clause like `catch_all`.
-            || self.at_contextual_kw("catch_all_panics")
+            || self.at(TokenKind::CatchAllPanics)
     }
 
     fn parse_catch_expr(&mut self, expr_start: usize) {
@@ -5981,12 +6050,8 @@ impl<'a> Parser<'a> {
 
     fn parse_catch_clause(&mut self) {
         self.with_node(SyntaxKind::CATCH_CLAUSE, |p| {
-            if p.at(TokenKind::Catch) || p.at(TokenKind::CatchAll) {
+            if p.at_catch_clause_start() {
                 p.bump();
-            } else if p.at_contextual_kw("catch_all_panics") {
-                // Re-label the contextual `Word` as a dedicated keyword so the
-                // AST lowering and tooling can recognize the clause kind.
-                p.bump_contextual_kw_as("catch_all_panics", SyntaxKind::KW_CATCH_ALL_PANICS);
             } else {
                 p.error_unexpected_token("catch clause keyword".to_string());
                 return;
@@ -5998,8 +6063,8 @@ impl<'a> Parser<'a> {
             // The catch binding is always a bare identifier (like a function
             // parameter), not a full pattern.
             p.with_node(SyntaxKind::CATCH_BINDING, |p| {
-                if p.at(TokenKind::Word) {
-                    p.bump();
+                if p.at_declared_name() {
+                    p.bump_name();
                 } else {
                     p.error_unexpected_token("catch binding identifier".to_string());
                 }
@@ -6031,7 +6096,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
 
-                if p.at_top_level_keyword_except_client() {
+                if p.at_top_level_keyword_outside_testset() {
                     break;
                 }
                 let before = p.current;
@@ -6152,7 +6217,7 @@ impl<'a> Parser<'a> {
         // always start with `let` (BAML's binding marker), and no normal
         // expression starts with `let`, so this is unambiguous. Mirrors
         // `parse_if_expr`'s `if` vs `if let` decision.
-        if self.peek_is_binding_intro_stmt(1) {
+        if self.peek_is_binding_intro(1) {
             self.parse_while_let_stmt();
             return;
         }
@@ -6229,7 +6294,7 @@ impl<'a> Parser<'a> {
                 p.bump(); // (
 
                 // Check if this is iterator-style: for (let var in expr) or C-style: for (init; cond; update)
-                if p.at_binding_intro_stmt() {
+                if p.at_binding_intro() {
                     // Peek ahead to check if this is iterator-style (has 'in' keyword)
                     // For iterator-style: for (let i in expr) / for (const i in expr)
                     // For C-style: for (let i = 0; ...) / for (const i = 0; ...)
@@ -6275,7 +6340,7 @@ impl<'a> Parser<'a> {
                 }
 
                 p.expect(TokenKind::RParen);
-            } else if p.at_binding_intro_stmt() && p.looks_like_for_in_loop() {
+            } else if p.at_binding_intro() && p.looks_like_for_in_loop() {
                 // Non-parenthesized form: `for let <pattern> in <expr> { }`.
                 p.parse_for_in_pattern();
                 p.expect(TokenKind::In);
@@ -6291,7 +6356,7 @@ impl<'a> Parser<'a> {
                 // `for ;;i += x {}` is reinterpreted as an object constructor.
                 p.expect(TokenKind::LParen);
                 p.suppress_object_literal_depth += 1;
-                if p.at_binding_intro_stmt() {
+                if p.at_binding_intro() {
                     p.parse_let_stmt();
                     p.parse_c_style_for_tail();
                 } else {
@@ -6435,7 +6500,7 @@ impl<'a> Parser<'a> {
         self.with_node(SyntaxKind::LET_STMT, |p| {
             // For-in pattern shares the let-statement shape: must start with
             // `let`/`const`. No initializer.
-            if !p.at_binding_intro_stmt() {
+            if !p.at_binding_intro() {
                 p.error_unexpected_token("'let'".to_string());
             }
             if p.binding_intro_is_followed_by_array_pattern() {
@@ -6604,7 +6669,7 @@ impl<'a> Parser<'a> {
                     self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR);
                     self.bump(); // ?.
                     if self.at_member_name() {
-                        self.bump();
+                        self.bump_name();
                     } else {
                         self.error_unexpected_token(
                             "field name, `[`, or `(` after `?.`".to_string(),
@@ -6655,7 +6720,7 @@ impl<'a> Parser<'a> {
                 self.wrap_events_in_node(lhs_start, SyntaxKind::FIELD_ACCESS_EXPR);
                 self.bump(); // . or $
                 if self.at_member_name() {
-                    self.bump();
+                    self.bump_name();
                 } else {
                     let punct = if op == TokenKind::Dollar {
                         "'$'"
@@ -6841,12 +6906,10 @@ impl<'a> Parser<'a> {
                         return *kind == SyntaxKind::PATH_EXPR;
                     }
                 }
-                Event::Token { kind, text, .. } => {
+                Event::Token { kind, .. } => {
                     if depth == 0 {
-                        // Only WORD tokens can be type names, and literals
-                        // like null/true/false are never constructors.
-                        return *kind == SyntaxKind::WORD
-                            && !matches!(text.as_str(), "null" | "true" | "false");
+                        // Only WORD tokens can be type names.
+                        return *kind == SyntaxKind::WORD;
                     }
                 }
                 Event::UnexpectedToken { .. }
@@ -6869,9 +6932,7 @@ impl<'a> Parser<'a> {
         match self.peek(1) {
             Some(t) if t.kind == TokenKind::DotDotDot => true, // spread
             Some(t) if t.kind == TokenKind::RBrace => true,    // empty braces
-            // `client` is a keyword but a valid field name (BEP-049 §10
-            // `Context { client: ... }`), so an object literal can begin with it.
-            Some(t) if t.kind == TokenKind::Word || t.kind == TokenKind::Client => {
+            Some(t) if t.kind == TokenKind::Word => {
                 let mut i = 2;
                 while self.peek(i).map(|t| t.kind) == Some(TokenKind::Dot)
                     && self.peek(i + 1).map(|t| t.kind) == Some(TokenKind::Word)
@@ -7078,18 +7139,14 @@ impl<'a> Parser<'a> {
             {
                 // env.FIELD sugar (not followed by `(`) — desugar to baml.env.get_or_panic("FIELD")
                 self.parse_env_access();
-            } else if text == "true" {
-                self.bump_contextual_kw_as("true", SyntaxKind::KW_TRUE);
-            } else if text == "false" {
-                self.bump_contextual_kw_as("false", SyntaxKind::KW_FALSE);
-            } else if text == "null" {
-                self.bump_contextual_kw_as("null", SyntaxKind::KW_NULL);
             } else {
                 // Identifier or path (could be multi-segment like baml.HttpMethod.Get)
                 self.parse_path_or_ident();
             }
-        } else if self.at(TokenKind::Client) {
-            // `client` is KW_CLIENT; allow as identifier (e.g. parameter named `client`, `client.execute(...)`)
+        } else if self.at(TokenKind::True) || self.at(TokenKind::False) || self.at(TokenKind::Null)
+        {
+            self.bump();
+        } else if self.at_path_head() {
             self.parse_path_or_ident();
         } else if self.at(TokenKind::LParen) && self.looks_like_lambda() {
             // Lambda expression: (params) -> [RetType] { body }
@@ -7181,9 +7238,7 @@ impl<'a> Parser<'a> {
 
     fn parse_call_arg(&mut self) {
         self.with_node(SyntaxKind::CALL_ARG, |p| {
-            if (p.at(TokenKind::Word) || p.at(TokenKind::Client))
-                && p.peek(1).map(|t| t.kind) == Some(TokenKind::Equals)
-            {
+            if p.at(TokenKind::Word) && p.peek(1).map(|t| t.kind) == Some(TokenKind::Equals) {
                 p.bump();
                 p.expect(TokenKind::Equals);
             }
@@ -7310,7 +7365,6 @@ impl<'a> Parser<'a> {
                 // - `LParen` / `RParen` for parenthesized union types
                 //   (`(int | string)`)
                 TokenKind::Word
-                | TokenKind::Dot
                 | TokenKind::Comma
                 | TokenKind::Equals
                 | TokenKind::LBracket
@@ -7330,15 +7384,20 @@ impl<'a> Parser<'a> {
                 | TokenKind::Colon
                 | TokenKind::Arrow
                 | TokenKind::FatArrow
-                // `spawn`/`await` are valid namespace segments inside type
-                // args (`foo<baml.spawn.Plan<T, E>>(x)`), mirroring
-                // the type-path parser's segment set.
-                | TokenKind::Spawn
-                | TokenKind::Await
-                | TokenKind::Class
-                | TokenKind::Enum
-                | TokenKind::Interface
-                | TokenKind::Function => {}
+                | TokenKind::True
+                | TokenKind::False
+                | TokenKind::Null
+                | TokenKind::Root => {}
+                // A path segment after `.` may be a keyword
+                // (`foo<baml.spawn.Plan<T, E>>(x)`).
+                TokenKind::Dot => {
+                    if self
+                        .peek(i + 1)
+                        .is_some_and(|t| Self::kind_is_member_name(t.kind))
+                    {
+                        i += 1;
+                    }
+                }
                 // Anything else — operators, braces, EOF-ish tokens — can't
                 // appear in a type, so this `<` is a comparison.
                 _ => return false,
@@ -7400,9 +7459,9 @@ impl<'a> Parser<'a> {
     /// unary/prefix starts of `parse_prefix`.
     fn is_start_of_expression(kind: TokenKind) -> bool {
         use TokenKind::{
-            Await, BigintLiteral, Client, FloatLiteral, Hash, If, IntegerLiteral, LBrace, LBracket,
-            LParen, Less, Match, Minus, MinusMinus, Not, PlusPlus, Quote, Spawn, Throw, Tilde,
-            Word,
+            Await, BigintLiteral, False, FloatLiteral, Hash, If, IntegerLiteral, LBrace, LBracket,
+            LParen, Less, Match, Minus, MinusMinus, Not, Null, PlusPlus, Quote, Root, SelfValue,
+            Spawn, Throw, Tilde, True, Word,
         };
         matches!(
             kind,
@@ -7413,7 +7472,11 @@ impl<'a> Parser<'a> {
                 | Quote   // string literal
                 | Hash    // removed hash string recovery
                 | Word
-                | Client
+                | SelfValue
+                | Root
+                | True
+                | False
+                | Null
                 | LParen
                 | LBracket
                 | LBrace
@@ -7840,51 +7903,25 @@ impl<'a> Parser<'a> {
     /// This distinction is made at parse time because we can determine syntactically
     /// whether the base is a simple identifier chain or a complex expression.
     fn parse_path_or_ident(&mut self) {
-        if !self.at(TokenKind::Word) && !self.at(TokenKind::Client) {
+        if !self.at_path_head() {
             return;
         }
 
-        // `spawn` / `await` are reserved keywords but are valid as path
-        // segments after a `.` (e.g. the `baml.spawn` namespace). They are
-        // unambiguous in segment position — a leading `spawn`/`await` is
-        // handled before this point. `is_ident_token` in
-        // `baml_compiler2_ast::lower_expr_body` must mirror this set.
-        let path_start = |k: TokenKind| {
-            matches!(
-                k,
-                TokenKind::Word
-                    | TokenKind::Client
-                    | TokenKind::Spawn
-                    | TokenKind::Await
-                    | TokenKind::Class
-                    | TokenKind::Enum
-                    | TokenKind::Interface
-                    | TokenKind::Function
-            )
-        };
-        // Once a path has started, any `.member` name continues it, so a member
-        // named by a keyword stays reachable deep in a path
-        // (`reflect.Class.extends`). Right after the head (`t.implements`) it
-        // is not a path start, and parses as member access instead.
-        let segment = |k: TokenKind| path_start(k) || Self::kind_is_member_name(k);
-
-        // Check if this looks like a path (ident.client followed by dot and another ident)
         if self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
-            && self.peek(2).map(|t| path_start(t.kind)).unwrap_or(false)
+            && self
+                .peek(2)
+                .is_some_and(|t| Self::kind_is_member_name(t.kind))
             && !(self
                 .peek(2)
                 .is_some_and(|t| t.kind == TokenKind::Word && t.text == "as")
                 && self.peek(3).map(|t| t.kind) == Some(TokenKind::Less))
         {
-            // It's a path - all segments are identifiers
             self.with_node(SyntaxKind::PATH_EXPR, |p| {
-                p.bump(); // First segment
-
-                // Parse remaining segments
+                p.bump_name();
                 while p.at(TokenKind::Dot) && !p.looks_like_as_projection() {
                     p.bump();
-                    if p.current().map(|t| segment(t.kind)).unwrap_or(false) {
-                        p.bump(); // Next segment
+                    if p.at_member_name() {
+                        p.bump_name();
                     } else {
                         p.error_unexpected_token("path segment after '.'".to_string());
                         break;
@@ -7892,8 +7929,7 @@ impl<'a> Parser<'a> {
                 }
             });
         } else {
-            // Simple identifier (no dots)
-            self.bump();
+            self.bump_name();
         }
     }
 
@@ -7902,7 +7938,11 @@ impl<'a> Parser<'a> {
             matches!(
                 token.kind,
                 TokenKind::Word
-                    | TokenKind::Client
+                    | TokenKind::SelfValue
+                    | TokenKind::Root
+                    | TokenKind::True
+                    | TokenKind::False
+                    | TokenKind::Null
                     | TokenKind::Quote
                     | TokenKind::Backtick
                     | TokenKind::Hash
@@ -7981,10 +8021,7 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
-            // Check for valid field start (`client` is a keyword but a valid
-            // field name — BEP-049 §10 `Context { client: ... }`).
             } else if self.at(TokenKind::Word)
-                || self.at(TokenKind::Client)
                 || self.at(TokenKind::Quote)
                 || self.at(TokenKind::Hash)
             {
@@ -8036,10 +8073,8 @@ impl<'a> Parser<'a> {
     fn parse_object_field(&mut self) {
         self.with_node(SyntaxKind::OBJECT_FIELD, |p| {
             // Field name - can be identifier, qualified identifier, or string literal.
-            // `client` is a keyword but a valid field name (BEP-049 §10
-            // `Context { client: ... }`).
             let mut shorthand_candidate = false;
-            if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
+            if p.at(TokenKind::Word) {
                 shorthand_candidate = true;
                 p.bump(); // identifier field name
                 while p.at(TokenKind::Dot) {
@@ -8077,9 +8112,9 @@ impl<'a> Parser<'a> {
     fn infix_binding_power(op: TokenKind) -> Option<(u8, u8)> {
         use TokenKind::{
             And, AndAnd, AndEquals, Caret, CaretEquals, Equals, EqualsEquals, Greater,
-            GreaterEquals, GreaterGreater, GreaterGreaterEquals, Instanceof, Less, LessEquals,
-            LessLess, LessLessEquals, Minus, MinusEquals, NotEquals, OrOr, Percent, PercentEquals,
-            Pipe, PipeEquals, Plus, PlusEquals, Slash, SlashEquals, Star, StarEquals,
+            GreaterEquals, GreaterGreater, GreaterGreaterEquals, Less, LessEquals, LessLess,
+            LessLessEquals, Minus, MinusEquals, NotEquals, OrOr, Percent, PercentEquals, Pipe,
+            PipeEquals, Plus, PlusEquals, Slash, SlashEquals, Star, StarEquals,
         };
 
         Some(match op {
@@ -8107,8 +8142,8 @@ impl<'a> Parser<'a> {
             // Equality (left associative)
             EqualsEquals | NotEquals => (16, 17),
 
-            // Comparison (left associative) - includes instanceof
-            Less | Greater | LessEquals | GreaterEquals | Instanceof => (18, 19),
+            // Comparison (left associative)
+            Less | Greater | LessEquals | GreaterEquals => (18, 19),
 
             // Bitwise shift (left associative)
             LessLess | GreaterGreater => (20, 21),
@@ -8136,7 +8171,7 @@ impl<'a> Parser<'a> {
             && self.peek(2).map(|t| t.kind) == Some(TokenKind::Equals)
         {
             self.with_node(SyntaxKind::CLIENT_VALUE_DEF, |p| {
-                p.expect(TokenKind::Client);
+                p.bump_weak_keyword(WeakDeclaration::Client);
                 p.bump(); // name
                 p.bump(); // =
                 p.parse_expr();
@@ -8145,8 +8180,7 @@ impl<'a> Parser<'a> {
             return;
         }
         self.with_node(SyntaxKind::CLIENT_DEF, |p| {
-            // 'client' keyword
-            p.expect(TokenKind::Client);
+            p.bump_weak_keyword(WeakDeclaration::Client);
 
             // Optional client type: <llm>
             if p.at(TokenKind::Less) {
@@ -8208,7 +8242,7 @@ impl<'a> Parser<'a> {
                 // - Enum: `enum ["celsius", "fahrenheit"]` inside nested option maps
                 // - Class: `class "MyClass"` inside nested option maps
                 if p.at_top_level_keyword()
-                    && !p.at(TokenKind::RetryPolicy)
+                    && !p.at_contextual_kw("retry_policy")
                     && !p.at(TokenKind::Enum)
                     && !p.at(TokenKind::Class)
                 {
@@ -8248,20 +8282,11 @@ impl<'a> Parser<'a> {
         // config keys (e.g., `enum ["celsius", "fahrenheit"]`).
 
         self.with_node(SyntaxKind::CONFIG_ITEM, |p| {
-            // Config key: identifier, keyword-as-identifier, quoted string, or
-            // removed hash string parsed for a targeted diagnostic
-            // Note: Some top-level keywords are also valid as config keys:
-            // - RetryPolicy: `retry_policy MyPolicy` inside client blocks
-            // - Enum: `enum ["celsius", "fahrenheit"]` inside nested option maps
-            // - Class: `class "MyClass"` inside nested option maps
-            // We explicitly allow them here so they parse as config items rather than
-            // triggering error recovery that would break out of the config block.
-            if p.at(TokenKind::Word)
-                || p.at(TokenKind::RetryPolicy)
-                || p.at(TokenKind::Enum)
-                || p.at(TokenKind::Class)
-            {
-                p.bump();
+            // Config key: a name (keywords included, e.g. `enum [...]` in
+            // nested option maps), quoted string, or removed hash string
+            // parsed for a targeted diagnostic.
+            if p.at_member_name() {
+                p.bump_name();
             } else if p.at(TokenKind::Quote) || p.at(TokenKind::Hash) {
                 // Quoted string or removed hash string key
                 if !p.parse_any_string() {
@@ -8397,17 +8422,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // Boolean literals
-        if self.at(TokenKind::Word) {
-            if let Some(token) = self.current() {
-                let text = token.text.as_str();
-                if text == "true" || text == "false" {
-                    return true;
-                }
-            }
-        }
-
-        false
+        self.at(TokenKind::True) || self.at(TokenKind::False)
     }
 
     /// Parse an array in config context - uses config-style parsing for nested objects
@@ -8466,7 +8481,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_test_expr(&mut self) {
         self.with_node(SyntaxKind::TEST_EXPR_DEF, |p| {
             // 'test' keyword
-            p.expect(TokenKind::Test);
+            p.bump_weak_keyword(WeakDeclaration::Test);
 
             // Same rule as `parse_testset`: a bare identifier as a
             // top-level test name can never resolve — report the syntax
@@ -8507,7 +8522,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_testset(&mut self) {
         self.with_node(SyntaxKind::TESTSET_DEF, |p| {
             // 'testset' keyword
-            p.expect(TokenKind::TestSet);
+            p.bump_weak_keyword(WeakDeclaration::TestSet);
 
             // A bare identifier as a top-level testset name can never
             // resolve (there are no local bindings at top level), and the
@@ -8560,7 +8575,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_retry_policy(&mut self) {
         self.with_node(SyntaxKind::RETRY_POLICY_DEF, |p| {
             // 'retry_policy' keyword
-            p.expect(TokenKind::RetryPolicy);
+            p.bump_weak_keyword(WeakDeclaration::RetryPolicy);
 
             // Policy name
             if p.at(TokenKind::Word) {
@@ -8588,8 +8603,7 @@ impl<'a> Parser<'a> {
     /// `GENERATOR_DEF` node (see `lower_cst`).
     pub(crate) fn parse_generator(&mut self) {
         self.with_node(SyntaxKind::GENERATOR_DEF, |p| {
-            // 'generator' keyword
-            p.expect(TokenKind::Generator);
+            p.bump_weak_keyword(WeakDeclaration::Generator);
 
             // Optional generator name — kept as the first WORD child so
             // lowering can name it in the diagnostic.
@@ -8626,7 +8640,7 @@ impl<'a> Parser<'a> {
     /// Parse a template string declaration
     pub(crate) fn parse_template_string(&mut self) {
         self.with_node(SyntaxKind::TEMPLATE_STRING_DEF, |p| {
-            p.expect(TokenKind::TemplateString);
+            p.bump_weak_keyword(WeakDeclaration::TemplateString);
 
             // Template name
             if p.at(TokenKind::Word) {
@@ -8665,9 +8679,8 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("'type' keyword".to_string());
             }
 
-            // Type alias name
-            if p.at(TokenKind::Word) {
-                p.bump();
+            if p.at_declared_name() {
+                p.bump_name();
             } else {
                 p.error_unexpected_token("type alias name".to_string());
             }
@@ -8715,20 +8728,19 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
             parser.parse_function();
         } else if parser.at(TokenKind::Implements) || parser.at(TokenKind::Implement) {
             parser.parse_implements_for();
-        } else if parser.at(TokenKind::Client) {
-            parser.parse_client();
-        } else if parser.at(TokenKind::Generator) {
-            parser.parse_generator();
-        } else if parser.at(TokenKind::Test) {
-            if !parser.try_recover_removed_legacy_test() {
-                parser.parse_test_expr();
+        } else if let Some(declaration) = parser.at_weak_declaration() {
+            match declaration {
+                WeakDeclaration::Client => parser.parse_client(),
+                WeakDeclaration::Generator => parser.parse_generator(),
+                WeakDeclaration::Test => {
+                    if !parser.try_recover_removed_legacy_test() {
+                        parser.parse_test_expr();
+                    }
+                }
+                WeakDeclaration::TestSet => parser.parse_testset(),
+                WeakDeclaration::RetryPolicy => parser.parse_retry_policy(),
+                WeakDeclaration::TemplateString => parser.parse_template_string(),
             }
-        } else if parser.at(TokenKind::TestSet) {
-            parser.parse_testset();
-        } else if parser.at(TokenKind::RetryPolicy) {
-            parser.parse_retry_policy();
-        } else if parser.at(TokenKind::TemplateString) {
-            parser.parse_template_string();
         } else if parser.at(TokenKind::Word)
             && parser.current().map(|t| t.text == "type").unwrap_or(false)
         {
@@ -8736,7 +8748,7 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
         } else if parser.at_let_type_binding_stmt() {
             // Only a body can bind a runtime type; lowering reports it here.
             parser.parse_type_binding_stmt();
-        } else if parser.at_binding_intro_stmt() {
+        } else if parser.at_binding_intro() {
             parser.parse_let_stmt();
         } else if parser.at_header_comment_start() {
             parser.consume_header_comment();
@@ -10399,7 +10411,7 @@ client<llm> Foo {
 
     #[test]
     fn parses_function_with_client_as_parameter_name() {
-        // `client` is a keyword (KW_CLIENT); it must still be valid as a parameter name.
+        // `client` is a weak keyword: an ordinary parameter name.
         let source = r#"
 function call_llm_function(client: Client, function_name: string) -> unknown {
   let _ = client
@@ -10455,9 +10467,9 @@ function f() -> int {
 
     #[test]
     fn expression_body_calling_a_client_param_is_not_llm_body() {
-        // `client` lexes as KW_CLIENT, so a call THROUGH a parameter named
-        // `client` looks like the start of an LLM directive unless `(` is
-        // excluded — the body would then be parsed as an LLM block and fail.
+        // A call THROUGH a parameter named `client` looks like the start of an
+        // LLM directive unless `(` is excluded — the body would then be
+        // parsed as an LLM block and fail.
         let source = r#"
 function f(client: (int) -> int) -> int {
   client(1)
@@ -10755,7 +10767,7 @@ function Foo() -> {
     }
 
     /// The LLM-vs-expression classifier walks raw tokens, where string
-    /// CONTENTS lex as ordinary tokens (`client` even lexes as `KW_CLIENT`).
+    /// CONTENTS lex as ordinary tokens.
     /// Prose that happens to mention `client`/`prompt`/`tools` must never
     /// flip a plain function into an LLM body — that produced a cascade of
     /// "Only 'client', 'tools' and 'prompt' allowed in LLM function" errors.
@@ -11036,9 +11048,8 @@ function Demo() -> int {
         assert_eq!(child_kinds[1], SyntaxKind::CATCH_CLAUSE);
     }
 
-    /// `catch_all_panics` is a contextual keyword: the lexer emits a plain
-    /// `Word`, and the parser must still recognize it in catch-clause position
-    /// (B-504 — it previously only handled `catch`/`catch_all`).
+    /// `catch_all_panics` introduces a catch clause like `catch`/`catch_all`
+    /// (B-504).
     #[test]
     fn parses_catch_all_panics_clause() {
         let source = r#"
@@ -11071,21 +11082,20 @@ function Demo() -> int {
         assert!(has_kw, "expected a KW_CATCH_ALL_PANICS token in the clause");
     }
 
-    /// `catch_all_panics` is contextual, not reserved: outside catch-clause
-    /// position it is still a perfectly good identifier (e.g. a function name).
     #[test]
-    fn catch_all_panics_is_a_normal_identifier_outside_catch() {
+    fn catch_all_panics_is_a_keyword() {
         let source = r#"
-function catch_all_panics() -> int { 1 }
-
 function Demo() -> int {
-  let x = catch_all_panics()
-  x
+  let catch_all_panics = 1
+  catch_all_panics
 }
 "#;
 
         let (_root, errors) = parse_source(source);
-        assert_no_errors(&errors);
+        assert!(
+            !errors.is_empty(),
+            "`catch_all_panics` must not bind a name"
+        );
     }
 
     #[test]

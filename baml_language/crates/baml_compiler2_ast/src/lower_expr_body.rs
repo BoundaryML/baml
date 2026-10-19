@@ -33,34 +33,14 @@ pub struct EnvVarRef {
     pub range: TextRange,
 }
 
-/// Returns true if `kind` can serve as an identifier token in expression position.
-///
-/// The parser allows `KW_CLIENT` (and `WORD`) inside `PATH_EXPR` / `FIELD_ACCESS_EXPR`
-/// nodes when `client` is used as a variable or field name. It likewise allows
-/// `KW_SPAWN` / `KW_AWAIT` as path segments (e.g. the `baml.spawn` namespace),
-/// since they are unambiguous after a `.`, and the interface-related keywords
-/// (`implements`, `interface`, `extends`) as member names — e.g.
-/// `dog_t.implements(animal_t)` on the reflection `type` value. This must
-/// match exactly what `parse_path_or_ident` / `at_member_name` accept in the
-/// parser; adding a new keyword there requires adding it here too.
+/// Returns true if `kind` can serve as an identifier or literal-word token in
+/// expression position. The parser emits every name as a `WORD`, keywords
+/// used as names included; the remaining kinds lower by text (the
+/// literal/identifier arms below switch on it).
 pub(crate) fn is_ident_token(kind: SyntaxKind) -> bool {
     matches!(
         kind,
         SyntaxKind::WORD
-            | SyntaxKind::KW_CLIENT
-            | SyntaxKind::KW_SPAWN
-            | SyntaxKind::KW_AWAIT
-            | SyntaxKind::KW_CLASS
-            | SyntaxKind::KW_ENUM
-            | SyntaxKind::KW_FUNCTION
-            | SyntaxKind::KW_IMPLEMENTS
-            | SyntaxKind::KW_IMPLEMENT
-            | SyntaxKind::KW_INTERFACE
-            | SyntaxKind::KW_EXTENDS
-            | SyntaxKind::KW_REQUIRES
-            // Contextual keywords re-lexed from a `Word`: still lower by text
-            // (the literal/identifier arms below switch on the text), so they
-            // must read as ident tokens just as they did when they were `Word`.
             | SyntaxKind::KW_AS
             | SyntaxKind::KW_TYPE
             | SyntaxKind::KW_TRUE
@@ -1933,10 +1913,6 @@ impl LoweringContext {
                         SyntaxKind::STRING_LITERAL => Some(Expr::Literal(Literal::String(
                             strip_string_delimiters(t.text()),
                         ))),
-                        // `spawn`/`await` pass `is_ident_token` (they're
-                        // valid path SEGMENTS) but here they're the keywords
-                        // themselves — never a name/with expression.
-                        SyntaxKind::KW_SPAWN | SyntaxKind::KW_AWAIT => None,
                         k if is_ident_token(k) => Some(match t.text() {
                             "true" => Expr::Literal(Literal::Bool(true)),
                             "false" => Expr::Literal(Literal::Bool(false)),
@@ -2100,11 +2076,6 @@ impl LoweringContext {
                         SyntaxKind::CARET => op = Some(BinaryOp::BitXor),
                         SyntaxKind::LESS_LESS => op = Some(BinaryOp::Shl),
                         SyntaxKind::GREATER_GREATER => op = Some(BinaryOp::Shr),
-                        SyntaxKind::KW_INSTANCEOF => {
-                            self.diags
-                                .push(LoweringDiagnostic::InstanceofRemoved { span });
-                            return self.alloc_expr(Expr::Missing, node.span_range());
-                        }
                         SyntaxKind::QUESTION_QUESTION => op = Some(BinaryOp::NullCoalesce),
                         SyntaxKind::QUESTION if op.is_none() => {
                             // Two consecutive QUESTION tokens = null coalescing (??)
@@ -2895,15 +2866,6 @@ impl LoweringContext {
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|t| t.kind() == SyntaxKind::WORD);
-
-        if let Some(token) = &name_token
-            && token.text() == "const"
-        {
-            self.diags
-                .push(LoweringDiagnostic::ReservedConstBindingName {
-                    span: token.text_range(),
-                });
-        }
 
         let name_span = name_token.as_ref().map(rowan::SyntaxToken::text_range);
         let name = name_token.map(|t| Name::new(t.text()));
@@ -3835,9 +3797,6 @@ impl LoweringContext {
             .iter()
             .rposition(|token| token.kind() == SyntaxKind::DOT)
             .and_then(|dot| tokens.get(dot + 1))
-            // The full member-name set, not just `WORD`: an interface method
-            // may be named with a contextual keyword (`implements`, `extends`),
-            // and the parser accepts those here.
             .filter(|token| is_ident_token(token.kind()));
         let Some(member_token) = member_token else {
             return self.alloc_expr(Expr::Missing, span);

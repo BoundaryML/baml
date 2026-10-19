@@ -229,7 +229,7 @@ pub fn spawn_launch(vm: &BexVm, plan: Value) -> Result<SpawnLaunch, VmInternalEr
         throws: throws.clone(),
         limits,
         cancel,
-        root: plan.root(),
+        root: plan.is_root(),
     })
 }
 

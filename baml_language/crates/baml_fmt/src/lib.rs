@@ -700,8 +700,8 @@ mod object_spread_tests {
 mod contextual_keyword_identifier_tests {
     use super::*;
 
-    /// `client` lexes as `KW_CLIENT` but is a legal identifier everywhere the
-    /// checker accepts one. The formatter must not die on it (it used to:
+    /// `client` is a weak keyword: a legal identifier everywhere outside a
+    /// client declaration. The formatter must not die on it (it used to:
     /// "Expected token/node of kind WORD, but found `KW_CLIENT`").
     #[test]
     fn test_client_as_identifier_formats() {
@@ -1221,11 +1221,10 @@ mod linear_formatter_regression_tests {
 
 #[cfg(test)]
 mod contextual_keyword_name_tests {
-    //! Regression tests for contextual keywords used as names. The lexer
-    //! emits a dedicated keyword kind for `client` (`KW_CLIENT`), and the
-    //! parser accepts it as a class field, parameter, and member-access
-    //! name (BEP-049 §10 `ctx.client`). The formatter used to reject those
-    //! files with "Expected token/node of kind WORD, but found `KW_CLIENT`".
+    //! Regression tests for weak keywords used as names: `client` is a class
+    //! field, parameter, and member-access name (BEP-049 §10 `ctx.client`).
+    //! The formatter used to reject those files with "Expected token/node of
+    //! kind WORD, but found `KW_CLIENT`".
 
     use super::*;
 
