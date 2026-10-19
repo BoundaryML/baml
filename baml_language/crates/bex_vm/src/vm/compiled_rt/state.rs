@@ -11,6 +11,10 @@ pub struct CompiledState {
     /// The stack compiled bodies run on, mapped on first use.
     pub(crate) fiber: Option<Fiber>,
     /// How a body on the fiber switches back to the VM.
+    #[cfg_attr(
+        any(target_arch = "wasm32", all(windows, target_arch = "aarch64")),
+        allow(dead_code)
+    )]
     pub(crate) yielder: Option<YielderPtr>,
     /// Whether the VM is currently driving the fiber, so a compiled callee may
     /// run in place.

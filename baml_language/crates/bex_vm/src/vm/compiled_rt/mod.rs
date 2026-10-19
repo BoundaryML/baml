@@ -148,15 +148,6 @@ pub(crate) mod stub {
 /// fiber; see [`stub`].
 pub(crate) const RUNNING: usize = usize::MAX;
 
-/// Fiber stack a compiled callee must still have below it: its builtins and unwinding.
-const STACK_RED_ZONE: usize = 256 << 10;
-
-#[inline]
-fn stack_address() -> usize {
-    let marker = 0u8;
-    std::ptr::from_ref(&marker) as usize
-}
-
 /// Where `function`'s [`stub::CODE`] starts, for a function with a compiled
 /// body.
 #[inline]
