@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import baml_sdk.Fns;
 import baml_sdk.OptBox;
+import java.math.BigInteger;
 import java.util.Arrays;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,22 @@ class TestOptionalArgs {
                     o.opt1(8L);
                     o.opt2(9L);
                 }));
+    }
+
+    @Test
+    void test_optional_args_bigint_in_i64_range() {
+        // A BigInteger is a `bigint` however small: an in-range value reaches
+        // a `bigint` parameter, and a returned bigint can be passed back.
+        assertEquals(
+                BigInteger.valueOf(7),
+                Fns.default_args_matrix(o -> o.bigint_value(BigInteger.valueOf(7))).bigint_value());
+        assertEquals(
+                BigInteger.valueOf(Long.MIN_VALUE),
+                Fns.default_args_matrix(o -> o.bigint_value(BigInteger.valueOf(Long.MIN_VALUE)))
+                        .bigint_value());
+        BigInteger returned = Fns.default_args_matrix().bigint_value();
+        assertEquals(BigInteger.valueOf(11), returned);
+        assertEquals(returned, Fns.default_args_matrix(o -> o.bigint_value(returned)).bigint_value());
     }
 
     @Test

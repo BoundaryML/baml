@@ -17,7 +17,8 @@ import java.util.Map;
  * class or host callable states its type in {@code InboundValue.value_type}:
  * the slot's type where the generated binding supplies one that fixes it (a
  * {@code List<Long>} under a {@code (int | string)[]} parameter goes out as a
- * {@code (int | string)[]}), and the type the value itself has where no slot
+ * {@code (int | string)[]}, and an empty list under {@code json} as the alias's
+ * list member {@code json[]}), and the type the value itself has where no slot
  * fixes it ({@link #naturalType}). A callable has no type of its own, so one
  * that reaches the encoder without a function type is refused. The engine
  * builds exactly the value stated and checks it against the slot.
@@ -110,9 +111,6 @@ public final class ProtoWriter {
     private static final int TY_CLASS_TYPE_ARGS = 2; // BamlTyClass.type_args (repeated BamlTy)
     private static final int ENUM_NAME = 1;
     private static final int ENUM_VALUE = 2;
-
-    private static final BigInteger LONG_MIN = BigInteger.valueOf(Long.MIN_VALUE);
-    private static final BigInteger LONG_MAX = BigInteger.valueOf(Long.MAX_VALUE);
 
     private ProtoWriter() {}
 
@@ -312,13 +310,11 @@ public final class ProtoWriter {
         } else if (value instanceof Integer || value instanceof Short || value instanceof Byte) {
             w.writeInt64(IV_INT, ((Number) value).longValue());
         } else if (value instanceof BigInteger bi) {
-            // In i64 range → int_value; otherwise the hex-string bigint channel
-            // (lowercase, sign-prefixed; matches num-bigint's `{bi:x}`).
-            if (bi.compareTo(LONG_MIN) >= 0 && bi.compareTo(LONG_MAX) <= 0) {
-                w.writeInt64(IV_INT, bi.longValue());
-            } else {
-                w.writeString(IV_BIGINT, bi.toString(16));
-            }
+            // A BigInteger is a `bigint` whatever its magnitude: `int` and
+            // `bigint` are distinct concrete types, so riding int_value would
+            // make it an `int` that no `bigint` slot takes. Hex string,
+            // lowercase and sign-prefixed (num-bigint's `{bi:x}`).
+            w.writeString(IV_BIGINT, bi.toString(16));
         } else if (value instanceof Double d) {
             w.writeDouble(IV_FLOAT, d);
         } else if (value instanceof Float f) {
@@ -328,16 +324,16 @@ public final class ProtoWriter {
         } else if (value instanceof byte[] bytes) {
             w.writeBytes(IV_UINT8ARRAY, bytes);
         } else if (value instanceof List<?> list) {
-            boolean slotIsList = contextualType != null && contextualType.kind() == BamlType.Kind.LIST;
-            w.writeMessage(IV_LIST, encodeList(list, slotIsList ? contextualType.listItem() : null));
-            statedType = slotIsList && isExact(contextualType)
-                    ? contextualType
+            BamlType slot = containerSlot(contextualType, BamlType.Kind.LIST, list.isEmpty());
+            w.writeMessage(IV_LIST, encodeList(list, slot == null ? null : slot.listItem()));
+            statedType = slot != null && isExact(slot)
+                    ? slot
                     : stateNatural(naturalType(list), contextualType);
         } else if (value instanceof Map<?, ?> map) {
-            boolean slotIsMap = contextualType != null && contextualType.kind() == BamlType.Kind.MAP;
-            w.writeMessage(IV_MAP, encodeMap(map, slotIsMap ? contextualType.mapValue() : null));
-            statedType = slotIsMap && isExact(contextualType)
-                    ? contextualType
+            BamlType slot = containerSlot(contextualType, BamlType.Kind.MAP, map.isEmpty());
+            w.writeMessage(IV_MAP, encodeMap(map, slot == null ? null : slot.mapValue()));
+            statedType = slot != null && isExact(slot)
+                    ? slot
                     : stateNatural(naturalType(map), contextualType);
         } else if (value instanceof Enum<?> constant) {
             // Any Java enum: encode it only if its type is a registered generated
@@ -456,6 +452,72 @@ public final class ProtoWriter {
         return w.toByteArray();
     }
 
+    /**
+     * The slot a list or map node is written under, or {@code null} when none
+     * fixes it and the node states its own type. That is the contextual type
+     * when it is of the node's {@code shape}, else the one member of that shape
+     * of the union it denotes, looking through optionals and recursive aliases,
+     * which are transparent ({@code json}'s list member is {@code json[]}).
+     *
+     * <p>This is the shared walker's member ranking cut down to what the writer
+     * can decide without planning the elements: a member of the node's shape
+     * outranks an open one (a type variable, {@code unknown}, an interface),
+     * which the walker falls back to only when the shaped member refuses the
+     * elements. An empty container fits every member of its shape, so it takes
+     * the one there is and is refused as ambiguous between several; a
+     * non-empty one takes it only when no open member could take the value as
+     * its own type instead.
+     */
+    private static BamlType containerSlot(BamlType contextualType, BamlType.Kind shape, boolean empty) {
+        if (contextualType == null) {
+            return null;
+        }
+        java.util.LinkedHashSet<BamlType> shaped = new java.util.LinkedHashSet<>();
+        boolean open = collectMembers(contextualType, shape, shaped, new java.util.HashSet<>());
+        if (shaped.size() == 1) {
+            return empty || !open ? shaped.iterator().next() : null;
+        }
+        if (shaped.size() > 1 && empty) {
+            throw new IllegalArgumentException(
+                    "an empty " + (shape == BamlType.Kind.LIST ? "list" : "map")
+                            + " is ambiguous under " + contextualType + ": it fits each of "
+                            + shaped + "; pass it typed as one of them");
+        }
+        return null;
+    }
+
+    /**
+     * Gather the members of {@code type} that have the given {@code shape} into
+     * {@code shaped}, flattening optionals, unions and recursive aliases (each
+     * alias read once, so a self-reference outside a container ends). Returns
+     * whether some member is open: a type variable, {@code unknown} or an
+     * interface, any of which could take a container as its own type.
+     */
+    private static boolean collectMembers(
+            BamlType type,
+            BamlType.Kind shape,
+            java.util.Set<BamlType> shaped,
+            java.util.Set<BamlType> seenAliases) {
+        if (type.kind() == shape) {
+            shaped.add(type);
+            return false;
+        }
+        return switch (type.kind()) {
+            case OPTIONAL -> collectMembers(type.optionalInner(), shape, shaped, seenAliases);
+            case UNION -> {
+                boolean open = false;
+                for (BamlType option : type.unionOptions()) {
+                    open |= collectMembers(option, shape, shaped, seenAliases);
+                }
+                yield open;
+            }
+            case TYPE_ALIAS -> seenAliases.add(type)
+                    && collectMembers(TypeRegistry.aliasBody(type), shape, shaped, seenAliases);
+            case TYPEVAR, UNKNOWN, INTERFACE -> true;
+            case PRIMITIVE, CLASS, ENUM, LIST, MAP, LITERAL, FUNCTION, ENUM_VARIANT, MEDIA, NEVER, OPAQUE -> false;
+        };
+    }
+
     /** No {@code TYPEVAR} anywhere in the token: exactly the tokens the wire can spell. */
     private static boolean isExact(BamlType type) {
         try {
@@ -469,23 +531,23 @@ public final class ProtoWriter {
     /**
      * The type a container states under a slot that does not fix it. An empty
      * container has no element type of its own ({@code never} in
-     * {@code natural}): under {@code unknown} (or no slot) it states
-     * {@code unknown}, as the compiler types {@code []} with no annotation;
-     * under a slot that leaves a type variable open nothing binds the
-     * variable, and the call is refused until the caller names it, as the
-     * dynamic hosts refuse it. A {@code never?} stays: that is {@code null}.
+     * {@code natural}): under a slot that leaves a type variable open nothing
+     * binds the variable, and the call is refused until the caller names it,
+     * as the dynamic hosts refuse it; anywhere else (no slot, {@code unknown},
+     * a slot with no member of its shape) it states {@code unknown}, as the
+     * compiler types {@code []} with no annotation, and the engine judges that
+     * against the slot. A {@code never?} stays: that is {@code null}.
      */
     private static BamlType stateNatural(BamlType natural, BamlType contextualType) {
         if (natural == null || !mentionsNever(natural)) {
             return natural;
         }
-        boolean open = contextualType == null || contextualType.kind() == BamlType.Kind.UNKNOWN;
-        if (open) {
+        String var = contextualType == null ? null : firstTypeVar(contextualType);
+        if (var == null) {
             return neverToUnknown(natural);
         }
-        String var = firstTypeVar(contextualType);
         throw new IllegalArgumentException(
-                "BAML could not infer a type for `" + (var == null ? "T" : var)
+                "BAML could not infer a type for `" + var
                         + "` from the value; pass the call's type arguments");
     }
 
@@ -554,8 +616,8 @@ public final class ProtoWriter {
         if (value instanceof Long || value instanceof Integer || value instanceof Short || value instanceof Byte) {
             return BamlType.INT;
         }
-        if (value instanceof BigInteger bi) {
-            return bi.compareTo(LONG_MIN) >= 0 && bi.compareTo(LONG_MAX) <= 0 ? BamlType.INT : BamlType.BIGINT;
+        if (value instanceof BigInteger) {
+            return BamlType.BIGINT;
         }
         if (value instanceof Double || value instanceof Float) {
             return BamlType.FLOAT;

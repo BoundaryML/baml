@@ -46,6 +46,14 @@ class TestAliases {
                                                 new RecList.IntValue(2L),
                                                 new RecList.IntValue(3L)))));
         assertEquals(nested, Fns.round_trip_rec_list(nested));
+
+        // An empty list is the alias's list member `RecList[]`, at any depth
+        // and beside a non-empty sibling.
+        RecList empty = new RecList.RecListListValue(List.of());
+        assertEquals(empty, Fns.round_trip_rec_list(empty));
+        RecList emptyInside =
+                new RecList.RecListListValue(List.of(empty, new RecList.IntValue(1L), empty));
+        assertEquals(emptyInside, Fns.round_trip_rec_list(emptyInside));
     }
 
     @Test

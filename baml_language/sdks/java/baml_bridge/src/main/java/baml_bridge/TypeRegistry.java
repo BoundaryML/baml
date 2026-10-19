@@ -78,6 +78,14 @@ public final class TypeRegistry {
             new ConcurrentHashMap<>();
     private static final Map<String, String> unionAliasFqnByRecordName = new ConcurrentHashMap<>();
 
+    // Recursive aliases: alias FQN -> the exact descriptor of the type it names.
+    // The generator expands a non-recursive alias at every use site, so a
+    // recursive one is the only alias a descriptor names (expanding it would
+    // not terminate). Aliases are transparent, so an encoder that meets one as
+    // a slot reads its body: an empty list under `json` is a `json[]` because
+    // that is the body's list member, and nothing else could say so.
+    private static final ConcurrentHashMap<String, BamlType> aliasBodiesByFqn = new ConcurrentHashMap<>();
+
     static {
         // Runtime-owned stdlib types the emitter deliberately does NOT generate
         // (RUNTIME_OWNED_FQNS in sdkgen_java) — their bodies ship in this runtime
@@ -207,6 +215,40 @@ public final class TypeRegistry {
         for (String recordName : recordNames) {
             unionAliasFqnByRecordName.putIfAbsent(recordName, aliasFqn);
         }
+    }
+
+    /**
+     * Register the body of the recursive alias {@code aliasFqn}: the exact
+     * descriptor of the type it names, in which the alias itself (and any other
+     * recursive alias) stays a {@link BamlType#typeAlias} token. Idempotent for
+     * an equal body; a different body for a registered alias is two
+     * declarations claiming one name and throws {@link IllegalStateException}.
+     */
+    public static void registerAliasBody(String aliasFqn, BamlType body) {
+        BamlType existing = aliasBodiesByFqn.putIfAbsent(aliasFqn, body);
+        if (existing != null && !existing.equals(body)) {
+            throw new IllegalStateException(
+                    "conflicting alias registration for '" + aliasFqn + "': already "
+                            + existing + ", refused " + body);
+        }
+    }
+
+    /**
+     * The registered body of the alias {@code alias} names. Every alias a
+     * generated descriptor names is registered with its body, so an unknown one
+     * is a broken invariant and throws {@link IllegalStateException}.
+     */
+    public static BamlType aliasBody(BamlType alias) {
+        if (alias.kind() != BamlType.Kind.TYPE_ALIAS) {
+            throw new IllegalArgumentException("not a type alias: " + alias);
+        }
+        BamlType body = aliasBodiesByFqn.get(alias.fqn());
+        if (body == null) {
+            throw new IllegalStateException(
+                    "the type alias `" + alias.fqn() + "` has no registered body; "
+                            + "regenerate the SDK");
+        }
+        return body;
     }
 
     /**

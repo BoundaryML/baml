@@ -39,7 +39,10 @@ pub use baml_sdkgen_types::{NamingConvention, OutputType};
 use crate::{
     emit::{render_class, render_enum, render_fns_holder, render_union},
     routing::{PackagePath, java_identifier, route},
-    translate_ty::{AliasTable, TranslateCtx, UnionSink, descriptor_expr_opt, registry_arm_expr},
+    translate_ty::{
+        AliasTable, TranslateCtx, UnionSink, descriptor_expr, descriptor_expr_opt,
+        registry_arm_expr,
+    },
 };
 
 /// Banner prepended to every generated `.java` file. Mirrors the TS
@@ -175,6 +178,11 @@ fn to_source_code_internal(
     let mut type_files: Vec<(PackagePath, String, String)> = Vec::new(); // (pkg, ident, body)
     let mut recursive_aliases: Vec<(PackagePath, String, String, &Ty)> = Vec::new();
     let mut union_registry: Vec<UnionReg> = Vec::new();
+    // (alias FQN, body descriptor expression) per recursive alias. A
+    // descriptor names a recursive alias rather than expanding it, and an
+    // alias is transparent, so the bridge reads the body to find the member
+    // a value inhabits (an empty list under `json` is a `json[]`).
+    let mut alias_bodies: Vec<(String, String)> = Vec::new();
 
     for (name, symbol) in pool {
         let pkg = route(name);
@@ -319,6 +327,7 @@ fn to_source_code_internal(
             aliases: &aliases,
             pkg: pkg.clone(),
         };
+        alias_bodies.push((alias_fqn.clone(), descriptor_expr(resolves_to, &aliases)));
         let body = if let Ty::Union(items) = resolves_to {
             let arms: Vec<Ty> = items
                 .iter()
@@ -381,7 +390,13 @@ fn to_source_code_internal(
     enum_registry.sort();
     union_registry.sort();
     union_registry.dedup();
+    alias_bodies.sort();
     let mut registrations = String::new();
+    for (alias_fqn, body) in &alias_bodies {
+        registrations.push_str(&format!(
+            "        baml_bridge.TypeRegistry.registerAliasBody({alias_fqn:?}, {body});\n"
+        ));
+    }
     for reg in &union_registry {
         // Arm tokens are BamlType builder EXPRESSIONS (emitted raw); record binary
         // names are strings. The structural key is derived runtime-side from the
@@ -1699,6 +1714,12 @@ mod tests {
         // Alias-FQN registration (the engine may send self_type either way).
         assert!(anchor.contains(
             "baml_bridge.TypeRegistry.registerUnionAlias(\"user.aliases.RecList\", \"baml_sdk.aliases.RecList\", new baml_bridge.BamlType[] {baml_bridge.BamlType.INT, baml_bridge.BamlType.list(baml_bridge.BamlType.classByFqn(\"user.aliases.RecList\"))},"
+        ), "{anchor}");
+        // The alias's body as the exact type it names, its self-reference kept
+        // as the alias token: what the bridge reads to state an empty
+        // `RecList[]` member.
+        assert!(anchor.contains(
+            "baml_bridge.TypeRegistry.registerAliasBody(\"user.aliases.RecList\", baml_bridge.BamlType.union(baml_bridge.BamlType.INT, baml_bridge.BamlType.list(baml_bridge.BamlType.typeAlias(\"user.aliases.RecList\"))));"
         ), "{anchor}");
     }
 

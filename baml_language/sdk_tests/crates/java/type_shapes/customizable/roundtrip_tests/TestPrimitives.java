@@ -88,10 +88,18 @@ class TestPrimitives {
 
     @Test
     void test_primitives_round_trip_bigint() {
-        // Encode uses the hex bigint channel only for values outside i64 range
-        // (an in-range int rides int_value), so every case here is beyond i64:
-        // a large positive, its negation, and a power-of-two hex boundary
-        // (2^64 — the first magnitude needing a 17th hex digit).
+        // A BigInteger is a `bigint` whatever its magnitude, so values inside
+        // i64 range round-trip as well as a large positive, its negation, and
+        // a power-of-two hex boundary (2^64 — the first magnitude needing a
+        // 17th hex digit).
+        for (BigInteger small : new BigInteger[] {
+                BigInteger.ZERO,
+                BigInteger.valueOf(5),
+                BigInteger.valueOf(-5),
+                BigInteger.valueOf(Long.MAX_VALUE),
+                BigInteger.valueOf(Long.MIN_VALUE)}) {
+            assertEquals(small, Fns.round_trip_bigint(small));
+        }
         BigInteger big = BigInteger.TWO.pow(80);
         assertEquals(big, Fns.round_trip_bigint(big));
         assertEquals(big.negate(), Fns.round_trip_bigint(big.negate()));
