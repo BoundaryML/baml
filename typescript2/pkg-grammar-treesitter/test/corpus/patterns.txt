@@ -566,3 +566,57 @@ function f(user: User, xs: int[], input: PatternInput) -> int {
         (binary_expression
           (identifier)
           (identifier))))))
+
+==================
+let type bindings with bounds and else
+==================
+
+function F(t: reflect.Type) -> int? {
+  let type T = t;
+  let type U extends Named & Tagged = t else { return null };
+  let typed: T[] = [];
+  1
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier)
+          (identifier))))
+    (optional_type
+      (type_path
+        (identifier)))
+    (function_body
+      (let_type_declaration
+        (identifier)
+        (identifier))
+      (let_type_declaration
+        (identifier)
+        (type_path
+          (identifier))
+        (type_path
+          (identifier))
+        (identifier)
+        (else_clause
+          (block
+            (expression_statement
+              (return_expression
+                (null))))))
+      (let_declaration
+        (chain_pattern
+          (type_pattern
+            (type_path
+              (identifier)))
+          (type_pattern
+            (array_type
+              (type_path
+                (identifier)))))
+        (array_expression))
+      (expression_statement
+        (number)))))
