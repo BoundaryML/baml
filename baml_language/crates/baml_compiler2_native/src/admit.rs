@@ -32,7 +32,7 @@ use bex_vm_types::{
 
 use crate::{
     analysis::{Analysis, Repr, capture_reprs, value_reprs},
-    codegen::Generator,
+    codegen::{Generator, ProgramContext},
     reach::{reachable, references},
     render::render_module,
 };
@@ -225,23 +225,9 @@ pub fn compile_program<'db>(
             .filter(|(_, unit)| unit.analysis.suspends)
             .map(|(&object, _)| object)
             .collect();
-        loop {
-            let grown: Vec<usize> =
-                units
-                    .iter()
-                    .filter(|(object, unit)| {
-                        !resumable.contains(*object)
-                            && unit.analysis.user_callees.iter().any(|callee| {
-                                !units.contains_key(callee) || resumable.contains(callee)
-                            })
-                    })
-                    .map(|(&object, _)| object)
-                    .collect();
-            if grown.is_empty() {
-                break;
-            }
-            resumable.extend(grown);
-        }
+        propagate(&units, &mut resumable, |_, callee, resumable| {
+            !units.contains_key(&callee) || resumable.contains(&callee)
+        });
         // Garbage collection inside compiled code. An inline body checks for
         // a collection at the headers of its allocating loops, and on entry
         // when it is recursive and allocates, so memory stays bounded as the
@@ -262,25 +248,9 @@ pub fn compile_program<'db>(
             .filter(|(_, checks)| checks.loops || checks.entry)
             .collect();
         let mut may_collect: BTreeSet<usize> = checks.keys().copied().collect();
-        loop {
-            let grown: Vec<usize> = units
-                .iter()
-                .filter(|(object, unit)| {
-                    !may_collect.contains(*object)
-                        && !resumable.contains(*object)
-                        && unit
-                            .analysis
-                            .user_callees
-                            .iter()
-                            .any(|callee| may_collect.contains(callee))
-                })
-                .map(|(&object, _)| object)
-                .collect();
-            if grown.is_empty() {
-                break;
-            }
-            may_collect.extend(grown);
-        }
+        propagate(&units, &mut may_collect, |caller, callee, may_collect| {
+            !resumable.contains(&caller) && may_collect.contains(&callee)
+        });
         let symbols: HashMap<usize, String> = units
             .keys()
             .map(|&object| (object, symbol_for(index.display(object), object)))
@@ -290,40 +260,20 @@ pub fn compile_program<'db>(
         let mut natives: BTreeMap<String, usize> = BTreeMap::new();
         let mut failed = Vec::new();
         for (&object, unit) in &units {
-            let mut generator = Generator {
+            let program = ProgramContext {
                 db,
                 index: &index,
-                object,
-                package: unit.package,
                 symbols: &symbols,
                 resumable: &resumable,
                 may_collect: &may_collect,
-                gc_checks: checks.get(&object).copied().unwrap_or_default(),
-                spill_base: 0,
-                suspends: resumable.contains(&object),
-                in_loop: false,
-                natives: &mut natives,
-                body: body_of(unit.mir),
-                lambdas: &unit.mir.lambdas,
-                analysis: &unit.analysis,
-                positions: index.positions(object),
-                current_mark: None,
-                out: String::new(),
-                pending: Vec::new(),
-                temps: 0,
-                live_in: Vec::new(),
-                slots: 0,
-                cause_slot: None,
-                point_slot: 0,
-                preds: Vec::new(),
-                loop_headers: BTreeSet::new(),
-                write_through: BTreeSet::new(),
-                call_types: Vec::new(),
-                structured: None,
-                frame_templates: Vec::new(),
-                hoist_types: true,
-                static_value_sites: Vec::new(),
             };
+            let mut generator = Generator::new(
+                &program,
+                &mut natives,
+                object,
+                unit,
+                checks.get(&object).copied().unwrap_or_default(),
+            );
             match generator.function(&symbols[&object]) {
                 Ok(code) => {
                     let (slots, cause_slot) =
@@ -443,7 +393,7 @@ fn admit_lambdas<'db>(
     }
 }
 
-fn body_of<'a, 'db>(mir: &'a MirFunction<'db>) -> &'a MirFunctionBody<'db> {
+pub(crate) fn body_of<'a, 'db>(mir: &'a MirFunction<'db>) -> &'a MirFunctionBody<'db> {
     match &mir.kind {
         MirFunctionKind::Bytecode(body) => body,
         MirFunctionKind::Builtin(_) => unreachable!("units hold bytecode bodies only"),
@@ -467,12 +417,12 @@ fn symbol_for(name: &str, object: usize) -> String {
     format!("{symbol}_{object}")
 }
 
-struct Unit<'db> {
-    mir: &'db MirFunction<'db>,
-    analysis: Analysis,
+pub(crate) struct Unit<'db> {
+    pub(crate) mir: &'db MirFunction<'db>,
+    pub(crate) analysis: Analysis,
     /// The ordinal of the package the function belongs to, when the program
     /// places it.
-    package: Option<u32>,
+    pub(crate) package: Option<u32>,
 }
 
 // ─── The program's objects by identity ──────────────────────────────────────
@@ -1209,6 +1159,33 @@ pub(crate) struct GcChecks {
     pub(crate) loops: bool,
     /// On entry: the function is recursive and allocates.
     pub(crate) entry: bool,
+}
+
+/// Grow `set` with every unit having a callee for which `joins(caller,
+/// callee, set)` holds, until it stops growing.
+fn propagate(
+    units: &BTreeMap<usize, Unit<'_>>,
+    set: &mut BTreeSet<usize>,
+    joins: impl Fn(usize, usize, &BTreeSet<usize>) -> bool,
+) {
+    loop {
+        let grown: Vec<usize> = units
+            .iter()
+            .filter(|(object, unit)| {
+                !set.contains(*object)
+                    && unit
+                        .analysis
+                        .user_callees
+                        .iter()
+                        .any(|&callee| joins(**object, callee, set))
+            })
+            .map(|(&object, _)| object)
+            .collect();
+        if grown.is_empty() {
+            return;
+        }
+        set.extend(grown);
+    }
 }
 
 /// The units on a cycle of direct calls between units (a function calling

@@ -53,6 +53,19 @@ impl Expr {
     }
 }
 
+/// What every body of one program is generated against.
+pub(crate) struct ProgramContext<'a, 'db> {
+    pub(crate) db: &'db dyn baml_compiler2_mir::Db,
+    pub(crate) index: &'a ProgramIndex,
+    /// The admitted functions' symbols, by object index.
+    pub(crate) symbols: &'a HashMap<usize, String>,
+    /// The admitted functions that can suspend, by object index.
+    pub(crate) resumable: &'a BTreeSet<usize>,
+    /// The admitted inline functions that may collect garbage: a call to one
+    /// roots the caller's live values for its duration (`rooted_call`).
+    pub(crate) may_collect: &'a BTreeSet<usize>,
+}
+
 pub(crate) struct Generator<'a, 'db> {
     pub(crate) db: &'db dyn baml_compiler2_mir::Db,
     pub(crate) index: &'a ProgramIndex,
@@ -138,6 +151,51 @@ pub(crate) struct Generator<'a, 'db> {
 }
 
 type Gen<T> = Result<T, Rejection>;
+
+impl<'a, 'db> Generator<'a, 'db> {
+    pub(crate) fn new(
+        program: &ProgramContext<'a, 'db>,
+        natives: &'a mut BTreeMap<String, usize>,
+        object: usize,
+        unit: &'a crate::admit::Unit<'db>,
+        gc_checks: crate::admit::GcChecks,
+    ) -> Self {
+        Self {
+            db: program.db,
+            index: program.index,
+            object,
+            package: unit.package,
+            symbols: program.symbols,
+            resumable: program.resumable,
+            may_collect: program.may_collect,
+            gc_checks,
+            spill_base: 0,
+            suspends: program.resumable.contains(&object),
+            in_loop: false,
+            natives,
+            body: crate::admit::body_of(unit.mir),
+            lambdas: &unit.mir.lambdas,
+            analysis: &unit.analysis,
+            positions: program.index.positions(object),
+            current_mark: None,
+            out: String::new(),
+            pending: Vec::new(),
+            temps: 0,
+            live_in: Vec::new(),
+            slots: 0,
+            cause_slot: None,
+            point_slot: 0,
+            preds: Vec::new(),
+            loop_headers: BTreeSet::new(),
+            write_through: BTreeSet::new(),
+            call_types: Vec::new(),
+            structured: None,
+            frame_templates: Vec::new(),
+            hoist_types: true,
+            static_value_sites: Vec::new(),
+        }
+    }
+}
 
 /// Loop iterations of a resumable body per check for a yield; see
 /// `Generator::leaf`.
