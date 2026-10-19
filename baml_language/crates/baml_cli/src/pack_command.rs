@@ -1509,7 +1509,7 @@ mod tests {
     fn test_native_manifest_release_profile() {
         let manifest = native_manifest(Path::new("/ws"), NativeProfile::Release);
         assert_eq!(
-            manifest,
+            manifest.replace(r"\\", "/"),
             "[package]\nname = \"baml_native_program\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\
              publish = false\n\n[workspace]\n\n[lib]\npath = \"src/lib.rs\"\n\n\
              [[bin]]\nname = \"baml_native_program\"\npath = \"src/main.rs\"\n\n\
