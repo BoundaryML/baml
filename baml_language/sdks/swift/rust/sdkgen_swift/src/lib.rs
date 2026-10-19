@@ -35,13 +35,13 @@ use std::{
 };
 
 use baml_base::qualified_name::AI_STREAM_STREAM;
-use baml_sdkgen_types::{Class, Name, Symbol, SymbolPool, Ty, TypeAlias};
+use baml_sdkgen_types::{Class, Name, ParamTy, Symbol, SymbolPool, Ty, TypeAlias};
 pub use baml_sdkgen_types::{NamingConvention, OutputType};
 use emit::{
     FnKind, RenderedField, indent_lines, render_callable, render_class, render_enum,
     render_type_alias, sort_key,
 };
-use translate_ty::{TranslateCtx, normalize_union, translate_ty};
+use translate_ty::{TranslateCtx, generic_param_slot, normalize_union, slot_expr, translate_ty};
 
 /// Build the Swift SDK output tree using precompiled BAML bytecode as
 /// the runtime payload. Returned paths are relative to the generated
@@ -255,6 +255,7 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
             supported_enums: supported_enums.clone(),
             supported_aliases: supported_aliases.clone(),
             nullable_aliases: nullable_aliases_for(pool, &supported_aliases),
+            alias_bodies: alias_bodies_for(pool, &supported_aliases),
         };
         let mut changed = false;
         for (key, symbol) in pool {
@@ -282,11 +283,13 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
         }
         if !changed {
             let nullable_aliases = nullable_aliases_for(pool, &supported_aliases);
+            let alias_bodies = alias_bodies_for(pool, &supported_aliases);
             return TranslateCtx {
                 supported_classes,
                 supported_enums,
                 supported_aliases,
                 nullable_aliases,
+                alias_bodies,
             };
         }
     }
@@ -386,6 +389,20 @@ fn render_supported_class(
     skips: &mut Vec<diagnostics::Skip>,
 ) -> Option<String> {
     let fqn = key.to_string();
+    // Inside the class's own encode, a type variable is the type argument
+    // the instance's slot was stated with.
+    let class_argument = |param: &ParamTy| {
+        let index = class
+            .generic_params
+            .iter()
+            .position(|p| p.as_str() == param.as_str());
+        debug_assert!(
+            index.is_some(),
+            "field of `{fqn}` names `{}`, which the class does not bind",
+            param.as_str()
+        );
+        index.map_or_else(|| generic_param_slot(param), emit::class_argument_local)
+    };
     let mut fields = Vec::new();
     for prop in &class.properties {
         fields.push(RenderedField {
@@ -394,6 +411,7 @@ fn render_supported_class(
             boxed: boxed_fields.contains(&(fqn.clone(), prop.name.as_str().to_string())),
             doc: prop.docstring.clone(),
             is_rust: matches!(prop.ty, Ty::RustType),
+            slot: slot_expr(&prop.ty, ctx, &class_argument)?,
         });
     }
 
@@ -534,6 +552,24 @@ fn nullable_aliases_for(
     out
 }
 
+/// Bodies of the supported non-recursive aliases, which a slot spells in
+/// place of the alias.
+fn alias_bodies_for(
+    pool: &SymbolPool,
+    supported_aliases: &BTreeSet<String>,
+) -> BTreeMap<String, Ty> {
+    pool.iter()
+        .filter_map(|(key, symbol)| match symbol {
+            Symbol::TypeAlias(alias)
+                if !alias.recursive && supported_aliases.contains(&key.to_string()) =>
+            {
+                Some((key.to_string(), alias.resolves_to.clone()))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 /// Can this alias's definition be emitted under `ctx`?
 fn alias_definition_ok(alias: &TypeAlias, ctx: &TranslateCtx) -> bool {
     if let Some((arms, _)) = recursive_union_alias_arms(alias) {
@@ -547,8 +583,8 @@ fn alias_definition_ok(alias: &TypeAlias, ctx: &TranslateCtx) -> bool {
 /// everything else is a plain `typealias` (union targets spell as
 /// `BamlUnionN<...>` via `translate_ty`).
 fn render_alias(alias: &TypeAlias, key: &Name, ctx: &TranslateCtx) -> Option<String> {
-    if let Some((arms, _)) = recursive_union_alias_arms(alias) {
-        return emit::render_recursive_union_alias(key, &arms, ctx);
+    if let Some((arms, nullable)) = recursive_union_alias_arms(alias) {
+        return emit::render_recursive_union_alias(key, &arms, nullable, ctx);
     }
     render_type_alias(alias, key, ctx)
 }
@@ -797,6 +833,182 @@ mod tests {
         Ty::Literal(value, baml_sdkgen_types::Freshness::Regular)
     }
 
+    fn origin() -> baml_sdkgen_types::Origin {
+        baml_sdkgen_types::Origin {
+            source_file_path: "slots.baml".to_string(),
+            span_start: 0,
+        }
+    }
+
+    fn function(name: &str, arguments: Vec<(&str, Ty)>, return_type: Ty) -> Symbol {
+        Symbol::Function(baml_sdkgen_types::Function {
+            name: name.into(),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: arguments
+                .into_iter()
+                .map(|(name, ty)| baml_sdkgen_types::FunctionArgument {
+                    name: name.into(),
+                    docstring: None,
+                    ty,
+                    default: None,
+                    injected: false,
+                })
+                .collect(),
+            return_type,
+            throws: None,
+            watchers: Vec::new(),
+            origin: origin(),
+        })
+    }
+
+    fn user(name: &str) -> Name {
+        Name::new("user".into(), Vec::new(), name.into())
+    }
+
+    fn emit(pool: &SymbolPool) -> String {
+        to_source_code_with_bytecode(pool, &[], NamingConvention::PreserveCase)
+            .into_values()
+            .collect()
+    }
+
+    fn string_literal(value: &str) -> Ty {
+        literal(baml_base::Literal::String(value.into()))
+    }
+
+    fn callback(ret: Ty, throws: Ty) -> Ty {
+        Ty::Function {
+            params: Box::new([]),
+            ret: Box::new(ret),
+            throws: Box::new(throws),
+        }
+    }
+
+    #[test]
+    fn literal_types_are_stated_as_declared() {
+        // Swift spells a literal by its base type; the slot still carries the
+        // literal, in a list's element type and in a class's type argument.
+        let box_class = Symbol::Class(baml_sdkgen_types::Class {
+            name: user("Box"),
+            generic_params: vec!["T".into()],
+            docstring: None,
+            properties: vec![baml_sdkgen_types::ClassProperty {
+                name: "items".into(),
+                docstring: None,
+                ty: list(Ty::TypeVar(ParamTy::new(0, "T".into()))),
+            }],
+            static_methods: Vec::new(),
+            instance_methods: Vec::new(),
+            origin: origin(),
+        });
+        let pool = SymbolPool::from([
+            (user("Box"), box_class),
+            (
+                user("send"),
+                function(
+                    "send",
+                    vec![
+                        (
+                            "statuses",
+                            list(union(vec![string_literal("draft"), string_literal("sent")])),
+                        ),
+                        (
+                            "boxed",
+                            Ty::Class(user("Box"), Box::new([string_literal("a")])),
+                        ),
+                    ],
+                    int(),
+                ),
+            ),
+        ]);
+        let emitted = emit(&pool);
+        assert!(
+            emitted.contains(
+                "BamlArgument(\"statuses\", statuses, as: BamlSlots.list(BamlSlot<Swift.String>.oneOf(\
+                 BamlSlot<Swift.String>.literal(\"draft\"), BamlSlot<Swift.String>.literal(\"sent\"))))"
+            ),
+            "{emitted}"
+        );
+        assert!(
+            emitted.contains(
+                "BamlArgument(\"boxed\", boxed, as: BamlSlot<Baml.Box<Swift.String>>._classType(\
+                 \"user.Box\", BamlSlot<Swift.String>.literal(\"a\")))"
+            ),
+            "{emitted}"
+        );
+        // The field typed by `T` is encoded under the instance's argument.
+        assert!(
+            emitted
+                .contains("BamlField(\"items\", self.items, as: BamlSlots.list(_bamlArgument0))"),
+            "{emitted}"
+        );
+    }
+
+    #[test]
+    fn callback_types_are_stated_exactly() {
+        let effect_param = ParamTy::new(1, "__effect_param_0".into());
+        assert!(baml_sdkgen_types::is_synthetic_effect_param(
+            effect_param.name()
+        ));
+        let effect = Ty::TypeVar(effect_param);
+        let pool = SymbolPool::from([(
+            user("call"),
+            function(
+                "call",
+                vec![
+                    ("diverge", callback(Ty::Never, Ty::Never)),
+                    (
+                        "pick",
+                        callback(
+                            union(vec![string_literal("a"), string_literal("b")]),
+                            effect,
+                        ),
+                    ),
+                ],
+                int(),
+            ),
+        )]);
+        let emitted = emit(&pool);
+        // `never` returns nothing: the closure can only throw.
+        assert!(
+            emitted.contains("diverge: @escaping @Sendable () async throws -> Swift.Never"),
+            "{emitted}"
+        );
+        let wrapper = emitted
+            .split_once("returns: .never, throws: .never)) { _args in\n")
+            .map(|(_, rest)| rest.lines().next().unwrap_or_default().trim())
+            .unwrap_or_default();
+        assert_eq!(wrapper, "try await diverge()", "{emitted}");
+        // A covariant return is stated as declared, literals and all.
+        assert!(
+            emitted.contains(
+                "let _baml_pick_returns = BamlSlot<Swift.String>.oneOf(\
+                 BamlSlot<Swift.String>.literal(\"a\"), BamlSlot<Swift.String>.literal(\"b\"))"
+            ),
+            "{emitted}"
+        );
+        assert!(
+            emitted.contains("returns: _baml_pick_returns.type, throws: .unknown)"),
+            "{emitted}"
+        );
+        assert!(!emitted.contains("?? .unknown"), "{emitted}");
+    }
+
+    #[test]
+    fn a_parameter_named_args_keeps_its_value() {
+        // The kwargs local must not shadow a parameter named `args`.
+        let mut symbol = function("cache", vec![("args", int())], int());
+        if let Symbol::Function(function) = &mut symbol {
+            function.arguments[0].default = Some(baml_sdkgen_types::FunctionArgumentDefault::Null);
+        }
+        let emitted = emit(&SymbolPool::from([(user("cache"), symbol)]));
+        assert!(
+            emitted
+                .contains("args._appendIfSet(\"args\", as: BamlSlot<Swift.Int>.own, to: &args_)"),
+            "{emitted}"
+        );
+    }
+
     #[test]
     fn unit_return_has_no_result() {
         // A function returning the unit type (`null`, also spelled `void`) has
@@ -836,6 +1048,7 @@ mod tests {
             supported_enums: BTreeSet::new(),
             supported_aliases: BTreeSet::new(),
             nullable_aliases: BTreeSet::new(),
+            alias_bodies: BTreeMap::new(),
         };
         let t = |ty: &Ty| translate_ty(ty, &ctx);
         assert_eq!(t(&int()).as_deref(), Some("Swift.Int"));

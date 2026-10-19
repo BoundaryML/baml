@@ -28,14 +28,16 @@ extension BamlOptional: ExpressibleByNilLiteral {
 extension BamlOptional where Wrapped: BamlEncodable {
     /// Append this slot to a kwargs array unless it is `.unset` —
     /// the Swift spelling of Python's "`_build_kwargs` drops UNSET".
+    /// `slot` is the declared type without its null, which `.null` covers.
     public func _appendIfSet(
         _ name: String,
-        to args: inout [(String, (any BamlEncodable)?)]
+        as slot: BamlSlot<Wrapped>,
+        to args: inout [BamlArgument]
     ) {
         switch self {
         case .unset: return
-        case .null: args.append((name, nil))
-        case .value(let wrapped): args.append((name, wrapped))
+        case .null: args.append(.null(name))
+        case .value(let wrapped): args.append(BamlArgument(name, wrapped, as: slot))
         }
     }
 }

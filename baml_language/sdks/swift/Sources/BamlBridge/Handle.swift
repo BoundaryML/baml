@@ -54,8 +54,11 @@ extension BamlHandle: Equatable {
     }
 }
 
-extension BamlHandle: BamlEncodable {
-    public func _bamlEncode() -> BamlInboundValue {
+/// A handle states nothing: its type is the engine's, checked live. It has
+/// no Swift-side type of its own, so it is not `BamlTyped`; a `$rust_type`
+/// field's slot is the field's declared type.
+extension BamlHandle: BamlLeafEncodable {
+    public func _bamlEncode(as _: BamlSlot<BamlHandle>) -> BamlInboundValue {
         if let portableMedia {
             return BamlMedia.encodePortable(portableMedia)
         }
@@ -155,12 +158,12 @@ public final class BamlFunctionHandle: @unchecked Sendable {
     }
 
     public func callRaw(
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) async throws -> BamlOutboundValue {
         try await BamlRuntime.shared.callHandleRaw(handle.key, args: args, baml: baml)
     }
-    public func callRawSync(args: [(String, (any BamlEncodable)?)], baml: BamlInvocationOptions = .init()) throws -> BamlOutboundValue {
+    public func callRawSync(args: [BamlArgument], baml: BamlInvocationOptions = .init()) throws -> BamlOutboundValue {
         try BamlRuntime.shared.callHandleRawSync(handle.key, args: args, baml: baml)
     }
 

@@ -71,11 +71,12 @@ public struct BamlHostArgs: Sendable {
 public struct BamlThrownValue: Error {
     // `Error` implies `Sendable`, so the stored payload must be too
     // (strict-concurrency checking on newer compilers rejects a bare
-    // `any BamlEncodable` here). Every realistic conformer already is:
-    // generated models are Sendable value types.
-    public let value: any BamlEncodable & Sendable
+    // `any BamlTyped` here). Every realistic conformer already is:
+    // generated models are Sendable value types. The value states its own
+    // type: the engine checks it against the declared `throws` type.
+    public let value: any BamlTyped & Sendable
 
-    public init(_ value: any BamlEncodable & Sendable) {
+    public init(_ value: any BamlTyped & Sendable) {
         self.value = value
     }
 }
@@ -84,8 +85,8 @@ public struct BamlThrownValue: Error {
 /// declared function type). Encoding it registers the body and ships a
 /// HOST_VALUE_CALLABLE handle with that type stated beside it: a host
 /// callable has no type of its own, so the one its slot declares is what the
-/// engine binds it to.
-public struct BamlHostCallable: BamlEncodable, Sendable {
+/// engine binds it to. It crosses only as a call argument (`BamlArgument`).
+public struct BamlHostCallable: Sendable {
     let functionType: BamlTypeDescriptor
     let body: @Sendable (BamlHostArgs) async throws -> BamlInboundValue
 
@@ -97,7 +98,7 @@ public struct BamlHostCallable: BamlEncodable, Sendable {
         self.body = body
     }
 
-    public func _bamlEncode() -> BamlInboundValue {
+    func _bamlEncode() -> BamlInboundValue {
         let key = HostCallableRegistry.shared.register(.callable(body))
         var handle = BamlBridge_Cffi_V1_BamlHandle()
         handle.key = key
@@ -183,27 +184,19 @@ final class HostCallableRegistry: @unchecked Sendable {
         var rawHandleValue = BamlBridge_Cffi_V1_InboundValue()
         rawHandleValue.handle = handle
         let handleValue = BamlInboundValue(rawHandleValue)
-        return .baml_class(
-            "baml.errors.HostCallable",
+        return .classValue(
+            stating: .classType("baml.errors.HostCallable"),
             [
-                ("message", String(describing: error)),
-                ("class_name", String(describing: type(of: error))),
-                ("language", "swift"),
+                BamlField("message", String(describing: error), as: String._bamlSlot),
+                BamlField("class_name", String(describing: type(of: error)), as: String._bamlSlot),
+                BamlField("language", "swift", as: String._bamlSlot),
                 // Declared `string?` on the BAML class — the engine
                 // requires the field present, so send explicit null.
-                ("traceback", Swift.String?.none),
-                ("_handle", RawInbound(handleValue)),
+                BamlField("traceback", Swift.String?.none, as: Swift.String?._bamlSlot),
+                BamlField("_handle", encoded: handleValue),
             ]
         )
     }
-}
-
-/// Tiny adapter so a prebuilt raw inbound value can ride through the
-/// `baml_class` field builder.
-private struct RawInbound: BamlEncodable {
-    let value: BamlInboundValue
-    init(_ value: BamlInboundValue) { self.value = value }
-    func _bamlEncode() -> BamlInboundValue { value }
 }
 
 private func completeHostCall(callId: UInt32, isError: Int32, payload: Data) {

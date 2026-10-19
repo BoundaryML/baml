@@ -177,7 +177,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     public func callSync<R: BamlDecodable>(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) throws -> R {
         try R._bamlDecode(unwrapEnvelope(invokeSync(fqn, args: args, baml: baml)))
@@ -188,7 +188,7 @@ public final class BamlRuntime: @unchecked Sendable {
     /// distinguish the `ai.stream.Done` sentinel from a partial).
     public func callRawSync(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) throws -> BamlOutboundValue {
         try unwrapEnvelope(invokeSync(fqn, args: args, baml: baml))
@@ -196,7 +196,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     public func callRaw(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) async throws -> BamlOutboundValue {
         do {
@@ -208,7 +208,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     public func callHandleRaw(
         _ handleKey: UInt64,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) async throws -> BamlOutboundValue {
         do {
@@ -218,7 +218,7 @@ public final class BamlRuntime: @unchecked Sendable {
         }
     }
 
-    public func callHandleRawSync(_ handleKey: UInt64, args: [(String, (any BamlEncodable)?)], baml: BamlInvocationOptions = .init()) throws -> BamlOutboundValue {
+    public func callHandleRawSync(_ handleKey: UInt64, args: [BamlArgument], baml: BamlInvocationOptions = .init()) throws -> BamlOutboundValue {
         let callId = BamlApi.newFunctionCall()
         let payload = try encodeCallArgs(args, callId: callId, callTarget: .functionHandle(handleKey), baml: baml)
         let box = ResultBox(); let semaphore = DispatchSemaphore(value: 0)
@@ -229,7 +229,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     public func callSyncVoid(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) throws {
         _ = try unwrapEnvelope(invokeSync(fqn, args: args, baml: baml))
@@ -237,7 +237,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     public func call<R: BamlDecodable>(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) async throws -> R {
         do {
@@ -252,7 +252,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     public func callVoid(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) async throws {
         do {
@@ -266,7 +266,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     private func invokeSync(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) throws -> Data {
         assertNotBlockingMainThreadInDebug(fqn)
@@ -290,7 +290,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     private func invokeAsync(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) async throws -> Data {
         let protoCallId = BamlApi.newFunctionCall()
@@ -318,7 +318,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     private func invokeHandleAsync(
         _ handleKey: UInt64,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) async throws -> Data {
         precondition(handleKey != 0, "cannot invoke a zero BAML function handle")

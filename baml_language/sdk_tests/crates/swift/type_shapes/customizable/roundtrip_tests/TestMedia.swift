@@ -54,4 +54,50 @@ final class TestMedia: XCTestCase {
         )
         _ = try Baml.media.round_trip_media(m: m)
     }
+
+    // Media is the type `image`, never the stdlib class wrapping it: every
+    // container holding media states `image[]`, `map<string, image>`, ...
+
+    func test_media_round_trip_image_list() throws {
+        let x = try Baml.media.return_image(url: url, mime: nil)
+        let result = try Baml.media.round_trip_image_list(x: [x, x])
+        XCTAssertEqual(result.count, 2)
+        XCTAssertEqual(try result[1].url(), url)
+        XCTAssertEqual(try Baml.media.round_trip_image_list(x: []).count, 0)
+    }
+
+    func test_media_round_trip_optional_image_list() throws {
+        let x = try Baml.media.return_image(url: url, mime: nil)
+        XCTAssertEqual(try Baml.media.round_trip_optional_image_list(x: [x])?.count, 1)
+        XCTAssertEqual(try Baml.media.round_trip_optional_image_list(x: [])?.count, 0)
+        XCTAssertNil(try Baml.media.round_trip_optional_image_list(x: nil))
+    }
+
+    func test_media_round_trip_image_map() throws {
+        let x = try Baml.media.return_image(url: url, mime: nil)
+        let result = try Baml.media.round_trip_image_map(x: ["a": x])
+        XCTAssertEqual(try result["a"]?.url(), url)
+    }
+
+    func test_media_round_trip_media_shapes() throws {
+        let x = try Baml.media.return_image(url: url, mime: nil)
+        let shapes = Baml.media.MediaShapes(
+            optional_image: nil,
+            images: [x],
+            optional_images: [x, nil],
+            images_by_name: ["a": x],
+            optional_list: []
+        )
+        let result = try Baml.media.round_trip_media_shapes(x: shapes)
+        XCTAssertEqual(result.images.count, 1)
+        XCTAssertEqual(result.optional_images.count, 2)
+        XCTAssertNil(result.optional_images[1])
+        XCTAssertEqual(result.optional_list?.count, 0)
+    }
+
+    func test_media_round_trip_image_or_audio() throws {
+        let x = try Baml.media.return_audio(url: url, mime: nil)
+        let result = try Baml.media.round_trip_image_or_audio(x: .t1(x))
+        XCTAssertEqual(try result.t1?.url(), url)
+    }
 }

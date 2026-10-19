@@ -104,16 +104,41 @@ public protocol BamlDecodable {
     static var _bamlArmIdentity: String? { get }
 
     /// Exact descriptor used to match an indexed outbound selection to this
-    /// host arm. Static types that also conform to `BamlEncodable` inherit this
-    /// from their cheap encode-side descriptor.
+    /// host arm. Static types that also conform to `BamlTyped` inherit their
+    /// own exact type.
     static var _bamlDecodeType: BamlTypeDescriptor? { get }
+
+    /// Whether an indexed outbound selection of type `selected` is this
+    /// host arm. A requirement so generic union decode reaches a scalar's
+    /// override.
+    static func _bamlDecodeSelects(_ selected: BamlTypeDescriptor) -> Bool
 }
 
 extension BamlDecodable {
     public static var _bamlArmIdentity: String? { nil }
     public static var _bamlDecodeType: BamlTypeDescriptor? {
-        (Self.self as? any BamlEncodable.Type)?._bamlType
+        (Self.self as? any BamlTyped.Type)?._bamlStatedType
     }
+
+    public static func _bamlDecodeSelects(_ selected: BamlTypeDescriptor) -> Bool {
+        _bamlDecodeType == selected
+    }
+}
+
+/// A scalar arm also stands for the literals of its kind: the generator gives
+/// a union one case for all its leaves of one Swift type (`"a" | "b" | int`
+/// is `BamlUnion2<String, Int>`), so a selected `"b"` can only be the
+/// `String` case.
+private func selectsScalar(
+    _ selected: BamlTypeDescriptor,
+    _ own: BamlTypeDescriptor,
+    literal matches: (BamlBridge_Cffi_V1_BamlTyLiteral.OneOf_Literal) -> Bool
+) -> Bool {
+    if selected == own { return true }
+    guard case .literal(let literal)? = selected.raw.ty, let value = literal.literal else {
+        return false
+    }
+    return matches(value)
 }
 
 func wireArmName(_ v: BamlBridge_Cffi_V1_BamlOutboundValue) -> String {
@@ -143,6 +168,10 @@ func wireArmName(_ v: BamlBridge_Cffi_V1_BamlOutboundValue) -> String {
 }
 
 extension Int: BamlDecodable {
+    public static func _bamlDecodeSelects(_ selected: BamlTypeDescriptor) -> Bool {
+        selectsScalar(selected, .int) { if case .intValue = $0 { true } else { false } }
+    }
+
     public static var _bamlArmIdentity: String? { "int" }
 
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> Int {
@@ -165,6 +194,10 @@ extension Int: BamlDecodable {
 }
 
 extension BamlBigInt: BamlDecodable {
+    public static func _bamlDecodeSelects(_ selected: BamlTypeDescriptor) -> Bool {
+        selectsScalar(selected, .bigint) { if case .bigintValue = $0 { true } else { false } }
+    }
+
     public static var _bamlArmIdentity: String? { "bigint" }
 
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> BamlBigInt {
@@ -200,6 +233,10 @@ extension Double: BamlDecodable {
 }
 
 extension Bool: BamlDecodable {
+    public static func _bamlDecodeSelects(_ selected: BamlTypeDescriptor) -> Bool {
+        selectsScalar(selected, .bool) { if case .boolValue = $0 { true } else { false } }
+    }
+
     public static var _bamlArmIdentity: String? { "bool" }
 
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> Bool {
@@ -216,6 +253,10 @@ extension Bool: BamlDecodable {
 }
 
 extension String: BamlDecodable {
+    public static func _bamlDecodeSelects(_ selected: BamlTypeDescriptor) -> Bool {
+        selectsScalar(selected, .string) { if case .stringValue = $0 { true } else { false } }
+    }
+
     public static var _bamlArmIdentity: String? { "string" }
 
     public static func _bamlDecode(_ value: BamlOutboundValue) throws -> String {
