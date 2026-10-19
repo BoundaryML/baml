@@ -10,7 +10,7 @@
 //! - Single-threaded execution: Each VM instance runs on one thread at a time
 //! - TLAB exclusivity: VMs have exclusive write access to their allocation regions
 //! - Controlled mutation: Only VM-owned runtime objects can be mutated, and only via `&mut self`
-//! - GC coordination: Garbage collection only runs when VMs are at safepoints (yielded)
+//! - GC coordination: Other VMs yield; compiled code may collect in place with rooted state.
 
 #![allow(unsafe_code)]
 
@@ -380,6 +380,7 @@ struct ManualActivation {
     context: Context,
 }
 
+/// Owned tracing configuration contains no GC heap pointers.
 #[derive(Clone, Default)]
 pub(crate) struct CallTrace {
     pub(crate) telemetry: crate::telemetry::TraceConfig,
@@ -406,6 +407,12 @@ pub(crate) struct FrameTypeMetadata {
     /// their own heads; these values preserve the additional reflection
     /// identity needed to reconstruct an explicitly supplied `type` value.
     pub(crate) values: Vec<Option<TypeValue>>,
+}
+
+#[derive(Default)]
+struct SavedCallTypes {
+    args: Vec<bex_vm_types::RealizedTy>,
+    values: Vec<Option<TypeValue>>,
 }
 
 impl FrameTypeMetadata {
@@ -590,6 +597,7 @@ pub(crate) mod tests {
             root_context: btel_types::context::Context::default(),
             pending_call_type_args: Vec::new(),
             compiled_type_args: Vec::new(),
+            saved_call_types: Vec::new(),
             call_type_args: Vec::new(),
             type_arg_pool: Vec::new(),
             compiled_delivery: None,
@@ -2040,6 +2048,78 @@ pub(crate) mod tests {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn compiled_delivery_survives_collection_before_resume() {
+        use crate::{
+            compiled_rt::{CompiledFn, Resume, Step},
+            errors::VmError,
+        };
+
+        fn body(vm: &mut BexVm, resume: Resume) -> Result<Step, Box<VmError>> {
+            match resume {
+                Resume::Start => Ok(Step::Yield),
+                Resume::Thrown(error) => {
+                    let (value, context) = vm.catch(error, vm.frame_depth())?;
+                    let Object::Instance(context) = vm.get_object(context.as_object_ptr().unwrap())
+                    else {
+                        panic!("expected error context");
+                    };
+                    assert_eq!(context.load_field(0), value);
+                    assert_eq!(vm.as_string(&value).unwrap(), "delivered error");
+                    Ok(Step::Return(value))
+                }
+                _ => panic!("expected a delivered exception"),
+            }
+        }
+
+        let mut program =
+            baml_test_support::compile_source(r#"function Main() -> string { "unused" }"#);
+        let entry = program.rendered_callables()["user.Main"].object;
+        let Object::Function(function) = &mut program.objects[entry] else {
+            unreachable!()
+        };
+        function.native_body = Some(test_body(CompiledFn::Resumable(body), 0));
+        let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+        vm.telemetry = None;
+        vm.set_entry_point(vm.heap.compile_time_ptr(entry.raw()), &[]);
+        assert!(matches!(vm.exec().unwrap(), VmExecState::EarlyYield));
+
+        let thrown_ptr = vm.string_value("delivered error").as_object_ptr().unwrap();
+        vm.try_handle_external_exception(Value::object(thrown_ptr))
+            .unwrap();
+        let Some(VmError::Thrown(thrown)) = vm.compiled_delivery.as_deref() else {
+            panic!("the unwinder must deliver to the suspended body");
+        };
+        let context_ptr = thrown.context.unwrap().as_object_ptr().unwrap();
+        let mut roots = Vec::new();
+        vm.collect_roots(&mut roots);
+        assert!(roots.contains(&thrown_ptr));
+        assert!(roots.contains(&context_ptr));
+
+        // SAFETY: this test owns the only VM, which is suspended, and forwards
+        // its roots before resuming it.
+        let (_, _, forwarding) = unsafe {
+            vm.heap
+                .collect_garbage_generational(&roots, CollectionLevel::Major)
+        };
+        let moved_value = *forwarding.get(&thrown_ptr).unwrap();
+        let moved_context = *forwarding.get(&context_ptr).unwrap();
+        assert_ne!(moved_value, thrown_ptr);
+        assert_ne!(moved_context, context_ptr);
+        vm.forward_roots(&forwarding);
+        let Some(VmError::Thrown(thrown)) = vm.compiled_delivery.as_deref() else {
+            unreachable!()
+        };
+        assert_eq!(thrown.value, Value::object(moved_value));
+        assert_eq!(thrown.context, Some(Value::object(moved_context)));
+        assert!(matches!(
+            vm.exec().unwrap(),
+            VmExecState::Complete(value) if value == Value::object(moved_value)
+        ));
+        assert!(vm.compiled_delivery.is_none());
+    }
+
     /// A resumable body calling a bound method value requests the call with
     /// the method's visible arguments; the VM inserts the receiver, as
     /// `CallIndirect` does.
@@ -2639,54 +2719,82 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn pending_native_call_type_args_root_and_forward_runtime_heads() {
-        let (mut vm, native_ptr) = vm_with_native_entry();
-        vm.set_entry_point(native_ptr, &[]);
+    fn call_type_lanes_root_and_forward_runtime_heads() {
+        for lane in 0..5 {
+            let (mut vm, native_ptr) = vm_with_native_entry();
+            vm.set_entry_point(native_ptr, &[]);
 
-        let tag = baml_type::typetag::TypeTag::fresh_dynamic();
-        let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
-            path: bex_vm_types::types::LocalName::new(
-                Vec::new(),
-                baml_type::Name::new("PendingNativeArg"),
-            ),
-            fields: Vec::new(),
-            description: None,
-            alias: None,
-            docstring: None,
-            other: indexmap::IndexMap::new(),
-            stream_done: false,
-            type_tag: tag,
-            cleanup: None,
-            methods: indexmap::IndexMap::new(),
-            generic_param_count: 0,
-            owner: bex_vm_types::types::Owner::anonymous(),
-        })));
-        vm.pending_call_type_args = vec![bex_vm_types::RealizedTy::Class(
-            bex_vm_types::TypeHead::new(class_ptr, tag),
-            Box::new([]),
-        )];
+            let tag = baml_type::typetag::TypeTag::fresh_dynamic();
+            let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
+                path: bex_vm_types::types::LocalName::new(
+                    Vec::new(),
+                    baml_type::Name::new("PendingNativeArg"),
+                ),
+                fields: Vec::new(),
+                description: None,
+                alias: None,
+                docstring: None,
+                other: indexmap::IndexMap::new(),
+                stream_done: false,
+                type_tag: tag,
+                cleanup: None,
+                methods: indexmap::IndexMap::new(),
+                generic_param_count: 0,
+                owner: bex_vm_types::types::Owner::anonymous(),
+            })));
+            let ty = bex_vm_types::RealizedTy::Class(
+                bex_vm_types::TypeHead::new(class_ptr, tag),
+                Box::new([]),
+            );
+            match lane {
+                0 => vm.pending_call_type_args.push(ty),
+                1 => vm.call_type_args.push(ty),
+                2 => vm.compiled_type_args.push(ty),
+                3 => {
+                    vm.pending_call_type_args.push(ty);
+                    vm.save_call_types();
+                }
+                _ => {
+                    vm.pending_call_type_values.push(Some(TypeValue::new(ty)));
+                    vm.save_call_types();
+                }
+            }
 
-        let mut roots = Vec::new();
-        vm.collect_roots(&mut roots);
-        assert!(
-            roots.contains(&class_ptr),
-            "a native call's realized argument must root its runtime declaration",
-        );
+            let mut roots = Vec::new();
+            vm.collect_roots(&mut roots);
+            assert!(
+                roots.contains(&class_ptr),
+                "a native call's realized argument must root its runtime declaration",
+            );
 
-        let (_stats, _remapped_roots, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, CollectionLevel::Major)
-        };
-        let moved = forwarding
-            .get(&class_ptr)
-            .copied()
-            .expect("the pending native type argument must survive collection");
-        vm.forward_roots(&forwarding);
+            let (_stats, _remapped_roots, forwarding) = unsafe {
+                vm.heap
+                    .collect_garbage_generational(&roots, CollectionLevel::Major)
+            };
+            let moved = forwarding
+                .get(&class_ptr)
+                .copied()
+                .expect("the pending native type argument must survive collection");
+            vm.forward_roots(&forwarding);
 
-        let bex_vm_types::RealizedTy::Class(head, ..) = &vm.pending_call_type_args[0] else {
-            panic!("the pending native argument must remain the dynamic class type")
-        };
-        assert_eq!(head.ptr(), moved);
+            let ty = match lane {
+                0 => &vm.pending_call_type_args[0],
+                1 => &vm.call_type_args[0],
+                2 => &vm.compiled_type_args[0],
+                3 => {
+                    vm.restore_call_types();
+                    &vm.pending_call_type_args[0]
+                }
+                _ => {
+                    vm.restore_call_types();
+                    &vm.pending_call_type_values[0].as_ref().unwrap().ty
+                }
+            };
+            let bex_vm_types::RealizedTy::Class(head, ..) = ty else {
+                panic!("the call argument must remain the dynamic class type")
+            };
+            assert_eq!(head.ptr(), moved);
+        }
     }
 
     /// The sibling above covers a frame's *definition overlay*. A frame's
@@ -3085,6 +3193,8 @@ pub struct BexVm {
     /// Spare buffer for the type arguments compiled code passes to generic
     /// builtins (`compiled_rt::call_builtin_typed`), kept for its capacity.
     pub(crate) compiled_type_args: Vec<bex_vm_types::RealizedTy>,
+    /// Pending lanes of outer calls, rooted while nested compiled calls run.
+    saved_call_types: Vec<SavedCallTypes>,
     /// The type arguments of the call a resumable compiled body requests
     /// (`compiled_rt::BexVm::push_type_arg`), reused across calls.
     pub(crate) call_type_args: Vec<bex_vm_types::RealizedTy>,
@@ -3893,6 +4003,7 @@ impl BexVm {
             root_context: Context::default(),
             pending_call_type_args: Vec::new(),
             compiled_type_args: Vec::new(),
+            saved_call_types: Vec::new(),
             call_type_args: Vec::new(),
             type_arg_pool: Vec::new(),
             compiled_delivery: None,
@@ -8741,10 +8852,9 @@ impl BexVm {
             bf.faulting_pc = call_site;
         }
 
-        // SAFETY: the active heap permit prevents collection throughout call
-        // setup, including stack/frame growth. Reuse this object and its resolved
-        // function only within this execution interval; exec reloads the function
-        // from the rooted frame after a yield.
+        // SAFETY: setup does not collect. An inline compiled body can collect
+        // once its frame is rooted; these borrowed objects must not be used
+        // after invoking that body.
         let callee_object: &'static Object = unsafe { callee_ptr.get() };
 
         // A host closure isn't a Function/Closure/BoundMethod and dispatches via
@@ -8901,17 +9011,14 @@ impl BexVm {
                     } else {
                         closure_type_args
                     };
-                let restore_pending = if !native_type_args.is_empty() {
-                    Some(std::mem::replace(
-                        &mut self.pending_call_type_args,
-                        native_type_args.to_vec(),
-                    ))
-                } else {
-                    None
-                };
+                let restore_pending = !native_type_args.is_empty();
+                if restore_pending {
+                    self.save_call_types();
+                    self.pending_call_type_args = native_type_args.to_vec();
+                }
                 let native_result = func(self, &args);
-                if let Some(prev) = restore_pending {
-                    self.pending_call_type_args = prev;
+                if restore_pending {
+                    let _ = self.restore_call_types();
                 }
                 self.settle();
 
@@ -9587,6 +9694,19 @@ impl BexVm {
         }
     }
 
+    pub(crate) fn save_call_types(&mut self) {
+        self.saved_call_types.push(SavedCallTypes {
+            args: std::mem::take(&mut self.pending_call_type_args),
+            values: std::mem::take(&mut self.pending_call_type_values),
+        });
+    }
+
+    pub(crate) fn restore_call_types(&mut self) -> Vec<bex_vm_types::RealizedTy> {
+        let previous = self.saved_call_types.pop().expect("saved call types");
+        self.pending_call_type_values = previous.values;
+        std::mem::replace(&mut self.pending_call_type_args, previous.args)
+    }
+
     fn execute_call_from_locals_offset_with_type_args(
         &mut self,
         callee_ptr: HeapPtr,
@@ -9600,12 +9720,9 @@ impl BexVm {
         // may be a frame's own vector); a pooled vector carries it.
         let mut pending_type_args = self.pooled_type_args();
         pending_type_args.extend_from_slice(options.type_args);
-        let previous_type_args =
-            std::mem::replace(&mut self.pending_call_type_args, pending_type_args);
-        let previous_type_values = std::mem::replace(
-            &mut self.pending_call_type_values,
-            options.type_values.to_vec(),
-        );
+        self.save_call_types();
+        self.pending_call_type_args = pending_type_args;
+        self.pending_call_type_values = options.type_values.to_vec();
         let frames_before = self.frames.len();
         self.pending_call_passes_type_args = !options.type_args.is_empty();
         let result = self.execute_call_from_locals_offset(
@@ -9615,21 +9732,8 @@ impl BexVm {
             frame_idx,
             function,
         );
-        let pending_type_args =
-            std::mem::replace(&mut self.pending_call_type_args, previous_type_args);
-        self.recycle_type_args(pending_type_args);
-        self.pending_call_type_values = previous_type_values;
-        // FOLLOW-UP (not a defect today): the rooted copy of the values is
-        // dropped one line above, and the writes below read `options`, which
-        // borrows a caller *local* that no GC root covers. A collection between
-        // the two would forward the rooted copy and leave these pointers stale.
-        // It is unreachable as written — `execute_call_from_locals_offset` only
-        // pushes a frame and sizes the eval stack, with no TLAB allocation, and
-        // the native path that can allocate pushes no bytecode frame, so the
-        // guard below declines. Recorded because this lane now carries recovered
-        // identities as well as method-level ones, so the day something on that
-        // path starts allocating, this is where it bites.
-        //
+        // The pending lanes are forwarded if an inline body collects. Caller
+        // slices and the saved outer lanes must not be read from Rust locals.
         // A definition overlay can arrive without any type-argument slots of its
         // own — interface dispatch hands one down for a method that declares no
         // generics — so the metadata lane is written whenever any of the three
@@ -9638,14 +9742,20 @@ impl BexVm {
         // An inline compiled body had them bound before it ran (the funnel's
         // `bind_passed_type_args`); the one way its frame is still here is an
         // error that left it pushed for the unwinder, at `RUNNING`.
-        if (!options.type_args.is_empty() || !options.type_values.is_empty())
+        if (!self.pending_call_type_args.is_empty() || !self.pending_call_type_values.is_empty())
             && self.frames.len() == frames_before + 1
             && *frame_idx == frames_before
             && let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frames_before)
             && frame.instruction_ptr != crate::compiled_rt::RUNNING
         {
-            append_passed_type_args(frame, options.type_args, options.type_values);
+            append_passed_type_args(
+                frame,
+                &self.pending_call_type_args,
+                &self.pending_call_type_values,
+            );
         }
+        let pending_type_args = self.restore_call_types();
+        self.recycle_type_args(pending_type_args);
         result
     }
 
@@ -13583,14 +13693,25 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // executing, so this is the only owner of their realized type heads.
         // A runtime declaration bound to T must remain live across any GC the
         // native performs or triggers through a continuation.
-        for ty in &self.pending_call_type_args {
+        for ty in self
+            .pending_call_type_args
+            .iter()
+            .chain(&self.call_type_args)
+            .chain(&self.compiled_type_args)
+            .chain(self.saved_call_types.iter().flat_map(|saved| &saved.args))
+        {
             ty.visit_heads(&mut |head| {
                 if head.is_resolved() {
                     roots.push(head.ptr());
                 }
             });
         }
-        for value in self.pending_call_type_values.iter().flatten() {
+        for value in self
+            .pending_call_type_values
+            .iter()
+            .chain(self.saved_call_types.iter().flat_map(|saved| &saved.values))
+            .flatten()
+        {
             value.ty.visit_heads(&mut |head| {
                 if head.is_resolved() {
                     roots.push(head.ptr());
@@ -13609,6 +13730,10 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 .iter()
                 .filter_map(|log| log.data.as_object_ptr()),
         );
+        if let Some(VmError::Thrown(thrown)) = self.compiled_delivery.as_deref() {
+            roots.extend(thrown.value.as_object_ptr());
+            roots.extend(thrown.context.and_then(|value| value.as_object_ptr()));
+        }
 
         // Frame function pointers (needed once closures are heap-allocated)
         roots.extend(self.collect_frame_roots());
@@ -13637,7 +13762,17 @@ impl ::bex_vm_types::RootHaver for BexVm {
             }
         }
 
-        for ty in &mut self.pending_call_type_args {
+        for ty in self
+            .pending_call_type_args
+            .iter_mut()
+            .chain(&mut self.call_type_args)
+            .chain(&mut self.compiled_type_args)
+            .chain(
+                self.saved_call_types
+                    .iter_mut()
+                    .flat_map(|saved| &mut saved.args),
+            )
+        {
             ty.visit_heads_mut(&mut |head| {
                 if head.is_resolved()
                     && let Some(&moved) = roots.get(&head.ptr())
@@ -13646,7 +13781,16 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 }
             });
         }
-        for value in self.pending_call_type_values.iter_mut().flatten() {
+        for value in self
+            .pending_call_type_values
+            .iter_mut()
+            .chain(
+                self.saved_call_types
+                    .iter_mut()
+                    .flat_map(|saved| &mut saved.values),
+            )
+            .flatten()
+        {
             value.ty.visit_heads_mut(&mut |head| {
                 if head.is_resolved()
                     && let Some(&moved) = roots.get(&head.ptr())
@@ -13696,6 +13840,15 @@ impl ::bex_vm_types::RootHaver for BexVm {
         }
         for transfer in &mut self.context_transfers {
             for value in [&mut transfer.handling, &mut transfer.target] {
+                if let Some(ptr) = value.as_object_ptr()
+                    && let Some(&new_ptr) = roots.get(&ptr)
+                {
+                    *value = Value::object(new_ptr);
+                }
+            }
+        }
+        if let Some(VmError::Thrown(thrown)) = self.compiled_delivery.as_deref_mut() {
+            for value in std::iter::once(&mut thrown.value).chain(thrown.context.iter_mut()) {
                 if let Some(ptr) = value.as_object_ptr()
                     && let Some(&new_ptr) = roots.get(&ptr)
                 {

@@ -2,7 +2,8 @@
 //!
 //! BEX uses a safepoint-based, generational copying collector:
 //!
-//! - **Safepoints**: GC only runs when all VMs are yielded (async operations)
+//! - **Safepoints**: GC runs with exclusive heap access: all mutators are parked,
+//!   or compiled code collects in place while every other mutator is parked.
 //! - **Generational**: Four spaces — Gen0 (nursery), Gen1, Gen2, and inactive
 //! - **Full collection**: Traces all three active generations, copies survivors
 //!   to inactive, swaps inactive↔Gen2, clears Gen0 and Gen1
@@ -118,15 +119,18 @@ impl BexHeap {
     ///
     /// # Safety
     ///
-    /// Caller must ensure all VMs are at safepoints (not executing).
-    /// This is typically guaranteed by the engine's epoch-based GC protocol.
+    /// Caller must ensure exclusive heap access: either all mutators are parked,
+    /// or the collecting VM holds the only active permit and every other mutator
+    /// is parked. An in-place collector must expose all live compiled values as
+    /// roots. All roots must be forwarded and TLABs invalidated before any mutator
+    /// resumes heap access.
     ///
     /// If this panics, the heap must not be used again: survivors may already
     /// have been moved out of the slots the roots point at.
     ///
     /// # Arguments
     ///
-    /// * `roots` — Stack roots from all yielded VMs plus any externally-held handles.
+    /// * `roots` — Roots from all VMs (including an in-place collector) and external handles.
     ///
     /// # Returns
     ///
@@ -512,7 +516,7 @@ impl BexHeap {
         self.bump_epoch();
 
         // Count objects across all active generations for stats.
-        // SAFETY: GC runs at safepoints, no VMs are executing.
+        // SAFETY: collection caller guarantees exclusive heap access.
         let old_count =
             unsafe { self.gen0_ref().len() + self.gen1_ref().len() + self.gen2_ref().len() };
 
@@ -634,7 +638,7 @@ impl BexHeap {
         // installed, so `value_mut_for_fixup` / dirty-card scan didn't
         // patch it and it now points into a cleared region.
         #[cfg(feature = "heap_debug")]
-        // SAFETY: GC safepoint, all permits parked.
+        // SAFETY: collection caller guarantees exclusive heap access.
         unsafe {
             self.debug_assert_post_major_no_dead_refs();
         }
@@ -715,7 +719,7 @@ impl BexHeap {
         let obj = unsafe { std::ptr::replace(old_ptr.as_ptr(), Object::Tombstone) };
 
         // Append to the destination space and get a pointer to the new location.
-        // SAFETY: GC runs at safepoints, no VMs are executing.
+        // SAFETY: collection caller guarantees exclusive heap access.
         let new_ptr = unsafe {
             let space = &mut *to.get();
             let new_idx = space.len();
@@ -914,7 +918,7 @@ impl BexHeap {
     /// and now points into the cleared Gen0/Gen1.
     ///
     /// # Safety
-    /// Must be called only at a GC safepoint (all permits parked).
+    /// Caller must hold exclusive heap access under the collection contract.
     #[cfg(feature = "heap_debug")]
     unsafe fn debug_assert_post_major_no_dead_refs(&self) {
         // SAFETY: caller is at a GC safepoint.
@@ -1523,7 +1527,8 @@ impl BexHeap {
     ///
     /// # Safety
     ///
-    /// Caller must ensure all VMs are at safepoints (not executing).
+    /// Caller must ensure exclusive heap access and root forwarding under the
+    /// same contract as [`Self::collect_garbage`], including in-place collection.
     ///
     /// If this panics, the heap must not be used again: survivors may already
     /// have been moved out of the slots the roots point at.
@@ -1724,7 +1729,8 @@ impl BexHeap {
     ///
     /// # Safety
     ///
-    /// Caller must ensure all VMs are at safepoints (not executing).
+    /// Caller must ensure exclusive heap access and root forwarding under the
+    /// same contract as [`Self::collect_garbage`], including in-place collection.
     ///
     /// If this panics, the heap must not be used again: survivors may already
     /// have been moved out of the slots the roots point at.
