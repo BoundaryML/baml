@@ -94,11 +94,7 @@ impl<'db> Generator<'_, 'db> {
                     let field = self.operand(block, field)?;
                     values.push(self.value_arg(&field.code, field.repr));
                 }
-                let class = self.hoist(Expr::new(
-                    format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
-                    Repr::Value,
-                ));
-                let class = format!("{}.as_object_ptr().expect(\"class object\")", class.code);
+                let class = format!("vm.idx_to_ptr(ObjectIndex::from_raw({object}))");
                 if type_arg_templates.is_empty() {
                     return Ok(Expr::new(
                         format!("vm.new_instance({class}, vec![{}])", values.join(", ")),
