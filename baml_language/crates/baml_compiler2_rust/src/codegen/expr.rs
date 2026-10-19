@@ -162,14 +162,14 @@ impl<'db> Generator<'_, 'db> {
                         "yielding builtin `{key}` emitted inline"
                     )));
                 }
-                let ordinal = self.native_ordinal(key);
+                let ordinal = self.builtin_ordinal(key);
                 let template = self.hoist(Expr::new(
                     format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
                     Repr::Value,
                 ));
                 let code = self.fallible(
                     block,
-                    &format!("vm.call_builtin(native_{ordinal}(), &[{}])", template.code),
+                    &format!("vm.call_builtin(builtin_{ordinal}(), &[{}])", template.code),
                 )?;
                 Ok(Expr::new(code, Repr::Value))
             }
@@ -487,9 +487,9 @@ impl<'db> Generator<'_, 'db> {
     }
 
     /// The module's ordinal for the builtin `key`, binding it on first use.
-    fn native_ordinal(&mut self, key: &str) -> usize {
-        let next = self.natives.len();
-        *self.natives.entry(key.to_owned()).or_insert(next)
+    fn builtin_ordinal(&mut self, key: &str) -> usize {
+        let next = self.builtins.len();
+        *self.builtins.entry(key.to_owned()).or_insert(next)
     }
 
     fn binary(&mut self, block: BlockId, op: BinOp, left: &Expr, right: &Expr) -> Gen<Expr> {

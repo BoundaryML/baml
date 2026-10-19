@@ -99,39 +99,39 @@ pub struct PackArgs {
     #[arg(short, long, help_heading = "Build options")]
     pub output: Option<PathBuf>,
 
-    /// Compile the program's functions to native code where possible.
+    /// Compile the program's functions to Rust where possible.
     ///
     /// Every function the compiler admits runs as Rust inside the VM; the rest
     /// run as bytecode, unchanged. Builds a host binary with `cargo` from the
-    /// BAML language workspace named by `--native-workspace`.
+    /// BAML language workspace named by `--rust-workspace`.
     #[arg(long, help_heading = "Build options")]
-    pub native: bool,
+    pub rust: bool,
 
-    /// The `baml_language` workspace checkout the native host is built from.
+    /// The `baml_language` workspace checkout the generated host is built from.
     #[arg(
         long,
         value_name = "DIR",
-        requires = "native",
+        requires = "rust",
         help_heading = "Build options"
     )]
-    pub native_workspace: Option<PathBuf>,
+    pub rust_workspace: Option<PathBuf>,
 
-    /// With `--native`, list which functions compiled natively and why the
+    /// With `--rust`, list which functions compiled to Rust and why the
     /// others did not.
-    #[arg(long, requires = "native", help_heading = "Build options")]
-    pub native_report: bool,
+    #[arg(long, requires = "rust", help_heading = "Build options")]
+    pub rust_report: bool,
 
-    /// With `--native`, the directory the generated crate is built in.
-    /// Defaults to `target/baml-native` under the current directory.
+    /// With `--rust`, the directory the generated crate is built in.
+    /// Defaults to `target/baml-rust` under the current directory.
     #[arg(
         long,
         value_name = "DIR",
-        requires = "native",
+        requires = "rust",
         help_heading = "Build options"
     )]
-    pub native_build_dir: Option<PathBuf>,
+    pub rust_build_dir: Option<PathBuf>,
 
-    /// With `--native`, how hard cargo optimizes the generated crate.
+    /// With `--rust`, how hard cargo optimizes the generated crate.
     ///
     /// `release` is the shipping build (fat LTO, one codegen unit, symbols
     /// stripped). `fast` trades that for build time (opt-level 1, no LTO, line
@@ -141,11 +141,11 @@ pub struct PackArgs {
         long,
         value_enum,
         value_name = "PROFILE",
-        default_value_t = NativeProfile::Release,
-        requires = "native",
+        default_value_t = RustProfile::Release,
+        requires = "rust",
         help_heading = "Build options"
     )]
-    pub native_profile: NativeProfile,
+    pub rust_profile: RustProfile,
 
     /// Target triple for the packaged executable.
     ///
@@ -174,15 +174,15 @@ pub struct PackArgs {
     pub expression: Option<String>,
 }
 
-/// The cargo profile a `--native` build compiles the generated crate under.
+/// The cargo profile a `--rust` build compiles the generated crate under.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
-pub enum NativeProfile {
+pub enum RustProfile {
     #[default]
     Release,
     Fast,
 }
 
-impl NativeProfile {
+impl RustProfile {
     /// The `[profile.release]` settings of the generated crate's manifest —
     /// the build always runs as `cargo build --release`, and the profile
     /// decides what that means.
@@ -284,8 +284,8 @@ impl PackArgs {
         )
         .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
 
-        let native = if self.native {
-            reporter.spin("Compiling", "native bodies");
+        let compiled = if self.rust {
+            reporter.spin("Compiling", "BAML to Rust");
             let callables = envelope.program.rendered_callables();
             let entries: Option<Vec<usize>> = targets
                 .iter()
@@ -295,7 +295,7 @@ impl PackArgs {
                         .map(|callable| callable.object.raw())
                 })
                 .collect();
-            let module = baml_db::native::compile_program(
+            let module = baml_db::rust_backend::compile_program(
                 &db,
                 root,
                 &envelope.program,
@@ -305,8 +305,8 @@ impl PackArgs {
                 entries.as_deref(),
             )
             .map_err(|error| anyhow!(error))?;
-            if self.native_report {
-                reporter.suspend(|| report_native(&module));
+            if self.rust_report {
+                reporter.suspend(|| report_rust(&module));
             }
             Some(module)
         } else {
@@ -316,7 +316,7 @@ impl PackArgs {
         let label = label_for(&targets);
         reporter.spin("Packaging", &label);
         let target_triple = self.resolved_target_triple()?;
-        let host_bytes = if native.is_some() {
+        let host_bytes = if compiled.is_some() {
             Vec::new()
         } else {
             read_host_binary(target_triple, reporter)?
@@ -328,8 +328,8 @@ impl PackArgs {
             .clone()
             .unwrap_or_else(|| default_output_path(&basename, target_triple));
 
-        if let Some(module) = native {
-            self.build_native(&module, &serialized, &output_path, target_triple, reporter)?;
+        if let Some(module) = compiled {
+            self.build_rust(&module, &serialized, &output_path, target_triple, reporter)?;
         } else {
             let mut output_file = std::fs::File::create(&output_path)
                 .with_context(|| format!("failed to create {}", output_path.display()))?;
@@ -420,17 +420,17 @@ impl PackArgs {
     }
 
     /// The generated crate embeds the program its compiled bodies replace.
-    fn build_native(
+    fn build_rust(
         &self,
-        module: &baml_db::native::NativeModule,
+        module: &baml_db::rust_backend::RustModule,
         serialized: &[u8],
         output_path: &Path,
         target_triple: &str,
         reporter: &Reporter,
     ) -> Result<()> {
-        let Some(workspace) = self.native_workspace.as_deref() else {
+        let Some(workspace) = self.rust_workspace.as_deref() else {
             anyhow::bail!(
-                "`--native` needs `--native-workspace <DIR>`: the `baml_language` checkout \
+                "`--rust` needs `--rust-workspace <DIR>`: the `baml_language` checkout \
                  whose `crates/bex_vm` the compiled bodies link against"
             );
         };
@@ -444,19 +444,19 @@ impl PackArgs {
         ] {
             if !workspace.join(crate_dir).join("Cargo.toml").is_file() {
                 anyhow::bail!(
-                    "`--native-workspace` {} does not contain {crate_dir}",
+                    "`--rust-workspace` {} does not contain {crate_dir}",
                     workspace.display()
                 );
             }
         }
         if target_triple != release_host_target_triple()? {
-            anyhow::bail!("`--native` builds for this machine only; drop `--target`");
+            anyhow::bail!("`--rust` builds for this machine only; drop `--target`");
         }
 
         let build_dir = self
-            .native_build_dir
+            .rust_build_dir
             .clone()
-            .unwrap_or_else(|| PathBuf::from("target").join("baml-native"));
+            .unwrap_or_else(|| PathBuf::from("target").join("baml-rust"));
         let src_dir = build_dir.join("src");
         std::fs::create_dir_all(&src_dir)
             .with_context(|| format!("failed to create {}", src_dir.display()))?;
@@ -468,19 +468,19 @@ impl PackArgs {
             src_dir.join("main.rs"),
             "fn main() -> std::process::ExitCode {\n    \
              baml_pack_host::run_embedded(\n        \
-             baml_native_program::PROGRAM_ARTIFACT,\n        \
-             Some(&baml_native_program::NATIVE_BODIES),\n    )\n}\n",
+             baml_rust_program::PROGRAM_ARTIFACT,\n        \
+             Some(&baml_rust_program::COMPILED_BODIES),\n    )\n}\n",
         )
         .context("failed to write the host shim")?;
         std::fs::write(
             build_dir.join("Cargo.toml"),
-            native_manifest(&workspace, self.native_profile),
+            rust_manifest(&workspace, self.rust_profile),
         )
         .context("failed to write the generated manifest")?;
 
         reporter.spin(
             "Building",
-            format!("{} native functions with cargo", module.functions.len()),
+            format!("{} compiled functions with cargo", module.functions.len()),
         );
         // The host must accept the envelope this CLI encodes, and the
         // fingerprint exists to refuse a host built from other sources. So the
@@ -498,7 +498,7 @@ impl PackArgs {
                 .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned());
             if head.as_deref() != Some(fingerprint) {
                 anyhow::bail!(
-                    "`--native-workspace` {} is at {}, but this CLI was built from {fingerprint}; \
+                    "`--rust-workspace` {} is at {}, but this CLI was built from {fingerprint}; \
                      check out that commit so the host and this CLI agree on the program format",
                     workspace.display(),
                     head.as_deref().unwrap_or("an unknown commit"),
@@ -539,12 +539,11 @@ impl PackArgs {
                 .context("failed to run cargo; is it on PATH?")
         })?;
         if !status.success() {
-            anyhow::bail!("cargo build of the native host failed ({status})");
+            anyhow::bail!("cargo build of the generated host failed ({status})");
         }
-        let built = target_dir.join("release").join(format!(
-            "baml_native_program{}",
-            std::env::consts::EXE_SUFFIX
-        ));
+        let built = target_dir
+            .join("release")
+            .join(format!("baml_rust_program{}", std::env::consts::EXE_SUFFIX));
         std::fs::copy(&built, output_path).with_context(|| {
             format!(
                 "failed to copy {} to {}",
@@ -585,14 +584,14 @@ impl PackArgs {
     /// bytes), and emit determinism guarantees a reused image is byte-identical
     /// to a fresh compile, so serving from cache never changes the artifact.
     ///
-    /// Native bodies and bytecode must come from the same lowering.
+    /// Compiled bodies and bytecode must come from the same lowering.
     fn load_and_compile_project(
         &self,
         reporter: &Reporter,
     ) -> Result<(ProjectDatabase, baml_db::SourceRoot, Program, bool)> {
         let mut session = crate::project_session::ProjectSession::open(
             self.from.as_deref(),
-            if self.native {
+            if self.rust {
                 crate::project_session::CacheUse::StoreOnly
             } else {
                 crate::project_session::CacheUse::ReadWrite
@@ -849,7 +848,7 @@ fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
         .unwrap_or_else(|| name.to_string())
 }
 
-fn native_manifest(workspace: &Path, profile: NativeProfile) -> String {
+fn rust_manifest(workspace: &Path, profile: RustProfile) -> String {
     let dep = |name: &str| {
         format!(
             "{name} = {{ path = {:?} }}\n",
@@ -857,9 +856,9 @@ fn native_manifest(workspace: &Path, profile: NativeProfile) -> String {
         )
     };
     format!(
-        "[package]\nname = \"baml_native_program\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\
+        "[package]\nname = \"baml_rust_program\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\
          publish = false\n\n[workspace]\n\n[lib]\npath = \"src/lib.rs\"\n\n\
-         [[bin]]\nname = \"baml_native_program\"\npath = \"src/main.rs\"\n\n\
+         [[bin]]\nname = \"baml_rust_program\"\npath = \"src/main.rs\"\n\n\
          [dependencies]\n{}{}{}\n\
          [profile.release]\n{}",
         dep("bex_vm"),
@@ -869,16 +868,16 @@ fn native_manifest(workspace: &Path, profile: NativeProfile) -> String {
     )
 }
 
-fn report_native(module: &baml_db::native::NativeModule) {
+fn report_rust(module: &baml_db::rust_backend::RustModule) {
     let mut out = String::new();
     for function in &module.functions {
-        out.push_str(&format!("native   {}\n", function.display));
+        out.push_str(&format!("rust     {}\n", function.display));
     }
     for (name, rejection) in &module.rejected {
         out.push_str(&format!("bytecode {name:<48} {rejection}\n"));
     }
     out.push_str(&format!(
-        "{} native, {} bytecode\n",
+        "{} rust, {} bytecode\n",
         module.functions.len(),
         module.rejected.len()
     ));
@@ -1031,11 +1030,11 @@ mod tests {
             functions: Vec::new(),
             file: None,
             output: None,
-            native: false,
-            native_workspace: None,
-            native_report: false,
-            native_build_dir: None,
-            native_profile: NativeProfile::Release,
+            rust: false,
+            rust_workspace: None,
+            rust_report: false,
+            rust_build_dir: None,
+            rust_profile: RustProfile::Release,
             target_triple: None,
             output_format: OutputFormat::Json,
             from: None,
@@ -1482,13 +1481,13 @@ mod tests {
     }
 
     #[test]
-    fn test_native_manifest_release_profile() {
-        let manifest = native_manifest(Path::new("/ws"), NativeProfile::Release);
+    fn test_rust_manifest_release_profile() {
+        let manifest = rust_manifest(Path::new("/ws"), RustProfile::Release);
         assert_eq!(
             manifest.replace(r"\\", "/"),
-            "[package]\nname = \"baml_native_program\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\
+            "[package]\nname = \"baml_rust_program\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\
              publish = false\n\n[workspace]\n\n[lib]\npath = \"src/lib.rs\"\n\n\
-             [[bin]]\nname = \"baml_native_program\"\npath = \"src/main.rs\"\n\n\
+             [[bin]]\nname = \"baml_rust_program\"\npath = \"src/main.rs\"\n\n\
              [dependencies]\n\
              bex_vm = { path = \"/ws/crates/bex_vm\" }\n\
              bex_vm_types = { path = \"/ws/crates/bex_vm_types\" }\n\
@@ -1500,9 +1499,9 @@ mod tests {
     }
 
     #[test]
-    fn test_native_manifest_fast_profile() {
-        let manifest = native_manifest(Path::new("/ws"), NativeProfile::Fast);
-        let release = native_manifest(Path::new("/ws"), NativeProfile::Release);
+    fn test_rust_manifest_fast_profile() {
+        let manifest = rust_manifest(Path::new("/ws"), RustProfile::Fast);
+        let release = rust_manifest(Path::new("/ws"), RustProfile::Release);
         let (head, profile) = manifest.split_once("[profile.release]\n").unwrap();
         assert_eq!(
             Some(head),
@@ -1521,19 +1520,19 @@ mod tests {
     }
 
     #[test]
-    fn test_native_profile_flag_parses_and_requires_native() {
+    fn test_rust_profile_flag_parses_and_requires_rust() {
         use clap::Parser;
         #[derive(Parser)]
         struct Wrapper {
             #[command(flatten)]
             args: PackArgs,
         }
-        let parsed = Wrapper::try_parse_from(["baml-pack", "--native"]).unwrap();
-        assert_eq!(parsed.args.native_profile, NativeProfile::Release);
+        let parsed = Wrapper::try_parse_from(["baml-pack", "--rust"]).unwrap();
+        assert_eq!(parsed.args.rust_profile, RustProfile::Release);
         let parsed =
-            Wrapper::try_parse_from(["baml-pack", "--native", "--native-profile", "fast"]).unwrap();
-        assert_eq!(parsed.args.native_profile, NativeProfile::Fast);
-        assert!(Wrapper::try_parse_from(["baml-pack", "--native-profile", "fast"]).is_err());
+            Wrapper::try_parse_from(["baml-pack", "--rust", "--rust-profile", "fast"]).unwrap();
+        assert_eq!(parsed.args.rust_profile, RustProfile::Fast);
+        assert!(Wrapper::try_parse_from(["baml-pack", "--rust-profile", "fast"]).is_err());
     }
 
     #[test]

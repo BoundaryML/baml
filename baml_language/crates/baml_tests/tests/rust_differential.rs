@@ -1,6 +1,6 @@
 //! Packs the probe programs once with compiled bodies, then runs each as
 //! bytecode, compiled, and compiled under GC stress. All three must agree.
-//! Run with `cargo test -p baml_tests --test native_differential -- --ignored`.
+//! Run with `cargo test -p baml_tests --test rust_differential -- --ignored`.
 use std::{path::Path, process::Command, time::Instant};
 
 const PROBES: &[&str] = &[
@@ -21,10 +21,10 @@ const PROBES: &[&str] = &[
 
 #[test]
 #[ignore = "builds a generated Rust crate with cargo"]
-fn native_differential() {
+fn rust_differential() {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
-    let build = Path::new(env!("CARGO_TARGET_TMPDIR")).join("native-differential");
+    let build = Path::new(env!("CARGO_TARGET_TMPDIR")).join("rust-differential");
     std::fs::create_dir_all(&build).unwrap();
     let executable = build.join(format!("probes{}", std::env::consts::EXE_SUFFIX));
     let mut argv = vec![
@@ -32,15 +32,15 @@ fn native_differential() {
         "--agent-skill-check".into(),
         "off".into(),
         "pack".into(),
-        "--native".into(),
-        "--native-profile".into(),
+        "--rust".into(),
+        "--rust-profile".into(),
         "fast".into(),
-        "--native-workspace".into(),
+        "--rust-workspace".into(),
         workspace.display().to_string(),
-        "--native-build-dir".into(),
+        "--rust-build-dir".into(),
         build.display().to_string(),
         "--from".into(),
-        manifest.join("native_diff").display().to_string(),
+        manifest.join("rust_diff").display().to_string(),
         "-o".into(),
         executable.display().to_string(),
     ];
@@ -48,22 +48,22 @@ fn native_differential() {
         argv.extend(["--function".into(), (*probe).into()]);
     }
     let started = Instant::now();
-    let result = baml_cli::run_cli(argv).expect("native pack must succeed");
+    let result = baml_cli::run_cli(argv).expect("compiled pack must succeed");
     assert!(matches!(result, baml_cli::ExitCode::Success), "{result:?}");
-    eprintln!("native pack wall time: {:?}", started.elapsed());
+    eprintln!("compiled pack wall time: {:?}", started.elapsed());
     let started = Instant::now();
     let mut failures = Vec::new();
     for probe in PROBES {
         let mut outputs = Vec::new();
         for (mode, bodies, stress) in [
             ("bytecode", "0", "0"),
-            ("native", "1", "0"),
+            ("compiled", "1", "0"),
             ("gc-stress", "1", "1"),
         ] {
             let start = Instant::now();
             let output = Command::new(&executable)
                 .arg(probe)
-                .env("BAML_NATIVE_BODIES", bodies)
+                .env("BAML_COMPILED_BODIES", bodies)
                 .env("BAML_GC_STRESS", stress)
                 .env("NO_COLOR", "1")
                 .output()
@@ -71,7 +71,7 @@ fn native_differential() {
             eprintln!("{probe}/{mode}: {} ({:?})", output.status, start.elapsed());
             outputs.push(output);
         }
-        for (mode, actual) in ["native", "gc-stress"].into_iter().zip(&outputs[1..]) {
+        for (mode, actual) in ["compiled", "gc-stress"].into_iter().zip(&outputs[1..]) {
             let expected = &outputs[0];
             if expected.status != actual.status
                 || expected.stdout != actual.stdout

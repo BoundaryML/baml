@@ -5,7 +5,7 @@
 //! and its admission table is compiler-side data a program cannot observe.
 
 use baml_compiler2_emit::OptLevel;
-use baml_db::native::{NativeModule, Rejection, compile_program};
+use baml_db::rust_backend::{Rejection, RustModule, compile_program};
 use bex_vm_types::{Instruction, Object, ObjectIndex, RealizedTy, types::Program};
 
 fn fingerprint(program: &Program) -> [u8; 32] {
@@ -14,11 +14,11 @@ fn fingerprint(program: &Program) -> [u8; 32] {
         .1
 }
 
-fn compile(source: &str) -> NativeModule {
+fn compile(source: &str) -> RustModule {
     compile_with_program(source).0
 }
 
-fn compile_with_program(source: &str) -> (NativeModule, Program) {
+fn compile_with_program(source: &str) -> (RustModule, Program) {
     let db = baml_test_support::setup_test_db(source);
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
@@ -32,14 +32,14 @@ fn compile_with_program(source: &str) -> (NativeModule, Program) {
         fingerprint(&program),
         None,
     )
-    .expect("native module renders");
+    .expect("generated module renders");
     (module, program)
 }
 
 /// Cached/artifact programs lack the compile-time MIR-to-PC map. The
-/// existing MIR shape guard must refuse to generate native bodies for them.
+/// existing MIR shape guard must refuse to generate compiled bodies for them.
 #[test]
-fn deserialized_program_cannot_supply_native_bodies() {
+fn deserialized_program_cannot_supply_compiled_bodies() {
     let db = baml_test_support::setup_test_db("function answer() -> int { 42 }");
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
@@ -53,7 +53,7 @@ fn deserialized_program_cannot_supply_native_bodies() {
         fingerprint(&program),
         None,
     )
-    .expect("native module renders");
+    .expect("generated module renders");
     assert!(fresh.functions.iter().any(|f| f.name == "user.answer"));
 
     let serialized = borsh::to_vec(&program).unwrap();
@@ -67,7 +67,7 @@ fn deserialized_program_cannot_supply_native_bodies() {
         fingerprint(&restored),
         None,
     )
-    .expect("native module renders");
+    .expect("generated module renders");
     assert!(cached.functions.is_empty());
     assert!(matches!(
         rejection(&cached, "user.answer"),
@@ -153,7 +153,7 @@ function main() -> string {
 }
 "#;
 
-fn rejection<'a>(module: &'a NativeModule, name: &str) -> &'a Rejection {
+fn rejection<'a>(module: &'a RustModule, name: &str) -> &'a Rejection {
     &module
         .rejected
         .iter()
@@ -221,7 +221,7 @@ fn compute_shaped_functions_are_admitted_and_the_rest_stay_bytecode() {
 fn generated_module_is_well_formed_rust() {
     let (module, program) = compile_with_program(FIXTURE);
     syn::parse_file(&module.source).expect("generated module parses as Rust");
-    assert!(module.source.contains("pub static NATIVE_BODIES"));
+    assert!(module.source.contains("pub static COMPILED_BODIES"));
     assert!(module.source.contains("include_bytes!(\"program.bexa\")"));
     // Compacted: whitespace out, and a trailing comma `prettyplease` adds to
     // a wrapped argument list with it, so the formatting of a long entry
@@ -435,7 +435,7 @@ function here() -> reflect.Package { reflect.Package.current() }
         words.contains("vm.new_map(RealizedTy::String,RealizedTy::Int)"),
         "{words}"
     );
-    assert!(words.contains("vm.call_builtin(native_"), "{words}");
+    assert!(words.contains("vm.call_builtin(builtin_"), "{words}");
     // A class-keyed map may run a user `hash`/`eq`: its index suspends.
     assert!(resumable("user.keyed"));
 
@@ -454,7 +454,7 @@ function here() -> reflect.Package { reflect.Package.current() }
 
     // A byte array literal is its pooled template deep-copied.
     let bytes = compact("user.bytes");
-    assert!(bytes.contains("vm.call_builtin(native_"), "{bytes}");
+    assert!(bytes.contains("vm.call_builtin(builtin_"), "{bytes}");
     assert!(
         module.source.contains("\"baml.deep_copy\""),
         "deep_copy is bound by key"
@@ -484,7 +484,7 @@ function here() -> reflect.Package { reflect.Package.current() }
 }
 
 /// The generated body of one function, for shape assertions.
-fn body_of(module: &NativeModule, name: &str) -> String {
+fn body_of(module: &RustModule, name: &str) -> String {
     let symbol = &module
         .functions
         .iter()
@@ -810,7 +810,7 @@ fn functions_whose_names_render_alike_compile_to_their_own_objects() {
         fingerprint(&program),
         None,
     )
-    .expect("native module renders");
+    .expect("generated module renders");
 
     let alike: Vec<_> = module
         .functions
@@ -984,7 +984,7 @@ fn entry_points_prune_admission_to_what_they_reach() {
         fingerprint(&program),
         Some(&entries),
     )
-    .expect("native module renders");
+    .expect("generated module renders");
     let admitted: Vec<&str> = module.functions.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(admitted, ["user.fib"], "only the entry's closure compiles");
     assert!(matches!(
@@ -1019,7 +1019,7 @@ fn entry_points_prune_admission_to_what_they_reach() {
         fingerprint(&program),
         Some(&entries),
     )
-    .expect("native module renders");
+    .expect("generated module renders");
     let admitted: Vec<&str> = module.functions.iter().map(|f| f.name.as_str()).collect();
     for name in [
         "user.main",

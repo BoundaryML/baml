@@ -45,7 +45,7 @@ fn extract_envelope() -> Result<PackEnvelope, String> {
     Ok(envelope)
 }
 
-fn native_bodies_disabled(value: Option<&str>) -> bool {
+fn compiled_bodies_disabled(value: Option<&str>) -> bool {
     value.is_some_and(|value| {
         let value = value.trim();
         value.eq_ignore_ascii_case("0")
@@ -54,32 +54,32 @@ fn native_bodies_disabled(value: Option<&str>) -> bool {
     })
 }
 
-fn native_bodies_from_env(
-    native_bodies: Option<bex_engine::NativeBodies>,
-) -> Option<bex_engine::NativeBodies> {
-    let value = std::env::var("BAML_NATIVE_BODIES").ok();
-    if native_bodies_disabled(value.as_deref()) {
+fn compiled_bodies_from_env(
+    compiled_bodies: Option<bex_engine::CompiledBodies>,
+) -> Option<bex_engine::CompiledBodies> {
+    let value = std::env::var("BAML_COMPILED_BODIES").ok();
+    if compiled_bodies_disabled(value.as_deref()) {
         None
     } else {
-        native_bodies
+        compiled_bodies
     }
 }
 
 fn run_envelope(
     envelope: PackEnvelope,
-    native_bodies: Option<bex_engine::NativeBodies>,
+    compiled_bodies: Option<bex_engine::CompiledBodies>,
 ) -> ExitCode {
-    let native_bodies = native_bodies_from_env(native_bodies);
+    let compiled_bodies = compiled_bodies_from_env(compiled_bodies);
     match envelope.mode {
-        PackMode::Single => run_single(envelope, native_bodies),
-        PackMode::Subcommand => run_subcommand(envelope, native_bodies),
+        PackMode::Single => run_single(envelope, compiled_bodies),
+        PackMode::Subcommand => run_subcommand(envelope, compiled_bodies),
     }
 }
 
 /// Compiled bodies must match the authenticated artifact fingerprint.
 pub fn run_embedded(
     artifact: &[u8],
-    native_bodies: Option<&'static bex_engine::NativeBodyTable>,
+    compiled_bodies: Option<&'static bex_engine::CompiledBodyTable>,
 ) -> ExitCode {
     let envelope: Result<(PackEnvelope, [u8; 32]), String> =
         baml_artifact::decode_with_digest(baml_artifact::ArtifactKind::PackedProgram, artifact)
@@ -93,7 +93,7 @@ pub fn run_embedded(
     match envelope {
         Ok((envelope, artifact_fingerprint)) => run_envelope(
             envelope,
-            native_bodies.map(|table| bex_engine::NativeBodies {
+            compiled_bodies.map(|table| bex_engine::CompiledBodies {
                 table,
                 artifact_fingerprint,
             }),
@@ -145,7 +145,7 @@ fn new_engine(
     program: bex_vm_types::Program,
     argv: Vec<String>,
     telemetry: btel_settings::artifact::ArtifactTelemetry,
-    native_bodies: Option<bex_engine::NativeBodies>,
+    compiled_bodies: Option<bex_engine::CompiledBodies>,
 ) -> Result<BexEngine, bex_engine::EngineError> {
     let recording = bex_engine::TelemetryRecording::from_artifact(&telemetry)?.with_host("pack");
     BexEngine::new_with_config(
@@ -156,13 +156,16 @@ fn new_engine(
             runtime_compiler: Some(bex_project::runtime_compiler()),
             artifact_telemetry: Some(telemetry),
             recording: Some(recording),
-            native_bodies,
+            compiled_bodies,
             ..Default::default()
         },
     )
 }
 
-fn run_single(envelope: PackEnvelope, native_bodies: Option<bex_engine::NativeBodies>) -> ExitCode {
+fn run_single(
+    envelope: PackEnvelope,
+    compiled_bodies: Option<bex_engine::CompiledBodies>,
+) -> ExitCode {
     debug_assert_eq!(
         envelope.targets.len(),
         1,
@@ -176,7 +179,7 @@ fn run_single(envelope: PackEnvelope, native_bodies: Option<bex_engine::NativeBo
         envelope.program,
         argv.clone(),
         envelope.telemetry,
-        native_bodies,
+        compiled_bodies,
     ) {
         Ok(e) => Arc::new(e),
         Err(e) => {
@@ -229,7 +232,7 @@ fn run_single(envelope: PackEnvelope, native_bodies: Option<bex_engine::NativeBo
 
 fn run_subcommand(
     envelope: PackEnvelope,
-    native_bodies: Option<bex_engine::NativeBodies>,
+    compiled_bodies: Option<bex_engine::CompiledBodies>,
 ) -> ExitCode {
     // `argv[1]` is the user's subcommand token after parsing; rebuild
     // os-level argv first so we can pass the trailing tokens to clap.
@@ -251,7 +254,7 @@ fn run_subcommand(
         envelope.program,
         bootstrap_argv,
         envelope.telemetry,
-        native_bodies,
+        compiled_bodies,
     ) {
         Ok(e) => e,
         Err(e) => {
@@ -390,16 +393,16 @@ fn finalize_dispatch(
 
 #[cfg(test)]
 mod tests {
-    use super::native_bodies_disabled;
+    use super::compiled_bodies_disabled;
 
     #[test]
-    fn native_bodies_env_off_values() {
+    fn compiled_bodies_env_off_values() {
         for value in ["0", "off", "OFF", "Off", "false", "FALSE", " 0 ", "False"] {
-            assert!(native_bodies_disabled(Some(value)), "{value:?}");
+            assert!(compiled_bodies_disabled(Some(value)), "{value:?}");
         }
-        for value in ["1", "on", "true", "", "yes", "no", "native"] {
-            assert!(!native_bodies_disabled(Some(value)), "{value:?}");
+        for value in ["1", "on", "true", "", "yes", "no", "rust"] {
+            assert!(!compiled_bodies_disabled(Some(value)), "{value:?}");
         }
-        assert!(!native_bodies_disabled(None));
+        assert!(!compiled_bodies_disabled(None));
     }
 }

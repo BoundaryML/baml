@@ -61,7 +61,7 @@ unsafe impl Send for FunctionKind {}
 #[allow(unsafe_code)]
 unsafe impl Sync for FunctionKind {}
 
-/// A natively compiled body for a [`FunctionKind::Bytecode`] function.
+/// A compiled body for a [`FunctionKind::Bytecode`] function.
 ///
 /// The BAML-to-Rust compiler emits one Rust function per admitted BAML
 /// function; the loader attaches it here, and the VM's call path runs it in
@@ -71,21 +71,21 @@ unsafe impl Sync for FunctionKind {}
 /// [`FunctionKind::Native`]: this crate cannot name the VM's body types.
 /// Runtime-only; never serialized.
 ///
-/// Built only through the `unsafe` [`NativeBody::new`], whose contract is what
+/// Built only through the `unsafe` [`CompiledBody::new`], whose contract is what
 /// makes calling the pointer sound.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NativeBody {
+pub struct CompiledBody {
     ptr: *const (),
     resumable: bool,
     slots: u32,
     cause_slot: Option<u32>,
 }
 
-impl NativeBody {
+impl CompiledBody {
     /// # Safety
     ///
     /// `ptr` must be cast from the `bex_vm::compiled_rt` body type `resumable`
-    /// names (`ResumableBody` when set, `CompiledBody` otherwise); the VM casts
+    /// names (`ResumableBody` when set, `InlineBody` otherwise); the VM casts
     /// it back to that type to call it.
     #[must_use]
     #[allow(unsafe_code)]
@@ -133,12 +133,12 @@ impl NativeBody {
     }
 }
 
-// SAFETY: a `NativeBody` points at immutable code (a function pointer), so
+// SAFETY: a `CompiledBody` points at immutable code (a function pointer), so
 // sharing it between threads is safe, exactly as for `FunctionKind::Native`.
 #[allow(unsafe_code)]
-unsafe impl Send for NativeBody {}
+unsafe impl Send for CompiledBody {}
 #[allow(unsafe_code)]
-unsafe impl Sync for NativeBody {}
+unsafe impl Sync for CompiledBody {}
 
 // Borsh proxy mirroring the previous serde-side shape — `Native(*const ())`
 // is runtime-only and must collapse to `NativeUnresolved` on the wire.
@@ -485,13 +485,13 @@ pub struct Function {
     /// Type of function.
     pub kind: FunctionKind,
 
-    /// Natively compiled body, attached at load time to a
+    /// Compiled body, attached at load time to a
     /// [`FunctionKind::Bytecode`] function the BAML-to-Rust compiler admitted.
     /// When set, the call path runs it instead of [`Self::bytecode`]; the
     /// bytecode stays authoritative for everything else (and for execution
     /// when this is `None`). Runtime-only; `None` on the wire.
     #[borsh(skip)]
-    pub native_body: Option<NativeBody>,
+    pub compiled_body: Option<CompiledBody>,
 
     /// Current immutable/resolved telemetry policy. This runtime-only atomic
     /// is not serialized; loaded programs begin at policy zero and the engine

@@ -76,18 +76,18 @@ impl<'db> Generator<'_, 'db> {
                         "yielding builtin `{key}` emitted inline"
                     )));
                 }
-                let next = self.natives.len();
-                let ordinal = *self.natives.entry(key.to_owned()).or_insert(next);
+                let next = self.builtins.len();
+                let ordinal = *self.builtins.entry(key.to_owned()).or_insert(next);
                 if types.is_empty() {
                     self.fallible(
                         block,
-                        &format!("vm.call_builtin(native_{ordinal}(), {args})"),
+                        &format!("vm.call_builtin(builtin_{ordinal}(), {args})"),
                     )
                 } else {
                     self.fallible(
                         block,
                         &format!(
-                            "vm.call_builtin_typed(native_{ordinal}(), &[{}], {args})",
+                            "vm.call_builtin_typed(builtin_{ordinal}(), &[{}], {args})",
                             types.join(", ")
                         ),
                     )

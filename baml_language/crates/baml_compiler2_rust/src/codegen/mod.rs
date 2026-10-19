@@ -94,7 +94,7 @@ pub(crate) struct Generator<'a, 'db> {
     /// `bb = N; continue`), as opposed to its resume prologue.
     pub(crate) in_loop: bool,
     /// Builtin native keys the module binds, by key → ordinal.
-    pub(crate) natives: &'a mut BTreeMap<String, usize>,
+    pub(crate) builtins: &'a mut BTreeMap<String, usize>,
     pub(crate) body: &'a MirFunctionBody<'db>,
     /// The lambdas lowered inside this function, which its `MakeClosure`s
     /// index.
@@ -155,7 +155,7 @@ type Gen<T> = Result<T, Rejection>;
 impl<'a, 'db> Generator<'a, 'db> {
     pub(crate) fn new(
         program: &ProgramContext<'a, 'db>,
-        natives: &'a mut BTreeMap<String, usize>,
+        builtins: &'a mut BTreeMap<String, usize>,
         object: usize,
         unit: &'a crate::admit::Unit<'db>,
         gc_checks: crate::admit::GcChecks,
@@ -172,7 +172,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             spill_base: 0,
             suspends: program.resumable.contains(&object),
             in_loop: false,
-            natives,
+            builtins,
             body: crate::admit::body_of(unit.mir),
             lambdas: &unit.mir.lambdas,
             analysis: &unit.analysis,

@@ -754,7 +754,7 @@ pub fn build_line_starts(text: &str) -> Vec<u32> {
 /// The 1-based source line a statement or terminator whose span starts at
 /// byte `start` is attributed to: the line of its first token. Some spans start
 /// on the newline before that token, which counts from the next line. Bytecode
-/// line tables report lines by this rule (natively compiled frames read the
+/// line tables report lines by this rule (compiled frames read the
 /// same tables).
 #[must_use]
 pub fn statement_line(line_starts: &[u32], start: u32) -> usize {
@@ -1161,7 +1161,7 @@ fn builtin_emit_function(
         telemetry_function_id: None,
         telemetry_registration: bex_vm_types::FunctionRegistration::default(),
         telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
-        native_body: None,
+        compiled_body: None,
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: Span::fake(),

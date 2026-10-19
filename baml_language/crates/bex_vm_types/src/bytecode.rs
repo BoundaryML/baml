@@ -1314,7 +1314,7 @@ pub enum OpCode {
     // discriminants.
     SatisfiesBound,
 
-    /// Hand the frame back to its natively compiled body (load-time only,
+    /// Hand the frame back to its compiled body (load-time only,
     /// like `CallExactArgs`: appended to a compiled function's code, never
     /// emitted into serialized `Instruction` streams). No operands (1 byte).
     ResumeCompiled,
@@ -2178,7 +2178,7 @@ pub struct ShieldRange {
 }
 
 /// Where one MIR block of a function landed in its instructions: the PC a
-/// natively compiled body of the function records as its frame's position
+/// compiled body of the function records as its frame's position
 /// at each statement and at the terminator, so the frame reads as the
 /// equivalent bytecode frame would. A PC here is an instruction index;
 /// `None` where the block emitted no instruction for that position.
@@ -2404,10 +2404,10 @@ pub struct Bytecode {
     pub shield_table: Vec<ShieldRange>,
 
     /// Where each MIR block (by `BlockId`) of the function landed in
-    /// `instructions`: what a natively compiled body records as its frame's
+    /// `instructions`: what a compiled body records as its frame's
     /// PC. See [`BlockPcs`].
     ///
-    /// Compile-time metadata for the native backend, which requires freshly
+    /// Compile-time metadata for the Rust backend, which requires freshly
     /// emitted bytecode. Runtime frames use `CompactCode::instruction_offsets`.
     /// Deserialization leaves this empty.
     #[borsh(skip)]

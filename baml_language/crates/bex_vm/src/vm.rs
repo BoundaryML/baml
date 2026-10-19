@@ -21,7 +21,7 @@ use btel_types::context::{Context, ContextPatch};
 use smallvec::SmallVec;
 
 use crate::{
-    compiled_rt::{CompiledFn, NativeBodies, Step},
+    compiled_rt::{CompiledBodies, CompiledFn, Step},
     telemetry::{
         CallTypeArgs, ClockDuration, ClockInstant, FrameTelemetry, InvocationOutcome,
         TelemetryState,
@@ -566,7 +566,7 @@ pub(crate) mod tests {
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
-            native_body: None,
+            compiled_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
@@ -1956,21 +1956,21 @@ pub fn convert_program_with_trace_hooks(
     program: bex_vm_types::Program,
     enabled: bool,
 ) -> Result<BytecodeProgram, VmInternalError> {
-    convert_program_with_natives(program, enabled, None)
+    convert_program_with_compiled_bodies(program, enabled, None)
 }
 
 /// [`convert_program_with_trace_hooks`], additionally attaching natively
 /// compiled bodies to the bytecode functions they were compiled from.
-pub fn convert_program_with_natives(
+pub fn convert_program_with_compiled_bodies(
     program: bex_vm_types::Program,
     enabled: bool,
-    native_bodies: Option<NativeBodies>,
+    compiled_bodies: Option<CompiledBodies>,
 ) -> Result<BytecodeProgram, VmInternalError> {
     // The one road from an executable into a VM: a decoded program is
     // checked against the format's laws here, and everything after — the
     // rendered views, the loader — indexes into a program that keeps them.
     program.validate()?;
-    if let Some(bodies) = native_bodies
+    if let Some(bodies) = compiled_bodies
         && bodies.table.fingerprint != bodies.artifact_fingerprint
     {
         return Err(VmInternalError::CompiledBody {
@@ -1980,7 +1980,7 @@ pub fn convert_program_with_natives(
     }
     let callables = program.rendered_callables();
     // Function names as the loader renders them; pooled functions have no owner yet.
-    let native_names: Vec<Option<String>> = native_bodies.map_or_else(Vec::new, |bodies| {
+    let body_names: Vec<Option<String>> = compiled_bodies.map_or_else(Vec::new, |bodies| {
         bodies
             .table
             .entries
@@ -2002,8 +2002,8 @@ pub fn convert_program_with_natives(
 
     // Compiled bodies attach before compact code is prepared: call
     // specialization reads the callee to choose a call fast path.
-    if let Some(bodies) = native_bodies {
-        compiled_rt::attach_native_bodies(&mut objects, bodies.table, &native_names)?;
+    if let Some(bodies) = compiled_bodies {
+        compiled_rt::attach_compiled_bodies(&mut objects, bodies.table, &body_names)?;
     }
 
     if !enabled {
@@ -2083,7 +2083,7 @@ pub fn prepare_compact_code(objects: &mut [Object], globals: &[bex_vm_types::Con
         if let Object::Function(function) = object {
             // Compiled functions get the resume stub appended and keep instruction
             // offsets, which compiled positions are expressed in.
-            let compact = if function.native_body.is_some() {
+            let compact = if function.compiled_body.is_some() {
                 let mut compact = function.bytecode.lower_to_compact_with_offsets();
                 compact
                     .code
@@ -5336,7 +5336,7 @@ impl BexVm {
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
-            native_body: None,
+            compiled_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
@@ -5444,7 +5444,7 @@ impl BexVm {
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
-            native_body: None,
+            compiled_body: None,
             local_names: Vec::new(),
             debug_locals: Vec::new(),
             span: baml_type::Span::fake(),
@@ -6615,7 +6615,7 @@ impl BexVm {
                 // SAFETY: see `load_function`.
                 let frame_function = unsafe { self.load_function(depth)? };
                 let (slots, stub) = frame_function
-                    .native_body
+                    .compiled_body
                     .zip(crate::compiled_rt::stub_start(frame_function))
                     .map(|(body, stub)| (body.slots() as usize, stub))
                     .expect("a suspended compiled frame has a compiled body");
@@ -7643,7 +7643,7 @@ impl BexVm {
                 let native = if hooked {
                     None
                 } else {
-                    crate::compiled_rt::native_body_fn(callee)
+                    crate::compiled_rt::compiled_fn(callee)
                 };
                 match native {
                     None => {
@@ -9800,7 +9800,7 @@ impl BexVm {
                                 // Specialization skips compiled callees
                                 // (`call_specialize`): they take the general
                                 // path, whose Bytecode arm runs the body.
-                                debug_assert!(callee.native_body.is_none());
+                                debug_assert!(callee.compiled_body.is_none());
                                 debug_assert_eq!(ntypeargs, 0);
                                 // Eager ok_or constructs/drops VmInternalError
                                 // even on success; release assembly retains a

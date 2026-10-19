@@ -3,7 +3,7 @@
 
 use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::Function};
 
-use super::{CompiledBody, stack_address};
+use super::{InlineBody, stack_address};
 use crate::{
     errors::{VmError, VmInternalError, VmPanic},
     indexable::EvalStackTrait,
@@ -293,7 +293,7 @@ impl BexVm {
     /// Call a compiled function from compiled code.
     ///
     /// Every call gets a frame, as in bytecode: it counts toward the depth
-    /// limit (a catchable `StackOverflow`, never a native stack overflow),
+    /// limit (a catchable `StackOverflow`, never a Rust stack overflow),
     /// names the callee in stack traces, and roots the callee. With telemetry
     /// off that frame is all the call costs: a struct push, then a direct
     /// Rust call LLVM can inline. With telemetry on the call goes through the
@@ -317,7 +317,7 @@ impl BexVm {
     pub fn call_compiled(
         &mut self,
         callee: HeapPtr,
-        body: CompiledBody,
+        body: InlineBody,
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
@@ -335,7 +335,7 @@ impl BexVm {
     fn call_compiled_here(
         &mut self,
         callee: HeapPtr,
-        body: CompiledBody,
+        body: InlineBody,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         if self.telemetry.is_some() {
@@ -363,7 +363,7 @@ impl BexVm {
     pub fn call_compiled_with_types(
         &mut self,
         callee: HeapPtr,
-        body: CompiledBody,
+        body: InlineBody,
         type_args: &[RealizedTy],
         args: &[Value],
         pc: u32,
@@ -382,7 +382,7 @@ impl BexVm {
     fn call_compiled_with_types_here(
         &mut self,
         callee: HeapPtr,
-        body: CompiledBody,
+        body: InlineBody,
         type_args: &[RealizedTy],
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
@@ -485,7 +485,7 @@ impl BexVm {
     fn call_compiled_cold(
         &mut self,
         callee: HeapPtr,
-        body: CompiledBody,
+        body: InlineBody,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         self.call_compiled_observed(callee, body, args)
@@ -511,7 +511,7 @@ impl BexVm {
     pub(super) fn call_compiled_observed(
         &mut self,
         callee: HeapPtr,
-        body: CompiledBody,
+        body: InlineBody,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         // SAFETY: a compiled callee is a function object in the compile-time

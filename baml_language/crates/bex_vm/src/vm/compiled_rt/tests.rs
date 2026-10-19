@@ -12,7 +12,7 @@ use crate::{
     vm::{BexVm, Frame, VmExecState},
 };
 
-/// A natively compiled body attached to a bytecode function is, to every
+/// A compiled body attached to a bytecode function is, to every
 /// observer, that bytecode function: same result, same telemetry records
 /// and call paths, same exception caught by the same bytecode `catch`, and
 /// the same innermost frame in the thrown error's stack trace.
@@ -20,27 +20,27 @@ use crate::{
 /// Rust rather than a BAML test because only Rust can install a body.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
-fn native_body_is_indistinguishable_from_bytecode() {
+fn compiled_body_is_indistinguishable_from_bytecode() {
     use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
     use crate::telemetry::{InvocationOutcome, SpanRecord, TimingRecord};
 
     static CALLS: AtomicUsize = AtomicUsize::new(0);
     static SAME: AtomicU32 = AtomicU32::new(0);
-    fn add_native(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn add_compiled(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
         CALLS.fetch_add(1, Ordering::Relaxed);
         vm.add_int(args[0], args[1])
     }
     // `Same<T>(x: T, y: T) -> bool { y is T }`: a generic body reading
     // its frame, calling a compiled generic callee with its own type
     // argument (`Add` stands in: it takes two ints).
-    fn same_native(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn same_compiled(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
         let depth = vm.frame_depth();
         let t = vm.frame_type_arg(depth, 0)?;
         let callee = vm.idx_to_ptr(ObjectIndex::from_raw(SAME.load(Ordering::Relaxed) as usize));
         let _ = vm.call_compiled_with_types(
             callee,
-            add_native,
+            add_compiled,
             std::slice::from_ref(&t),
             &[args[0], args[1]],
             0,
@@ -82,15 +82,15 @@ fn native_body_is_indistinguishable_from_bytecode() {
             .collect()
     }
 
-    fn run(native: bool) -> (String, Timings, NamedPaths, TypeArgs) {
+    fn run(compiled: bool) -> (String, Timings, NamedPaths, TypeArgs) {
         let mut program = baml_test_support::compile_source(SOURCE);
         let entry = program.rendered_callables()["user.Main"].object.raw();
         let add = program.rendered_callables()["user.Add"].object.raw();
         SAME.store(u32::try_from(add).unwrap(), Ordering::Relaxed);
-        if native {
+        if compiled {
             for (name, body) in [
-                ("user.Add", add_native as crate::compiled_rt::CompiledBody),
-                ("user.Same", same_native),
+                ("user.Add", add_compiled as crate::compiled_rt::InlineBody),
+                ("user.Same", same_compiled),
             ] {
                 let object = program.rendered_callables()[name].object.raw();
                 let Object::Function(function) =
@@ -99,7 +99,7 @@ fn native_body_is_indistinguishable_from_bytecode() {
                     unreachable!()
                 };
                 assert!(matches!(function.kind, FunctionKind::Bytecode));
-                function.native_body =
+                function.compiled_body =
                     Some(test_body(crate::compiled_rt::CompiledFn::Inline(body), 0));
             }
         }
@@ -179,20 +179,20 @@ fn native_body_is_indistinguishable_from_bytecode() {
 
     let bytecode = run(false);
     assert_eq!(CALLS.load(Ordering::Relaxed), 0);
-    let native = run(true);
-    // `Add` runs natively from `AddStr` twice (the second overflows) and
+    let compiled = run(true);
+    // `Add` runs compiled from `AddStr` twice (the second overflows) and
     // from the compiled `Same` once, on the first call only.
     assert_eq!(
         CALLS.load(Ordering::Relaxed),
         3,
-        "the native bodies must run for every call"
+        "the compiled bodies must run for every call"
     );
 
     // Same value: the first call adds, the second overflows, is caught by
     // the bytecode `catch` in `Caller`, and its trace's innermost frame is
     // the compiled function.
     assert_eq!(bytecode.0, "3|true|user.Add");
-    assert_eq!(native.0, bytecode.0);
+    assert_eq!(compiled.0, bytecode.0);
 
     // Same telemetry: the user functions (Main, Caller x2, AddStr x2,
     // Add x3, Same x1) plus whatever stdlib bytecode the program reaches,
@@ -201,15 +201,15 @@ fn native_body_is_indistinguishable_from_bytecode() {
     // Call-path ids come from a process-global counter, so compare the
     // records by the (caller, callee) names the ids resolve to.
     let bytecode_named = named(&bytecode);
-    let native_named = named(&native);
+    let compiled_named = named(&compiled);
     assert!(bytecode_named.len() >= 9);
-    assert_eq!(native_named, bytecode_named);
+    assert_eq!(compiled_named, bytecode_named);
     assert!(
         !bytecode.3.is_empty(),
         "the generic call announces its type arguments"
     );
-    assert_eq!(native.3, bytecode.3);
-    let add_outcomes: Vec<_> = native_named
+    assert_eq!(compiled.3, bytecode.3);
+    let add_outcomes: Vec<_> = compiled_named
         .iter()
         .filter(|(caller, callee, _, _)| {
             caller.as_deref() == Some("user.AddStr") && callee == "user.Add"
@@ -228,7 +228,10 @@ pub(crate) fn test_int(value: Value) -> i64 {
 }
 
 /// A hand-written compiled body that keeps `slots` slots in its frame.
-fn test_body(body: crate::compiled_rt::CompiledFn, slots: u32) -> bex_vm_types::types::NativeBody {
+fn test_body(
+    body: crate::compiled_rt::CompiledFn,
+    slots: u32,
+) -> bex_vm_types::types::CompiledBody {
     crate::compiled_rt::CompiledEntry {
         object: 0,
         name: "",
@@ -241,7 +244,7 @@ fn test_body(body: crate::compiled_rt::CompiledFn, slots: u32) -> bex_vm_types::
 }
 
 /// Run `user.Main` of `source` with the named functions' bodies replaced
-/// by hand-written compiled bodies, shaped as `baml_compiler2_native`
+/// by hand-written compiled bodies, shaped as `baml_compiler2_rust`
 /// emits them (a resumable one keeping 3 slots: its argument, one local
 /// and its point). `objects` receives each named function's, class's or
 /// interface's object index before the run, for bodies that call or
@@ -326,7 +329,7 @@ fn exec_with_compiled_bodies(
             crate::compiled_rt::CompiledFn::Inline(_) => 0,
             crate::compiled_rt::CompiledFn::Resumable(_) => 3,
         };
-        function.native_body = Some(test_body(*body, slots));
+        function.compiled_body = Some(test_body(*body, slots));
     }
     let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
     vm.telemetry = level.map(|level| {
@@ -351,7 +354,7 @@ fn exec_with_compiled_bodies(
 }
 
 /// Compiled recursion counts toward the frame limit: the caller sees a
-/// catchable `StackOverflow` at the bytecode depth, never a native stack
+/// catchable `StackOverflow` at the bytecode depth, never a Rust stack
 /// overflow, with telemetry off (the direct-call path) and on (the VM's
 /// call path).
 #[cfg(not(target_arch = "wasm32"))]
@@ -991,29 +994,30 @@ fn compiled_bodies_require_the_original_program() {
     let artifact = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
     let (decoded, digest) =
         baml_artifact::decode_with_digest(baml_artifact::ArtifactKind::Program, &artifact).unwrap();
-    let table = Box::leak(Box::new(super::NativeBodyTable {
+    let table = Box::leak(Box::new(super::CompiledBodyTable {
         fingerprint: digest,
         entries,
     }));
-    let bodies = super::NativeBodies {
+    let bodies = super::CompiledBodies {
         table,
         artifact_fingerprint: digest,
     };
-    let loaded = crate::vm::convert_program_with_natives(decoded, true, Some(bodies)).unwrap();
+    let loaded =
+        crate::vm::convert_program_with_compiled_bodies(decoded, true, Some(bodies)).unwrap();
     let Object::Function(function) = &loaded.objects[object] else {
         panic!("compiled entry must be a function")
     };
-    assert!(function.native_body.is_some());
+    assert!(function.compiled_body.is_some());
 
     let changed = baml_test_support::compile_source("function Main() -> int { 2 }");
     let artifact = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &changed).unwrap();
     let (changed, digest) =
         baml_artifact::decode_with_digest(baml_artifact::ArtifactKind::Program, &artifact).unwrap();
-    let bodies = super::NativeBodies {
+    let bodies = super::CompiledBodies {
         table,
         artifact_fingerprint: digest,
     };
-    let error = crate::vm::convert_program_with_natives(changed, true, Some(bodies))
+    let error = crate::vm::convert_program_with_compiled_bodies(changed, true, Some(bodies))
         .expect_err("same signature with a different body must be refused");
     assert!(error.to_string().contains("fingerprint mismatch"));
 }
@@ -1021,7 +1025,7 @@ fn compiled_bodies_require_the_original_program() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn empty_native_table_still_requires_matching_artifact() {
-    static TABLE: super::NativeBodyTable = super::NativeBodyTable {
+    static TABLE: super::CompiledBodyTable = super::CompiledBodyTable {
         fingerprint: [0; 32],
         entries: &[],
     };
@@ -1029,10 +1033,10 @@ fn empty_native_table_still_requires_matching_artifact() {
     let artifact = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
     let (program, artifact_fingerprint) =
         baml_artifact::decode_with_digest(baml_artifact::ArtifactKind::Program, &artifact).unwrap();
-    let error = crate::vm::convert_program_with_natives(
+    let error = crate::vm::convert_program_with_compiled_bodies(
         program,
         true,
-        Some(super::NativeBodies {
+        Some(super::CompiledBodies {
             table: &TABLE,
             artifact_fingerprint,
         }),
@@ -1187,7 +1191,7 @@ fn compiled_delivery_survives_collection_before_resume() {
     let Object::Function(function) = &mut program.objects[entry] else {
         unreachable!()
     };
-    function.native_body = Some(test_body(CompiledFn::Resumable(body), 0));
+    function.compiled_body = Some(test_body(CompiledFn::Resumable(body), 0));
     let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
     vm.telemetry = None;
     vm.set_entry_point(vm.heap.compile_time_ptr(entry.raw()), &[]);

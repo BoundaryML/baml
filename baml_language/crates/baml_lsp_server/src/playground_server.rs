@@ -2852,7 +2852,7 @@ mod tests {
 
     #[tokio::test]
     async fn native_zero_capacity_drain_broadcasts_capture_loss_diagnostic() {
-        let project = unique_temp_dir("baml-native-capture-loss");
+        let project = unique_temp_dir("baml-rust-capture-loss");
         std::fs::create_dir_all(&project).expect("project dir should be created");
         std::fs::write(project.join("baml.toml"), "").expect("manifest should be created");
 
@@ -3016,7 +3016,7 @@ mod tests {
 
     #[tokio::test]
     async fn native_drain_persists_identified_log_and_retains_live_body() {
-        let project = unique_temp_dir("baml-native-log-history");
+        let project = unique_temp_dir("baml-rust-log-history");
         std::fs::create_dir_all(&project).expect("project dir should be created");
         std::fs::write(project.join("baml.toml"), "").expect("manifest should be created");
 

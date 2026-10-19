@@ -10,23 +10,23 @@ pub struct PendingLog {
     pub source_location: Option<VmEventSourceLocation>,
 }
 
-/// Natively compiled bodies for one program, as the BAML-to-Rust compiler
+/// Compiled bodies for one program, as the BAML-to-Rust compiler
 /// emits them; see [`super::CompiledEntry`].
-pub struct NativeBodyTable {
+pub struct CompiledBodyTable {
     pub fingerprint: [u8; 32],
     pub entries: &'static [crate::compiled_rt::CompiledEntry],
 }
 
 /// Compiled bodies paired with the digest verified while decoding their artifact.
 #[derive(Clone, Copy)]
-pub struct NativeBodies {
-    pub table: &'static NativeBodyTable,
+pub struct CompiledBodies {
+    pub table: &'static CompiledBodyTable,
     pub artifact_fingerprint: [u8; 32],
 }
 
-pub(crate) fn attach_native_bodies(
+pub(crate) fn attach_compiled_bodies(
     objects: &mut [Object],
-    table: &NativeBodyTable,
+    table: &CompiledBodyTable,
     names: &[Option<String>],
 ) -> Result<(), VmInternalError> {
     for (entry, name) in table.entries.iter().zip(names) {
@@ -49,7 +49,7 @@ pub(crate) fn attach_native_bodies(
         if !matches!(function.kind, FunctionKind::Bytecode) {
             return Err(mismatch("targets a function that is not bytecode"));
         }
-        function.native_body = Some(entry.erase());
+        function.compiled_body = Some(entry.erase());
     }
     Ok(())
 }
@@ -176,7 +176,7 @@ impl BexVm {
         use crate::compiled_rt::{Resume, stub};
         let (Some(start), Some(body)) = (
             crate::compiled_rt::stub_start(function),
-            crate::compiled_rt::native_body_fn(function),
+            crate::compiled_rt::compiled_fn(function),
         ) else {
             return Err(VmInternalError::CompiledBody {
                 message: format!("`{}` resumed without a compiled body", function.name()),
@@ -378,7 +378,7 @@ impl BexVm {
         crate::compiled_rt::compiled_at(frame.instruction_ptr, function)
     }
 
-    /// Whether a natively compiled body runs the frame at `idx`: its
+    /// Whether a compiled body runs the frame at `idx`: its
     /// position fields then hold no bytecode position (see
     /// `crate::compiled_rt::stub`).
     #[must_use]
@@ -413,7 +413,7 @@ impl BexVm {
             return None;
         };
         let function = self.get_object(frame.function).as_callable().ok()?;
-        let slot = function.native_body?.cause_slot()?;
+        let slot = function.compiled_body?.cause_slot()?;
         let context = *self
             .stack
             .0
@@ -448,7 +448,7 @@ impl BexVm {
     }
 
     /// Complete the bytecode frame at `frame_idx` with `result`: the shared
-    /// epilogue of `OpCode::Return` and of a natively compiled body.
+    /// epilogue of `OpCode::Return` and of a compiled body.
     ///
     /// Finishes the frame's telemetry record, replaces the frame's stack region
     /// with `result`, pops the frame, restores the caller's context, and selects

@@ -73,7 +73,7 @@ pub struct CompiledFunction {
     /// under no package label (`.<lambda(f, 0)>`), so this says whose it is
     /// (`user.<lambda(f, 0)>`); any other function's is its `name`.
     pub display: String,
-    /// The Rust symbol of the body (`bex_vm::compiled_rt::CompiledBody`).
+    /// The Rust symbol of the body (`bex_vm::compiled_rt::InlineBody`).
     pub symbol: String,
     /// Object index of that bytecode function in the program.
     pub object: usize,
@@ -83,16 +83,16 @@ pub struct CompiledFunction {
     /// see `bex_vm::compiled_rt::ResumableBody`).
     pub resumable: bool,
     /// The stack slots its body keeps in its frame
-    /// (`bex_vm_types::types::NativeBody::slots`).
+    /// (`bex_vm_types::types::CompiledBody::slots`).
     pub slots: u32,
     /// Its cause slot, when it has a `catch`
-    /// (`bex_vm_types::types::NativeBody::cause_slot`).
+    /// (`bex_vm_types::types::CompiledBody::cause_slot`).
     pub cause_slot: Option<u32>,
 }
 
 /// The generated Rust module for one program.
 #[derive(Debug, Clone)]
-pub struct NativeModule {
+pub struct RustModule {
     /// Rust source of the module.
     pub source: String,
     /// The functions it compiles, in emission order.
@@ -127,7 +127,7 @@ pub fn compile_program<'db>(
     artifact_path: &str,
     fingerprint: [u8; 32],
     entries: Option<&[usize]>,
-) -> Result<NativeModule, String> {
+) -> Result<RustModule, String> {
     let index = ProgramIndex::new(db, root, program);
     // Admission works on object indices: the identity generated code bakes
     // in, unique across packages where a rendered name need not be.
@@ -219,7 +219,7 @@ pub fn compile_program<'db>(
     // awaits, spawns, runs a sys op, or calls anything compiled code does not
     // call directly (bytecode, a function value, a builtin that runs
     // callbacks, or a function that itself suspends).
-    let (bodies, functions, natives) = loop {
+    let (bodies, functions, builtins) = loop {
         let mut resumable: BTreeSet<usize> = units
             .iter()
             .filter(|(_, unit)| unit.analysis.suspends)
@@ -257,7 +257,7 @@ pub fn compile_program<'db>(
             .collect();
         let mut bodies = String::new();
         let mut functions = Vec::new();
-        let mut natives: BTreeMap<String, usize> = BTreeMap::new();
+        let mut builtins: BTreeMap<String, usize> = BTreeMap::new();
         let mut failed = Vec::new();
         for (&object, unit) in &units {
             let program = ProgramContext {
@@ -269,7 +269,7 @@ pub fn compile_program<'db>(
             };
             let mut generator = Generator::new(
                 &program,
-                &mut natives,
+                &mut builtins,
                 object,
                 unit,
                 checks.get(&object).copied().unwrap_or_default(),
@@ -300,7 +300,7 @@ pub fn compile_program<'db>(
             }
         }
         if failed.is_empty() {
-            break (bodies, functions, natives);
+            break (bodies, functions, builtins);
         }
         for (object, rejection) in failed {
             units.remove(&object);
@@ -308,8 +308,8 @@ pub fn compile_program<'db>(
         }
     };
 
-    let source = render_module(&bodies, &functions, &natives, artifact_path, fingerprint)?;
-    Ok(NativeModule {
+    let source = render_module(&bodies, &functions, &builtins, artifact_path, fingerprint)?;
+    Ok(RustModule {
         source,
         functions,
         rejected,

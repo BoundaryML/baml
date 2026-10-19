@@ -245,7 +245,7 @@ impl CacheContext {
         })
     }
 
-    /// Native bodies and bytecode must come from the same lowering.
+    /// Compiled bodies and bytecode must come from the same lowering.
     pub(crate) fn store_only(mut self) -> Self {
         self.serve = false;
         self

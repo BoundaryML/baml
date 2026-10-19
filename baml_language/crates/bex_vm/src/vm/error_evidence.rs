@@ -720,7 +720,7 @@ mod tests {
         let Object::Function(function) = &mut program.objects[entry] else {
             unreachable!()
         };
-        function.native_body = Some(
+        function.compiled_body = Some(
             CompiledEntry {
                 object: 0,
                 name: "user.Main",

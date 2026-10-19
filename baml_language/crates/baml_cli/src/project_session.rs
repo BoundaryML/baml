@@ -42,7 +42,7 @@ pub(crate) enum CacheUse {
     /// Consume warm seeds, never store: introspection commands
     /// (`generate`). Shares the run/check keyspace.
     ReadOnly,
-    /// Native bodies and bytecode must come from the same lowering.
+    /// Compiled bodies and bytecode must come from the same lowering.
     StoreOnly,
     /// No cache at all (projectless fallback, tests).
     Off,

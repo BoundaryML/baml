@@ -4,8 +4,8 @@ mod arith;
 mod call;
 mod cell;
 mod frame;
-pub(crate) use frame::attach_native_bodies;
-pub use frame::{FramePosition, NativeBodies, NativeBodyTable, PendingLog};
+pub(crate) use frame::attach_compiled_bodies;
+pub use frame::{CompiledBodies, CompiledBodyTable, FramePosition, PendingLog};
 pub use state::CompiledState;
 pub(crate) use state::SavedCallTypes;
 mod heap;
@@ -50,17 +50,17 @@ use crate::{
     vm::{BexVm, value_as_float},
 };
 
-/// A natively compiled BAML function body. Errors are the VM's own: a thrown
+/// A compiled BAML function body. Errors are the VM's own: a thrown
 /// BAML exception keeps its throw kind and context end to end, and an internal
 /// error keeps its own variant. Boxed so the `Result` stays two words wide
 /// on 64-bit targets; the box is paid only on throw.
-pub type CompiledBody = fn(&mut BexVm, &[Value]) -> Result<Value, Box<VmError>>;
+pub type InlineBody = fn(&mut BexVm, &[Value]) -> Result<Value, Box<VmError>>;
 
 #[cfg(target_pointer_width = "64")]
 const _: () =
     assert!(std::mem::size_of::<Result<Value, Box<VmError>>>() == 2 * std::mem::size_of::<usize>());
 
-/// A natively compiled body that can suspend: a state machine the VM drives.
+/// A compiled body that can suspend: a state machine the VM drives.
 ///
 /// It keeps its arguments, every local live across a suspension and the point
 /// it suspended at in its frame's stack slots (`slot`/`set_slot`), which the GC
@@ -109,7 +109,7 @@ pub enum Step {
 #[derive(Clone, Copy)]
 pub enum CompiledFn {
     /// Runs to completion inside the call that enters it.
-    Inline(CompiledBody),
+    Inline(InlineBody),
     /// Driven by the VM; see [`ResumableBody`].
     Resumable(ResumableBody),
 }
@@ -127,15 +127,15 @@ pub struct CompiledEntry {
     /// The body.
     pub body: CompiledFn,
     /// The stack slots the body keeps in its frame; see
-    /// [`bex_vm_types::types::NativeBody::slots`].
+    /// [`bex_vm_types::types::CompiledBody::slots`].
     pub slots: u32,
     /// The body's cause slot, when it has a `catch`; see
-    /// [`bex_vm_types::types::NativeBody::cause_slot`].
+    /// [`bex_vm_types::types::CompiledBody::cause_slot`].
     pub cause_slot: Option<u32>,
 }
 
 impl CompiledEntry {
-    pub(crate) fn erase(self) -> bex_vm_types::types::NativeBody {
+    pub(crate) fn erase(self) -> bex_vm_types::types::CompiledBody {
         let (ptr, resumable) = match self.body {
             CompiledFn::Inline(body) => (body as *const (), false),
             CompiledFn::Resumable(body) => (body as *const (), true),
@@ -143,7 +143,7 @@ impl CompiledEntry {
         // SAFETY: `ptr` is cast from the body type `resumable` names.
         #[allow(unsafe_code)]
         unsafe {
-            bex_vm_types::types::NativeBody::new(ptr, resumable, self.slots, self.cause_slot)
+            bex_vm_types::types::CompiledBody::new(ptr, resumable, self.slots, self.cause_slot)
         }
     }
 }
@@ -252,7 +252,7 @@ fn stack_address() -> usize {
 /// body.
 #[inline]
 pub(crate) fn stub_start(function: &Function) -> Option<usize> {
-    function.native_body?;
+    function.compiled_body?;
     Some(function.bytecode.compact.as_ref()?.code.len() - stub::CODE.len())
 }
 
@@ -354,9 +354,9 @@ pub fn callee_ptr(value: Value) -> Result<HeapPtr, Box<VmError>> {
 /// The compiled body attached to `function`.
 #[inline]
 #[allow(unsafe_code)]
-pub(crate) fn native_body_fn(function: &Function) -> Option<CompiledFn> {
-    let body = function.native_body?;
-    // SAFETY: a `NativeBody` is built only through its `unsafe` constructor,
+pub(crate) fn compiled_fn(function: &Function) -> Option<CompiledFn> {
+    let body = function.compiled_body?;
+    // SAFETY: a `CompiledBody` is built only through its `unsafe` constructor,
     // whose contract is that `resumable` names the type the pointer was cast
     // from. `transmute` because Rust has no `as` cast from `*const ()` to a fn
     // pointer.
@@ -364,7 +364,7 @@ pub(crate) fn native_body_fn(function: &Function) -> Option<CompiledFn> {
         if body.resumable() {
             CompiledFn::Resumable(std::mem::transmute::<*const (), ResumableBody>(body.ptr()))
         } else {
-            CompiledFn::Inline(std::mem::transmute::<*const (), CompiledBody>(body.ptr()))
+            CompiledFn::Inline(std::mem::transmute::<*const (), InlineBody>(body.ptr()))
         }
     })
 }

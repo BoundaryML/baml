@@ -45,8 +45,8 @@ pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
 #[doc(hidden)]
 pub use vm::compiled_rt;
-pub use vm::compiled_rt::{FramePosition, NativeBodies, NativeBodyTable, PendingLog};
+pub use vm::compiled_rt::{CompiledBodies, CompiledBodyTable, FramePosition, PendingLog};
 pub use vm::{
     BexVm, BytecodeFrame, BytecodeProgram, Frame, VmEventSourceLocation, VmExecState,
-    convert_program, convert_program_with_natives, prepare_compact_code,
+    convert_program, convert_program_with_compiled_bodies, prepare_compact_code,
 };

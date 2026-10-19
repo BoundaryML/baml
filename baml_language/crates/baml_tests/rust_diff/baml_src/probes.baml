@@ -165,7 +165,7 @@ function Allocation() -> void {
 }
 
 function Logs() -> void {
-    log.info("native differential log");
-    log.warn("native differential warning");
+    log.info("differential log");
+    log.warn("differential warning");
     baml.io.println("logged");
 }

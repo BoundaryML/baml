@@ -12,7 +12,7 @@
 
 use bex_vm_types::{HeapPtr, Object, ObjectType, StackIndex, Value, types::Cell};
 
-use super::{CompiledBody, CompiledFn};
+use super::{CompiledFn, InlineBody};
 use crate::{
     errors::{VmError, VmInternalError, VmPanic},
     vm::{BexVm, Frame},
@@ -110,7 +110,7 @@ impl BexVm {
     /// [`Step::Call`]: super::Step::Call
     #[inline]
     #[must_use]
-    pub fn closure_inline_body(&self, callee: HeapPtr, argc: usize) -> Option<CompiledBody> {
+    pub fn closure_inline_body(&self, callee: HeapPtr, argc: usize) -> Option<InlineBody> {
         let function = match self.get_object(callee) {
             Object::Closure(closure) => closure.function,
             Object::Function(_) => callee,
@@ -122,7 +122,7 @@ impl BexVm {
         if function.arity != argc || function.trace_passthrough {
             return None;
         }
-        match super::native_body_fn(function)? {
+        match super::compiled_fn(function)? {
             CompiledFn::Inline(body) => Some(body),
             CompiledFn::Resumable(_) => None,
         }
@@ -137,7 +137,7 @@ impl BexVm {
     pub fn call_closure_compiled(
         &mut self,
         callee: HeapPtr,
-        body: CompiledBody,
+        body: InlineBody,
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
@@ -155,7 +155,7 @@ impl BexVm {
     fn call_closure_compiled_here(
         &mut self,
         callee: HeapPtr,
-        body: CompiledBody,
+        body: InlineBody,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         if self.telemetry.is_some() {

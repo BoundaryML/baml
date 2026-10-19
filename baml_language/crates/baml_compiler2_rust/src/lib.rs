@@ -8,4 +8,4 @@ mod reach;
 mod render;
 mod structure;
 
-pub use admit::{CompiledFunction, NativeModule, Rejection, compile_program};
+pub use admit::{CompiledFunction, Rejection, RustModule, compile_program};

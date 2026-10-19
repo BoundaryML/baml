@@ -243,7 +243,7 @@ fn extern_function_coords<'db>(
 /// declares it and its path there — the identity the executable's package
 /// tables key on ([`ProgramPackage::globals`], `classes`, `enums`), and so
 /// the one key a consumer binds a declaration's object by without a rendered
-/// spelling (the native backend's program index).
+/// spelling (the Rust backend's program index).
 ///
 /// [`ProgramPackage::globals`]: bex_vm_types::types::ProgramPackage::globals
 pub type DeclCoords = (SourceRoot, DeclPath);

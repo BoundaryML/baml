@@ -238,7 +238,7 @@ impl BexVm {
         if function.arity != args.len() || function.trace_passthrough {
             return Ok(None);
         }
-        match super::native_body_fn(function) {
+        match super::compiled_fn(function) {
             Some(super::CompiledFn::Inline(body)) => {
                 self.call_compiled(callee, body, args, pc).map(Some)
             }

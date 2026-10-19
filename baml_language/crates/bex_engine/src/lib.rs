@@ -90,9 +90,9 @@ mod telemetry;
 #[cfg(not(target_arch = "wasm32"))]
 pub use bcs_api::diagnostics::Diagnostic as CloudAuthorizationFailure;
 mod thread;
-/// Natively compiled bodies an engine runs in place of bytecode
-/// ([`EngineConfig::native_bodies`]).
-pub use bex_vm::{NativeBodies, NativeBodyTable};
+/// Compiled bodies an engine runs in place of bytecode
+/// ([`EngineConfig::compiled_bodies`]).
+pub use bex_vm::{CompiledBodies, CompiledBodyTable};
 #[cfg(not(target_arch = "wasm32"))]
 pub use btel_types::ProcessStatus;
 #[cfg(not(target_arch = "wasm32"))]
@@ -911,7 +911,7 @@ pub struct EngineConfig {
     #[cfg(not(target_arch = "wasm32"))]
     pub recording: Option<TelemetryRecording>,
     /// Compiled bodies and the verified digest of the artifact containing `program`.
-    pub native_bodies: Option<bex_vm::NativeBodies>,
+    pub compiled_bodies: Option<bex_vm::CompiledBodies>,
 }
 
 impl Default for EngineConfig {
@@ -923,7 +923,7 @@ impl Default for EngineConfig {
             artifact_telemetry: None,
             #[cfg(not(target_arch = "wasm32"))]
             recording: None,
-            native_bodies: None,
+            compiled_bodies: None,
         }
     }
 }
@@ -1080,7 +1080,7 @@ pub struct BexEngine {
     checking_gc: AtomicBool,
     /// Set when compiled code collected in place; its awaited tail is owed.
     gc_followup: AtomicBool,
-    has_native_bodies: bool,
+    has_compiled_bodies: bool,
     /// Used to notify long-running threads that they should park the VM even if they aren't at a typical yield point.
     #[cfg(not(target_arch = "wasm32"))]
     park_requested: Arc<AtomicBool>,
@@ -1788,7 +1788,7 @@ impl BexEngine {
             artifact_telemetry,
             #[cfg(not(target_arch = "wasm32"))]
             recording,
-            native_bodies,
+            compiled_bodies,
         } = config;
         let auto_telemetry_level = match &artifact_telemetry {
             Some(policy) => policy
@@ -1820,13 +1820,13 @@ impl BexEngine {
         // The init order, before the executable is consumed.
         let init_order = bytecode_program.init_order.clone();
 
-        let has_native_bodies = native_bodies.is_some();
+        let has_compiled_bodies = compiled_bodies.is_some();
 
         // Convert the pure bytecode to a VM-ready program with native functions attached
-        let bytecode = bex_vm::vm::convert_program_with_natives(
+        let bytecode = bex_vm::vm::convert_program_with_compiled_bodies(
             bytecode_program,
             auto_telemetry_level.is_some(),
-            native_bodies,
+            compiled_bodies,
         )
         .map_err(EngineError::VmInternalError)?;
 
@@ -2030,7 +2030,7 @@ impl BexEngine {
                 // bytecode, but events and GC safepoints may still yield.
                 loop {
                     let state = vm.exec();
-                    if has_native_bodies {
+                    if has_compiled_bodies {
                         vm.compiled.pending_logs.clear();
                     }
                     match state {
@@ -2227,7 +2227,7 @@ impl BexEngine {
             heap_permit_manager,
             checking_gc: AtomicBool::new(false),
             gc_followup: AtomicBool::new(false),
-            has_native_bodies,
+            has_compiled_bodies,
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
@@ -4882,7 +4882,7 @@ impl BexEngine {
     /// a `SetOnce`) — calling [`Self::gc_safepoint`] there would do an
     /// extra release-and-reacquire pair around the heuristic for nothing.
     async fn maybe_collect_garbage(self: &Arc<Self>) {
-        if self.has_native_bodies {
+        if self.has_compiled_bodies {
             self.collect_in_place_followup().await;
         }
         let i_am_checking = self
@@ -5780,14 +5780,14 @@ impl BexEngine {
         let result = async {
             let mut thread = active.as_mut().expect("active execution permit");
 
-            if self.has_native_bodies && thread.vm.compiled.collector.is_none() {
+            if self.has_compiled_bodies && thread.vm.compiled.collector.is_none() {
                 thread.vm.compiled.collector = Some(Arc::new(InPlaceCollector {
                     engine: Arc::downgrade(self),
                     own: thread.cell_id(),
                 }));
             }
             loop {
-                if self.has_native_bodies && self.gc_followup.load(Ordering::Acquire) {
+                if self.has_compiled_bodies && self.gc_followup.load(Ordering::Acquire) {
                     let inactive = active.take().expect("active execution permit").release();
                     self.collect_in_place_followup().await;
                     thread = active.insert(inactive.acquire().await);
@@ -5796,7 +5796,7 @@ impl BexEngine {
                     telemetry.validate(&thread.vm, false);
                 }
                 let vm_exec_result = thread.vm.exec();
-                if self.has_native_bodies && !thread.vm.compiled.pending_logs.is_empty() {
+                if self.has_compiled_bodies && !thread.vm.compiled.pending_logs.is_empty() {
                     for log in std::mem::take(&mut thread.vm.compiled.pending_logs) {
                         self.capture_baml_log_event(
                             thread,
