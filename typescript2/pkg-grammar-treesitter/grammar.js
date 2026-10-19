@@ -697,6 +697,7 @@ module.exports = grammar({
 
     _statement: ($) =>
       choice(
+        $.let_type_declaration,
         $.let_declaration,
         $.expression_statement,
         $.while_statement,
@@ -726,6 +727,27 @@ module.exports = grammar({
             optional(field('else', $.else_clause)),
             optional(';'),
           ),
+        ),
+      ),
+
+    // `let type T = t;` `let type U extends Named & Tagged = t else { return null };`
+    // binds a type parameter for the rest of the block.
+    let_type_declaration: ($) =>
+      prec.right(
+        seq(
+          'let',
+          'type',
+          field('name', $.identifier),
+          optional(
+            seq(
+              'extends',
+              field('bound', seq($._type, repeat(seq('&', $._type)))),
+            ),
+          ),
+          '=',
+          field('value', $._expression),
+          optional(field('else', $.else_clause)),
+          optional(';'),
         ),
       ),
 
