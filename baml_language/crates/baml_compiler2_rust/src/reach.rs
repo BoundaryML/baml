@@ -1,13 +1,5 @@
-//! Reachability: which functions a pack's entry points can run.
-//!
-//! Compiling a function the pack never calls costs build time and binary
-//! size for nothing, so admission is limited to what its entry points reach.
-//! Reachability is over MIR and conservative: a function is reached through a
-//! direct call, a function value (a constant, a generic instantiation, a
-//! bound method), a closure lowered inside it, or an interface dispatch,
-//! which reaches every method of that name in the program. A function this
-//! misses stays bytecode in the artifact, so a gap here costs speed, never a
-//! result.
+//! Conservative MIR reachability from a pack's entry points.
+//! Interface dispatch reaches every method with the requested name.
 
 use std::collections::{BTreeSet, HashMap, VecDeque};
 
@@ -62,7 +54,6 @@ impl<'db> Collector<'_, 'db> {
         }
     }
 
-    /// An interface dispatch of `method` reaches every method of that name.
     fn dispatch(&mut self, method: &str) {
         self.out.extend(self.index.methods_named(method));
     }
@@ -141,8 +132,7 @@ impl<'db> Collector<'_, 'db> {
                     self.operand(value);
                 }
             }
-            // A closure's body runs when the closure is called: the lambda's
-            // object is reached, and its references are its maker's.
+            // Include closure bodies even when their calls cannot be resolved statically.
             Rvalue::MakeClosure {
                 lambda_idx,
                 captures,
@@ -187,9 +177,7 @@ impl<'db> Collector<'_, 'db> {
     }
 }
 
-/// The closure of `entries` under `references`: every function some entry
-/// reaches. A function absent from `references` (one the compiler did not
-/// lower, a builtin) ends a path.
+/// Transitive reachability; objects absent from `references` end a path.
 pub(crate) fn reachable(
     entries: impl IntoIterator<Item = usize>,
     references: &HashMap<usize, BTreeSet<usize>>,

@@ -1,43 +1,20 @@
-//! Structured control flow from a reducible control-flow graph.
-//!
-//! This is the "Beyond Relooper" / Stackifier scheme: blocks are emitted in
-//! reverse postorder inside their immediate dominator's region. A merge node
-//! (two or more forward in-edges) opens a labeled block at its dominator that
-//! its predecessors leave with `break`; a loop header becomes a labeled `loop`
-//! that its back edges re-enter with `continue`. The first block after a loop
-//! (the lowest-numbered exit the header dominates) follows the `loop` and is
-//! reached by breaking out of it; further exits that merge paths open their
-//! labeled blocks around the loop. With a reducible graph this never
-//! duplicates a block and never needs a state variable: every reachable
-//! block appears exactly once in the output.
-//!
-//! A block under a `catch` or `defer` has an *unwind* edge to its handler,
-//! taken by any throw or panic in the block (a call's `Err`, a checked
-//! operation's panic, a `throw`). The edge is an ordinary edge of the graph
-//! here, and its target is always labeled (a forced merge node) so the block
-//! can leave for it from the middle of its code with a `break`; the jump each
-//! block uses is recorded in [`Structured::unwind_jumps`].
-//!
-//! The structurizer sees only the graph's shape ([`Flow`]), so it can be unit
-//! tested on hand-built graphs; the printer fills each [`Stmt::Leaf`] from
-//! the MIR block it names.
+//! Stackifier control-flow structuring for reducible graphs, including unwind edges.
+//! Each reachable block is emitted once, within its immediate dominator's region.
 
 use std::{cell::RefCell, fmt};
 
-/// How a block hands control to its successors. Everything the terminator
-/// computes (a call, a short-circuit assignment) belongs to the block's leaf;
-/// only the edge shape matters here.
+/// Terminator edges; computations belong to the block's leaf.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Flow {
-    /// One successor.
     Goto(usize),
-    /// Two-way branch.
     Branch {
         then_block: usize,
         else_block: usize,
     },
-    /// Multi-way branch: one successor per arm, plus the default.
-    Switch { arms: Vec<usize>, otherwise: usize },
+    Switch {
+        arms: Vec<usize>,
+        otherwise: usize,
+    },
     /// The function ends here (return or unreachable).
     Exit,
 }
@@ -55,8 +32,6 @@ impl Flow {
         }
     }
 
-    /// Successors without repeats: a branch or switch whose arms share a
-    /// target hands control to that target once, whichever arm fires.
     fn distinct_successors(&self) -> Vec<usize> {
         let mut out = self.successors();
         let mut seen = Vec::with_capacity(out.len());
@@ -87,7 +62,6 @@ impl Cfg {
         out
     }
 
-    /// [`Self::successors`] without repeats.
     fn distinct_successors(&self, block: usize) -> Vec<usize> {
         let mut out = self.flows[block].distinct_successors();
         if let Some(handler) = self.unwinds[block]
@@ -109,7 +83,6 @@ pub(crate) struct Structured {
     pub unwind_jumps: Vec<Vec<Stmt>>,
 }
 
-/// One statement of the structured program.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Stmt {
     /// The straight-line body of a block, including whatever its terminator
@@ -117,11 +90,14 @@ pub(crate) enum Stmt {
     Leaf(usize),
     /// A labeled block whose body leaves it with [`Stmt::Break`] to `label`;
     /// block `label`'s own code follows it in the enclosing sequence.
-    Block { label: usize, body: Vec<Stmt> },
-    /// A labeled loop headed by block `label`, re-entered with
-    /// [`Stmt::Continue`].
-    Loop { label: usize, body: Vec<Stmt> },
-    /// The two-way branch that ends `block`.
+    Block {
+        label: usize,
+        body: Vec<Stmt>,
+    },
+    Loop {
+        label: usize,
+        body: Vec<Stmt>,
+    },
     If {
         block: usize,
         then_branch: Vec<Stmt>,
@@ -145,16 +121,19 @@ pub(crate) enum Stmt {
     Exit(usize),
 }
 
-/// Why a graph could not be structured. Every variant is a violated MIR
-/// invariant: lowering only produces reducible, well-formed graphs.
+/// Violated MIR invariants: lowering must produce reducible, well-formed graphs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum StructureError {
-    /// The entry block index is out of range.
     MissingEntry(usize),
-    /// A block jumps to an index that is not a block.
-    UnknownBlock { from: usize, to: usize },
+    UnknownBlock {
+        from: usize,
+        to: usize,
+    },
     /// A retreating edge whose target does not dominate its source.
-    Irreducible { from: usize, to: usize },
+    Irreducible {
+        from: usize,
+        to: usize,
+    },
 }
 
 impl fmt::Display for StructureError {
@@ -219,8 +198,7 @@ impl<'a> Analysis<'a> {
             }
         }
 
-        // Iterative depth-first search for a postorder, taking successors in
-        // terminator order so the layout follows the source's branch order.
+        // Terminator order preserves the source's branch order in the layout.
         let mut postorder = Vec::with_capacity(n);
         let mut visited = vec![false; n];
         let mut stack: Vec<(usize, std::vec::IntoIter<usize>)> = Vec::new();
@@ -248,7 +226,6 @@ impl<'a> Analysis<'a> {
             by_rpo[number] = block;
         }
 
-        // Predecessors of reachable blocks, with edge multiplicity.
         let mut preds: Vec<Vec<usize>> = vec![Vec::new(); n];
         for &block in &by_rpo {
             for succ in cfg.successors(block) {
@@ -322,8 +299,7 @@ impl<'a> Analysis<'a> {
         for block in 0..n {
             is_merge[block] = forward_in[block] >= 2;
         }
-        // A handler is always labeled: the blocks under it leave for it from
-        // the middle of their code, which only a `break` can do.
+        // Handlers need labels for unwinding from the middle of a block.
         for &block in &by_rpo {
             if let Some(handler) = cfg.unwinds[block] {
                 is_merge[handler] = true;
@@ -338,9 +314,7 @@ impl<'a> Analysis<'a> {
             list.sort_by(|a, b| rpo[*b].cmp(&rpo[*a]));
         }
 
-        // A header's natural loop: its back-edge sources and everything that
-        // reaches them without passing the header. Reducibility makes every
-        // member dominated by the header.
+        // The header must dominate every member of its natural loop.
         let mut loop_members: Vec<Option<Vec<bool>>> = vec![None; n];
         let mut natural_exit_of: Vec<Option<usize>> = vec![None; n];
         for &header in &by_rpo {
@@ -367,8 +341,7 @@ impl<'a> Analysis<'a> {
                 members[block] = true;
                 work.extend(preds[block].iter().copied());
             }
-            // The exit emitted right after the loop: the first block outside
-            // it that it dominates. Every jump to it comes from inside.
+            // The first dominated block outside the loop follows it in the output.
             let natural = children[header]
                 .iter()
                 .copied()
@@ -401,9 +374,7 @@ impl<'a> Analysis<'a> {
                 .collect();
             return self.node_within(block, &merge_children, context);
         };
-        // Merge nodes inside the loop open their blocks inside it; merge
-        // exits other than the natural one open theirs around it, so code
-        // after the loop sits after the `loop`.
+        // Merge exits wrap the loop; internal merges stay inside it.
         let (inside, outside): (Vec<usize>, Vec<usize>) = self.children[block]
             .iter()
             .copied()
@@ -412,8 +383,7 @@ impl<'a> Analysis<'a> {
         self.loop_within(block, &inside, &outside, context)
     }
 
-    /// `outside` is the list of merge exits still to wrap around the loop,
-    /// outermost first.
+    /// `outside` lists merge exits in outermost-first order.
     fn loop_within(
         &self,
         header: usize,
@@ -471,8 +441,7 @@ impl<'a> Analysis<'a> {
                 then_block,
                 else_block,
             } if then_block == else_block => {
-                // Both arms agree, and the condition has no effect of its
-                // own: fall through without a conditional.
+                // The leaf has already evaluated the condition.
                 out.extend(self.do_branch(block, *then_block, context)?);
             }
             Flow::Branch {
@@ -484,15 +453,11 @@ impl<'a> Analysis<'a> {
                 else_branch: self.do_branch(block, *else_block, context)?,
             }),
             Flow::Switch { arms, otherwise } => {
-                // An arm that jumps where `otherwise` does is the `_` arm;
-                // structuring its target a second time would duplicate the
-                // whole subtree (exponentially, for consecutive matches).
                 if arms.iter().all(|target| target == otherwise) {
                     out.extend(self.do_branch(block, *otherwise, context)?);
                     return Ok(out);
                 }
-                // Arms sharing a target share one group, in first-appearance
-                // order, so a target is emitted at most once.
+                // Group shared targets in first-appearance order to avoid duplication.
                 let mut groups: Vec<(usize, Vec<usize>)> = Vec::new();
                 for (index, &target) in arms.iter().enumerate() {
                     if target == *otherwise {
@@ -525,7 +490,7 @@ impl<'a> Analysis<'a> {
         context: &mut Vec<Label>,
     ) -> Result<Vec<Stmt>, StructureError> {
         if self.rpo[target] <= self.rpo[source] {
-            // A back edge: the header's loop is open, or the graph lied.
+            // A back edge requires an enclosing loop for its target.
             if !context.contains(&Label::Loop(target)) {
                 return Err(StructureError::Irreducible {
                     from: source,
@@ -581,7 +546,6 @@ mod tests {
         }
     }
 
-    /// Every leaf reached, in emission order, and every jump.
     fn walk(stmts: &[Stmt], leaves: &mut Vec<usize>, jumps: &mut Vec<Stmt>) {
         for stmt in stmts {
             match stmt {
@@ -610,7 +574,6 @@ mod tests {
         }
     }
 
-    /// Each reachable block appears exactly once: no duplication.
     fn assert_each_block_once(stmts: &[Stmt], reachable: &[usize]) {
         let mut leaves = Vec::new();
         let mut jumps = Vec::new();
@@ -729,7 +692,6 @@ mod tests {
             "both exits leave the loop itself"
         );
         assert!(jumps.contains(&Stmt::Exit(6)));
-        // The exit's code comes right after the loop.
         assert!(matches!(stmts[1], Stmt::Loop { label: 1, .. }), "{stmts:?}");
         assert_eq!(stmts[2..], [Stmt::Leaf(6), Stmt::Exit(6)]);
     }
@@ -765,8 +727,6 @@ mod tests {
             blocks.is_empty(),
             "5 is the inner loop's natural exit: {blocks:?}"
         );
-        // The inner loop sits inside the outer one, and block 5 (where the
-        // inner loop's exits meet) directly follows the inner `loop`.
         let outer = find_loop(&stmts, 1).expect("outer loop");
         find_loop(outer, 2).expect("inner loop nested in outer");
         let Stmt::If { then_branch, .. } = &outer[1] else {
@@ -912,7 +872,6 @@ mod tests {
         );
         assert_eq!(arms[0].0, vec![1]);
 
-        // Every arm shares the default: no conditional at all.
         let g = cfg(
             0,
             vec![
