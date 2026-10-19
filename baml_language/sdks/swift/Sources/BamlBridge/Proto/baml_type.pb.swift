@@ -1086,8 +1086,9 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTyTypeVar: Sendable {
 }
 
 /// An associated-type projection such as `P.Output` or `(T as Iterator).Item`
-/// (`RuntimeTy::AssociatedTypeProjection`). `interface` is absent when the
-/// projection is not qualified by an explicit interface.
+/// (`RuntimeTy::AssociatedTypeProjection`). `interface` is required: a
+/// projection always carries its declaring interface, and the decoder refuses
+/// one without it.
 nonisolated struct BamlBridge_Cffi_V1_BamlTyAssociatedTypeProjection: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for

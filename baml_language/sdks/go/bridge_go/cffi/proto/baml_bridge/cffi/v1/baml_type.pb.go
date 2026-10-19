@@ -2318,8 +2318,9 @@ func (x *BamlTyTypeVar) GetIndex() uint32 {
 }
 
 // An associated-type projection such as `P.Output` or `(T as Iterator).Item`
-// (`RuntimeTy::AssociatedTypeProjection`). `interface` is absent when the
-// projection is not qualified by an explicit interface.
+// (`RuntimeTy::AssociatedTypeProjection`). `interface` is required: a
+// projection always carries its declaring interface, and the decoder refuses
+// one without it.
 type BamlTyAssociatedTypeProjection struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

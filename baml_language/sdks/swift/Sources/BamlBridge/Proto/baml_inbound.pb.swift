@@ -70,11 +70,11 @@ nonisolated enum BamlBridge_Cffi_V1_TraceMode: SwiftProtobuf.Enum, Swift.CaseIte
 
 }
 
-/// Core value type. `value_type` is a sparse exact-type annotation for this
-/// node, never a copy of the enclosing union. Most values omit it and are
-/// decoded from the declared contextual type plus payload shape. Hosts set it
-/// only when shape/context cannot preserve their choice (for example an empty
-/// container, an overlapping union arm, or a literal-vs-primitive selection).
+/// Core value type. `value_type` is this node's own exact type, and whether a
+/// node carries one is fixed by its arm: a list, map, class or callable node
+/// must state it, every other node must not. A statement is a realized type
+/// (no type variables), never a root union or optional. The engine builds the
+/// stated value as it is, converts nothing, and checks it against its slot.
 nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -220,10 +220,9 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
     set {value = .promptAstValue(newValue)}
   }
 
-  /// A JavaScript `number`. Unlike `int_value` and `float_value`, this does
-  /// not choose a BAML numeric representation: an integral value may inhabit
-  /// either `int` or `float`, and the declared contextual type selects one.
-  /// Non-integral values can inhabit only `float`.
+  /// Retired: a host states `int_value` or `float_value`. The decoder refuses
+  /// this arm; the field stays so an old host's value is refused rather than
+  /// decoded as an unknown field, which would read as null.
   var jsNumberValue: Double {
     get {
       if case .jsNumberValue(let v)? = value {return v}
@@ -259,10 +258,9 @@ nonisolated struct BamlBridge_Cffi_V1_InboundValue: Sendable {
     /// and engine-created values have one canonical representation.
     case mediaValue(BamlBridge_Cffi_V1_BamlValueMedia)
     case promptAstValue(BamlBridge_Cffi_V1_BamlValuePromptAst)
-    /// A JavaScript `number`. Unlike `int_value` and `float_value`, this does
-    /// not choose a BAML numeric representation: an integral value may inhabit
-    /// either `int` or `float`, and the declared contextual type selects one.
-    /// Non-integral values can inhabit only `float`.
+    /// Retired: a host states `int_value` or `float_value`. The decoder refuses
+    /// this arm; the field stays so an old host's value is refused rather than
+    /// decoded as an unknown field, which would read as null.
     case jsNumberValue(Double)
 
   }

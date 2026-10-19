@@ -21,6 +21,30 @@ source_paths:
 
 # Java Inbound Argument Encoding
 
+> **Superseded contract (2026-10).** The inbound contract this document was
+> written against is gone. The engine is now exact: it builds what the wire
+> states, converts nothing, and checks the value once against its slot. The
+> authority is the "Inbound value contract" section of
+> `baml_language/sdks/csharp/ABI.md`, and the Java implementation is
+> `ProtoWriter.java` itself. In particular, these claims below no longer hold:
+>
+> - `value_type` is not sparse. Every list, map, class and callable node states
+>   its exact type; scalars, `null`, enums, media, prompts and handles state
+>   nothing.
+> - The writer does not dispatch on the Java runtime shape alone. Generated
+>   bindings pass each argument's declared slot (`BamlTypedValue`, including
+>   slots that mention the call's type parameters), and the writer states that
+>   slot or, under an open slot, the value's own type.
+> - A `BigInteger` is always `bigint_value`, never `int_value`.
+> - An empty container under an open type variable is refused until the caller
+>   names the variable; under `unknown` it is `unknown[]`; under a recursive
+>   alias such as `json` it states the alias's member (`json[]`).
+> - Media is a `media_value`, not a `class_value`.
+> - There is no ambiguity policy and no `js_number_value`; the engine never
+>   picks a union member or converts a number.
+>
+> The line citations below date from 2026-07 and have drifted.
+
 This file records how generated Java SDK calls encode Java arguments before they
 cross into the BAML engine. It is the section-for-section mirror of
 `ref-python-inbound-encoding.md`, written so the two can be read side by side for
@@ -173,7 +197,7 @@ message InboundMapEntry {
 }
 
 message InboundValue {
-  BamlTy value_type = 1;              // sparse exact-type annotation for THIS node
+  BamlTy value_type = 1;              // this node's exact type (see the banner above)
   oneof value {
     string string_value = 2;
     int64 int_value = 3;
@@ -197,25 +221,20 @@ message InboundClassValue {
 }
 ```
 
-**The sparse `value_type` annotation (field 1).** Since `ceae8ea6c` (#4087),
-class identity **no longer lives on the class payload** — the old
-`InboundClassValue.class_ty` was removed (field 1 is now `reserved`) and moved to
-the node-level `InboundValue.value_type`, the same channel every other kind uses.
-`value_type` is a **sparse exact-type annotation for the current node**, never a
-copy of the enclosing union: most values omit it and are recovered from the
-declared contextual type plus payload shape; a host writes it only when
-shape/context cannot preserve its choice. The three canonical cases (from the
-proto comment) are an **empty container**, an **overlapping union arm**, and a
-**literal-vs-primitive selection**. The engine rejects a `value_type` that is
-itself a root union or optional — it must identify one exact selected node
-(`value_decode.rs:37-39`, `InvalidInboundValueTypeRootUnion`). See "The `value_type`
-annotation" section below for how the Java encoder threads it.
+**The `value_type` annotation (field 1).** Since `ceae8ea6c` (#4087), class
+identity lives on the node-level `InboundValue.value_type`, not on the class
+payload (`InboundClassValue` field 1 is `reserved`). Under the current contract
+`value_type` is the node's exact type, and whether a node carries one is fixed
+by its arm: a list, map, class or callable node must state it, and a scalar,
+`null`, enum, media, prompt or handle node must not. A statement is a realized
+type (no type variables), never a root union or optional. See the banner at the
+top and `ABI.md` "Inbound value contract".
 
-Inbound values do not carry declared BAML parameter types. **The Java encoder
-dispatches on the Java runtime shape of each argument — never on the declared
-BAML parameter type** (`ProtoWriter.java:11-17, 154-231`), exactly like Python's
-`_set_inbound_value`. Rust decodes to `BexExternalValue` and the engine re-runs
-BAML validation after deserialization.
+The generated binding passes each argument's declared slot to the writer
+(`BamlTypedValue`), so the writer states the slot where the slot fixes the
+node's type, and the value's own type where the slot is open (`unknown`, a type
+variable). Rust decodes the stated graph to `BexExternalValue`, and the engine
+builds it and checks it once against the slot, converting nothing.
 
 ## Java Encoding Rules
 
@@ -234,8 +253,7 @@ The **arm order matters** — `Boolean` is checked before the integer arms
 | `Boolean` | `bool_value` (5) | Checked before the integer arms (`:160-161`). |
 | `Long` | `int_value` (3) | `:162-163`. |
 | `Integer` / `Short` / `Byte` | `int_value` (3) | Widened via `Number.longValue()` (`:164-165`). |
-| `BigInteger` within signed i64 | `int_value` (3) | `:166-170`; pinned by `WireCodecTest.inbound_bigint_in_range_uses_int_channel:244-249`. |
-| `BigInteger` outside signed i64 | `bigint_value` (12) | Lowercase base-16 via `toString(16)`, sign-prefixed; matches num-bigint's `{bi:x}` (`:171-173`). |
+| `BigInteger` (any value) | `bigint_value` (12) | Lowercase base-16 via `toString(16)`, sign-prefixed; matches num-bigint's `{bi:x}`. A `bigint` is never sent as an `int`, since concrete types are atomic; pinned by `WireCodecTest.inbound_bigint_in_range_uses_bigint_channel`. |
 | `Double` | `float_value` (4) | `:174`. |
 | `Float` | `float_value` (4) | Widened to `double` (`:175-177`). |
 | `String` | `string_value` (2) | `:178`. |
@@ -607,8 +625,8 @@ encoder error.
   `type_args` — only the bare `value_type.class_ty.name` (the identity itself
   relocated to `value_type` in `ceae8ea6c`, so this is not byte-identical to the
   older `InboundClassValue.class_ty` wire). Selected union arms additionally carry
-  the arm's exact `value_type` (empty containers, overlapping arms, literals). Rust
-  and the engine own coercion and BAML type validation.
+  the arm's exact `value_type` (empty containers, overlapping arms, literals). The
+  engine converts nothing: it checks each built value once against its slot.
 - Omit-vs-explicit-null is preserved by the `$Opts` touched-set, not a sentinel:
   a setter never called ⇒ omitted (engine default); a setter called with `null`
   ⇒ an entry with an absent `value` oneof (explicit BAML `null`)
