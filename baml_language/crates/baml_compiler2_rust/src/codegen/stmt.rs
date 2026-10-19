@@ -1,5 +1,4 @@
-//! Statements: structured control flow, a block's statements and
-//! terminator, and how an error leaves a block.
+//! Emit structured control flow, block statements, and error handling.
 
 use baml_compiler2_mir::{
     BlockId, IntrinsicOp, Local, Place, Rvalue, ShortCircuitKind, StatementKind, SwitchKey,
@@ -14,7 +13,7 @@ use crate::{
     structure::Stmt,
 };
 
-impl Generator<'_, '_> {
+impl<'db> Generator<'_, 'db> {
     pub(super) fn stmts(&mut self, stmts: &[Stmt]) -> Gen<()> {
         for stmt in stmts {
             self.stmt(stmt)?;
@@ -93,11 +92,7 @@ impl Generator<'_, '_> {
         }
     }
 
-    /// The pattern a switch arm's key matches against the discriminant: an
-    /// enum's variant index, or a class's dispatch tag (what `Rvalue::TypeTag`
-    /// reads off an instance, which the linker fixed for every class of the
-    /// program). Two keys with one tag match in order, as bytecode's solved
-    /// table does: the later arm is unreachable.
+    /// Class keys use dispatch tags; enum keys use variant indices.
     pub(super) fn switch_pattern(&self, key: &SwitchKey<'_>) -> Gen<String> {
         Ok(match key {
             SwitchKey::Int(key) => format!("{key}i64"),
@@ -111,20 +106,22 @@ impl Generator<'_, '_> {
         })
     }
 
-    /// The statements of a block and whatever its terminator computes before
-    /// control transfers.
     pub(super) fn leaf(&mut self, id: BlockId) -> Gen<()> {
-        let block = &self.body.blocks[id.0];
-        // A leaf can be entered from several places; nothing about `pc` is
-        // known on entry. Every PC of the leaf lies in its block's bytecode,
-        // so what it records says whether the block is a shielded `defer`
-        // body, as the engine reads it (`vm_thread_is_shielded`).
+        // A leaf can have several predecessors, so its entry PC is unknown.
         self.current_mark = None;
         let pcs = self.positions.block(id.0).cloned().unwrap_or_default();
-        // A resumable body lets the scheduler in from its loops. It counts
-        // iterations in a register and takes the VM's control-flow check
-        // every `YIELD_EVERY`th: a compiled iteration is a fraction of an
-        // interpreted one, so this still polls about as often in time.
+        self.loop_check(id, pcs.start);
+        self.update_cause(id);
+        for (index, statement) in self.body.blocks[id.0].statements.iter().enumerate() {
+            let pc = pcs.statements.get(index).copied().flatten();
+            self.set_pc(pc);
+            self.block_statement(id, &statement.kind, pc)?;
+        }
+        self.set_pc(pcs.terminator);
+        self.leaf_terminator(id)
+    }
+
+    fn loop_check(&mut self, id: BlockId, pc: Option<usize>) {
         if self.suspends && self.loop_headers.contains(&id.0) {
             let live = self.live_in[id.0].clone();
             let point = self.yield_point(id.0);
@@ -137,14 +134,11 @@ impl Generator<'_, '_> {
             self.line(&format!(
                 "vm.set_slot(depth, {point_slot}, Value::int({point}));"
             ));
-            // It yields standing at the loop header.
-            let at = pc_arg(pcs.start);
+            let at = pc_arg(pc);
             self.line(&format!("vm.note_pc(depth, {at});"));
             self.line("return Ok(Step::Yield);");
             self.line("}");
         } else if self.gc_checks.loops && self.loop_headers.contains(&id.0) {
-            // An inline body collects in place at an allocating loop's
-            // header, as often as a resumable one would yield.
             let live = self.live_in[id.0].clone();
             self.line("iterations = iterations.wrapping_add(1);");
             self.gc_check(
@@ -152,8 +146,11 @@ impl Generator<'_, '_> {
                 &format!("iterations % {YIELD_EVERY} == 0 && vm.gc_due()"),
             );
         }
-        // Entering or leaving a handler's body: record the context of the
-        // error it handles, which a raise here chains onto as its cause.
+    }
+
+    // Errors raised in this block inherit the active handler context.
+    fn update_cause(&mut self, id: BlockId) {
+        let block = &self.body.blocks[id.0];
         if let Some(slot) = self.cause_slot
             && self.cause_changes_at(id.0)
         {
@@ -166,108 +163,107 @@ impl Generator<'_, '_> {
             };
             self.statement(&format!("vm.set_slot(depth, {slot}, {cause});"));
         }
-        for (index, statement) in block.statements.iter().enumerate() {
-            let pc = pcs.statements.get(index).copied().flatten();
-            self.set_pc(pc);
-            match &statement.kind {
-                StatementKind::Assign { destination, value } => {
-                    // A type local is built where it is consumed (a call's
-                    // type argument, a `type` value); it has no runtime
-                    // value of its own.
-                    if let (Place::Local(local), Rvalue::LoadType(_)) = (destination, value)
-                        && self.analysis.is_type_local(local.0)
-                    {
-                        continue;
+    }
+
+    fn block_statement(
+        &mut self,
+        id: BlockId,
+        statement: &StatementKind<'db>,
+        pc: Option<usize>,
+    ) -> Gen<()> {
+        match statement {
+            StatementKind::Assign { destination, value } => {
+                // Type locals have no runtime binding; reads construct their values.
+                if let (Place::Local(local), Rvalue::LoadType(_)) = (destination, value)
+                    && self.analysis.is_type_local(local.0)
+                {
+                    return Ok(());
+                }
+                let value = self.rvalue(id, value)?;
+                let code = self.store(id, destination, &value)?;
+                self.statement(&code);
+            }
+            StatementKind::Drop(_) | StatementKind::Nop => {}
+            StatementKind::FreshCell { local, carry_value } => {
+                let init = if *carry_value {
+                    self.hoist(Expr::new(
+                        format!("vm.cell_load(l{})?", local.0),
+                        Repr::Value,
+                    ))
+                    .code
+                } else {
+                    "Value::NULL".to_string()
+                };
+                let cell = Expr::new(format!("vm.new_cell({init})"), Repr::Value);
+                let code = self.store(id, &Place::Local(*local), &cell)?;
+                self.statement(&code);
+            }
+            StatementKind::Intrinsic {
+                op: IntrinsicOp::BindType(slot),
+                args,
+            } => {
+                let [value] = args.as_slice() else {
+                    return Err(Rejection::Invalid("`BindType` takes one operand".into()));
+                };
+                let value = self.value_operand(id, value)?;
+                let code = self.fallible(id, &format!("vm.bind_type(depth, {slot}, {value})"))?;
+                self.statement(&format!("{code};"));
+            }
+            StatementKind::Intrinsic {
+                op: IntrinsicOp::Log(level),
+                args,
+            } => {
+                let level = match level {
+                    baml_compiler2_mir::LogLevel::Info => "Info",
+                    baml_compiler2_mir::LogLevel::Debug => "Debug",
+                    baml_compiler2_mir::LogLevel::Warn => "Warn",
+                    baml_compiler2_mir::LogLevel::Error => "Error",
+                };
+                let Some(data) = args.first() else {
+                    return Err(Rejection::Invalid("`log` without its data".into()));
+                };
+                let data = self.value_operand(id, data)?;
+                let name = match args.get(1) {
+                    Some(name) => {
+                        let name = self.operand(id, name)?;
+                        self.value_arg(&name.code, name.repr)
                     }
-                    let value = self.rvalue(id, value)?;
-                    let code = self.store(id, destination, &value)?;
-                    self.statement(&code);
-                }
-                StatementKind::Drop(_) | StatementKind::Nop => {}
-                // The captured local's binding is created here: a new cell,
-                // holding null or the value of the cell it replaces (a loop
-                // header's binding, carried into the next iteration).
-                StatementKind::FreshCell { local, carry_value } => {
-                    let init = if *carry_value {
-                        self.hoist(Expr::new(
-                            format!("vm.cell_load(l{})?", local.0),
-                            Repr::Value,
-                        ))
-                        .code
-                    } else {
-                        "Value::NULL".to_string()
-                    };
-                    let cell = Expr::new(format!("vm.new_cell({init})"), Repr::Value);
-                    let code = self.store(id, &Place::Local(*local), &cell)?;
-                    self.statement(&code);
-                }
-                // `type T = value`: bind the value into the frame's slot, as
-                // `BindType` does. Every type the body derives after this
-                // reads the frame again (`Generator::realized`).
-                StatementKind::Intrinsic {
-                    op: IntrinsicOp::BindType(slot),
-                    args,
-                } => {
-                    let [value] = args.as_slice() else {
-                        return Err(Rejection::Invalid("`BindType` takes one operand".into()));
-                    };
-                    let value = self.value_operand(id, value)?;
-                    let code =
-                        self.fallible(id, &format!("vm.bind_type(depth, {slot}, {value})"))?;
-                    self.statement(&format!("{code};"));
-                }
-                // `log.*`: the `$baml_log` record bytecode's `SendEvent`
-                // makes, queued for the engine (`vm.log_event`).
-                StatementKind::Intrinsic {
-                    op: IntrinsicOp::Log(level),
-                    args,
-                } => {
-                    let level = match level {
-                        baml_compiler2_mir::LogLevel::Info => "Info",
-                        baml_compiler2_mir::LogLevel::Debug => "Debug",
-                        baml_compiler2_mir::LogLevel::Warn => "Warn",
-                        baml_compiler2_mir::LogLevel::Error => "Error",
-                    };
-                    let Some(data) = args.first() else {
-                        return Err(Rejection::Invalid("`log` without its data".into()));
-                    };
-                    let data = self.value_operand(id, data)?;
-                    let name = match args.get(1) {
-                        Some(name) => {
-                            let name = self.operand(id, name)?;
-                            self.value_arg(&name.code, name.repr)
-                        }
-                        None => "Value::NULL".to_string(),
-                    };
-                    // The statement's PC is its `SendEvent`'s, whose line entry
-                    // locates the record.
-                    let at = pc_arg(pc);
-                    let code =
-                        self.fallible(id, &format!("vm.log_event(bex_vm::compiled_rt::LogLevel::{level}, {data}, {name}, {at})"))?;
-                    self.statement(&format!("{code};"));
-                }
-                StatementKind::Intrinsic { .. } => return unsupported("compiler intrinsic"),
-                StatementKind::VirtualFieldStore {
-                    iface,
-                    receiver,
-                    field_index,
-                    value,
-                    ..
-                } => {
-                    let (iface, iface_args, _) = self.interface_operands(iface)?;
-                    let receiver = self.value_operand(id, receiver)?;
-                    let value = self.value_operand(id, value)?;
-                    let code = self.fallible(
-                        id,
-                        &format!(
-                            "vm.virtual_store_field({receiver}, {iface}, {iface_args}, {field_index}, {value})"
-                        ),
-                    )?;
-                    self.statement(&format!("{code};"));
-                }
+                    None => "Value::NULL".to_string(),
+                };
+                let at = pc_arg(pc);
+                let code = self.fallible(
+                    id,
+                    &format!(
+                        "vm.log_event(bex_vm::compiled_rt::LogLevel::{level}, {data}, {name}, {at})"
+                    ),
+                )?;
+                self.statement(&format!("{code};"));
+            }
+            StatementKind::Intrinsic { .. } => return unsupported("compiler intrinsic"),
+            StatementKind::VirtualFieldStore {
+                iface,
+                receiver,
+                field_index,
+                value,
+                ..
+            } => {
+                let (iface, iface_args, _) = self.interface_operands(iface)?;
+                let receiver = self.value_operand(id, receiver)?;
+                let value = self.value_operand(id, value)?;
+                let code = self.fallible(
+                    id,
+                    &format!(
+                        "vm.virtual_store_field({receiver}, {iface}, {iface_args}, {field_index}, {value})"
+                    ),
+                )?;
+                self.statement(&format!("{code};"));
             }
         }
-        self.set_pc(pcs.terminator);
+        Ok(())
+    }
+
+    fn leaf_terminator(&mut self, id: BlockId) -> Gen<()> {
+        let block = &self.body.blocks[id.0];
         match block.terminator.as_ref().expect("checked in Analysis") {
             Terminator::Branch { condition, .. } => {
                 let condition = self.operand(id, condition)?;
@@ -298,7 +294,6 @@ impl Generator<'_, '_> {
                 self.statement(&format!("d{} = {code};", id.0));
             }
             terminator @ Terminator::Call { .. } if self.call_suspends(terminator) => {}
-            // Emitted by `pause`.
             terminator @ Terminator::VirtualCall { .. } if !self.array_iteration(terminator) => {}
             Terminator::Call {
                 callee,
@@ -330,58 +325,19 @@ impl Generator<'_, '_> {
                 let store = self.store(id, destination, &Expr::new("lhs", Repr::Value))?;
                 self.statement(&format!("if c{} {{ {store} }}", id.0));
             }
-            Terminator::VirtualCall { destination, .. } => {
-                if let Some((iter, array)) = array_iter_call(
-                    self.body,
-                    self.analysis.arity,
-                    block.terminator.as_ref().expect("checked"),
-                ) {
-                    let array = coerce(&format!("l{array}"), self.repr(Local(array)), Repr::Value);
-                    self.statement(&format!("l{iter} = {array}; i{iter} = 0;"));
-                } else if let Some(iter) = array_next_call(
-                    block.terminator.as_ref().expect("checked"),
-                    &self.analysis.array_iters,
-                ) {
-                    // `baml.iter.ArrayIterator.next`: the length is re-read on
-                    // every step, so a loop that grows or shrinks the array
-                    // sees it, and the end is a `Done` instance.
-                    let done = baml_compiler2_hir_ty::layout::lang_class(
-                        self.db,
-                        baml_base::LangPackage::Baml,
-                        &["iter"],
-                        "Done",
-                    )
-                    .map(|done| self.index.class(self.db, done))
-                    .transpose()?
-                    .flatten();
-                    let Some((done, _)) = done else {
-                        return unsupported("`baml.iter.Done` not found in the program");
-                    };
-                    let step = format!(
-                        "if i{iter} < bex_vm::compiled_rt::expect_int(vm.container_len(l{iter})?)? {{ \
-                         let v = vm.load_array_element(l{iter}, Value::int(i{iter}))?; i{iter} += 1; v }} \
-                         else {{ vm.new_instance(vm.idx_to_ptr(ObjectIndex::from_raw({done})), Vec::new()) }}"
-                    );
-                    let code = self.store(id, destination, &Expr::new(step, Repr::Value))?;
-                    self.statement(&code);
-                } else {
-                    return Err(Rejection::Invalid(
-                        "virtual call admitted without a lowering".into(),
-                    ));
-                }
+            terminator @ Terminator::VirtualCall { destination, .. } => {
+                self.array_iteration_call(id, terminator, destination)?;
             }
             Terminator::Goto { .. }
             | Terminator::Return
             | Terminator::Unreachable
             | Terminator::Throw { .. }
             | Terminator::Rethrow { .. } => {}
-            // Emitted by `pause`, in a resumable function.
             Terminator::SysOp { .. }
             | Terminator::Spawn { .. }
             | Terminator::Await { .. }
             | Terminator::AwaitAny { .. } => {}
-            // Before a wildcard catch arm: a panic is raised again, with its
-            // context, rather than swallowed.
+            // A wildcard catch must propagate panics with their context.
             Terminator::ThrowIfPanic { value, context, .. } => {
                 let value = self.value_operand(id, value)?;
                 let context = self.value_operand(id, context)?;
@@ -400,7 +356,44 @@ impl Generator<'_, '_> {
         Ok(())
     }
 
-    /// How a block leaves the function.
+    fn array_iteration_call(
+        &mut self,
+        id: BlockId,
+        terminator: &Terminator<'db>,
+        destination: &Place,
+    ) -> Gen<()> {
+        if let Some((iter, array)) = array_iter_call(self.body, self.analysis.arity, terminator) {
+            let array = coerce(&format!("l{array}"), self.repr(Local(array)), Repr::Value);
+            self.statement(&format!("l{iter} = {array}; i{iter} = 0;"));
+        } else if let Some(iter) = array_next_call(terminator, &self.analysis.array_iters) {
+            // Re-read the length each step because the array can change during iteration.
+            let done = baml_compiler2_hir_ty::layout::lang_class(
+                self.db,
+                baml_base::LangPackage::Baml,
+                &["iter"],
+                "Done",
+            )
+            .map(|done| self.index.class(self.db, done))
+            .transpose()?
+            .flatten();
+            let Some((done, _)) = done else {
+                return unsupported("`baml.iter.Done` not found in the program");
+            };
+            let step = format!(
+                "if i{iter} < bex_vm::compiled_rt::expect_int(vm.container_len(l{iter})?)? {{ \
+                 let v = vm.load_array_element(l{iter}, Value::int(i{iter}))?; i{iter} += 1; v }} \
+                 else {{ vm.new_instance(vm.idx_to_ptr(ObjectIndex::from_raw({done})), Vec::new()) }}"
+            );
+            let code = self.store(id, destination, &Expr::new(step, Repr::Value))?;
+            self.statement(&code);
+        } else {
+            return Err(Rejection::Invalid(
+                "virtual call admitted without a lowering".into(),
+            ));
+        }
+        Ok(())
+    }
+
     pub(super) fn exit(&mut self, id: BlockId) -> Gen<()> {
         let block = &self.body.blocks[id.0];
         match block.terminator.as_ref().expect("checked in Analysis") {
@@ -408,8 +401,7 @@ impl Generator<'_, '_> {
                 if self.analysis.array_iters.contains_key(&0) {
                     return unsupported("array iterator used as a value");
                 }
-                // A returned type local (`reflect.Type.of<T>()`) has no
-                // binding; its value is built here, as at any other read.
+                // Type locals have no runtime binding.
                 let result = if self.analysis.is_type_local(0) {
                     self.load(id, &Place::Local(Local(0)))?.code
                 } else {
@@ -444,7 +436,6 @@ impl Generator<'_, '_> {
                     self.statement(&format!("return Err({error});"));
                 }
             }
-            // Bytecode's `Unreachable`: a catchable `baml.panics.Unreachable`.
             Terminator::Unreachable => {
                 self.line("let unreachable = vm.unreachable_panic();");
                 if block.unwind.is_some() {
@@ -464,11 +455,8 @@ impl Generator<'_, '_> {
         Ok(())
     }
 
-    /// The statements that land `error` (an expression of type
-    /// `Box<VmError>`) in `block`'s handler: build its context and pop the
-    /// frames of compiled callees above this one (`BexVm::catch`), bind value
-    /// and context into the handler's landing locals, and jump there. An
-    /// internal error is not catchable and propagates.
+    /// Bind the error and context in the handler, then jump to it.
+    /// Internal errors bypass handlers.
     pub(super) fn unwind_jump(&mut self, block: BlockId, error: &str) -> Gen<String> {
         let Some(handler) = self.body.blocks[block.0].unwind else {
             return Err(Rejection::Invalid(
@@ -514,8 +502,7 @@ impl Generator<'_, '_> {
         Ok(out)
     }
 
-    /// Wrap a fallible expression (`Result<_, Box<VmError>>`) for `block`:
-    /// route a thrown value to its handler, otherwise propagate with `?`.
+    /// Route a thrown value to the block's handler, or propagate it with `?`.
     pub(super) fn fallible(&mut self, block: BlockId, code: &str) -> Gen<String> {
         if self.body.blocks[block.0].unwind.is_none() {
             return Ok(format!("{code}?"));

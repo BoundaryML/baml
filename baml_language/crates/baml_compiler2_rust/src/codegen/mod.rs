@@ -889,89 +889,34 @@ impl<'db> Generator<'_, 'db> {
             .terminator
             .as_ref()
             .expect("checked");
-        // The request, and the arguments a call pushes above the slots.
-        let (step, args) = match terminator {
-            Terminator::Call {
-                callee,
-                args,
-                ntypeargs,
-                argument_layout,
-                has_trace,
-                ..
-            } => {
-                let (type_args, args) = args.split_at((*ntypeargs).min(args.len()));
-                // A `$trace` attachment is the final operand: handed to the
-                // VM for the call it requests, as bytecode's `SetCallTrace`.
-                let args = if *has_trace {
-                    let Some((trace, args)) = args.split_last() else {
-                        return Err(Rejection::Invalid(
-                            "a traced call without its attachment".into(),
-                        ));
-                    };
-                    let trace = self.value_operand(block, trace)?;
-                    let code = self.fallible(block, &format!("vm.set_call_trace({trace})"))?;
-                    self.statement(&format!("{code};"));
-                    args
-                } else {
-                    args
-                };
-                let (types, _) = self.call_type_args(type_args)?;
-                self.callee_ptr(block, callee)?;
-                let mut laid_out = false;
-                let args = match callee {
-                    Operand::Constant(Constant::Function(func)) => {
-                        let name = function_display_name(self.db, *func);
-                        let Some((_, info)) = self.index.function(self.db, *func)? else {
-                            return unsupported(format!(
-                                "callee `{name}` not found in the program"
-                            ));
-                        };
-                        self.laid_out_args(block, &name, info, argument_layout.as_ref(), args)?
-                    }
-                    // Named arguments to a function value: laid over the
-                    // callee's slots at run time, as the interpreter's
-                    // `CallIndirect` remaps them, and pushed here.
-                    _ if argument_layout
-                        .as_ref()
-                        .is_some_and(|layout| layout.0.iter().any(Option::is_some)) =>
-                    {
-                        let layout = argument_layout.as_ref().expect("checked");
-                        let slots: Vec<String> = layout
-                            .0
-                            .iter()
-                            .map(|slot| match slot {
-                                Some(name) => format!("Some({:?})", name.as_str()),
-                                None => "None".to_string(),
-                            })
-                            .collect();
-                        let values = self.arg_values(block, args)?;
-                        self.statement(&format!(
-                            "let argc = vm.push_indirect_args(callee, &[{}], &[{}])?;",
-                            slots.join(", "),
-                            values.join(", ")
-                        ));
-                        laid_out = true;
-                        Vec::new()
-                    }
-                    _ => self.arg_values(block, args)?,
-                };
-                if !matches!(callee, Operand::Constant(_))
-                    && types.is_empty()
-                    && !*has_trace
-                    && !laid_out
-                {
-                    self.direct_closure_call(block, &args)?;
-                }
-                self.call_types = types;
-                if laid_out {
-                    ("Step::Call { callee, argc }".to_string(), args)
-                } else {
-                    (
-                        format!("Step::Call {{ callee, argc: {} }}", args.len()),
-                        args,
-                    )
-                }
-            }
+        let (step, args) = self.pause_request(block, terminator)?;
+        let saved = self.saved_at(block)?;
+        self.save(saved);
+        self.flush();
+        let point_slot = self.point_slot;
+        self.line(&format!(
+            "vm.set_slot(depth, {point_slot}, Value::int({point}));"
+        ));
+        for arg in &args {
+            self.line(&format!("vm.push_arg({arg});"));
+        }
+        for ty in std::mem::take(&mut self.call_types) {
+            self.line(&format!("vm.push_type_arg({ty});"));
+        }
+        let site = self.site_pc(block);
+        self.line(&format!("vm.note_pc(depth, {site});"));
+        self.line(&format!("return Ok({step});"));
+        Ok(())
+    }
+
+    fn pause_request(
+        &mut self,
+        block: BlockId,
+        terminator: &Terminator<'db>,
+    ) -> Gen<(String, Vec<String>)> {
+        Ok(match terminator {
+            Terminator::Call { .. } => self.call_request(block, terminator)?,
+
             Terminator::SysOp { callee, args, .. } => {
                 self.callee_ptr(block, callee)?;
                 let args = self.arg_values(block, args)?;
@@ -1051,24 +996,91 @@ impl<'db> Generator<'_, 'db> {
                 ("Step::Spawn(operand)".to_string(), Vec::new())
             }
             _ => return Err(Rejection::Invalid("pause at a non-suspending block".into())),
+        })
+    }
+
+    fn call_request(
+        &mut self,
+        block: BlockId,
+        terminator: &Terminator<'db>,
+    ) -> Gen<(String, Vec<String>)> {
+        let Terminator::Call {
+            callee,
+            args,
+            ntypeargs,
+            argument_layout,
+            has_trace,
+            ..
+        } = terminator
+        else {
+            unreachable!("call request requires a call terminator");
         };
-        let saved = self.saved_at(block)?;
-        self.save(saved);
-        self.flush();
-        let point_slot = self.point_slot;
-        self.line(&format!(
-            "vm.set_slot(depth, {point_slot}, Value::int({point}));"
-        ));
-        for arg in &args {
-            self.line(&format!("vm.push_arg({arg});"));
+        let (type_args, args) = args.split_at((*ntypeargs).min(args.len()));
+        // A `$trace` attachment is the final operand: handed to the
+        // VM for the call it requests, as bytecode's `SetCallTrace`.
+        let args = if *has_trace {
+            let Some((trace, args)) = args.split_last() else {
+                return Err(Rejection::Invalid(
+                    "a traced call without its attachment".into(),
+                ));
+            };
+            let trace = self.value_operand(block, trace)?;
+            let code = self.fallible(block, &format!("vm.set_call_trace({trace})"))?;
+            self.statement(&format!("{code};"));
+            args
+        } else {
+            args
+        };
+        let (types, _) = self.call_type_args(type_args)?;
+        self.callee_ptr(block, callee)?;
+        let mut laid_out = false;
+        let args = match callee {
+            Operand::Constant(Constant::Function(func)) => {
+                let name = function_display_name(self.db, *func);
+                let Some((_, info)) = self.index.function(self.db, *func)? else {
+                    return unsupported(format!("callee `{name}` not found in the program"));
+                };
+                self.laid_out_args(block, &name, info, argument_layout.as_ref(), args)?
+            }
+            // Named arguments to a function value: laid over the
+            // callee's slots at run time, as the interpreter's
+            // `CallIndirect` remaps them, and pushed here.
+            _ if argument_layout
+                .as_ref()
+                .is_some_and(|layout| layout.0.iter().any(Option::is_some)) =>
+            {
+                let layout = argument_layout.as_ref().expect("checked");
+                let slots: Vec<String> = layout
+                    .0
+                    .iter()
+                    .map(|slot| match slot {
+                        Some(name) => format!("Some({:?})", name.as_str()),
+                        None => "None".to_string(),
+                    })
+                    .collect();
+                let values = self.arg_values(block, args)?;
+                self.statement(&format!(
+                    "let argc = vm.push_indirect_args(callee, &[{}], &[{}])?;",
+                    slots.join(", "),
+                    values.join(", ")
+                ));
+                laid_out = true;
+                Vec::new()
+            }
+            _ => self.arg_values(block, args)?,
+        };
+        if !matches!(callee, Operand::Constant(_)) && types.is_empty() && !*has_trace && !laid_out {
+            self.direct_closure_call(block, &args)?;
         }
-        for ty in std::mem::take(&mut self.call_types) {
-            self.line(&format!("vm.push_type_arg({ty});"));
-        }
-        let site = self.site_pc(block);
-        self.line(&format!("vm.note_pc(depth, {site});"));
-        self.line(&format!("return Ok({step});"));
-        Ok(())
+        self.call_types = types;
+        Ok(if laid_out {
+            ("Step::Call { callee, argc }".to_string(), args)
+        } else {
+            (
+                format!("Step::Call {{ callee, argc: {} }}", args.len()),
+                args,
+            )
+        })
     }
 
     /// Before a call through a function value suspends (`pause`): when the

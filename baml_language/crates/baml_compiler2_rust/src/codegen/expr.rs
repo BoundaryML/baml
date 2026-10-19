@@ -1,8 +1,9 @@
 //! Rvalues: operators, type tests, and aggregates.
 
+use baml_compiler2_hir_ty::extern_loc::{ClassRef, FunctionRef};
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BlockId, Rvalue, TyTemplate, TypeTest, UnaryOp, class_display_name,
-    enum_display_name, function_display_name,
+    AggregateKind, BinOp, BlockId, Operand, Rvalue, TyTemplate, TyTemplateInterface, TypeTest,
+    UnaryOp, class_display_name, enum_display_name, function_display_name,
 };
 use baml_type::typetag;
 use bex_vm_types::ConstValue;
@@ -59,18 +60,7 @@ impl<'db> Generator<'_, 'db> {
                 let code = self.type_test(&format!("({value})"), test)?;
                 Ok(Expr::new(code, Repr::Bool))
             }
-            Rvalue::Array(template, elements) => {
-                let element_ty = self.realized_type(template)?;
-                let mut values = Vec::with_capacity(elements.len());
-                for element in elements {
-                    let element = self.operand(block, element)?;
-                    values.push(self.value_arg(&element.code, element.repr));
-                }
-                Ok(Expr::new(
-                    format!("vm.new_array({element_ty}, vec![{}])", values.join(", ")),
-                    Repr::Value,
-                ))
-            }
+            Rvalue::Array(template, elements) => self.array_literal(block, template, elements),
             Rvalue::Aggregate {
                 kind:
                     AggregateKind::Class {
@@ -78,47 +68,13 @@ impl<'db> Generator<'_, 'db> {
                         type_arg_templates,
                     },
                 fields,
-            } => {
-                let name = class_display_name(self.db, *class);
-                let Some((object, field_count)) = self.index.class(self.db, *class)? else {
-                    return unsupported(format!("class `{name}` not found in the program"));
-                };
-                if fields.len() != field_count {
-                    return unsupported(format!(
-                        "`{name}` literal with {} of {field_count} fields",
-                        fields.len()
-                    ));
-                }
-                let mut values = Vec::with_capacity(fields.len());
-                for field in fields {
-                    let field = self.operand(block, field)?;
-                    values.push(self.value_arg(&field.code, field.repr));
-                }
-                let class = format!("vm.idx_to_ptr(ObjectIndex::from_raw({object}))");
-                if type_arg_templates.is_empty() {
-                    return Ok(Expr::new(
-                        format!("vm.new_instance({class}, vec![{}])", values.join(", ")),
-                        Repr::Value,
-                    ));
-                }
-                // An instance of a generic class carries its class type
-                // arguments, as `AllocInstance` with type operands stores them.
-                let type_args = self.realized_all(type_arg_templates)?;
-                Ok(Expr::new(
-                    format!(
-                        "vm.new_generic_instance({class}, Box::new([{}]), vec![{}])",
-                        type_args.join(", "),
-                        values.join(", ")
-                    ),
-                    Repr::Value,
-                ))
-            }
+            } => self.class_literal(block, *class, type_arg_templates, fields),
             Rvalue::Aggregate {
                 kind: AggregateKind::Array,
                 ..
             } => unsupported("untyped array aggregate"),
-            // A map literal is an empty map followed by `baml.Map.set` calls.
             Rvalue::Map(key, value, entries) => {
+                // Map entries must be lowered to Map.set calls.
                 if !entries.is_empty() {
                     return unsupported("map literal with inline entries");
                 }
@@ -129,200 +85,41 @@ impl<'db> Generator<'_, 'db> {
                     Repr::Value,
                 ))
             }
-            // The literal's pooled template, deep-copied on every evaluation
-            // so the value is mutable, as bytecode does.
-            Rvalue::Uint8Array(bytes) => {
-                let Some(&object) = self.index.byte_arrays.get(bytes) else {
-                    return Err(Rejection::Invalid(
-                        "byte array literal not in the program's pool".into(),
-                    ));
-                };
-                let deep_copy = baml_compiler2_hir_ty::callable::lang_function(
-                    self.db,
-                    baml_base::LangPackage::Baml,
-                    &[],
-                    "deep_copy",
-                );
-                let Some((_, info)) = deep_copy
-                    .map(|function| self.index.function(self.db, function))
-                    .transpose()?
-                    .flatten()
-                else {
-                    return unsupported("`baml.deep_copy` not found in the program");
-                };
-                let Some(key) = info.native_key.as_deref() else {
-                    return unsupported("builtin `baml.deep_copy` has no native key");
-                };
-                let shape = CallShape {
-                    type_args_primitive: false,
-                    map_key_primitive: false,
-                };
-                if !builtin_is_callable(key, shape) {
-                    return Err(Rejection::Invalid(format!(
-                        "yielding builtin `{key}` emitted inline"
-                    )));
-                }
-                let ordinal = self.builtin_ordinal(key);
-                let template = self.hoist(Expr::new(
-                    format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
-                    Repr::Value,
-                ));
-                let code = self.fallible(
-                    block,
-                    &format!("vm.call_builtin(builtin_{ordinal}(), &[{}])", template.code),
-                )?;
-                Ok(Expr::new(code, Repr::Value))
-            }
-            // A closure over a lambda, which is a unit of its own (compiled
-            // or not: the object is the same): its cells, the enclosing
-            // function's type arguments it captures, and the lambda's object.
+            Rvalue::Uint8Array(bytes) => self.byte_array_literal(block, bytes),
             Rvalue::MakeClosure {
                 lambda_idx,
                 captures,
                 type_arg_templates,
-            } => {
-                let Some(lambda) = self.lambdas.get(*lambda_idx) else {
-                    return Err(Rejection::Invalid(format!(
-                        "closure over lambda {lambda_idx} of a function with {}",
-                        self.lambdas.len()
-                    )));
-                };
-                let Some(object) = self.index.lambda(self.db, &lambda.identity)? else {
-                    let name = lambda.identity.display_name(self.db);
-                    return unsupported(format!("lambda `{name}` not found in the program"));
-                };
-                // The enclosing function's type arguments the closure
-                // captures, read from the frame where they name its own.
-                let types = self.realized_all(type_arg_templates)?;
-                let mut cells = Vec::with_capacity(captures.len());
-                for capture in captures {
-                    let cell = self.operand(block, capture)?;
-                    cells.push(self.value_arg(&cell.code, cell.repr));
-                }
-                Ok(Expr::new(
-                    format!(
-                        "vm.make_closure(vm.idx_to_ptr(ObjectIndex::from_raw({object})), \
-                         vec![{}], vec![{}].into_boxed_slice())",
-                        cells.join(", "),
-                        types.join(", ")
-                    ),
-                    Repr::Value,
-                ))
-            }
-            // `receiver.method` as a value, as bytecode's `MakeBoundMethod`
-            // builds it.
+            } => self.closure_value(block, *lambda_idx, captures, type_arg_templates),
             Rvalue::MakeBoundMethod { func, receiver } => {
-                let name = function_display_name(self.db, *func);
-                let Some((object, _)) = self.index.function(self.db, *func)? else {
-                    return unsupported(format!("method `{name}` not found in the program"));
-                };
-                let receiver = self.value_operand(block, receiver)?;
-                Ok(Expr::new(
-                    format!(
-                        "vm.make_bound_method(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {receiver})"
-                    ),
-                    Repr::Value,
-                ))
+                self.bound_method_value(block, *func, receiver)
             }
-            // `foo<T>`: a `GenericFunction` over the function's global slot
-            // at the frame-derived arguments, as `MakeGenericFunction`
-            // builds it (`foo<int>` is a pooled constant instead).
             Rvalue::MakeGenericFunction {
                 func,
                 type_arg_templates,
-            } => {
-                let name = function_display_name(self.db, *func);
-                let Some((object, _)) = self.index.function(self.db, *func)? else {
-                    return unsupported(format!("function `{name}` not found in the program"));
-                };
-                let Some(&global) = self.index.globals.get(&object) else {
-                    return unsupported(format!("function `{name}` has no global slot"));
-                };
-                let type_args = self.realized_all(type_arg_templates)?;
-                Ok(Expr::new(
-                    format!(
-                        "vm.make_generic_function(depth, GlobalIndex::from_raw({global}), Box::new([{}]))",
-                        type_args.join(", ")
-                    ),
-                    Repr::Value,
-                ))
-            }
-            // `g<T>` on a function value: a closure carrying the arguments,
-            // as `MakeGenericFunctionFromValue` builds it.
+            } => self.generic_function_value(*func, type_arg_templates),
             Rvalue::MakeGenericFunctionFromValue {
                 value,
                 type_arg_templates,
-            } => {
-                let value = self.value_operand(block, value)?;
-                let type_args = self.realized_all(type_arg_templates)?;
-                let code = self.fallible(
-                    block,
-                    &format!(
-                        "vm.specialize_function_value({value}, &[{}])",
-                        type_args.join(", ")
-                    ),
-                )?;
-                Ok(Expr::new(code, Repr::Value))
-            }
-            // Interface dispatch resolved at run time against a statically
-            // known interface, as the interpreter's `MakeVirtual*` and
-            // `VirtualLoadField` do; see `bex_vm::compiled_rt::virtual`.
+            } => self.specialized_function_value(block, value, type_arg_templates),
             Rvalue::MakeVirtualBoundMethod {
                 iface,
                 method,
                 receiver,
                 type_args,
-            } => {
-                let (iface, iface_args, _) = self.interface_operands(iface)?;
-                let types = self.realized_all(type_args)?;
-                let receiver = self.value_operand(block, receiver)?;
-                let code = self.fallible(
-                    block,
-                    &format!(
-                        "vm.make_virtual_bound_method({receiver}, {iface}, {iface_args}, {method:?}, &[{}])",
-                        types.join(", ")
-                    ),
-                )?;
-                Ok(Expr::new(code, Repr::Value))
-            }
+            } => self.virtual_bound_method_value(block, iface, method, receiver, type_args),
             Rvalue::MakeVirtualFunction {
                 self_ty,
                 iface,
                 method,
                 type_args,
-            } => {
-                let self_ty = self.realized(self_ty)?;
-                let (iface, iface_args, _) = self.interface_operands(iface)?;
-                let (types, _) = self.type_operands("interface function value", type_args)?;
-                let code = self.fallible(
-                    block,
-                    &format!(
-                        "vm.make_virtual_function(&{self_ty}, {iface}, {iface_args}, {method:?}, &[{}])",
-                        types.join(", ")
-                    ),
-                )?;
-                Ok(Expr::new(code, Repr::Value))
-            }
+            } => self.virtual_function_value(block, self_ty, iface, method, type_args),
             Rvalue::VirtualFieldAccess {
                 iface,
                 receiver,
                 field_index,
                 ..
-            } => {
-                let (iface, iface_args, _) = self.interface_operands(iface)?;
-                let receiver = self.value_operand(block, receiver)?;
-                let code = self.fallible(
-                    block,
-                    &format!(
-                        "vm.virtual_load_field({receiver}, {iface}, {iface_args}, {field_index})"
-                    ),
-                )?;
-                Ok(Expr::new(code, Repr::Value))
-            }
-            // A type local is consumed where it is used (`Generator::load`);
-            // one reaching here is a local MIR also writes a value to, or a
-            // frame-derived type in a body that binds types (`Analysis`), so
-            // the type is stored as a `type` value like any other.
+            } => self.virtual_field_value(block, iface, receiver, *field_index),
             Rvalue::LoadType(template) => {
                 let slot = match template {
                     TyTemplate::TypeArgRef(slot) => format!("Some({slot})"),
@@ -344,8 +141,6 @@ impl<'db> Generator<'_, 'db> {
                 ))
             }
             Rvalue::TraceHookSettings { .. } => unsupported("trace hook"),
-            // The bound loads as bytecode loads it (`LoadType` of the
-            // constraint), then the VM's own check decides.
             Rvalue::SatisfiesBound { ty, bound } => {
                 let value = self.value_operand(block, ty)?;
                 let template = bound.to_template();
@@ -363,6 +158,259 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
+    fn array_literal(
+        &mut self,
+        block: BlockId,
+        template: &TyTemplate,
+        elements: &[Operand<'db>],
+    ) -> Gen<Expr> {
+        let element_ty = self.realized_type(template)?;
+        let mut values = Vec::with_capacity(elements.len());
+        for element in elements {
+            let element = self.operand(block, element)?;
+            values.push(self.value_arg(&element.code, element.repr));
+        }
+        Ok(Expr::new(
+            format!("vm.new_array({element_ty}, vec![{}])", values.join(", ")),
+            Repr::Value,
+        ))
+    }
+
+    fn class_literal(
+        &mut self,
+        block: BlockId,
+        class: ClassRef<'db>,
+        type_arg_templates: &[TyTemplate],
+        fields: &[Operand<'db>],
+    ) -> Gen<Expr> {
+        let name = class_display_name(self.db, class);
+        let Some((object, field_count)) = self.index.class(self.db, class)? else {
+            return unsupported(format!("class `{name}` not found in the program"));
+        };
+        if fields.len() != field_count {
+            return unsupported(format!(
+                "`{name}` literal with {} of {field_count} fields",
+                fields.len()
+            ));
+        }
+        let mut values = Vec::with_capacity(fields.len());
+        for field in fields {
+            let field = self.operand(block, field)?;
+            values.push(self.value_arg(&field.code, field.repr));
+        }
+        let class = format!("vm.idx_to_ptr(ObjectIndex::from_raw({object}))");
+        if type_arg_templates.is_empty() {
+            return Ok(Expr::new(
+                format!("vm.new_instance({class}, vec![{}])", values.join(", ")),
+                Repr::Value,
+            ));
+        }
+        let type_args = self.realized_all(type_arg_templates)?;
+        Ok(Expr::new(
+            format!(
+                "vm.new_generic_instance({class}, Box::new([{}]), vec![{}])",
+                type_args.join(", "),
+                values.join(", ")
+            ),
+            Repr::Value,
+        ))
+    }
+
+    fn byte_array_literal(&mut self, block: BlockId, bytes: &[u8]) -> Gen<Expr> {
+        // Each evaluation copies the pooled literal so mutations stay local.
+        let Some(&object) = self.index.byte_arrays.get(bytes) else {
+            return Err(Rejection::Invalid(
+                "byte array literal not in the program's pool".into(),
+            ));
+        };
+        let deep_copy = baml_compiler2_hir_ty::callable::lang_function(
+            self.db,
+            baml_base::LangPackage::Baml,
+            &[],
+            "deep_copy",
+        );
+        let Some((_, info)) = deep_copy
+            .map(|function| self.index.function(self.db, function))
+            .transpose()?
+            .flatten()
+        else {
+            return unsupported("`baml.deep_copy` not found in the program");
+        };
+        let Some(key) = info.native_key.as_deref() else {
+            return unsupported("builtin `baml.deep_copy` has no native key");
+        };
+        let shape = CallShape {
+            type_args_primitive: false,
+            map_key_primitive: false,
+        };
+        if !builtin_is_callable(key, shape) {
+            return Err(Rejection::Invalid(format!(
+                "yielding builtin `{key}` emitted inline"
+            )));
+        }
+        let ordinal = self.builtin_ordinal(key);
+        let template = self.hoist(Expr::new(
+            format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
+            Repr::Value,
+        ));
+        let code = self.fallible(
+            block,
+            &format!("vm.call_builtin(builtin_{ordinal}(), &[{}])", template.code),
+        )?;
+        Ok(Expr::new(code, Repr::Value))
+    }
+
+    fn closure_value(
+        &mut self,
+        block: BlockId,
+        lambda_idx: usize,
+        captures: &[Operand<'db>],
+        type_arg_templates: &[TyTemplate],
+    ) -> Gen<Expr> {
+        let Some(lambda) = self.lambdas.get(lambda_idx) else {
+            return Err(Rejection::Invalid(format!(
+                "closure over lambda {lambda_idx} of a function with {}",
+                self.lambdas.len()
+            )));
+        };
+        let Some(object) = self.index.lambda(self.db, &lambda.identity)? else {
+            let name = lambda.identity.display_name(self.db);
+            return unsupported(format!("lambda `{name}` not found in the program"));
+        };
+        let types = self.realized_all(type_arg_templates)?;
+        let mut cells = Vec::with_capacity(captures.len());
+        for capture in captures {
+            let cell = self.operand(block, capture)?;
+            cells.push(self.value_arg(&cell.code, cell.repr));
+        }
+        Ok(Expr::new(
+            format!(
+                "vm.make_closure(vm.idx_to_ptr(ObjectIndex::from_raw({object})), \
+                 vec![{}], vec![{}].into_boxed_slice())",
+                cells.join(", "),
+                types.join(", ")
+            ),
+            Repr::Value,
+        ))
+    }
+
+    fn bound_method_value(
+        &mut self,
+        block: BlockId,
+        func: FunctionRef<'db>,
+        receiver: &Operand<'db>,
+    ) -> Gen<Expr> {
+        let name = function_display_name(self.db, func);
+        let Some((object, _)) = self.index.function(self.db, func)? else {
+            return unsupported(format!("method `{name}` not found in the program"));
+        };
+        let receiver = self.value_operand(block, receiver)?;
+        Ok(Expr::new(
+            format!(
+                "vm.make_bound_method(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {receiver})"
+            ),
+            Repr::Value,
+        ))
+    }
+
+    fn generic_function_value(
+        &mut self,
+        func: FunctionRef<'db>,
+        type_arg_templates: &[TyTemplate],
+    ) -> Gen<Expr> {
+        let name = function_display_name(self.db, func);
+        let Some((object, _)) = self.index.function(self.db, func)? else {
+            return unsupported(format!("function `{name}` not found in the program"));
+        };
+        let Some(&global) = self.index.globals.get(&object) else {
+            return unsupported(format!("function `{name}` has no global slot"));
+        };
+        let type_args = self.realized_all(type_arg_templates)?;
+        Ok(Expr::new(
+            format!(
+                "vm.make_generic_function(depth, GlobalIndex::from_raw({global}), Box::new([{}]))",
+                type_args.join(", ")
+            ),
+            Repr::Value,
+        ))
+    }
+
+    fn specialized_function_value(
+        &mut self,
+        block: BlockId,
+        value: &Operand<'db>,
+        type_arg_templates: &[TyTemplate],
+    ) -> Gen<Expr> {
+        let value = self.value_operand(block, value)?;
+        let type_args = self.realized_all(type_arg_templates)?;
+        let code = self.fallible(
+            block,
+            &format!(
+                "vm.specialize_function_value({value}, &[{}])",
+                type_args.join(", ")
+            ),
+        )?;
+        Ok(Expr::new(code, Repr::Value))
+    }
+
+    fn virtual_bound_method_value(
+        &mut self,
+        block: BlockId,
+        iface: &TyTemplateInterface,
+        method: &str,
+        receiver: &Operand<'db>,
+        type_args: &[TyTemplate],
+    ) -> Gen<Expr> {
+        let (iface, iface_args, _) = self.interface_operands(iface)?;
+        let types = self.realized_all(type_args)?;
+        let receiver = self.value_operand(block, receiver)?;
+        let code = self.fallible(
+            block,
+            &format!(
+                "vm.make_virtual_bound_method({receiver}, {iface}, {iface_args}, {method:?}, &[{}])",
+                types.join(", ")
+            ),
+        )?;
+        Ok(Expr::new(code, Repr::Value))
+    }
+
+    fn virtual_function_value(
+        &mut self,
+        block: BlockId,
+        self_ty: &TyTemplate,
+        iface: &TyTemplateInterface,
+        method: &str,
+        type_args: &[Operand<'db>],
+    ) -> Gen<Expr> {
+        let self_ty = self.realized(self_ty)?;
+        let (iface, iface_args, _) = self.interface_operands(iface)?;
+        let (types, _) = self.type_operands("interface function value", type_args)?;
+        let code = self.fallible(
+            block,
+            &format!(
+                "vm.make_virtual_function(&{self_ty}, {iface}, {iface_args}, {method:?}, &[{}])",
+                types.join(", ")
+            ),
+        )?;
+        Ok(Expr::new(code, Repr::Value))
+    }
+
+    fn virtual_field_value(
+        &mut self,
+        block: BlockId,
+        iface: &TyTemplateInterface,
+        receiver: &Operand<'db>,
+        field_index: u32,
+    ) -> Gen<Expr> {
+        let (iface, iface_args, _) = self.interface_operands(iface)?;
+        let receiver = self.value_operand(block, receiver)?;
+        let code = self.fallible(
+            block,
+            &format!("vm.virtual_load_field({receiver}, {iface}, {iface_args}, {field_index})"),
+        )?;
+        Ok(Expr::new(code, Repr::Value))
+    }
+
     pub(super) fn type_test(&mut self, value: &str, test: &TypeTest<'db>) -> Gen<String> {
         match test {
             TypeTest::Class { class, args } => {
@@ -375,8 +423,7 @@ impl<'db> Generator<'_, 'db> {
                         "vm.is_instance_of({value}, vm.idx_to_ptr(ObjectIndex::from_raw({object})))"
                     ));
                 }
-                // `is C<..>`: the class, then each argument invariantly, as
-                // the interpreter's test against a class with type arguments.
+                // Class type arguments are invariant.
                 let type_args = self.realized_all(args)?;
                 Ok(format!(
                     "vm.is_instance_of_at({value}, vm.idx_to_ptr(ObjectIndex::from_raw({object})), &[{}])",
@@ -392,10 +439,6 @@ impl<'db> Generator<'_, 'db> {
                     "vm.is_variant_of({value}, vm.idx_to_ptr(ObjectIndex::from_raw({object})))"
                 ))
             }
-            // `is T` for a structural type. One that reads the frame (or a
-            // generic class instance) is membership in the realized type, by
-            // the canonical algebra; any other is decided through the constant
-            // the emitter pooled for it, as bytecode's `IsType` decides it.
             TypeTest::Template(template)
                 if reads_frame(template)
                     || matches!(template, TyTemplate::Class(..) | TyTemplate::Enum(..)) =>
@@ -407,12 +450,6 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// `value is T` for a type template, deciding it as bytecode's emitter
-    /// does for the same template (`is_type_template`): a realized leaf by
-    /// its type tag, `unknown` as true, and a literal type or a structural
-    /// type (a container, union, interface, alias, …) through the constant
-    /// the emitter pooled for this test in the function's own constant pool,
-    /// so the VM's value matcher decides both the same way.
     fn template_test(&mut self, value: &str, template: &TyTemplate) -> Gen<String> {
         frame_free(template)?;
         let tag = |tag: i64| format!("(bex_vm::compiled_rt::type_tag({value}) == {tag}i64)");
@@ -422,7 +459,6 @@ impl<'db> Generator<'_, 'db> {
                     "a class or enum test reaches the backend as a declaration test".into(),
                 ));
             }
-            // The top type: every value inhabits it.
             TyTemplate::Unknown => return Ok("true".to_string()),
             TyTemplate::Int => return Ok(tag(typetag::INT)),
             TyTemplate::Bigint => return Ok(tag(typetag::BIGINT)),
@@ -453,11 +489,6 @@ impl<'db> Generator<'_, 'db> {
         ))
     }
 
-    /// The `RealizedTy` expression for a type template in this function:
-    /// built in place when it needs no declaration lookup
-    /// ([`static_realized`]), otherwise read from the constant the emitter
-    /// pooled for the same template (`LoadType`), bound to a temporary so it
-    /// can be a call's argument.
     fn realized_type(&mut self, template: &TyTemplate) -> Gen<String> {
         if reads_frame(template) {
             return self.realized(template);
@@ -486,7 +517,6 @@ impl<'db> Generator<'_, 'db> {
         Ok(name)
     }
 
-    /// The module's ordinal for the builtin `key`, binding it on first use.
     fn builtin_ordinal(&mut self, key: &str) -> usize {
         let next = self.builtins.len();
         *self.builtins.entry(key.to_owned()).or_insert(next)
@@ -548,7 +578,6 @@ impl<'db> Generator<'_, 'db> {
             (Bool, Bool, BinOp::BitOr) => Expr::new(format!("({l} | {r})"), Bool),
             (Bool, Bool, BinOp::BitXor) => Expr::new(format!("({l} ^ {r})"), Bool),
             _ => {
-                // The interpreter's generic operator over tagged values.
                 let l = self.value_arg(l, left.repr);
                 let r = self.value_arg(r, right.repr);
                 match op {
@@ -597,8 +626,6 @@ impl<'db> Generator<'_, 'db> {
     }
 }
 
-/// A template that reads no frame type argument: the only kind a body with
-/// no type arguments of its own can resolve.
 fn frame_free(template: &TyTemplate) -> Gen<()> {
     let mut refs = 0;
     template.for_each_type_arg_ref(&mut |_| refs += 1);
