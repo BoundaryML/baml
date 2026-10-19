@@ -30,13 +30,9 @@ tokio = { workspace = true, features = [ "rt" ] }
 default = [  ]
 native-tls = [ "sys_native/native-tls" ]
 
-[lib]
-path = "src/main.rs"
-doctest = false
-
 [[bin]]
 name = "baml-pack-host"
-path = "src/bin.rs"
+path = "src/main.rs"
 
 # Standalone host binary for packed `baml pack` outputs — depends on
 # `sys_native` (tokio + mio) and `libsui` (native ELF/Mach-O/PE patching).
