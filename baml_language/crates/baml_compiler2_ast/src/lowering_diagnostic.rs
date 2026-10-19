@@ -107,9 +107,6 @@ pub enum LoweringDiagnostic {
     /// A byte string literal contains an invalid escape sequence.
     InvalidByteStringEscape { message: String, span: TextRange },
 
-    /// The `instanceof` operator was used; it has been removed. Use `match` instead.
-    InstanceofRemoved { span: TextRange },
-
     /// A backtick template has a malformed block tag — an unclosed,
     /// mismatched, or stray `${for}`/`${if}` open/close.
     MalformedTemplateBlock {
@@ -140,10 +137,6 @@ pub enum LoweringDiagnostic {
 
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
-
-    /// `const` is reserved as future language surface and cannot be used as a
-    /// binding name.
-    ReservedConstBindingName { span: TextRange },
 
     /// An assignment operator (`=`, `+=`, …) appeared in expression position,
     /// e.g. `(x = 5)`. Assignment is statement-only in BAML, so the expression
@@ -451,13 +444,6 @@ impl LoweringDiagnostic {
                 *span,
                 "invalid escape",
             ),
-            LoweringDiagnostic::InstanceofRemoved { span } => (
-                DiagnosticId::RemovedFeature,
-                Severity::Error,
-                "`instanceof` is no longer supported. Use a `match` expression for type checking instead.".to_string(),
-                *span,
-                "use `match` instead",
-            ),
             LoweringDiagnostic::MalformedTemplateBlock { kind, span } => {
                 use baml_compiler_syntax::BacktickStructuralErrorKind as K;
                 let (message, label): (&str, &str) = match kind {
@@ -551,13 +537,6 @@ impl LoweringDiagnostic {
                 "`const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.".to_string(),
                 *span,
                 "`const` behaves like `let` for now",
-            ),
-            LoweringDiagnostic::ReservedConstBindingName { span } => (
-                DiagnosticId::InvalidSyntax,
-                Severity::Error,
-                "`const` is reserved and cannot be used as a binding name".to_string(),
-                *span,
-                "`const` is reserved here",
             ),
             LoweringDiagnostic::AssignmentInExpressionPosition { span } => (
                 DiagnosticId::InvalidSyntax,

@@ -378,29 +378,29 @@ test "as_remains_usable_as_an_identifier" {
     assert.equal((as + 1).to_string(), "6")
 }
 
-// An interface method may be named with a contextual keyword; every access
-// spelling must reach it, the qualified one included.
+// An interface method may be named with a weak keyword; every access spelling
+// must reach it, the qualified one included.
 interface Keyworded {
-    function implements(self) -> int throws never
-    function extends(self) -> int throws never
+    function test(self) -> int throws never
+    function client(self) -> int throws never
 }
 class Keyed2 {
     implements Keyworded {
-        function implements(self) -> int throws never {
+        function test(self) -> int throws never {
             1
         }
 
-        function extends(self) -> int throws never {
+        function client(self) -> int throws never {
             2
         }
     }
 }
 test "keyword_named_members_are_reachable_through_the_qualifier" {
     let k = Keyed2 {}
-    assert.equal(k.implements(), 1)
-    assert.equal((Keyed2 as Keyworded).implements(k), 1)
-    assert.equal((Keyed2 as Keyworded).extends(k), 2)
-    assert.equal(Keyworded.extends(k), 2)
+    assert.equal(k.test(), 1)
+    assert.equal((Keyed2 as Keyworded).test(k), 1)
+    assert.equal((Keyed2 as Keyworded).client(k), 2)
+    assert.equal(Keyworded.client(k), 2)
 }
 
 // A `self`-less member reached through the TYPE carries the whole callee

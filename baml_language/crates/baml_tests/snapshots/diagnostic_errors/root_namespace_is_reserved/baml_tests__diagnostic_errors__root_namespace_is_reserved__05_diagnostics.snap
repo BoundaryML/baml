@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0176
 
-  × `root` is the path to this package and cannot name a namespace: rename the directory `ns_root/`
+  × `root` is a keyword and cannot name a namespace: rename the directory `ns_root/`
    ╭─[items.baml:1:1]
  1 │ class Thing {
    · ▲

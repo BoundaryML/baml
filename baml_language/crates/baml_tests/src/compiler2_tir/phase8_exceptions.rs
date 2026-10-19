@@ -1,6 +1,6 @@
 //! Phase 8 tests: catch/throw/throws + match parity in compiler2 TIR.
 
-// Native ns_exceptions, ns_lambdas, and ns_defer suites cover successful panic
+// Native ns_exceptions, ns_lambdas, and ns_defer_blocks suites cover successful panic
 // field access, inferred throwing lambdas, and throwing defer bodies.
 use super::support::{make_db, render_tir};
 use crate::engine::TestDbExt;

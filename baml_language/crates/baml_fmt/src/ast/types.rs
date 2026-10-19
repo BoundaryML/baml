@@ -561,16 +561,7 @@ impl UnionTypeMember {
                     let dot = t::Dot::from_cst(dot)?;
                     let segment = it.expect_next("type path segment after `.`")?;
                     let token = StrongAstError::assert_is_token(segment)?;
-                    if !matches!(
-                        token.kind(),
-                        SyntaxKind::WORD
-                            | SyntaxKind::KW_SPAWN
-                            | SyntaxKind::KW_AWAIT
-                            | SyntaxKind::KW_CLASS
-                            | SyntaxKind::KW_ENUM
-                            | SyntaxKind::KW_INTERFACE
-                            | SyntaxKind::KW_FUNCTION
-                    ) {
+                    if token.kind() != SyntaxKind::WORD {
                         return Err(StrongAstError::UnexpectedKindDesc {
                             expected_desc: "type path segment".into(),
                             found: token.kind(),
@@ -1273,9 +1264,7 @@ impl FromCST for FunctionTypeParam {
 
         let mut it = SyntaxNodeIter::new(&node);
 
-        let name = if let Some(name) =
-            it.next_if(|e| matches!(e.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
-        {
+        let name = if let Some(name) = it.next_if(|e| e.kind() == SyntaxKind::WORD) {
             let name = t::Word::new_from_span(name.text_range());
             let question = it
                 .next_if_kind(SyntaxKind::QUESTION)

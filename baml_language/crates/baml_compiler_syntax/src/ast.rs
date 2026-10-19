@@ -29,16 +29,7 @@ fn extract_dotted_name<'a>(tokens: impl Iterator<Item = &'a SyntaxToken>) -> Opt
             break;
         }
         let Some(word) = iter.next() else { break };
-        if !matches!(
-            word.kind(),
-            SyntaxKind::WORD
-                | SyntaxKind::KW_SPAWN
-                | SyntaxKind::KW_AWAIT
-                | SyntaxKind::KW_CLASS
-                | SyntaxKind::KW_ENUM
-                | SyntaxKind::KW_INTERFACE
-                | SyntaxKind::KW_FUNCTION
-        ) {
+        if word.kind() != SyntaxKind::WORD {
             break;
         }
         parts.push(word.text().to_string());
@@ -183,7 +174,7 @@ impl CallArg {
             .children_with_tokens()
             .filter(|element| !element.kind().is_trivia());
         let first = elements.next()?.into_token()?;
-        if !matches!(first.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT) {
+        if first.kind() != SyntaxKind::WORD {
             return None;
         }
         (elements.next()?.kind() == SyntaxKind::EQUALS).then_some(first)
@@ -200,7 +191,7 @@ impl ObjectField {
             .children_with_tokens()
             .find(|element| !element.kind().is_trivia())
             .and_then(rowan::NodeOrToken::into_token)
-            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_CLIENT))
+            .filter(|token| token.kind() == SyntaxKind::WORD)
     }
 }
 
@@ -253,19 +244,7 @@ impl UnionMemberParts {
         let name: Vec<_> = self
             .tokens
             .iter()
-            .take_while(|t| {
-                matches!(
-                    t.kind(),
-                    SyntaxKind::WORD
-                        | SyntaxKind::DOT
-                        | SyntaxKind::KW_SPAWN
-                        | SyntaxKind::KW_AWAIT
-                        | SyntaxKind::KW_CLASS
-                        | SyntaxKind::KW_ENUM
-                        | SyntaxKind::KW_INTERFACE
-                        | SyntaxKind::KW_FUNCTION
-                )
-            })
+            .take_while(|t| matches!(t.kind(), SyntaxKind::WORD | SyntaxKind::DOT))
             .collect();
         if let (Some(first), Some(last)) = (name.first(), name.last()) {
             return Some(rowan::TextRange::new(
@@ -808,7 +787,7 @@ impl FunctionTypeParam {
             self.syntax
                 .children_with_tokens()
                 .filter_map(rowan::NodeOrToken::into_token)
-                .find(|t| t.kind() == SyntaxKind::WORD || t.kind() == SyntaxKind::KW_CLIENT)
+                .find(|t| t.kind() == SyntaxKind::WORD)
                 .map(|t| t.text().to_string())
         } else {
             None
@@ -826,7 +805,7 @@ impl FunctionTypeParam {
         matches!(
             (tokens.next(), tokens.next(), tokens.next()),
             (Some(first), Some(second), Some(third))
-                if (first.kind() == SyntaxKind::WORD || first.kind() == SyntaxKind::KW_CLIENT)
+                if first.kind() == SyntaxKind::WORD
                     && second.kind() == SyntaxKind::QUESTION
                     && third.kind() == SyntaxKind::COLON
         )
@@ -921,14 +900,7 @@ impl FunctionDef {
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| {
-                let kind = token.kind();
-                let is_name = kind == SyntaxKind::WORD
-                    || kind == SyntaxKind::KW_IMPLEMENTS
-                    || kind == SyntaxKind::KW_IMPLEMENT
-                    || kind == SyntaxKind::KW_EXTENDS
-                    || kind == SyntaxKind::KW_REQUIRES
-                    || kind == SyntaxKind::KW_INTERFACE;
-                is_name && token.parent() == Some(self.syntax.clone())
+                token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
             })
             .nth(0)
     }
@@ -1802,10 +1774,7 @@ impl Parameter {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                // `client` is KW_CLIENT in the CST, not WORD.
-                token.kind() == SyntaxKind::WORD || token.kind() == SyntaxKind::KW_CLIENT
-            })
+            .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
     /// Get the parameter type.
@@ -1846,7 +1815,7 @@ impl CallArg {
             .collect();
 
         if tokens.len() >= 2
-            && (tokens[0].kind() == SyntaxKind::WORD || tokens[0].kind() == SyntaxKind::KW_CLIENT)
+            && tokens[0].kind() == SyntaxKind::WORD
             && tokens[1].kind() == SyntaxKind::EQUALS
         {
             Some(tokens[0].clone())
@@ -1971,29 +1940,13 @@ impl ImplementsBlock {
     }
 }
 
-fn is_member_name_token(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        SyntaxKind::WORD
-            | SyntaxKind::KW_IMPLEMENTS
-            | SyntaxKind::KW_IMPLEMENT
-            | SyntaxKind::KW_EXTENDS
-            | SyntaxKind::KW_REQUIRES
-            | SyntaxKind::KW_INTERFACE
-    )
-}
-
 impl InterfaceFieldLink {
     /// The interface field on the left side of `field as class_field`.
     pub fn interface_field(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                !token.kind().is_trivia()
-                    && is_member_name_token(token.kind())
-                    && token.kind() != SyntaxKind::KW_AS
-            })
+            .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
     /// The class field on the right side of `field as class_field`.
@@ -2009,7 +1962,7 @@ impl InterfaceFieldLink {
                 after_as = true;
                 continue;
             }
-            if after_as && is_member_name_token(token.kind()) {
+            if after_as && token.kind() == SyntaxKind::WORD {
                 return Some(token);
             }
         }
@@ -2122,15 +2075,7 @@ impl MethodSig {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                let kind = token.kind();
-                kind == SyntaxKind::WORD
-                    || kind == SyntaxKind::KW_IMPLEMENTS
-                    || kind == SyntaxKind::KW_IMPLEMENT
-                    || kind == SyntaxKind::KW_EXTENDS
-                    || kind == SyntaxKind::KW_REQUIRES
-                    || kind == SyntaxKind::KW_INTERFACE
-            })
+            .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
     pub fn param_list(&self) -> Option<ParameterList> {
@@ -2154,20 +2099,7 @@ impl Field {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| {
-                matches!(
-                    token.kind(),
-                    SyntaxKind::WORD
-                        | SyntaxKind::KW_IMPLEMENTS
-                        | SyntaxKind::KW_IMPLEMENT
-                        | SyntaxKind::KW_EXTENDS
-                        | SyntaxKind::KW_REQUIRES
-                        | SyntaxKind::KW_INTERFACE
-                        // `client` keyword stays valid as a field name
-                        // (BEP-049 §10 `ctx.client` on `Context`).
-                        | SyntaxKind::KW_CLIENT
-                )
-            })
+            .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
     /// Get the field type.
@@ -2223,7 +2155,7 @@ impl ClientDef {
             .filter(|token| {
                 token.kind() == SyntaxKind::WORD && token.parent() == Some(self.syntax.clone())
             })
-            .nth(0) // Get the first WORD (client keyword is KW_CLIENT, not WORD)
+            .nth(0)
     }
 
     /// Get the config block.
@@ -2258,15 +2190,12 @@ impl ConfigBlock {
 }
 
 impl ConfigItem {
-    /// Get the config item key (first WORD or keyword token).
-    ///
-    /// Config items can have keyword tokens as keys (e.g., `retry_policy` inside
-    /// a client block is lexed as `KW_RETRY_POLICY`, not `WORD`).
+    /// Get the config item key (the first WORD token).
     pub fn key(&self) -> Option<SyntaxToken> {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_RETRY_POLICY))
+            .find(|token| token.kind() == SyntaxKind::WORD)
     }
 
     /// Get the config item value (WORD token inside `CONFIG_VALUE`, if present).
@@ -2633,7 +2562,6 @@ impl BlockExpr {
                         | SyntaxKind::FLOAT_LITERAL
                         | SyntaxKind::STRING_LITERAL
                         | SyntaxKind::RAW_STRING_LITERAL
-                        // Boolean / null literals are re-lexed contextual keywords.
                         | SyntaxKind::KW_TRUE
                         | SyntaxKind::KW_FALSE
                         | SyntaxKind::KW_NULL => Some(BlockElement::ExprToken(t)),

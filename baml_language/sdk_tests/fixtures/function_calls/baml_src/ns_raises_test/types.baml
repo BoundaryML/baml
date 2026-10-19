@@ -37,7 +37,7 @@ function PureLen(s: string) -> int {
 
 /// Loads documents, with failure modes on its methods.
 class DocLoader {
-  root string
+  base_dir string
 
   /// Load the document at `path`.
   function load(self, path: string) -> string throws ParseError {

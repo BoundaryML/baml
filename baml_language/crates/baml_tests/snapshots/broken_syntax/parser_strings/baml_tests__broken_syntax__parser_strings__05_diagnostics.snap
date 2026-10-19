@@ -405,14 +405,13 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                                           ╰── expected `top-level declaration`, found `'{'`
     ╰────
 
-  [hir] E0010
+  [parse] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
-  │ ai.RoundRobin)
+  × unexpected token
     ╭─[unicode_strings.baml:26:3]
  26 │   client: GPT4
     ·   ───┬──
-    ·      ╰── replace with `client Name = <expr>;`
+    ·      ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
   [parse] E0010
@@ -421,7 +420,7 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[unicode_strings.baml:26:9]
  26 │   client: GPT4
     ·         ┬
-    ·         ╰── expected `client name`, found `':'`
+    ·         ╰── expected `top-level declaration`, found `':'`
     ╰────
 
   [parse] E0010

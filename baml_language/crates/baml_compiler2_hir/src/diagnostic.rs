@@ -10,6 +10,7 @@ use baml_compiler_diagnostics::{
     diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase},
     runtime_type::{self, DuplicateMemberKind, SerializedKeyContainer},
 };
+use baml_type::reserved::ReservedName;
 use text_size::TextRange;
 
 use crate::contributions::DefinitionKind;
@@ -19,6 +20,16 @@ use crate::contributions::DefinitionKind;
 pub struct MemberSite {
     pub range: TextRange,
     pub kind: DefinitionKind,
+}
+
+/// Where a reserved name was declared.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReservedNameSite {
+    /// A declaration of the given kind, with its article (`a class`,
+    /// `an enum`, ...).
+    Declaration(&'static str),
+    /// A namespace, which takes its name from an `ns_<name>/` directory.
+    NamespaceDirectory,
 }
 
 /// Per-file diagnostic produced during HIR2 semantic indexing.
@@ -54,11 +65,13 @@ pub enum Hir2Diagnostic {
     },
     /// Builtin-only syntax used outside builtin stdlib files.
     BuiltinOnlySyntax { feature: String, span: TextRange },
-    /// A binding, item, or type parameter named `root`, the path to the
-    /// package itself.
-    RootIsReserved { span: TextRange },
-    /// A file under a directory `ns_root/`: a namespace named `root`.
-    RootNamespace { span: TextRange },
+    /// A declaration named by a reserved name ([`ReservedName::of`]).
+    ReservedName {
+        name: Name,
+        reason: ReservedName,
+        site: ReservedNameSite,
+        span: TextRange,
+    },
     /// Generic single-span diagnostic for builtin contract validation.
     DiagnosticMessage {
         diagnostic_id: DiagnosticId,
@@ -412,34 +425,39 @@ impl Hir2Diagnostic {
                 .with_primary(Span { file_id, range: *span }, "not valid here")
                 .with_phase(DiagnosticPhase::Hir)
             }
-            Hir2Diagnostic::RootIsReserved { span } => Diagnostic::error(
-                DiagnosticId::RootIsReserved,
-                "`root` is the path to this package and cannot name a binding, an item, or a \
-                 type parameter"
-                    .to_string(),
-            )
-            .with_primary(
-                Span {
-                    file_id,
-                    range: *span,
-                },
-                "`root` is this package",
-            )
-            .with_phase(DiagnosticPhase::Hir),
-            Hir2Diagnostic::RootNamespace { span } => Diagnostic::error(
-                DiagnosticId::RootIsReserved,
-                "`root` is the path to this package and cannot name a namespace: rename the \
-                 directory `ns_root/`"
-                    .to_string(),
-            )
-            .with_primary(
-                Span {
-                    file_id,
-                    range: *span,
-                },
-                "this file is in `ns_root/`",
-            )
-            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::ReservedName {
+                name,
+                reason,
+                site,
+                span,
+            } => {
+                let what = match reason {
+                    ReservedName::Keyword => "a keyword",
+                    ReservedName::BuiltinType => "a built-in type name",
+                };
+                let (message, label) = match site {
+                    ReservedNameSite::Declaration(kind) => (
+                        format!("`{name}` is {what} and cannot name {kind}"),
+                        format!("`{name}` is reserved"),
+                    ),
+                    ReservedNameSite::NamespaceDirectory => (
+                        format!(
+                            "`{name}` is {what} and cannot name a namespace: rename the \
+                             directory `ns_{name}/`"
+                        ),
+                        format!("this file is in `ns_{name}/`"),
+                    ),
+                };
+                Diagnostic::error(DiagnosticId::ReservedName, message)
+                    .with_primary(
+                        Span {
+                            file_id,
+                            range: *span,
+                        },
+                        label,
+                    )
+                    .with_phase(DiagnosticPhase::Hir)
+            }
             Hir2Diagnostic::BuiltinOnlySyntax { feature, span } => Diagnostic::error(
                 DiagnosticId::InvalidAttributeContext,
                 format!("builtin-only syntax `{feature}` is only allowed in builtin stdlib files"),

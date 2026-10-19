@@ -21,6 +21,6 @@ class TestVoid {
         // beyond the doc and needs confirmation.
         // java-port note: BAML `-> void` maps to Java `void` (Python gets None);
         // the strongest expressible assertion is that the call completes.
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> baml_sdk.void$.Fns.no_op());
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> baml_sdk.unit.Fns.no_op());
     }
 }

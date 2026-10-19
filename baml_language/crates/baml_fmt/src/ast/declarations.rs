@@ -2698,27 +2698,17 @@ pub enum ConfigItemKey {
     String(t::QuotedString),
     // parser allows raw strings as keys, but that's not a good idea
     // RawString(t::RawString),
-    RetryPolicy(t::RetryPolicy),
-    Enum(t::Enum),
-    Class(t::Class),
 }
 
 impl FromCST for ConfigItemKey {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
-            SyntaxKind::WORD | SyntaxKind::KW_CLIENT => {
-                t::Word::from_cst(elem).map(ConfigItemKey::Word)
-            }
+            SyntaxKind::WORD => t::Word::from_cst(elem).map(ConfigItemKey::Word),
             SyntaxKind::STRING_LITERAL => {
                 t::QuotedString::from_cst(elem).map(ConfigItemKey::String)
             }
-            SyntaxKind::KW_RETRY_POLICY => {
-                t::RetryPolicy::from_cst(elem).map(ConfigItemKey::RetryPolicy)
-            }
-            SyntaxKind::KW_ENUM => t::Enum::from_cst(elem).map(ConfigItemKey::Enum),
-            SyntaxKind::KW_CLASS => t::Class::from_cst(elem).map(ConfigItemKey::Class),
             _ => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "WORD, STRING_LITERAL, KW_RETRY_POLICY, KW_ENUM, or KW_CLASS".into(),
+                expected_desc: "WORD or STRING_LITERAL".into(),
                 found: elem.kind(),
                 at: elem.text_range(),
             }),
@@ -2734,36 +2724,18 @@ impl Printable for ConfigItemKey {
                 PrintInfo::default_single_line()
             }
             ConfigItemKey::String(string) => printer.print(string, shape),
-            ConfigItemKey::RetryPolicy(retry_policy) => {
-                printer.print_raw_token(retry_policy);
-                PrintInfo::default_single_line()
-            }
-            ConfigItemKey::Enum(enum_) => {
-                printer.print_raw_token(enum_);
-                PrintInfo::default_single_line()
-            }
-            ConfigItemKey::Class(class) => {
-                printer.print_raw_token(class);
-                PrintInfo::default_single_line()
-            }
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
             ConfigItemKey::Word(word) => word.span(),
             ConfigItemKey::String(string) => string.leftmost_token(),
-            ConfigItemKey::RetryPolicy(retry_policy) => retry_policy.span(),
-            ConfigItemKey::Enum(enum_) => enum_.span(),
-            ConfigItemKey::Class(class) => class.span(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
             ConfigItemKey::Word(word) => word.span(),
             ConfigItemKey::String(string) => string.rightmost_token(),
-            ConfigItemKey::RetryPolicy(retry_policy) => retry_policy.span(),
-            ConfigItemKey::Enum(enum_) => enum_.span(),
-            ConfigItemKey::Class(class) => class.span(),
         }
     }
 }

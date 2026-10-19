@@ -1222,10 +1222,10 @@ class Response {
     }
 
     #[test]
-    fn ast_lowers_keyword_named_class_field() {
+    fn ast_lowers_weak_keyword_named_class_field() {
         let source = r#"
-class InterfaceTwo {
-  interface string
+class Session {
+  client string
 }
 "#;
         let items = parse_and_lower(source);
@@ -1238,7 +1238,7 @@ class InterfaceTwo {
             .expect("expected ClassDef");
 
         let field = class.fields.first().expect("expected field");
-        assert_eq!(field.name.as_str(), "interface");
+        assert_eq!(field.name.as_str(), "client");
         assert_eq!(field.type_expr.to_string(), "string");
     }
 
@@ -1287,10 +1287,10 @@ function Foo(t: TypeValue) -> string {
         let Expr::Call { callee, .. } = &body.exprs[tail_expr] else {
             panic!("expected call expression");
         };
-        let Expr::MemberAccess { member, .. } = &body.exprs[*callee] else {
-            panic!("expected member access callee");
+        let Expr::Path(path) = &body.exprs[*callee] else {
+            panic!("expected path callee");
         };
-        assert_eq!(member.as_str(), "implements");
+        assert_eq!(path.to_string(), "t.implements");
     }
 
     #[test]

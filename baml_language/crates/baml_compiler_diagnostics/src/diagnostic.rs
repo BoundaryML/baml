@@ -176,7 +176,7 @@ pub enum DiagnosticId {
     LoweringError,
 
     // Removed feature errors (E0098) — shared by all removed-syntax
-    // diagnostics (`instanceof`, legacy BEP-066 TypeBuilder syntax, ...).
+    // diagnostics (legacy BEP-066 TypeBuilder syntax, ...).
     RemovedFeature,
 
     // Namespace diagnostics (E0099)
@@ -405,9 +405,9 @@ pub enum DiagnosticId {
     /// thrown type a published clause would carry, or a type still being
     /// inferred that would be decided as one.
     ScopedTypeEscapesBlock,
-    /// A binding, item, type parameter, or namespace was named `root`, the
-    /// path to the package itself.
-    RootIsReserved,
+    /// A declaration or namespace was named by a keyword or a built-in type
+    /// name.
+    ReservedName,
     /// A class literal named a class that holds a `$rust_type` field. That
     /// state is created only by the class's own native functions; a literal
     /// could only copy a handle out of another value, which relabels what the
@@ -642,7 +642,7 @@ impl DiagnosticId {
             DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
             DiagnosticId::ScopedTypeEscapesBlock => "E0172",
             DiagnosticId::CannotConstructOpaqueClass => "E0173",
-            DiagnosticId::RootIsReserved => "E0176",
+            DiagnosticId::ReservedName => "E0176",
             DiagnosticId::ServedInterfaceExportsFunctionsOnly => "E0178",
             DiagnosticId::CallSiteBuiltinValue => "E0177",
         }

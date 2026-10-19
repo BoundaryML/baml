@@ -734,12 +734,7 @@ fn client_config_key_type_info(token: &SyntaxToken) -> Option<TypeInfo> {
     let key = config_item
         .children_with_tokens()
         .filter_map(rowan::NodeOrToken::into_token)
-        .find(|candidate| {
-            matches!(
-                candidate.kind(),
-                SyntaxKind::WORD | SyntaxKind::KW_RETRY_POLICY
-            )
-        })?;
+        .find(|candidate| candidate.kind() == SyntaxKind::WORD)?;
     if key.text_range() != token.text_range() {
         return None;
     }

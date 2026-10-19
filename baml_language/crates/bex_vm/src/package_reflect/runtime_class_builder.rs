@@ -28,9 +28,9 @@ use super::{
     BamlClassClassBuilder, BamlClassClassPendingType, PackageReflectImpl,
     type_kinds::{
         ReflectedTypeRow, WitnessField, alloc_compilation_error, alloc_with_meta,
-        compiler_diagnostic, is_baml_identifier, prepare_class_witnesses, reflected_class_fields,
-        reflected_type_row, register_class_witnesses, string_map_rows, validate_class_witnesses,
-        with_meta_row,
+        compiler_diagnostic, is_baml_identifier, is_type_name, prepare_class_witnesses,
+        reflected_class_fields, reflected_type_row, register_class_witnesses, string_map_rows,
+        validate_class_witnesses, with_meta_row,
     },
 };
 use crate::{BexVm, errors::VmRustFnError};
@@ -642,7 +642,7 @@ fn prepare_group(
     let mut prepared = IndexMap::new();
 
     for node in group.values() {
-        if !is_baml_identifier(&node.name) {
+        if !is_type_name(&node.name) {
             diagnostics.push(
                 runtime_type::invalid_identifier(InvalidIdentifierKind::Class, &node.name)
                     .with_phase(DiagnosticPhase::Hir),

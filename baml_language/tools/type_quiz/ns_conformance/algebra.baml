@@ -49,8 +49,8 @@ function lorem_decl() -> root.algebra.IfaceDecl throws never {
 }
 
 function rec_decl() -> root.algebra.AliasDecl throws never {
-    root.algebra.AliasDecl.recursive("Rec", (self) -> {
-        root.algebra.Union.new([root.algebra.Prim.int(), root.algebra.Array.new(self)])
+    root.algebra.AliasDecl.recursive("Rec", (rec) -> {
+        root.algebra.Union.new([root.algebra.Prim.int(), root.algebra.Array.new(rec)])
     })
 }
 
