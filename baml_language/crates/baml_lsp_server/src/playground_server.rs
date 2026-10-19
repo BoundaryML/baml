@@ -1378,8 +1378,8 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
 
     if let Some(hello) = to_ws_text(&WsOutMessage::Hello {
         toolchain_version: baml_version::CANONICAL_VERSION.to_string(),
-        playground_protocol: 2,
-        min_client_playground_protocol: 2,
+        playground_protocol: baml_lsp::PLAYGROUND_PROTOCOL,
+        min_client_playground_protocol: baml_lsp::MIN_SUPPORTED_CLIENT_PLAYGROUND_PROTOCOL,
         capabilities: vec![
             "playgroundWebSocket.v2".to_string(),
             "callFunction.v1".to_string(),

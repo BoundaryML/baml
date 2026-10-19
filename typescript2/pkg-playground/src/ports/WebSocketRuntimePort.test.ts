@@ -49,8 +49,8 @@ class FakeWebSocket {
 function compatibleHello(socket: FakeWebSocket): void {
   socket.receive({
     capabilities: [],
-    minClientPlaygroundProtocol: 2,
-    playgroundProtocol: 2,
+    minClientPlaygroundProtocol: 3,
+    playgroundProtocol: 3,
     toolchainVersion: 'test',
     type: 'hello',
   });

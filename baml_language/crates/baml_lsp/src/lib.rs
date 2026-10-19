@@ -39,7 +39,8 @@ pub mod state;
 pub use discovery::NativeFs;
 pub use discovery::{DiscoveredRoot, LoadedRoot, NoFs, ProjectFs};
 pub use dispatch::{
-    OPEN_PANEL_COMMAND, OpenPanelArgs, OpenPanelRequest, initialize_result, server_capabilities,
+    MIN_SUPPORTED_CLIENT_PLAYGROUND_PROTOCOL, OPEN_PANEL_COMMAND, OpenPanelArgs, OpenPanelRequest,
+    PLAYGROUND_PROTOCOL, initialize_result, server_capabilities,
 };
 pub use error::LspError;
 pub use mutation::SourceMutation;

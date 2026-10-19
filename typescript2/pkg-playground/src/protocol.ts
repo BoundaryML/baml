@@ -1,5 +1,7 @@
-export const BAML_PLAYGROUND_PROTOCOL_MIN = 2;
-export const BAML_PLAYGROUND_PROTOCOL_MAX = 2;
+// Protocol 3: `startRun` and `startPreviewRun` carry the arguments form's
+// JSON text in `args`; protocol 2 sent proto bytes in `argsBytes`.
+export const BAML_PLAYGROUND_PROTOCOL_MIN = 3;
+export const BAML_PLAYGROUND_PROTOCOL_MAX = 3;
 
 export function isPlaygroundProtocolCompatible(
   serverProtocol: number,

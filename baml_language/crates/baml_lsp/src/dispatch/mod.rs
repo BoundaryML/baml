@@ -25,7 +25,8 @@ mod proto;
 mod requests;
 
 pub use requests::{
-    OPEN_PANEL_COMMAND, OpenPanelArgs, OpenPanelRequest, initialize_result, server_capabilities,
+    MIN_SUPPORTED_CLIENT_PLAYGROUND_PROTOCOL, OPEN_PANEL_COMMAND, OpenPanelArgs, OpenPanelRequest,
+    PLAYGROUND_PROTOCOL, initialize_result, server_capabilities,
 };
 
 use crate::{
