@@ -1929,10 +1929,7 @@ fn contains_type_var(ty: &Ty) -> bool {
 }
 
 fn is_synthetic_effect_type(ty: &Ty) -> bool {
-    matches!(
-        ty,
-        Ty::TypeVar(name) if name.as_str().starts_with("__effect_param_")
-    )
+    matches!(ty, Ty::TypeVar(param) if is_synthetic_effect_param(param.name()))
 }
 
 fn require_supported_map_key(
@@ -2627,17 +2624,25 @@ fn render_generic_type_token(
 /// The throws-type argument of a generated `HostCallable(...)` call. A throws
 /// clause the declaration left open is an implicit effect parameter the caller
 /// never binds; a host callable may throw anything, so it is stated as
-/// `unknown`. Any other throws type is stated as its wire metadata: a throws
-/// type is never decoded, so it needs no registry token.
-fn host_callable_throws(render: &RenderContext<'_>, throws: &Ty, context: &str) -> String {
-    match throws {
-        Ty::TypeVar(param) if is_synthetic_effect_param(param.name()) => {
-            format!("{context}.UnknownThrows()")
-        }
-        other => format!(
+/// `unknown`. A throws type naming the callee's own type parameters is the
+/// type the call binds them to, so it is stated through the same `type_token`
+/// the parameters and result use. Any other throws type is stated as its wire
+/// metadata: a throws type is never decoded, so it needs no registry token.
+fn host_callable_throws(
+    render: &RenderContext<'_>,
+    throws: &Ty,
+    context: &str,
+    type_token: impl FnOnce(&Ty) -> String,
+) -> String {
+    if is_synthetic_effect_type(throws) {
+        format!("{context}.UnknownThrows()")
+    } else if contains_type_var(throws) {
+        format!("{context}.Throws({})", type_token(throws))
+    } else {
+        format!(
             "{context}.Throws({})",
-            byte_array_source(&render.wire_metadata(other))
-        ),
+            byte_array_source(&render.wire_metadata(throws))
+        )
     }
 }
 
@@ -2696,7 +2701,7 @@ fn render_generic_host_callable_add(
     } else {
         format!("{context}.Result({})", type_token(ret))
     };
-    let throws = host_callable_throws(render, throws, context);
+    let throws = host_callable_throws(render, throws, context, &mut type_token);
     let invocation = params
         .iter()
         .enumerate()
@@ -3598,7 +3603,9 @@ fn render_function_codec(
     } else {
         format!("context.Result({})", render.type_field(ret))
     };
-    let throws = host_callable_throws(render, throws, "context");
+    let throws = host_callable_throws(render, throws, "context", |ty| {
+        render.type_field(ty).to_string()
+    });
     let invocation_arguments = params
         .iter()
         .enumerate()
@@ -5710,6 +5717,68 @@ mod tests {
             .join("\n")
     }
 
+    /// `function CallThrowing<E>(f: () -> int throws E) -> int throws E`: the
+    /// callback's throws type is the callee's own type parameter, bound by the
+    /// call.
+    fn explicit_throws_host_callable_source() -> String {
+        let function_name = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("explicit_throws_contract")],
+            BaseName::new("CallThrowing"),
+        );
+        let parameter_e = BaseName::new("E");
+        let type_e = Ty::TypeVar(ParamTy::new(0, parameter_e.clone()));
+        let callback = Ty::Function {
+            params: Box::new([]),
+            ret: Box::new(Ty::Int),
+            throws: Box::new(type_e.clone()),
+        };
+        let function = baml_sdkgen_types::Function {
+            name: BaseName::new("CallThrowing"),
+            generic_params: vec![parameter_e],
+            docstring: None,
+            arguments: vec![FunctionArgument {
+                injected: false,
+                name: BaseName::new("f"),
+                docstring: None,
+                ty: callback,
+                default: None,
+            }],
+            return_type: Ty::Int,
+            throws: Some(type_e),
+            watchers: vec![],
+            origin: baml_sdkgen_types::Origin {
+                source_file_path: "explicit_throws_contract.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let mut symbols = HashMap::new();
+        symbols.insert(function_name.clone(), Symbol::Function(function));
+        let mut callables = HashMap::new();
+        callables.insert(
+            CallableKey::Free(function_name),
+            CallableIdentity {
+                family_name: BaseName::new("CallThrowing"),
+                wire_name: BaseName::new("CallThrowing"),
+                variant: CallableVariant::Execute,
+                receiver: None,
+            },
+        );
+        let tree = generate_program(
+            &CodegenModel { symbols, callables },
+            &[1, 2, 3],
+            "0.0.0-test",
+            "0.0.0-test",
+            "explicit-throws-contract",
+        )
+        .expect("a generic callback with an explicit throws type should generate");
+        tree.files
+            .iter()
+            .map(|file| String::from_utf8_lossy(&file.contents))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     fn nullable_bytes_source() -> String {
         let function_name = Name::new(
             BaseName::new("user"),
@@ -5991,6 +6060,31 @@ mod tests {
             source.contains("((global::System.Func<T, global::System.Threading.Tasks.Task<R>>)")
         );
         assert!(!source.contains("ResolveType<global::System.Func<"));
+    }
+
+    /// A callback's declared `throws E` is the type the call binds `E` to,
+    /// stated through `E`'s type token like the parameters and result; the
+    /// static metadata would spell the unbound variable, which the decoder
+    /// refuses.
+    #[test]
+    fn generic_host_callable_states_its_bound_throws_type() {
+        let source = explicit_throws_host_callable_source();
+        assert!(source.contains(".AddHostCallable("), "{source}");
+        assert!(source.contains(".Throws(bamlType0)"), "{source}");
+        assert!(!source.contains(".UnknownThrows()"), "{source}");
+    }
+
+    /// The implicit effect parameter of an open throws clause is recognized by
+    /// its exact spelling, the same test `host_callable_throws` routes by.
+    #[test]
+    fn synthetic_effect_params_are_recognized_by_their_exact_spelling() {
+        let effect = Ty::TypeVar(ParamTy::new(1, BaseName::new("__effect_param_0")));
+        let named = Ty::TypeVar(ParamTy::new(0, BaseName::new("E")));
+        assert!(is_synthetic_effect_type(&effect));
+        assert!(!is_synthetic_effect_type(&named));
+        // A name that merely starts like an effect parameter is a user's own.
+        let lookalike = Ty::TypeVar(ParamTy::new(0, BaseName::new("__effect_param_x")));
+        assert!(!is_synthetic_effect_type(&lookalike));
     }
 
     #[test]

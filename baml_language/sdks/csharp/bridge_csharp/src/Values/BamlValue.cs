@@ -49,6 +49,15 @@ public enum BamlTypeDescriptorKind : int
     Handle = 14,
     Prompt = 15,
     Type = 16,
+    /// <summary>
+    /// A type the SDK has no projection for, which a value's type can still
+    /// name: the interface of a <c>Shape[]</c>, or the function type of a list
+    /// of closures. Two opaque descriptors are equal exactly when they name
+    /// the same type.
+    /// </summary>
+    Opaque = 17,
+    /// <summary>The type no value has, as the item type of an empty <c>never[]</c>.</summary>
+    Never = 18,
 }
 
 /// <summary>
@@ -870,13 +879,18 @@ public sealed class BamlTypeDescriptor : IEquatable<BamlTypeDescriptor>
 {
     private readonly IReadOnlyList<BamlTypeDescriptor> arguments;
 
+    // An opaque type's canonical wire encoding: its identity, compared byte for
+    // byte, with no structure published.
+    private readonly byte[]? opaque;
+
     private BamlTypeDescriptor(
         BamlTypeDescriptorKind kind,
         string? fqn = null,
         IEnumerable<BamlTypeDescriptor>? arguments = null,
         bool isNullable = false,
         string? alias = null,
-        string? literal = null)
+        string? literal = null,
+        byte[]? opaque = null)
     {
         Kind = kind;
         Fqn = fqn;
@@ -884,6 +898,7 @@ public sealed class BamlTypeDescriptor : IEquatable<BamlTypeDescriptor>
         IsNullable = isNullable;
         Alias = alias;
         Literal = literal;
+        this.opaque = opaque;
     }
 
     public BamlTypeDescriptorKind Kind { get; }
@@ -905,7 +920,8 @@ public sealed class BamlTypeDescriptor : IEquatable<BamlTypeDescriptor>
         && arguments.SequenceEqual(other.arguments)
         && IsNullable == other.IsNullable
         && StringComparer.Ordinal.Equals(Alias, other.Alias)
-        && StringComparer.Ordinal.Equals(Literal, other.Literal);
+        && StringComparer.Ordinal.Equals(Literal, other.Literal)
+        && (opaque ?? []).AsSpan().SequenceEqual(other.opaque ?? []);
 
     public override bool Equals(object? obj) =>
         obj is BamlTypeDescriptor other && Equals(other);
@@ -922,6 +938,7 @@ public sealed class BamlTypeDescriptor : IEquatable<BamlTypeDescriptor>
         hash.Add(IsNullable);
         hash.Add(Alias, StringComparer.Ordinal);
         hash.Add(Literal, StringComparer.Ordinal);
+        hash.AddBytes(opaque ?? []);
         return hash.ToHashCode();
     }
 
@@ -1046,6 +1063,12 @@ public sealed class BamlTypeDescriptor : IEquatable<BamlTypeDescriptor>
             BamlTy.TyOneofCase.Resource => Leaf(BamlTypeDescriptorKind.Handle),
             BamlTy.TyOneofCase.PromptAst => Leaf(BamlTypeDescriptorKind.Prompt),
             BamlTy.TyOneofCase.MetaType => Leaf(BamlTypeDescriptorKind.Type),
+            // An element type may name an interface or a function type though
+            // no value has one; the SDK projects neither, so it keeps the
+            // type's identity only. Re-sending reads the original type bytes.
+            BamlTy.TyOneofCase.Interface or BamlTy.TyOneofCase.Function =>
+                new(BamlTypeDescriptorKind.Opaque, opaque: type.ToByteArray()),
+            BamlTy.TyOneofCase.Never => Leaf(BamlTypeDescriptorKind.Never),
             _ => throw UnsupportedType(type),
         };
     }
@@ -1079,7 +1102,8 @@ public sealed class BamlTypeDescriptor : IEquatable<BamlTypeDescriptor>
         arguments,
         isNullable: true,
         Alias,
-        Literal);
+        Literal,
+        opaque);
 
     private static BamlTypeDescriptor Leaf(BamlTypeDescriptorKind kind) => new(kind);
 

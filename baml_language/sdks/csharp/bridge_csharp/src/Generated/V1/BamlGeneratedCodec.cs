@@ -218,6 +218,13 @@ public readonly partial struct BamlGeneratedCodecContext
     public BamlGeneratedHostThrows Throws(ReadOnlySpan<byte> metadata) => new(metadata.ToArray());
 
     /// <summary>
+    /// The declared throws type of a host callable that names the callee's type
+    /// parameters, as the type the call binds them to.
+    /// </summary>
+    public BamlGeneratedHostThrows Throws<T>(BamlGeneratedType<T> type) =>
+        new(registry.RequireType(type).Metadata);
+
+    /// <summary>
     /// The throws type of a host callable whose declaration left it open: an
     /// implicit effect parameter the caller never binds. A host callable may
     /// throw anything, so it is <c>unknown</c>.
