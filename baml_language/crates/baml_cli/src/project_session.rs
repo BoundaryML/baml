@@ -42,8 +42,6 @@ pub(crate) enum CacheUse {
     /// Consume warm seeds, never store: introspection commands
     /// (`generate`). Shares the run/check keyspace.
     ReadOnly,
-    /// Compiled bodies and bytecode must come from the same lowering.
-    StoreOnly,
     /// No cache at all (projectless fallback, tests).
     Off,
 }
@@ -108,11 +106,7 @@ impl ProjectSession {
     fn from_resolved(resolved: ResolvedProject, cache_use: CacheUse) -> Result<Self> {
         let cache = match cache_use {
             CacheUse::Off => None,
-            CacheUse::StoreOnly => {
-                crate::bytecode_cache::validate_env()?;
-                CacheContext::open(&resolved).map(CacheContext::store_only)
-            }
-            CacheUse::ReadWrite | CacheUse::ReadOnly => {
+            _ => {
                 crate::bytecode_cache::validate_env()?;
                 CacheContext::open(&resolved)
             }
@@ -129,11 +123,12 @@ impl ProjectSession {
     /// The whole-program cache hit, for commands that execute or package the
     /// compiled program. Call before [`Self::warm_prep`]: a hit makes the
     /// warm preamble unnecessary. Gated off under `DEV_BAML_BUILD_CACHE_VERIFY=always` so the
-    /// verify tripwire always exercises the full compile path, and for a
-    /// [`CacheUse::StoreOnly`] session.
+    /// verify tripwire always exercises the full compile path.
     pub(crate) fn try_cached_program(&self) -> Option<bex_vm_types::Program> {
-        let cache = self.cache.as_ref().filter(|cache| cache.serves())?;
-        let mut program = cache.load()?;
+        if CacheContext::verify_enabled() {
+            return None;
+        }
+        let mut program = self.cache.as_ref().and_then(CacheContext::load)?;
         // `source_content_hash` is in-memory metadata (`borsh(skip)`), so a
         // cached program arrives without it. The cache hit just validated
         // every project file byte-for-byte against this database, so

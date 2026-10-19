@@ -118,10 +118,11 @@ function Uncaught() -> void {
 }
 
 function Async() -> void {
-    let a = spawn { 21 };
-    let b = spawn { 21 };
-    let winner = await baml.future.any([a, b]);
-    baml.io.println(`${winner}:${await a + await b}`);
+    let a = spawn { 20 };
+    let b = spawn { 22 };
+    let sum = await a + await b;
+    let winner = await baml.future.any([spawn { 21 }, spawn { 21 }]);
+    baml.io.println(`${winner}:${sum}`);
 }
 
 function Cancellation() -> void {

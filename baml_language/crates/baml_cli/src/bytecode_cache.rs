@@ -103,7 +103,6 @@ pub(crate) struct CacheContext {
     /// from the entry stored under its key, reported by
     /// [`Self::verify_packages`]. Empty otherwise.
     package_mismatches: Mutex<Vec<PackageMismatch>>,
-    serve: bool,
 }
 
 /// A package whose cached output differs from a fresh emit under one key.
@@ -241,18 +240,7 @@ impl CacheContext {
             packages_served: AtomicUsize::new(0),
             packages_emitted: AtomicUsize::new(0),
             package_mismatches: Mutex::new(Vec::new()),
-            serve: true,
         })
-    }
-
-    /// Compiled bodies and bytecode must come from the same lowering.
-    pub(crate) fn store_only(mut self) -> Self {
-        self.serve = false;
-        self
-    }
-
-    pub(crate) fn serves(&self) -> bool {
-        self.serve && !Self::verify_enabled()
     }
 
     /// Tripwire mode (`DEV_BAML_BUILD_CACHE_VERIFY=always`): force a real
@@ -663,7 +651,7 @@ impl PackageCache for CacheContext {
         root: SourceRoot,
         opt: OptLevel,
     ) -> Option<EmittedPackage> {
-        if !self.serves() {
+        if Self::verify_enabled() {
             return None;
         }
         let emitted = self
@@ -859,14 +847,13 @@ impl CacheContext {
     /// served soundly, since a file's diagnostics and throws depend on every
     /// declaration it resolves. `None` on a first compile, a changed
     /// project, a missing or undecodable manifest, or under
-    /// `DEV_BAML_BUILD_CACHE_VERIFY=always` (the oracle exercises the honest path)
-    /// or for a [`Self::store_only`] context.
+    /// `DEV_BAML_BUILD_CACHE_VERIFY=always` (the oracle exercises the honest path).
     pub(crate) fn served_checks(
         &self,
         db: &ProjectDatabase,
         package: SourceRoot,
     ) -> Option<ServedChecks> {
-        if !self.serves() {
+        if Self::verify_enabled() {
             return None;
         }
         let manifest: ProjectManifest = self.load_decoded(&self.manifest_key)?;
@@ -1080,7 +1067,7 @@ impl CacheContext {
         // corrupt blob and `DEV_BAML_BUILD_CACHE_VERIFY=always` both fall
         // through to the honest builtin check (verify is gated here so its
         // oracle exercises the honest path).
-        let serve_builtins = self.serves()
+        let serve_builtins = !Self::verify_enabled()
             && self
                 .load_stdlib_diagnostics()
                 .and_then(|blob| crate::diagnostics_cache::rehydrate_builtin_blob(db, &blob))
@@ -1384,7 +1371,7 @@ impl CacheContext {
     /// build constant). Returns whether the seed was served; gated off under
     /// `DEV_BAML_BUILD_CACHE_VERIFY=always` so the oracle exercises the honest path.
     pub(crate) fn seed_stdlib_interface(&self, db: &mut ProjectDatabase) -> bool {
-        self.serves()
+        !Self::verify_enabled()
             && self
                 .load_stdlib_interface()
                 .map(|by_package| db.set_seeded_stdlib_interface(by_package))
@@ -1598,41 +1585,6 @@ mod tests {
             honest_bytes(&r2),
             "a compile linked from served packages is byte-identical to an honest compile"
         );
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn store_only_context_serves_nothing_and_still_stores() {
-        if cache_disabled() {
-            return;
-        }
-        let root = bc_root();
-        let files = [("a.baml", A_V1), ("b.baml", B)];
-        let _ = compile_and_store_v1(&root, &files);
-
-        let r2 = resolved(&root, &files);
-        let (mut db2, pkg2) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx2 = open(&r2).expect("cache reopens").store_only();
-        assert!(!ctx2.serves());
-        assert!(
-            ctx2.load().is_some(),
-            "the warm entry is there to be served"
-        );
-        assert!(!ctx2.seed_stdlib_interface(&mut db2));
-        assert!(ctx2.served_checks(&db2, pkg2).is_none());
-        let program = compile_program(&db2, pkg2, Some(&ctx2)).expect("honest compile");
-        assert_eq!(ctx2.packages_served(), 0, "nothing is served");
-        assert_eq!(
-            ctx2.packages_emitted(),
-            linked_package_count(&db2, pkg2),
-            "every package is emitted fresh"
-        );
-        assert_eq!(program_bytes(&program), honest_bytes(&r2));
-
-        let (db3, pkg3) = crate::project_load::build_db_from_sources(&r2, |_| {});
-        let ctx3 = open(&r2).expect("cache reopens");
-        let _ = compile_program(&db3, pkg3, Some(&ctx3)).expect("warm compile");
-        assert_eq!(ctx3.packages_served(), linked_package_count(&db3, pkg3));
         let _ = std::fs::remove_dir_all(&root);
     }
 

@@ -592,7 +592,7 @@ impl PackArgs {
         let mut session = crate::project_session::ProjectSession::open(
             self.from.as_deref(),
             if self.rust {
-                crate::project_session::CacheUse::StoreOnly
+                crate::project_session::CacheUse::Off
             } else {
                 crate::project_session::CacheUse::ReadWrite
             },
