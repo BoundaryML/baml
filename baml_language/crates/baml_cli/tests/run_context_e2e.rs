@@ -488,4 +488,12 @@ fn baml_context_env_applies_and_context_flag_overrides_it() {
     );
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("only one stdin consumer"));
+    let output = piped_cli_with_env_context(
+        project.path(),
+        &["run", "Check", "--", "--value", "empty"],
+        Some(""),
+        None,
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid --context"));
 }

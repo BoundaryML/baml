@@ -538,16 +538,17 @@ fn pack_e2e_baml_context_env() {
             String::from_utf8_lossy(&out.stderr)
         );
 
-        let out = run_with_context(bin, &args(&["--value", "x"]), Some("[]"), "");
-        assert!(!out.status.success());
-        assert!(out.stdout.is_empty());
-        assert!(String::from_utf8_lossy(&out.stderr).contains("invalid BAML_CONTEXT"));
-
-        // Unset and empty both mean no context, so the fixture's assertions fail.
-        for context in [None, Some("")] {
-            let out = run_with_context(bin, &args(&["--value", "x"]), context, "");
+        // Set but empty is a source, as with clap `env` flags on `baml run`.
+        for context in ["[]", ""] {
+            let out = run_with_context(bin, &args(&["--value", "x"]), Some(context), "");
             assert!(!out.status.success(), "{context:?}");
-            assert!(!String::from_utf8_lossy(&out.stderr).contains("BAML_CONTEXT"));
+            assert!(out.stdout.is_empty());
+            assert!(String::from_utf8_lossy(&out.stderr).contains("invalid BAML_CONTEXT"));
         }
+
+        // Without a context the fixture's assertions fail.
+        let out = run_with_context(bin, &args(&["--value", "x"]), None, "");
+        assert!(!out.status.success());
+        assert!(!String::from_utf8_lossy(&out.stderr).contains("BAML_CONTEXT"));
     }
 }

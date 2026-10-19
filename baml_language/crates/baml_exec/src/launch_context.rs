@@ -10,11 +10,11 @@ use serde_json::Value;
 /// --context` overrides it.
 pub const CONTEXT_ENV: &str = "BAML_CONTEXT";
 
-/// Read [`CONTEXT_ENV`], treating an unset or empty value as absent (the
-/// same rule clap applies to `env`-backed flags).
+/// Read [`CONTEXT_ENV`] the way clap reads an `env`-backed flag: a set but
+/// empty value is still a source, so it fails to parse rather than being
+/// ignored.
 pub fn context_source_from_env() -> Result<Option<String>> {
     match std::env::var(CONTEXT_ENV) {
-        Ok(source) if source.is_empty() => Ok(None),
         Ok(source) => Ok(Some(source)),
         Err(std::env::VarError::NotPresent) => Ok(None),
         Err(std::env::VarError::NotUnicode(_)) => bail!("{CONTEXT_ENV} is not valid UTF-8"),
