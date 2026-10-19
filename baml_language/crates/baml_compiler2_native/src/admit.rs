@@ -123,7 +123,7 @@ pub fn compile_program<'db>(
     opt: OptLevel,
     artifact_path: &str,
     entries: Option<&[usize]>,
-) -> NativeModule {
+) -> Result<NativeModule, String> {
     let index = ProgramIndex::new(db, root, program);
     // Admission works on object indices: the identity generated code bakes
     // in, unique across packages where a rendered name need not be.
@@ -348,12 +348,12 @@ pub fn compile_program<'db>(
         }
     };
 
-    let source = render_module(&bodies, &functions, &natives, artifact_path);
-    NativeModule {
+    let source = render_module(&bodies, &functions, &natives, artifact_path)?;
+    Ok(NativeModule {
         source,
         functions,
         rejected,
-    }
+    })
 }
 
 /// Make `mir`, the function at `object` with the bytecode body `body`, a

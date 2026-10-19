@@ -285,7 +285,8 @@ impl PackArgs {
                 crate::bytecode_cache::CLI_OPT_LEVEL,
                 "program.bexa",
                 entries.as_deref(),
-            );
+            )
+            .map_err(|error| anyhow!(error))?;
             if self.native_report {
                 reporter.suspend(|| report_native(&module));
             }
@@ -552,9 +553,10 @@ impl PackArgs {
         if !status.success() {
             anyhow::bail!("cargo build of the native host failed ({status})");
         }
-        let built = target_dir
-            .join("release")
-            .join(format!("baml_native_program{}", std::env::consts::EXE_SUFFIX));
+        let built = target_dir.join("release").join(format!(
+            "baml_native_program{}",
+            std::env::consts::EXE_SUFFIX
+        ));
         std::fs::copy(&built, output_path).with_context(|| {
             format!(
                 "failed to copy {} to {}",

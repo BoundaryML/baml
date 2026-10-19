@@ -17,7 +17,8 @@ fn compile_with_program(source: &str) -> (NativeModule, Program) {
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
         baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
-    let module = compile_program(&db, root, &program, OptLevel::Two, "program.bexa", None);
+    let module = compile_program(&db, root, &program, OptLevel::Two, "program.bexa", None)
+        .expect("native module renders");
     (module, program)
 }
 
@@ -763,7 +764,8 @@ fn functions_whose_names_render_alike_compile_to_their_own_objects() {
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
         baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
-    let module = compile_program(&db, root, &program, OptLevel::Two, "program.bexa", None);
+    let module = compile_program(&db, root, &program, OptLevel::Two, "program.bexa", None)
+        .expect("native module renders");
 
     let alike: Vec<_> = module
         .functions
@@ -935,7 +937,8 @@ fn entry_points_prune_admission_to_what_they_reach() {
         OptLevel::Two,
         "program.bexa",
         Some(&entries),
-    );
+    )
+    .expect("native module renders");
     let admitted: Vec<&str> = module.functions.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(admitted, ["user.fib"], "only the entry's closure compiles");
     assert!(matches!(
@@ -968,7 +971,8 @@ fn entry_points_prune_admission_to_what_they_reach() {
         OptLevel::Two,
         "program.bexa",
         Some(&entries),
-    );
+    )
+    .expect("native module renders");
     let admitted: Vec<&str> = module.functions.iter().map(|f| f.name.as_str()).collect();
     for name in [
         "user.main",
@@ -1186,7 +1190,10 @@ fn runtime_types_dispatch_and_bound_methods_compile() {
             .collect::<String>()
     };
     let describe = compact("user.generic_describe");
-    assert!(describe.contains("vm.virtual_target_uncached("), "{describe}");
+    assert!(
+        describe.contains("vm.virtual_target_uncached("),
+        "{describe}"
+    );
     assert!(!describe.contains("staticS"), "{describe}");
     let fns = compact("user.fns");
     assert!(fns.contains("vm.frame_type_constant(depth,"), "{fns}");
