@@ -247,20 +247,19 @@ impl<'db> Generator<'_, 'db> {
         ));
         self.declare_locals(true, self.gc_checks.loops);
         if self.slots > 0 {
-            self.line(&format!("vm.reserve_slots(depth, {});", self.slots));
+            self.emit_line(&format!("vm.reserve_slots(depth, {});", self.slots));
         }
         if let Some(slot) = self.cause_slot {
-            self.line(&format!("vm.set_slot(depth, {slot}, Value::NULL);"));
+            self.emit_line(&format!("vm.set_slot(depth, {slot}, Value::NULL);"));
         }
         let prologue = std::mem::take(&mut self.out);
         if self.gc_checks.entry {
-            let live = self.live_in[self.body.entry.0].clone();
-            self.gc_check(&live, "vm.gc_due()");
+            self.gc_check(self.body.entry, "vm.gc_due()");
         }
         self.stmts(&stmts)?;
         // Every path ends in an `Exit`; this keeps the closure well-typed.
-        self.line("#[allow(unreachable_code)]");
-        self.line("Ok(Value::NULL)");
+        self.emit_line("#[allow(unreachable_code)]");
+        self.emit_line("Ok(Value::NULL)");
         self.footer();
         Ok(self.assemble(prologue))
     }
@@ -282,21 +281,24 @@ impl<'db> Generator<'_, 'db> {
         // Prologue: start, or read the point this body suspended at, restore
         // what it saved and take the result of its request.
         self.in_loop = false;
-        self.line("let mut bb: usize;");
-        self.line("match resume {");
-        self.line("Resume::Start => {");
-        self.line(&format!("vm.reserve_slots(depth, {slots});"));
+        self.emit_line("let mut bb: usize;");
+        self.emit_line("match resume {");
+        self.emit_line("Resume::Start => {");
+        self.emit_line(&format!("vm.reserve_slots(depth, {slots});"));
         if let Some(cause) = self.cause_slot {
-            self.line(&format!("vm.set_slot(depth, {cause}, Value::NULL);"));
+            self.emit_line(&format!("vm.set_slot(depth, {cause}, Value::NULL);"));
         }
         // A write-through local's slot holds its value from its first
         // assignment on, and its default before that, so a resume where
         // liveness overapproximates still reads a well-typed value.
-        for local in self.write_through.clone() {
+        for local in 0..self.analysis.reprs.len() {
+            if !self.write_through.contains(&local) {
+                continue;
+            }
             if local > arity {
                 let repr = self.repr(Local(local));
                 let default = coerce(repr.default_value(), repr, Repr::Value);
-                self.line(&format!("vm.set_slot(depth, {local}, {default});"));
+                self.emit_line(&format!("vm.set_slot(depth, {local}, {default});"));
             }
         }
         // Argument `i` arrives in slot `i - 1` but local `i` keeps slot `i`:
@@ -304,11 +306,11 @@ impl<'db> Generator<'_, 'db> {
         for i in 1..=arity {
             let arg = format!("vm.slot(depth, {})", i - 1);
             if self.body.locals[i].is_captured {
-                self.line(&format!("let arg = {arg};"));
-                self.line(&format!("l{i} = vm.new_cell(arg);"));
+                self.emit_line(&format!("let arg = {arg};"));
+                self.emit_line(&format!("l{i} = vm.new_cell(arg);"));
             } else {
                 let arg = coerce(&arg, Repr::Value, self.repr(Local(i)));
-                self.line(&format!("l{i} = {arg};"));
+                self.emit_line(&format!("l{i} = {arg};"));
             }
         }
         let synced: Vec<usize> = (1..=arity)
@@ -316,54 +318,56 @@ impl<'db> Generator<'_, 'db> {
             .collect();
         for i in synced {
             let slot = coerce(&format!("l{i}"), self.repr(Local(i)), Repr::Value);
-            self.line(&format!("vm.set_slot(depth, {i}, {slot});"));
+            self.emit_line(&format!("vm.set_slot(depth, {i}, {slot});"));
         }
-        self.line(&format!("bb = {};", self.body.entry.0));
-        self.line("}");
+        self.emit_line(&format!("bb = {};", self.body.entry.0));
+        self.emit_line("}");
         // Each resume arm restores what its suspension saved (`saved_at`).
-        self.line("resume => {");
-        self.line(&format!(
+        self.emit_line("resume => {");
+        self.emit_line(&format!(
             "let point = bex_vm::compiled_rt::expect_int(vm.slot(depth, {point_slot}))?;"
         ));
-        self.line("match (point, resume) {");
+        self.emit_line("match (point, resume) {");
         for block in 0..self.body.blocks.len() {
             if self.block_suspends(block) {
                 self.resume_arms(BlockId(block))?;
             }
         }
-        for header in self.loop_headers.clone() {
-            self.line(&format!(
+        for header in 0..self.body.blocks.len() {
+            if !self.loop_headers.contains(&header) {
+                continue;
+            }
+            self.emit_line(&format!(
                 "({}, Resume::Yielded) => {{",
                 self.yield_point(header)
             ));
-            let live = self.live_in[header].clone();
-            self.restore(self.saved(live));
-            self.line(&format!("bb = {header};"));
-            self.line("}");
+            self.restore(self.saved(|i| self.live_in[header][i]));
+            self.emit_line(&format!("bb = {header};"));
+            self.emit_line("}");
         }
-        self.line("(_, Resume::Thrown(e)) => return Err(e),");
-        self.line("_ => return Err(bex_vm::compiled_rt::unreachable()),");
-        self.line("}");
-        self.line("}");
-        self.line("}");
+        self.emit_line("(_, Resume::Thrown(e)) => return Err(e),");
+        self.emit_line("_ => return Err(bex_vm::compiled_rt::unreachable()),");
+        self.emit_line("}");
+        self.emit_line("}");
+        self.emit_line("}");
         // Every entry rebuilds the frame-derived types, since a collection
         // may have moved their heads while the body was suspended.
         let prologue = std::mem::take(&mut self.out);
         self.in_loop = true;
-        self.line("loop {");
-        self.line("match bb {");
+        self.emit_line("loop {");
+        self.emit_line("match bb {");
         for block in 0..self.body.blocks.len() {
             if self.body.blocks[block].terminator.is_none() {
                 continue;
             }
-            self.line(&format!("{block} => {{"));
+            self.emit_line(&format!("{block} => {{"));
             self.leaf(BlockId(block))?;
             self.transfer(BlockId(block))?;
-            self.line("}");
+            self.emit_line("}");
         }
-        self.line("_ => return Err(bex_vm::compiled_rt::unreachable()),");
-        self.line("}");
-        self.line("}");
+        self.emit_line("_ => return Err(bex_vm::compiled_rt::unreachable()),");
+        self.emit_line("}");
+        self.emit_line("}");
         self.footer();
         Ok(self.assemble(prologue))
     }
@@ -382,19 +386,19 @@ impl<'db> Generator<'_, 'db> {
             .rsplit("-> ")
             .next()
             .expect("signature has a result");
-        self.line(&format!("{signature} {{"));
-        self.line("let depth = vm.frame_depth();");
-        self.line("let mut pc: u32 = 0;");
-        self.line(&format!("let result = (|| -> {result} {{"));
+        self.emit_line(&format!("{signature} {{"));
+        self.emit_line("let depth = vm.frame_depth();");
+        self.emit_line("let mut pc: u32 = 0;");
+        self.emit_line(&format!("let result = (|| -> {result} {{"));
     }
 
     fn footer(&mut self) {
-        self.line("})();");
-        self.line("if result.is_err() {");
-        self.line("vm.note_pc(depth, pc);");
-        self.line("}");
-        self.line("result");
-        self.line("}");
+        self.emit_line("})();");
+        self.emit_line("if result.is_err() {");
+        self.emit_line("vm.note_pc(depth, pc);");
+        self.emit_line("}");
+        self.emit_line("result");
+        self.emit_line("}");
     }
 
     /// Declare the body's locals, iterator positions, iteration counter and
@@ -415,13 +419,13 @@ impl<'db> Generator<'_, 'db> {
             } else {
                 coerce(&format!("args[{}]", i - 1), Repr::Value, repr)
             };
-            self.line(&format!("let mut l{i}: {ty} = {init};"));
+            self.emit_line(&format!("let mut l{i}: {ty} = {init};"));
         }
         for iter in analysis.array_iters.keys() {
-            self.line(&format!("let mut i{iter}: i64 = 0;"));
+            self.emit_line(&format!("let mut i{iter}: i64 = 0;"));
         }
         if iterations {
-            self.line("let mut iterations: u32 = 0;");
+            self.emit_line("let mut iterations: u32 = 0;");
         }
         for block in &self.body.blocks {
             let declaration = match &block.terminator {
@@ -433,7 +437,7 @@ impl<'db> Generator<'_, 'db> {
                 Some(Terminator::Switch { .. }) => format!("let mut d{}: i64 = 0;", block.id.0),
                 _ => continue,
             };
-            self.line(&declaration);
+            self.emit_line(&declaration);
         }
     }
 
@@ -441,10 +445,10 @@ impl<'db> Generator<'_, 'db> {
     /// body generated since.
     fn assemble(&mut self, prologue: String) -> String {
         let body = std::mem::take(&mut self.out);
-        for (k, template) in self.frame_templates.clone().iter().enumerate() {
-            let code = realized_expr(self.index, template, true)
+        for k in 0..self.frame_templates.len() {
+            let code = realized_expr(self.index, &self.frame_templates[k], true)
                 .expect("a hoisted template was rendered when it was hoisted");
-            self.line(&format!("let ty{k}: RealizedTy = {code};"));
+            self.emit_line(&format!("let ty{k}: RealizedTy = {code};"));
         }
         let mut out = prologue;
         out.push_str(&std::mem::take(&mut self.out));
@@ -699,20 +703,21 @@ impl<'db> Generator<'_, 'db> {
 
     /// A compiled GC check: when a collection is due, collect with the value
     /// locals in `live` rooted and read back.
-    pub(super) fn gc_check(&mut self, live: &[bool], guard: &str) {
+    pub(super) fn gc_check(&mut self, block: BlockId, guard: &str) {
+        let live = &self.live_in[block.0];
         let locals: Vec<usize> = (0..self.analysis.reprs.len())
             .filter(|&i| {
                 live[i] && !self.analysis.is_type_local(i) && self.repr(Local(i)) == Repr::Value
             })
             .collect();
-        self.line(&format!("if {guard} {{"));
+        self.emit_line(&format!("if {guard} {{"));
         let values: Vec<String> = locals.iter().map(|i| format!("l{i}")).collect();
-        self.line(&format!("let mut live = [{}];", values.join(", ")));
-        self.line("vm.collect_here(&mut live);");
+        self.emit_line(&format!("let mut live = [{}];", values.join(", ")));
+        self.emit_line("vm.collect_here(&mut live);");
         for (j, i) in locals.iter().enumerate() {
-            self.line(&format!("l{i} = live[{j}];"));
+            self.emit_line(&format!("l{i} = live[{j}];"));
         }
-        self.line("}");
+        self.emit_line("}");
     }
 
     /// The locals a resumable body writes through to their slots: each one
@@ -731,7 +736,7 @@ impl<'db> Generator<'_, 'db> {
             }
         }
         for &header in &self.loop_headers {
-            kept.extend(self.saved(self.live_in[header].clone()).0);
+            kept.extend(self.saved(|i| self.live_in[header][i]).0);
         }
         let mut excluded: BTreeSet<usize> = self.analysis.array_iters.keys().copied().collect();
         for block in &self.body.blocks {
@@ -803,38 +808,38 @@ impl<'db> Generator<'_, 'db> {
     /// and keeps its default until it is next written.
     fn saved_at(&self, block: BlockId) -> Gen<Saved> {
         let (destination, target) = self.resume_edge(block)?;
-        let mut live = self.live_in[target.0].clone();
-        if let Place::Local(local) = destination {
-            live[local.0] = false;
-        }
-        if let Some(handler) = self.body.blocks[block.0].unwind {
-            for (live, handler) in live.iter_mut().zip(&self.live_in[handler.0]) {
-                *live |= *handler;
-            }
-        }
-        Ok(self.saved(live))
+        let overwritten = match destination {
+            Place::Local(local) => Some(local.0),
+            _ => None,
+        };
+        let handler = self.body.blocks[block.0].unwind;
+        Ok(self.saved(|i| {
+            (self.live_in[target.0][i] && overwritten != Some(i))
+                || handler.is_some_and(|handler| self.live_in[handler.0][i])
+        }))
     }
 
-    /// What a suspension keeps when the locals `live` are live once it
-    /// resumes. With a cause slot, every handler's context local is kept too:
-    /// a block leaving a nested handler sets the slot back from the enclosing
-    /// handler's context (see [`Self::leaf`]), a read MIR's liveness does not
-    /// see.
-    fn saved(&self, mut live: Vec<bool>) -> Saved {
-        if self.cause_slot.is_some() {
-            for landing in self.body.blocks.iter().filter_map(|block| block.landing) {
-                live[landing.context_local.0] = true;
-            }
-        }
+    /// Handler contexts stay live so leaving a nested handler can restore its cause.
+    fn saved(&self, live: impl Fn(usize) -> bool) -> Saved {
+        let kept = |i| {
+            live(i)
+                || (self.cause_slot.is_some()
+                    && self
+                        .body
+                        .blocks
+                        .iter()
+                        .filter_map(|block| block.landing)
+                        .any(|landing| landing.context_local.0 == i))
+        };
         let locals = (0..self.analysis.reprs.len())
-            .filter(|&i| live[i] && !self.analysis.is_type_local(i))
+            .filter(|&i| kept(i) && !self.analysis.is_type_local(i))
             .collect();
         let base = self.analysis.reprs.len().max(self.arity());
         let iters = self
             .iters()
             .into_iter()
             .enumerate()
-            .filter(|&(_, iter)| live[iter])
+            .filter(|&(_, iter)| kept(iter))
             .map(|(j, iter)| (iter, base + j))
             .collect();
         (locals, iters)
@@ -855,10 +860,10 @@ impl<'db> Generator<'_, 'db> {
                 Repr::Value,
                 self.repr(Local(i)),
             );
-            self.line(&format!("l{i} = {value};"));
+            self.emit_line(&format!("l{i} = {value};"));
         }
         for (iter, slot) in iters {
-            self.line(&format!(
+            self.emit_line(&format!(
                 "i{iter} = bex_vm::compiled_rt::expect_int(vm.slot(depth, {slot}))?;"
             ));
         }
@@ -872,10 +877,10 @@ impl<'db> Generator<'_, 'db> {
                 continue;
             }
             let value = self.value_arg(&format!("l{i}"), self.repr(Local(i)));
-            self.statement(&format!("vm.set_slot(depth, {i}, {value});"));
+            self.emit_statement(&format!("vm.set_slot(depth, {i}, {value});"));
         }
         for (iter, slot) in iters {
-            self.statement(&format!("vm.set_slot(depth, {slot}, Value::int(i{iter}));"));
+            self.emit_statement(&format!("vm.set_slot(depth, {slot}, Value::int(i{iter}));"));
         }
     }
 
@@ -892,20 +897,20 @@ impl<'db> Generator<'_, 'db> {
         let (step, args) = self.pause_request(block, terminator)?;
         let saved = self.saved_at(block)?;
         self.save(saved);
-        self.flush();
+        self.flush_bindings();
         let point_slot = self.point_slot;
-        self.line(&format!(
+        self.emit_line(&format!(
             "vm.set_slot(depth, {point_slot}, Value::int({point}));"
         ));
         for arg in &args {
-            self.line(&format!("vm.push_arg({arg});"));
+            self.emit_line(&format!("vm.push_arg({arg});"));
         }
         for ty in std::mem::take(&mut self.call_types) {
-            self.line(&format!("vm.push_type_arg({ty});"));
+            self.emit_line(&format!("vm.push_type_arg({ty});"));
         }
         let site = self.site_pc(block);
-        self.line(&format!("vm.note_pc(depth, {site});"));
-        self.line(&format!("return Ok({step});"));
+        self.emit_line(&format!("vm.note_pc(depth, {site});"));
+        self.emit_line(&format!("return Ok({step});"));
         Ok(())
     }
 
@@ -949,7 +954,7 @@ impl<'db> Generator<'_, 'db> {
                     };
                     let trace = self.value_operand(block, trace)?;
                     let code = self.fallible(block, &format!("vm.set_call_trace({trace})"))?;
-                    self.statement(&format!("{code};"));
+                    self.emit_statement(&format!("{code};"));
                     args
                 } else {
                     args
@@ -976,23 +981,23 @@ impl<'db> Generator<'_, 'db> {
             } => {
                 let future = self.load(block, future)?;
                 let future = self.value_arg(&future.code, future.repr);
-                self.statement(&format!("let operand = {future};"));
+                self.emit_statement(&format!("let operand = {future};"));
                 let store = self.store(block, destination, &Expr::new("v", Repr::Value))?;
-                self.line("if let Some(v) = vm.ready(operand) {");
-                self.statement(&store);
+                self.emit_line("if let Some(v) = vm.ready(operand) {");
+                self.emit_statement(&store);
                 let jump = self.jump_to(target.0);
-                self.line(&jump);
-                self.line("}");
+                self.emit_line(&jump);
+                self.emit_line("}");
                 ("Step::Await(operand)".to_string(), Vec::new())
             }
             Terminator::AwaitAny { futures, .. } => {
                 let futures = self.value_operand(block, futures)?;
-                self.statement(&format!("let operand = {futures};"));
+                self.emit_statement(&format!("let operand = {futures};"));
                 ("Step::AwaitAny(operand)".to_string(), Vec::new())
             }
             Terminator::Spawn { plan, .. } => {
                 let plan = self.value_operand(block, plan)?;
-                self.statement(&format!("let operand = {plan};"));
+                self.emit_statement(&format!("let operand = {plan};"));
                 ("Step::Spawn(operand)".to_string(), Vec::new())
             }
             _ => return Err(Rejection::Invalid("pause at a non-suspending block".into())),
@@ -1026,7 +1031,7 @@ impl<'db> Generator<'_, 'db> {
             };
             let trace = self.value_operand(block, trace)?;
             let code = self.fallible(block, &format!("vm.set_call_trace({trace})"))?;
-            self.statement(&format!("{code};"));
+            self.emit_statement(&format!("{code};"));
             args
         } else {
             args
@@ -1059,7 +1064,7 @@ impl<'db> Generator<'_, 'db> {
                     })
                     .collect();
                 let values = self.arg_values(block, args)?;
-                self.statement(&format!(
+                self.emit_statement(&format!(
                     "let argc = vm.push_indirect_args(callee, &[{}], &[{}])?;",
                     slots.join(", "),
                     values.join(", ")
@@ -1090,8 +1095,8 @@ impl<'db> Generator<'_, 'db> {
     /// `args` are bound.
     fn direct_closure_call(&mut self, block: BlockId, args: &[String]) -> Gen<()> {
         let (destination, target) = self.resume_edge(block)?;
-        self.flush();
-        self.line(&format!(
+        self.flush_bindings();
+        self.emit_line(&format!(
             "if let Some(body) = vm.closure_inline_body(callee, {}) {{",
             args.len()
         ));
@@ -1104,10 +1109,10 @@ impl<'db> Generator<'_, 'db> {
             ),
         )?;
         let store = self.store(block, &destination, &Expr::new(call, Repr::Value))?;
-        self.statement(&store);
+        self.emit_statement(&store);
         let jump = self.jump_to(target.0);
-        self.line(&jump);
-        self.line("}");
+        self.emit_line(&jump);
+        self.emit_line("}");
         Ok(())
     }
 
@@ -1162,7 +1167,7 @@ impl<'db> Generator<'_, 'db> {
             | Terminator::Await { .. }
             | Terminator::AwaitAny { .. } => unreachable!("suspensions are emitted by `pause`"),
         };
-        self.line(&code);
+        self.emit_line(&code);
         Ok(())
     }
 
@@ -1175,19 +1180,19 @@ impl<'db> Generator<'_, 'db> {
         if !matches!(destination, Place::Local(_) | Place::Deref(_)) {
             return unsupported("a suspending call's result stored into a field or element");
         }
-        self.line(&format!("({point}, Resume::Value(v)) => {{"));
+        self.emit_line(&format!("({point}, Resume::Value(v)) => {{"));
         self.restore_locals(block)?;
         let store = self.store(block, &destination, &Expr::new("v", Repr::Value))?;
-        self.statement(&store);
-        self.line(&format!("bb = {};", target.0));
-        self.line("}");
+        self.emit_statement(&store);
+        self.emit_line(&format!("bb = {};", target.0));
+        self.emit_line("}");
         if self.body.blocks[block.0].unwind.is_some() {
-            self.line(&format!("({point}, Resume::Thrown(e)) => {{"));
+            self.emit_line(&format!("({point}, Resume::Thrown(e)) => {{"));
             self.restore_locals(block)?;
             let jump = self.unwind_jump(block, "e")?;
-            self.flush();
+            self.flush_bindings();
             self.out.push_str(&jump);
-            self.line("}");
+            self.emit_line("}");
         }
         Ok(())
     }
@@ -1264,18 +1269,18 @@ impl<'db> Generator<'_, 'db> {
             .any(|&pred| self.body.blocks[pred].handling != handling)
     }
 
-    fn line(&mut self, text: &str) {
+    fn emit_line(&mut self, text: &str) {
         self.out.push_str(text);
         self.out.push('\n');
     }
 
     /// Emit a statement, preceded by the bindings its expressions hoisted.
-    fn statement(&mut self, text: &str) {
+    fn emit_statement(&mut self, text: &str) {
         let pending = std::mem::take(&mut self.pending);
         for binding in pending {
-            self.line(&binding);
+            self.emit_line(&binding);
         }
-        self.line(text);
+        self.emit_line(text);
     }
 
     /// Bind `expr` to a temporary unless it is an atom (a local or a
@@ -1308,9 +1313,9 @@ impl<'db> Generator<'_, 'db> {
     }
 
     /// Emit the bindings hoisted so far.
-    fn flush(&mut self) {
+    fn flush_bindings(&mut self) {
         for binding in std::mem::take(&mut self.pending) {
-            self.line(&binding);
+            self.emit_line(&binding);
         }
     }
 
@@ -1324,7 +1329,7 @@ impl<'db> Generator<'_, 'db> {
         let mark = self.positions.reading(pc);
         if self.current_mark != Some(mark) {
             self.current_mark = Some(mark);
-            self.line(&format!("pc = {pc};"));
+            self.emit_line(&format!("pc = {pc};"));
         }
     }
 

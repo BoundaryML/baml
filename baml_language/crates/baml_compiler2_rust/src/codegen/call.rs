@@ -118,7 +118,7 @@ impl<'db> Generator<'_, 'db> {
                 format!("bex_vm::compiled_rt::callee_ptr({value})?")
             }
         };
-        self.statement(&format!("let callee = {code};"));
+        self.emit_statement(&format!("let callee = {code};"));
         Ok(())
     }
 
@@ -293,17 +293,17 @@ impl<'db> Generator<'_, 'db> {
         // whose instantiation is the same on every pass uses it.
         if iface_fixed && types_fixed {
             let site = format!("S{}", block.0);
-            self.statement(&format!(
+            self.emit_statement(&format!(
                     "static {site}: bex_vm::compiled_rt::VirtualSite = bex_vm::compiled_rt::VirtualSite::new();"
                 ),
             );
-            self.statement(&format!(
+            self.emit_statement(&format!(
                     "let callee = vm.virtual_target(&{site}, {receiver}, {iface}, {iface_args}, {method:?}, &[{}])?;",
                     types.join(", ")
                 ),
             );
         } else {
-            self.statement(&format!(
+            self.emit_statement(&format!(
                     "let callee = vm.virtual_target_uncached({receiver}, {iface}, {iface_args}, {method:?}, &[{}])?;",
                     types.join(", ")
                 ),
@@ -317,16 +317,16 @@ impl<'db> Generator<'_, 'db> {
                 block,
                 &format!("vm.call_inline(callee, &[{}], {site})", values.join(", ")),
             )?;
-            self.flush();
+            self.flush_bindings();
             let store = self.store(block, destination, &Expr::new("v", Repr::Value))?;
             let jump = self.jump_to(target.0);
-            self.line(&format!("if let Some(v) = {call} {{"));
-            self.line(&store);
-            self.line(&jump);
-            self.line("}");
+            self.emit_line(&format!("if let Some(v) = {call} {{"));
+            self.emit_line(&store);
+            self.emit_line(&jump);
+            self.emit_line("}");
         }
         let layout = layout.unwrap_or_else(|| "None".to_string());
-        self.statement(&format!(
+        self.emit_statement(&format!(
             "let argc = vm.push_virtual_args(callee, {layout}, &[{}])?;",
             values.join(", ")
         ));
