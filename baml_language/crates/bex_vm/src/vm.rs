@@ -327,14 +327,16 @@ pub struct BytecodeFrame {
     pub(crate) context: Context,
 }
 
+// 112 bytes normally; heap_debug enlarges HeapPtr with its allocation epoch.
+#[cfg(target_pointer_width = "64")]
+const _: () = assert!(std::mem::size_of::<BytecodeFrame>() == 104 + std::mem::size_of::<HeapPtr>());
+
 /// A type-value site, with disjoint bytecode and compiled namespaces.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum TypeValueSite {
     Constant(usize),
     Compiled(usize),
 }
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(std::mem::size_of::<BytecodeFrame>() == 112);
 
 impl BytecodeFrame {
     /// The frame of a compiled-to-compiled call: the call's type arguments
