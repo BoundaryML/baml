@@ -606,7 +606,7 @@ self.onmessage = async (event: MessageEvent) => {
           msg.requestId,
           msg.project,
           msg.functionName,
-          msg.argsBytes,
+          msg.args,
         );
       } catch (e) {
         postOut({
@@ -629,7 +629,7 @@ self.onmessage = async (event: MessageEvent) => {
           msg.parentFunctionName,
           msg.helper,
           msg.functionName,
-          msg.argsBytes,
+          msg.args,
         );
       } catch (e) {
         postOut({
