@@ -60,13 +60,14 @@ impl BexVm {
     ) -> Result<Value, Box<VmError>> {
         // Reuse the buffer's capacity: a `push` in a loop allocates nothing
         // here after the first call.
-        let previous = std::mem::take(&mut self.pending_call_type_args);
+        self.save_call_types();
         let mut buffer = std::mem::take(&mut self.compiled_type_args);
         buffer.clear();
         buffer.extend_from_slice(type_args);
         self.pending_call_type_args = buffer;
         let result = self.call_builtin(builtin, args);
-        self.compiled_type_args = std::mem::replace(&mut self.pending_call_type_args, previous);
+        self.compiled_type_args = self.restore_call_types();
+        self.compiled_type_args.clear();
         result
     }
 
@@ -391,8 +392,13 @@ impl BexVm {
         let locals_offset = StackIndex::from_raw(self.stack.len());
         let mut frame_type_args = self.pooled_type_args();
         frame_type_args.extend_from_slice(type_args);
-        let mut frame =
-            crate::vm::BytecodeFrame::compiled(callee, locals_offset, frame_type_args, context, None);
+        let mut frame = crate::vm::BytecodeFrame::compiled(
+            callee,
+            locals_offset,
+            frame_type_args,
+            context,
+            None,
+        );
         // A type naming a runtime declaration rides beside the frame's
         // arguments as an exact value, as a bytecode call carries it.
         let type_values = crate::vm::exact_type_values(type_args);
@@ -681,6 +687,76 @@ mod tests {
     fn vm() -> BexVm {
         let program = baml_test_support::compile_source("function Main() -> int { 1 }");
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    #[allow(unsafe_code, clippy::disallowed_methods)]
+    fn compiled_body_survives_gc_stress() {
+        use bex_heap::CollectionLevel;
+        use bex_vm_types::{RootHaver, Value};
+
+        use crate::compiled_rt::{CompiledCollector, CompiledFn};
+
+        const CHILD: &str = "BAML_COMPILED_GC_STRESS_TEST_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "compiled_rt::call::tests::compiled_body_survives_gc_stress",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .env("BAML_GC_STRESS", "1")
+                .output()
+                .expect("run GC stress in a fresh process for its cached environment flag");
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
+            return;
+        }
+
+        struct Collector;
+        impl CompiledCollector for Collector {
+            fn collect_in_place(&self, vm: &mut BexVm) -> bool {
+                let mut roots = Vec::new();
+                vm.collect_roots(&mut roots);
+                // SAFETY: this test owns the heap's only VM; collect_here roots its
+                // compiled body's live values before entering the collector.
+                let (_, _, forwarding) = unsafe {
+                    vm.heap
+                        .collect_garbage_generational(&roots, CollectionLevel::Major)
+                };
+                vm.forward_roots(&forwarding);
+                true
+            }
+        }
+
+        fn body(vm: &mut BexVm, _: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            vm.compiled_collector = Some(Arc::new(Collector));
+            let mut live = [vm.string_value("still live")];
+            for _ in 0..3 {
+                assert!(vm.gc_due(), "stress must collect at every compiled check");
+                let before = live[0];
+                vm.collect_here(&mut live);
+                assert_ne!(live[0], before, "the live value must actually move");
+                assert_eq!(vm.as_string(&live[0]).unwrap().as_str(), "still live");
+            }
+            Ok(live[0])
+        }
+
+        assert_eq!(
+            crate::vm::tests::run_with_compiled_bodies(
+                "function Main() -> string { \"still live\" }",
+                &[("user.Main", CompiledFn::Inline(body))],
+                &[],
+                false,
+            ),
+            "still live",
+        );
     }
 
     /// A recycled vector comes back cleared with its capacity; an
