@@ -177,11 +177,11 @@ pub struct PackArgs {
 /// The cargo profile a `--native` build compiles the generated crate under.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum NativeProfile {
-    /// The shipping build: slow to compile, fast to run.
+    // The shipping build: slow to compile, fast to run.
     #[default]
     Release,
-    /// A quick compile for correctness runs; not representative of release
-    /// speed or size.
+    // A quick compile for correctness runs; not representative of release
+    // speed or size.
     Fast,
 }
 
