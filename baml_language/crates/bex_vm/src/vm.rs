@@ -327,6 +327,13 @@ pub struct BytecodeFrame {
     pub(crate) context: Context,
 }
 
+/// A type-value site, with disjoint bytecode and compiled namespaces.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum TypeValueSite {
+    Constant(usize),
+    Compiled(usize),
+}
+
 impl BytecodeFrame {
     /// The frame of a compiled-to-compiled call: the call's type arguments
     /// (a pooled vector, or an empty one for a non-generic call) and no
@@ -3213,7 +3220,7 @@ pub struct BexVm {
     /// constants in static functions. The compact numeric key keeps the
     /// per-iteration lookup cheaper than re-hashing the full realized type.
     /// Entries are explicit VM GC roots.
-    pub(crate) static_load_type_cache: HashMap<(usize, usize), HeapPtr>,
+    pub(crate) static_load_type_cache: HashMap<(usize, TypeValueSite), HeapPtr>,
     /// Monomorphic static virtual-call results keyed by caller site and the
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
@@ -6103,7 +6110,7 @@ impl BexVm {
         frame_idx: usize,
         template: &bex_vm_types::TyTemplate,
         constant: usize,
-    ) -> Option<(usize, usize)> {
+    ) -> Option<(usize, TypeValueSite)> {
         if <&bex_vm_types::RealizedTy>::try_from(template).is_err()
             || !matches!(&self.frames[frame_idx],
                 Frame::Bytecode(frame)
@@ -6114,7 +6121,7 @@ impl BexVm {
         }
         Some((
             self.runtime_cache_function_addr(self.frames[frame_idx].function())?,
-            constant,
+            TypeValueSite::Constant(constant),
         ))
     }
 
@@ -9523,7 +9530,7 @@ impl BexVm {
     /// Where the compiled body of the frame at `idx` stands; `None` for a
     /// frame whose bytecode runs, or a native continuation. Every reader of
     /// a frame's position asks this first: a compiled frame's position fields
-    /// hold its stub offset and line, not a bytecode position.
+    /// hold its stub offset and original bytecode PC, not a compact bytecode PC.
     pub(crate) fn compiled_at(&self, idx: usize) -> Option<crate::compiled_rt::CompiledAt> {
         let Frame::Bytecode(frame) = &self.frames[idx] else {
             return None;
@@ -12696,7 +12703,10 @@ impl BexVm {
                                         if frame.type_metadata.as_ref()
                                             .is_none_or(|metadata| !metadata.binds_runtime_declaration(&self.heap))) =>
                             {
-                                Some((std::ptr::from_ref(*function) as usize, idx))
+                                Some((
+                                    std::ptr::from_ref(*function) as usize,
+                                    TypeValueSite::Constant(idx),
+                                ))
                             }
                             ConstValue::Type(template) if !runtime_package.is_null() => {
                                 self.runtime_load_type_cache_key(*frame_idx, template, idx)

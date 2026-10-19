@@ -13,7 +13,7 @@ impl BexVm {
     // ── Containers ────────────────────────────────────────────────────────────
 
     /// `.length()` of an array, byte array, map, or string (in bytes).
-    pub fn container_len(&self, container: Value) -> Result<Value, VmError> {
+    pub fn container_len(&self, container: Value) -> Result<Value, Box<VmError>> {
         let Some(ptr) = container.as_object_ptr() else {
             return Err(VmInternalError::TypeError {
                 expected: ObjectType::Array.into(),
@@ -41,7 +41,11 @@ impl BexVm {
     /// `array[index]` for arrays and byte arrays. A negative index counts from
     /// the end; one that still lands outside throws `IndexOutOfBounds` with
     /// the original index.
-    pub fn load_array_element(&mut self, array: Value, index: Value) -> Result<Value, VmError> {
+    pub fn load_array_element(
+        &mut self,
+        array: Value,
+        index: Value,
+    ) -> Result<Value, Box<VmError>> {
         let array_ptr = self.as_object_ptr(array, ObjectType::Array)?;
         let Some(i) = index.as_int() else {
             return Err(VmInternalError::TypeError {
@@ -83,7 +87,7 @@ impl BexVm {
         };
         match load_result {
             Ok(v) => Ok(v),
-            Err((index, length)) => Err(self.index_out_of_bounds(index, length)),
+            Err((index, length)) => Err(Box::new(self.index_out_of_bounds(index, length))),
         }
     }
 
@@ -95,7 +99,7 @@ impl BexVm {
         array: Value,
         index: Value,
         new_value: Value,
-    ) -> Result<(), VmError> {
+    ) -> Result<(), Box<VmError>> {
         let array_ptr = self.as_object_ptr(array, ObjectType::Array)?;
         let Some(i) = index.as_int() else {
             return Err(VmInternalError::TypeError {
@@ -146,7 +150,7 @@ impl BexVm {
             }
         };
         if let Err((index, length)) = store_result {
-            return Err(self.index_out_of_bounds(index, length));
+            return Err(Box::new(self.index_out_of_bounds(index, length)));
         }
         self.heap.write_barrier(array_ptr, new_value);
         Ok(())
@@ -164,7 +168,7 @@ impl BexVm {
     // ── Instances ─────────────────────────────────────────────────────────────
 
     /// Read field `idx` of a class instance.
-    pub fn load_field(&mut self, instance: Value, idx: usize) -> Result<Value, VmError> {
+    pub fn load_field(&mut self, instance: Value, idx: usize) -> Result<Value, Box<VmError>> {
         let obj_ptr = self.as_object_ptr(instance, ObjectType::Instance)?;
         let load_result = {
             let Object::Instance(instance) = self.get_object(obj_ptr) else {
@@ -180,7 +184,7 @@ impl BexVm {
         };
         match load_result {
             Ok(value) => Ok(value),
-            Err(length) => Err(self.invalid_field_access_error(idx, length)),
+            Err(length) => Err(Box::new(self.invalid_field_access_error(idx, length))),
         }
     }
 
@@ -191,7 +195,7 @@ impl BexVm {
         instance: Value,
         idx: usize,
         new_value: Value,
-    ) -> Result<(), VmError> {
+    ) -> Result<(), Box<VmError>> {
         let obj_ptr = self.as_object_ptr(instance, ObjectType::Instance)?;
         let store_error = {
             let Object::Instance(instance) = self.get_object(obj_ptr) else {
@@ -204,7 +208,7 @@ impl BexVm {
             (idx >= instance.field_len()).then_some(instance.field_len())
         };
         if let Some(length) = store_error {
-            return Err(self.invalid_field_access_error(idx, length));
+            return Err(Box::new(self.invalid_field_access_error(idx, length)));
         }
         self.heap.write_barrier(obj_ptr, new_value);
         let Object::Instance(instance) = self.get_object(obj_ptr) else {
@@ -248,7 +252,7 @@ impl BexVm {
     // ── Enums and classes ─────────────────────────────────────────────────────
 
     /// The variant index of an enum value.
-    pub fn discriminant(&self, value: Value) -> Result<i64, VmError> {
+    pub fn discriminant(&self, value: Value) -> Result<i64, Box<VmError>> {
         let Some(ptr) = value.as_object_ptr() else {
             return Err(VmInternalError::TypeError {
                 expected: ObjectType::Variant.into(),

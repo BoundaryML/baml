@@ -1,26 +1,8 @@
-//! Runtime surface shared by the interpreter and natively compiled BAML
-//! functions.
-//!
-//! A BAML function compiled to Rust (see `Function::native_body`) must produce
-//! exactly the values and exactly the exceptions the bytecode interpreter
-//! produces for the same program. Both share the semantic primitives that
-//! decide those: `Value::try_int` and the tagged checked arithmetic, index
-//! resolution, the generic `binop`/`cmpop`, and the cold constructors of every
-//! panic. The dispatch arms in `run_compact` keep their own hand-tuned shape:
-//! routing them through these methods measurably slowed the interpreter (one
-//! giant function whose register allocation depends on every arm), so the
-//! methods here compose the same primitives for generated code instead.
-//!
-//! Every method takes operands as values rather than reading the eval stack,
-//! because compiled code keeps its locals in Rust variables and has no eval
-//! stack region of its own. Errors are the interpreter's own `VmError`: a
-//! thrown BAML exception (`VmError::Thrown`) built through
-//! [`BexVm::panic_to_exception_value`], or an internal error for an operand the
-//! type checker should have ruled out.
-//!
-//! Nothing here reads run-loop state (`pc`, the current frame index, the
-//! current function): a body names its own frame by the frame count it read
-//! on entry (`frame_depth`), and reads its type arguments off it.
+//! Runtime operations and frame support for BAML compiled to Rust. Generated
+//! bodies share the interpreter's semantic primitives and error types; the
+//! interpreter keeps its own dispatch arms, including container and field access,
+//! to preserve its performance. See `baml_compiler2_native/DESIGN.txt` for the
+//! compilation, rooting, and suspension protocols.
 
 mod arith;
 mod call;
@@ -30,8 +12,6 @@ mod program;
 mod types;
 mod r#virtual;
 
-/// The literal and freshness of a `RealizedTy::Literal` generated code
-/// builds, re-exported so the generated crate needs only this one.
 /// What lets compiled code collect garbage in place: the engine's view of
 /// every other mutator. Collecting moves objects, so `vm`'s stack (where
 /// compiled code roots its live values first) is a root and is forwarded.
@@ -49,8 +29,12 @@ pub fn gc_stress() -> bool {
     *STRESS.get_or_init(|| std::env::var_os("BAML_GC_STRESS").is_some_and(|value| value == "1"))
 }
 
+/// The literal in a `RealizedTy::Literal` built by generated code.
 pub use baml_base::Literal;
+/// The freshness of a `RealizedTy::Literal` built by generated code.
 pub use baml_type::Freshness;
+/// Severity of a log emitted by generated code.
+pub use btel_records::LogLevel;
 #[cfg(test)]
 pub(crate) use call::FORCE_CALL_FUNNEL;
 
@@ -67,6 +51,9 @@ use crate::{
 /// error keeps its own variant. Boxed so the `Result` stays two words wide;
 /// the box is paid only on throw.
 pub type CompiledBody = fn(&mut BexVm, &[Value]) -> Result<Value, Box<VmError>>;
+
+const _: () =
+    assert!(std::mem::size_of::<Result<Value, Box<VmError>>>() == 2 * std::mem::size_of::<usize>());
 
 /// A natively compiled body that can suspend: a state machine the VM drives.
 ///
@@ -195,6 +182,18 @@ pub(crate) mod stub {
     pub(crate) const AWAIT: usize = 3;
     pub(crate) const AWAIT_ANY: usize = 5;
     pub(crate) const SPAWN: usize = 7;
+
+    const _: () = {
+        assert!(matches!(CODE[START], OpCode::ResumeCompiled));
+        assert!(matches!(CODE[AFTER_CALL], OpCode::ResumeCompiled));
+        assert!(matches!(CODE[AFTER_YIELD], OpCode::ResumeCompiled));
+        assert!(matches!(CODE[AWAIT], OpCode::Await));
+        assert!(matches!(CODE[AWAIT_ANY], OpCode::AwaitAny));
+        assert!(matches!(CODE[SPAWN], OpCode::Spawn));
+        assert!(matches!(CODE[AWAIT + 1], OpCode::ResumeCompiled));
+        assert!(matches!(CODE[AWAIT_ANY + 1], OpCode::ResumeCompiled));
+        assert!(matches!(CODE[SPAWN + 1], OpCode::ResumeCompiled));
+    };
 }
 
 /// The `instruction_ptr` of a compiled frame whose body is running on the

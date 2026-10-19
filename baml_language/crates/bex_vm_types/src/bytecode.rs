@@ -2406,6 +2406,11 @@ pub struct Bytecode {
     /// Where each MIR block (by `BlockId`) of the function landed in
     /// `instructions`: what a natively compiled body records as its frame's
     /// PC. See [`BlockPcs`].
+    ///
+    /// Compile-time metadata for the native backend, which requires freshly
+    /// emitted bytecode. Runtime frames use `CompactCode::instruction_offsets`.
+    /// Deserialization leaves this empty.
+    #[borsh(skip)]
     pub block_pcs: Vec<BlockPcs>,
 
     /// Compact bytecode encoding. Populated at engine load time by
@@ -3376,6 +3381,26 @@ mod compact_tests {
             ])
             .is_dispatchable(),
             "bisection needs ascending keys"
+        );
+    }
+
+    #[test]
+    fn block_pcs_are_compile_time_only() {
+        let mut bytecode = make_bytecode(vec![Instruction::Return], vec![]);
+        let without_positions = borsh::to_vec(&bytecode).unwrap();
+        bytecode.block_pcs.push(BlockPcs {
+            statements: vec![Some(0)],
+            terminator: Some(0),
+            start: Some(0),
+        });
+        let serialized = borsh::to_vec(&bytecode).unwrap();
+        assert_eq!(serialized, without_positions);
+        let restored: Bytecode = borsh::from_slice(&serialized).unwrap();
+        assert!(restored.block_pcs.is_empty());
+        assert_eq!(restored.instructions, bytecode.instructions);
+        assert_eq!(
+            restored.lower_to_compact_with_offsets().instruction_offsets,
+            vec![0, 1]
         );
     }
 

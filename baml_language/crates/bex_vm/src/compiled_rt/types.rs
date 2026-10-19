@@ -28,9 +28,7 @@ impl BexVm {
     #[inline]
     #[must_use]
     pub fn frame_type_args(&self, depth: usize) -> &[RealizedTy] {
-        let Frame::Bytecode(frame) = &self.frames[depth - 1] else {
-            unreachable!("a compiled body reads its own frame");
-        };
+        let frame = self.compiled_frame(depth);
         &frame.type_args
     }
 
@@ -87,14 +85,11 @@ impl BexVm {
     /// running function creates for it, as bytecode's `LoadType` of a fully
     /// realized constant in a static function creates once per site
     /// (`static_load_type_cache`), so two reads of the site are one value.
-    /// `ordinal` numbers the site within the compiled body; the key space
-    /// is the bytecode's, from its top, which the body's bytecode never
-    /// reaches. A frame binding a runtime declaration takes a fresh value,
-    /// as there.
+    /// `ordinal` numbers the site within the compiled body, in a distinct
+    /// cache namespace from bytecode constants. A frame binding a runtime
+    /// declaration takes a fresh value, as there.
     pub fn static_type_value(&mut self, depth: usize, ordinal: usize, ty: RealizedTy) -> Value {
-        let Frame::Bytecode(frame) = &self.frames[depth - 1] else {
-            unreachable!("a compiled body reads its own frame");
-        };
+        let frame = self.compiled_frame(depth);
         let cacheable = frame
             .type_metadata
             .as_ref()
@@ -105,7 +100,7 @@ impl BexVm {
             {
                 Some((
                     std::ptr::from_ref(function.as_ref()) as usize,
-                    usize::MAX - ordinal,
+                    crate::vm::TypeValueSite::Compiled(ordinal),
                 ))
             }
             _ => None,
@@ -133,9 +128,7 @@ impl BexVm {
     /// the frame again.
     pub fn bind_type(&mut self, depth: usize, slot: u32, value: Value) -> Result<(), Box<VmError>> {
         let type_value = self.type_operand_value(value).map_err(Box::new)?;
-        let Frame::Bytecode(frame) = &mut self.frames[depth - 1] else {
-            unreachable!("a compiled body binds types in its own frame");
-        };
+        let frame = self.compiled_frame_mut(depth);
         let slot = slot as usize;
         frame.type_args.resize(slot + 1, RealizedTy::unknown());
         frame.type_args[slot] = type_value.ty.clone();
@@ -250,9 +243,8 @@ impl BexVm {
         callable: Value,
         type_args: &[RealizedTy],
     ) -> Result<Value, Box<VmError>> {
-        let callable_ptr = self
-            .as_object_ptr(callable, ObjectType::from(FunctionType::Callable))
-            .map_err(|error| Box::new(VmError::InternalError(error)))?;
+        let callable_ptr =
+            self.as_object_ptr(callable, ObjectType::from(FunctionType::Callable))?;
         let wrapped = match self.get_object(callable_ptr) {
             Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
             Object::Closure(closure) => Some((
