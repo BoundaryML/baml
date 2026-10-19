@@ -168,7 +168,9 @@ impl<'db> Generator<'_, 'db> {
                     map_key_primitive: false,
                 };
                 if !builtin_is_callable(key, shape) {
-                    return unsupported(format!("builtin `{key}` may yield"));
+                    return Err(Rejection::Invalid(format!(
+                        "yielding builtin `{key}` emitted inline"
+                    )));
                 }
                 let ordinal = self.native_ordinal(key);
                 let template = self.hoist(Expr::new(

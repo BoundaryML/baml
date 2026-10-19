@@ -262,41 +262,6 @@ impl PackArgs {
             validate_help_param(&engine, &t.qualified_name)?;
         }
 
-        // Compile admitted functions to Rust against this exact program; the
-        // generated crate embeds the packed program below, so the two can
-        // never drift apart. Only what the targets reach is compiled; a
-        // target the program's tables do not name (none today) compiles
-        // everything rather than nothing.
-        let native = if self.native {
-            reporter.spin("Compiling", "native bodies");
-            let callables = program.rendered_callables();
-            let entries: Option<Vec<usize>> = targets
-                .iter()
-                .map(|target| {
-                    callables
-                        .get(&target.qualified_name)
-                        .map(|callable| callable.object.raw())
-                })
-                .collect();
-            let module = baml_db::native::compile_program(
-                &db,
-                root,
-                &program,
-                crate::bytecode_cache::CLI_OPT_LEVEL,
-                "program.bexa",
-                entries.as_deref(),
-            );
-            if self.native_report {
-                reporter.suspend(|| report_native(&module));
-            }
-            Some(module)
-        } else {
-            None
-        };
-        drop(db);
-        let label = label_for(&targets);
-        reporter.spin("Packaging", &label);
-
         let mut envelope = PackEnvelope {
             program,
             mode: mode.clone(),
@@ -311,20 +276,54 @@ impl PackArgs {
             output_format: self.output_format,
             telemetry,
         };
+        if let Some(provisioning) = provisioning {
+            reporter.spin("Provisioning", "embedded telemetry");
+            envelope.telemetry.embedded =
+                Some(Box::new(provisioning.mint(envelope.telemetry_digest()?)?));
+        }
+        let (serialized, fingerprint) = baml_artifact::encode_with_digest(
+            baml_artifact::ArtifactKind::PackedProgram,
+            &envelope,
+        )
+        .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
+
+        let native = if self.native {
+            reporter.spin("Compiling", "native bodies");
+            let callables = envelope.program.rendered_callables();
+            let entries: Option<Vec<usize>> = targets
+                .iter()
+                .map(|target| {
+                    callables
+                        .get(&target.qualified_name)
+                        .map(|callable| callable.object.raw())
+                })
+                .collect();
+            let module = baml_db::native::compile_program(
+                &db,
+                root,
+                &envelope.program,
+                crate::bytecode_cache::CLI_OPT_LEVEL,
+                "program.bexa",
+                fingerprint,
+                entries.as_deref(),
+            )
+            .map_err(|error| anyhow!(error))?;
+            if self.native_report {
+                reporter.suspend(|| report_native(&module));
+            }
+            Some(module)
+        } else {
+            None
+        };
+        drop(db);
+        let label = label_for(&targets);
+        reporter.spin("Packaging", &label);
         let target_triple = self.resolved_target_triple()?;
         let host_bytes = if native.is_some() {
             Vec::new()
         } else {
             read_host_binary(target_triple, reporter)?
         };
-        if let Some(provisioning) = provisioning {
-            reporter.spin("Provisioning", "embedded telemetry");
-            envelope.telemetry.embedded =
-                Some(Box::new(provisioning.mint(envelope.telemetry_digest()?)?));
-        }
-        let serialized =
-            baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope)
-                .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
 
         let basename = self.resolve_output_basename()?;
         let output_path = self
@@ -480,7 +479,7 @@ impl PackArgs {
             "fn main() -> std::process::ExitCode {\n    \
              baml_pack_host::run_embedded(\n        \
              baml_native_program::PROGRAM_ARTIFACT,\n        \
-             Some(baml_native_program::NATIVE_BODIES),\n    )\n}\n",
+             Some(&baml_native_program::NATIVE_BODIES),\n    )\n}\n",
         )
         .context("failed to write the host shim")?;
         std::fs::write(
@@ -552,7 +551,10 @@ impl PackArgs {
         if !status.success() {
             anyhow::bail!("cargo build of the native host failed ({status})");
         }
-        let built = target_dir.join("release").join("baml_native_program");
+        let built = target_dir.join("release").join(format!(
+            "baml_native_program{}",
+            std::env::consts::EXE_SUFFIX
+        ));
         std::fs::copy(&built, output_path).with_context(|| {
             format!(
                 "failed to copy {} to {}",

@@ -61,11 +61,9 @@ fn native_bodies_disabled(value: Option<&str>) -> bool {
     })
 }
 
-/// The bodies to run with: `native_bodies`, unless the environment turns
-/// them off.
 fn native_bodies_from_env(
-    native_bodies: Option<&'static bex_engine::NativeBodyTable>,
-) -> Option<&'static bex_engine::NativeBodyTable> {
+    native_bodies: Option<bex_engine::NativeBodies>,
+) -> Option<bex_engine::NativeBodies> {
     let value = std::env::var(NATIVE_BODIES_ENV).ok();
     if native_bodies_disabled(value.as_deref()) {
         None
@@ -81,7 +79,7 @@ fn native_bodies_from_env(
 /// `BAML_NATIVE_BODIES=0` in the environment (see the crate docs).
 pub fn run_envelope(
     envelope: PackEnvelope,
-    native_bodies: Option<&'static bex_engine::NativeBodyTable>,
+    native_bodies: Option<bex_engine::NativeBodies>,
 ) -> ExitCode {
     let native_bodies = native_bodies_from_env(native_bodies);
     match envelope.mode {
@@ -97,17 +95,23 @@ pub fn run_embedded(
     artifact: &[u8],
     native_bodies: Option<&'static bex_engine::NativeBodyTable>,
 ) -> ExitCode {
-    let envelope: Result<PackEnvelope, String> =
-        baml_artifact::decode(baml_artifact::ArtifactKind::PackedProgram, artifact)
+    let envelope: Result<(PackEnvelope, [u8; 32]), String> =
+        baml_artifact::decode_with_digest(baml_artifact::ArtifactKind::PackedProgram, artifact)
             .map_err(|e| format!("Failed to deserialize pack envelope: {e}"))
-            .and_then(|envelope: PackEnvelope| {
+            .and_then(|(envelope, digest): (PackEnvelope, [u8; 32])| {
                 envelope
                     .verify_telemetry()
                     .map_err(|error| error.to_string())?;
-                Ok(envelope)
+                Ok((envelope, digest))
             });
     match envelope {
-        Ok(envelope) => run_envelope(envelope, native_bodies),
+        Ok((envelope, artifact_fingerprint)) => run_envelope(
+            envelope,
+            native_bodies.map(|table| bex_engine::NativeBodies {
+                table,
+                artifact_fingerprint,
+            }),
+        ),
         Err(e) => {
             print_error(e);
             ExitCode::FAILURE
@@ -146,7 +150,7 @@ fn new_engine(
     program: bex_vm_types::Program,
     argv: Vec<String>,
     telemetry: btel_settings::artifact::ArtifactTelemetry,
-    native_bodies: Option<&'static bex_engine::NativeBodyTable>,
+    native_bodies: Option<bex_engine::NativeBodies>,
 ) -> Result<BexEngine, bex_engine::EngineError> {
     let recording = bex_engine::TelemetryRecording::from_artifact(&telemetry)?.with_host("pack");
     BexEngine::new_with_config(
@@ -165,10 +169,7 @@ fn new_engine(
 
 /// Single-target dispatch: the binary acts like a one-shot CLI; flags on
 /// the binary bind directly to the target's parameters.
-fn run_single(
-    envelope: PackEnvelope,
-    native_bodies: Option<&'static bex_engine::NativeBodyTable>,
-) -> ExitCode {
+fn run_single(envelope: PackEnvelope, native_bodies: Option<bex_engine::NativeBodies>) -> ExitCode {
     debug_assert_eq!(
         envelope.targets.len(),
         1,
@@ -237,7 +238,7 @@ fn run_single(
 /// one subcommand per packed function.
 fn run_subcommand(
     envelope: PackEnvelope,
-    native_bodies: Option<&'static bex_engine::NativeBodyTable>,
+    native_bodies: Option<bex_engine::NativeBodies>,
 ) -> ExitCode {
     // `argv[1]` is the user's subcommand token after parsing; rebuild
     // os-level argv first so we can pass the trailing tokens to clap.

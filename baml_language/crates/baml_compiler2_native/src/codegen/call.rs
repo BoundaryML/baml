@@ -24,7 +24,9 @@ impl<'db> Generator<'_, 'db> {
         layout: Option<&baml_type::CallLayout>,
     ) -> Gen<String> {
         let Operand::Constant(Constant::Function(func)) = callee else {
-            return unsupported("call through a function value");
+            return Err(Rejection::Invalid(
+                "call through a function value emitted inline".into(),
+            ));
         };
         let name = function_display_name(self.db, *func);
         let Some((object, info)) = self.index.function(self.db, *func)? else {
@@ -70,7 +72,9 @@ impl<'db> Generator<'_, 'db> {
                     return unsupported(format!("builtin `{name}` has no native key"));
                 };
                 if !builtin_is_callable(key, shape) {
-                    return unsupported(format!("builtin `{key}` may yield"));
+                    return Err(Rejection::Invalid(format!(
+                        "yielding builtin `{key}` emitted inline"
+                    )));
                 }
                 let next = self.natives.len();
                 let ordinal = *self.natives.entry(key.to_owned()).or_insert(next);
@@ -89,7 +93,9 @@ impl<'db> Generator<'_, 'db> {
                     )
                 }
             }
-            FunctionKind::SysOp(_) => unsupported(format!("`{name}` is a sys op")),
+            FunctionKind::SysOp(_) => Err(Rejection::Invalid(format!(
+                "sys op `{name}` emitted inline"
+            ))),
         }
     }
 
