@@ -552,7 +552,9 @@ impl PackArgs {
         if !status.success() {
             anyhow::bail!("cargo build of the native host failed ({status})");
         }
-        let built = target_dir.join("release").join("baml_native_program");
+        let built = target_dir
+            .join("release")
+            .join(format!("baml_native_program{}", std::env::consts::EXE_SUFFIX));
         std::fs::copy(&built, output_path).with_context(|| {
             format!(
                 "failed to copy {} to {}",
