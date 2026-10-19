@@ -1,7 +1,10 @@
 //! The generated module's text: the source around the bodies, and the
 //! spellings of generated expressions.
 
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    fmt::{self, Write as _},
+};
 
 use baml_compiler2_mir::BinOp;
 
@@ -26,43 +29,68 @@ pub(crate) fn render_module(
     fingerprint: [u8; 32],
 ) -> Result<String, String> {
     let mut out = String::from(PRELUDE);
+    write_module(
+        &mut out,
+        bodies,
+        functions,
+        natives,
+        artifact_path,
+        fingerprint,
+    )
+    .expect("formatting into a String cannot fail");
+    syn::parse_file(&out)
+        .map(|file| prettyplease::unparse(&file))
+        .map_err(|error| format!("native backend generated invalid Rust: {error}"))
+}
+
+fn write_module(
+    out: &mut String,
+    bodies: &str,
+    functions: &[CompiledFunction],
+    natives: &BTreeMap<String, usize>,
+    artifact_path: &str,
+    fingerprint: [u8; 32],
+) -> fmt::Result {
     for (key, ordinal) in natives {
-        out += &format!(
+        writeln!(
+            out,
             "fn native_{ordinal}() -> NativeFunction {{
                 static F: std::sync::OnceLock<NativeFunction> = std::sync::OnceLock::new();
                 *F.get_or_init(|| bex_vm::package_baml::resolve_native({key:?})
                     .expect(\"builtin bound at compile time\"))
-            }}\n"
-        );
+            }}"
+        )?;
     }
-    out += bodies;
-    out += &format!(
+    out.push_str(bodies);
+    writeln!(
+        out,
         "pub static NATIVE_BODIES: NativeBodyTable = NativeBodyTable {{
             fingerprint: {fingerprint:?},
-            entries: &[\n"
-    );
+            entries: &["
+    )?;
     for function in functions {
         let shape = if function.resumable {
             "Resumable"
         } else {
             "Inline"
         };
-        out += &format!(
+        writeln!(
+            out,
             "CompiledEntry {{ object: {}, name: {:?}, arity: {}, body: CompiledFn::{shape}({}), \
-             slots: {}, cause_slot: {:?} }},\n",
+             slots: {}, cause_slot: {:?} }},",
             function.object,
             function.name,
             function.arity,
             function.symbol,
             function.slots,
             function.cause_slot,
-        );
+        )?;
     }
-    out += "] };\n";
-    out += &format!("pub static PROGRAM_ARTIFACT: &[u8] = include_bytes!({artifact_path:?});\n");
-    syn::parse_file(&out)
-        .map(|file| prettyplease::unparse(&file))
-        .map_err(|error| format!("native backend generated invalid Rust: {error}"))
+    writeln!(out, "] }};")?;
+    writeln!(
+        out,
+        "pub static PROGRAM_ARTIFACT: &[u8] = include_bytes!({artifact_path:?});"
+    )
 }
 
 /// Whether generated code `code` is a local, a numeric literal, or a path.
