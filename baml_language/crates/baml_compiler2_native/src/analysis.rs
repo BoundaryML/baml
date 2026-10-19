@@ -2,7 +2,7 @@
 //! block, and what the function calls or suspends on.
 
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     sync::OnceLock,
 };
 
@@ -92,7 +92,7 @@ pub(crate) struct Analysis {
     /// Iterators over an array (`xs.iter()` of a local of array type), by
     /// iterator local → array local. Compiled as an index walk with the
     /// semantics `baml.iter.ArrayIterator` documents.
-    pub(crate) array_iters: HashMap<usize, usize>,
+    pub(crate) array_iters: BTreeMap<usize, usize>,
     /// Whether a block inside a loop may allocate: the loop's header is where
     /// an inline body checks for a collection.
     pub(crate) loop_allocates: bool,
@@ -199,7 +199,7 @@ impl Analysis {
             frame_types.clear();
         }
 
-        let mut array_iters = HashMap::new();
+        let mut array_iters = BTreeMap::new();
         for block in &body.blocks {
             if let Some(terminator) = &block.terminator
                 && let Some((iter, array)) = array_iter_call(body, mir.arity, terminator)
@@ -464,7 +464,7 @@ pub(crate) fn array_iter_call(
 /// `it.next()` on an array iterator, as the iterator local.
 pub(crate) fn array_next_call(
     terminator: &Terminator<'_>,
-    array_iters: &HashMap<usize, usize>,
+    array_iters: &BTreeMap<usize, usize>,
 ) -> Option<usize> {
     let Terminator::VirtualCall {
         has_trace: false,

@@ -15,26 +15,26 @@ use crate::{
 };
 
 impl Generator<'_, '_> {
-    pub(super) fn stmts(&mut self, stmts: &[Stmt], depth: usize) -> Gen<()> {
+    pub(super) fn stmts(&mut self, stmts: &[Stmt]) -> Gen<()> {
         for stmt in stmts {
-            self.stmt(stmt, depth)?;
+            self.stmt(stmt)?;
         }
         Ok(())
     }
 
-    fn stmt(&mut self, stmt: &Stmt, depth: usize) -> Gen<()> {
+    fn stmt(&mut self, stmt: &Stmt) -> Gen<()> {
         match stmt {
-            Stmt::Leaf(block) => self.leaf(BlockId(*block), depth),
+            Stmt::Leaf(block) => self.leaf(BlockId(*block)),
             Stmt::Block { label, body } => {
-                self.line(depth, &format!("'b{label}: {{"));
-                self.stmts(body, depth + 1)?;
-                self.line(depth, "}");
+                self.line(&format!("'b{label}: {{"));
+                self.stmts(body)?;
+                self.line("}");
                 Ok(())
             }
             Stmt::Loop { label, body } => {
-                self.line(depth, &format!("'l{label}: loop {{"));
-                self.stmts(body, depth + 1)?;
-                self.line(depth, "}");
+                self.line(&format!("'l{label}: loop {{"));
+                self.stmts(body)?;
+                self.line("}");
                 Ok(())
             }
             Stmt::If {
@@ -42,11 +42,11 @@ impl Generator<'_, '_> {
                 then_branch,
                 else_branch,
             } => {
-                self.line(depth, &format!("if c{block} {{"));
-                self.stmts(then_branch, depth + 1)?;
-                self.line(depth, "} else {");
-                self.stmts(else_branch, depth + 1)?;
-                self.line(depth, "}");
+                self.line(&format!("if c{block} {{"));
+                self.stmts(then_branch)?;
+                self.line("} else {");
+                self.stmts(else_branch)?;
+                self.line("}");
                 Ok(())
             }
             Stmt::Switch {
@@ -61,35 +61,35 @@ impl Generator<'_, '_> {
                         "switch stmt on a non-switch block".into(),
                     ));
                 };
-                self.line(depth, &format!("match d{block} {{"));
+                self.line(&format!("match d{block} {{"));
                 for (indices, body) in arms {
                     let mut pattern = Vec::with_capacity(indices.len());
                     for &i in indices {
                         pattern.push(self.switch_pattern(&keys[i].0)?);
                     }
-                    self.line(depth + 1, &format!("{} => {{", pattern.join(" | ")));
-                    self.stmts(body, depth + 2)?;
-                    self.line(depth + 1, "}");
+                    self.line(&format!("{} => {{", pattern.join(" | ")));
+                    self.stmts(body)?;
+                    self.line("}");
                 }
-                self.line(depth + 1, "_ => {");
-                self.stmts(otherwise, depth + 2)?;
-                self.line(depth + 1, "}");
-                self.line(depth, "}");
+                self.line("_ => {");
+                self.stmts(otherwise)?;
+                self.line("}");
+                self.line("}");
                 Ok(())
             }
             Stmt::Break(label) => {
-                self.line(depth, &format!("break 'b{label};"));
+                self.line(&format!("break 'b{label};"));
                 Ok(())
             }
             Stmt::BreakLoop(label) => {
-                self.line(depth, &format!("break 'l{label};"));
+                self.line(&format!("break 'l{label};"));
                 Ok(())
             }
             Stmt::Continue(label) => {
-                self.line(depth, &format!("continue 'l{label};"));
+                self.line(&format!("continue 'l{label};"));
                 Ok(())
             }
-            Stmt::Exit(block) => self.exit(BlockId(*block), depth),
+            Stmt::Exit(block) => self.exit(BlockId(*block)),
         }
     }
 
@@ -113,7 +113,7 @@ impl Generator<'_, '_> {
 
     /// The statements of a block and whatever its terminator computes before
     /// control transfers.
-    pub(super) fn leaf(&mut self, id: BlockId, depth: usize) -> Gen<()> {
+    pub(super) fn leaf(&mut self, id: BlockId) -> Gen<()> {
         let block = &self.body.blocks[id.0];
         // A leaf can be entered from several places; nothing about `pc` is
         // known on entry. Every PC of the leaf lies in its block's bytecode,
@@ -129,30 +129,27 @@ impl Generator<'_, '_> {
             let live = self.live_in[id.0].clone();
             let point = self.yield_point(id.0);
             let point_slot = self.point_slot;
-            self.line(depth, "iterations = iterations.wrapping_add(1);");
-            self.line(
-                depth,
-                &format!("if iterations % {YIELD_EVERY} == 0 && vm.should_yield() {{"),
-            );
-            self.save(self.saved(live), depth + 1);
-            self.line(
-                depth + 1,
-                &format!("vm.set_slot(depth, {point_slot}, Value::int({point}));"),
-            );
+            self.line("iterations = iterations.wrapping_add(1);");
+            self.line(&format!(
+                "if iterations % {YIELD_EVERY} == 0 && vm.should_yield() {{"
+            ));
+            self.save(self.saved(live));
+            self.line(&format!(
+                "vm.set_slot(depth, {point_slot}, Value::int({point}));"
+            ));
             // It yields standing at the loop header.
             let at = pc_arg(pcs.start);
-            self.line(depth + 1, &format!("vm.note_pc(depth, {at});"));
-            self.line(depth + 1, "return Ok(Step::Yield);");
-            self.line(depth, "}");
+            self.line(&format!("vm.note_pc(depth, {at});"));
+            self.line("return Ok(Step::Yield);");
+            self.line("}");
         } else if self.gc_checks.loops && self.loop_headers.contains(&id.0) {
             // An inline body collects in place at an allocating loop's
             // header, as often as a resumable one would yield.
             let live = self.live_in[id.0].clone();
-            self.line(depth, "iterations = iterations.wrapping_add(1);");
+            self.line("iterations = iterations.wrapping_add(1);");
             self.gc_check(
                 &live,
                 &format!("iterations % {YIELD_EVERY} == 0 && vm.gc_due()"),
-                depth,
             );
         }
         // Entering or leaving a handler's body: record the context of the
@@ -167,11 +164,11 @@ impl Generator<'_, '_> {
                 }
                 None => "Value::NULL".to_string(),
             };
-            self.statement(depth, &format!("vm.set_slot(depth, {slot}, {cause});"));
+            self.statement(&format!("vm.set_slot(depth, {slot}, {cause});"));
         }
         for (index, statement) in block.statements.iter().enumerate() {
             let pc = pcs.statements.get(index).copied().flatten();
-            self.set_pc(pc, depth);
+            self.set_pc(pc);
             match &statement.kind {
                 StatementKind::Assign { destination, value } => {
                     // A type local is built where it is consumed (a call's
@@ -184,7 +181,7 @@ impl Generator<'_, '_> {
                     }
                     let value = self.rvalue(id, value)?;
                     let code = self.store(id, destination, &value)?;
-                    self.statement(depth, &code);
+                    self.statement(&code);
                 }
                 StatementKind::Drop(_) | StatementKind::Nop => {}
                 // The captured local's binding is created here: a new cell,
@@ -202,7 +199,7 @@ impl Generator<'_, '_> {
                     };
                     let cell = Expr::new(format!("vm.new_cell({init})"), Repr::Value);
                     let code = self.store(id, &Place::Local(*local), &cell)?;
-                    self.statement(depth, &code);
+                    self.statement(&code);
                 }
                 // `type T = value`: bind the value into the frame's slot, as
                 // `BindType` does. Every type the body derives after this
@@ -218,7 +215,7 @@ impl Generator<'_, '_> {
                     let value = self.value_arg(&value.code, value.repr);
                     let code =
                         self.fallible(id, &format!("vm.bind_type(depth, {slot}, {value})"))?;
-                    self.statement(depth, &format!("{code};"));
+                    self.statement(&format!("{code};"));
                 }
                 // `log.*`: the `$baml_log` record bytecode's `SendEvent`
                 // makes, queued for the engine (`vm.log_event`).
@@ -249,7 +246,7 @@ impl Generator<'_, '_> {
                     let at = pc_arg(pc);
                     let code =
                         self.fallible(id, &format!("vm.log_event(bex_vm::compiled_rt::LogLevel::{level}, {data}, {name}, {at})"))?;
-                    self.statement(depth, &format!("{code};"));
+                    self.statement(&format!("{code};"));
                 }
                 StatementKind::Intrinsic { .. } => return unsupported("compiler intrinsic"),
                 StatementKind::VirtualFieldStore {
@@ -270,16 +267,16 @@ impl Generator<'_, '_> {
                             "vm.virtual_store_field({receiver}, {iface}, {iface_args}, {field_index}, {value})"
                         ),
                     )?;
-                    self.statement(depth, &format!("{code};"));
+                    self.statement(&format!("{code};"));
                 }
             }
         }
-        self.set_pc(pcs.terminator, depth);
+        self.set_pc(pcs.terminator);
         match block.terminator.as_ref().expect("checked in Analysis") {
             Terminator::Branch { condition, .. } => {
                 let condition = self.operand(id, condition)?;
                 let code = coerce(&condition.code, condition.repr, Repr::Bool);
-                self.statement(depth, &format!("c{} = {code};", id.0));
+                self.statement(&format!("c{} = {code};", id.0));
             }
             Terminator::NarrowBind {
                 source,
@@ -289,20 +286,20 @@ impl Generator<'_, '_> {
             } => {
                 let source = self.operand(id, source)?;
                 let source_value = self.value_arg(&source.code, source.repr);
-                self.statement(depth, &format!("let narrowed = {source_value};"));
+                self.statement(&format!("let narrowed = {source_value};"));
                 let test = self.type_test("narrowed", test)?;
-                self.statement(depth, &format!("c{} = {test};", id.0));
+                self.statement(&format!("c{} = {test};", id.0));
                 let store = self.store(
                     id,
                     &Place::Local(*destination),
                     &Expr::new("narrowed", Repr::Value),
                 )?;
-                self.statement(depth, &format!("if c{} {{ {store} }}", id.0));
+                self.statement(&format!("if c{} {{ {store} }}", id.0));
             }
             Terminator::Switch { discriminant, .. } => {
                 let discriminant = self.operand(id, discriminant)?;
                 let code = coerce(&discriminant.code, discriminant.repr, Repr::Int);
-                self.statement(depth, &format!("d{} = {code};", id.0));
+                self.statement(&format!("d{} = {code};", id.0));
             }
             terminator @ Terminator::Call { .. } if self.call_suspends(terminator) => {}
             // Emitted by `pause`.
@@ -317,7 +314,7 @@ impl Generator<'_, '_> {
             } => {
                 let call = self.call(id, callee, args, *ntypeargs, argument_layout.as_ref())?;
                 let code = self.store(id, destination, &Expr::new(call, Repr::Value))?;
-                self.statement(depth, &code);
+                self.statement(&code);
             }
             Terminator::ShortCircuit {
                 operand,
@@ -327,15 +324,15 @@ impl Generator<'_, '_> {
             } => {
                 let operand = self.operand(id, operand)?;
                 let value = self.value_arg(&operand.code, operand.repr);
-                self.statement(depth, &format!("let lhs = {value};"));
+                self.statement(&format!("let lhs = {value};"));
                 let short = match kind {
                     ShortCircuitKind::And => "!vm.is_truthy(lhs)",
                     ShortCircuitKind::Or => "vm.is_truthy(lhs)",
                     ShortCircuitKind::Coalesce => "!lhs.is_null()",
                 };
-                self.statement(depth, &format!("c{} = {short};", id.0));
+                self.statement(&format!("c{} = {short};", id.0));
                 let store = self.store(id, destination, &Expr::new("lhs", Repr::Value))?;
-                self.statement(depth, &format!("if c{} {{ {store} }}", id.0));
+                self.statement(&format!("if c{} {{ {store} }}", id.0));
             }
             Terminator::VirtualCall { destination, .. } => {
                 if let Some((iter, array)) = array_iter_call(
@@ -344,7 +341,7 @@ impl Generator<'_, '_> {
                     block.terminator.as_ref().expect("checked"),
                 ) {
                     let array = coerce(&format!("l{array}"), self.repr(Local(array)), Repr::Value);
-                    self.statement(depth, &format!("l{iter} = {array}; i{iter} = 0;"));
+                    self.statement(&format!("l{iter} = {array}; i{iter} = 0;"));
                 } else if let Some(iter) = array_next_call(
                     block.terminator.as_ref().expect("checked"),
                     &self.analysis.array_iters,
@@ -370,7 +367,7 @@ impl Generator<'_, '_> {
                          else {{ vm.new_instance(vm.idx_to_ptr(ObjectIndex::from_raw({done})), Vec::new()) }}"
                     );
                     let code = self.store(id, destination, &Expr::new(step, Repr::Value))?;
-                    self.statement(depth, &code);
+                    self.statement(&code);
                 } else {
                     return Err(Rejection::Invalid(
                         "virtual call admitted without a lowering".into(),
@@ -396,21 +393,21 @@ impl Generator<'_, '_> {
                 let context = self.value_arg(&context.code, context.repr);
                 let error = format!("bex_vm::compiled_rt::rethrow({value}, {context})");
                 let raise = if block.unwind.is_some() {
-                    self.unwind_jump(id, &error, depth + 1)?
+                    self.unwind_jump(id, &error)?
                 } else {
                     format!("return Err({error});")
                 };
-                self.statement(depth, &format!("if vm.is_panic({value}) {{"));
+                self.statement(&format!("if vm.is_panic({value}) {{"));
                 self.out.push_str(&raise);
                 self.out.push('\n');
-                self.line(depth, "}");
+                self.line("}");
             }
         }
         Ok(())
     }
 
     /// How a block leaves the function.
-    pub(super) fn exit(&mut self, id: BlockId, depth: usize) -> Gen<()> {
+    pub(super) fn exit(&mut self, id: BlockId) -> Gen<()> {
         let block = &self.body.blocks[id.0];
         match block.terminator.as_ref().expect("checked in Analysis") {
             Terminator::Return => {
@@ -425,9 +422,9 @@ impl Generator<'_, '_> {
                     coerce("l0", self.repr(Local(0)), Repr::Value)
                 };
                 if self.suspends {
-                    self.statement(depth, &format!("return Ok(Step::Return({result}));"));
+                    self.statement(&format!("return Ok(Step::Return({result}));"));
                 } else {
-                    self.statement(depth, &format!("return Ok({result});"));
+                    self.statement(&format!("return Ok({result});"));
                 }
             }
             Terminator::Throw { value } => {
@@ -435,11 +432,11 @@ impl Generator<'_, '_> {
                 let value = self.value_arg(&value.code, value.repr);
                 let error = format!("bex_vm::compiled_rt::throw({value})");
                 if block.unwind.is_some() {
-                    let jump = self.unwind_jump(id, &error, depth)?;
-                    self.flush(depth);
+                    let jump = self.unwind_jump(id, &error)?;
+                    self.flush();
                     self.out.push_str(&jump);
                 } else {
-                    self.statement(depth, &format!("return Err({error});"));
+                    self.statement(&format!("return Err({error});"));
                 }
             }
             Terminator::Rethrow { value, context } => {
@@ -449,22 +446,22 @@ impl Generator<'_, '_> {
                 let context = self.value_arg(&context.code, context.repr);
                 let error = format!("bex_vm::compiled_rt::rethrow({value}, {context})");
                 if block.unwind.is_some() {
-                    let jump = self.unwind_jump(id, &error, depth)?;
-                    self.flush(depth);
+                    let jump = self.unwind_jump(id, &error)?;
+                    self.flush();
                     self.out.push_str(&jump);
                 } else {
-                    self.statement(depth, &format!("return Err({error});"));
+                    self.statement(&format!("return Err({error});"));
                 }
             }
             // Bytecode's `Unreachable`: a catchable `baml.panics.Unreachable`.
             Terminator::Unreachable => {
-                self.line(depth, "let unreachable = vm.unreachable_panic();");
+                self.line("let unreachable = vm.unreachable_panic();");
                 if block.unwind.is_some() {
-                    let jump = self.unwind_jump(id, "unreachable", depth)?;
-                    self.flush(depth);
+                    let jump = self.unwind_jump(id, "unreachable")?;
+                    self.flush();
                     self.out.push_str(&jump);
                 } else {
-                    self.line(depth, "return Err(unreachable);");
+                    self.line("return Err(unreachable);");
                 }
             }
             other => {
@@ -481,7 +478,7 @@ impl Generator<'_, '_> {
     /// frames of compiled callees above this one (`BexVm::catch`), bind value
     /// and context into the handler's landing locals, and jump there. An
     /// internal error is not catchable and propagates.
-    pub(super) fn unwind_jump(&mut self, block: BlockId, error: &str, depth: usize) -> Gen<String> {
+    pub(super) fn unwind_jump(&mut self, block: BlockId, error: &str) -> Gen<String> {
         let Some(handler) = self.body.blocks[block.0].unwind else {
             return Err(Rejection::Invalid(
                 "unwind jump from a block without a handler".into(),
@@ -504,23 +501,22 @@ impl Generator<'_, '_> {
             &Expr::new("context", Repr::Value),
         )?;
         let saved = std::mem::take(&mut self.out);
-        self.line(depth, "vm.note_pc(depth, pc);");
-        self.line(
-            depth,
-            &format!("let (thrown, context) = vm.catch({error}, depth)?;"),
-        );
-        self.line(depth, &value);
-        self.line(depth, &context);
+        self.line("vm.note_pc(depth, pc);");
+        self.line(&format!(
+            "let (thrown, context) = vm.catch({error}, depth)?;"
+        ));
+        self.line(&value);
+        self.line(&context);
         if self.suspends {
             let jump = self.jump_to(handler.0);
-            self.line(depth, &jump);
+            self.line(&jump);
         } else {
             let structured = self
                 .structured
                 .as_ref()
                 .expect("an inline body is structured before its leaves are emitted");
             let jumps = structured.unwind_jumps[block.0].clone();
-            self.stmts(&jumps, depth)?;
+            self.stmts(&jumps)?;
         }
         out.push_str(&self.out);
         self.out = saved;
@@ -533,7 +529,7 @@ impl Generator<'_, '_> {
         if self.body.blocks[block.0].unwind.is_none() {
             return Ok(format!("{code}?"));
         }
-        let jump = self.unwind_jump(block, "e", 0)?;
+        let jump = self.unwind_jump(block, "e")?;
         Ok(format!(
             "(match {code} {{ Ok(v) => v, Err(e) => {{ {jump} }} }})"
         ))
