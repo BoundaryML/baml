@@ -3,10 +3,19 @@
 mod arith;
 mod call;
 mod cell;
+mod frame;
+pub(crate) use frame::attach_native_bodies;
+pub use frame::{FramePosition, NativeBodies, NativeBodyTable, PendingLog};
+pub use state::CompiledState;
+pub(crate) use state::SavedCallTypes;
 mod heap;
 mod program;
+mod state;
 mod types;
 mod r#virtual;
+
+#[cfg(test)]
+pub(crate) mod tests;
 
 /// What lets compiled code collect garbage in place: the engine's view of
 /// every other mutator. Collecting moves objects, so `vm`'s stack (where

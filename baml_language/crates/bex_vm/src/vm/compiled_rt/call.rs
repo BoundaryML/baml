@@ -76,13 +76,13 @@ impl BexVm {
         // Reuse the buffer's capacity: a `push` in a loop allocates nothing
         // here after the first call.
         self.save_call_types();
-        let mut buffer = std::mem::take(&mut self.compiled_type_args);
+        let mut buffer = std::mem::take(&mut self.compiled.builtin_type_args);
         buffer.clear();
         buffer.extend_from_slice(type_args);
         self.pending_call_type_args = buffer;
         let result = self.call_builtin(builtin, args);
-        self.compiled_type_args = self.restore_call_types();
-        self.compiled_type_args.clear();
+        self.compiled.builtin_type_args = self.restore_call_types();
+        self.compiled.builtin_type_args.clear();
         result
     }
 
@@ -126,7 +126,7 @@ impl BexVm {
     /// allocates nothing for them.
     #[inline]
     pub fn push_type_arg(&mut self, ty: RealizedTy) {
-        self.call_type_args.push(ty);
+        self.compiled.call_type_args.push(ty);
     }
 
     /// The value of `future` when it has settled with one and awaiting it
@@ -173,7 +173,7 @@ impl BexVm {
     #[cold]
     #[inline(never)]
     pub fn collect_here(&mut self, live: &mut [Value]) {
-        let Some(collector) = self.compiled_collector.clone() else {
+        let Some(collector) = self.compiled.collector.clone() else {
             return;
         };
         let base = self.stack.len();
@@ -253,7 +253,7 @@ impl BexVm {
     /// `log.info(data, name?)` and its siblings in compiled code: the record
     /// bytecode's `SendEvent` of the `$baml_log` payload makes, recorded for
     /// telemetry here and
-    /// queued for the engine ([`Self::pending_logs`]) instead of returned,
+    /// queued for the engine ([`CompiledState::pending_logs`](super::CompiledState::pending_logs)) instead of returned,
     /// since a compiled body cannot leave mid-statement. `pc` is the
     /// statement's in the function's bytecode, whose `SendEvent` line entry
     /// locates the record as the interpreter locates it.
@@ -281,7 +281,7 @@ impl BexVm {
                 .map(Self::event_source_location_for_line_entry),
             _ => None,
         };
-        self.pending_logs.push(crate::vm::PendingLog {
+        self.compiled.pending_logs.push(super::PendingLog {
             level,
             event_name: name,
             data,
@@ -402,7 +402,7 @@ impl BexVm {
         );
         // A type naming a runtime declaration rides beside the frame's
         // arguments as an exact value, as a bytecode call carries it.
-        let type_values = crate::vm::exact_type_values(type_args);
+        let type_values = super::frame::exact_type_values(type_args);
         if !type_values.is_empty() {
             frame.type_metadata = Some(Box::new(crate::vm::FrameTypeMetadata {
                 values: type_values,
@@ -422,7 +422,7 @@ impl BexVm {
     /// A spare type-argument vector: one the pool holds, or a new one.
     #[inline]
     pub(crate) fn pooled_type_args(&mut self) -> Vec<RealizedTy> {
-        self.type_arg_pool.pop().unwrap_or_default()
+        self.compiled.type_arg_pool.pop().unwrap_or_default()
     }
 
     /// Give a frame's type-argument vector back to the pool, cleared. The
@@ -431,9 +431,9 @@ impl BexVm {
     #[inline]
     pub(crate) fn recycle_type_args(&mut self, mut type_args: Vec<RealizedTy>) {
         const POOL: usize = 16;
-        if type_args.capacity() != 0 && self.type_arg_pool.len() < POOL {
+        if type_args.capacity() != 0 && self.compiled.type_arg_pool.len() < POOL {
             type_args.clear();
-            self.type_arg_pool.push(type_args);
+            self.compiled.type_arg_pool.push(type_args);
         }
     }
 
@@ -446,7 +446,7 @@ impl BexVm {
     /// on any thread, never the thread's stack limit.
     #[inline]
     pub(crate) fn with_stack_room<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        if stack_address() < self.stack_floor {
+        if stack_address() < self.compiled.stack_floor {
             return self.on_fresh_segment(f);
         }
         f(self)
@@ -462,12 +462,12 @@ impl BexVm {
     fn on_fresh_segment<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let floor = self.stack_floor;
+            let floor = self.compiled.stack_floor;
             let result = stacker::grow(super::STACK_SEGMENT, || {
-                self.stack_floor = super::stack_floor();
+                self.compiled.stack_floor = super::stack_floor();
                 f(self)
             });
-            self.stack_floor = floor;
+            self.compiled.stack_floor = floor;
             result
         }
         #[cfg(target_arch = "wasm32")]
@@ -700,7 +700,7 @@ mod tests {
 
         #[allow(clippy::unnecessary_wraps, reason = "matches the compiled body ABI")]
         fn body(vm: &mut BexVm, _: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
-            vm.compiled_collector = Some(Arc::new(Collector));
+            vm.compiled.collector = Some(Arc::new(Collector));
             let mut live = [vm.string_value("still live")];
             for _ in 0..3 {
                 assert!(vm.gc_due(), "stress must collect at every compiled check");
@@ -733,7 +733,7 @@ mod tests {
         }
 
         assert_eq!(
-            crate::vm::tests::run_with_compiled_bodies(
+            crate::compiled_rt::tests::run_with_compiled_bodies(
                 "function Main() -> string { \"still live\" }",
                 &[("user.Main", CompiledFn::Inline(body))],
                 &[],
@@ -754,15 +754,15 @@ mod tests {
         let capacity = first.capacity();
         vm.recycle_type_args(first);
         vm.recycle_type_args(Vec::new());
-        assert_eq!(vm.type_arg_pool.len(), 1);
+        assert_eq!(vm.compiled.type_arg_pool.len(), 1);
         let again = vm.pooled_type_args();
         assert!(again.is_empty());
         assert_eq!(again.capacity(), capacity);
-        assert!(vm.type_arg_pool.is_empty());
+        assert!(vm.compiled.type_arg_pool.is_empty());
         vm.recycle_type_args(again);
         for _ in 0..40 {
             vm.recycle_type_args(Vec::with_capacity(4));
         }
-        assert_eq!(vm.type_arg_pool.len(), 16);
+        assert_eq!(vm.compiled.type_arg_pool.len(), 16);
     }
 }

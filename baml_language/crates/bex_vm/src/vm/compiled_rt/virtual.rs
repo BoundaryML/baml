@@ -183,8 +183,10 @@ impl BexVm {
         if let (Some(site), Some(tag)) = (site, key)
             && let Some((callee, frame)) = site.get(tag, self.image())
         {
-            self.call_type_args.extend_from_slice(frame);
-            self.call_type_args.extend_from_slice(method_type_args);
+            self.compiled.call_type_args.extend_from_slice(frame);
+            self.compiled
+                .call_type_args
+                .extend_from_slice(method_type_args);
             return Ok(self.heap.compile_time_ptr(callee as usize));
         }
         let head = self.interface_head(iface)?;
@@ -202,8 +204,10 @@ impl BexVm {
         {
             site.set(tag, index, self.image(), &frame);
         }
-        self.call_type_args.extend(frame);
-        self.call_type_args.extend_from_slice(method_type_args);
+        self.compiled.call_type_args.extend(frame);
+        self.compiled
+            .call_type_args
+            .extend_from_slice(method_type_args);
         Ok(callee)
     }
 
@@ -225,7 +229,7 @@ impl BexVm {
         args: &[Value],
         pc: u32,
     ) -> Result<Option<Value>, Box<VmError>> {
-        if !self.call_type_args.is_empty() {
+        if !self.compiled.call_type_args.is_empty() {
             return Ok(None);
         }
         let Object::Function(function) = self.get_object(callee) else {
@@ -260,7 +264,7 @@ impl BexVm {
             Err(error) => {
                 // The type arguments `virtual_target` pushed belong to the
                 // call that will not happen.
-                self.call_type_args.clear();
+                self.compiled.call_type_args.clear();
                 Err(error)
             }
         }
@@ -529,7 +533,7 @@ mod tests {
         errors::VmError,
         vm::{
             BexVm,
-            tests::{run_with_compiled_bodies, test_int},
+            compiled_rt::tests::{run_with_compiled_bodies, test_int},
         },
     };
 

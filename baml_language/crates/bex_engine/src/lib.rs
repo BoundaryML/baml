@@ -2031,7 +2031,7 @@ impl BexEngine {
                 loop {
                     let state = vm.exec();
                     if has_native_bodies {
-                        vm.pending_logs.clear();
+                        vm.compiled.pending_logs.clear();
                     }
                     match state {
                         Ok(VmExecState::Complete(_)) => {
@@ -5780,8 +5780,8 @@ impl BexEngine {
         let result = async {
             let mut thread = active.as_mut().expect("active execution permit");
 
-            if self.has_native_bodies && thread.vm.compiled_collector.is_none() {
-                thread.vm.compiled_collector = Some(Arc::new(InPlaceCollector {
+            if self.has_native_bodies && thread.vm.compiled.collector.is_none() {
+                thread.vm.compiled.collector = Some(Arc::new(InPlaceCollector {
                     engine: Arc::downgrade(self),
                     own: thread.cell_id(),
                 }));
@@ -5796,8 +5796,8 @@ impl BexEngine {
                     telemetry.validate(&thread.vm, false);
                 }
                 let vm_exec_result = thread.vm.exec();
-                if self.has_native_bodies && !thread.vm.pending_logs.is_empty() {
-                    for log in std::mem::take(&mut thread.vm.pending_logs) {
+                if self.has_native_bodies && !thread.vm.compiled.pending_logs.is_empty() {
+                    for log in std::mem::take(&mut thread.vm.compiled.pending_logs) {
                         self.capture_baml_log_event(
                             thread,
                             log_capture.as_ref(),

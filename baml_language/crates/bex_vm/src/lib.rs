@@ -15,9 +15,6 @@
 pub(crate) mod array_index;
 mod call_specialize;
 pub mod compile_artifact;
-/// Generated-code ABI; not a stable public API.
-#[doc(hidden)]
-pub mod compiled_rt;
 pub mod debug;
 pub mod definitions;
 pub mod errors;
@@ -46,8 +43,10 @@ pub use compile_artifact::{
 pub use errors::{StackFrame, VmPanic, format_traceback};
 pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
+#[doc(hidden)]
+pub use vm::compiled_rt;
+pub use vm::compiled_rt::{FramePosition, NativeBodies, NativeBodyTable, PendingLog};
 pub use vm::{
-    BexVm, BytecodeFrame, BytecodeProgram, Frame, FramePosition, NativeBodies, NativeBodyTable,
-    PendingLog, VmEventSourceLocation, VmExecState, convert_program, convert_program_with_natives,
-    prepare_compact_code,
+    BexVm, BytecodeFrame, BytecodeProgram, Frame, VmEventSourceLocation, VmExecState,
+    convert_program, convert_program_with_natives, prepare_compact_code,
 };
