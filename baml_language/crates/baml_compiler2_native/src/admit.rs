@@ -322,6 +322,14 @@ pub fn compile_program<'db>(
             };
             match generator.function(&symbols[&object]) {
                 Ok(code) => {
+                    let (slots, cause_slot) =
+                        match checked_frame_slots(generator.slots, generator.cause_slot) {
+                            Ok(layout) => layout,
+                            Err(rejection) => {
+                                failed.push((object, rejection));
+                                continue;
+                            }
+                        };
                     bodies.push_str(&code);
                     functions.push(CompiledFunction {
                         name: index.name(object).to_owned(),
@@ -330,10 +338,8 @@ pub fn compile_program<'db>(
                         object,
                         arity: index.info(object).arity,
                         resumable: resumable.contains(&object),
-                        slots: u32::try_from(generator.slots).unwrap_or(u32::MAX),
-                        cause_slot: generator
-                            .cause_slot
-                            .map(|slot| u32::try_from(slot).unwrap_or(u32::MAX)),
+                        slots,
+                        cause_slot,
                     });
                 }
                 Err(rejection) => failed.push((object, rejection)),
@@ -757,8 +763,13 @@ impl ProgramIndex {
                 let slot = package.slot_base.raw() + cell as usize;
                 if matches!(path, DeclPath::Let(_)) {
                     collisions.extend(
-                        claim(&mut index.lets, &mut index.ambiguous, key(path.clone()), slot)
-                            .map(|key| format!("{key:?}")),
+                        claim(
+                            &mut index.lets,
+                            &mut index.ambiguous,
+                            key(path.clone()),
+                            slot,
+                        )
+                        .map(|key| format!("{key:?}")),
                     );
                     continue;
                 }
@@ -1273,12 +1284,49 @@ fn recursive_units(units: &BTreeMap<usize, Unit<'_>>) -> BTreeSet<usize> {
     recursive
 }
 
+fn checked_frame_slots(
+    slots: usize,
+    cause_slot: Option<usize>,
+) -> Result<(u32, Option<u32>), Rejection> {
+    let overflow = |_| Rejection::Unsupported("compiled frame slot count exceeds u32".into());
+    Ok((
+        u32::try_from(slots).map_err(overflow)?,
+        cause_slot
+            .map(u32::try_from)
+            .transpose()
+            .map_err(overflow)?,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use baml_base::Name;
     use bex_vm_types::{FnPath, types::LocalName};
 
     use super::*;
+
+    #[test]
+    fn frame_slots_preserve_representable_counts() {
+        assert_eq!(checked_frame_slots(0, None), Ok((0, None)));
+        assert_eq!(
+            checked_frame_slots(u32::MAX as usize, Some(u32::MAX as usize - 1)),
+            Ok((u32::MAX, Some(u32::MAX - 1)))
+        );
+    }
+
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn oversized_frame_slots_are_rejected() {
+        let oversized = u32::MAX as usize + 1;
+        assert!(matches!(
+            checked_frame_slots(oversized, None),
+            Err(Rejection::Unsupported(_))
+        ));
+        assert!(matches!(
+            checked_frame_slots(0, Some(oversized)),
+            Err(Rejection::Unsupported(_))
+        ));
+    }
 
     #[test]
     fn symbols_are_identifiers() {
