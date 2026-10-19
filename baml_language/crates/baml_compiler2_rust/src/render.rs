@@ -1,5 +1,4 @@
-//! The generated module's text: the source around the bodies, and the
-//! spellings of generated expressions.
+//! Renders the module wrapper and Rust expression syntax.
 
 use std::{
     collections::BTreeMap,
@@ -103,7 +102,6 @@ pub(crate) fn is_atom(code: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | ':' | '.'))
 }
 
-/// Convert `code`, held as `from`, into `to`.
 pub(crate) fn coerce(code: &str, from: Repr, to: Repr) -> String {
     use Repr::{Bool, Float, Int, Value};
     match (from, to) {
@@ -111,9 +109,7 @@ pub(crate) fn coerce(code: &str, from: Repr, to: Repr) -> String {
         (Int, Value) => format!("Value::int({code})"),
         (Bool, Value) => format!("Value::bool({code})"),
         (Float, Value) => format!("vm.float_value({code})"),
-        // Checked: a value of the wrong kind here is a checker hole, reported
-        // as the internal error the interpreter's generic paths raise, never
-        // read as zero.
+        // Reject wrong value kinds instead of silently converting them.
         (Value, Int) => format!("bex_vm::compiled_rt::expect_int({code})?"),
         (Value, Bool) => format!("bex_vm::compiled_rt::expect_bool({code})?"),
         (Value, Float) => format!("bex_vm::compiled_rt::expect_f64({code})?"),

@@ -1,9 +1,5 @@
-//! Operands and places: reading and writing locals, fields, elements, and
-//! the cells of captured locals.
-//!
-//! A captured local's Rust variable holds its cell (`Place::Local` of it
-//! names the cell; `Place::Deref` the value in it); a lambda's captures are
-//! cells in its closure, read off its frame (`Place::Capture`).
+//! Reads and writes locals, fields, elements, and captured cells.
+//! Captured locals hold cells; dereferences access their values.
 
 use baml_compiler2_mir::{BlockId, CellId, Operand, Place};
 
@@ -22,10 +18,7 @@ impl<'db> Generator<'_, 'db> {
     pub(super) fn load(&mut self, block: BlockId, place: &Place) -> Gen<Expr> {
         match place {
             Place::Local(local) => {
-                // A type derived from the frame as a `type` value: built
-                // per read, as bytecode's `LoadType` of such a template is.
-                // A statically known one is the site's one object, as its
-                // `LoadType` cache keeps it.
+                // Frame-derived types are rebuilt per read; static types are cached per site.
                 if let Some(template) = self.analysis.frame_types.get(&local.0).cloned() {
                     let slot = match template {
                         baml_type::TyTemplate::TypeArgRef(slot) => format!("Some({slot})"),
@@ -85,7 +78,6 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// The cell `cell` names, bound, and how the value in it is held.
     fn cell(&mut self, cell: &CellId) -> (String, Repr) {
         match cell {
             CellId::Local(local) => (format!("l{}", local.0), self.analysis.values[local.0]),
@@ -105,7 +97,6 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// The statement storing `value` into `place`.
     pub(super) fn store(&mut self, block: BlockId, place: &Place, value: &Expr) -> Gen<String> {
         match place {
             Place::Local(local) => {

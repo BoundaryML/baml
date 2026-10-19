@@ -1,16 +1,4 @@
-//! MIR to Rust, against the VM's runtime surface.
-//!
-//! One Rust function per admitted BAML function, with the VM's native call
-//! signature. Statically typed `int`, `float`, and `bool` locals are raw
-//! `i64`, `f64`, and `bool`; every other local is a `Value`. Every operation
-//! is a call into `bex_vm::compiled_rt`, the implementation the interpreter
-//! runs too, so results and exceptions are identical by construction.
-//!
-//! Control flow is structured by [`crate::structure`] from the MIR graph, so
-//! loops are Rust loops and LLVM sees them as such. A block under a `catch`
-//! has an unwind edge; a fallible operation in such a block binds the thrown
-//! value into the handler's error local and jumps there, exactly as the
-//! interpreter's unwinder would within one frame.
+//! Generates Rust bodies from MIR using the VM runtime and structured control flow.
 
 mod call;
 mod constant;
@@ -53,100 +41,64 @@ impl Expr {
     }
 }
 
-/// What every body of one program is generated against.
+/// Shared program symbols and call properties.
 pub(crate) struct ProgramContext<'a, 'db> {
     pub(crate) db: &'db dyn baml_compiler2_mir::Db,
     pub(crate) index: &'a ProgramIndex,
-    /// The admitted functions' symbols, by object index.
     pub(crate) symbols: &'a HashMap<usize, String>,
-    /// The admitted functions that can suspend, by object index.
     pub(crate) resumable: &'a BTreeSet<usize>,
-    /// The admitted inline functions that may collect garbage: a call to one
-    /// roots the caller's live values for its duration (`rooted_call`).
+    /// Calls to these functions require rooting live caller values.
     pub(crate) may_collect: &'a BTreeSet<usize>,
 }
 
 pub(crate) struct Generator<'a, 'db> {
     pub(crate) db: &'db dyn baml_compiler2_mir::Db,
     pub(crate) index: &'a ProgramIndex,
-    /// Object index of the bytecode function this body replaces: the
-    /// function whose constant pool and package the body reads.
+    /// Function object whose constant pool and package this body uses.
     pub(crate) object: usize,
-    /// The ordinal of the package the function belongs to, when the program
-    /// places it.
     pub(crate) package: Option<u32>,
-    /// The admitted functions' symbols, by object index.
     pub(crate) symbols: &'a HashMap<usize, String>,
-    /// The admitted functions that can suspend, by object index.
     pub(crate) resumable: &'a BTreeSet<usize>,
-    /// The admitted inline functions that may collect garbage: a call to one
-    /// roots the caller's live values for its duration (`rooted_call`).
+    /// Calls to these functions require rooting live caller values.
     pub(crate) may_collect: &'a BTreeSet<usize>,
-    /// Where this body checks for a collection, if it is inline.
     pub(crate) gc_checks: crate::admit::GcChecks,
-    /// The first of the frame slots a call that may collect roots the
-    /// caller's live values in (`rooted_call`), after the body's own.
+    /// First spill slot used to root values across collecting calls.
     pub(crate) spill_base: usize,
-    /// Whether this function can suspend: it is emitted as a resumable state
-    /// machine over its blocks rather than as structured code.
+    /// Suspensions require a resumable state machine.
     pub(crate) suspends: bool,
-    /// While emitting a resumable function's block loop (where a jump is
-    /// `bb = N; continue`), as opposed to its resume prologue.
+    /// Jumps continue the block loop after the resume prologue.
     pub(crate) in_loop: bool,
-    /// Builtin native keys the module binds, by key → ordinal.
+    /// Builtin keys mapped to stable binding ordinals.
     pub(crate) builtins: &'a mut BTreeMap<String, usize>,
     pub(crate) body: &'a MirFunctionBody<'db>,
-    /// The lambdas lowered inside this function, which its `MakeClosure`s
-    /// index.
     pub(crate) lambdas: &'a [MirFunction<'db>],
     pub(crate) analysis: &'a Analysis,
-    /// Where the body's MIR positions landed in its function's bytecode: the
-    /// PCs it records (`pc`).
+    /// Bytecode PCs corresponding to MIR positions.
     pub(crate) positions: &'a Positions,
-    /// What the PC the code emitted so far in the current leaf has set reads
-    /// as ([`Positions::reading`]).
+    /// Source location and shielding last recorded in this leaf.
     pub(crate) current_mark: Option<(usize, bool)>,
     pub(crate) out: String,
-    /// `let` bindings to emit before the statement being generated: every
-    /// operand that is not an atom is bound first, so no call's argument list
-    /// holds another call (two `vm` borrows) whatever the expression is.
+    /// Bind non-atomic operands before calls to avoid overlapping VM borrows.
     pub(crate) pending: Vec<String>,
     pub(crate) temps: usize,
-    /// For a resumable function, the locals live on entry to each block:
-    /// what a suspension keeps in the frame's slots.
     pub(crate) live_in: Vec<Vec<bool>>,
-    /// The stack slots the body keeps in its frame: a resumable body's
-    /// locals and iterator positions, then its point slot, then the cause
-    /// slot; just the cause slot for an inline body with a `catch`.
+    /// Locals and iterator positions precede the suspension point and cause slots.
     pub(crate) slots: usize,
-    /// The slot holding the context of the error being handled, which the
-    /// VM's cause chain reads; `None` without a `catch`.
+    /// Active handler context used by the VM cause chain.
     pub(crate) cause_slot: Option<usize>,
-    /// A resumable body's slot for the point it suspended at.
     pub(crate) point_slot: usize,
-    /// Each block's predecessors along normal edges.
     pub(crate) preds: Vec<Vec<usize>>,
-    /// A resumable body's loop headers: where it checks for a yield.
     pub(crate) loop_headers: BTreeSet<usize>,
-    /// A resumable body's write-through locals: kept across suspensions but
-    /// assigned only outside loops, so each assignment also writes the
-    /// local's slot and no suspension saves it.
+    /// Locals assigned outside loops whose slots stay current across suspensions.
     pub(crate) write_through: BTreeSet<usize>,
-    /// The type arguments of the call `pause` is emitting.
     pub(crate) call_types: Vec<String>,
-    /// An inline body's structured control flow, built when it is emitted;
-    /// a resumable body has none.
+    /// Inline bodies have structured control flow; resumable bodies do not.
     pub(crate) structured: Option<Structured>,
-    /// The templates over the frame's type arguments the body realizes
-    /// once on entry, by the local `ty{k}` holding each (`Self::realized`).
+    /// Frame-derived types hoisted into `ty{k}` locals.
     pub(crate) frame_templates: Vec<baml_compiler2_mir::TyTemplate>,
-    /// Whether derived types are built once on entry. A body binding a type
-    /// into its frame (`type T = ..`) builds each where it is used instead,
-    /// since a template may read the slot bound.
+    /// Type bindings and collections require rebuilding derived types at each use.
     pub(crate) hoist_types: bool,
-    /// The statically known types the body reads as `type` values, by the
-    /// expression building each: one cached object per site
-    /// (`vm.static_type_value`), as bytecode's `LoadType` keeps.
+    /// Static type values cached by their generated expression.
     pub(crate) static_value_sites: Vec<String>,
 }
 
@@ -236,7 +188,6 @@ impl<'db> Generator<'_, 'db> {
 
     /// A body that cannot suspend: structured Rust that runs to completion.
     fn inline_function(&mut self, symbol: &str) -> Gen<String> {
-        // A graph the structurer refuses keeps the function bytecode.
         let structured = structurize(&self.analysis.cfg)
             .map_err(|error| Rejection::Invalid(error.to_string()))?;
         let stmts = structured.stmts.clone();
@@ -264,11 +215,7 @@ impl<'db> Generator<'_, 'db> {
         Ok(self.assemble(prologue))
     }
 
-    /// A resumable function: the VM drives it through `Resume`/`Step`. Its
-    /// arguments and every local live across a suspension sit in its frame's
-    /// stack slots (local `i` in slot `i`, an iterator position after the
-    /// locals), so the GC sees them while it is suspended. The blocks run in a
-    /// `loop { match bb }`, since a resume enters the middle of the function.
+    /// Live locals stay in frame slots while the VM suspends this state machine.
     fn resumable_function(&mut self, symbol: &str) -> Gen<String> {
         let arity = self.arity_locals();
         let slots = self.slots;
@@ -278,8 +225,6 @@ impl<'db> Generator<'_, 'db> {
             "pub fn {symbol}(vm: &mut BexVm, resume: Resume) -> R<Step>"
         ));
         self.declare_locals(false, !self.loop_headers.is_empty());
-        // Prologue: start, or read the point this body suspended at, restore
-        // what it saved and take the result of its request.
         self.in_loop = false;
         self.emit_line("let mut bb: usize;");
         self.emit_line("match resume {");
@@ -288,9 +233,7 @@ impl<'db> Generator<'_, 'db> {
         if let Some(cause) = self.cause_slot {
             self.emit_line(&format!("vm.set_slot(depth, {cause}, Value::NULL);"));
         }
-        // A write-through local's slot holds its value from its first
-        // assignment on, and its default before that, so a resume where
-        // liveness overapproximates still reads a well-typed value.
+        // Initialize slots so overestimated liveness still restores typed values.
         for local in 0..self.analysis.reprs.len() {
             if !self.write_through.contains(&local) {
                 continue;
@@ -322,7 +265,6 @@ impl<'db> Generator<'_, 'db> {
         }
         self.emit_line(&format!("bb = {};", self.body.entry.0));
         self.emit_line("}");
-        // Each resume arm restores what its suspension saved (`saved_at`).
         self.emit_line("resume => {");
         self.emit_line(&format!(
             "let point = bex_vm::compiled_rt::expect_int(vm.slot(depth, {point_slot}))?;"
@@ -372,15 +314,11 @@ impl<'db> Generator<'_, 'db> {
         Ok(self.assemble(prologue))
     }
 
-    /// The number of parameters the body binds as locals.
     fn arity_locals(&self) -> usize {
         self.body.locals.len().min(self.arity())
     }
 
-    /// Open the function and the closure its body runs in. Every way out of
-    /// the closure, `?` included, passes [`Self::footer`], which records the
-    /// PC an error was raised at in this function's frame. Before its first
-    /// statement a body stands at PC 0, as a bytecode frame does.
+    /// Every closure exit records the current PC before returning an error.
     fn header(&mut self, signature: &str) {
         let result = signature
             .rsplit("-> ")
@@ -401,9 +339,6 @@ impl<'db> Generator<'_, 'db> {
         self.emit_line("}");
     }
 
-    /// Declare the body's locals, iterator positions, iteration counter and
-    /// per-block condition and discriminant temporaries. An inline body binds
-    /// its parameters from `args`; a resumable one reads them on `Start`.
     fn declare_locals(&mut self, from_args: bool, iterations: bool) {
         let analysis = self.analysis;
         let arity = if from_args { self.arity_locals() } else { 0 };
@@ -441,8 +376,7 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// `prologue`, then the frame-derived types the body needed, then the
-    /// body generated since.
+    /// Insert hoisted types between the prologue and body.
     fn assemble(&mut self, prologue: String) -> String {
         let body = std::mem::take(&mut self.out);
         for k in 0..self.frame_templates.len() {
@@ -456,10 +390,7 @@ impl<'db> Generator<'_, 'db> {
         out
     }
 
-    /// An expression of type `RealizedTy` for `template`, owned: a static
-    /// template is built in place; one reading the frame's type arguments
-    /// is a clone of the local built on entry (`frame_templates`), or built
-    /// where it is used when the body binds types (`hoist_types`).
+    /// Reuse hoisted frame types unless bindings or collections can invalidate them.
     pub(super) fn realized(&mut self, template: &baml_compiler2_mir::TyTemplate) -> Gen<String> {
         if !reads_frame(template) {
             return match realized_expr(self.index, template, false) {
@@ -487,11 +418,7 @@ impl<'db> Generator<'_, 'db> {
         Ok(format!("ty{k}.clone()"))
     }
 
-    /// A type this backend does not build from its parts (an interface, a
-    /// recursive alias, a function type, an opaque type, ...): the constant
-    /// bytecode's own `LoadType` of the same template reads, substituted with
-    /// the frame's type arguments as that instruction substitutes it, bound
-    /// to a temporary.
+    /// Read a type from its pooled template with frame arguments substituted.
     fn pooled_type(&mut self, template: &baml_compiler2_mir::TyTemplate) -> Gen<String> {
         let blocked = || {
             unsupported(format!(
@@ -517,7 +444,6 @@ impl<'db> Generator<'_, 'db> {
         Ok(name)
     }
 
-    /// [`Self::realized`] for each of `templates`.
     pub(super) fn realized_all(
         &mut self,
         templates: &[baml_compiler2_mir::TyTemplate],
@@ -528,8 +454,7 @@ impl<'db> Generator<'_, 'db> {
             .collect()
     }
 
-    /// An expression of type `&RealizedTy` for `template`: the entry local
-    /// borrowed, or a built type bound to a temporary first.
+    /// Borrow a realized type, binding a temporary when needed.
     pub(super) fn realized_ref(
         &mut self,
         template: &baml_compiler2_mir::TyTemplate,
@@ -545,9 +470,7 @@ impl<'db> Generator<'_, 'db> {
         Ok(format!("&{name}"))
     }
 
-    /// A call's type arguments (the leading `ntypeargs` operands, each a
-    /// type local) as owned `RealizedTy` expressions, and whether every one
-    /// is a statically known primitive (`StaticTy::primitive`).
+    /// Return realized call types and whether all are static primitives.
     pub(super) fn call_type_args(
         &mut self,
         type_args: &[Operand<'db>],
@@ -574,8 +497,6 @@ impl<'db> Generator<'_, 'db> {
         Ok((types, primitive))
     }
 
-    /// Work out the body's frame layout and the control-flow facts its
-    /// emission reads.
     fn prepare(&mut self) {
         let blocks = &self.body.blocks;
         self.preds = vec![Vec::new(); blocks.len()];
@@ -640,9 +561,7 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// Whether a resumable body runs a callee in place that may collect: a
-    /// compiled function that may, or a closure or implementation it calls
-    /// directly before falling back to a request.
+    /// A resumable body may call a collecting callee before requesting suspension.
     fn calls_in_place(&self) -> bool {
         self.body
             .blocks
@@ -665,8 +584,6 @@ impl<'db> Generator<'_, 'db> {
             })
     }
 
-    /// The value locals live across `block`'s call: what a collection inside
-    /// the callee may move.
     fn rooted_locals(&self, block: BlockId) -> Gen<Vec<usize>> {
         let (locals, _) = self.saved_at(block)?;
         Ok(locals
@@ -675,12 +592,7 @@ impl<'db> Generator<'_, 'db> {
             .collect())
     }
 
-    /// `call`, an expression of type `R<_>` that runs a callee which may
-    /// collect, made with the value locals live across `block`'s call rooted
-    /// in the frame's spill slots and read back after it (on either outcome:
-    /// a handler reads them too, and the callee's frames, which an error
-    /// leaves pushed, stand above the slots). The result, through `block`'s
-    /// handler.
+    /// Root live values across a collecting call and reload them on either outcome.
     pub(super) fn rooted_call(&mut self, block: BlockId, call: &str) -> Gen<String> {
         let live = self.rooted_locals(block)?;
         if live.is_empty() {
@@ -701,8 +613,7 @@ impl<'db> Generator<'_, 'db> {
         self.fallible(block, &format!("r{k}"))
     }
 
-    /// A compiled GC check: when a collection is due, collect with the value
-    /// locals in `live` rooted and read back.
+    /// Root live values while collecting and reload them afterward.
     pub(super) fn gc_check(&mut self, block: BlockId, guard: &str) {
         let live = &self.live_in[block.0];
         let locals: Vec<usize> = (0..self.analysis.reprs.len())
@@ -720,12 +631,8 @@ impl<'db> Generator<'_, 'db> {
         self.emit_line("}");
     }
 
-    /// The locals a resumable body writes through to their slots: each one
-    /// that some suspension keeps, is assigned only in blocks outside every
-    /// loop (so writing its slot at each assignment runs a bounded number of
-    /// times, where saving it runs at every suspension), and is a plain
-    /// scalar or value (not a float, which writing would box, nor an
-    /// iterator or a handler's landing local, which are assigned elsewhere).
+    /// Write through locals assigned outside loops, excluding boxed floats,
+    /// iterators, and handler locals that have separate storage rules.
     fn write_through_locals(&self, in_loop: &[bool]) -> BTreeSet<usize> {
         let mut kept = BTreeSet::new();
         for block in 0..self.body.blocks.len() {
@@ -799,13 +706,7 @@ impl<'db> Generator<'_, 'db> {
             .collect()
     }
 
-    /// What a suspension at the end of `block` keeps in the frame's slots:
-    /// each local live once it resumes, then the position of each live array
-    /// iterator, with its slot. Live once it resumes means live into the
-    /// block the resume continues at, less the local the resume writes, plus
-    /// live into the block's handler when a raise can land there. Every other
-    /// local is dead across the suspension: it is neither saved nor restored,
-    /// and keeps its default until it is next written.
+    /// Keep resume-entry locals except the result, plus unwind-entry locals.
     fn saved_at(&self, block: BlockId) -> Gen<Saved> {
         let (destination, target) = self.resume_edge(block)?;
         let overwritten = match destination {
@@ -845,14 +746,12 @@ impl<'db> Generator<'_, 'db> {
         (locals, iters)
     }
 
-    /// Read back what the suspension at the end of `block` saved.
     fn restore_locals(&mut self, block: BlockId) -> Gen<()> {
         let saved = self.saved_at(block)?;
         self.restore(saved);
         Ok(())
     }
 
-    /// Read `saved` back from the frame's slots.
     fn restore(&mut self, (locals, iters): Saved) {
         for i in locals {
             let value = coerce(
@@ -869,8 +768,7 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// Save `saved` in the frame's slots: all but the write-through locals,
-    /// whose slots already hold them.
+    /// Write-through locals already have current frame slots.
     fn save(&mut self, (locals, iters): Saved) {
         for i in locals {
             if self.write_through.contains(&i) {
@@ -884,10 +782,7 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// Suspend at `block`'s terminator: save the locals live across it and
-    /// its point in the frame's slots, and hand the VM the request. An await
-    /// of a future that has already settled takes its value without
-    /// suspending.
+    /// Save live locals and request suspension; settled awaits continue immediately.
     fn pause(&mut self, block: BlockId) -> Gen<()> {
         let point = block.0 + 1;
         let terminator = self.body.blocks[block.0]
@@ -930,8 +825,6 @@ impl<'db> Generator<'_, 'db> {
                     args,
                 )
             }
-            // The callee is resolved and the arguments pushed here, laid over
-            // the slots of whichever implementation resolved.
             Terminator::VirtualCall {
                 iface,
                 method,
@@ -944,8 +837,6 @@ impl<'db> Generator<'_, 'db> {
                 has_trace,
                 ..
             } => {
-                // As for a direct call: the attachment is the final operand,
-                // handed to the VM, and the call is always requested.
                 let args = if *has_trace {
                     let Some((trace, args)) = args.split_last() else {
                         return Err(Rejection::Invalid(
@@ -1021,8 +912,7 @@ impl<'db> Generator<'_, 'db> {
             unreachable!("call request requires a call terminator");
         };
         let (type_args, args) = args.split_at((*ntypeargs).min(args.len()));
-        // A `$trace` attachment is the final operand: handed to the
-        // VM for the call it requests, as bytecode's `SetCallTrace`.
+        // The final operand of a traced call is its attachment.
         let args = if *has_trace {
             let Some((trace, args)) = args.split_last() else {
                 return Err(Rejection::Invalid(
@@ -1047,9 +937,7 @@ impl<'db> Generator<'_, 'db> {
                 };
                 self.laid_out_args(block, &name, info, argument_layout.as_ref(), args)?
             }
-            // Named arguments to a function value: laid over the
-            // callee's slots at run time, as the interpreter's
-            // `CallIndirect` remaps them, and pushed here.
+            // Function values need their named arguments mapped at runtime.
             _ if argument_layout
                 .as_ref()
                 .is_some_and(|layout| layout.0.iter().any(Option::is_some)) =>
@@ -1088,11 +976,7 @@ impl<'db> Generator<'_, 'db> {
         })
     }
 
-    /// Before a call through a function value suspends (`pause`): when the
-    /// value is a closure (or a plain function) whose body is compiled and
-    /// inline, call it directly, as a call to a named compiled function is
-    /// made, and continue; anything else goes through the VM. `callee` and
-    /// `args` are bound.
+    /// Run compiled inline closures in place before falling back to a VM request.
     fn direct_closure_call(&mut self, block: BlockId, args: &[String]) -> Gen<()> {
         let (destination, target) = self.resume_edge(block)?;
         self.flush_bindings();
@@ -1116,7 +1000,6 @@ impl<'db> Generator<'_, 'db> {
         Ok(())
     }
 
-    /// How a block of a resumable function hands control on.
     fn transfer(&mut self, id: BlockId) -> Gen<()> {
         if self.block_suspends(id.0) {
             return self.pause(id);
@@ -1171,9 +1054,7 @@ impl<'db> Generator<'_, 'db> {
         Ok(())
     }
 
-    /// The prologue arms that resume after `block`'s suspension: bind the
-    /// result and continue at its target, or land an error in the block's
-    /// handler.
+    /// Resume with a result or route an error to the suspension site's handler.
     fn resume_arms(&mut self, block: BlockId) -> Gen<()> {
         let point = block.0 + 1;
         let (destination, target) = self.resume_edge(block)?;
@@ -1197,8 +1078,6 @@ impl<'db> Generator<'_, 'db> {
         Ok(())
     }
 
-    /// The local a suspension at the end of `block` writes when it resumes,
-    /// and the block it continues at.
     fn resume_edge(&self, block: BlockId) -> Gen<(Place, BlockId)> {
         match self.body.blocks[block.0].terminator.as_ref() {
             Some(
@@ -1235,7 +1114,6 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// A jump to `block` in a resumable function.
     fn jump_to(&self, block: usize) -> String {
         if self.in_loop {
             format!("bb = {block}; continue;")
@@ -1244,20 +1122,16 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// The array iterators, in the order their positions take slots after
-    /// the locals'.
+    /// Iterator positions take slots in this order after the locals.
     fn iters(&self) -> Vec<usize> {
         self.analysis.array_iters.keys().copied().collect()
     }
 
-    /// The point a resumable body records for a yield at loop header
-    /// `header`, after the points of its suspending blocks (`block + 1`).
+    /// Yield points follow suspension points so their IDs cannot overlap.
     fn yield_point(&self, header: usize) -> usize {
         self.body.blocks.len() + 1 + header
     }
 
-    /// Whether the handler `block` runs under differs from one it can be
-    /// entered from: where the cause slot is set.
     fn cause_changes_at(&self, block: usize) -> bool {
         let handling = self.body.blocks[block].handling;
         let preds = &self.preds[block];
@@ -1274,7 +1148,6 @@ impl<'db> Generator<'_, 'db> {
         self.out.push('\n');
     }
 
-    /// Emit a statement, preceded by the bindings its expressions hoisted.
     fn emit_statement(&mut self, text: &str) {
         let pending = std::mem::take(&mut self.pending);
         for binding in pending {
@@ -1283,8 +1156,7 @@ impl<'db> Generator<'_, 'db> {
         self.emit_line(text);
     }
 
-    /// Bind `expr` to a temporary unless it is an atom (a local or a
-    /// literal), so it can be an argument of a call into the VM.
+    /// VM call arguments must be atoms to avoid overlapping mutable borrows.
     fn hoist(&mut self, expr: Expr) -> Expr {
         if is_atom(&expr.code) {
             return expr;
@@ -1299,9 +1171,6 @@ impl<'db> Generator<'_, 'db> {
         Expr::new(name, expr.repr)
     }
 
-    /// `code`, held as `repr`, coerced to a `Value` that can be a VM call
-    /// argument.
-    /// `operand` as a `Value` call argument.
     fn value_operand(&mut self, block: BlockId, operand: &Operand<'db>) -> Gen<String> {
         let operand = self.operand(block, operand)?;
         Ok(self.value_arg(&operand.code, operand.repr))
@@ -1312,18 +1181,14 @@ impl<'db> Generator<'_, 'db> {
         self.hoist(Expr::new(coerced, Repr::Value)).code
     }
 
-    /// Emit the bindings hoisted so far.
     fn flush_bindings(&mut self) {
         for binding in std::mem::take(&mut self.pending) {
             self.emit_line(&binding);
         }
     }
 
-    /// Emit `pc = N;` for a position whose PC is `pc` when it reads
-    /// differently ([`Positions::reading`]: its line, its shielding) from
-    /// the one the current leaf last set: a frame at either reads the same,
-    /// so the body stores no more often than the line changes. A position
-    /// the bytecode emitted no instruction for keeps the last one.
+    /// Record a PC only when its source location or shielding changes.
+    /// Positions without bytecode retain the last PC.
     fn set_pc(&mut self, pc: Option<usize>) {
         let Some(pc) = pc else { return };
         let mark = self.positions.reading(pc);
@@ -1333,13 +1198,10 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// The PC of the call or suspension ending `block`, as generated code:
-    /// its instruction's, where a call records its call site.
     fn site_pc(&self, block: BlockId) -> String {
         pc_arg(self.positions.block(block.0).and_then(|pcs| pcs.terminator))
     }
 
-    /// Whether `block` ends in a suspension point.
     fn block_suspends(&self, block: usize) -> bool {
         match self.body.blocks[block].terminator.as_ref() {
             Some(
@@ -1354,16 +1216,13 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// Whether a `VirtualCall` terminator is one this backend compiles in
-    /// place as array iteration (see [`Analysis::array_iters`]); any other
-    /// interface method call resolves its callee at run time and suspends.
+    /// Array iteration is inline; other virtual calls can suspend.
     pub(super) fn array_iteration(&self, terminator: &Terminator<'db>) -> bool {
         array_iter_call(self.body, self.analysis.arity, terminator).is_some()
             || array_next_call(terminator, &self.analysis.array_iters).is_some()
     }
 
-    /// Whether a `Call` terminator suspends: see [`suspends_directly`]; a
-    /// call to a user function suspends unless it is compiled and inline.
+    /// Uncompiled or resumable callees require a VM request.
     fn call_suspends(&self, terminator: &Terminator<'db>) -> bool {
         if suspends_directly(
             self.db,
@@ -1383,8 +1242,6 @@ impl<'db> Generator<'_, 'db> {
     }
 
     fn arity(&self) -> usize {
-        // The MIR body's parameters are locals 1..=arity; `Analysis::new`
-        // checked the count against the locals.
         self.analysis.arity
     }
 }

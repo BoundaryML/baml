@@ -1,4 +1,4 @@
-//! Constants.
+//! Generates constant expressions and resolves pooled objects.
 
 use baml_compiler2_mir::{Constant, enum_display_name, function_display_name};
 
@@ -13,8 +13,6 @@ impl<'db> Generator<'_, 'db> {
             Constant::Bool(b) => Expr::new(format!("{b}"), Repr::Bool),
             Constant::Null => Expr::new("Value::NULL", Repr::Value),
             Constant::OmittedArg => Expr::new("Value::OMITTED_ARG", Repr::Value),
-            // The literal's compile-time string object, as bytecode loads it:
-            // no allocation per evaluation.
             Constant::String(s) => match self.index.strings.get(s.as_str()) {
                 Some(object) => Expr::new(
                     format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
@@ -22,7 +20,6 @@ impl<'db> Generator<'_, 'db> {
                 ),
                 None => Expr::new(format!("vm.string_value({s:?})"), Repr::Value),
             },
-            // Its compile-time bigint object, as bytecode loads it.
             Constant::Bigint(value) => match self.index.bigints.get(&value.to_string()) {
                 Some(object) => Expr::new(
                     format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
@@ -34,8 +31,7 @@ impl<'db> Generator<'_, 'db> {
                     ));
                 }
             },
-            // A named function as a value: the program's pooled wrapper over
-            // it, as bytecode loads it, so `f === f` holds as there.
+            // Pool function wrappers so repeated reads preserve identity.
             Constant::Function(func) => {
                 let Some((object, _)) = self.index.function(self.db, *func)? else {
                     let name = function_display_name(self.db, *func);
@@ -50,7 +46,6 @@ impl<'db> Generator<'_, 'db> {
                     Repr::Value,
                 )
             }
-            // `foo<int>`: the program's pooled, interned instantiation.
             Constant::GenericFunction { func, type_args } => {
                 let name = function_display_name(self.db, *func);
                 let Some((object, _)) = self.index.function(self.db, *func)? else {
@@ -66,8 +61,6 @@ impl<'db> Generator<'_, 'db> {
                     Repr::Value,
                 )
             }
-            // A top-level `let`: the value `$init` left in its global slot,
-            // read as this function reads globals.
             Constant::GlobalItem(binding) => {
                 let Some(slot) = self.index.let_slot(self.db, *binding)? else {
                     return unsupported("top-level let not found in the program");
@@ -80,8 +73,6 @@ impl<'db> Generator<'_, 'db> {
                     Repr::Value,
                 )
             }
-            // A fresh variant object, as bytecode's `AllocVariant` allocates;
-            // its range check is done here, against the enum's declaration.
             Constant::EnumVariant { enum_ref, index } => {
                 let Some(object) = self.index.enum_(self.db, *enum_ref)? else {
                     let name = enum_display_name(self.db, *enum_ref);

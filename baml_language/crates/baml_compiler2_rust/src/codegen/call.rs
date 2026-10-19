@@ -1,6 +1,4 @@
-//! Calls: an inline call's expression, the callee and arguments of a
-//! request a resumable body hands the VM, and the static operands of an
-//! interface dispatch.
+//! Generates inline calls, suspension requests, and interface dispatch operands.
 
 use baml_compiler2_mir::{
     BlockId, Constant, Operand, Place, TyTemplateInterface, decl_display_name,
@@ -99,8 +97,6 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// Bind `callee` as `let callee: HeapPtr`: a named function's object, or
-    /// a function value's.
     pub(super) fn callee_ptr(&mut self, block: BlockId, callee: &Operand<'db>) -> Gen<()> {
         let code = match callee {
             Operand::Constant(Constant::Function(func)) => {
@@ -122,11 +118,7 @@ impl<'db> Generator<'_, 'db> {
         Ok(())
     }
 
-    /// The argument `Value`s of a call to `name` (the callee `info`
-    /// describes), in the callee's slot order: a call with named or omitted
-    /// optionals is laid over the callee's declared slots at compile time, as
-    /// the VM's `remap_call_arguments` does at run time, with `OMITTED_ARG`
-    /// where the callee's default applies.
+    /// Lay out arguments in callee slot order, filling defaults with `OMITTED_ARG`.
     pub(super) fn laid_out_args(
         &mut self,
         block: BlockId,
@@ -163,7 +155,6 @@ impl<'db> Generator<'_, 'db> {
         Ok(values)
     }
 
-    /// The comma-separated `Value`s of a request's arguments.
     pub(super) fn arg_values(&mut self, block: BlockId, args: &[Operand<'db>]) -> Gen<Vec<String>> {
         let mut values = Vec::with_capacity(args.len());
         for arg in args {
@@ -173,9 +164,7 @@ impl<'db> Generator<'_, 'db> {
         Ok(values)
     }
 
-    /// Type operands (type locals) as `RealizedTy` expressions, and whether
-    /// every one is known statically: a type built from the frame's type
-    /// arguments, or read from a pooled constant, is built where it is used.
+    /// Realize type operands and report whether all are static.
     pub(super) fn type_operands(
         &mut self,
         what: &str,
@@ -206,12 +195,7 @@ impl<'db> Generator<'_, 'db> {
         Ok((types, fixed))
     }
 
-    /// The operands of a dispatch through `iface`: the interface object's
-    /// pointer, the `&[RealizedTy]` of its instantiation, and whether that
-    /// instantiation is known statically (else it is built from the frame or
-    /// a pooled constant where the dispatch runs). Associated types are
-    /// outputs of the implementation, not part of its selection, so they are
-    /// not spelled.
+    /// Associated types are implementation outputs and do not select the implementation.
     pub(super) fn interface_operands(
         &mut self,
         iface: &TyTemplateInterface,
@@ -248,6 +232,8 @@ impl<'db> Generator<'_, 'db> {
     /// value arguments in declared order; `self_arg` indexes the receiver
     /// among the value arguments.
     #[allow(clippy::too_many_arguments)]
+    /// Call an inline implementation or return a VM request.
+    /// `self_arg` indexes the receiver among the value arguments.
     pub(super) fn virtual_request(
         &mut self,
         block: BlockId,
@@ -271,12 +257,7 @@ impl<'db> Generator<'_, 'db> {
                 values.len()
             )));
         };
-        // The slots this site pushes, for the VM to lay over the resolved
-        // callee's: an implementation may declare optionals the interface
-        // method does not, which the VM fills with `OMITTED_ARG` even when
-        // the site names none. Only a site naming no optional calls an
-        // inline callee in place, which `call_inline` declines unless the
-        // callee's arity is the site's.
+        // Implementations may add optional parameters, so only matching arities run inline.
         let named = layout.is_some_and(|layout| layout.0.iter().any(Option::is_some));
         let layout = layout.map(|layout| {
             let slots: Vec<String> = layout
@@ -289,8 +270,7 @@ impl<'db> Generator<'_, 'db> {
                 .collect();
             format!("Some(&[{}])", slots.join(", "))
         });
-        // The site's cache keys on the receiver alone, so only a dispatch
-        // whose instantiation is the same on every pass uses it.
+        // The receiver-only cache is valid only for a static instantiation.
         if iface_fixed && types_fixed {
             let site = format!("S{}", block.0);
             self.emit_statement(&format!(
@@ -309,8 +289,7 @@ impl<'db> Generator<'_, 'db> {
                 ),
             );
         }
-        // A traced call reaches the VM's call path, which applies the
-        // attachment, so it is never run in place.
+        // The VM must apply trace attachments, so traced calls cannot run inline.
         if !named && !traced {
             let site = self.site_pc(block);
             let call = self.rooted_call(
