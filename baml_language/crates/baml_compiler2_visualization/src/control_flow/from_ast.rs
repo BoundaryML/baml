@@ -253,14 +253,7 @@ impl<'a> AstGraphBuilder<'a> {
             ast::Stmt::Expr(expr_id) => {
                 self.visit_expr(*expr_id);
             }
-            ast::Stmt::TypeBinding {
-                value: ast::TypeBindingValue::Runtime(operand),
-                ..
-            } => self.visit_expr(*operand),
-            ast::Stmt::TypeBinding {
-                value: ast::TypeBindingValue::Static(_),
-                ..
-            } => {}
+            ast::Stmt::TypeBinding { operand, .. } => self.visit_expr(*operand),
             ast::Stmt::Throw { value } => {
                 self.visit_expr(*value);
             }
@@ -1018,13 +1011,15 @@ fn collect_callee_names_stmt(body: &ast::ExprBody, id: ast::StmtId, names: &mut 
     match &body.stmts[id] {
         ast::Stmt::Expr(expr) => collect_callee_names_expr(body, *expr, names),
         ast::Stmt::TypeBinding {
-            value: ast::TypeBindingValue::Runtime(operand),
+            operand,
+            else_branch,
             ..
-        } => collect_callee_names_expr(body, *operand, names),
-        ast::Stmt::TypeBinding {
-            value: ast::TypeBindingValue::Static(_),
-            ..
-        } => {}
+        } => {
+            collect_callee_names_expr(body, *operand, names);
+            if let Some(else_branch) = else_branch {
+                collect_callee_names_expr(body, *else_branch, names);
+            }
+        }
         ast::Stmt::Defer { body: defer_body } => {
             collect_callee_names_expr(body, *defer_body, names);
         }

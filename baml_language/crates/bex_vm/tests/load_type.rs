@@ -81,6 +81,7 @@ fn inject_function(
         origin: FunctionOrigin::UserDefined,
         native_key: None,
         body_meta: None,
+        trace_passthrough: false,
         owner: bex_vm_types::HeapPtr::null(),
     };
 

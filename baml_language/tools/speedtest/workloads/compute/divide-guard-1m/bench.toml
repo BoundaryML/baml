@@ -1,0 +1,5 @@
+name = "divide guard 1m"
+description = "1,000,000 guarded integer divisions"
+expect = "0"
+jobs = 8
+warmup = 1

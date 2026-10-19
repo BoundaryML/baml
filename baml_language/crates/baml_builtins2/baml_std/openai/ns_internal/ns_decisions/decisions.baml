@@ -1,5 +1,5 @@
 // Reflection owns traversal, metadata precedence, routing, and validation.
-// Reflected enums and classes are constructed through unreflect + JSON.
+// Reflected enums and classes are constructed through `let type` + JSON.
 class ChoiceOption {
     key: string,
     description: string?,
@@ -30,8 +30,8 @@ function reject(detail: string) -> ai.errors.InvalidRequest {
 // Only finite Choice members are accepted. Reflected (canonical) union order
 // is preserved; a key collision belongs to the first member that offered it.
 function options(ty: reflect.Type) -> ChoiceOption[] {
-    if let en: reflect.enum.Type = ty.as_enum() {
-        type T = unreflect(ty);
+    if let en: reflect.Enum = ty.as_enum() {
+        let type T = ty;
         let out: ChoiceOption[] = [];
         for (let variant in en.values()) {
             if (!variant.meta.skip) {
@@ -46,7 +46,7 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
         }
         return out;
     }
-    if let union: reflect.union.Type = ty.as_union() {
+    if let union: reflect.Union = ty.as_union() {
         let out: ChoiceOption[] = [];
         for (let member in union.member_types()) {
             for (let option in options(member)) {
@@ -58,10 +58,10 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
     if (ty == reflect.Type.of<null>()) {
         return [ChoiceOption { key: "<null>", description: null, value: null }];
     }
-    if let literal: reflect.literal.Type = ty.as_literal() {
+    if let literal: reflect.Literal = ty.as_literal() {
         let value = literal.value();
-        if let en: reflect.enum.Type = reflect.Type.of_value(value).as_enum() {
-            let name = reflect.enum.get_value(value);
+        if let en: reflect.Enum = reflect.Type.of_value(value).as_enum() {
+            let name = reflect.Enum.get_value(value);
             for (let variant in en.values()) {
                 if (variant.name == name) {
                     if (variant.meta.skip) {
@@ -100,7 +100,7 @@ function accepts_null(ty: reflect.Type) -> bool {
     if (ty == reflect.Type.of<null>() || ty == reflect.Type.of<unknown>()) {
         return true;
     }
-    if let union: reflect.union.Type = ty.as_union() {
+    if let union: reflect.Union = ty.as_union() {
         for (let member in union.member_types()) {
             if (accepts_null(member)) {
                 return true;
@@ -124,12 +124,10 @@ function collect(
             throw reject(`Decisions cannot convert recursive type ${ty.to_string()}`)
         }
     }
-    if let cls: reflect.class.Type = ty.as_class() {
+    if let cls: reflect.Class = ty.as_class() {
         let out: Leaf[] = [];
         for (let field in cls.fields()) {
-            let field_type: reflect.Type = field.type else {
-                throw reject(`Decisions cannot reflect field ${field.name}`)
-            };
+            let field_type = field.type;
             if (field.meta.skip) {
                 if (!accepts_null(field_type)) {
                     throw reject(`Skipped Decisions field ${field.name} must accept null`)
@@ -157,7 +155,7 @@ function collect(
     }
 
     let choices: ChoiceOption[] = [];
-    if (ty != reflect.Type.of<bool>() && ty != reflect.Type.of<float>()) {
+    if (ty != bool.type() && ty != float.type()) {
         let seen: map<string, bool> = {};
         for (let option in options(ty)) {
             if (!seen.has(option.key)) {
@@ -171,7 +169,7 @@ function collect(
     }
 
     let type_description = match (ty.as_enum()) {
-        let en: reflect.enum.Type => en.meta().description,
+        let en: reflect.Enum => en.metadata().description,
         null => null,
     };
     let local = description ?? type_description ?? "";
@@ -394,7 +392,7 @@ function decode(leaf: Leaf, answer: Answer) -> unknown {
         if (answer.type != "predicate" || probability < 0.0 || probability > 1.0) {
             throw failed(`Invalid predicate answer for ${leaf.id}`)
         }
-        if (leaf.ty == reflect.Type.of<bool>()) {
+        if (leaf.ty == bool.type()) {
             return probability >= 0.5;
         }
         return probability;
@@ -411,21 +409,19 @@ function decode(leaf: Leaf, answer: Answer) -> unknown {
 }
 
 function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>) -> unknown {
-    if let cls: reflect.class.Type = ty.as_class() {
+    if let cls: reflect.Class = ty.as_class() {
         let fields: map<string, unknown> = {};
         for (let field in cls.fields()) {
             if (field.meta.skip) {
                 let _ = fields.set(field.name, null);
             } else {
-                let field_type: reflect.Type = field.type else {
-                    throw failed("Missing field type")
-                };
+                let field_type = field.type;
                 let _ = fields.set(field.name, assemble(field_type, path.concat([field.name]), values));
             }
         }
         // JSON currently cannot preserve an already-selected enum versus string
         // literal with the same JSON value. This matches the TypeSafe adapter limitation.
-        type T = unreflect(ty);
+        let type T = ty;
         return baml.json.from_string<T>(baml.json.to_string(fields));
     }
     values.get(
@@ -442,8 +438,7 @@ function invoke(c: root.DecisionsClient, input: ai.ModelTurnInput) -> ai.ModelTu
     // No streaming here: only the two transport deadlines apply.
     let sent = ai.wire.send_as_with_wire<Response>(
         ai.LlmTimeoutOptions._resolve(c.timeout)._apply(request(c, input, p, false)),
-        "openai-decisions",
-        c.id(),
+        ai.events.ModelKey { provider: c.provider(), model: c.model },
         capture_wire = c.capture_wire,
     );
     if (sent.value.answers.length() != p.leaves.length()) {
@@ -467,28 +462,34 @@ function invoke(c: root.DecisionsClient, input: ai.ModelTurnInput) -> ai.ModelTu
         let _ = values.set(leaf.id, decode(leaf, answer));
     }
     let value = assemble(input.output_type, [], values);
-    ai.ModelTurn {
-        model: sent.value.model ?? c.model,
-        content: [ai.content.Text { text: baml.json.to_string(value) }],
-        parsed_output: ai.ParsedOutput { value: value },
-        stop_reason: ai.content.StopReason.Complete,
-        calls: [sent.call],
-        usage: match (sent.value.usage) {
-            let usage: root.internal.OaUsage => {
-                ai.events.Usage {
-                    input_tokens: usage.input_tokens ?? 0,
-                    output_tokens: usage.output_tokens ?? 0,
-                    cached_input_tokens: usage.input_tokens_details?.cached_tokens,
-                    reasoning_tokens: usage.output_tokens_details?.reasoning_tokens,
-                    cache_write_input_tokens: usage.input_tokens_details?.cache_write_tokens,
-                    uncached_input_tokens: ai.internal.uncached_input_tokens(
-                        usage.input_tokens,
-                        usage.input_tokens_details?.cached_tokens,
-                        cache_write = usage.input_tokens_details?.cache_write_tokens,
-                    ),
-                }
-            },
-            null => null,
+    let usage: ai.events.Usage? = match (sent.value.usage) {
+        let reported: root.internal.OaUsage => {
+            ai.events.Usage {
+                input_tokens: reported.input_tokens,
+                output_tokens: reported.output_tokens,
+                cached_input_tokens: reported.input_tokens_details?.cached_tokens,
+                reasoning_tokens: reported.output_tokens_details?.reasoning_tokens,
+                cache_write_input_tokens: reported.input_tokens_details?.cache_write_tokens,
+                uncached_input_tokens: ai.internal.uncached_input_tokens(
+                    reported.input_tokens,
+                    reported.input_tokens_details?.cached_tokens,
+                    cache_write = reported.input_tokens_details?.cache_write_tokens,
+                ),
+            }
         },
-    }
+        null => null,
+    };
+    ai.internal.with_own_call(
+        ai.ModelTurn {
+            content: [ai.content.Text { text: baml.json.to_string(value) }],
+            parsed_output: ai.ParsedOutput { value: value },
+            stop_reason: ai.content.StopReason.Complete,
+            calls: [],
+            child_turns: [],
+        },
+        sent.call,
+        usage,
+        c.model,
+        sent.value.model,
+    )
 }

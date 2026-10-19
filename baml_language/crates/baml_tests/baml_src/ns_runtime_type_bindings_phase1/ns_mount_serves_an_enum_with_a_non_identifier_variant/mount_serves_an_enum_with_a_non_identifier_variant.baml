@@ -5,27 +5,27 @@
 /// variant is unreachable from source. There is no stub whose spelling could
 /// fail, so nothing refuses the enum.
 function non_identifier_variant() -> string {
-    let color = reflect.enum.new("Color", ["Red", "bad-variant"]);
+    let color = reflect.Enum.new("Color", ["Red", "bad-variant"]);
     let base = reflect.Package.compile({ "lib.baml": `function noop() -> int throws never { 0 }` });
     let app = base.with_types({ "Color": color });
     let consumer = reflect.Package.compile(
         { "main.baml": `function go() -> unknown throws never { app.Color.Red }` },
         packages = { "app": app },
     );
-    let go = consumer.get_function<() -> unknown>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<() -> unknown>("root.go");
     go().to_string()
 }
 
 /// The control: every variant spellable, the same shape mounts the same way.
 function identifier_variants() -> string {
-    let color = reflect.enum.new("Color", ["Red", "Green"]);
+    let color = reflect.Enum.new("Color", ["Red", "Green"]);
     let base = reflect.Package.compile({ "lib.baml": `function noop() -> int throws never { 0 }` });
     let app = base.with_types({ "Color": color });
     let consumer = reflect.Package.compile(
         { "main.baml": `function go() -> unknown throws never { app.Color.Red }` },
         packages = { "app": app },
     );
-    let go = consumer.get_function<() -> unknown>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<() -> unknown>("root.go");
     go().to_string()
 }
 

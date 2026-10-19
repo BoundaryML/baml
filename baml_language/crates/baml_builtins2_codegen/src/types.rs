@@ -114,6 +114,20 @@ pub struct Receiver {
     /// Generic type parameters of the class (e.g. `["T"]` for `Array<T>`).
     pub class_generics: Vec<String>,
     pub receiver_type: ReceiverType,
+    /// Whether the receiver may be one of the builtins the glue special-cases
+    /// by class name (the containers, `String`, the numeric companions, the
+    /// media classes). Those all live in the `baml` package, so a same-named
+    /// class of another package (`reflect.Array`, `reflect.Map`) is not one.
+    pub builtin: bool,
+}
+
+impl Receiver {
+    /// The class name builtin-receiver handling matches on: the class name
+    /// when the receiver may be a builtin ([`Self::builtin`]), else `""`,
+    /// which no builtin is called.
+    pub fn builtin_name(&self) -> &str {
+        if self.builtin { &self.class_name } else { "" }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -70,7 +70,7 @@ source: crates/baml_tests/src/generated_tests.rs
   ⚠ extraneous throws declaration: unknown[]
     ╭─[scoped_type_escape.baml:87:84]
  87 │ ╭─▶ function list_relaxed_wrongly(t: reflect.Type) -> string throws unknown[] | string {
- 88 │ │       type T = unreflect(t)
+ 88 │ │       let type T = t;
  89 │ │       let v: T = as_t<T>(1)
  90 │ │       let a: T[] = [v]
  91 │ │       throw a
@@ -90,7 +90,7 @@ source: crates/baml_tests/src/generated_tests.rs
   ⚠ extraneous throws declaration: Boom<unknown>
     ╭─[scoped_type_escape.baml:94:85]
  94 │ ╭─▶ function boom_relaxed_wrongly(t: reflect.Type) -> int throws Boom<unknown> | string {
- 95 │ │       type T = unreflect(t)
+ 95 │ │       let type T = t;
  96 │ │       risky<T>(as_t<T>("x"), true)
  97 │ ╰─▶ }
     ╰────
@@ -108,7 +108,7 @@ source: crates/baml_tests/src/generated_tests.rs
   × `throws unknown` is imprecise: this function throws `string | (() -> unknown throws never)`; write `throws string | (() -> unknown throws never)`
      ╭─[scoped_type_escape.baml:104:74]
  104 │ ╭─▶ function imprecise_unknown_clause(t: reflect.Type) -> int throws unknown {
- 105 │ │       type T = unreflect(t)
+ 105 │ │       let type T = t;
  106 │ │       let v: T = as_t<T>(1)
  107 │ │       throw () -> { ident<T>(v) }
  108 │ ╰─▶ }
@@ -235,7 +235,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[scoped_type_escape.baml:252:82]
  252 │ ╭─▶ function lambda_partial_clause_too_narrow(t: reflect.Type) -> int throws unknown {
  253 │ │       let f = () -> int throws string | _ {
- 254 │ │           type T = unreflect(t)
+ 254 │ │           let type T = t;
  255 │ │           throw as_t<T>(1)
  256 │ │       }
  257 │ │       f()
@@ -248,7 +248,7 @@ source: crates/baml_tests/src/generated_tests.rs
      ╭─[scoped_type_escape.baml:252:82]
  252 │ ╭─▶ function lambda_partial_clause_too_narrow(t: reflect.Type) -> int throws unknown {
  253 │ │       let f = () -> int throws string | _ {
- 254 │ │           type T = unreflect(t)
+ 254 │ │           let type T = t;
  255 │ │           throw as_t<T>(1)
  256 │ │       }
  257 │ │       f()

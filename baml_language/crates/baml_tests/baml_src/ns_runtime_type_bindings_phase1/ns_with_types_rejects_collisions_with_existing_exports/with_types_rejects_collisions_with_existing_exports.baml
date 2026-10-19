@@ -5,7 +5,7 @@ function ExistingFunction() -> null {
 }
 
 function main() -> string {
-    let dynamic_t = reflect.class.new("Dynamic", { "value": reflect.Type.of<string>() });
+    let dynamic_t = reflect.Class.new("Dynamic", { "value": string.type() });
     let base = reflect.Package.compile(
         {
             "base.baml": `

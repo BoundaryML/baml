@@ -76,7 +76,7 @@ def test_function_spec_helpers_accept_invocation_controls():
 
     spec = lorem.ExtractResume_spec(text="Ada Lovelace", _baml={})
     assert spec.name(_baml={"timeout_ms": 1000})
-    for method in ("name", "arguments", "output_type", "prompt", "tools", "client_id", "build_request", "parse", "call"):
+    for method in ("name", "arguments", "output_type", "prompt", "tools", "requested_model", "build_request", "parse", "call"):
         args = ('{"name":"Ada","email":null}',) if method == "parse" else ()
         with pytest.raises(BamlCancelledError):
             getattr(spec, method)(*args, _baml={"timeout_ms": 0})
@@ -85,7 +85,7 @@ def test_function_spec_helpers_accept_invocation_controls():
 async def test_function_spec_helpers_accept_invocation_controls_async():
     spec = await lorem.ExtractResume_spec_async(text="Ada Lovelace", _baml={})
     assert await spec.name_async(_baml={"timeout_ms": 1000})
-    for method in ("name", "arguments", "output_type", "prompt", "tools", "client_id", "build_request", "parse", "call"):
+    for method in ("name", "arguments", "output_type", "prompt", "tools", "requested_model", "build_request", "parse", "call"):
         args = ('{"name":"Ada","email":null}',) if method == "parse" else ()
         with pytest.raises(asyncio.CancelledError):
             await getattr(spec, f"{method}_async")(*args, _baml={"timeout_ms": 0})

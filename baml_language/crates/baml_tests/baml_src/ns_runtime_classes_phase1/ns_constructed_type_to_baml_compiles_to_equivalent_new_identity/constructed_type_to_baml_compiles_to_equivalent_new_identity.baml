@@ -10,21 +10,21 @@ function RoundTrip<T>() -> T {
 }
 
 function main() -> bool {
-    let scores_t = reflect.map.new(reflect.Type.of<string>(), reflect.Type.of<int>().optional().as_type());
-    let original = reflect.class.new(
+    let scores_t = reflect.Map.new(string.type(), int.type().optional());
+    let original = reflect.Class.new(
         "RoundTripRecord",
         {
-            "kind": reflect.literal.new("visit").as_type().meta(
+            "kind": reflect.Literal.new("visit").meta(
                 alias = "wire_kind",
                 description = "dispatch key",
             ),
-            "tags": reflect.Type.of<string>().array().as_type().meta(description = "ordered labels"),
-            "scores": scores_t.as_type(),
+            "tags": string.type().array().meta(description = "ordered labels"),
+            "scores": scores_t,
         },
     );
-    let source = original.as_type().to_baml();
+    let source = original.to_baml();
     let package = reflect.Package.compile({ "round_trip.baml": source });
-    let compiled = package.get_class("root.RoundTripRecord") ?? throw "missing compiled RoundTripRecord";
+    let compiled = package.get_class("root.RoundTripRecord");
     let document = `
         {
                         "wire_kind": "visit",
@@ -32,13 +32,13 @@ function main() -> bool {
                         "scores": {"priority": 7, "followup": null}
                     }
     `;
-    type Original = unreflect(original.as_type())
-    type Compiled = unreflect(compiled.as_type())
+    let type Original = original;
+    let type Compiled = compiled;
     let original_value = RoundTrip@parse<Original>(document);
     let compiled_value = RoundTrip@parse<Compiled>(document);
 
     return original.as_type() != compiled.as_type()
-        && source == compiled.as_type().to_baml()
+        && source == compiled.to_baml()
         && RoundTrip@render_prompt<Original>().text() == RoundTrip@render_prompt<Compiled>().text()
         && baml.json.to_string(original_value) == baml.json.to_string(compiled_value)
         && reflect.Type.of_value(original_value) == original.as_type()

@@ -126,7 +126,7 @@ function main() -> ai.Prompt {
   let ctx = ai.Context {
     client: cc,
     tags: {},
-    _output_format: ai.internal.build_output_format(reflect.Type.of<string>()),
+    _output_format: ai.internal.build_output_format(string.type()),
   }
   let render = prompt`${system}Rules${user}Hello`
   render(ctx)

@@ -139,9 +139,9 @@ pub fn dependency_named(db: &dyn crate::Db, root: SourceRoot, name: &Name) -> Op
 /// A package's edge table: every package it reaches, by the name it reaches
 /// it under — its manifest edges, then the language packages under their
 /// fixed names. The language packages are reachable from every package,
-/// their own siblings included: `baml` calls the metatype's companion
-/// methods in `reflect` while `reflect` depends on `baml`, which no manifest
-/// edge could express without a cycle. A non-stdlib root already carries the
+/// their own siblings included: `reflect` calls methods of `baml`'s builtin
+/// carriers (`Array.push`, `String.length`) while `baml` depends on
+/// `reflect`, which no manifest edge could express without a cycle. A non-stdlib root already carries the
 /// prelude as explicit edges, so for it the fixed names add nothing.
 ///
 /// Tracked: a viewpoint, a binder and an edge walk each read it, and it
@@ -212,13 +212,30 @@ pub enum PathHead {
 /// manifest is display metadata and the default a dependent spells the
 /// package by, never a way to reach it.
 ///
+/// Stdlib roots additionally reach their sibling language packages through
+/// the implicit edges in [`edge_table`], without cyclic manifest dependencies.
+///
 /// The ONE place a written first segment becomes a package; whether the
 /// segment is read as one at all is [`path_head`]'s call.
 pub fn path_package(db: &dyn crate::Db, own: SourceRoot, first: &Name) -> Option<SourceRoot> {
     if first.as_str() == ROOT_SEGMENT {
         return Some(own);
     }
-    dependency_named(db, own, first)
+    dependency_named(db, own, first).or_else(|| {
+        // Language packages may use each other's public types without a
+        // cyclic manifest dependency (trace.Span uses baml.errors.Context,
+        // while baml already depends on trace). These are the same implicit
+        // language-package edges exposed by edge_table; user packages still
+        // resolve written names only through their declared/prelude edges.
+        (own.kind(db) == SourceRootKind::Stdlib)
+            .then(|| {
+                edge_table(db, own)
+                    .iter()
+                    .find(|(edge, _)| edge == first)
+                    .map(|(_, target)| *target)
+            })
+            .flatten()
+    })
 }
 
 /// The [`PathHead`] of `segments`, written in the namespace `namespace` of
@@ -258,14 +275,15 @@ pub fn path_head(
 /// namespace ([`baml_base::Path::compiler_item`]), read as a plain name —
 /// the semantic index records no binding for it, so none shadows it.
 pub fn compiler_path_head(db: &dyn crate::Db, segments: &[Name]) -> PathHead {
-    let [first, _, ..] = segments else {
-        unreachable!("a compiler-written path names a package or item and a member: {segments:?}")
-    };
-    match baml_base::LangPackage::from_manifest_name(first.as_str()) {
-        Some(package) => lang_roots(db)
-            .get(package)
-            .map_or(PathHead::Plain, PathHead::Lang),
-        None => PathHead::Plain,
+    match segments {
+        [first, _, ..] => match baml_base::LangPackage::from_manifest_name(first.as_str()) {
+            Some(package) => lang_roots(db)
+                .get(package)
+                .map_or(PathHead::Plain, PathHead::Lang),
+            None => PathHead::Plain,
+        },
+        [_] => PathHead::Plain,
+        [] => unreachable!("a compiler-written path names an item"),
     }
 }
 

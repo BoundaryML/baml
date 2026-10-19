@@ -2607,6 +2607,7 @@ impl BexEngine {
                 // Transfer the shutdown guard to the joining task so it completes
                 // even if this awaiting caller is dropped.
                 match tokio::task::spawn_blocking(move || {
+                    runtime.close_span_owners();
                     let processing = runtime.finish();
                     // Drain delivery even when processing failed. No VM or
                     // heap permit survives here; cancellation cannot skip join.
@@ -3584,13 +3585,12 @@ impl BexEngine {
             let Some(first) = bounds.first() else {
                 continue;
             };
-            let ty_as_ty = bex_vm_types::Ty::from(ty.clone());
-            if !ty_as_ty.is_concrete() {
+            if !BexVm::bound_admits(ty) {
                 return Err(EngineError::TypeMismatch {
                     message: format!(
-                        "`{name}` is a generic BAML function whose type parameter `{var}` must be \
-                         one concrete type that implements `{}`; `{ty}` is not a single concrete \
-                         type.",
+                        "`{name}` is a generic BAML function whose type parameter `{var}` must \
+                         be one concrete type that implements `{}`; `{ty}` is not a single \
+                         concrete type.",
                         bex_vm_types::Ty::Interface(first.interface, Box::new([]), Box::new([]))
                     ),
                 });
@@ -3603,18 +3603,15 @@ impl BexEngine {
                     None => continue,
                 };
                 let substitute = |template: &bex_vm_types::TyTemplate| {
-                    template
-                        .substitute(frame_for_bound, vm)
-                        .map(bex_vm_types::Ty::from)
-                        .map_err(|error| {
-                            EngineError::VmInternalError(
-                                bex_vm::errors::VmInternalError::TypeSubstitution {
-                                    message: format!(
-                                        "bound of `{var}` on `{name}` is not realized: {error}"
-                                    ),
-                                },
-                            )
-                        })
+                    template.substitute(frame_for_bound, vm).map_err(|error| {
+                        EngineError::VmInternalError(
+                            bex_vm::errors::VmInternalError::TypeSubstitution {
+                                message: format!(
+                                    "bound of `{var}` on `{name}` is not realized: {error}"
+                                ),
+                            },
+                        )
+                    })
                 };
                 let args = bound
                     .args
@@ -3628,14 +3625,32 @@ impl BexEngine {
                         substitute(template).map(|ty| (assoc_name.clone(), ty))
                     })
                     .collect::<Result<Box<[_]>, _>>()?;
-                let required = bex_vm_types::Ty::Interface(bound.interface, args, assoc);
-                if !baml_type::normalize::is_subtype(&ty_as_ty, &required, vm) {
-                    return Err(EngineError::TypeMismatch {
-                        message: format!(
-                            "`{name}` is a generic BAML function whose type parameter `{var}` \
-                             must implement `{required}`; `{ty}` does not."
-                        ),
-                    });
+                let required = bex_vm_types::Ty::Interface(
+                    bound.interface,
+                    args.iter().cloned().map(bex_vm_types::Ty::from).collect(),
+                    assoc
+                        .iter()
+                        .map(|(assoc_name, ty)| {
+                            (assoc_name.clone(), bex_vm_types::Ty::from(ty.clone()))
+                        })
+                        .collect(),
+                );
+                // The judgment a `let type T extends I` statement makes in a
+                // body, made here for the host's type argument. Concreteness
+                // was established above, for every bound at once.
+                match vm.check_bound(ty, (bound.interface, args, assoc), None) {
+                    bex_vm::BoundCheck::Satisfied => {}
+                    bex_vm::BoundCheck::NotConcrete => {
+                        unreachable!("`bound_admits` held for `{ty}` above")
+                    }
+                    bex_vm::BoundCheck::NotImplemented => {
+                        return Err(EngineError::TypeMismatch {
+                            message: format!(
+                                "`{name}` is a generic BAML function whose type parameter \
+                                 `{var}` must implement `{required}`; `{ty}` does not."
+                            ),
+                        });
+                    }
                 }
             }
         }
@@ -4356,6 +4371,15 @@ impl BexEngine {
             thread.host_environment = host_environment;
         }
         let options = if let Some(reservation) = reservation {
+            // A host/prepared invocation is an independent execution, not the
+            // VM's explicit pass-through continuation. Never admit a forwarded
+            // view here merely because it carries an already-acquired claim.
+            if reservation.is_forwarded_claim() {
+                return Err(EngineError::TypeMismatch {
+                    message: "a forwarded reservation claim cannot start an independent invocation"
+                        .into(),
+                });
+            }
             reservation
                 .validate(self.trace_scope)
                 .map_err(|error| EngineError::TypeMismatch {
@@ -7189,10 +7213,18 @@ impl BexEngine {
         args: &[Value],
     ) -> Result<PendingRuntimeCompile, OpError> {
         let operation = SysOp::ReflectSessionCompile;
+        // `reflect` does not depend on `baml`, so a bad receiver throws
+        // `reflect.errors.InvalidArgument`, never `baml.errors.InvalidArgument`.
         let invalid = |message: String| {
-            OpError::new(
+            OpError::host_thrown_value(
                 operation,
-                bex_vm_types::errors::VmBamlError::InvalidArgument { message },
+                BexExternalValue::Instance {
+                    class_name: "reflect.errors.InvalidArgument".to_string(),
+                    type_args: Vec::new(),
+                    fields: indexmap::indexmap! {
+                        "message".to_string() => BexExternalValue::String(message.into()),
+                    },
+                },
             )
         };
         let receiver = args

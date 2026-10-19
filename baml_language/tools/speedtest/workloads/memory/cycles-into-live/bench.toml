@@ -1,0 +1,6 @@
+name = "cycles into live"
+description = "build and drop 65,536 two-node cycles that each point into a live ring of 500,000 nodes"
+origin = "native-bench 15_cycles_into_live"
+expect = "500000,224288063"
+jobs = 3
+warmup = 1

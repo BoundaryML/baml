@@ -72,8 +72,27 @@ use indexmap::IndexMap;
 
 use crate::{
     BexVm,
-    errors::{VmBamlError, VmRustFnError},
+    errors::{VmInternalError, VmRustFnError},
 };
+
+/// Why a compiled unit failed to load into its package.
+pub(super) enum LinkError {
+    /// The unit does not fit the package or the dependencies it binds.
+    Link(String),
+    Internal(VmInternalError),
+}
+
+impl LinkError {
+    /// The error the loading native returns: a link failure throws
+    /// `reflect.errors.InvalidArgument`, since `reflect` does not depend on
+    /// `baml`.
+    pub(super) fn into_native_error(self, vm: &mut BexVm) -> VmRustFnError {
+        match self {
+            Self::Link(message) => super::type_kinds::invalid_argument(vm, message),
+            Self::Internal(error) => VmRustFnError::InternalError(error),
+        }
+    }
+}
 
 /// Whose image a load extends.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -124,7 +143,7 @@ pub(super) fn load_package(
     target: LoadTarget,
     emitted: &EmittedPackage,
     commits: &[Commit<'_>],
-) -> Result<Loaded, VmRustFnError> {
+) -> Result<Loaded, LinkError> {
     let unit = &emitted.unit;
     if let Some(misplaced) = unit
         .misplaced_object()
@@ -237,7 +256,7 @@ fn load_tail(
     tail: &InitTail,
     commits: &[Commit<'_>],
     image: &mut Image,
-) -> Result<LoadedTail, VmRustFnError> {
+) -> Result<LoadedTail, LinkError> {
     let slots = bind_slots(vm, package_ptr, &tail.dependencies)?;
     let (locals, imports) = place_objects(
         vm,
@@ -263,7 +282,7 @@ fn load_tail(
     };
     relocate_all(vm, image, &space)?;
 
-    let tail_object = |index: u32| -> Result<HeapPtr, VmRustFnError> {
+    let tail_object = |index: u32| -> Result<HeapPtr, LinkError> {
         space
             .locals
             .get(index as usize)
@@ -340,10 +359,8 @@ fn publish(
     vm.tlab.heap().conservative_write_barrier(package_ptr);
 }
 
-fn link_error(message: impl std::fmt::Display) -> VmRustFnError {
-    VmRustFnError::from(VmBamlError::InvalidArgument {
-        message: format!("runtime link: {message}"),
-    })
+fn link_error(message: impl std::fmt::Display) -> LinkError {
+    LinkError::Link(format!("runtime link: {message}"))
 }
 
 fn live(ptr: HeapPtr) -> Option<HeapPtr> {
@@ -412,7 +429,7 @@ impl Image {
         unit: &CompilationUnit,
         space: &Space,
         slots: &IndexMap<DeclPath, u32>,
-    ) -> Result<(), VmRustFnError> {
+    ) -> Result<(), LinkError> {
         let mut exported: HashSet<&DeclPath> = HashSet::with_capacity(unit.exports.objects.len());
         for (path, local_ref) in &unit.exports.objects {
             if !exported.insert(path) {
@@ -504,7 +521,7 @@ impl Image {
     }
 
     /// The head of the declaration at `index`.
-    fn head(&self, index: usize) -> Result<TypeHead, VmRustFnError> {
+    fn head(&self, index: usize) -> Result<TypeHead, LinkError> {
         match self.tag(index) {
             Some(tag) => Ok(TypeHead::new(self.objects[index], tag)),
             None => Err(link_error(format!(
@@ -523,7 +540,7 @@ fn place_objects<'a>(
     slots: &[Bound],
     owned: impl IntoIterator<Item = &'a Object>,
     imports: &[ImportEntry],
-) -> Result<(Vec<usize>, Vec<usize>), VmRustFnError> {
+) -> Result<(Vec<usize>, Vec<usize>), LinkError> {
     // A declaration is minted with its identity here — the only place a
     // runtime tag comes from.
     let mut locals = Vec::new();
@@ -541,7 +558,7 @@ fn place_objects<'a>(
         // A runtime function takes its telemetry identity at allocation.
         let ptr = vm
             .alloc_runtime_object(object)
-            .map_err(VmRustFnError::InternalError)?;
+            .map_err(LinkError::Internal)?;
         locals.push(image.add(vm, ptr));
     }
     let mut placed = Vec::with_capacity(imports.len());
@@ -559,7 +576,7 @@ fn place_globals(
     package_ptr: HeapPtr,
     slots: &[Bound],
     imports: &[ImportEntry],
-) -> Result<Vec<usize>, VmRustFnError> {
+) -> Result<Vec<usize>, LinkError> {
     let mut placed = Vec::with_capacity(imports.len());
     for entry in imports {
         placed.push(
@@ -581,7 +598,7 @@ fn slot_unit_functions(
     unit: &CompilationUnit,
     locals: &[usize],
     base_slot: usize,
-) -> Result<(), VmRustFnError> {
+) -> Result<(), LinkError> {
     let mut owned = vec![false; unit.exports.globals.len()];
     for (path, slot) in &unit.exports.globals {
         let Some(seen) = owned.get_mut(*slot as usize) else {
@@ -651,7 +668,7 @@ fn slot_unit_functions(
 
 /// Relocate every local of `space`, keeping the float constants it boxes in
 /// the image.
-fn relocate_all(vm: &mut BexVm, image: &mut Image, space: &Space) -> Result<(), VmRustFnError> {
+fn relocate_all(vm: &mut BexVm, image: &mut Image, space: &Space) -> Result<(), LinkError> {
     for &index in &space.locals {
         let floats = relocate(vm, image.objects[index], space, image)?;
         for float in floats {
@@ -682,7 +699,7 @@ fn bind_slots(
     vm: &BexVm,
     package_ptr: HeapPtr,
     entries: &[Locator],
-) -> Result<Vec<Bound>, VmRustFnError> {
+) -> Result<Vec<Bound>, LinkError> {
     let mut bound: Vec<Bound> = Vec::with_capacity(entries.len());
     for (index, locator) in entries.iter().enumerate() {
         let via = locator.via();
@@ -752,7 +769,7 @@ fn bind_slots(
 /// whole identity. A transitive entry binds anything and carries no digest,
 /// as in the static lane; a prelude entry is bound by identity before this
 /// is asked.
-fn verify_fingerprint(vm: &BexVm, locator: &Locator, target: HeapPtr) -> Result<(), VmRustFnError> {
+fn verify_fingerprint(vm: &BexVm, locator: &Locator, target: HeapPtr) -> Result<(), LinkError> {
     let target = vm.get_object(target);
     let is_language = matches!(
         target,
@@ -794,11 +811,7 @@ fn verify_fingerprint(vm: &BexVm, locator: &Locator, target: HeapPtr) -> Result<
     Ok(())
 }
 
-fn slot_binding(
-    package_ptr: HeapPtr,
-    slots: &[Bound],
-    dep: DepSlot,
-) -> Result<Bound, VmRustFnError> {
+fn slot_binding(package_ptr: HeapPtr, slots: &[Bound], dep: DepSlot) -> Result<Bound, LinkError> {
     match dep.dependency_index() {
         None => Ok(Bound::Package(package_ptr)),
         Some(index) => slots.get(index).copied().ok_or_else(|| {
@@ -895,7 +908,7 @@ fn bound_tables<'a>(
     package_ptr: HeapPtr,
     slots: &[Bound],
     dep: DepSlot,
-) -> Result<BoundTables<'a>, VmRustFnError> {
+) -> Result<BoundTables<'a>, LinkError> {
     Ok(match slot_binding(package_ptr, slots, dep)? {
         Bound::Package(owner) if owner == package_ptr => BoundTables::Tables(Tables::Own(image)),
         Bound::Package(owner) => {
@@ -915,7 +928,7 @@ fn resolve_object(
     package_ptr: HeapPtr,
     slots: &[Bound],
     key: &DeclKey,
-) -> Result<HeapPtr, VmRustFnError> {
+) -> Result<HeapPtr, LinkError> {
     let tables = match bound_tables(vm, image, package_ptr, slots, key.dep)? {
         BoundTables::Tables(tables) => tables,
         BoundTables::Declaration(declaration) => {
@@ -997,7 +1010,7 @@ fn resolve_body(
     tables: Tables<'_>,
     path: &DeclPath,
     key: &BodyKey,
-) -> Result<Option<BoundBody>, VmRustFnError> {
+) -> Result<Option<BoundBody>, LinkError> {
     if let Tables::Own(image) = tables {
         return Ok(image.globals.get(path).copied().map(BoundBody::Own));
     }
@@ -1037,7 +1050,7 @@ fn resolve_global(
     package_ptr: HeapPtr,
     slots: &[Bound],
     key: &DeclKey,
-) -> Result<GlobalBinding, VmRustFnError> {
+) -> Result<GlobalBinding, LinkError> {
     let tables = match bound_tables(vm, image, package_ptr, slots, key.dep)? {
         BoundTables::Tables(tables) => tables,
         BoundTables::Declaration(_) => {
@@ -1132,7 +1145,7 @@ struct Space {
 }
 
 impl Space {
-    fn object(&self, raw: usize) -> Result<usize, VmRustFnError> {
+    fn object(&self, raw: usize) -> Result<usize, LinkError> {
         match import_ordinal(raw) {
             Some(ordinal) => self.imports.get(ordinal).copied(),
             None => self.locals.get(raw).copied(),
@@ -1140,7 +1153,7 @@ impl Space {
         .ok_or_else(|| link_error(format!("object operand {raw} is outside the unit")))
     }
 
-    fn global(&self, raw: usize) -> Result<usize, VmRustFnError> {
+    fn global(&self, raw: usize) -> Result<usize, LinkError> {
         match import_ordinal(raw) {
             Some(ordinal) => self.import_slots.get(ordinal).copied(),
             None => self.local_slots.get(raw).copied(),
@@ -1158,7 +1171,7 @@ fn relocate(
     ptr: HeapPtr,
     space: &Space,
     image: &Image,
-) -> Result<Vec<HeapPtr>, VmRustFnError> {
+) -> Result<Vec<HeapPtr>, LinkError> {
     let mut failure = None;
     let mut metered = vm.get_object_mut(ptr);
     let object = &mut *metered;
@@ -1294,7 +1307,7 @@ fn relocate_template(
     template: &mut TyTemplate,
     space: &Space,
     image: &Image,
-) -> Result<(), VmRustFnError> {
+) -> Result<(), LinkError> {
     let mut failure = None;
     template.visit_heads_mut(&mut |head| {
         if failure.is_some() {
@@ -1313,7 +1326,7 @@ fn relocate_template(
 
 /// The declaration operand of a unit-convention head; a head outside the
 /// convention is a link error.
-fn head_operand(head: &TypeHead) -> Result<ObjectIndex, VmRustFnError> {
+fn head_operand(head: &TypeHead) -> Result<ObjectIndex, LinkError> {
     head.try_operand()
         .ok_or_else(|| link_error("the unit carries a type head outside the unit convention"))
 }
@@ -1327,7 +1340,7 @@ fn load_rule(
     space: &Space,
     image: &Image,
     type_count: usize,
-) -> Result<(HeapPtr, HeapPtr), VmRustFnError> {
+) -> Result<(HeapPtr, HeapPtr), LinkError> {
     let interface_ptr = image.objects[space.object(rule.interface_head.raw())?];
     if !matches!(vm.get_object(interface_ptr), Object::Interface(_)) {
         return Err(link_error(

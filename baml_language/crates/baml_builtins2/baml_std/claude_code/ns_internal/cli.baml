@@ -308,6 +308,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     args.push("--json-schema");
     args.push(baml.json.stringify(schema));
 
+    let started = baml.time.Instant.now();
     let p = baml.sys.start_process(
         c.executable,
         args,
@@ -408,8 +409,8 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     };
 
     let usage = ai.events.Usage {
-        input_tokens: baml.json.path_or<int>(result, ".usage.input_tokens", 0),
-        output_tokens: baml.json.path_or<int>(result, ".usage.output_tokens", 0),
+        input_tokens: baml.json.path_or<int?>(result, ".usage.input_tokens", null),
+        output_tokens: baml.json.path_or<int?>(result, ".usage.output_tokens", null),
         cached_input_tokens: baml.json.path_or<int?>(result, ".usage.cache_read_input_tokens", null),
         reasoning_tokens: null,
     };
@@ -446,5 +447,20 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     } else {
         content.push(ai.content.Text { text: baml.json.stringify(structured) });
     }
-    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
+    // One CLI run is one model call, with no HTTP exchange to record.
+    let call = ai.events.ModelCall {
+        resolved_model: ai.events.ModelKey { provider: c.provider(), model: c.model },
+        usage: null,
+        timing: ai.events.Timing { start_time: started, duration: started.elapsed(), ttft: null },
+        http_request: null,
+        http_response: null,
+        sse_responses: null,
+    };
+    ai.internal.with_own_call(
+        ai.ModelTurn { calls: [], child_turns: [], content: content, stop_reason: stop },
+        call,
+        usage,
+        c.model,
+        null,
+    )
 }

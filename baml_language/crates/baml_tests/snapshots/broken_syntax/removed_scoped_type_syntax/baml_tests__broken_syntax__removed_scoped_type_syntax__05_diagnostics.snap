@@ -1,0 +1,174 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:21:5]
+ 21 │     type T = unreflect(t)
+    ·     ──────────┬──────────
+    ·               ╰── body-level `type T = …` bindings were removed; write `let type T = t;` instead
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:28:5]
+ 28 │     type S = Wrapper<int>
+    ·     ──────────┬──────────
+    ·               ╰── body-level `type S = …` bindings were removed; write `let type S = reflect.Type.of<Wrapper<int>>();` instead
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:29:5]
+ 29 │     type H = Wrapper<_>
+    ·     ─────────┬─────────
+    ·              ╰── body-level `type H = …` bindings were removed; write `let type H = reflect.Type.of<Wrapper<_>>();` instead
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:30:5]
+ 30 │     type N = Wrapper<unreflect(t)>
+    ·     ───────────────┬──────────────
+    ·                    ╰── body-level `type N = …` bindings were removed; bind each `unreflect` operand with `let type U = <expr>;` first, then write `let type N = reflect.Type.of<…>();` naming `U`
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:38:22]
+ 38 │     let call = ident<unreflect(t)>(1)
+    ·                      ────┬────
+    ·                          ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:39:25]
+ 39 │     let applied = ident<unreflect(t)>
+    ·                         ────┬────
+    ·                             ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:40:26]
+ 40 │     let literal = Holder<unreflect(t)> { label: "h" }
+    ·                          ────┬────
+    ·                              ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:41:30]
+ 41 │     let constructed = Holder<unreflect(t)>.new("h")
+    ·                              ────┬────
+    ·                                  ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:42:28]
+ 42 │     let annotated: Wrapper<unreflect(t)>? = null
+    ·                            ────┬────
+    ·                                ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:43:23]
+ 43 │     let tested = 1 is unreflect(t)
+    ·                       ────┬────
+    ·                           ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:45:9]
+ 45 │         unreflect(t) => 1,
+    ·         ────┬────
+    ·             ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:48:37]
+ 48 │     let reflected = reflect.Type.of<unreflect(t)>()
+    ·                                     ────┬────
+    ·                                         ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:57:19]
+ 57 │     value Wrapper<unreflect(reflect.Type.of<string>())>
+    ·                   ────┬────
+    ·                       ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:61:23]
+ 61 │     implements Marker<unreflect(reflect.Type.of<string>())> {}
+    ·                       ────┬────
+    ·                           ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:65:20]
+ 65 │     value: Wrapper<unreflect(reflect.Type.of<string>())>
+    ·                    ────┬────
+    ·                        ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:66:14]
+ 66 │ ) -> Wrapper<unreflect(reflect.Type.of<string>())> {
+    ·              ────┬────
+    ·                  ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:70:39]
+ 70 │ function bound_site<T extends Wrapper<unreflect(reflect.Type.of<string>())>>() -> null { null }
+    ·                                       ────┬────
+    ·                                           ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[removed_scoped_type_syntax.baml:72:26]
+ 72 │ type AliasSite = Wrapper<unreflect(reflect.Type.of<string>())>
+    ·                          ────┬────
+    ·                              ╰── `unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here
+    ╰────
+
+  [hir] E0010
+
+  × top-level `let` bindings are not supported
+    ╭─[removed_scoped_type_syntax.baml:75:1]
+ 75 │ let type TopLevel = reflect.Type.of<string>();
+    · ───────────────────────┬──────────────────────
+    ·                        ╰── move this binding into a function body
+    ╰────

@@ -44,7 +44,7 @@ function go() -> string throws never {
         { "main.baml": `function go() -> string throws never { app.tag() }` },
         packages = { "app": mounted },
     );
-    let go = consumer.get_function<() -> string>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<() -> string>("root.go");
     app.tag() + ":" + go()
 }
 "#,

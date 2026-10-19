@@ -51,6 +51,7 @@ fn func(name: &str, instructions: Vec<Instruction>) -> Object {
         origin: FunctionOrigin::Internal,
         native_key: None,
         body_meta: None,
+        trace_passthrough: false,
         owner: bex_vm_types::HeapPtr::null(),
     }))
 }

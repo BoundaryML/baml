@@ -1,0 +1,5 @@
+name = "spawn await x10k"
+description = "spawn and await 10,000 trivial tasks one at a time"
+expect = "10000"
+jobs = 3
+warmup = 1

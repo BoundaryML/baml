@@ -215,15 +215,17 @@ function google_parse_thoughts_and_usage() -> string {
             "totalTokenCount": 27,
         },
     };
-    let turn = google.internal.parse(baml.json.to<google.internal.GmResponse>(raw), 0);
+    let response = baml.json.to<google.internal.GmResponse>(raw);
+    let turn = google.internal.parse(response, 0);
+    let usage = google.internal._gm_usage(response.usageMetadata);
     [
         turn.terminal_text() ?? "",
         turn.content.length().to_string(),
         turn.stop_reason.to_string(),
-        (turn.usage?.input_tokens ?? -1).to_string(),
-        (turn.usage?.output_tokens ?? -1).to_string(),
-        (turn.usage?.cached_input_tokens ?? -1).to_string(),
-        (turn.usage?.reasoning_tokens ?? -1).to_string(),
+        (usage?.input_tokens ?? -1).to_string(),
+        (usage?.output_tokens ?? -1).to_string(),
+        (usage?.cached_input_tokens ?? -1).to_string(),
+        (usage?.reasoning_tokens ?? -1).to_string(),
     ].join("|")
 }
 
@@ -486,7 +488,7 @@ function vertex_media_url_passthrough() -> string {
         prompt: GoogleVision@spec(img).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
     let cl = google.VertexClient.new(
         model = "gemini-2.5-flash",
@@ -521,7 +523,7 @@ function google_media_url_inlined() -> string {
         prompt: GoogleVision@spec(img).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
             let cl = google.GeminiClient.new(
                 model = "gemini-2.5-flash",
@@ -551,7 +553,7 @@ function google_media_youtube_passthrough() -> string {
         prompt: GoogleWatch@spec(clip).prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
     let cl = google.GeminiClient.new(
         model = "gemini-2.5-flash",
@@ -629,7 +631,7 @@ function google_stream_usage_splits_the_cache() -> string {
                 base_url = mock.base_url(),
             );
             let spec = GoogleEcho@spec("Say pong.");
-            let u = cl
+            let turn = cl
                 .invoke_stream(
                 ai.ModelTurnInput {
                     prompt: spec.prompt_template,
@@ -638,8 +640,8 @@ function google_stream_usage_splits_the_cache() -> string {
                     output_type: spec.output_type(),
                 },
                 )
-                .final_turn()
-                .usage;
+                .final_turn();
+            let u = ai.events.usage_for(ai.events.call_usage(turn.calls), ai.events.ModelKey { provider: "google", model: "gemini-2.5-flash" });
             `${u?.input_tokens ?? -1}/${u?.cached_input_tokens ?? -1}/${u?.cache_write_input_tokens ?? -1}/${u?.uncached_input_tokens ?? -1}/${u?.output_tokens ?? -1}/${u?.reasoning_tokens ?? -1}`
         },
     )
@@ -866,7 +868,7 @@ function vertex_claude_raw_predict() -> string {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
     let cl = google.VertexClient.new(
         model = "claude-sonnet-4-5",
@@ -917,7 +919,7 @@ function _vertex_cached_body(model: string, default_args: bool = false) -> strin
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
     let cl = google.VertexClient.new(
         model = model,
@@ -964,7 +966,7 @@ function vertex_claude_model_override() -> string {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
     let cl = google.VertexClient.new(
         model = "claude-sonnet-4-5",
@@ -1192,7 +1194,7 @@ function google_missing_key_invoke() -> string {
         prompt: GoogleEcho@spec("Say pong.").prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     };
     // The concrete classes, not the `ai.errors.Failure` interface: a
     // configuration error and a transport error are both typed, and matching

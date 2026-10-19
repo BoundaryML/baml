@@ -2282,6 +2282,34 @@ mod tests {
     }
 
     #[test]
+    fn let_type_keyword_hover_documents_let_type() {
+        let test = CursorTest::new(
+            "interface Named { name string }\nfunction f(t: reflect.Type) -> string {\n  let ty<[CURSOR]pe T extends Named = t;\n  \"x\"\n}\n",
+        );
+        let TypeInfo::Documentation { label, detail } = info_at(&test) else {
+            panic!("the `type` keyword hovers as documentation");
+        };
+        assert_eq!(label, "type");
+        let topic = baml_builtins2::language_topic("type").expect("the `type` keyword topic");
+        assert_eq!(detail, topic.summary);
+        assert!(
+            topic
+                .syntax
+                .as_deref()
+                .is_some_and(|syntax| syntax.contains("let type T = t;")),
+            "the keyword docs show the `let type` spelling: {topic:?}"
+        );
+    }
+
+    #[test]
+    fn a_bounded_let_type_value_reaches_the_bound_member() {
+        let test = CursorTest::new(
+            "interface Named { name string }\nfunction f(t: reflect.Type) -> string {\n  let type T extends Named = t else { return \"\" };\n  let v = baml.json.to<T>({});\n  v.na<[CURSOR]me\n}\n",
+        );
+        assert_eq!(info_at(&test).to_describe_block(), "name: string");
+    }
+
+    #[test]
     fn client_config_hover_only_documents_the_key_token() {
         let key = CursorTest::new(
             r#"client<llm> Example {

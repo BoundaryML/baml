@@ -967,6 +967,9 @@
           "include": "#watch-statement"
         },
         {
+          "include": "#let-type-statement"
+        },
+        {
           "include": "#let-statement"
         },
         {
@@ -3029,6 +3032,64 @@
         },
         {
           "include": "#pattern"
+        }
+      ]
+    },
+    "let-type-bound-intersection": {
+      "name": "keyword.operator.type.baml",
+      "match": "&"
+    },
+    "let-type-bounds": {
+      "name": "meta.type-parameter.bounds.baml",
+      "begin": "\\b(extends)\\b",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.operator.extends.baml"
+        }
+      },
+      "end": "(?=\\s*=)",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#let-type-bound-intersection"
+        },
+        {
+          "include": "#type-expression"
+        }
+      ]
+    },
+    "let-type-statement": {
+      "name": "meta.statement.let-type.baml",
+      "begin": "(?:^\\s*|\\G\\s*|(?<=[{;}])\\s*)(let)\\s+(type)\\s+(\\$?[A-Za-z_][A-Za-z0-9_-]*(?:\\$[A-Za-z_][A-Za-z0-9_-]*)*)\\b",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.declaration.binding.baml"
+        },
+        "2": {
+          "name": "keyword.declaration.type-binding.baml"
+        },
+        "3": {
+          "name": "entity.name.type.parameter.baml"
+        }
+      },
+      "end": "(?=[;}]|$)",
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#let-type-bounds"
+        },
+        {
+          "include": "#assignment-operator"
+        },
+        {
+          "include": "#let-else-clause"
+        },
+        {
+          "include": "#expression"
         }
       ]
     },

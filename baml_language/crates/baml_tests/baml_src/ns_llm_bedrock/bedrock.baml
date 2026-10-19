@@ -437,7 +437,8 @@ function bedrock_multi_turn() -> string {
     let log: ai.events.Event[] = [
         ai.events.AssistantMessage {
             content: [ai.content.Text { text: "4" }],
-            client_id: `bedrock/${_model()}`,
+            resolved_model: ai.events.ModelKey { provider: "aws-bedrock", model: _model() },
+            requested_model: _model(),
         },
         ai.events.UserMessage.new("And 3+3?"),
     ];
@@ -475,7 +476,8 @@ function bedrock_reasoning_only_turn_is_dropped() -> string {
     let log: ai.events.Event[] = [
         ai.events.AssistantMessage {
             content: [ai.content.Reasoning { summary: "thinking about it" }],
-            client_id: `bedrock/${_model()}`,
+            resolved_model: ai.events.ModelKey { provider: "aws-bedrock", model: _model() },
+            requested_model: _model(),
         },
         ai.events.UserMessage.new("And 3+3?"),
     ];
@@ -506,12 +508,14 @@ function bedrock_reasoning_only_turn_mid_conversation() -> string {
     let log: ai.events.Event[] = [
         ai.events.AssistantMessage {
             content: [ai.content.Text { text: "4" }],
-            client_id: `bedrock/${_model()}`,
+            resolved_model: ai.events.ModelKey { provider: "aws-bedrock", model: _model() },
+            requested_model: _model(),
         },
         ai.events.UserMessage.new("And 3+3?"),
         ai.events.AssistantMessage {
             content: [ai.content.Reasoning { summary: "thinking about it" }],
-            client_id: `bedrock/${_model()}`,
+            resolved_model: ai.events.ModelKey { provider: "aws-bedrock", model: _model() },
+            requested_model: _model(),
         },
         ai.events.UserMessage.new("And 4+4?"),
     ];
@@ -636,7 +640,8 @@ function bedrock_tool_replay() -> string {
                 ai.content.ToolUse { id: "tu_1", name: "get_weather", args: args },
                 ai.content.ToolUse { id: "tu_2", name: "get_weather", args: args },
             ],
-            client_id: `bedrock/${_model()}`,
+            resolved_model: ai.events.ModelKey { provider: "aws-bedrock", model: _model() },
+            requested_model: _model(),
         },
         ai.events.ToolCompleted.new("tu_1", "sunny"),
         ai.events.ToolFailed { id: "tu_2", message: "upstream down" },
@@ -679,7 +684,8 @@ function bedrock_tool_replay_null_arg() -> json {
     let log: ai.events.Event[] = [
         ai.events.AssistantMessage {
             content: [ai.content.ToolUse { id: "tu_1", name: "get_weather", args: args }],
-            client_id: `bedrock/${_model()}`,
+            resolved_model: ai.events.ModelKey { provider: "aws-bedrock", model: _model() },
+            requested_model: _model(),
         },
         ai.events.ToolCompleted.new("tu_1", "sunny"),
     ];
@@ -703,7 +709,8 @@ function _replay_status(model: string) -> string {
     let log: ai.events.Event[] = [
         ai.events.AssistantMessage {
             content: [ai.content.ToolUse { id: "tu_1", name: "get_weather", args: no_args }],
-            client_id: cl.id(),
+            resolved_model: ai.events.ModelKey { provider: "aws-bedrock", model: cl.model },
+            requested_model: cl.model,
         },
         ai.events.ToolFailed { id: "tu_1", message: "upstream down" },
     ];
@@ -1231,6 +1238,15 @@ function _parse(raw: json) -> ai.ModelTurn {
     aws.internal.parse_response(baml.json.to<aws.internal.ConverseResponse>(raw))
 }
 
+function _parse_usage(raw: json) -> ai.events.Usage? {
+    aws.internal.converse_usage(baml.json.to<aws.internal.ConverseResponse>(raw).usage)
+}
+
+/// The usage a turn billed to the mocked Bedrock model.
+function _bedrock_usage(turn: ai.ModelTurn) -> ai.events.Usage? {
+    ai.events.usage_for(ai.events.call_usage(turn.calls), ai.events.ModelKey { provider: "aws-bedrock", model: _model() })
+}
+
 // A one-text-block response with the given `stopReason`.
 function _with_stop(stop: string) -> json {
     { "output": { "message": { "content": [{ "text": "x" }] } }, "stopReason": stop }
@@ -1255,12 +1271,13 @@ function bedrock_parse_text_and_usage() -> string {
         "metrics": { "latencyMs": 42 },
     };
     let turn = _parse(raw);
+    let usage = _parse_usage(raw);
     [
         turn.terminal_text() ?? "",
         _stop_label(turn),
-        (turn.usage?.input_tokens ?? -1).to_string(),
-        (turn.usage?.output_tokens ?? -1).to_string(),
-        (turn.usage?.cached_input_tokens ?? -1).to_string(),
+        (usage?.input_tokens ?? -1).to_string(),
+        (usage?.output_tokens ?? -1).to_string(),
+        (usage?.cached_input_tokens ?? -1).to_string(),
         turn.content.length().to_string(),
     ].join("|")
 }
@@ -1391,8 +1408,7 @@ test "bedrock_parse_empty_and_malformed" {
 // Usage is optional on the wire; its absence is not a parse failure
 // (`test_parse_no_usage`, :306-322).
 function bedrock_parse_no_usage() -> string {
-    let turn = _parse({ "output": { "message": { "content": [{ "text": "hi" }] } }, "stopReason": "end_turn" });
-    match (turn.usage) {
+    match (_parse_usage({ "output": { "message": { "content": [{ "text": "hi" }] } }, "stopReason": "end_turn" })) {
         null => "no-usage",
         _ => "usage",
     }
@@ -1416,7 +1432,7 @@ function bedrock_invoke_against_mock() -> string {
             let sent = mock.last_request();
             [
                 turn.terminal_text() ?? "",
-                (turn.usage?.cached_input_tokens ?? -1).to_string(),
+                (_bedrock_usage(turn)?.cached_input_tokens ?? -1).to_string(),
                 sent.method,
                 sent.path(),
                 baml.json.path<string>(sent.json(), ".messages[0].content[0].text"),
@@ -1660,7 +1676,7 @@ function bedrock_stream_text() -> string {
                 deltas.join("+"),
                 turn.terminal_text() ?? "",
                 _stop_label(turn),
-                `${turn.usage?.input_tokens ?? -1}/${turn.usage?.output_tokens ?? -1}`,
+                `${_bedrock_usage(turn)?.input_tokens ?? -1}/${_bedrock_usage(turn)?.output_tokens ?? -1}`,
                 sent.path(),
                 sent.header("accept") ?? "",
                 `${(sent.header("authorization") ?? "").starts_with("AWS4-HMAC-SHA256")}`,

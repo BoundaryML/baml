@@ -128,8 +128,11 @@ class CannedClient {
     chunks: string[],
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "canned"
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -145,10 +148,10 @@ class CannedClient {
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             ai.ModelTurn {
+                child_turns: [],
                 calls: [],
                 content: [ai.content.Text { text: self.chunks.join("") }],
                 stop_reason: ai.content.StopReason.Complete,
-                usage: null,
             }
         }
     }
@@ -362,8 +365,8 @@ function coerce_unspecialized_generic() -> string {
             item: T,
         }
     ` });
-    let class_type = package.get_class("RBox") ?? baml.sys.panic("RBox is missing");
-    type T = unreflect(class_type.as_type());
+    let class_type = package.get_class("RBox");
+    let type T = class_type;
     let json: json = {"item": 1};
     let _ = baml.sap.coerce<T>(json) catch (e) {
         baml.errors.ParseError { message } => {

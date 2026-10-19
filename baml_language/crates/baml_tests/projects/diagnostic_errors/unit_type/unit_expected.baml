@@ -86,11 +86,11 @@ function catch_arm_tails() -> void {
   }
 }
 
-// A value typed by a block's own `type T = …` is no different: where the unit
+// A value typed by a block's own `let type T = …` is no different: where the unit
 // type is expected it is a value left undiscarded, not one that escapes.
 function make<T>() -> T[] { [] }
 
 function scoped_tail(t: reflect.Type) -> void {
-  type T = unreflect(t);
+  let type T = t;
   make<T>()
 }

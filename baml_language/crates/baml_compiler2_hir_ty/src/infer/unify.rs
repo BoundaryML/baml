@@ -159,7 +159,7 @@ enum VarValue {
         policy: VarPolicy,
         /// The block-scope depth the class was minted in (see
         /// [`InferenceTable::bind_scoped_param`]): a solution may mention
-        /// a scoped `type T = …` parameter only from a depth at most this.
+        /// a scoped `let type T = …` parameter only from a depth at most this.
         /// A var-var union keeps the shallower depth, since the merged
         /// class is observable from the outer scope.
         universe: u32,
@@ -260,7 +260,7 @@ pub struct InferenceTable {
     /// Bounds per CLASS, keyed by the root's index; var-var unions merge the
     /// two roots' entries.
     bounds: FxHashMap<u32, VarBounds>,
-    /// The current block-scope depth: how many `type T = …` bindings are
+    /// The current block-scope depth: how many `let type T = …` bindings are
     /// open. Fresh variables record it; see
     /// [`InferenceTable::bind_scoped_param`]. Not part of a snapshot: the
     /// walk opens and closes scopes symmetrically inside any probe.
@@ -290,7 +290,7 @@ impl InferenceTable {
             .0
     }
 
-    /// Opens the scope of a block-level `type T = …` binding: variables
+    /// Opens the scope of a block-level `let type T = …` binding: variables
     /// minted from here until the matching
     /// [`InferenceTable::close_scopes_to`] live one universe deeper and may
     /// be solved to `param`; variables minted outside may not (rustc's

@@ -1,0 +1,111 @@
+# The KPIs on the speedtest report (kpis.html), in page order.
+#
+# Each KPI is a question a user asks of a language, answered by one chart in
+# which every row of the run (BAML at each telemetry level, Node, Bun, Python)
+# is a bar. A KPI lists the workloads that answer it, by `category::name`; the
+# first is shown by default and the rest are one click away.
+#
+# metric:
+#   throughput    jobs per second from the in-process per-job time (higher is better)
+#   process_ms    process start to exit, observed by the parent (lower)
+#   peak_rss_mib  peak resident memory from wait4 (lower)
+#   binary_kib    size of the executable to ship (lower; BAML rows only)
+#   build_s       time from source to that executable (lower; BAML rows only)
+#
+# `speedtest run --kpi` runs exactly the workloads listed here.
+
+[[kpi]]
+key = "programs"
+title = "Real programs"
+question = "How fast does a realistic program run?"
+metric = "throughput"
+measure = "One job runs a whole program: a task scheduler with interface dispatch, a hand-written JSON parser, or an agent loop that decodes model responses into typed unions and retries on malformed ones."
+workloads = ["programs::richards 50", "programs::json parser 15", "programs::agent loop 300"]
+
+[[kpi]]
+key = "sort"
+title = "Sorting"
+question = "How fast does it sort?"
+metric = "throughput"
+measure = "One job sorts integers in BAML code from four input orders (random, sorted, reversed, many duplicates), or generates numbers and uses the library sort."
+workloads = ["compute::merge sort 20k", "compute::quick sort 3-way 1k", "compute::generate sort 8k"]
+
+[[kpi]]
+key = "arrays"
+title = "Arrays and loops"
+question = "How fast does it iterate, index and build arrays?"
+metric = "throughput"
+measure = "One job walks, indexes and builds integer arrays in BAML code and returns a sum."
+workloads = ["compute::array traversal 8k", "compute::array build sum 100k", "compute::nested loops 500x500"]
+
+[[kpi]]
+key = "json"
+title = "JSON"
+question = "How fast does it parse, validate and serialize JSON?"
+metric = "throughput"
+measure = "One job decodes 2,048 JSON rows into typed classes, validates, groups, sorts and serializes the answer, or serializes one small record many times."
+workloads = ["compute::json aggregate 2k", "compute::json hello"]
+
+[[kpi]]
+key = "calls"
+title = "Function calls"
+question = "What does a function call cost?"
+metric = "throughput"
+measure = "One job is a loop of small calls: free functions, recursion, methods and interface dispatch."
+workloads = ["compute::pure call 1m", "compute::fib32 recursive", "classes::method call 100k", "interfaces::polymorphic dispatch 100k"]
+
+[[kpi]]
+key = "alloc"
+title = "Allocation"
+question = "How fast does it allocate and reclaim many small objects?"
+metric = "throughput"
+measure = "One job allocates batches of small objects while keeping a few or many alive, or builds and drops binary trees under a long-lived one."
+workloads = ["memory::allocation high retention", "memory::allocation low retention", "memory::binary trees 14"]
+
+[[kpi]]
+key = "mem"
+title = "Memory management"
+question = "What do cycles, a large live heap and heap-passing calls cost?"
+metric = "throughput"
+measure = "One job builds and drops cyclic graphs, allocates beside a large live graph, churns a splay tree, or passes heap objects through small calls."
+workloads = ["memory::cyclic churn", "memory::live heap", "memory::cycles into live", "memory::live walk", "memory::heap calls", "memory::splay 2k"]
+
+[[kpi]]
+key = "numeric"
+title = "Floats, maps and strings"
+question = "How fast is float math, hashing and string work?"
+metric = "throughput"
+measure = "One job integrates a five-body system in floats, counts k-mers of a DNA string in a map, or splits and concatenates strings."
+workloads = ["compute::nbody 20k", "compute::k-nucleotide 25k", "string::split medium literal 10k", "string::concat loop 10k"]
+
+[[kpi]]
+key = "startup"
+title = "Startup"
+question = "How fast does a fresh process get to work?"
+metric = "process_ms"
+measure = "Process start to exit for a program whose main does nothing: loading the executable, building the runtime, one call."
+workloads = ["process::startup"]
+
+[[kpi]]
+key = "memory"
+title = "Peak memory"
+question = "How much memory does a process use at its peak?"
+metric = "peak_rss_mib"
+measure = "Peak resident memory of the whole process over a trial, from the kernel's wait4 accounting."
+workloads = ["memory::allocation high retention", "memory::live heap", "memory::binary trees 14", "compute::json aggregate 2k", "process::startup"]
+
+[[kpi]]
+key = "artifact"
+title = "Binary size"
+question = "How big is the thing you ship?"
+metric = "binary_kib"
+measure = "Size of the executable `baml pack` produces: the runtime plus the compiled program."
+workloads = ["process::startup", "programs::richards 50"]
+
+[[kpi]]
+key = "build"
+title = "Build time"
+question = "How long from source to a runnable artifact?"
+metric = "build_s"
+measure = "Wall time of `baml pack`: compile the program and write the executable."
+workloads = ["process::startup", "programs::richards 50", "programs::json parser 15"]

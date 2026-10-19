@@ -5,10 +5,10 @@ source: crates/baml_tests/src/generated_tests.rs
   [parse] E0010
 
   × unexpected token
-   ╭─[bindings.baml:4:25]
- 4 │   type T = unreflect(t) @alias("x")
-   ·                         ┬
-   ·                         ╰── expected `expression`, found `'@'`
+   ╭─[bindings.baml:4:18]
+ 4 │   let type T = t @alias("x")
+   ·                  ┬
+   ·                  ╰── expected `expression`, found `'@'`
    ╰────
 
   [parse] E0010

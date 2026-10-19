@@ -302,7 +302,9 @@ fn is_public_resource_stdlib_function(name: &Name) -> bool {
         return false;
     }
     if name.package().as_str() == "trace" {
-        return true;
+        // A `trace.Span` is driven by a BAML closure (`Span.run`), so a host
+        // has no shape for one.
+        return name.to_string() != "trace.start_span";
     }
     name.package().as_str() == "baml"
         && name.namespace().first().is_some_and(|namespace| {

@@ -90,7 +90,7 @@ class BedrockClient {
     headers: map<string, string>?,
     /// Extra query parameters, appended (and percent-encoded) BEFORE signing.
     query_params: map<string, string>?,
-    /// Record request/response bodies on the LLMCall wire records delivered
+    /// Record request/response bodies on the ModelCall wire records delivered
     /// through on_event. Status, headers, and timing are always recorded; this
     /// flag only gates the bodies.
     capture_wire: bool,
@@ -157,8 +157,12 @@ class BedrockClient {
     }
 
     implements ai.Client {
-        function id(self) -> string {
-            `bedrock/${self.model}`
+        function requested_model(self) -> string {
+            self.model
+        }
+
+        function provider(self) -> string {
+            "aws-bedrock"
         }
 
         /// What a `${cache()}` sends as a `cachePoint` block: a checkpoint

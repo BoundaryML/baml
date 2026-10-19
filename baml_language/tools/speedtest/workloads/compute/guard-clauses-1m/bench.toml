@@ -1,0 +1,5 @@
+name = "guard clauses 1m"
+description = "1,000,000 calls through early-return guard clauses"
+expect = "571428714285"
+jobs = 8
+warmup = 1

@@ -43,3 +43,15 @@ pub const PROCESS_CONTEXT_FORMAT_MINOR: u32 = 9;
 /// A terminal recording can report SDK lifetime completion with an unknown
 /// OS process outcome (`ProcessStatus.UNKNOWN`).
 pub const UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR: u32 = 10;
+
+/// Explicit object-lifetime completions and closure without an outcome.
+pub const MANUAL_SPAN_FORMAT_MINOR: u32 = 11;
+
+/// Owned operations use ordinary function rows, named inputs, bound receivers, and
+/// neutral closure without the legacy manual-only marker. Local-only for now.
+pub const OWNED_SPAN_FORMAT_MINOR: u32 = 12;
+
+/// Completions carry the model usage charged to their span
+/// (`FunctionCompletion.usage`, `ThreadCompletion.usage`), and function
+/// metadata marks model invoke functions (`FunctionMetadata.model_invoke`).
+pub const MODEL_USAGE_FORMAT_MINOR: u32 = 13;

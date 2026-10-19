@@ -456,18 +456,20 @@ impl<'db> SemanticIndexBuilder<'db> {
     ) {
         match &body.stmts[stmt_id] {
             ast::Stmt::Expr(expr) => self.walk_expr(*expr, body, source_map, true),
-            ast::Stmt::TypeBinding { name, value } => {
+            ast::Stmt::TypeBinding {
+                name,
+                operand,
+                else_branch,
+                ..
+            } => {
                 if let Some(span) = source_map.type_binding_name_span(stmt_id) {
                     self.reject_root_name(name, span);
                 }
-                match value {
-                    // The runtime operand is an ordinary expression in the
-                    // enclosing scope (`T` is not yet in scope while its own
-                    // operand runs).
-                    ast::TypeBindingValue::Runtime(operand) => {
-                        self.walk_expr(*operand, body, source_map, true);
-                    }
-                    ast::TypeBindingValue::Static(_) => {}
+                // The operand and the `else` block are ordinary expressions
+                // in the enclosing scope (`T` is not yet in scope in either).
+                self.walk_expr(*operand, body, source_map, true);
+                if let Some(else_branch) = else_branch {
+                    self.walk_expr(*else_branch, body, source_map, true);
                 }
             }
             ast::Stmt::Let {
@@ -1771,7 +1773,16 @@ impl<'db> SemanticIndexBuilder<'db> {
                     let type_expr = &field.type_expr;
                     self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);
                 }
-                for method in &class.methods {
+                for method in class
+                    .methods
+                    .iter()
+                    .chain(class.implements.iter().flat_map(|block| &block.methods))
+                {
+                    self.validate_function_phase1(method, is_builtin_file);
+                }
+            }
+            ast::Item::ImplementsFor(implements) => {
+                for method in &implements.methods {
                     self.validate_function_phase1(method, is_builtin_file);
                 }
             }
@@ -1785,6 +1796,14 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn validate_function_phase1(&mut self, function: &ast::FunctionDef, is_builtin_file: bool) {
+        if function.metadata.explicit_trace_passthrough
+            && self.file.source_root(self.db).kind(self.db) != baml_base::SourceRootKind::Stdlib
+        {
+            self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
+                feature: "//baml:trace_passthrough".to_owned(),
+                span: function.span,
+            });
+        }
         for param in &function.params {
             if let Some(type_expr) = &param.type_expr {
                 self.validate_type_expr_phase1(type_expr, type_expr.span, is_builtin_file);

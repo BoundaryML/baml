@@ -56,7 +56,7 @@ function parse<T>(text: string) -> T throws root.errors.ParseError {
 ///
 /// It is generally recommended to use `baml.sap.parse` instead.
 function parse_type(t: reflect.Type, text: string) -> unknown throws root.errors.ParseError {
-    type T = unreflect(t);
+    let type T = t;
     parse<T>(text)
 }
 
@@ -69,7 +69,7 @@ function parse_type(t: reflect.Type, text: string) -> unknown throws root.errors
 /// are read under the names the output format shows, and a `@skip` field is
 /// not read.
 ///
-/// The type is often data here (`type T = unreflect(t)`), so a `T` that the
+/// The type is often data here (`let type T = t`), so a `T` that the
 /// parser cannot model is thrown, where `parse` panics: `unknown`,
 /// `uint8array`, a function, a type that holds one of those, and a class with
 /// a `@skip` field whose type has no value to fill in.

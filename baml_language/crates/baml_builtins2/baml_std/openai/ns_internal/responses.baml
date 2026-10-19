@@ -801,7 +801,7 @@ function _request(
     // sanitize BEFORE lowering: foreign reasoning, empty turns and orphaned
     // tool calls are everyone's problem, fixed once in ai.wire.
     let journal = ai.wire.degrade_tool_media(
-        ai.wire.sanitize_for_client(input.journal, c.id()),
+        ai.wire.sanitize_for_client(input.journal, "openai", c.model),
         ["image", "pdf", "video"],
     );
     for (let item in lower_journal(journal, preview = preview)) {
@@ -976,10 +976,15 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
     } else {
         ai.content.StopReason.Complete
     };
-    let usage: ai.events.Usage? = if let u: OaUsage = resp.usage {
+    ai.ModelTurn { calls: [], child_turns: [], content: content, stop_reason: stop }
+}
+
+/// One decoded response's usage, null when it reported none.
+function usage(resp: OaResponse) -> ai.events.Usage? {
+    if let u: OaUsage = resp.usage {
         ai.events.Usage {
-            input_tokens: u.input_tokens ?? 0,
-            output_tokens: u.output_tokens ?? 0,
+            input_tokens: u.input_tokens,
+            output_tokens: u.output_tokens,
             cached_input_tokens: u.input_tokens_details?.cached_tokens,
             reasoning_tokens: u.output_tokens_details?.reasoning_tokens,
             cache_write_input_tokens: u.input_tokens_details?.cache_write_tokens,
@@ -992,19 +997,18 @@ function parse(resp: OaResponse) -> ai.ModelTurn {
         }
     } else {
         null
-    };
-    ai.ModelTurn { calls: [], content: content, stop_reason: stop, usage: usage }
+    }
 }
 
 /// The one internal entry point: render, send, normalize — one model turn.
 /// Whether any text parses as `t`: `string`, or a union with a `string` member
 /// (`string?` included).
 function _accepts_any_text(t: reflect.Type) -> bool {
-    let text = reflect.Type.of<string>();
+    let text = string.type();
     if (t == text) {
         return true;
     }
-    if let union: reflect.union.Type = t.as_union() {
+    if let union: reflect.Union = t.as_union() {
         return union.member_types().some((member) -> {
             member == text
         });
@@ -1070,14 +1074,19 @@ function _commentary_output(resp: OaResponse, output_type: reflect.Type) -> ai.P
 
 function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
     let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(render(c, input));
-    let sent = ai.wire.send_as_with_wire<OaResponse>(req, "openai", c.id(), capture_wire = c.capture_wire);
+    let sent = ai.wire.send_as_with_wire<OaResponse>(
+        req,
+        ai.events.ModelKey { provider: c.provider(), model: c.model },
+        capture_wire = c.capture_wire,
+    );
     let turn = parse(sent.value);
-    ai.ModelTurn {
-        ...turn,
-        parsed_output: _commentary_output(sent.value, input.output_type),
-        calls: [sent.call],
-        model: c.model,
-    }
+    ai.internal.with_own_call(
+        ai.ModelTurn { ...turn, parsed_output: _commentary_output(sent.value, input.output_type) },
+        sent.call,
+        usage(sent.value),
+        c.model,
+        sent.value.model,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -1238,12 +1247,8 @@ function _stream_events(
                 out.push(
                     ai.stream.TurnMeta {
                         stop_reason: turn.stop_reason,
-                        input_tokens: turn.usage?.input_tokens,
-                        output_tokens: turn.usage?.output_tokens,
-                        cached_input_tokens: turn.usage?.cached_input_tokens,
-                        cache_write_input_tokens: turn.usage?.cache_write_input_tokens,
-                        uncached_input_tokens: turn.usage?.uncached_input_tokens,
-                        reasoning_tokens: turn.usage?.reasoning_tokens,
+                        usage: usage(final_response),
+                        resolved_model: final_response.model,
                     },
                 );
             };
@@ -1353,14 +1358,10 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
         timeout_options = limits,
         dispatched = started,
     );
-    let call = ai.events.LLMCall {
-        client_name: c.id(),
-        provider: "openai",
-        timing: ai.events.Timing {
-            start_time_utc_ms: started.to_timestamp_milliseconds(),
-            duration_ms: null,
-            ttft_ms: null,
-        },
+    let call = ai.events.ModelCall {
+        resolved_model: ai.events.ModelKey { provider: c.provider(), model: c.model },
+        usage: null,
+        timing: ai.events.Timing { start_time: started, duration: null, ttft: null },
         http_request: if (c.capture_wire) {
             baml.http.Request {
                 method: req.method,
@@ -1372,16 +1373,14 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
             null
         },
         http_response: ai.events.HttpResponse { status: sse.status_code, headers: sse.headers, body: null },
-        usage: null,
-        selected: true,
         sse_responses: if (c.capture_wire) {
             []
         } else {
             null
         },
     };
-    stream._calls = [call];
     stream._wire_call = call;
+    stream._requested_model = c.model;
     stream._call_started = started;
     stream._ttft_from = baml.time.Instant.now();
     stream._capture_sse = c.capture_wire;

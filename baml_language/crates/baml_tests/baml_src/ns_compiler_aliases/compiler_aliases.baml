@@ -47,7 +47,7 @@ test "compiler_alias_media_class_spelling_is_the_primitive" {
     };
     assert.equal(kind, "image/png");
 
-    assert.is_true(reflect.Type.of<baml.media.Image>() == reflect.Type.of<image>());
-    assert.equal(reflect.Type.of<baml.media.Image>().to_string(), "image");
+    assert.is_true(baml.media.Image.type() == image.type());
+    assert.equal(baml.media.Image.type().to_string(), "image");
     assert.equal(reflect.Type.of<baml.media.Audio[]>().to_string(), "audio[]")
 }

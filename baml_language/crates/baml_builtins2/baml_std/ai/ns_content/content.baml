@@ -119,4 +119,6 @@ enum StopReason {
     ToolUse,
     MaxTokens,
     Refused,
+    /// The attempt threw; see `ModelTurn.error`.
+    Failed,
 }

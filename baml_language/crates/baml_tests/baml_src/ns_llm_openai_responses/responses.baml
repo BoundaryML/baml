@@ -366,7 +366,8 @@ function oai_tools_and_journal() -> json {
                     ai.content.Text { text: "on it" },
                     ai.content.ToolUse { id: "call_1", name: "lookup", args: args },
                 ],
-                client_id: "openai/gpt-4o-mini",
+                resolved_model: ai.events.ModelKey { provider: "openai", model: "gpt-4o-mini" },
+                requested_model: "gpt-4o-mini",
             },
         ],
     };
@@ -707,6 +708,11 @@ test "oai_role_metadata_is_not_forwarded" {
 
 // ─── response parsing ────────────────────────────────────────────────────────
 
+/// The usage a run billed to `gpt-4o-mini` on OpenAI, the model these tests use.
+function _oai_usage(usage: ai.events.ModelUsage[]) -> ai.events.Usage? {
+    ai.events.usage_for(usage, ai.events.ModelKey { provider: "openai", model: "gpt-4o-mini" })
+}
+
 // total/cached/reasoning token details reach ai.events.Usage.
 function oai_usage_details() -> string {
     root.llm_mock.mock_json_serve(
@@ -718,11 +724,12 @@ function oai_usage_details() -> string {
                 base_url = mock.base_url(),
             );
             let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let usage = _oai_usage(result.usage);
             [
-                result.usage.input_tokens.to_string(),
-                result.usage.output_tokens.to_string(),
-                (result.usage.cached_input_tokens ?? -1).to_string(),
-                (result.usage.reasoning_tokens ?? -1).to_string(),
+                (usage?.input_tokens ?? -1).to_string(),
+                (usage?.output_tokens ?? -1).to_string(),
+                (usage?.cached_input_tokens ?? -1).to_string(),
+                (usage?.reasoning_tokens ?? -1).to_string(),
             ].join("|")
         },
     )
@@ -733,7 +740,7 @@ test "oai_usage_details" {
 }
 
 // A `usage` object with no counts at all still parses (the fields are optional
-// on purpose) and contributes zeroes.
+// on purpose) and reports no counts: unreported is not zero.
 function oai_sparse_usage() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_oai_sparse_usage_response())],
@@ -744,13 +751,14 @@ function oai_sparse_usage() -> string {
                 base_url = mock.base_url(),
             );
             let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
-            `${result.value}|${result.usage.input_tokens}|${result.usage.output_tokens}`
+            let usage = _oai_usage(result.usage);
+            `${result.value}|${usage?.input_tokens ?? -1}|${usage?.output_tokens ?? -1}`
         },
     )
 }
 
 test "oai_sparse_usage" {
-    assert.equal(oai_sparse_usage(), "pong|0|0")
+    assert.equal(oai_sparse_usage(), "pong|-1|-1")
 }
 
 // A commentary message that parses into a structured output type is the
@@ -996,7 +1004,7 @@ function oai_stream_usage_splits_the_cache() -> string {
                 base_url = mock.base_url(),
             );
             let spec = OaiEcho@spec("Say pong.");
-            let u = cl
+            let turn = cl
                 .invoke_stream(
                 ai.ModelTurnInput {
                     prompt: spec.prompt_template,
@@ -1005,8 +1013,8 @@ function oai_stream_usage_splits_the_cache() -> string {
                     output_type: spec.output_type(),
                 },
                 )
-                .final_turn()
-                .usage;
+                .final_turn();
+            let u = ai.events.usage_for(ai.events.call_usage(turn.calls), ai.events.ModelKey { provider: "openai", model: "gpt-4o-mini" });
             `${u?.input_tokens ?? -1}/${u?.cached_input_tokens ?? -1}/${u?.cache_write_input_tokens ?? -1}/${u?.uncached_input_tokens ?? -1}/${u?.output_tokens ?? -1}/${u?.reasoning_tokens ?? -1}`
         },
     )
@@ -1467,7 +1475,7 @@ function _oai_live_client() -> openai.ResponsesClient {
 function oai_live_answers() -> bool {
     let result = ai.Agent.new(client = _oai_live_client())
         .run(OaiEcho@spec("Say pong."));
-    result.value.trim().length() > 0 && result.usage.output_tokens > 0
+    result.value.trim().length() > 0 && (_oai_usage(result.usage)?.output_tokens ?? 0) > 0
 }
 
 function oai_live_streams() -> bool {

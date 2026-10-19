@@ -2155,7 +2155,7 @@ fn run_expr_is_a_block_whatever_it_starts_with() {
 }
 
 /// An expression that ends in a value is checked as the body of a function
-/// returning `unknown`, so a value typed by a `type T = …` of the expression
+/// returning `unknown`, so a value typed by a `let type T = …` of the expression
 /// leaves it. One that ends in a statement has no such value and returns what
 /// its `return`s say, `null` when it has none.
 #[test]
@@ -2168,14 +2168,8 @@ fn run_expr_takes_its_value_from_a_final_expression_or_its_returns() {
     );
 
     for (expression, printed) in [
-        (
-            "type T = unreflect(reflect.Type.of<int>()); make<T>()",
-            "[]",
-        ),
-        (
-            "type T = unreflect(reflect.Type.of<int>()); make<T>();",
-            "null",
-        ),
+        ("let type T = int.type(); make<T>()", "[]"),
+        ("let type T = int.type(); make<T>();", "null"),
         ("note();", "null"),
         ("return;", "null"),
         ("return 5;", "5"),

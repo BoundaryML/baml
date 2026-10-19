@@ -1,7 +1,21 @@
-"""Benchmark runner — timing, packing, the main run loop."""
+"""The run loop: build, verify, measure, summarize, write the bundle.
 
+    1. Build: pack every workload's main.baml with the speedtest driver into one
+       executable (pack time and executable size are results).
+    2. Verify: run every (workload, row) once and compare its result with the
+       workload's `expect`; a row that fails is reported, never measured.
+    3. Measure: `trials` rounds; each round runs every (workload, row) once, in
+       a seeded shuffled order, each in a fresh process. Every trial's result
+       is checked again.
+    4. Summarize and write the bundle: meta.json (baselines, compare, UI),
+       trials.csv (every trial), kpis.json and kpis.html (the KPI report).
+"""
+
+import csv
 import os
+import random
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -9,405 +23,295 @@ import time
 from pathlib import Path
 from statistics import median, stdev
 
-from speedtest.fmt import fmt_ms, fmt_ms_sd, fmt_ratio, sig_marker
-from speedtest.loader import load_workloads
-from speedtest.storage import (
-    build_run_data, results_dir,
-    save_baseline, save_run,
-)
+from speedtest import kpis, measure, rows as rowmod
+from speedtest.fmt import fmt_ratio
+from speedtest.loader import load_workloads, select
+from speedtest.storage import build_run_data, results_dir, save_baseline, save_run
+
+DRIVER = rowmod.DRIVERS / "bench_driver.baml"
+SETUP_DRIVER = rowmod.DRIVERS / "bench_driver_setup.baml"
 
 
-def _time_once(cmd):
-    """Run a command once, return (elapsed_seconds, success, result)."""
-    start = time.perf_counter()
-    result = subprocess.run(cmd, capture_output=True, text=True, shell=isinstance(cmd, str))
-    elapsed = time.perf_counter() - start
-    return elapsed, result.returncode == 0, result
-
-
-def time_command_adaptive(cmd, measurement_time=5.0, min_samples=5, max_samples=100):
-    """Run a command adaptively, targeting measurement_time seconds total.
-
-    Strategy (criterion-inspired):
-      1. Warm up: 3 runs (discarded, warms OS caches / CPU)
-      2. Estimate per-run time from warm-up
-      3. Calculate how many samples to fill measurement_time
-      4. Clamp to [min_samples, max_samples]
-      5. Collect samples
-
-    Returns list of wall-clock seconds or None on failure.
-    """
-    warmup_times = []
-    for i in range(3):
-        elapsed, ok, result = _time_once(cmd)
-        if not ok:
-            if i == 0:
-                stderr = result.stderr.strip()
-                stderr = re.sub(r'\x1b\[[0-9;]*m', '', stderr)
-                lines = stderr.split('\n')
-                err_lines = [l for l in lines if 'error' in l.lower() or 'traceback' in l.lower()]
-                if err_lines:
-                    sys.stderr.write(f" ERROR: {err_lines[0][:80]}\n")
-            return None
-        warmup_times.append(elapsed)
-
-    est_per_run = median(warmup_times)
-    if est_per_run > 0:
-        target_samples = int(measurement_time / est_per_run)
-    else:
-        target_samples = max_samples
-    n_samples = max(min_samples, min(target_samples, max_samples))
-
-    times = []
-    for i in range(n_samples):
-        elapsed, ok, result = _time_once(cmd)
-        if not ok:
-            return None
-        times.append(elapsed)
-
-    return times
-
-
-def time_command_fixed(cmd, runs=10):
-    """Run a command a fixed number of times. Returns list of seconds or None."""
-    times = []
-    for i in range(runs):
-        elapsed, ok, result = _time_once(cmd)
-        if not ok:
-            if i == 0:
-                stderr = result.stderr.strip()
-                stderr = re.sub(r'\x1b\[[0-9;]*m', '', stderr)
-                lines = stderr.split('\n')
-                err_lines = [l for l in lines if 'error' in l.lower() or 'traceback' in l.lower()]
-                if err_lines:
-                    sys.stderr.write(f" ERROR: {err_lines[0][:80]}\n")
-            return None
-        times.append(elapsed)
-    return times
-
-
-def pack_baml(binary, baml_file, output_path):
-    """Pack a BAML workload into a standalone binary. Returns True on success."""
-    result = subprocess.run(
-        [binary, "pack", "main", "--file", baml_file, "-o", output_path],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        sys.stderr.write(
-            f"       baml pack failed (binary={binary}): "
-            f"{result.stderr.strip().splitlines()[-1] if result.stderr.strip() else 'no stderr'}\n"
-        )
-        return False
-    return True
+def _has_setup(baml):
+    return bool(re.search(r"^function setup\(", baml, re.M) and re.search(r"^function run\(", baml, re.M))
 
 
 def _repo_root():
-    d = Path.cwd()
+    d = Path(__file__).resolve()
     while d != d.parent:
-        if (d / "Cargo.toml").exists():
+        if (d / "Cargo.toml").exists() and (d / "crates").is_dir():
             return d
         d = d.parent
-    return Path.cwd()
+    sys.exit("cannot find baml_language/ (the Cargo workspace) above the speedtest package")
+
+
+def _log(msg):
+    print(msg, file=sys.stderr, flush=True)
+
+
+def _cli_env():
+    # The CLI refuses to run inside coding agents without an installed skill;
+    # the harness is not an agent session.
+    return {**os.environ, "DEV_BAML_CLI_DISABLE_AGENT_DETECTION": "1"}
+
+
+def build_baml(cli, workload, stage):
+    """Pack main.baml plus the driver into one executable. Returns a build record."""
+    project = stage / workload["id"].replace("/", "__")
+    src = project / "baml_src"
+    src.mkdir(parents=True)
+    (project / "baml.toml").write_text('[package]\nname = "speedtest_workload"\n')
+    shutil.copy(workload["files"]["baml"], src / "main.baml")
+    shutil.copy(SETUP_DRIVER if _has_setup(workload["baml"]) else DRIVER, src / "speedtest_driver.baml")
+    out = project / "workload"
+    start = time.perf_counter()
+    r = subprocess.run([str(cli), "--no-progress", "--color", "never", "pack", "speedtest_driver", "-o", str(out)],
+                       cwd=project, capture_output=True, text=True, env=_cli_env(), stdin=subprocess.DEVNULL)
+    seconds = time.perf_counter() - start
+    if r.returncode != 0 or not out.exists():
+        lines = [l for l in r.stderr.strip().splitlines() if l.strip() and not l.startswith("warning:")]
+        return {"status": "failed", "error": (lines[-1] if lines else f"exit {r.returncode}")[:400]}
+    return {"status": "ok", "artifact": str(out), "seconds": seconds, "bytes": out.stat().st_size}
+
+
+def _stats(values):
+    values = [v for v in values if v is not None]
+    if not values:
+        return None
+    return {"median": median(values), "min": min(values), "max": max(values),
+            "stdev": stdev(values) if len(values) > 1 else 0.0, "n": len(values)}
+
+
+def _dir_bytes(path):
+    return sum(f.stat().st_size for f in Path(path).rglob("*") if f.is_file()) if Path(path).exists() else 0
+
+
+class Cell:
+    """One (workload, row): its verification outcome and trials."""
+
+    def __init__(self, workload, row):
+        self.workload, self.row = workload, row
+        self.status, self.reason, self.trials = "pending", None, []
+
+    def fail(self, reason):
+        self.status, self.reason = "failed", reason
+
+    def summary(self):
+        ok = [t for t in self.trials if t.ok]
+        out = {"status": self.status, "reason": self.reason, "trials": len(self.trials), "failed_trials": len(self.trials) - len(ok)}
+        if ok:
+            out.update(per_job_ns=_stats([t.per_job_ns for t in ok]), process_ns=_stats([t.process_ns for t in ok]),
+                       cpu_ns=_stats([t.cpu_ns for t in ok]), peak_rss_bytes=_stats([t.peak_rss_bytes for t in ok]),
+                       jobs=ok[0].jobs)
+            if self.row.is_baml:
+                out["recording_bytes"] = _stats([t.extra.get("recording_bytes") for t in ok])
+        return out
+
+
+def _trial(cell, artifact, jobs, warmup, scratch, cpu):
+    home = Path(tempfile.mkdtemp(prefix="home-", dir=scratch))
+    try:
+        t = measure.run(cell.row.command(cell.workload, artifact, jobs, warmup), env=cell.row.env(os.environ, home), cpu=cpu)
+        if cell.row.is_baml:
+            t.extra["recording_bytes"] = _dir_bytes(home / "btel")
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+    if t.ok and t.result != cell.workload["expect"]:
+        t.ok, t.error = False, f"result {t.result[:80]!r} != expected {cell.workload['expect'][:80]!r}"
+    return t
+
+
+def _fmt_ns(ns):
+    if ns is None:
+        return "—"
+    if ns >= 1e9:
+        return f"{ns / 1e9:.2f}s"
+    if ns >= 1e6:
+        return f"{ns / 1e6:.1f}ms" if ns >= 1e7 else f"{ns / 1e6:.2f}ms"
+    return f"{ns / 1e3:.1f}µs"
+
+
+def print_table(workloads, row_list, cells):
+    primary = next((r for r in row_list if r.key == rowmod.PRIMARY), row_list[0])
+    others = [r for r in row_list if r is not primary]
+    head = ["workload", primary.label] + [c for r in others for c in (r.label, f"vs {r.label}")]
+    table = [head]
+    for w in workloads:
+        p = cells[(w["id"], primary.key)].summary()
+        pm = p.get("per_job_ns", {}).get("median") if p.get("per_job_ns") else None
+        line = [w["name"], _fmt_ns(pm) if pm else p["status"]]
+        for r in others:
+            s = cells[(w["id"], r.key)].summary()
+            m = s["per_job_ns"]["median"] if s.get("per_job_ns") else None
+            line += [_fmt_ns(m) if m else s["status"], fmt_ratio(pm, m) if pm and m else "—"]
+        table.append(line)
+    widths = [max(len(str(row[i])) for row in table) for i in range(len(head))]
+    for i, row in enumerate(table):
+        print("  ".join(str(c).ljust(widths[j]) if j == 0 else str(c).rjust(widths[j]) for j, c in enumerate(row)))
+        if i == 0:
+            print("  ".join("-" * w for w in widths))
+    print(f"\nper-job time, median of trials; 'vs X' is {primary.label} time over X's (above 1x: BAML is slower).")
+
+
+def _machine():
+    info = {"platform": sys.platform, "cores": os.cpu_count(), "kernel": os.uname().release}
+    try:
+        for line in Path("/proc/cpuinfo").read_text().splitlines():
+            if line.lower().startswith(("model name", "hardware")):
+                info["cpu"] = line.split(":", 1)[1].strip()
+                break
+    except OSError:
+        pass
+    if "cpu" not in info:
+        r = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True)
+        info["cpu"] = r.stdout.strip() or os.uname().machine
+    return info
 
 
 def cmd_run(args):
-    """Execute the 'run' subcommand — the main benchmark loop."""
-    repo_root = _repo_root()
-    baml_cli = os.path.abspath(args.baml or str(repo_root / "target" / "release" / "baml-cli"))
-
-    # ── Build ────────────────────────────────────────────────────────────
+    repo = _repo_root()
+    cli = Path(args.baml or repo / "target" / "release" / "baml-cli").resolve()
     if args.build:
-        build_cmd = ["cargo", "build", "--release", "-p", "baml_pack_host", "-p", "baml_cli"]
-        print(f"$ {' '.join(build_cmd)}", file=sys.stderr)
-        r = subprocess.run(build_cmd, cwd=str(repo_root))
-        if r.returncode != 0:
-            sys.exit(r.returncode)
-        if args.profile:
-            prof_cmd = ["cargo", "build", "--profile", "profiling", "-p", "baml_pack_host", "-p", "baml_cli"]
-            print(f"$ {' '.join(prof_cmd)}", file=sys.stderr)
-            r = subprocess.run(prof_cmd, cwd=str(repo_root))
-            if r.returncode != 0:
-                sys.exit(r.returncode)
-
-    if not os.path.isfile(baml_cli):
-        print(f"ERROR: baml-cli not found at {baml_cli}")
-        print("Run: cargo build --release --bin baml-cli  (or use --build)")
-        sys.exit(1)
-
-    # ── Detect runners ───────────────────────────────────────────────────
-    if args.only_baml:
-        has_python = has_bun = has_node = False
-    else:
-        has_python = subprocess.run(["python3", "--version"], capture_output=True).returncode == 0
-        has_bun = subprocess.run(["bun", "--version"], capture_output=True).returncode == 0
-        has_node = subprocess.run(["node", "--version"], capture_output=True).returncode == 0
-
-    # ── Profiling setup ──────────────────────────────────────────────────
-    profile_baml_bin = None
-    if args.profile:
-        if subprocess.run(["which", "samply"], capture_output=True).returncode != 0:
-            print("ERROR: --profile requires `samply` on PATH.", file=sys.stderr)
+        cmd = ["cargo", "build", "--release", "-p", "baml_pack_host", "-p", "baml_cli"]
+        _log(f"$ {' '.join(cmd)}")
+        if subprocess.run(cmd, cwd=repo).returncode != 0:
             sys.exit(1)
+    if not cli.is_file():
+        sys.exit(f"no baml-cli at {cli}; build it with `cargo build --release -p baml_cli -p baml_pack_host` or pass --build")
 
-        def derive_prof(p):
-            return p.replace("/release/", "/profiling/")
-
-        profile_baml_bin = args.profile_baml or derive_prof(baml_cli)
-        if not os.path.isfile(profile_baml_bin):
-            print(f"ERROR: profiling binary not found at {profile_baml_bin}", file=sys.stderr)
-            sys.exit(1)
-
-    # ── Load workloads ───────────────────────────────────────────────────
     workloads = load_workloads()
+    missing = sorted(kpis.workload_names() - {w["name"] for w in workloads})
+    if missing:
+        sys.exit(f"kpis.toml names workloads that do not exist: {', '.join(missing)}")
+    if args.kpi:
+        wanted = kpis.workload_names()
+        workloads = [w for w in workloads if w["name"] in wanted]
+    workloads = select(workloads, args.filter)
     if not workloads:
-        print("ERROR: no workloads found", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(f"no workloads match {args.filter}")
 
-    if args.filter:
-        workloads = [w for w in workloads if any(f.lower() in w["name"].lower() for f in args.filter)]
-        if not workloads:
-            print(f"ERROR: no workloads match filters: {args.filter}", file=sys.stderr)
-            sys.exit(1)
+    row_list = rowmod.resolve(args.rows.split(",") if args.rows else None, telemetry=args.telemetry or args.kpi)
+    versions = {}
+    for r in row_list:
+        if not r.is_baml and r.kind not in versions:
+            versions[r.kind] = rowmod.toolchain_version(r.kind)
+    trials_n = args.trials or 5
 
-    tmpdir = tempfile.mkdtemp(prefix="speedtest_")
-    total = len(workloads)
-    fixed_runs = args.runs  # None = adaptive, int = fixed
-    measurement_time = args.measurement_time
-    results = []
-    profile_files = []
-    is_tty = sys.stderr.isatty()
+    stage = Path(tempfile.mkdtemp(prefix="speedtest-"))
+    cells = {(w["id"], r.key): Cell(w, r) for w in workloads for r in row_list}
+    builds = {}
+    started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    load_start = os.getloadavg()
+    if load_start[0] > (os.cpu_count() or 1) / 4:
+        _log(f"warning: load average {load_start[0]:.1f} on {os.cpu_count()} cores; results will be noisy")
+    try:
+        _log(f"building {len(workloads)} workloads with {cli}")
+        for w in workloads:
+            builds[w["id"]] = build_baml(cli, w, stage)
+            b = builds[w["id"]]
+            if b["status"] != "ok":
+                _log(f"  {w['name']}: pack failed: {b['error']}")
 
-    if fixed_runs:
-        mode_str = f"{fixed_runs} runs (fixed)"
-    else:
-        mode_str = f"adaptive (~{measurement_time:.0f}s per workload)"
-    if is_tty:
-        sys.stderr.write(f"Timing mode: {mode_str}\n")
-
-    # ── Main loop ────────────────────────────────────────────────────────
-    for idx, workload in enumerate(workloads, 1):
-        name = workload["name"]
-        slug = re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
-
-        # Write temp files
-        baml_file = os.path.join(tmpdir, f"{slug}.baml")
-        py_file = os.path.join(tmpdir, f"{slug}.py")
-        js_file = os.path.join(tmpdir, f"{slug}.js")
-        for path, src in [(baml_file, workload["baml"]), (py_file, workload["python"]), (js_file, workload["js"])]:
-            with open(path, "w") as f:
-                f.write(src)
-
-        row = {
-            "name": name,
-            "category": workload["category"],
-            "source": {"baml": workload["baml"], "python": workload["python"], "js": workload["js"]},
-        }
-
-        if is_tty:
-            sys.stderr.write(f"\n[{idx}/{total}] {name}\n")
-            sys.stderr.flush()
-
-        # Pack
-        packed_baml = os.path.join(tmpdir, f"{slug}.packed")
-        if not pack_baml(baml_cli, baml_file, packed_baml):
-            if is_tty:
-                sys.stderr.write("       SKIP (baml pack failed)\n")
-            continue
-
-        # Verify output
-        def get_output(cmd):
-            r = subprocess.run(cmd, capture_output=True, text=True)
-            return r.stdout.strip().split("\n")[-1].strip() if r.returncode == 0 else None
-
-        expected = get_output([packed_baml])
-        if expected is None:
-            if is_tty:
-                sys.stderr.write("       SKIP (packed baml failed to run)\n")
-            continue
-
-        # Cross-language output verification
-        checks = []
-        if has_python:
-            checks.append(("python3", ["python3", "-S", py_file]))
-        if has_node:
-            checks.append(("node", ["node", js_file]))
-        if has_bun:
-            checks.append(("bun", ["bun", js_file]))
-
-        for lang, cmd in checks:
-            out = get_output(cmd)
-            if out is not None and out != expected:
-                if is_tty:
-                    sys.stderr.write(f"       MISMATCH: baml={expected}, {lang}={out}\n")
-                row["mismatch"] = True
-
-        # Time each runner
-        def run_one(label, cmd):
-            if is_tty:
-                sys.stderr.write(f"       {label:>10s}: ")
-                sys.stderr.flush()
-            if fixed_runs:
-                t = time_command_fixed(cmd, runs=fixed_runs)
+        _log(f"verifying {len(cells)} (workload, row) pairs")
+        for (wid, _), cell in cells.items():
+            if not cell.row.is_baml and versions.get(cell.row.kind) is None:
+                cell.status, cell.reason = "unavailable", f"{cell.row.kind} is not installed"
+                continue
+            if cell.row.is_baml and builds[wid]["status"] != "ok":
+                cell.fail(f"pack failed: {builds[wid]['error']}")
+                continue
+            t = _trial(cell, builds[wid].get("artifact"), 1, 0, stage, args.cpu)
+            if t.ok:
+                cell.status = "ok"
             else:
-                t = time_command_adaptive(cmd, measurement_time=measurement_time)
-            if t:
-                med = median(t)
-                sd = stdev(t) if len(t) > 1 else 0.0
-                n = len(t)
-                if is_tty:
-                    sys.stderr.write(
-                        f"{fmt_ms_sd(med, sd):>14s}  "
-                        f"({n} samples, min={fmt_ms(min(t))}, max={fmt_ms(max(t))})\n"
-                    )
-                return {"med": med, "sd": sd, "times": t}
-            else:
-                if is_tty:
-                    sys.stderr.write("FAIL\n")
-                return None
+                cell.fail(t.error)
+                _log(f"  {cell.workload['name']} [{cell.row.key}]: {t.error}")
 
-        row["baml"] = run_one("baml", [packed_baml])
-        if has_python:
-            row["python"] = run_one("python3", ["python3", "-S", py_file])
-        if has_node:
-            row["node"] = run_one("node", ["node", js_file])
-        if has_bun:
-            row["bun"] = run_one("bun", ["bun", js_file])
+        live = [c for c in cells.values() if c.status == "ok"]
+        rng = random.Random(args.seed)
+        _log(f"measuring: {trials_n} trials x {len(live)} pairs, shuffled (seed {args.seed})")
+        for i in range(trials_n):
+            order = live[:]
+            rng.shuffle(order)
+            for cell in order:
+                w = cell.workload
+                jobs = args.jobs or w["jobs"]
+                t = _trial(cell, builds[w["id"]].get("artifact"), jobs, w["warmup"], stage, args.cpu)
+                cell.trials.append(t)
+                if not t.ok:
+                    _log(f"  trial {i + 1}: {w['name']} [{cell.row.key}]: {t.error}")
+            _log(f"  round {i + 1}/{trials_n} done")
 
-        # Profiling
-        if args.profile and profile_baml_bin:
-            def profile_one(label, prof_bin, prof_slug):
-                if is_tty:
-                    sys.stderr.write(f"       {label:>10s}: ")
-                    sys.stderr.flush()
-                json_path = os.path.join(tmpdir, f"{prof_slug}.json")
-                r = subprocess.run(
-                    ["samply", "record", "--save-only", "-o", json_path,
-                     prof_bin, "run", "--file", baml_file, "-f", "main", "--", "main"],
-                    capture_output=True, text=True,
-                )
-                if r.returncode != 0 or not os.path.isfile(json_path):
-                    err = r.stderr.strip().splitlines()[-1] if r.stderr.strip() else f"exit {r.returncode}"
-                    if is_tty:
-                        sys.stderr.write(f"FAIL ({err})\n")
-                    return None
-                if is_tty:
-                    sys.stderr.write(f"OK\n")
-                return json_path
-
-            p = profile_one("profile", profile_baml_bin, slug)
-            if p:
-                profile_files.append(p)
-
-        results.append(row)
-
-    # ── Print results ────────────────────────────────────────────────────
-    _print_results(results, has_python, has_node, has_bun)
-
-    # ── Save results ─────────────────────────────────────────────────────
-    runners_used = ["baml"]
-    if has_python:
-        runners_used.append("python3")
-    if has_node:
-        runners_used.append("node")
-    if has_bun:
-        runners_used.append("bun")
-
-    rdir = results_dir(args)
-    data = build_run_data(args, results, runners_used, baml_cli=baml_cli)
-
-    run_path = save_run(rdir, data, profile_files)
-
-    # Always update baselines/<branch>/latest (and rotate last)
-    tag = getattr(args, 'tag', None)
-    bl_dir = save_baseline(rdir, run_path, data, tag=tag)
-
-    branch = bl_dir.name
-
-    print(f"\nResults saved to {branch}/latest", file=sys.stderr)
-    if tag:
-        print(f"Tagged as {branch}/{tag}", file=sys.stderr)
-    print(f"\nTo compare:  speedtest compare {branch} <other-branch>", file=sys.stderr)
-    print(f"To open UI:  speedtest open", file=sys.stderr)
-
-    # Cleanup
-    import shutil
-    shutil.rmtree(tmpdir, ignore_errors=True)
-
-
-# ── Output formatting ────────────────────────────────────────────────────
-
-NAME_W = 30
-NUM_W = 16
-
-
-def _print_results(results, has_python, has_node, has_bun):
-    cols = ["Benchmark", "baml"]
-    if has_python:
-        cols += ["python3", "baml/py"]
-    if has_node:
-        cols += ["node", "baml/node"]
-    if has_bun:
-        cols += ["bun", "baml/bun"]
-
-    def med_of(e):
-        return e["med"] if e else None
-
-    def cell_timing(e):
-        if e is None:
-            return f"{'FAIL':>{NUM_W}s}"
-        return f"{fmt_ms_sd(e['med'], e['sd']):>{NUM_W}s}"
-
-    def cell_ratio(a, b):
-        if a is None or b is None or b == 0:
-            return f"{'—':>{NUM_W}s}"
-        return f"{fmt_ratio(a, b):>{NUM_W}s}"
-
-    def print_header():
-        hdr = [f"{cols[0]:>{NAME_W}s}"] + [f"{c:>{NUM_W}s}" for c in cols[1:]]
-        print("| " + " | ".join(hdr) + " |")
-        sep = ["-" * NAME_W] + ["-" * NUM_W for _ in cols[1:]]
-        print("| " + " | ".join(sep) + " |")
-
-    def print_row(row):
-        name = row["name"]
-        display = name.split("::", 1)[-1] if "::" in name else name
-        flag = " (!)" if row.get("mismatch") else ""
-        cells = [f"{(display + flag):>{NAME_W}s}"]
-
-        baml = row.get("baml")
-        cells.append(cell_timing(baml))
-
-        if has_python:
-            py = row.get("python")
-            cells.append(cell_timing(py))
-            cells.append(cell_ratio(med_of(baml), med_of(py)))
-        if has_node:
-            nd = row.get("node")
-            cells.append(cell_timing(nd))
-            cells.append(cell_ratio(med_of(baml), med_of(nd)))
-        if has_bun:
-            bn = row.get("bun")
-            cells.append(cell_timing(bn))
-            cells.append(cell_ratio(med_of(baml), med_of(bn)))
-
-        print("| " + " | ".join(cells) + " |")
-
-    # Group by category
-    categories = []
-    seen = set()
-    for row in results:
-        cat = row["category"]
-        if cat not in seen:
-            categories.append(cat)
-            seen.add(cat)
+        if args.profile:
+            _profile(args, cli, workloads, stage)
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
 
     print()
-    for cat in categories:
-        cat_rows = [r for r in results if r["category"] == cat]
-        if not cat_rows:
-            continue
-        print(f"### {cat}\n")
-        print_header()
-        for row in cat_rows:
-            print_row(row)
-        print()
+    print_table(workloads, row_list, cells)
+    _save(args, cli, workloads, row_list, cells, builds, versions, trials_n,
+          {"started": started, "finished": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+           "loadavg_start": load_start, "loadavg_end": os.getloadavg()})
+
+
+def _profile(args, cli, workloads, stage):
+    prof = Path(args.profile_baml or str(cli).replace("/release/", "/profiling/"))
+    if not shutil.which("samply") or not prof.is_file():
+        _log(f"--profile needs samply on PATH and a profiling baml-cli at {prof}; skipping")
+        return
+    out = stage / "profiles"
+    out.mkdir(exist_ok=True)
+    for w in workloads:
+        path = out / f"{w['id'].replace('/', '__')}.json"
+        subprocess.run(["samply", "record", "--save-only", "-o", str(path), str(prof), "run", "--file",
+                        str(w["files"]["baml"]), "main"], capture_output=True, env=_cli_env())
+    args._profile_files = sorted(str(p) for p in out.glob("*.json"))
+
+
+def _save(args, cli, workloads, row_list, cells, builds, versions, trials_n, timing):
+    summaries = {w["id"]: {r.key: cells[(w["id"], r.key)].summary() for r in row_list} for w in workloads}
+
+    # meta.json keeps the shape baselines, `compare` and the UI read: per
+    # runner, seconds per job.
+    legacy = {"vm-off": "baml", "python": "python", "node": "node", "bun": "bun"}
+    results = []
+    for w in workloads:
+        entry = {"name": w["name"], "category": w["category"],
+                 "source": {"baml": w["baml"], "python": w["python"], "js": w["js"]}}
+        for key, name in legacy.items():
+            if (w["id"], key) not in cells:
+                continue
+            ok = [t.per_job_ns / 1e9 for t in cells[(w["id"], key)].trials if t.ok]
+            entry[name] = {"med": median(ok), "sd": stdev(ok) if len(ok) > 1 else 0.0, "times": ok} if ok else None
+        results.append(entry)
+    args.runs, args.measurement_time = trials_n, 0
+    data = build_run_data(args, results, [legacy[r.key] for r in row_list if r.key in legacy], baml_cli=str(cli))
+    data.update(protocol="speedtest-2", trials=trials_n, seed=args.seed, cpu=args.cpu, machine=_machine(),
+                toolchains=versions, rows=[r.key for r in row_list], builds=builds, summary=summaries, **timing)
+
+    rdir = results_dir(args)
+    run_path = save_run(rdir, data, getattr(args, "_profile_files", None))
+    with open(run_path / "trials.csv", "w", newline="") as f:
+        out = csv.writer(f)
+        out.writerow(["workload", "row", "trial", "ok", "jobs", "per_job_ns", "elapsed_ns", "process_ns", "cpu_ns",
+                      "peak_rss_bytes", "recording_bytes", "error"])
+        for (wid, key), cell in cells.items():
+            for i, t in enumerate(cell.trials):
+                out.writerow([wid, key, i, int(t.ok), t.jobs, t.per_job_ns, t.elapsed_ns, t.process_ns, t.cpu_ns,
+                              t.peak_rss_bytes, t.extra.get("recording_bytes"), t.error or ""])
+    page = kpis.render(run_path, data, workloads, row_list)
+    bl = save_baseline(rdir, run_path, data, tag=args.tag)
+    if args.out:
+        out_dir = Path(args.out)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for name in ("meta.json", "trials.csv", "kpis.json", "kpis.html"):
+            shutil.copy(run_path / name, out_dir / name)
+        page = out_dir / "kpis.html"
+
+    failed = sum(1 for c in cells.values() if c.status == "failed") + sum(s["failed_trials"] for ws in summaries.values() for s in ws.values())
+    _log(f"\nreport:  {page}")
+    _log(f"run:     {run_path}  (baseline {bl.name}/latest{', tag ' + args.tag if args.tag else ''})")
+    _log(f"compare: speedtest compare {bl.name} <other>")
+    if failed:
+        _log(f"{failed} failure(s); see the report")
+        sys.exit(1)

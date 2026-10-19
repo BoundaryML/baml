@@ -1566,6 +1566,15 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
+    fn satisfies_bound(&mut self) -> Result<(), Self::Error> {
+        // Consumes the type and the bound, pushes the bool.
+        if !self.sim.pop_n(2) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error> {
         self.make_closure_with_type_args(lambda_idx, capture_count, 0)
     }

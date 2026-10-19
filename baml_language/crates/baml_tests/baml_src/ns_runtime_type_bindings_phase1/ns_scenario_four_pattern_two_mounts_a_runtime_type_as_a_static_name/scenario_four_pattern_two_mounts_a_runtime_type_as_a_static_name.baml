@@ -3,14 +3,14 @@ interface PersonAnchor {
     email: string,
 }
 
-function TenantPersonType() -> reflect.class.Type {
-    let anchor_impl = reflect.interface.implementation<PersonAnchor>().field("name").field("email");
-    reflect.class.new(
+function TenantPersonType() -> reflect.Class {
+    let anchor_impl = reflect.Interface.implementation<PersonAnchor>().field("name").field("email");
+    reflect.Class.new(
         "AcmePerson",
         {
-            "name": reflect.Type.of<string>(),
-            "email": reflect.Type.of<string>(),
-            "favorite_editor": reflect.Type.of<string>(),
+            "name": string.type(),
+            "email": string.type(),
+            "favorite_editor": string.type(),
         },
         implementations = [anchor_impl],
     )
@@ -19,7 +19,7 @@ function TenantPersonType() -> reflect.class.Type {
 function main() -> string {
     let person_t = TenantPersonType();
     let app = reflect.Package.compile({ "empty.baml": "" }).with_types({ "AcmePerson": person_t });
-    let exported = app.get_class("root.AcmePerson") ?? throw "missing mounted class";
+    let exported = app.get_class("root.AcmePerson");
     if (exported.as_type() != person_t.as_type()) {
         throw "with_types changed the exported type"
     }
@@ -39,7 +39,7 @@ function main() -> string {
         packages = { "app": app },
     );
 
-    let extract = pkg.get_function<(string) -> PersonAnchor>("root.Run") ?? throw "missing root.Run";
+    let extract = pkg.get_function<(string) -> PersonAnchor>("root.Run");
     let person = extract(`{"name":"Ada","email":"ada@example.com","favorite_editor":"vim"}`);
     if (reflect.Type.of_value(person) != person_t.as_type()) {
         throw "compiled wrapper did not return the mounted type"

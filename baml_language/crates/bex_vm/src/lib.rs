@@ -21,6 +21,7 @@ pub mod errors;
 pub mod indexable;
 pub mod kperf;
 pub mod lang_items;
+mod model_usage;
 pub mod package_ai;
 pub mod package_baml;
 pub mod package_load;
@@ -44,6 +45,6 @@ pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
 pub use type_match::{Primitive, value_is_member, value_primitive};
 pub use vm::{
-    BexVm, BytecodeFrame, BytecodeProgram, Frame, VmEventSourceLocation, VmExecState,
-    convert_program, prepare_compact_code,
+    BexVm, BoundCheck, BoundParts, BytecodeFrame, BytecodeProgram, Frame, VmEventSourceLocation,
+    VmExecState, convert_program, prepare_compact_code,
 };

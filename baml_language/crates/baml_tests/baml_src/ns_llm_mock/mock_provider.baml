@@ -542,7 +542,7 @@ test "mock_sse_events_roundtrip" {
 /// (`call_media`, tool `capture`), then a user turn carrying text plus the
 /// same `media`. Each client test asserts where the media landed on the wire
 /// and that the text-only result kept its plain-string shape.
-function media_journal(client_id: string, media: image | audio | video | pdf) -> ai.Journal {
+function media_journal(requested_model: string, media: image | audio | video | pdf) -> ai.Journal {
     let args: map<string, unknown> = {};
     ai.Journal {
         log: [
@@ -551,7 +551,7 @@ function media_journal(client_id: string, media: image | audio | video | pdf) ->
                     ai.content.ToolUse { id: "call_text", name: "lookup", args: args },
                     ai.content.ToolUse { id: "call_media", name: "capture", args: args },
                 ],
-                client_id: client_id,
+                requested_model: requested_model,
             },
             ai.events.ToolCompleted.new("call_text", "sunny in SF"),
             ai.events.ToolCompleted.of("call_media", ["captured:", media]),
@@ -564,7 +564,7 @@ function media_journal(client_id: string, media: image | audio | video | pdf) ->
 /// FIRST: a Degrade must still keep both results contiguous and attach the
 /// media after the second one, and the media-only result must not lower to an
 /// empty tool result.
-function parallel_media_journal(client_id: string, media: image | audio | video | pdf) -> ai.Journal {
+function parallel_media_journal(requested_model: string, media: image | audio | video | pdf) -> ai.Journal {
     let args: map<string, unknown> = {};
     ai.Journal {
         log: [
@@ -573,7 +573,7 @@ function parallel_media_journal(client_id: string, media: image | audio | video 
                     ai.content.ToolUse { id: "call_media", name: "capture", args: args },
                     ai.content.ToolUse { id: "call_text", name: "lookup", args: args },
                 ],
-                client_id: client_id,
+                requested_model: requested_model,
             },
             ai.events.ToolCompleted.of("call_media", [media]),
             ai.events.ToolCompleted.new("call_text", "sunny in SF"),

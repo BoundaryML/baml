@@ -84,6 +84,10 @@ pub(crate) trait PullSink<'db> {
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error>;
     /// Reify the package statically selected at this call site.
     fn load_current_package(&mut self) -> Result<(), Self::Error>;
+    /// Pop a bound (an `Object::Type` of the interface constraint) and a type
+    /// value, push whether the type satisfies the bound
+    /// (`Rvalue::SatisfiesBound`).
+    fn satisfies_bound(&mut self) -> Result<(), Self::Error>;
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
 
     /// Same as `make_closure` but with an additional `ntypeargs` count for
@@ -463,6 +467,13 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
         Rvalue::IsTypeTag { operand, tag } => {
             walk_operand_pull(sink, operand)?;
             sink.is_type_tag(*tag)
+        }
+        // The bound is a constraint, loaded the way a virtual call loads the
+        // interface it dispatches through.
+        Rvalue::SatisfiesBound { ty, bound } => {
+            walk_operand_pull(sink, ty)?;
+            sink.load_type(&bound.to_template())?;
+            sink.satisfies_bound()
         }
         Rvalue::MakeClosure {
             lambda_idx,

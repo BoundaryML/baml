@@ -81,7 +81,7 @@ function mpc_library() -> reflect.Package {
 
                     implements Sizing {
                         function tag_as<T>(self, tag: T) -> string throws never {
-                            if reflect.Type.of<T>() == reflect.Type.of<int>() {
+                            if reflect.Type.of<T>() == int.type() {
                                 self.label + ":int"
                             } else {
                                 self.label + ":other"
@@ -251,7 +251,7 @@ function mpc_consumer() -> reflect.Package {
 test "mounted source-less package calls preserve the complete surface" {
     let consumer = mpc_consumer();
     assert.equal(consumer.diagnostics().length(), 0);
-    let exercise = consumer.get_function<() -> string>("root.exercise") ?? throw "missing root.exercise";
+    let exercise = consumer.get_function<() -> string>("root.exercise");
     assert.equal(
         exercise(),
         "3|42|42|42|hello|out-of-body|42|via-existential|any|any|ok:negative|42|l",
@@ -277,7 +277,7 @@ test "mounted generic return retains its concrete class type" {
         },
         packages = { "app": app },
     );
-    let main = consumer.get_function<() -> int>("root.main") ?? throw "missing root.main";
+    let main = consumer.get_function<() -> int>("root.main");
     assert.equal(main(), 42)
 }
 
@@ -304,9 +304,9 @@ test "mounted impl statics and method values take the source roads" {
         packages = { "app": app },
     );
     assert.equal(consumer.diagnostics().length(), 0);
-    let static_call = consumer.get_function<() -> int>("root.static_call") ?? throw "missing root.static_call";
+    let static_call = consumer.get_function<() -> int>("root.static_call");
     assert.equal(static_call(), 3);
-    let value_reference = consumer.get_function<() -> string>("root.value_reference") ?? throw "missing root.value_reference";
+    let value_reference = consumer.get_function<() -> string>("root.value_reference");
     assert.equal(value_reference(), "v")
 }
 
@@ -347,15 +347,15 @@ test "mounted impl methods as values and through qualified spellings" {
         packages = { "app": app },
     );
     assert.equal(consumer.diagnostics().length(), 0);
-    let annotated_value = consumer.get_function<() -> string>("root.annotated_value") ?? throw "missing root.annotated_value";
+    let annotated_value = consumer.get_function<() -> string>("root.annotated_value");
     assert.equal(annotated_value(), "w:int");
-    let turbofish_value = consumer.get_function<() -> string>("root.turbofish_value") ?? throw "missing root.turbofish_value";
+    let turbofish_value = consumer.get_function<() -> string>("root.turbofish_value");
     assert.equal(turbofish_value(), "t:other");
-    let bounded_value = consumer.get_function<() -> int>("root.bounded_value") ?? throw "missing root.bounded_value";
+    let bounded_value = consumer.get_function<() -> int>("root.bounded_value");
     assert.equal(bounded_value(), 42);
-    let interface_qualified_call = consumer.get_function<() -> string>("root.interface_qualified_call") ?? throw "missing root.interface_qualified_call";
+    let interface_qualified_call = consumer.get_function<() -> string>("root.interface_qualified_call");
     assert.equal(interface_qualified_call(), "hi q");
-    let written_qualifier_default = consumer.get_function<() -> string>("root.written_qualifier_default") ?? throw "missing root.written_qualifier_default";
+    let written_qualifier_default = consumer.get_function<() -> string>("root.written_qualifier_default");
     assert.equal(written_qualifier_default(), "hi dhi d")
 }
 
@@ -383,7 +383,7 @@ test "mounted interface fields read through an existential and inherent statics 
         packages = { "app": app },
     );
     assert.equal(consumer.diagnostics().length(), 0);
-    let main = consumer.get_function<() -> string>("root.main") ?? throw "missing root.main";
+    let main = consumer.get_function<() -> string>("root.main");
     assert.equal(main(), "lbl:0")
 }
 
@@ -455,7 +455,7 @@ test "an alias of a mounted class qualifies its statics" {
         packages = { "app": app },
     );
     assert.equal(consumer.diagnostics().length(), 0);
-    let main = consumer.get_function<() -> string>("root.main") ?? throw "missing root.main";
+    let main = consumer.get_function<() -> string>("root.main");
     assert.equal(main(), "6:8:7:int:5:12:string")
 }
 
@@ -507,6 +507,6 @@ test "a recursive alias of a mounted package crosses the mount" {
         packages = { "app": app },
     );
     assert.equal(consumer.diagnostics().length(), 0);
-    let main = consumer.get_function<() -> int>("root.main") ?? throw "missing root.main";
+    let main = consumer.get_function<() -> int>("root.main");
     assert.equal(main(), 3)
 }

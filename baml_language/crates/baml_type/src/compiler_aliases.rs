@@ -431,7 +431,7 @@ pub fn by_spelling(spelling: &str) -> Option<&'static CompilerAlias> {
 
 /// The entry whose carrier declaration is `name` under `lang`'s installed
 /// language packages. Keyed on the full definition path, so a user's own
-/// `class Int` and `reflect.class.Type` stay nominal.
+/// `class Int` and `reflect.Class` stay nominal.
 pub fn by_definition(lang: LangRoots, name: &DeclName) -> Option<&'static CompilerAlias> {
     ALL.iter().find(|entry| {
         entry
@@ -590,7 +590,7 @@ mod tests {
             "user.String",
             "baml.Image",
             "baml.other.String",
-            "reflect.class.Type",
+            "reflect.Class",
         ] {
             assert!(by_definition(lang, &decl(path)).is_none(), "{path}");
             assert!(

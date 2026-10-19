@@ -1,0 +1,5 @@
+name = "nested loops 500x500"
+description = "two nested loops of 500 iterations each"
+expect = "15562562500"
+jobs = 100
+warmup = 6

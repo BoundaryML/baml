@@ -397,9 +397,8 @@ class prompt {
   }
 
   void add_self(detail::args_encoder& args) const {
-    args.add_arg("self", [&](detail::pb::InboundValue& target) {
-      encode_into(target);
-    });
+    args.add_arg(
+        "self", [&](detail::pb::InboundValue& target) { encode_into(target); });
   }
 
   detail::pb::BamlValuePromptAst value_;

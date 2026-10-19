@@ -21,7 +21,7 @@ function base_package() -> reflect.Package throws unknown {
 
 test "a base and its view are one package to a consumer" {
     let base = base_package();
-    let extra = reflect.class.new("Extra", { "tag": reflect.Type.of<string>() });
+    let extra = reflect.Class.new("Extra", { "tag": string.type() });
     let view = base.with_types({ "Extra": extra });
     let consumer = reflect.Package.compile(
         {
@@ -29,28 +29,28 @@ test "a base and its view are one package to a consumer" {
                 function through(item: base.Item) -> app.Item { item }
                 function back(item: app.Item) -> base.Item { item }
                 function same() -> bool {
-                    reflect.Type.of<base.Item>() == reflect.Type.of<app.Item>()
+                    base.Item.type() == app.Item.type()
                 }
                 function tagged() -> app.Extra { app.Extra { tag: "t" } }
             `,
         },
         packages = { "base": base, "app": view },
     );
-    let same = consumer.get_function<() -> bool>("root.same") ?? throw "missing same";
+    let same = consumer.get_function<() -> bool>("root.same");
     assert.is_true(same());
-    type Item = unreflect((base.get_class("root.Item") ?? throw "missing Item").as_type())
-    let through = consumer.get_function<(Item) -> Item>("root.through") ?? throw "missing through";
-    let make = base.get_function<(int) -> Item>("root.make") ?? throw "missing make";
+    let type Item = base.get_class("root.Item");
+    let through = consumer.get_function<(Item) -> Item>("root.through");
+    let make = base.get_function<(int) -> Item>("root.make");
     let item = through(make(3));
     assert.equal(reflect.Type.of_value(item), reflect.Type.of<Item>());
-    type Extra = unreflect(extra.as_type())
-    let tagged = consumer.get_function<() -> Extra>("root.tagged") ?? throw "missing tagged";
+    let type Extra = extra;
+    let tagged = consumer.get_function<() -> Extra>("root.tagged");
     assert.equal(reflect.Type.of_value(tagged()), extra.as_type())
 }
 
 test "a view alone reaches its base, and the base's functions run in the base" {
     let base = base_package();
-    let view = base.with_types({ "Extra": reflect.class.new("Extra", { "tag": reflect.Type.of<string>() }) });
+    let view = base.with_types({ "Extra": reflect.Class.new("Extra", { "tag": string.type() }) });
     let consumer = reflect.Package.compile(
         {
             "consumer.baml": `
@@ -61,25 +61,25 @@ test "a view alone reaches its base, and the base's functions run in the base" {
         },
         packages = { "app": view },
     );
-    type Item = unreflect((base.get_class("root.Item") ?? throw "missing Item").as_type())
-    let build = consumer.get_function<() -> Item>("root.build") ?? throw "missing build";
+    let type Item = base.get_class("root.Item");
+    let build = consumer.get_function<() -> Item>("root.build");
     let item = build();
     assert.equal(reflect.Type.of_value(item), reflect.Type.of<Item>());
-    let value = consumer.get_function<(Item) -> int>("root.value") ?? throw "missing value";
+    let value = consumer.get_function<(Item) -> int>("root.value");
     assert.equal(value(item), 7);
-    let home = consumer.get_function<() -> string>("root.home") ?? throw "missing home";
+    let home = consumer.get_function<() -> string>("root.home");
     assert.equal(home(), "root.Item");
     // The view answers for its base: the same function, the same class.
-    let make = view.get_function<(int) -> Item>("root.make") ?? throw "the view re-exports make";
+    let make = view.get_function<(int) -> Item>("root.make");
     assert.equal(reflect.Type.of_value(make(1)), reflect.Type.of<Item>());
-    assert.equal((view.get_class("root.Item") ?? throw "missing Item").as_type(), reflect.Type.of<Item>());
+    assert.equal(view.get_class("root.Item").as_type(), reflect.Type.of<Item>());
     assert.is_true(view.functions().get("root.make") != null)
 }
 
 test "a view of a view re-exports every layer" {
     let base = base_package();
-    let first = base.with_types({ "First": reflect.class.new("First", { "a": reflect.Type.of<int>() }) });
-    let second = first.with_types({ "Second": reflect.class.new("Second", { "b": reflect.Type.of<int>() }) });
+    let first = base.with_types({ "First": reflect.Class.new("First", { "a": int.type() }) });
+    let second = first.with_types({ "Second": reflect.Class.new("Second", { "b": int.type() }) });
     let consumer = reflect.Package.compile(
         {
             "consumer.baml": `
@@ -93,12 +93,12 @@ test "a view of a view re-exports every layer" {
         },
         packages = { "app": second },
     );
-    let all = consumer.get_function<() -> int>("root.all") ?? throw "missing all";
+    let all = consumer.get_function<() -> int>("root.all");
     assert.equal(all(), 6)
 }
 
 test "a minted class reached through two views is one type" {
-    let minted = reflect.class.new("Minted", { "n": reflect.Type.of<int>() });
+    let minted = reflect.Class.new("Minted", { "n": int.type() });
     let one = reflect.Package.compile({ "one.baml": "" }).with_types({ "Minted": minted });
     let two = reflect.Package.compile({ "two.baml": "" }).with_types({ "Minted": minted });
     let consumer = reflect.Package.compile(
@@ -106,35 +106,35 @@ test "a minted class reached through two views is one type" {
             "consumer.baml": `
                 function across(value: one.Minted) -> two.Minted { value }
                 function same() -> bool {
-                    reflect.Type.of<one.Minted>() == reflect.Type.of<two.Minted>()
+                    one.Minted.type() == two.Minted.type()
                 }
             `,
         },
         packages = { "one": one, "two": two },
     );
-    let same = consumer.get_function<() -> bool>("root.same") ?? throw "missing same";
+    let same = consumer.get_function<() -> bool>("root.same");
     assert.is_true(same())
 }
 
 test "a renamed re-export is the same declaration" {
     let base = base_package();
-    let view = base.with_types({ "Twin": base.get_class("root.Item") ?? throw "missing Item" });
+    let view = base.with_types({ "Twin": base.get_class("root.Item") });
     let consumer = reflect.Package.compile(
         {
             "consumer.baml": `
                 function same() -> bool {
-                    reflect.Type.of<app.Twin>() == reflect.Type.of<app.Item>()
+                    app.Twin.type() == app.Item.type()
                 }
                 function twin() -> app.Twin { app.make(9) }
             `,
         },
         packages = { "app": view },
     );
-    let same = consumer.get_function<() -> bool>("root.same") ?? throw "missing same";
+    let same = consumer.get_function<() -> bool>("root.same");
     assert.is_true(same());
     assert.equal(
-        (view.get_class("root.Twin") ?? throw "missing Twin").as_type(),
-        (base.get_class("root.Item") ?? throw "missing Item").as_type(),
+        view.get_class("root.Twin").as_type(),
+        base.get_class("root.Item").as_type(),
     )
 }
 
@@ -153,10 +153,10 @@ test "with_types declares an alias for a type that is not a bare declaration" {
         },
         packages = { "app": view },
     );
-    let total = consumer.get_function<(int[]) -> int>("root.total") ?? throw "missing total";
+    let total = consumer.get_function<(int[]) -> int>("root.total");
     assert.equal(total([1, 2, 3]), 6);
     // An alias is not a class.
-    assert.is_true(view.get_class("root.Ints") == null)
+    assert.is_true(view.find_class("root.Ints") == null)
 }
 
 class HostRecord {
@@ -165,7 +165,7 @@ class HostRecord {
 
 test "with_types re-exports a class of the host program" {
     let base = base_package();
-    let view = base.with_types({ "Record": reflect.Type.of<HostRecord>() });
+    let view = base.with_types({ "Record": HostRecord.type() });
     let consumer = reflect.Package.compile(
         {
             "consumer.baml": `
@@ -174,6 +174,6 @@ test "with_types re-exports a class of the host program" {
         },
         packages = { "app": view },
     );
-    let name = consumer.get_function<(HostRecord) -> string>("root.name") ?? throw "missing name";
+    let name = consumer.get_function<(HostRecord) -> string>("root.name");
     assert.equal(name(HostRecord { name: "host" }), "host")
 }

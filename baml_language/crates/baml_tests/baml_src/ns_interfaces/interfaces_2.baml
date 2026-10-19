@@ -174,8 +174,8 @@ implements<T> UrrsPrintable for UrrsBox<T> {
     function display(self) -> string { return "box" }
 }
 function urrs_main() -> bool {
-    return reflect.Type.of<UrrsBox<int>>().implements(reflect.Type.of<UrrsPrintable>())
-        && reflect.Type.of<UrrsBox<string>>().implements(reflect.Type.of<UrrsPrintable>())
+    return UrrsBox<int>.type().implements(reflect.Type.of<UrrsPrintable>())
+        && UrrsBox<string>.type().implements(reflect.Type.of<UrrsPrintable>())
 }
 test "unified_rule_reflection_sees_generic_class_implementor_once" {
     assert.is_true(urrs_main())
@@ -269,7 +269,7 @@ implements<T extends F2riNamed> F2riPrintable for T {
     function display(self) -> string { return self.name }
 }
 function f2ri_main() -> bool {
-    return reflect.Type.of<F2riPerson>().implements(reflect.Type.of<F2riPrintable>())
+    return F2riPerson.type().implements(reflect.Type.of<F2riPrintable>())
 }
 test "form2_reflect_implements_returns_true" {
     assert.is_true(f2ri_main())
@@ -295,8 +295,8 @@ implements<T extends F2rsNamed> F2rsPrintable for T {
 }
 function f2rs_main() -> bool {
     let printable = reflect.Type.of<F2rsPrintable>()
-    return printable.implemented_by(reflect.Type.of<F2rsPerson>())
-        && printable.implemented_by(reflect.Type.of<F2rsTeam>())
+    return printable.implemented_by(F2rsPerson.type())
+        && printable.implemented_by(F2rsTeam.type())
 }
 test "form2_reflect_membership_includes_satisfying_classes" {
     assert.is_true(f2rs_main())
@@ -311,12 +311,12 @@ implements<T> BirrPrintable<T> for BirrContainer<T> {}
 function birr_main() -> bool {
     let int_printable: BirrPrintable<int> = BirrContainer<int> { value: 1 }
     let string_printable: BirrPrintable<string> = BirrContainer<string> { value: "two" }
-    return reflect.Type.of<BirrContainer<int>>().implements(reflect.Type.of<BirrPrintable<int>>())
-        && reflect.Type.of<BirrContainer<string>>().implements(reflect.Type.of<BirrPrintable<string>>())
-        && reflect.Type.of<BirrPrintable<int>>().implemented_by(reflect.Type.of<BirrContainer<int>>())
-        && reflect.Type.of<BirrPrintable<string>>().implemented_by(reflect.Type.of<BirrContainer<string>>())
-        && !reflect.Type.of<BirrPrintable<int>>().implemented_by(reflect.Type.of<BirrContainer<string>>())
-        && !reflect.Type.of<BirrPrintable<string>>().implemented_by(reflect.Type.of<BirrContainer<int>>())
+    return BirrContainer<int>.type().implements(reflect.Type.of<BirrPrintable<int>>())
+        && BirrContainer<string>.type().implements(reflect.Type.of<BirrPrintable<string>>())
+        && reflect.Type.of<BirrPrintable<int>>().implemented_by(BirrContainer<int>.type())
+        && reflect.Type.of<BirrPrintable<string>>().implemented_by(BirrContainer<string>.type())
+        && !reflect.Type.of<BirrPrintable<int>>().implemented_by(BirrContainer<string>.type())
+        && !reflect.Type.of<BirrPrintable<string>>().implemented_by(BirrContainer<int>.type())
 }
 test "blanket_interface_rule_reflection_includes_concrete_container_implementors" {
     assert.is_true(birr_main())
@@ -863,7 +863,7 @@ class Fz34IntBox {
 function fz34_main() -> bool {
     // IntBox only implements Box<int>, NOT Box<string>, so this is false —
     // `implements` respects the generic type argument.
-    return reflect.Type.of<Fz34IntBox>().implements(reflect.Type.of<Fz34Box<string>>())
+    return Fz34IntBox.type().implements(reflect.Type.of<Fz34Box<string>>())
 }
 test "fuzz_bug34_reflect_implements_respects_generic_type_args" {
     assert.is_true(fz34_main() == false)
@@ -881,7 +881,7 @@ class Fz35IntBox {
 function fz35_main() -> bool {
     // Box<string>.implemented_by(IntBox) is false — IntBox only implements
     // Box<int>, and `implemented_by` respects the type argument.
-    return reflect.Type.of<Fz35Box<string>>().implemented_by(reflect.Type.of<Fz35IntBox>())
+    return reflect.Type.of<Fz35Box<string>>().implemented_by(Fz35IntBox.type())
 }
 test "fuzz_bug35_reflect_implemented_by_respects_generic_type_args" {
     assert.is_true(fz35_main() == false)

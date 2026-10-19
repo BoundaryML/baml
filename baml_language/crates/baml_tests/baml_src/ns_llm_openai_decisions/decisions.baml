@@ -198,15 +198,15 @@ function rejects(ty: reflect.Type, instructions: bool = true) -> bool {
 }
 
 test "reject string" {
-    assert.is_true(rejects(reflect.Type.of<string>()))
+    assert.is_true(rejects(string.type()))
 }
 
 test "reject int" {
-    assert.is_true(rejects(reflect.Type.of<int>()))
+    assert.is_true(rejects(int.type()))
 }
 
 test "reject bigint" {
-    assert.is_true(rejects(reflect.Type.of<bigint>()))
+    assert.is_true(rejects(bigint.type()))
 }
 
 test "reject string array" {
@@ -242,15 +242,15 @@ test "reject mixed structural union" {
 }
 
 test "reject unsupported leaf" {
-    assert.is_true(rejects(reflect.Type.of<WithNotes>()))
+    assert.is_true(rejects(WithNotes.type()))
 }
 
 test "reject recursive class" {
-    assert.is_true(rejects(reflect.Type.of<Node>()))
+    assert.is_true(rejects(Node.type()))
 }
 
 test "reject direct recursion by identity" {
-    assert.is_true(rejects(reflect.Type.of<DirectNode>()))
+    assert.is_true(rejects(DirectNode.type()))
 }
 
 test "reject recursive alias" {
@@ -258,19 +258,19 @@ test "reject recursive alias" {
 }
 
 test "reject image output" {
-    assert.is_true(rejects(reflect.Type.of<image>()))
+    assert.is_true(rejects(image.type()))
 }
 
 test "reject audio output" {
-    assert.is_true(rejects(reflect.Type.of<audio>()))
+    assert.is_true(rejects(audio.type()))
 }
 
 test "reject pdf output" {
-    assert.is_true(rejects(reflect.Type.of<pdf>()))
+    assert.is_true(rejects(pdf.type()))
 }
 
 test "reject empty instructions" {
-    assert.is_true(rejects(reflect.Type.of<bool>(), instructions = false))
+    assert.is_true(rejects(bool.type(), instructions = false))
 }
 
 test "union ignores member description" {
@@ -282,7 +282,7 @@ test "reject singleton" {
 }
 
 test "reject empty class" {
-    assert.is_true(rejects(reflect.Type.of<Empty>()))
+    assert.is_true(rejects(Empty.type()))
 }
 
 function predicate_body(n: float) -> string {
@@ -317,8 +317,10 @@ function predicate(n: float, ty: reflect.Type) -> unknown {
     ) -> {
         let cl = openai.DecisionsClient.new(api_key = "test-key", base_url = mock.base_url());
         let turn = cl.invoke(input(ty));
+        assert.equal(turn.calls.length(), 1);
+        assert.equal(turn.calls[0].resolved_model.to_json(), { "provider": "openai-decisions", "model": "gpt-6-luna" });
         assert.equal(
-            turn.usage.to_json(),
+            turn.calls[0].usage.to_json(),
             {
                 "input_tokens": 142,
                 "output_tokens": 0,
@@ -328,7 +330,7 @@ function predicate(n: float, ty: reflect.Type) -> unknown {
                 "uncached_input_tokens": 142,
             },
         );
-        assert.equal(turn.model, "gpt-6-luna");
+        assert.equal(turn.resolved_model?.model, "gpt-6-luna");
         let sent = mock.last_request();
         assert.equal(sent.path(), "/decisions");
         assert.equal(sent.header("authorization"), "Bearer test-key");
@@ -351,11 +353,11 @@ function predicate(n: float, ty: reflect.Type) -> unknown {
 }
 
 test "predicate request, usage, thresholds and probability outputs" {
-    assert.equal(predicate(0.0, reflect.Type.of<bool>()), false);
-    assert.equal(predicate(0.49, reflect.Type.of<bool>()), false);
-    assert.equal(predicate(0.5, reflect.Type.of<bool>()), true);
-    assert.equal(predicate(1.0, reflect.Type.of<bool>()), true);
-    assert.equal(predicate(0.72, reflect.Type.of<float>()), 0.72)
+    assert.equal(predicate(0.0, bool.type()), false);
+    assert.equal(predicate(0.49, bool.type()), false);
+    assert.equal(predicate(0.5, bool.type()), true);
+    assert.equal(predicate(1.0, bool.type()), true);
+    assert.equal(predicate(0.72, float.type()), 0.72)
 }
 
 function choose(ty: reflect.Type, key: string) -> unknown {
@@ -369,7 +371,7 @@ function choose(ty: reflect.Type, key: string) -> unknown {
 }
 
 test "enum aliases, finite unions, optional null and bigint choices" {
-    assert.equal(choose(reflect.Type.of<Team>(), "tech"), Team.Technical);
+    assert.equal(choose(Team.type(), "tech"), Team.Technical);
     assert.equal(choose(reflect.Type.of<Team?>(), "<null>"), null);
     assert.equal(choose(reflect.Type.of<1 | 2 | 3>(), "2"), 2);
     assert.equal(choose(reflect.Type.of<"calm" | "angry">(), "angry"), "angry");
@@ -395,11 +397,11 @@ test "defaults, lazy credentials, preview and both shorthand paths" {
             "capture_wire": true,
         },
     );
-    assert.equal(cl.id(), "openai-decisions/gpt-6-luna");
-    assert.equal(Urgent@spec("x").client_id(), cl.id());
+    assert.equal(cl.requested_model(), "gpt-6-luna");
+    assert.equal(Urgent@spec("x").requested_model(), cl.requested_model());
     let provider = "openai-decisions";
-    assert.equal(ai.clients.resolve(`${provider}/gpt-6-luna`).id(), cl.id());
-    let req = cl.render(input(reflect.Type.of<Override>(), instructions = false));
+    assert.equal(ai.clients.resolve(`${provider}/gpt-6-luna`).requested_model(), cl.requested_model());
+    let req = cl.render(input(Override.type(), instructions = false));
     assert.equal(
         req.to_json(),
         {
@@ -433,7 +435,7 @@ test "defaults, lazy credentials, preview and both shorthand paths" {
         api_key = "secret",
         base_url = "http://localhost:1234",
     );
-    let custom_req = custom.render(input(reflect.Type.of<bool>()));
+    let custom_req = custom.render(input(bool.type()));
     assert.equal(
         custom_req.to_json(),
         {
@@ -460,7 +462,7 @@ test "defaults, lazy credentials, preview and both shorthand paths" {
 }
 
 test "enum descriptions, aliases and skips become choice options" {
-    let req = openai.DecisionsClient.new().render(input(reflect.Type.of<Team>(), instructions = false));
+    let req = openai.DecisionsClient.new().render(input(Team.type(), instructions = false));
     assert.equal(
         baml.json.parse(req.body),
         {
@@ -604,7 +606,7 @@ function malformed(body: string, ty: reflect.Type? = null) -> bool {
         mock: root.llm_mock.MockJsonServer,
     ) -> {
         let cl = openai.DecisionsClient.new(api_key = "k", base_url = mock.base_url());
-        let result = cl.invoke(input(ty ?? reflect.Type.of<bool>())).terminal_text() catch_all (e) {
+        let result = cl.invoke(input(ty ?? bool.type())).terminal_text() catch_all (e) {
             let failed: ai.errors.ParseFailed => {
                 return true;
             },
@@ -627,11 +629,11 @@ test "malformed answers fail without inventing outputs" {
     assert.is_true(malformed(`{"answers":[{"name":"result","type":"predicate"}]}`));
     assert.is_true(malformed(predicate_body(1.1)));
     assert.is_true(malformed(predicate_body(-0.1)));
-    assert.is_true(malformed(choice_body("not-offered"), ty = reflect.Type.of<Team>()));
+    assert.is_true(malformed(choice_body("not-offered"), ty = Team.type()));
     assert.is_true(
         malformed(
             `{"answers":[{"name":"route","type":"choice","choice":"tech"},{"name":"route","type":"choice","choice":"tech"}]}`,
-            ty = reflect.Type.of<Judged<Team>>(),
+            ty = Judged<Team>.type(),
         ),
     );
     assert.is_true(malformed(`{"answers":{}}`))
@@ -642,7 +644,7 @@ function refuses() -> bool {
         mock: root.llm_mock.MockJsonServer,
     ) -> {
         let value = openai.DecisionsClient.new(api_key = "k", base_url = mock.base_url()).invoke(
-            input(reflect.Type.of<bool>()),
+            input(bool.type()),
         ) catch (e) {
             ai.errors.Refused => {
                 assert.equal(
@@ -678,7 +680,7 @@ function media_input(media: image | audio | video | pdf) -> ai.ModelTurnInput {
     let spec = MediaInput@spec(media);
     ai.ModelTurnInput {
         prompt: spec.prompt_template,
-        output_type: reflect.Type.of<bool>(),
+        output_type: bool.type(),
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
     }
@@ -761,7 +763,7 @@ function wire_capture() -> bool {
         mock: root.llm_mock.MockJsonServer,
     ) -> {
         let cl = openai.DecisionsClient.new(api_key = "private-key", base_url = mock.base_url());
-        let turn = cl.invoke(input(reflect.Type.of<bool>()));
+        let turn = cl.invoke(input(bool.type()));
         assert.equal(turn.calls.at(0)?.http_response?.body, body);
         assert.equal(turn.calls.at(0)?.http_request?.headers.get("authorization"), "REDACTED");
         let quiet = openai.DecisionsClient.new(
@@ -769,7 +771,7 @@ function wire_capture() -> bool {
             base_url = mock.base_url(),
             capture_wire = false,
         );
-        let no_body = quiet.invoke(input(reflect.Type.of<bool>()));
+        let no_body = quiet.invoke(input(bool.type()));
         assert.equal(no_body.calls.at(0)?.http_response?.body, null);
         true
     })
@@ -784,7 +786,7 @@ function http_error(status: int) -> string {
         mock: root.llm_mock.MockJsonServer,
     ) -> {
         let cl = openai.DecisionsClient.new(api_key = "k", base_url = mock.base_url());
-        let result = cl.invoke(input(reflect.Type.of<bool>())).terminal_text() catch_all (e) {
+        let result = cl.invoke(input(bool.type())).terminal_text() catch_all (e) {
             let limited: ai.errors.RateLimited => {
                 return `limited:${limited.retry_after_ms ?? 0}`;
             },
@@ -815,13 +817,14 @@ function decisions_tool() -> string {
 }
 
 test "journal evidence preserves prompt, user and assistant order" {
-    let turn = input(reflect.Type.of<bool>());
+    let turn = input(bool.type());
     let history = ai.Journal {
         log: [
             ai.events.UserMessage.new("follow-up"),
             ai.events.AssistantMessage {
                 content: [ai.content.Text { text: "earlier answer" }],
-                client_id: "previous",
+                resolved_model: ai.events.ModelKey { provider: "openai-decisions", model: "previous" },
+                requested_model: "previous",
             },
         ],
     };
@@ -840,7 +843,7 @@ test "journal evidence preserves prompt, user and assistant order" {
 }
 
 test "tools are rejected before HTTP" {
-    let turn = input(reflect.Type.of<bool>());
+    let turn = input(bool.type());
     let request = openai.DecisionsClient.new().render(
         ai.ModelTurnInput {
             prompt: turn.prompt,
@@ -857,7 +860,7 @@ test "tools are rejected before HTTP" {
 }
 
 test "tool history is rejected before HTTP" {
-    let turn = input(reflect.Type.of<bool>());
+    let turn = input(bool.type());
     let request = openai.DecisionsClient.new().render(
         ai.ModelTurnInput {
             prompt: turn.prompt,
@@ -938,10 +941,12 @@ function usage_breakdown() -> bool {
         mock: root.llm_mock.MockJsonServer,
     ) -> {
         let turn = openai.DecisionsClient.new(api_key = "k", base_url = mock.base_url()).invoke(
-            input(reflect.Type.of<bool>()),
+            input(bool.type()),
         );
+        assert.equal(turn.calls.length(), 1);
+        assert.equal(turn.calls[0].resolved_model.to_json(), { "provider": "openai-decisions", "model": "gpt-6-luna" });
         assert.equal(
-            turn.usage.to_json(),
+            turn.calls[0].usage.to_json(),
             {
                 "input_tokens": 100,
                 "output_tokens": 10,
@@ -962,7 +967,7 @@ test "reported token usage breakdown is preserved" {
 test "trailing slash base URL overrides use a single route separator" {
     let cl = openai.DecisionsClient.new(base_url = "https://gateway.example/v1/");
     assert.equal(
-        cl.render(input(reflect.Type.of<bool>())).url,
+        cl.render(input(bool.type())).url,
         "https://gateway.example/v1/decisions",
     )
 }

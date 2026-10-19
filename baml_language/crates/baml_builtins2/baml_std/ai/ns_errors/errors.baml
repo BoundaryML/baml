@@ -32,6 +32,7 @@ type InvokeError = Failure
 /// type must be added here with an explicit classification below.
 type RaisedInClient = InvokeError
     | baml.errors.InvalidArgument
+    | reflect.errors.InvalidArgument
     | baml.errors.Io
     | baml.errors.ParseError
     | baml.json.SerializationError
@@ -63,6 +64,14 @@ function normalize(error: RaisedInClient) -> InvokeError throws never {
         let timeout: baml.errors.Timeout => timeout,
         let compilation: reflect.errors.CompilationError => compilation,
         let invalid: baml.errors.InvalidArgument => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: invalid.message,
+                raw_body: null,
+            }
+        },
+        let invalid: reflect.errors.InvalidArgument => {
             InvalidRequest {
                 provider: "client",
                 status_code: null,
@@ -307,7 +316,7 @@ class ToolFailedError {
 /// client lacks the capability (an explicit override is caught at the call
 /// site by its StreamingClient type).
 class StreamingUnsupported {
-    client_id: string,
+    requested_model: string,
     implements Failure {
         function retry_safety(self) -> RetrySafety {
             RetrySafety.Safe

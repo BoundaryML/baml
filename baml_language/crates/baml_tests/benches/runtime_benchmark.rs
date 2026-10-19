@@ -3,9 +3,9 @@
 //! Run with: cargo bench --bench runtime_benchmark
 //!
 //! Every bench in this file is auto-generated from the cross-language speedtest
-//! corpus under `tools/speedtest/workloads/*.md` (see `build.rs`:
+//! corpus under `tools/speedtest/workloads/` (see `build.rs`:
 //! `generate_speedtest_benches`). There are intentionally no hand-written
-//! benches here — to add or change one, edit a workload `.md` so the speedtest
+//! benches here — to add or change one, edit a workload's `main.baml` so the speedtest
 //! harness and CodSpeed stay in sync from a single source of truth.
 //!
 //! Each generated bench measures *pure VM execution*: the BAML source is

@@ -58,5 +58,6 @@
   },
   "dependencies": {
     "protobufjs": "^7.6.2"
-  }
+  },
+  "license": "Apache-2.0"
 }

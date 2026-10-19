@@ -15,7 +15,8 @@ interface Runner {
 class RunResult<Out> {
     value: Out,
     journal: Journal,
-    usage: root.events.Usage,
+    // The usage of every model call the run made, summed per model.
+    usage: root.events.ModelUsage[],
 }
 
 /// (internal) How far `on_event` has read a journal: the count of entries it was
@@ -265,7 +266,7 @@ class Agent {
         c: Client,
         spec: FunctionSpec<Out>,
         j: Journal,
-        total: root.events.Usage,
+        total: root.events.ModelUsage[],
         attempts_left: int,
     ) -> _AcceptedTurn {
         let turn = c.invoke(
@@ -276,33 +277,23 @@ class Agent {
                 output_type: spec.output_type(),
             },
         );
-        if let u: root.events.Usage = turn.usage {
-            total.input_tokens += u.input_tokens;
-            total.output_tokens += u.output_tokens;
-            if let ci: int = u.cached_input_tokens {
-                total.cached_input_tokens = (total.cached_input_tokens ?? 0) + ci;
-            }
-            if let rt: int = u.reasoning_tokens {
-                total.reasoning_tokens = (total.reasoning_tokens ?? 0) + rt;
-            }
-            if let cw: int = u.cache_write_input_tokens {
-                total.cache_write_input_tokens = (total.cache_write_input_tokens ?? 0) + cw;
-            }
-            if let ui: int = u.uncached_input_tokens {
-                total.uncached_input_tokens = (total.uncached_input_tokens ?? 0) + ui;
-            }
-        }
+        let calls = turn.all_calls();
+        root.events.merge_usage(total, root.events.call_usage(calls));
+        let provider = turn.resolved_model?.provider ?? "unknown";
         // every attempt commits: the journal is the complete record
-        let batch: root.events.Event[] = [root.events.AssistantMessage { content: turn.content, client_id: c.id() }];
-        // wire records ride the journal: failed legs first, selected last
-        for (let call in turn.calls) {
+        let batch: root.events.Event[] = [
+            root.events.AssistantMessage {
+                content: turn.content,
+                resolved_model: turn.resolved_model,
+                requested_model: turn.requested_model,
+            },
+        ];
+        // wire records ride the journal, oldest first
+        for (let call in calls) {
             batch.push(call);
         }
         for (let u in turn.tool_uses()) {
             batch.push(root.events.ToolRequested { id: u.id, name: u.name, args: u.args });
-        }
-        if let u: root.events.Usage = turn.usage {
-            batch.push(u);
         }
         let candidate = turn.terminal_text() ?? "";
         let text_output: ParsedOutput? = null;
@@ -327,13 +318,13 @@ class Agent {
             match (turn.stop_reason) {
                 root.content.StopReason.MaxTokens => {
                     throw root.errors.FinishReasonError {
-                        provider: c.id(),
+                        provider: provider,
                         finish_reason: turn.stop_reason,
                         raw_output: candidate,
                     }
                 },
                 root.content.StopReason.Refused => {
-                    throw root.errors.Refused { provider: c.id(), reason: "the model declined to answer", raw_body: null }
+                    throw root.errors.Refused { provider: provider, reason: "the model declined to answer", raw_body: null }
                 },
                 _ => null,
             };
@@ -348,7 +339,7 @@ class Agent {
             self._attempt_turn<Out>(c, spec, j, total, attempts_left - 1)
         } else {
             j.append_all(batch);
-            throw root.errors.ParseFailed { provider: c.id(), raw_output: candidate }
+            throw root.errors.ParseFailed { provider: provider, raw_output: candidate }
         }
     }
 
@@ -380,14 +371,7 @@ class Agent {
         schema_attempts: int,
     ) -> RunResult<Out> {
         let steps = 0;
-        let total = root.events.Usage {
-            input_tokens: 0,
-            output_tokens: 0,
-            cached_input_tokens: null,
-            reasoning_tokens: null,
-            cache_write_input_tokens: null,
-            uncached_input_tokens: null,
-        };
+        let total: root.events.ModelUsage[] = [];
         // the futility breaker: identical repeated failures stop the run
         let fail_counts: map<string, int> = {};
         while (steps < self.max_steps) {
@@ -440,13 +424,14 @@ class Agent {
                 // a media-shaped Out is built from. A media Out the turn
                 // produced no media for went through the text parse, which is
                 // how absence is expressed (`_fits_without_text`).
+                let provider = turn.resolved_model?.provider ?? "unknown";
                 let value = if let parsed: ParsedOutput = turn.parsed_output ?? accepted.text_output {
                     let typed: Out = parsed.value else {
-                        throw root.errors.ParseFailed { provider: selected.id(), raw_output: candidate }
+                        throw root.errors.ParseFailed { provider: provider, raw_output: candidate }
                     };
                     typed
                 } else {
-                    self._media_value<Out>(turn, selected.id())
+                    self._media_value<Out>(turn, provider)
                 };
                 let value_json = baml.json.to_json(value) catch_all (e) {
                     _ => {
@@ -476,22 +461,49 @@ class Agent {
             | reflect.errors.CompilationError
             | root.errors.Failure;
 
+        //baml:trace_passthrough
         function run<Out>(self, spec: FunctionSpec<Out>) -> RunResult<Out> {
-            let schema_attempts = self._validated_schema_attempts();
             let selected = self.client ?? spec.default_client;
-            let j = Journal.new(spec);
-            let delivered = _Delivered { count: 0 };
-            self._deliver(j, delivered);
-            self._run_steps<Out>(selected, spec, j, delivered, schema_attempts) catch_all (e) {
+            let inputs: map<string, unknown> = {};
+            let arguments = spec.arguments();
+            for (let key in arguments.keys()) {
+                inputs[key] = arguments[key];
+            }
+            inputs["client"] = selected;
+            inputs["on_event"] = self.on_event;
+            let span = trace._create_span(spec.target(), inputs = inputs, config = trace._passthrough()) catch_all (e) {
                 _ => {
-                    // A turn is on the record before it is judged, so the turn
-                    // that ends the run with an error is in the journal: the
-                    // reply that did not parse and the repair attempts before
-                    // it, the cut-short turn, the refusal, the failed tool.
-                    // Every error passes here, and the listener gets what the
-                    // journal holds before the error propagates.
-                    self._deliver(j, delivered);
-                    throw e
+                    throw baml.errors.UnknownError.with_message<never>(e, "could not start agent span")
+                },
+            };
+            span.run(() -> {
+                let schema_attempts = self._validated_schema_attempts();
+                let j = Journal.new(spec);
+                let delivered = _Delivered { count: 0 };
+                self._deliver(j, delivered);
+                let result = self._run_steps<Out>(selected, spec, j, delivered, schema_attempts) catch_all (e) {
+                    _ => {
+                        // A turn is on the record before it is judged, so the turn
+                        // that ends the run with an error is in the journal: the
+                        // reply that did not parse and the repair attempts before
+                        // it, the cut-short turn, the refusal, the failed tool.
+                        // Every error passes here, and the listener gets what the
+                        // journal holds before the error propagates.
+                        self._deliver(j, delivered);
+                        throw e
+                    },
+                };
+                span.finish(result.value);
+                result
+            }) catch_all_panics (e, context) {
+                let e: trace.SpanError => {
+                    let error = baml.errors.UnknownError.with_message<never>(e, "could not enter agent span");
+                    span.fail_with_context(error, context);
+                    throw error;
+                },
+                _ => {
+                    span.fail_with_context(e, context);
+                    throw e;
                 },
             }
         }

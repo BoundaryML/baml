@@ -147,6 +147,7 @@ macro_rules! visit_bytecode_index_operands {
         | I::TraceHookSpan
         | I::TraceHookRich
         | I::TraceHookEmptySpan
+        | I::SatisfiesBound
             | I::SetCallTrace
             | I::Throw
             | I::Rethrow
@@ -386,6 +387,7 @@ mod tests {
             origin: FunctionOrigin::Internal,
             native_key: None,
             body_meta: None,
+            trace_passthrough: false,
             owner: HeapPtr::null(),
         }
     }

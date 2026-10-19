@@ -143,13 +143,13 @@ public sealed class BamlFunctionSpec<TFinal> : IDisposable
                 baml)
             .ConfigureAwait(false));
 
-    public string ClientId(global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
-        ClientIdAsync(baml).GetAwaiter().GetResult();
+    public string RequestedModel(global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
+        RequestedModelAsync(baml).GetAwaiter().GetResult();
 
-    public async Task<string> ClientIdAsync(
+    public async Task<string> RequestedModelAsync(
         global::Baml.Generated.V1.IBamlInvocationOptions? baml = null) =>
         (await InvokeAsync(
-                "ai.FunctionSpec.client_id",
+                "ai.FunctionSpec.requested_model",
                 additionalArguments: null,
                 baml)
             .ConfigureAwait(false)).ReadString();

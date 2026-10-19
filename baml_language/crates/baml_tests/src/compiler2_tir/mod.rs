@@ -133,16 +133,16 @@ pub(crate) mod support {
         }
     }
 
-    fn type_binding_value_desc(
-        value: &baml_compiler2_ast::TypeBindingValue,
-        body: &ExprBody,
+    /// ` extends A & B` for a `let type` binding's bounds; empty when none.
+    fn type_binding_bounds_desc(
+        bounds: &[baml_compiler2_ast::TypeExpr],
+        render: impl Fn(&baml_compiler2_ast::TypeExpr) -> String,
     ) -> String {
-        match value {
-            baml_compiler2_ast::TypeBindingValue::Runtime(operand) => {
-                format!("unreflect({})", expr_desc(*operand, body))
-            }
-            baml_compiler2_ast::TypeBindingValue::Static(ty) => ty.to_string(),
+        if bounds.is_empty() {
+            return String::new();
         }
+        let bounds: Vec<String> = bounds.iter().map(render).collect();
+        format!(" extends {}", bounds.join(" & "))
     }
 
     fn expr_desc(expr_id: ExprId, body: &ExprBody) -> String {
@@ -666,9 +666,22 @@ pub(crate) mod support {
         let pad = " ".repeat(indent);
         let stmt = &body.stmts[stmt_id];
         match stmt {
-            Stmt::TypeBinding { name, value } => {
-                let value = type_binding_value_desc(value, body);
-                writeln!(output, "{pad}type {name} = {value}").ok();
+            Stmt::TypeBinding {
+                name,
+                operand,
+                bounds,
+                else_branch,
+            } => {
+                let bounds = type_binding_bounds_desc(bounds, ToString::to_string);
+                let operand = expr_desc(*operand, body);
+                let else_desc = else_branch
+                    .map(|else_expr| format!(" else {}", expr_desc(else_expr, body)))
+                    .unwrap_or_default();
+                writeln!(
+                    output,
+                    "{pad}let type {name}{bounds} = {operand}{else_desc}"
+                )
+                .ok();
             }
             Stmt::Let {
                 pattern,
@@ -815,17 +828,24 @@ pub(crate) mod support {
         let pad = " ".repeat(indent);
         let stmt = &body.stmts[stmt_id];
         match stmt {
-            Stmt::TypeBinding { name, value } => {
-                let (value_desc, value_ty) = match value {
-                    baml_compiler2_ast::TypeBindingValue::Runtime(operand) => (
-                        format!("unreflect({})", expr_desc_rich(*operand, body, inference)),
-                        expr_ty(vp, inference, *operand).to_string(),
-                    ),
-                    baml_compiler2_ast::TypeBindingValue::Static(ty) => {
-                        (ty.to_string(), "type".to_string())
-                    }
-                };
-                writeln!(output, "{pad}type {name} = {value_desc} : {value_ty}").ok();
+            Stmt::TypeBinding {
+                name,
+                operand,
+                bounds,
+                else_branch,
+            } => {
+                let bounds = type_binding_bounds_desc(bounds, ToString::to_string);
+                let operand_desc = expr_desc_rich(*operand, body, inference);
+                let operand_ty = expr_ty(vp, inference, *operand);
+                writeln!(
+                    output,
+                    "{pad}let type {name}{bounds} = {operand_desc} : {operand_ty}"
+                )
+                .ok();
+                if let Some(else_expr) = else_branch {
+                    writeln!(output, "{pad}  else:").ok();
+                    render_expr(vp, *else_expr, body, inference, indent + 4, output);
+                }
             }
             Stmt::Let {
                 pattern,
@@ -2016,29 +2036,26 @@ pub(crate) mod support {
             prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
-            fn type_binding_value_desc_hir(
-                value: &baml_compiler2_ast::TypeBindingValue,
-                body: &ExprBody,
-                prefix: &str,
-                local_type_names: &std::collections::HashSet<&str>,
-            ) -> String {
-                match value {
-                    baml_compiler2_ast::TypeBindingValue::Runtime(operand) => format!(
-                        "unreflect({})",
-                        expr_desc_hir(*operand, body, prefix, local_type_names)
-                    ),
-                    baml_compiler2_ast::TypeBindingValue::Static(ty) => {
-                        type_expr_to_string_hir(ty, prefix, local_type_names)
-                    }
-                }
-            }
-
             use baml_compiler2_ast::Stmt;
             let stmt = &body.stmts[stmt_id];
             match stmt {
-                Stmt::TypeBinding { name, value } => format!(
-                    "type {name} = {}",
-                    type_binding_value_desc_hir(value, body, prefix, local_type_names)
+                Stmt::TypeBinding {
+                    name,
+                    operand,
+                    bounds,
+                    else_branch,
+                } => format!(
+                    "let type {name}{} = {}{}",
+                    type_binding_bounds_desc(bounds, |bound| {
+                        type_expr_to_string_hir(bound, prefix, local_type_names)
+                    }),
+                    expr_desc_hir(*operand, body, prefix, local_type_names),
+                    else_branch
+                        .map(|else_expr| format!(
+                            " else {}",
+                            expr_desc_hir(else_expr, body, prefix, local_type_names)
+                        ))
+                        .unwrap_or_default()
                 ),
                 Stmt::Let {
                     pattern,

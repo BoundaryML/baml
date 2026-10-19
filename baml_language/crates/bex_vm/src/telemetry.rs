@@ -161,6 +161,7 @@ impl FrameTelemetry {
 pub use btel_records::{LogLevel, SpanRecord, TimingRecord};
 
 mod host;
+pub(crate) mod manual;
 mod snapshot;
 type VmSpanRecord = SpanRecord<btel_snapshot::Snapshot, btel_snapshot::Snapshot>;
 const _: () = assert!(size_of::<TimingRecord>() <= btel_settings::layout::TIMING_RECORD_MAX_BYTES);
@@ -203,6 +204,9 @@ pub struct TelemetryState {
     runtime: Arc<btel_processor::TelemetryRuntime>,
     /// Exception-path bookkeeping, allocated by the first recorded raise.
     errors: Option<Box<ErrorBook>>,
+    /// Model usage charged to open spans (or the thread), one entry per model,
+    /// written just before the node completes. Empty without model calls.
+    usage: Vec<(TelemetryId, Vec<btel_records::ModelUsage>)>,
     #[cfg(test)]
     timing_records: Vec<TimingRecord>,
     #[cfg(test)]
@@ -232,12 +236,73 @@ impl TelemetryState {
         }
         options
     }
+    pub(crate) fn operation_options(
+        &self,
+        function: &Function,
+        config: TraceConfig,
+    ) -> manual::OperationOptions {
+        let policy = self.policy_by_id(function.telemetry_policy_id.load());
+        let is_ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }));
+        manual::OperationOptions {
+            mode: config
+                .reserved_id
+                .map(|_| InvocationMode::Span)
+                .or(config.mode)
+                .or(self.entry_settings(function, config).mode)
+                .unwrap_or(InvocationMode::Hidden),
+            reserved_id: config.reserved_id,
+            inputs: config.inputs == Some(true)
+                || policy.capture_inputs
+                || (is_ai && btel_settings::policy::AI_CAPTURE_INPUTS),
+            output: config.output == Some(true)
+                || policy.capture_output
+                || (is_ai && btel_settings::policy::AI_CAPTURE_OUTPUT),
+            error: config.error == Some(true)
+                || policy.capture_error
+                || (is_ai && btel_settings::policy::AI_CAPTURE_ERROR),
+            policy,
+            live_policy: function.telemetry_function_id.map(|function_id| {
+                self.policies
+                    .watch_owned(function_id, &function.telemetry_policy_id)
+            }),
+        }
+    }
+
     pub fn set_context(&mut self, context: btel_types::context::Context) {
         #[cfg(all(not(test), not(target_arch = "wasm32")))]
         if !context.same_version(&self.context) {
             self.pending_context_snapshot = None;
         }
         self.context = context;
+    }
+
+    /// The current context as a context-observation record names it, and the
+    /// snapshot the record must carry when no earlier record delivered it.
+    #[cfg(all(not(test), not(target_arch = "wasm32")))]
+    pub(crate) fn context_reference(
+        &mut self,
+    ) -> (
+        btel_records::ContextReference,
+        Option<btel_snapshot::Snapshot>,
+    ) {
+        use btel_records::ContextReference;
+
+        if self.context.is_empty() {
+            return (ContextReference::Empty, None);
+        }
+        if let Some((context, id)) = &self.context_snapshot
+            && context.same_version(&self.context)
+        {
+            return (ContextReference::Snapshot(*id), None);
+        }
+        self.prepare_context();
+        match self.pending_context_snapshot.take() {
+            Some(captured) => (
+                ContextReference::Snapshot(captured.root_id()),
+                Some(captured),
+            ),
+            None => (ContextReference::Unavailable, None),
+        }
     }
 
     #[cfg(all(not(test), not(target_arch = "wasm32")))]
@@ -301,6 +366,7 @@ impl TelemetryState {
             #[cfg(not(target_arch = "wasm32"))]
             runtime,
             errors: None,
+            usage: Vec::new(),
             #[cfg(test)]
             timing_records: Vec::new(),
             #[cfg(test)]
@@ -313,7 +379,7 @@ impl TelemetryState {
     /// left out rather than given an invented key; nothing is recorded when
     /// no slot has one.
     #[cold]
-    fn capture_type_args(
+    pub(crate) fn capture_type_args(
         &mut self,
         function: &Function,
         type_args: CallTypeArgs<'_>,
@@ -660,6 +726,10 @@ impl TelemetryState {
             return None;
         }
 
+        if function.trace_passthrough {
+            return None;
+        }
+
         let mode_override = trace.and_then(|config| {
             config
                 .reserved_id
@@ -671,9 +741,7 @@ impl TelemetryState {
             if self.auto_level == AutoTelemetryLevel::Low {
                 return None;
             }
-            if self.auto_level == AutoTelemetryLevel::Medium
-                && !matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }))
-            {
+            if self.auto_level == AutoTelemetryLevel::Medium && function.body_meta.is_none() {
                 return Some(self.enter_timing(
                     callee,
                     visible_caller,
@@ -914,6 +982,7 @@ impl TelemetryState {
             let captured_value =
                 capture_value.and_then(|value| self.capture(snapshot::Input::Value(value)));
             let id = telemetry.span_id().expect("span frame owns its identity");
+            self.flush_model_usage(id);
             match (
                 outcome,
                 telemetry.is_reentry(),
@@ -1203,6 +1272,45 @@ impl TelemetryState {
         self.thread.active_call_path = telemetry.saved_call_path;
     }
 
+    /// Charge model usage to the innermost span, or the thread when none is
+    /// open. Entries for one provider's model are summed.
+    #[cold]
+    pub fn charge_model_usage(&mut self, entries: Vec<btel_records::ModelUsage>) {
+        let node = self.thread.active_id;
+        let index = match self.usage.iter().position(|(id, _)| *id == node) {
+            Some(index) => index,
+            None => {
+                self.usage.push((node, Vec::new()));
+                self.usage.len() - 1
+            }
+        };
+        merge_usage(&mut self.usage[index].1, entries);
+    }
+
+    /// Remove and return the usage charged to `node`, for a node whose
+    /// completion this thread does not write (an owned span).
+    pub(crate) fn take_model_usage(
+        &mut self,
+        node: TelemetryId,
+    ) -> Option<Vec<btel_records::ModelUsage>> {
+        let index = self.usage.iter().position(|(id, _)| *id == node)?;
+        Some(self.usage.swap_remove(index).1)
+    }
+
+    /// Write the usage charged to `node`, just before its completion.
+    fn flush_model_usage(&mut self, node: TelemetryId) {
+        if self.usage.is_empty() {
+            return;
+        }
+        if let Some(index) = self.usage.iter().position(|(id, _)| *id == node) {
+            let (_, entries) = self.usage.swap_remove(index);
+            self.write_span(SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
+                node,
+                entries,
+            })));
+        }
+    }
+
     pub fn complete_thread(&mut self, outcome: InvocationOutcome) {
         if self.thread.completed {
             return;
@@ -1222,6 +1330,7 @@ impl TelemetryState {
             self.thread.running = true;
             self.write_span(SpanRecord::ThreadSpanRunning { at: completed_at });
         }
+        self.flush_model_usage(self.thread.id);
         self.write_span(SpanRecord::ThreadSpanCompletion {
             id: self.thread.id,
             parent_id: self.thread.parent_id,
@@ -1264,7 +1373,13 @@ impl TelemetryState {
         if !matches!(function.kind, FunctionKind::Bytecode) {
             return Err("native telemetry policies are immutable");
         }
-        self.policies.publish(&function.telemetry_policy_id, policy)
+        self.policies.publish_for_function(
+            function
+                .telemetry_function_id
+                .expect("checked function identity"),
+            &function.telemetry_policy_id,
+            policy,
+        )
     }
 
     #[inline(always)]
@@ -1422,23 +1537,7 @@ impl TelemetryState {
                 self.runtime.write_span(self.thread.id, record);
                 return;
             }
-            let mut snapshot = None;
-            let reference = if self.context.is_empty() {
-                ContextReference::Empty
-            } else if let Some((context, id)) = &self.context_snapshot
-                && context.same_version(&self.context)
-            {
-                ContextReference::Snapshot(*id)
-            } else {
-                self.prepare_context();
-                if let Some(captured) = self.pending_context_snapshot.take() {
-                    let id = captured.root_id();
-                    snapshot = Some(captured);
-                    ContextReference::Snapshot(id)
-                } else {
-                    ContextReference::Unavailable
-                }
-            };
+            let (reference, snapshot) = self.context_reference();
             if self
                 .runtime
                 .write_span_with_context(self.thread.id, reference, snapshot, record)
@@ -1499,11 +1598,7 @@ fn default_mode(function: &Function, policy: TelemetryPolicy) -> InvocationMode 
             NATIVE_DEFAULT_MODE
         }
         FunctionKind::Bytecode if policy.span_from_entry => InvocationMode::Span,
-        FunctionKind::Bytecode
-            if matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. })) =>
-        {
-            AI_DEFAULT_MODE
-        }
+        FunctionKind::Bytecode if function.body_meta.is_some() => AI_DEFAULT_MODE,
         FunctionKind::Bytecode => BYTECODE_DEFAULT_MODE,
     }
 }
@@ -1517,7 +1612,7 @@ pub(crate) fn ordinary_settings(
         mode: Some(if config.reserved_id.is_some() {
             InvocationMode::Span
         } else {
-            config.mode.unwrap_or(if ai {
+            config.mode.unwrap_or(if function.body_meta.is_some() {
                 AI_DEFAULT_MODE
             } else {
                 BYTECODE_DEFAULT_MODE
@@ -1560,6 +1655,36 @@ pub(crate) fn test_runtime() -> Arc<btel_processor::TelemetryRuntime> {
     static RUNTIME: std::sync::OnceLock<Arc<btel_processor::TelemetryRuntime>> =
         std::sync::OnceLock::new();
     Arc::clone(RUNTIME.get_or_init(|| btel_processor::TelemetryRuntime::new().unwrap()))
+}
+
+/// Add `entries` into `charged`, summing the entries for one provider's model.
+pub(crate) fn merge_usage(
+    charged: &mut Vec<btel_records::ModelUsage>,
+    entries: Vec<btel_records::ModelUsage>,
+) {
+    for entry in entries {
+        match charged
+            .iter_mut()
+            .find(|known| known.provider == entry.provider && known.model == entry.model)
+        {
+            Some(known) => add_usage(known, &entry),
+            None => charged.push(entry),
+        }
+    }
+}
+
+/// Sum `added` into `into`. A count stays `None` only when both are.
+fn add_usage(into: &mut btel_records::ModelUsage, added: &btel_records::ModelUsage) {
+    let sum = |a: Option<u64>, b: Option<u64>| match (a, b) {
+        (None, None) => None,
+        (a, b) => Some(a.unwrap_or(0).saturating_add(b.unwrap_or(0))),
+    };
+    into.calls = into.calls.saturating_add(added.calls);
+    into.input_tokens = sum(into.input_tokens, added.input_tokens);
+    into.output_tokens = sum(into.output_tokens, added.output_tokens);
+    into.cache_read_tokens = sum(into.cache_read_tokens, added.cache_read_tokens);
+    into.cache_write_tokens = sum(into.cache_write_tokens, added.cache_write_tokens);
+    into.reasoning_tokens = sum(into.reasoning_tokens, added.reasoning_tokens);
 }
 
 #[cfg(test)]
@@ -2302,6 +2427,7 @@ mod tests {
             origin: bex_vm_types::FunctionOrigin::Internal,
             native_key: None,
             body_meta,
+            trace_passthrough: false,
             owner: HeapPtr::null(),
         }
     }
@@ -2785,6 +2911,122 @@ mod tests {
             SpanRecord::FunctionSpanCompletionOkNeedsAnnouncement { id, captured_value: Some(value), .. }
                 if *id == span_id && matches!(value.roots()[0],btel_snapshot::SnapshotValue::Int(5))
         )));
+    }
+
+    #[test]
+    #[cfg(not(target_arch = "wasm32"))]
+    fn owned_timing_span_promotes_after_its_creating_state_is_gone() {
+        #[derive(Default)]
+        struct Observed {
+            completions: Vec<(bool, bool, InvocationOutcome, Option<i64>)>,
+            population: u64,
+        }
+        struct Sink(Arc<std::sync::Mutex<Observed>>);
+        impl btel_processor::Publisher<btel_snapshot::Snapshot, btel_snapshot::Snapshot> for Sink {
+            fn aggregate(&mut self, delta: btel_processor::AggregateDelta) {
+                self.0.lock().unwrap().population += delta.count;
+            }
+            fn span(&mut self, _: TelemetryId, record: &mut VmSpanRecord) {
+                assert!(
+                    !matches!(
+                        record,
+                        SpanRecord::ManualSpanAnnouncement(_) | SpanRecord::ManualSpanCompletion(_)
+                    ),
+                    "a Timing operation must use late promotion, with no fabricated entry"
+                );
+                if let Some(done) = record.completion() {
+                    let value =
+                        done.captured_value
+                            .and_then(|snapshot| match snapshot.roots()[0] {
+                                btel_snapshot::SnapshotValue::Int(n) => Some(n),
+                                _ => None,
+                            });
+                    self.0.lock().unwrap().completions.push((
+                        done.late,
+                        done.requires_announcement,
+                        done.outcome,
+                        value,
+                    ));
+                }
+            }
+            fn flush(&mut self) {}
+        }
+
+        for outcome in [
+            Some(InvocationOutcome::Ok),
+            Some(InvocationOutcome::Errored),
+            Some(InvocationOutcome::Panicked),
+            Some(InvocationOutcome::Cancelled),
+            None,
+        ] {
+            let observed = Arc::new(std::sync::Mutex::new(Observed::default()));
+            let runtime =
+                btel_processor::TelemetryRuntime::with_publisher(Sink(observed.clone())).unwrap();
+            let policies = Arc::new(TelemetryPolicies::new());
+            let clock = test_clock();
+            let function = function(FunctionKind::Bytecode, None);
+            let mut creator =
+                TelemetryState::new_root(policies.clone(), clock.clone(), runtime.clone());
+            let options = creator.operation_options(
+                &function,
+                TraceConfig {
+                    mode: Some(InvocationMode::Timing),
+                    ..TraceConfig::default()
+                },
+            );
+            assert!(!options.output && !options.error);
+            let metadata = function.runtime_metadata().unwrap();
+            // SAFETY: the only supplied value is an immediate integer.
+            let span = unsafe {
+                manual::ManualSpan::start_with_options(
+                    Some(&mut creator),
+                    btel_types::RecordingId::generate(),
+                    btel_types::context::Context::default(),
+                    &metadata,
+                    Some(Value::int(7)),
+                    None,
+                    options,
+                    None,
+                )
+            };
+            drop(creator);
+            let updater = TelemetryState::new_root(policies, clock.clone(), runtime.clone());
+            updater
+                .set_policy(
+                    &function,
+                    TelemetryPolicy {
+                        promotion_duration_threshold: Some(
+                            clock.threshold(std::time::Duration::ZERO),
+                        ),
+                        capture_inputs: true,
+                        capture_output: true,
+                        capture_error: true,
+                        ..TelemetryPolicy::NONE
+                    },
+                )
+                .unwrap();
+            // SAFETY: the output/error is immediate and needs no heap traversal.
+            unsafe {
+                span.finish(outcome, outcome.map(|_| Value::int(42)));
+            }
+            drop(updater);
+            drop(span);
+            runtime.finish().unwrap();
+            let observed = observed.lock().unwrap();
+            match outcome {
+                Some(outcome) => {
+                    assert_eq!(observed.completions, vec![(true, false, outcome, Some(42))]);
+                    assert_eq!(observed.population, 1);
+                }
+                None => {
+                    assert!(observed.completions.is_empty());
+                    assert_eq!(
+                        observed.population, 0,
+                        "neutral close must not enter latency statistics"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

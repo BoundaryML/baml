@@ -17,14 +17,15 @@ const SOURCE: &str = r#"
 async fn call_read_pid(ops: sys_ops::SysOps) -> Result<BexExternalValue, bex_engine::EngineError> {
     let program = common::compile_for_engine(SOURCE);
     let engine = Arc::new(BexEngine::new(program, Arc::new(ops), Vec::new()).unwrap());
-    engine
-        .call_function(
-            "read_pid",
-            vec![],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
+    // An engine call's future is large; boxed, it does not inflate every
+    // test that awaits this helper.
+    Box::pin(engine.call_function(
+        "read_pid",
+        vec![],
+        FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+        true,
+    ))
+    .await
 }
 
 #[tokio::test]

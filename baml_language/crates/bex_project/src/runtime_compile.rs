@@ -906,46 +906,80 @@ fn assignment_parts(source: &str) -> Option<(&str, &'static str, &str)> {
     Some((source[..start].trim(), operator, source[end..].trim()))
 }
 
-/// Recognize the statement-only `type T = unreflect(expr)` form and return
-/// the source-visible name plus the operand text. The parser has already
-/// validated the delimiters for block statements; this small lexical helper
-/// is also used to distinguish the same token shape from a top-level alias
-/// during Session's initial declaration-hoisting pass.
-fn runtime_type_binding_parts(source: &str) -> Option<(String, &str)> {
-    let tokens = lex_lossless(source, baml_base::FileId::new(0));
-    let words = tokens
-        .iter()
-        .enumerate()
-        .filter(|(_, token)| token.kind == TokenKind::Word)
-        .collect::<Vec<_>>();
-    let [(_, type_word), (_, name), (unreflect_index, unreflect), ..] = words.as_slice() else {
-        return None;
-    };
-    if type_word.text.as_str() != "type" || unreflect.text.as_str() != "unreflect" {
-        return None;
-    }
-    let open = tokens
-        .iter()
-        .skip(*unreflect_index + 1)
-        .find(|token| token.kind == TokenKind::LParen)?;
-    let close = tokens
-        .iter()
-        .rev()
-        .find(|token| token.kind == TokenKind::RParen)?;
-    let start = usize::from(open.span.range.end());
-    let end = usize::from(close.span.range.start());
-    (start <= end).then(|| (name.text.clone(), source[start..end].trim()))
+/// The source text of a session `let type T [extends …] = operand [else
+/// { … }];` step, sliced from the wrapped submission it was parsed from.
+struct RuntimeTypeBindingParts<'a> {
+    name: String,
+    /// The `extends A & B` clause, verbatim.
+    bounds: Option<&'a str>,
+    operand: &'a str,
+    /// The `{ … }` block after `else`, verbatim.
+    else_block: Option<&'a str>,
 }
 
+/// Split a `TYPE_BINDING_STMT` step into its source parts. `None` for the
+/// removed `type T = …` spelling (a parse error the session already reported)
+/// or an incomplete statement.
+fn runtime_type_binding_parts<'a>(
+    node: &SyntaxNode,
+    wrapped: &'a str,
+) -> Option<RuntimeTypeBindingParts<'a>> {
+    let text = |range: rowan::TextRange| -> &'a str {
+        wrapped[usize::from(range.start())..usize::from(range.end())].trim()
+    };
+    let mut name = None;
+    let mut bounds = None;
+    let mut operand: Option<rowan::TextRange> = None;
+    let mut else_block = None;
+    let (mut seen_let, mut seen_equals, mut seen_else) = (false, false, false);
+    for element in node.children_with_tokens() {
+        let range = element.text_range();
+        match element.kind() {
+            SyntaxKind::KW_LET => seen_let = true,
+            SyntaxKind::WORD if !seen_equals && name.is_none() => {
+                name = Some(text(range).to_string());
+            }
+            SyntaxKind::GENERIC_PARAM_BOUNDS => bounds = Some(text(range)),
+            SyntaxKind::EQUALS if !seen_equals => seen_equals = true,
+            SyntaxKind::KW_ELSE => seen_else = true,
+            SyntaxKind::SEMICOLON => {}
+            kind if kind.is_trivia() => {}
+            _ if seen_else => else_block = Some(text(range)),
+            _ if seen_equals => {
+                operand = Some(operand.map_or(range, |operand| operand.cover(range)));
+            }
+            _ => {}
+        }
+    }
+    if !seen_let {
+        return None;
+    }
+    Some(RuntimeTypeBindingParts {
+        name: name?,
+        bounds,
+        operand: text(operand?),
+        else_block,
+    })
+}
+
+/// Re-bind every earlier `let type` step's type for a later step, with its
+/// bounds, so `T` keeps the same static meaning there. A bounded `let type`
+/// must have an `else` block; the step that wrote the binding already checked
+/// the bounds, so this one is not expected to run.
 fn runtime_type_binding_prelude(bindings: &IndexMap<String, SessionVisibleSymbol>) -> String {
     let mut prelude = String::new();
-    for symbol in bindings.values() {
-        if let SessionVisibleKind::TypeBinding { type_value } = &symbol.kind {
-            let _ = writeln!(
-                prelude,
-                "type {} = unreflect({type_value});",
-                symbol.internal
-            );
+    for (name, symbol) in bindings {
+        if let SessionVisibleKind::TypeBinding { type_value, bounds } = &symbol.kind {
+            if bounds.is_empty() {
+                let _ = writeln!(prelude, "let type {} = {type_value};", symbol.internal);
+            } else {
+                let _ = writeln!(
+                    prelude,
+                    "let type {} {bounds} = {type_value} else {{ \
+                     baml.sys.panic(\"session type `{name}` no longer satisfies its bounds\") }};",
+                    symbol.internal
+                );
+            }
         }
     }
     prelude
@@ -1242,7 +1276,7 @@ fn local_item(name: &str) -> LocalName {
 }
 
 /// `erase_steps` names steps (by index into the lowered `steps`) whose value
-/// is typed by a session `type T = …` binding, as a first compile reported at
+/// is typed by a session `let type T = …` binding, as a first compile reported at
 /// their block tails (E0172). Such a step publishes through the erasing helper
 /// so its global carries `unknown` — the only type a binding-typed value may
 /// leave its block as — while every other step keeps its precise type.
@@ -1278,8 +1312,6 @@ fn lower_session_submission(
         .filter(|node| {
             declaration_kind(node.kind())
                 && (node.kind() == SyntaxKind::IMPLEMENTS_FOR || declaration_name(node).is_some())
-                && !(node.kind() == SyntaxKind::TYPE_ALIAS_DEF
-                    && runtime_type_binding_parts(&node.text().to_string()).is_some())
         })
         .collect::<Vec<_>>();
 
@@ -1461,7 +1493,8 @@ fn lower_session_submission(
         let returns_value =
             Some(index) == last_code && !is_outer_let && !is_statement && !has_semicolon;
         let (generated_name, step_source, commit_global, binding) = if is_type_binding {
-            let Some((name, operand)) = runtime_type_binding_parts(raw) else {
+            let Some(parts) = node.and_then(|node| runtime_type_binding_parts(node, &wrapped))
+            else {
                 return Err(vec![runtime_diagnostic(
                     DiagnosticId::InvalidSyntax,
                     &request.submission_name,
@@ -1470,20 +1503,42 @@ fn lower_session_submission(
                     "invalid runtime type binding",
                 )]);
             };
+            let rewrite = |text: &str| {
+                rewrite_identifiers(
+                    text,
+                    &visible_mapping,
+                    &IndexMap::new(),
+                    &HashSet::new(),
+                    &local_names,
+                )
+            };
+            let name = parts.name;
             let type_name = internal(&name);
             let backing_name = format!("__baml_session_{sequence}_type_value_{name}");
-            let operand = rewrite_identifiers(
-                operand,
-                &visible_mapping,
-                &IndexMap::new(),
-                &HashSet::new(),
-                &local_names,
-            );
-            let source = format!("let {backing_name} = {{\n{prelude}({operand})\n}}\n");
+            let operand = rewrite(parts.operand);
+            let bounds = parts.bounds.map(&rewrite).unwrap_or_default();
+            // The step stores the type value itself; later steps re-bind it
+            // (`runtime_type_binding_prelude`). A bounded binding checks its
+            // bounds here, where it is written, and runs its `else` block on
+            // a miss.
+            let source = if bounds.is_empty() {
+                format!("let {backing_name} = {{\n{prelude}({operand})\n}}\n")
+            } else {
+                let else_clause = parts
+                    .else_block
+                    .map(|block| format!(" else {}", rewrite(block)))
+                    .unwrap_or_default();
+                let checked = format!("{backing_name}_checked");
+                format!(
+                    "let {backing_name} = {{\n{prelude}let {checked} = ({operand});\n\
+                     let type {type_name} {bounds} = {checked}{else_clause};\n{checked}\n}}\n"
+                )
+            };
             let symbol = SessionVisibleSymbol {
                 internal: type_name,
                 kind: SessionVisibleKind::TypeBinding {
                     type_value: backing_name.clone(),
+                    bounds,
                 },
             };
             (backing_name, source, None, Some((name, symbol)))
@@ -1568,7 +1623,7 @@ fn lower_session_submission(
                     &local_names,
                 );
                 // A step's value leaves its block into a global that later
-                // submissions read, and a scoped `type T = …` binding lives
+                // submissions read, and a scoped `let type T = …` binding lives
                 // only inside that block: a value typed by one cannot leave
                 // (E0172) unless the block's context is a ground type. A
                 // step the first compile reported at its tail is re-lowered

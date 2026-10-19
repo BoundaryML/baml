@@ -612,6 +612,7 @@ impl ProjectDatabase {
                 );
                 root.set_kind(self).to(kind);
                 root.set_self_name(self).to(self_name);
+                root.set_exclude_tests(self).to(false);
                 root.set_interface(self).to(interface);
                 root.set_dependencies(self).to(dependencies);
                 root
@@ -1157,6 +1158,19 @@ impl ProjectDatabase {
 
     // ── Bytecode ─────────────────────────────────────────────────────────────
 
+    /// Exclude test/testset blocks from subsequent compilation of `root` and
+    /// its source dependencies. This is a tracked semantic-input change, so
+    /// already-queried HIR and package interfaces are invalidated as well.
+    ///
+    /// SDK generation calls this after checking the complete project. Compile
+    /// the resulting program fresh: cached programs/packages include tests.
+    pub fn exclude_tests(&mut self, root: SourceRoot) {
+        let roots = baml_compiler2_hir::package::world_roots(self, root).clone();
+        for root in roots {
+            root.set_exclude_tests(self).to(true);
+        }
+    }
+
     /// The compiled bytecode of `root`'s program — the root and its
     /// dependency closure, never another workspace root that shares this
     /// database.
@@ -1486,6 +1500,7 @@ mod tests {
             edges("baml"),
             vec![
                 ("log".to_string(), root_of("log")),
+                ("reflect".to_string(), root_of("reflect")),
                 ("trace".to_string(), root_of("trace")),
             ]
         );
@@ -1800,6 +1815,7 @@ mod tests {
         assert!(!revived.is_session_submission(&db));
     }
 
+    /// Revived inputs retain their identities and restore fresh-root compilation defaults.
     #[test]
     fn removed_roots_are_revived_and_files_tombstoned() {
         let mut db = ProjectDatabase::new();
@@ -1807,6 +1823,7 @@ mod tests {
         let path = Path::new("/dep/a.baml");
         let file = db.add_or_update_file_in(dep, path, "class A {}");
         let file_id = file.file_id(&db);
+        db.exclude_tests(dep);
 
         db.remove_source_root(dep);
         assert!(db.source_roots().is_empty());
@@ -1822,10 +1839,22 @@ mod tests {
             revived.self_name(&db).as_ref().map(Name::as_str),
             Some("dep2")
         );
-        let file_again = db.add_or_update_file_in(revived, path, "class B {}");
+        let file_again =
+            db.add_or_update_file_in(revived, path, "class B {} test \"restored\" { null }");
         assert_eq!(file_again.file_id(&db), file_id);
         assert_eq!(file_again.source_root(&db), revived);
         assert_eq!(db.root_files(revived), vec![file_again]);
+        assert!(
+            baml_compiler2_hir::item_data::file_functions(&db, file_again)
+                .iter()
+                .any(|&function| {
+                    baml_compiler2_hir::item_data::function_data(&db, function)
+                        .metadata
+                        .origin
+                        == baml_compiler2_ast::FunctionOrigin::TestInitializer
+                }),
+            "a revived root must include tests by default"
+        );
     }
 
     #[test]

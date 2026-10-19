@@ -2515,7 +2515,7 @@ mod tests {
         }
     }
 
-    /// `type T = …` on frame slot `slot`; the operand is immaterial here.
+    /// `let type T = …` on frame slot `slot`; the operand is immaterial here.
     fn bind_type(slot: u32) -> Statement<'static> {
         Statement {
             kind: StatementKind::Intrinsic {

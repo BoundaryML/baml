@@ -376,11 +376,11 @@ type:
       }
     }
     function from_runtime(t: reflect.Type) -> reflect.Type {
-      type T = unreflect(t)
+      let type T = t;
       reflect.Type.of<T>()
     }
   details: |
-    At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`. Inside a function, lambda, or block body, `type T = unreflect(t)` binds a block-scoped type parameter to a runtime type value (`t: reflect.Type | reflect.TypeView`, or a `reflect.class.PendingType` from a builder; an `unknown` must be narrowed first with `match` or `is`), and `type T = SomeType` binds one to a static type. `T` is a rigid type parameter for the rest of the block: nothing typed by `T` may leave the block except through a type that does not mention it, such as `unknown`. `unreflect` is legal only as the whole right-hand side of such a statement. The old `type.of<T>()` shorthand and bare `type` value annotation do not exist; write `reflect.Type.of<T>()` and `reflect.Type`.
+    At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`. Inside a function, lambda, or block body, `let type T = t;` binds a block-scoped type parameter to a runtime type value (`t: reflect.Type | reflect.TypeView`; an `unknown` must be narrowed first with `match` or `is`, and a class builder's pending type is not accepted: bind the class `build()` returns). `T` is a rigid type parameter for the rest of the block: nothing typed by `T` may leave the block except through a type that does not mention it, such as `unknown`. `let type T extends I = t else { ... };` also gives `T` the interface bound `I` (several bounds join with `&`): the statement checks the bound when it runs and runs the diverging `else { ... }` block when the type misses it. A bounded `let type` must have that `else` block. A body-level `type T = ...` alias and `unreflect(...)` no longer exist; write `let type`. The old `type.of<T>()` shorthand and bare `type` value annotation do not exist either; write `reflect.Type.of<T>()` and `reflect.Type`.
 
 void:
   summary: "The unit type, written as the return type of a function that produces no value."
@@ -515,6 +515,9 @@ let:
   syntax: |
     let name = "Alice"
     let count = items.length()
+    let type T = runtime_type;
+  details: |
+    `let type T = t;` binds the runtime type value `t` as the block-scoped type `T`; see `type`.
 
 const:
   summary: "Declares a compile-time constant binding."
@@ -1132,8 +1135,8 @@ query:
                 FROM profiler GROUP BY function_name ORDER BY self_ns DESC LIMIT 10"
     baml query "SELECT span_id, input_args['customer']['age'] AS age, output_value
                 FROM spans WHERE input_args['customer']['age'] >= 30" --format jsonl
-    baml query "SELECT span_name, temporary_projections['cost'] FROM spans
-                WHERE temporary_projections IS NOT NULL"
+    baml query "SELECT span_name, total_usage[0]['model'], total_usage[0]['input_tokens']
+                FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL"
     baml query --schema --table spans
   details: |
     Every `baml run`/`baml test` records to `.baml/btel`; the first query
@@ -1141,8 +1144,9 @@ query:
     Relations: `processes` (one row per process, with its status),
     `spans` (completed function calls that were retained, and futures: a
     root call is a future without a parent; `input_args`, `output_value`,
-    `error_value` (a `baml.errors.Context`) and `temporary_projections`
-    (model usage and cost) are BAML values), `span_announcements` (every
+    `error_value` (a `baml.errors.Context`), `self_usage` (the model usage
+    of the calls an `ai.Client.invoke` span made) and `total_usage` (every
+    call under a span, one entry per model with its token counts) are BAML values), `span_announcements` (every
     started span), and `profiler` (one row per calling-context node of an
     ended process: invocations, outcomes, total/self/I/O time). Value columns
     support ordinary subscripts and comparisons —

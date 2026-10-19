@@ -1,0 +1,5 @@
+name = "fib iterative 100k"
+description = "iterative Fibonacci, 100,000 times"
+expect = "1258626902500000"
+jobs = 4
+warmup = 1

@@ -1,0 +1,6 @@
+name = "richards 50"
+description = "the Richards OS task-scheduler simulation, 50 runs"
+origin = "Octane / Are We Fast Yet Richards"
+expect = "1161046400"
+jobs = 2
+warmup = 1

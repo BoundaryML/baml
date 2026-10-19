@@ -71,7 +71,7 @@ function described_type<T>() -> reflect.Type {
 }
 
 function described_type_eq_concrete_fn() -> bool {
-    described_type<User>() == reflect.Type.of<User>()
+    described_type<User>() == User.type()
 }
 
 test "described_type_eq_concrete" {
@@ -79,7 +79,7 @@ test "described_type_eq_concrete" {
 }
 
 function described_type_neq_different_fn() -> bool {
-    described_type<int>() == reflect.Type.of<User>()
+    described_type<int>() == User.type()
 }
 
 test "described_type_neq_different" {
@@ -117,7 +117,7 @@ function fwd<T>() -> reflect.Type {
 }
 
 function fwd_user_eq_reflect_type_of_user_fn() -> bool {
-    fwd<User>() == reflect.Type.of<User>()
+    fwd<User>() == User.type()
 }
 
 test "fwd_user_eq_reflect_type_of_user" {
@@ -125,7 +125,7 @@ test "fwd_user_eq_reflect_type_of_user" {
 }
 
 function fwd_int_neq_user_fn() -> bool {
-    fwd<int>() == reflect.Type.of<User>()
+    fwd<int>() == User.type()
 }
 
 test "fwd_int_neq_user" {
@@ -145,7 +145,7 @@ function level3<T>() -> reflect.Type {
 }
 
 function three_level_forwarding_eq_concrete_fn() -> bool {
-    level3<User>() == reflect.Type.of<User>()
+    level3<User>() == User.type()
 }
 
 test "three_level_forwarding_eq_concrete" {

@@ -1,8 +1,8 @@
 [project]
 name = "speedtest"
 version = "0.1.0"
-description = "Benchmark runner for BAML — timing, baselines, comparison, profiling"
-requires-python = ">=3.10"
+description = "BAML benchmarks: workloads, reference ports, KPI report, baselines"
+requires-python = ">=3.11"
 dependencies = []
 
 [project.scripts]

@@ -1,0 +1,6 @@
+name = "heap calls"
+description = "4,096 iterations of small calls that pass and return heap objects"
+origin = "native-bench 14_heap_calls"
+expect = "12282,20468,85911,143276"
+jobs = 200
+warmup = 12
