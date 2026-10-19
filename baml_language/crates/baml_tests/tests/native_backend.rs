@@ -21,6 +21,27 @@ fn compile_with_program(source: &str) -> (NativeModule, Program) {
     (module, program)
 }
 
+/// Cached/artifact programs lack the compile-time MIR-to-PC map. The
+/// existing MIR shape guard must refuse to generate native bodies for them.
+#[test]
+fn deserialized_program_cannot_supply_native_bodies() {
+    let db = baml_test_support::setup_test_db("function answer() -> int { 42 }");
+    let root = db.workspace_root().expect("test db has a workspace root");
+    let program =
+        baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
+    let fresh = compile_program(&db, root, &program, OptLevel::Two, "program.bexa", None);
+    assert!(fresh.functions.iter().any(|f| f.name == "user.answer"));
+
+    let serialized = borsh::to_vec(&program).unwrap();
+    let restored: Program = borsh::from_slice(&serialized).unwrap();
+    let cached = compile_program(&db, root, &restored, OptLevel::Two, "program.bexa", None);
+    assert!(cached.functions.is_empty());
+    assert!(matches!(
+        rejection(&cached, "user.answer"),
+        Rejection::Invalid(reason) if reason == "the function's bytecode was emitted from other MIR"
+    ));
+}
+
 const FIXTURE: &str = r#"
 class Point {
   x int

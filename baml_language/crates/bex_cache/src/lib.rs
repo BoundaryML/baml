@@ -202,11 +202,7 @@ use sha2::{Digest, Sha256};
 /// as, which owns every function in it.
 ///
 /// Version 21: `FunctionMeta` gained the appended `ModelInvoke` variant.
-///
-/// Version 22: `Bytecode` gained `block_pcs`, where each MIR block's
-/// statements and terminator landed, which natively compiled bodies record
-/// as their frames' PCs.
-pub const FORMAT_VERSION: u32 = 22;
+pub const FORMAT_VERSION: u32 = 21;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
