@@ -305,8 +305,8 @@ impl BexVm {
     /// caller's bytecode. It goes into the caller's frame before the callee
     /// runs, as the interpreter records a caller's call site on every call:
     /// a stack trace taken while the callee runs (an error caught below, a
-    /// `StackOverflow`) names the line of this call, and telemetry the same
-    /// call site the interpreter records.
+    /// `StackOverflow`) resolves this bytecode PC to the call site, as telemetry
+    /// does for the interpreter.
     ///
     /// On `Err` the callee's frame stays pushed, as the VM's call path leaves
     /// it: the unwinder pops it if the error escapes, [`Self::catch`] if a

@@ -9416,7 +9416,7 @@ impl BexVm {
     /// Where the compiled body of the frame at `idx` stands; `None` for a
     /// frame whose bytecode runs, or a native continuation. Every reader of
     /// a frame's position asks this first: a compiled frame's position fields
-    /// hold its stub offset and line, not a bytecode position.
+    /// hold its stub offset and original bytecode PC, not a compact bytecode PC.
     pub(crate) fn compiled_at(&self, idx: usize) -> Option<crate::compiled_rt::CompiledAt> {
         let Frame::Bytecode(frame) = &self.frames[idx] else {
             return None;
