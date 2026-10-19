@@ -61,8 +61,6 @@ fn native_bodies_disabled(value: Option<&str>) -> bool {
     })
 }
 
-/// The bodies to run with: `native_bodies`, unless the environment turns
-/// them off.
 fn native_bodies_from_env(
     native_bodies: Option<bex_engine::NativeBodies>,
 ) -> Option<bex_engine::NativeBodies> {

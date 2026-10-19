@@ -110,7 +110,7 @@ pub struct NativeModule {
 /// refers to exactly this build (the generated crate embeds it as
 /// `PROGRAM_ARTIFACT`, read from `artifact_path`).
 ///
-/// `fingerprint` is the artifact payload digest returned by
+/// `fingerprint` is the authenticated artifact digest returned by
 /// `baml_artifact::encode_with_digest` for the embedded artifact containing `program`.
 ///
 /// `entries` are the object indices of the functions the pack runs (its
