@@ -1,8 +1,4 @@
-//! Runtime operations and frame support for BAML compiled to Rust. Generated
-//! bodies share the interpreter's semantic primitives and error types; the
-//! interpreter keeps its own dispatch arms, including container and field access,
-//! to preserve its performance. See `baml_compiler2_native/DESIGN.txt` for the
-//! compilation, rooting, and suspension protocols.
+//! Runtime operations and frame support for BAML compiled to Rust.
 
 mod arith;
 mod call;

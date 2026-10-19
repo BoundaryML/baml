@@ -60,16 +60,9 @@ pub(crate) fn render_module(
         out,
         "pub static PROGRAM_ARTIFACT: &[u8] = include_bytes!({artifact_path:?});"
     );
-    match syn::parse_file(&out) {
-        Ok(file) => Ok(prettyplease::unparse(&file)),
-        Err(error) => {
-            let message = format!("native backend generated invalid Rust: {error}");
-            #[cfg(test)]
-            panic!("{message}");
-            #[cfg(not(test))]
-            Err(message)
-        }
-    }
+    syn::parse_file(&out)
+        .map(|file| prettyplease::unparse(&file))
+        .map_err(|error| format!("native backend generated invalid Rust: {error}"))
 }
 
 /// Whether generated code `code` is a single token: a local, a literal, or a
@@ -146,9 +139,10 @@ mod tests {
     use super::*;
 
     #[test]
-    #[should_panic(expected = "native backend generated invalid Rust")]
     fn malformed_generated_rust_is_an_error() {
-        let _ = render_module("fn broken(", &[], &BTreeMap::new(), "program.bexa", [0; 32]);
+        let error = render_module("fn broken(", &[], &BTreeMap::new(), "program.bexa", [0; 32])
+            .unwrap_err();
+        assert!(error.starts_with("native backend generated invalid Rust"));
     }
 
     #[test]
