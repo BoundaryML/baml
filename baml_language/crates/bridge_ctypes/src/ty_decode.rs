@@ -203,7 +203,17 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
                 .collect::<Result<Vec<_>, _>>()?,
         ),
         TyVariant::Literal(lit) => literal_to_runtime_ty(lit.literal.as_ref())?,
-        TyVariant::TypeAlias(n) => RuntimeTy::TypeAlias(TypeName::from_dotted_path(&n.name)),
+        // A type alias is not generic at run time, and a function type
+        // carries no type parameters of its own: a value in either field
+        // would be dropped, so it is refused rather than ignored.
+        TyVariant::TypeAlias(n) => {
+            if !n.type_args.is_empty() {
+                return Err(CtypesError::UnsupportedTypeField {
+                    field: "BamlTyTypeAlias.type_args",
+                });
+            }
+            RuntimeTy::TypeAlias(TypeName::from_dotted_path(&n.name))
+        }
         TyVariant::Unknown(_) => RuntimeTy::unknown(),
         TyVariant::Media(m) => RuntimeTy::Media(media_kind_to_runtime(m.kind)?),
         TyVariant::Interface(i) => {
@@ -234,6 +244,11 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
         }
         TyVariant::EnumVariant(e) => {
             RuntimeTy::EnumVariant(TypeName::from_dotted_path(&e.name), Name::new(&e.variant))
+        }
+        TyVariant::Function(f) if !f.generic_params.is_empty() => {
+            return Err(CtypesError::UnsupportedTypeField {
+                field: "BamlTyFunction.generic_params",
+            });
         }
         TyVariant::Function(f) => RuntimeTy::Function {
             params: f

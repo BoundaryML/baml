@@ -45,6 +45,8 @@ const MAX_DEPTH: usize = 512;
 
 /// A host's own text in a message, cut to a length a message can carry.
 const TEXT_LIMIT: usize = 80;
+/// The longest type rendering a refusal echoes.
+const TYPE_LIMIT: usize = 200;
 
 /// Why a host value was not taken: it could not be built as it was sent, or
 /// the value it builds is not a member of its slot.
@@ -115,11 +117,21 @@ impl From<Refusal> for EngineError {
     }
 }
 
-fn bounded(text: &str) -> String {
-    if text.chars().count() <= TEXT_LIMIT {
+pub(crate) fn bounded(text: &str) -> String {
+    cut(text, TEXT_LIMIT)
+}
+
+/// A type's rendering for a refusal: longer than a name, as a type carries
+/// structure, but never a host-stated union echoed in full.
+pub(crate) fn bounded_type(text: &str) -> String {
+    cut(text, TYPE_LIMIT)
+}
+
+fn cut(text: &str, limit: usize) -> String {
+    if text.chars().count() <= limit {
         text.to_string()
     } else {
-        let head: String = text.chars().take(TEXT_LIMIT).collect();
+        let head: String = text.chars().take(limit).collect();
         format!("{head}…")
     }
 }
@@ -137,12 +149,24 @@ fn concrete_ty_name(vm: &BexVm, value: Value) -> Option<String> {
     BexEngine::landed_ty(vm, value).map(|ty| ty.to_string())
 }
 
-/// One hydration: the heap it builds on, the program it reads, and where in
-/// the value it is.
+/// Who built an external value: a host across the boundary, or the runtime
+/// itself (a sys-op's result). Both are built and checked the same way; what
+/// differs is what each may create. Only the runtime creates native data, so
+/// a host's instance of a class that holds some is refused where the
+/// runtime's own is the data it says.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ValueOrigin {
+    Host,
+    Runtime,
+}
+
+/// One hydration: the heap it builds on, the program it reads, who built the
+/// value, and where in the value it is.
 struct Hydrator<'a, H: HeapPermit<BexThread>> {
     engine: &'a BexEngine,
     holder: &'a mut H,
     overlay: InboundRuntimeOverlay<'a>,
+    origin: ValueOrigin,
     path: Vec<Segment>,
     /// Membership answers for primitive values under slots the algebra has to
     /// decide (a union, a recursive alias): a list of a thousand ints under
@@ -162,6 +186,14 @@ enum SlotMembership {
     PerValue,
     /// The answer per primitive, filled in the first time each is asked.
     ByPrimitive([Option<bool>; bex_vm::Primitive::COUNT]),
+}
+
+/// Does `ty` mention `$rust_type` anywhere? Only the runtime creates values of
+/// it, so no host-built instance has a field of it.
+fn holds_native_data(ty: &RealizedTy) -> bool {
+    let mut found = matches!(ty, RealizedTy::RustType);
+    ty.visit_children(&mut |child| found = found || holds_native_data(child));
+    found
 }
 
 /// Does `ty` mention a literal type anywhere, with recursive aliases
@@ -287,7 +319,7 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
         } else {
             Err(self.refuse(RefusalKind::NotAMember {
                 found: concrete_ty_name(self.vm(), value),
-                expected: ty.to_string(),
+                expected: bounded_type(&ty.to_string()),
             }))
         }
     }
@@ -653,6 +685,18 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                 .collect::<Result<Vec<(String, RealizedTy)>, Refusal>>()?;
             (class.name().to_string(), declared)
         };
+        // A field of `$rust_type` holds native data only the runtime creates
+        // (a media wrapper's payload, a cipher's state, a cancel token). A
+        // host passes such an instance back as it received it, the field
+        // holding the runtime's own data; a value of the host's own there
+        // would inhabit the field as any `$rust_type` does and reach an
+        // accessor that expects the runtime's data. The one exception is the
+        // host's own error class, whose payload is the host's handle to the
+        // exception it raised: the runtime only carries it back to the host.
+        let host_error_class = self
+            .vm()
+            .error_class_ptr(bex_vm_types::types::ErrorClass::HostCallable);
+        let guards_native_data = self.origin == ValueOrigin::Host && class_ptr != host_error_class;
         if let Some(unknown) = fields
             .keys()
             .find(|key| !declared.iter().any(|(field, _)| field == *key))
@@ -670,6 +714,15 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                 ))
             })?;
             values.push(self.within(Segment::Field(field.clone()), |this| {
+                if guards_native_data
+                    && holds_native_data(field_ty)
+                    && !this.runtime_issued(sent)?
+                {
+                    return Err(this.malformed(format!(
+                        "field `{field}` of `{declared_name}` holds native runtime data; a host \
+                         passes back only what the runtime issued"
+                    )));
+                }
                 let built = this.value(sent)?;
                 this.member(built, field_ty)?;
                 Ok(built)
@@ -681,6 +734,36 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                 .tlab_mut()
                 .alloc_instance_with_type_args(class_ptr, type_args, values),
         ))
+    }
+
+    /// Is `sent` data the runtime issued (its own native data handed back by
+    /// reference, or nothing), as opposed to a value of the host's own? A
+    /// host's opaque value lands as native data too, so the question is asked
+    /// of the external value, before it is built.
+    fn runtime_issued(&self, sent: &BexExternalValue) -> Result<bool, Refusal> {
+        Ok(match sent {
+            BexExternalValue::Null | BexExternalValue::RustData(_) => true,
+            BexExternalValue::Handle(handle) => {
+                let live = self.live(handle)?;
+                live.as_object_ptr()
+                    .is_some_and(|ptr| matches!(self.vm().get_object(ptr), Object::RustData(_)))
+            }
+            BexExternalValue::HostValue(_)
+            | BexExternalValue::HostCallable { .. }
+            | BexExternalValue::Int(_)
+            | BexExternalValue::Bigint(_)
+            | BexExternalValue::Float(_)
+            | BexExternalValue::String(_)
+            | BexExternalValue::Bool(_)
+            | BexExternalValue::Uint8Array(_)
+            | BexExternalValue::Array { .. }
+            | BexExternalValue::Map { .. }
+            | BexExternalValue::Instance { .. }
+            | BexExternalValue::Variant { .. }
+            | BexExternalValue::Union { .. }
+            | BexExternalValue::Adt(_)
+            | BexExternalValue::FunctionRef { .. } => false,
+        })
     }
 
     /// The object a live reference refers to.
@@ -724,19 +807,22 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
 }
 
 impl BexEngine {
-    /// Build a host value on the heap as the value it says it is. `overlay`
-    /// names the runtime declarations the call may spell. The slot the value
-    /// is bound for plays no part; see [`Self::hydrate_into`].
+    /// Build an external value on the heap as the value it says it is.
+    /// `overlay` names the runtime declarations the call may spell; `origin`
+    /// is who built the value. The slot the value is bound for plays no part;
+    /// see [`Self::hydrate_into`].
     pub(crate) fn hydrate(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         value: &BexExternalValue,
         overlay: InboundRuntimeOverlay<'_>,
+        origin: ValueOrigin,
     ) -> Result<Value, Refusal> {
         let mut hydrator = Hydrator {
             engine: self,
             holder,
             overlay,
+            origin,
             path: Vec::new(),
             members: HashMap::new(),
         };
@@ -758,7 +844,7 @@ impl BexEngine {
                 path: Vec::new(),
                 kind: RefusalKind::NotAMember {
                     found: concrete_ty_name(vm, value),
-                    expected: slot.to_string(),
+                    expected: bounded_type(&slot.to_string()),
                 },
             })
         }
@@ -771,8 +857,9 @@ impl BexEngine {
         value: &BexExternalValue,
         slot: &RuntimeTy,
         overlay: InboundRuntimeOverlay<'_>,
+        origin: ValueOrigin,
     ) -> Result<Value, Refusal> {
-        let built = self.hydrate(holder, value, overlay)?;
+        let built = self.hydrate(holder, value, overlay, origin)?;
         Self::check_member(holder, built, slot)?;
         Ok(built)
     }

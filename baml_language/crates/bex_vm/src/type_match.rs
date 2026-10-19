@@ -116,7 +116,7 @@ fn primitive_member(vm: &BexVm, value: Value, ty: &Ty) -> Option<bool> {
     Some(value_primitive(vm, value) == Some(slot))
 }
 
-/// The primitive concrete types, for [`primitive_member`]'s comparison and
+/// The primitive concrete types, for [`value_is_member`]'s primitive fast path and
 /// for a caller that asks the same membership question of many primitive
 /// values and wants to ask it once per primitive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

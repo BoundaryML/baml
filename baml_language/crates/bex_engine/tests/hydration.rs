@@ -40,6 +40,34 @@ async fn call(
         .await
 }
 
+/// `call` with a host type definition bound to the type parameter `name`.
+async fn call_with_definition(
+    source: &str,
+    function: &str,
+    args: Vec<BexExternalValue>,
+    name: &str,
+    definition: bex_vm_types::types::PortableTypeDef,
+) -> Result<BexExternalValue, EngineError> {
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(source),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("engine construction"),
+    );
+    engine
+        .call_function(
+            function,
+            args,
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_type_defs(IndexMap::from([(name.to_string(), definition)]))
+                .build(),
+            true,
+        )
+        .await
+}
+
 /// The refusal's message, or a panic with whatever else came back.
 #[track_caller]
 fn refusal(result: Result<BexExternalValue, EngineError>) -> String {
@@ -304,6 +332,134 @@ async fn an_opaque_host_value_is_rust_data() {
         message.contains("Value of type '$rust_type' does not match the declared type `int`"),
         "{message}"
     );
+}
+
+#[tokio::test]
+async fn a_class_holding_native_data_cannot_be_built_by_a_host() {
+    // `baml.media.Image` keeps its payload in a `$rust_type` field. A stated
+    // instance may hand back only what the runtime issued; a value of the
+    // host's own there is refused.
+    let source = r#"
+        function width(x: image) -> int { 1 }
+    "#;
+    let forged = instance(
+        "baml.media.Image",
+        vec![],
+        &[(
+            "_data",
+            BexExternalValue::HostValue(HostValueArc::new(7_002, HostValueKind::Opaque)),
+        )],
+    );
+    let message = refusal(call(source, "width", vec![forged]).await);
+    assert!(
+        message
+            .contains("holds native runtime data; a host passes back only what the runtime issued"),
+        "{message}"
+    );
+}
+
+#[tokio::test]
+async fn a_host_definition_may_not_redeclare_a_program_declaration() {
+    // A definition named like the program's `Person` would stand in for it in
+    // every value the call states; the program's declaration is the only one.
+    let source = r#"
+        class Person { name: string }
+        function hello<T>(p: Person) -> string { p.name }
+    "#;
+    let metadata = || bex_vm_types::types::PortableMetadata {
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+    };
+    let definition = bex_vm_types::types::PortableTypeDef {
+        root: RuntimeTy::Class(
+            baml_type::QualifiedTypeName::from_dotted_path("user.Person"),
+            Box::new([]),
+        ),
+        classes: vec![bex_vm_types::types::PortableClassDef {
+            name: baml_type::QualifiedTypeName::from_dotted_path("user.Person"),
+            fields: vec![bex_vm_types::types::PortableClassFieldDef {
+                name: "z".to_string(),
+                ty: RuntimeTy::Int,
+                metadata: metadata(),
+                skip: false,
+            }],
+            metadata: metadata(),
+            generic_param_count: 0,
+        }],
+        enums: Vec::new(),
+        witnesses: Vec::new(),
+    };
+    let doppelganger = instance("user.Person", vec![], &[("z", BexExternalValue::Int(7))]);
+    let message =
+        refusal(call_with_definition(source, "hello", vec![doppelganger], "T", definition).await);
+    assert!(
+        message.contains("which the program already declares"),
+        "{message}"
+    );
+}
+
+#[tokio::test]
+async fn a_host_definition_with_nested_classes_crosses_whole() {
+    // `A { b: B }` in one definition: a value spells both classes, and both
+    // resolve to the definition's declarations.
+    let source = r#"
+        function keep<T>(x: T) -> T { x }
+    "#;
+    let metadata = || bex_vm_types::types::PortableMetadata {
+        description: None,
+        alias: None,
+        docstring: None,
+        other: IndexMap::new(),
+    };
+    let field = |name: &str, ty: RuntimeTy| bex_vm_types::types::PortableClassFieldDef {
+        name: name.to_string(),
+        ty,
+        metadata: metadata(),
+        skip: false,
+    };
+    let a_name = baml_type::QualifiedTypeName::from_dotted_path("dyn.A");
+    let b_name = baml_type::QualifiedTypeName::from_dotted_path("dyn.B");
+    let definition = bex_vm_types::types::PortableTypeDef {
+        root: RuntimeTy::Class(a_name.clone(), Box::new([])),
+        classes: vec![
+            bex_vm_types::types::PortableClassDef {
+                name: a_name,
+                fields: vec![field("b", RuntimeTy::Class(b_name.clone(), Box::new([])))],
+                metadata: metadata(),
+                generic_param_count: 0,
+            },
+            bex_vm_types::types::PortableClassDef {
+                name: b_name,
+                fields: vec![field("z", RuntimeTy::Int)],
+                metadata: metadata(),
+                generic_param_count: 0,
+            },
+        ],
+        enums: Vec::new(),
+        witnesses: Vec::new(),
+    };
+    let value = instance(
+        "A",
+        vec![],
+        &[(
+            "b",
+            instance("B", vec![], &[("z", BexExternalValue::Int(1))]),
+        )],
+    );
+    let returned = call_with_definition(source, "keep", vec![value], "T", definition)
+        .await
+        .expect("both classes of the definition resolve");
+    // A runtime declaration's instance leaves the engine by reference.
+    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+        ty: RuntimeTy::Class(name, _),
+        ..
+    }) = &returned
+    else {
+        panic!("expected a handle to an `A`, got {returned:?}");
+    };
+    assert_eq!(name.name().as_str(), "A");
 }
 
 #[tokio::test]

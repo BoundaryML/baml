@@ -301,6 +301,117 @@ async fn explicit_binding_widens_inferred_type() {
     );
 }
 
+// ── §D2: a bounded parameter takes one concrete implementor ────────────────
+
+#[tokio::test]
+async fn a_bounded_type_parameter_takes_one_concrete_implementor() {
+    let source = r#"
+        interface Named {
+            function label(self) -> string throws never;
+        }
+        implement Named for int {
+            function label(self) -> string throws never { "int" }
+        }
+        implement Named for string {
+            function label(self) -> string throws never { "string" }
+        }
+        class Plain { x: int }
+        function same<T extends Named>(a: T, b: T) -> bool { a.label() == b.label() }
+        function main() -> int { 0 }
+    "#;
+    // Two ints bind `T = int`, which implements `Named`.
+    assert_eq!(
+        call_infer(source, "same", vec![BEV::Int(1), BEV::Int(1)])
+            .await
+            .unwrap(),
+        BEV::Bool(true)
+    );
+    // An int and a string bind `T = int | string`: not one concrete type, so
+    // `a.label()` has no single implementation to dispatch to.
+    let err = call_infer(source, "same", vec![BEV::Int(1), s("x")])
+        .await
+        .expect_err("a union is not a concrete implementor");
+    let EngineError::TypeMismatch { message } = &err else {
+        panic!("expected TypeMismatch, got {err:?}");
+    };
+    assert!(
+        message.contains("same")
+            && message.contains("`T`")
+            && message.contains("one concrete type")
+            && message.contains("Named"),
+        "{message}"
+    );
+    // An explicit concrete type that does not implement the bound.
+    let plain = || BEV::Instance {
+        class_name: "user.Plain".to_string(),
+        type_args: vec![],
+        fields: IndexMap::from([("x".to_string(), BEV::Int(1))]),
+    };
+    let err = call_with_bindings(
+        source,
+        "same",
+        vec![plain(), plain()],
+        indexmap! { "T" => RuntimeTy::Class(baml_type::TypeName::from_dotted_path("user.Plain"), Box::new([])) },
+    )
+    .await
+    .expect_err("`Plain` does not implement `Named`");
+    let EngineError::TypeMismatch { message } = &err else {
+        panic!("expected TypeMismatch, got {err:?}");
+    };
+    assert!(
+        message.contains("must implement")
+            && message.contains("Plain")
+            && message.contains("does not"),
+        "{message}"
+    );
+}
+
+#[tokio::test]
+async fn a_generic_interface_parameter_takes_an_explicit_type_argument() {
+    let source = r#"
+        interface Container<T> {
+            function get(self) -> T throws never;
+        }
+        class IntBox {
+            item: int
+            implements Container<int> {
+                function get(self) -> int throws never { self.item }
+            }
+        }
+        function unwrap<T>(c: Container<T>) -> T { c.get() }
+        function main() -> int { 0 }
+    "#;
+    let boxed = BEV::Instance {
+        class_name: "user.IntBox".to_string(),
+        type_args: vec![],
+        fields: IndexMap::from([("item".to_string(), BEV::Int(7))]),
+    };
+    // The explicit `T` reaches inside the interface: the slot is
+    // `Container<int>`, which `IntBox` implements.
+    assert_eq!(
+        call_with_bindings(
+            source,
+            "unwrap",
+            vec![boxed.clone()],
+            indexmap! { "T" => RuntimeTy::Int }
+        )
+        .await
+        .unwrap(),
+        BEV::Int(7)
+    );
+    // BUG: inferred, `IntBox` implements `Container<int>`, so `T = int`. The
+    // shared solver has no rule for an interface formal against a concrete
+    // actual, and `TypeContext` has no query for the instantiation a type
+    // implements, so the call is refused as must-specify today.
+    let err = call_infer(source, "unwrap", vec![boxed])
+        .await
+        .expect_err("inference through an implementation is not supported yet");
+    let EngineError::TypeMismatch { message } = &err else {
+        panic!("expected TypeMismatch, got {err:?}");
+    };
+    assert!(message.contains("could not infer a type"), "{message}");
+}
+
 // ── §E: must-specify still rejects (return/body-only vars) ─────────────────
 
 #[tokio::test]

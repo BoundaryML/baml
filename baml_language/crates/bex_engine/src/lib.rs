@@ -75,6 +75,7 @@ mod function_call_context;
 mod future;
 mod hydrate;
 pub use future::LeakedFuture;
+use hydrate::ValueOrigin;
 #[cfg(not(target_arch = "wasm32"))]
 mod host_instrumentation;
 mod invocation;
@@ -3150,19 +3151,54 @@ impl BexEngine {
             );
             type_values.insert(name, type_value);
         }
-
+        // A definition declares fresh runtime declarations, reached in this
+        // call by their item names. One spelled like a declaration the program
+        // has would stand in for it in every value and type the call states,
+        // so the collision is refused: a declaration's identity is itself,
+        // never its name, and the program's declarations are reached by name
+        // alone.
+        {
+            let no_overlay = IndexMap::new();
+            for head in Self::declaration_heads(&thread.vm, &type_values, &IndexMap::new()) {
+                if head.tag().static_index().is_some() {
+                    continue;
+                }
+                let Ok(spelled) = head.to_overlay_name() else {
+                    continue;
+                };
+                let spelled = spelled.to_string();
+                if self
+                    .resolve_inbound_declaration(
+                        &thread.vm,
+                        &spelled,
+                        crate::conversion::InboundRuntimeOverlay::new(&no_overlay),
+                        crate::conversion::InboundDeclarationKind::Any,
+                    )
+                    .is_some()
+                {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "the host's type definition declares `{}`, which the program \
+                             already declares; name the program's type instead",
+                            crate::hydrate::bounded(&spelled)
+                        ),
+                    });
+                }
+            }
+        }
         // Every provided argument is built on the heap as the value it is,
         // before any question of its slot (`hydrate`): hydration reads nothing
         // from the declared types, so a value's type is settled by the time it
         // is inferred from or checked. A runtime declaration a host spells in
         // a value resolves through the call's overlay.
-        let runtime_named_objects = Self::runtime_named_objects(&type_values, &live_type_args);
+        let runtime_named_objects =
+            Self::runtime_named_objects(&thread.vm, &type_values, &live_type_args);
         let overlay = crate::conversion::InboundRuntimeOverlay::new(&runtime_named_objects);
         let mut landed: Vec<Option<Value>> = Vec::with_capacity(args.len());
         for (idx, arg) in args.iter().enumerate() {
             landed.push(match arg {
                 BexCallArg::Provided(value) => Some(
-                    self.hydrate(&mut thread, value, overlay)
+                    self.hydrate(&mut thread, value, overlay, ValueOrigin::Host)
                         .map_err(|refusal| {
                             argument_refused(function_name, &params, idx, &refusal)
                         })?,
@@ -3508,23 +3544,154 @@ impl BexEngine {
         Ok(())
     }
 
+    /// Every bound a type parameter declares holds for the type argument bound
+    /// to it (`TYPE_SYSTEM.md` "Generics on Functions"): a bounded parameter
+    /// takes one concrete type, and that type implements each bound at the
+    /// bound's own arguments. The compiler checks this at every call it sees;
+    /// a host's call is checked here, once its type arguments are realized.
+    fn check_type_arg_bounds(
+        vm: &BexVm,
+        entry_ptr: HeapPtr,
+        type_args: &indexmap::IndexMap<String, bex_vm_types::RealizedTy>,
+    ) -> Result<(), EngineError> {
+        // SAFETY: a resolved entry point is a compile-time object.
+        let Object::Function(func) = (unsafe { entry_ptr.get() }) else {
+            return Ok(());
+        };
+        if func.generic_param_bounds.iter().all(Vec::is_empty) {
+            return Ok(());
+        }
+        let full_name = func.name();
+        let name = host_display_name(&full_name);
+        // The frame, slot by slot. A slot the call never binds (a generic
+        // class's parameter under one of its static methods) is `None`: no
+        // value depends on it. A bound whose own arguments name such a slot
+        // has nothing to hold for and is skipped; every other bound is
+        // checked, and a bounded slot that is bound is always one concrete
+        // type.
+        let frame: Vec<Option<bex_vm_types::RealizedTy>> = func
+            .type_param_names
+            .iter()
+            .map(|slot| type_args.get(slot).cloned())
+            .collect();
+        let full_frame: Option<Vec<bex_vm_types::RealizedTy>> = frame.iter().cloned().collect();
+        let no_frame: Vec<bex_vm_types::RealizedTy> = Vec::new();
+        for (slot, bounds) in func.generic_param_bounds.iter().enumerate() {
+            let (Some(Some(ty)), Some(var)) = (frame.get(slot), func.type_param_names.get(slot))
+            else {
+                continue;
+            };
+            let Some(first) = bounds.first() else {
+                continue;
+            };
+            let ty_as_ty = bex_vm_types::Ty::from(ty.clone());
+            if !ty_as_ty.is_concrete() {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "`{name}` is a generic BAML function whose type parameter `{var}` must be \
+                         one concrete type that implements `{}`; `{ty}` is not a single concrete \
+                         type.",
+                        bex_vm_types::Ty::Interface(first.interface, Box::new([]), Box::new([]))
+                    ),
+                });
+            }
+            for bound in bounds {
+                // A bound with no arguments of its own needs no frame.
+                let frame_for_bound = match &full_frame {
+                    Some(full_frame) => full_frame,
+                    None if bound.args.is_empty() && bound.assoc.is_empty() => &no_frame,
+                    None => continue,
+                };
+                let substitute = |template: &bex_vm_types::TyTemplate| {
+                    template
+                        .substitute(frame_for_bound, vm)
+                        .map(bex_vm_types::Ty::from)
+                        .map_err(|error| {
+                            EngineError::VmInternalError(
+                                bex_vm::errors::VmInternalError::TypeSubstitution {
+                                    message: format!(
+                                        "bound of `{var}` on `{name}` is not realized: {error}"
+                                    ),
+                                },
+                            )
+                        })
+                };
+                let args = bound
+                    .args
+                    .iter()
+                    .map(substitute)
+                    .collect::<Result<Box<[_]>, _>>()?;
+                let assoc = bound
+                    .assoc
+                    .iter()
+                    .map(|(assoc_name, template)| {
+                        substitute(template).map(|ty| (assoc_name.clone(), ty))
+                    })
+                    .collect::<Result<Box<[_]>, _>>()?;
+                let required = bex_vm_types::Ty::Interface(bound.interface, args, assoc);
+                if !baml_type::normalize::is_subtype(&ty_as_ty, &required, vm) {
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "`{name}` is a generic BAML function whose type parameter `{var}` \
+                             must implement `{required}`; `{ty}` does not."
+                        ),
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn runtime_named_objects(
+        vm: &BexVm,
         type_values: &indexmap::IndexMap<String, bex_vm_types::types::TypeValue>,
         live_type_args: &indexmap::IndexMap<String, bex_vm_types::RuntimeTy>,
     ) -> indexmap::IndexMap<String, HeapPtr> {
         let mut named = indexmap::IndexMap::new();
-        let mut note = |head: &bex_vm_types::TypeHead| {
+        for head in Self::declaration_heads(vm, type_values, live_type_args) {
             if let Ok(name) = head.to_overlay_name() {
                 named.entry(name.to_string()).or_insert_with(|| head.ptr());
             }
-        };
+        }
+        named
+    }
+
+    /// Every declaration the call's type values and live bindings reach, each
+    /// once. A runtime class names other runtime declarations in its fields
+    /// (`A { b: B }` in one definition), which a value may spell as well, so
+    /// every runtime class reached is followed through its fields. A static
+    /// declaration is reached by name already and is not followed.
+    fn declaration_heads(
+        vm: &BexVm,
+        type_values: &indexmap::IndexMap<String, bex_vm_types::types::TypeValue>,
+        live_type_args: &indexmap::IndexMap<String, bex_vm_types::RuntimeTy>,
+    ) -> Vec<bex_vm_types::TypeHead> {
+        let mut pending: Vec<bex_vm_types::TypeHead> = Vec::new();
+        let mut note = |head: &bex_vm_types::TypeHead| pending.push(*head);
         for type_value in type_values.values() {
             type_value.ty.visit_heads(&mut note);
         }
         for ty in live_type_args.values() {
             ty.visit_heads(&mut note);
         }
-        named
+        let mut reached: Vec<bex_vm_types::TypeHead> = Vec::new();
+        while let Some(head) = pending.pop() {
+            if !head.is_resolved() || reached.iter().any(|seen| seen.ptr() == head.ptr()) {
+                continue;
+            }
+            reached.push(head);
+            if head.tag().static_index().is_some() {
+                continue;
+            }
+            if let Object::Class(class) = vm.get_object(head.ptr()) {
+                for field in &class.fields {
+                    field
+                        .field_template
+                        .visit_heads(&mut |inner: &bex_vm_types::TypeHead| pending.push(*inner));
+                }
+            }
+        }
+        reached
     }
 
     /// Named functions and callable targets differ only in target resolution
@@ -3548,13 +3715,20 @@ impl BexEngine {
         copy_objects: bool,
     ) -> Result<PreparedInvocation, EngineError> {
         // Finish fallible host type narrowing before setting the entry frame.
-        let runtime_named_objects = Self::runtime_named_objects(&type_values, &live_type_args);
-        // Live capability receivers supply exact heap-owned types. Their wire
-        // spellings are useful for structural checks above, but may name a
-        // runtime-only declaration and must not be re-anchored by name here.
+        let runtime_named_objects =
+            Self::runtime_named_objects(&thread.vm, &type_values, &live_type_args);
+        // Live receivers and arguments supply exact heap-owned types for the
+        // variables the call did not bind otherwise; a name the host bound
+        // explicitly keeps the host's type (the arguments were checked against
+        // it), so a live value never widens or narrows a frame slot behind an
+        // explicit binding. A live type may name a runtime-only declaration
+        // and is never re-anchored by name here.
+        let live_type_args: indexmap::IndexMap<_, _> = live_type_args
+            .into_iter()
+            .filter(|(name, _)| !type_args.contains_key(name))
+            .collect();
         let mut type_args = type_args
             .into_iter()
-            .filter(|(name, _)| !live_type_args.contains_key(name))
             .map(|(name, ty)| {
                 let anchored = self.anchor_wire_ty_with_runtime(
                     &thread.vm,
@@ -3583,6 +3757,7 @@ impl BexEngine {
             })?;
             type_args.insert(name, realized);
         }
+        Self::check_type_arg_bounds(&thread.vm, entry_ptr, &type_args)?;
         Ok(PreparedInvocation {
             runtime: Arc::clone(self),
             thread,
@@ -3685,9 +3860,17 @@ impl BexEngine {
             deadline,
             bound_runtime: _,
 
-            type_args: _,
-            type_defs: _,
+            type_args,
+            type_defs,
         } = call_ctx;
+        // A callable value is already specialized: its type arguments were
+        // fixed when it was made, so a call binds none.
+        if !type_args.is_empty() || !type_defs.is_empty() {
+            return Err(EngineError::TypeMismatch {
+                message: "a callable value is already specialized and takes no type arguments"
+                    .to_string(),
+            });
+        }
         let mut thread = self
             .new_entry_thread(CancellationToken::new(), inherited_state.as_ref())
             .await;
@@ -4008,8 +4191,11 @@ impl BexEngine {
         // each provided arg, built as the value it is (`hydrate`). A runtime
         // declaration a host spells in a value resolves through the call's
         // overlay.
-        let runtime_named_objects =
-            Self::runtime_named_objects(&indexmap::IndexMap::new(), &seed_live_type_args);
+        let runtime_named_objects = Self::runtime_named_objects(
+            &thread.vm,
+            &indexmap::IndexMap::new(),
+            &seed_live_type_args,
+        );
         let overlay = crate::conversion::InboundRuntimeOverlay::new(&runtime_named_objects);
         let mut landed: Vec<Option<Value>> = Vec::with_capacity(args.len() + self_offset);
         if let Some(receiver) = receiver {
@@ -4018,7 +4204,7 @@ impl BexEngine {
         for (idx, arg) in args.iter().enumerate() {
             landed.push(match arg {
                 BexCallArg::Provided(value) => Some(
-                    self.hydrate(&mut thread, value, overlay)
+                    self.hydrate(&mut thread, value, overlay, ValueOrigin::Host)
                         .map_err(|refusal| callable_argument_refused(idx, &refusal))?,
                 ),
                 BexCallArg::OmittedDefault => None,
@@ -4077,15 +4263,25 @@ impl BexEngine {
             .map(|ty| crate::conversion::substitute_type_vars(ty, &type_args));
 
         // Each landed argument is a member of its parameter's type, or the
-        // call is refused. A callable that declares no parameter types (a
-        // lambda stores none) takes each value as what it is.
-        let any = bex_vm_types::RuntimeTy::Unknown;
+        // call is refused. Every callable stores one type per parameter
+        // (lambdas included), and the arity was checked above, so a slot
+        // with no type is a broken callable, never a value to wave through.
         let vm_args: Vec<Value> = landed
             .into_iter()
             .enumerate()
             .map(|(slot, value)| match value {
                 Some(value) => {
-                    let ty = param_types.get(slot).unwrap_or(&any);
+                    let ty = param_types.get(slot).ok_or_else(|| {
+                        EngineError::VmInternalError(
+                            bex_vm::errors::VmInternalError::TypeSubstitution {
+                                message: format!(
+                                    "the callable declares {} parameter type(s) but takes an \
+                                     argument at position {slot}",
+                                    param_types.len()
+                                ),
+                            },
+                        )
+                    })?;
                     Self::check_member(&thread, value, ty).map_err(|refusal| {
                         callable_argument_refused(slot - self_offset, &refusal)
                     })?;
@@ -4264,6 +4460,7 @@ impl BexEngine {
                     token,
                     token_ty,
                     crate::conversion::InboundRuntimeOverlay::none(),
+                    ValueOrigin::Host,
                 )
                 .map_err(|refusal| EngineError::TypeMismatch {
                     message: format!(
@@ -5005,7 +5202,7 @@ impl BexEngine {
         // not a value a callable may throw, and anything else has to be a
         // member of `E`.
         let overlay = crate::conversion::InboundRuntimeOverlay::none();
-        let landed = match self.hydrate(thread, thrown, overlay) {
+        let landed = match self.hydrate(thread, thrown, overlay, ValueOrigin::Host) {
             Ok(landed) => landed,
             Err(refusal) => return violation(thread, refusal.to_string()),
         };
@@ -6040,11 +6237,17 @@ impl BexEngine {
                                 // not inhabit it is a breach of the callback's
                                 // contract; any other op's is a fault of the op.
                                 let overlay = crate::conversion::InboundRuntimeOverlay::none();
+                                let origin = if operation == SysOp::BamlHostCallHostValue {
+                                    ValueOrigin::Host
+                                } else {
+                                    ValueOrigin::Runtime
+                                };
                                 let landed = match self.hydrate_into(
                                     thread,
                                     &external,
                                     &declared_ret,
                                     overlay,
+                                    origin,
                                 ) {
                                     Ok(landed) => Ok(landed),
                                     Err(refusal) if operation == SysOp::BamlHostCallHostValue => {
@@ -7814,6 +8017,7 @@ mod type_identity_tests {
                 &exported,
                 &bex_vm_types::RuntimeTy::Type,
                 crate::conversion::InboundRuntimeOverlay::none(),
+                crate::hydrate::ValueOrigin::Host,
             )
             .expect("the same engine accepts its own live reference");
         assert_eq!(
@@ -7882,6 +8086,7 @@ mod type_identity_tests {
                 &exported,
                 &bex_vm_types::RuntimeTy::Type,
                 crate::conversion::InboundRuntimeOverlay::none(),
+                crate::hydrate::ValueOrigin::Host,
             )
             .expect("a foreign live reference degrades to its definitions");
         let landed_ptr = landed.as_object_ptr().expect("landed on a heap object");

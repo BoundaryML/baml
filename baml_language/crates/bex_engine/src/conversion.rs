@@ -102,7 +102,10 @@ pub(crate) fn anchor_wire_ty(
     ty.try_map_heads(&mut |name: &baml_type::TypeName| {
         vm.declaration_head(name)
             .ok_or_else(|| EngineError::TypeMismatch {
-                message: format!("host-supplied type names unknown declaration `{name}`"),
+                message: format!(
+                    "host-supplied type names unknown declaration `{}`",
+                    crate::hydrate::bounded(&name.to_string())
+                ),
             })
     })
 }
@@ -223,7 +226,10 @@ impl BexEngine {
             let ptr = self
                 .resolve_inbound_declaration(vm, &spelling, overlay, InboundDeclarationKind::Any)
                 .ok_or_else(|| EngineError::TypeMismatch {
-                    message: format!("host-supplied type names unknown declaration `{name}`"),
+                    message: format!(
+                        "host-supplied type names unknown declaration `{}`",
+                        crate::hydrate::bounded(&name.to_string())
+                    ),
                 })?;
             let tag = match vm.get_object(ptr) {
                 Object::Class(class) => class.type_tag,
@@ -1226,42 +1232,7 @@ pub(crate) fn collect_type_var_bindings<N: Clone>(
     concrete: &baml_type::RuntimeTy<N>,
     out: &mut indexmap::IndexMap<String, baml_type::RuntimeTy<N>>,
 ) {
-    use baml_type::RuntimeTy;
-    match (declared, concrete) {
-        // A type-var position binds to whatever concrete type sits opposite it.
-        // First binding wins (a type var should be consistent across positions).
-        (RuntimeTy::TypeVar(name), _) => {
-            out.entry(name.to_string())
-                .or_insert_with(|| concrete.clone());
-        }
-        (RuntimeTy::Class(_, da), RuntimeTy::Class(_, ca)) => {
-            for (d, c) in da.iter().zip(ca.iter()) {
-                collect_type_var_bindings(d, c, out);
-            }
-        }
-        (RuntimeTy::List(d), RuntimeTy::List(c)) => collect_type_var_bindings(d, c, out),
-        (
-            RuntimeTy::Map {
-                key: dk, value: dv, ..
-            },
-            RuntimeTy::Map {
-                key: ck, value: cv, ..
-            },
-        ) => {
-            collect_type_var_bindings(dk, ck, out);
-            collect_type_var_bindings(dv, cv, out);
-        }
-        (RuntimeTy::Union(dm), RuntimeTy::Union(cm)) => {
-            for (d, c) in dm.iter().zip(cm.iter()) {
-                collect_type_var_bindings(d, c, out);
-            }
-        }
-        (RuntimeTy::Future(dv, de), RuntimeTy::Future(cv, ce)) => {
-            collect_type_var_bindings(dv, cv, out);
-            collect_type_var_bindings(de, ce, out);
-        }
-        _ => {}
-    }
+    collect_live_type_var_bindings(declared, concrete, out);
 }
 
 /// Recover type-variable bindings from a live VM type. The declared signature
@@ -1274,14 +1245,33 @@ pub(crate) fn collect_live_type_var_bindings<DeclaredHead: Clone, ConcreteHead: 
     out: &mut indexmap::IndexMap<String, baml_type::RuntimeTy<ConcreteHead>>,
 ) {
     use baml_type::RuntimeTy;
+    let mut zip = |declared: &[RuntimeTy<DeclaredHead>], concrete: &[RuntimeTy<ConcreteHead>]| {
+        if declared.len() == concrete.len() {
+            for (declared, concrete) in declared.iter().zip(concrete) {
+                collect_live_type_var_bindings(declared, concrete, out);
+            }
+        }
+    };
+    // The declared side decides where a variable can sit; a concrete side of
+    // another shape binds nothing there. First binding wins.
     match (declared, concrete) {
         (RuntimeTy::TypeVar(name), _) => {
             out.entry(name.to_string())
                 .or_insert_with(|| concrete.clone());
         }
         (RuntimeTy::Class(_, declared_args), RuntimeTy::Class(_, concrete_args)) => {
-            for (declared, concrete) in declared_args.iter().zip(concrete_args) {
-                collect_live_type_var_bindings(declared, concrete, out);
+            zip(declared_args, concrete_args);
+        }
+        (
+            RuntimeTy::Interface(_, declared_args, declared_assoc),
+            RuntimeTy::Interface(_, concrete_args, concrete_assoc),
+        ) => {
+            zip(declared_args, concrete_args);
+            for (name, declared) in declared_assoc {
+                if let Some((_, concrete)) = concrete_assoc.iter().find(|(other, _)| other == name)
+                {
+                    collect_live_type_var_bindings(declared, concrete, out);
+                }
             }
         }
         (RuntimeTy::List(declared), RuntimeTy::List(concrete)) => {
@@ -1291,22 +1281,16 @@ pub(crate) fn collect_live_type_var_bindings<DeclaredHead: Clone, ConcreteHead: 
             RuntimeTy::Map {
                 key: declared_key,
                 value: declared_value,
-                ..
             },
             RuntimeTy::Map {
                 key: concrete_key,
                 value: concrete_value,
-                ..
             },
         ) => {
             collect_live_type_var_bindings(declared_key, concrete_key, out);
             collect_live_type_var_bindings(declared_value, concrete_value, out);
         }
-        (RuntimeTy::Union(declared), RuntimeTy::Union(concrete)) => {
-            for (declared, concrete) in declared.iter().zip(concrete) {
-                collect_live_type_var_bindings(declared, concrete, out);
-            }
-        }
+        (RuntimeTy::Union(declared), RuntimeTy::Union(concrete)) => zip(declared, concrete),
         (
             RuntimeTy::Future(declared_value, declared_error),
             RuntimeTy::Future(concrete_value, concrete_error),
@@ -1314,7 +1298,62 @@ pub(crate) fn collect_live_type_var_bindings<DeclaredHead: Clone, ConcreteHead: 
             collect_live_type_var_bindings(declared_value, concrete_value, out);
             collect_live_type_var_bindings(declared_error, concrete_error, out);
         }
-        _ => {}
+        (
+            RuntimeTy::Function {
+                params: declared_params,
+                ret: declared_ret,
+                throws: declared_throws,
+            },
+            RuntimeTy::Function {
+                params: concrete_params,
+                ret: concrete_ret,
+                throws: concrete_throws,
+            },
+        ) => {
+            if declared_params.len() == concrete_params.len() {
+                for (declared, concrete) in declared_params.iter().zip(concrete_params) {
+                    collect_live_type_var_bindings(&declared.ty, &concrete.ty, out);
+                }
+            }
+            collect_live_type_var_bindings(declared_ret, concrete_ret, out);
+            collect_live_type_var_bindings(declared_throws, concrete_throws, out);
+        }
+        (
+            RuntimeTy::Class(..)
+            | RuntimeTy::Interface(..)
+            | RuntimeTy::List(_)
+            | RuntimeTy::Map { .. }
+            | RuntimeTy::Union(_)
+            | RuntimeTy::Future(..)
+            | RuntimeTy::Function { .. },
+            _,
+        ) => {}
+        // A leaf, or a position whose type the call binds elsewhere, holds no
+        // variable to bind from here.
+        (
+            RuntimeTy::Int
+            | RuntimeTy::Bigint
+            | RuntimeTy::Float
+            | RuntimeTy::String
+            | RuntimeTy::Bool
+            | RuntimeTy::Null
+            | RuntimeTy::Uint8Array
+            | RuntimeTy::Media(_)
+            | RuntimeTy::Literal(..)
+            | RuntimeTy::Enum(_)
+            | RuntimeTy::EnumVariant(..)
+            | RuntimeTy::RustType
+            | RuntimeTy::Type
+            | RuntimeTy::Resource
+            | RuntimeTy::PromptAst
+            | RuntimeTy::Unknown
+            | RuntimeTy::Never,
+            _,
+        ) => {}
+        // A recursive alias is named, not unfolded, in a declared signature,
+        // and a projection is reduced once its base is bound: neither binds a
+        // variable by position.
+        (RuntimeTy::TypeAlias(_) | RuntimeTy::AssociatedTypeProjection { .. }, _) => {}
     }
 }
 
@@ -1332,59 +1371,18 @@ pub(crate) fn substitute_type_vars<N: Clone>(
     ty: &baml_type::RuntimeTy<N>,
     bindings: &indexmap::IndexMap<String, baml_type::RuntimeTy<N>>,
 ) -> baml_type::RuntimeTy<N> {
-    use baml_type::RuntimeTy;
     if bindings.is_empty() {
         return ty.clone();
     }
     match ty {
-        RuntimeTy::TypeVar(name) => bindings
+        baml_type::RuntimeTy::TypeVar(name) => bindings
             .get(name.as_str())
             .cloned()
             .unwrap_or_else(|| ty.clone()),
-        RuntimeTy::Class(tn, args) => RuntimeTy::Class(
-            tn.clone(),
-            args.iter()
-                .map(|a| substitute_type_vars(a, bindings))
-                .collect(),
-        ),
-        RuntimeTy::List(inner) => RuntimeTy::List(Box::new(substitute_type_vars(inner, bindings))),
-        RuntimeTy::Map { key, value } => RuntimeTy::Map {
-            key: Box::new(substitute_type_vars(key, bindings)),
-            value: Box::new(substitute_type_vars(value, bindings)),
-        },
-        RuntimeTy::Union(members) => RuntimeTy::Union(
-            members
-                .iter()
-                .map(|m| substitute_type_vars(m, bindings))
-                .collect(),
-        ),
-        RuntimeTy::Future(value, error) => RuntimeTy::Future(
-            Box::new(substitute_type_vars(value, bindings)),
-            Box::new(substitute_type_vars(error, bindings)),
-        ),
-        // A function-typed parameter (`f: (T) -> R`) carries call type-vars in its
-        // params/return/throws. Substitute them so an explicitly-bound closure
-        // param materializes against concrete types (J13: `apply[int,int]` binds
-        // `f` as `(int) -> int`, not the unvalidatable `(T) -> R`).
-        RuntimeTy::Function {
-            params,
-            ret,
-            throws,
-        } => RuntimeTy::Function {
-            params: params
-                .iter()
-                .map(|p| baml_type::RuntimeFunctionParamTy {
-                    name: p.name.clone(),
-                    ty: substitute_type_vars(&p.ty, bindings),
-                    mode: p.mode,
-                })
-                .collect(),
-            ret: Box::new(substitute_type_vars(ret, bindings)),
-            throws: Box::new(substitute_type_vars(throws, bindings)),
-        },
-        // Other positions (leaves, opaque handles, Interface/projection) don't
-        // carry call type-vars in these paths, so they pass through unchanged.
-        _ => ty.clone(),
+        // Every other position is substituted through, an interface's
+        // arguments and a function type's parameters included (`f: (T) -> R`
+        // bound explicitly materializes as `(int) -> int`).
+        other => other.map_children(&mut |child| substitute_type_vars(child, bindings)),
     }
 }
 
@@ -1394,19 +1392,16 @@ pub(crate) fn substitute_type_vars<N: Clone>(
 /// `TypeVar` that remains is unbound — the host failed to supply it. The
 /// engine rejects such calls (the wire must be fully bound).
 pub(crate) fn first_unbound_type_var(ty: &RuntimeTy) -> Option<String> {
-    match ty {
-        RuntimeTy::TypeVar(name) => Some(name.to_string()),
-        RuntimeTy::Class(_, args) => args.iter().find_map(first_unbound_type_var),
-        RuntimeTy::List(inner) => first_unbound_type_var(inner),
-        RuntimeTy::Map { key, value, .. } => {
-            first_unbound_type_var(key).or_else(|| first_unbound_type_var(value))
-        }
-        RuntimeTy::Union(members) => members.iter().find_map(first_unbound_type_var),
-        RuntimeTy::Future(value, error) => {
-            first_unbound_type_var(value).or_else(|| first_unbound_type_var(error))
-        }
-        _ => None,
+    if let RuntimeTy::TypeVar(name) = ty {
+        return Some(name.to_string());
     }
+    let mut found = None;
+    ty.visit_children(&mut |child| {
+        if found.is_none() {
+            found = first_unbound_type_var(child);
+        }
+    });
+    found
 }
 
 /// Whether `ty` mentions any `TypeVar` (i.e. the callee is generic at this
@@ -1493,9 +1488,14 @@ pub(crate) fn infer_bindings_runtime(
 ///
 /// Contrast [`infer_bindings_runtime`], the per-argument best-effort merge kept
 /// for the self-receiver and callable-summary paths.
+// BUG: inference runs after hydration, so the VM's facts exist, but the
+// declared types here are wire-spelled (`TypeName` heads) and the VM is a
+// `TypeContext<TypeHead>`; and the shared solver has no rule binding an
+// interface formal (`Container<T>`) from a concrete actual that implements it
+// (`IntBox`). Both are needed before `unwrap(IntBox{..})` infers `T = int`.
 #[expect(
     deprecated,
-    reason = "fact-free by necessity: inference runs at the host entry boundary, before any VM exists to supply facts"
+    reason = "fact-free: the declared types are wire-spelled, the VM's facts are over live heads"
 )]
 pub(crate) fn infer_bindings_runtime_checked(
     pairs: &[(RuntimeTy, RuntimeTy)],
@@ -1568,21 +1568,7 @@ fn walk_union_vars(ty: &RuntimeTy, under_union: bool, out: &mut std::collections
                 walk_union_vars(m, true, out);
             }
         }
-        RuntimeTy::List(inner) => walk_union_vars(inner, under_union, out),
-        RuntimeTy::Map { key, value, .. } => {
-            walk_union_vars(key, under_union, out);
-            walk_union_vars(value, under_union, out);
-        }
-        RuntimeTy::Class(_, args) => {
-            for a in args {
-                walk_union_vars(a, under_union, out);
-            }
-        }
-        RuntimeTy::Future(value, error) => {
-            walk_union_vars(value, under_union, out);
-            walk_union_vars(error, under_union, out);
-        }
-        _ => {}
+        other => other.visit_children(&mut |child| walk_union_vars(child, under_union, out)),
     }
 }
 
@@ -1599,40 +1585,10 @@ fn walk_closure_vars(
         }
         // Descending into a function-typed position poisons every var reached
         // through it — params, return, and throws alike.
-        RuntimeTy::Function {
-            params,
-            ret,
-            throws,
-            ..
-        } => {
-            for p in params {
-                walk_closure_vars(&p.ty, true, out);
-            }
-            walk_closure_vars(ret, true, out);
-            walk_closure_vars(throws, true, out);
+        RuntimeTy::Function { .. } => {
+            ty.visit_children(&mut |child| walk_closure_vars(child, true, out));
         }
-        RuntimeTy::List(inner) => {
-            walk_closure_vars(inner, in_closure, out);
-        }
-        RuntimeTy::Map { key, value, .. } => {
-            walk_closure_vars(key, in_closure, out);
-            walk_closure_vars(value, in_closure, out);
-        }
-        RuntimeTy::Union(members) => {
-            for m in members {
-                walk_closure_vars(m, in_closure, out);
-            }
-        }
-        RuntimeTy::Class(_, args) => {
-            for a in args {
-                walk_closure_vars(a, in_closure, out);
-            }
-        }
-        RuntimeTy::Future(value, error) => {
-            walk_closure_vars(value, in_closure, out);
-            walk_closure_vars(error, in_closure, out);
-        }
-        _ => {}
+        other => other.visit_children(&mut |child| walk_closure_vars(child, in_closure, out)),
     }
 }
 

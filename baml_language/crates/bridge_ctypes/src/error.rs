@@ -21,6 +21,15 @@ pub enum CtypesError {
     #[error("map keys cross the boundary as strings; got an {0} key")]
     MapKeyNotString(&'static str),
 
+    #[error("key `{0}` occurs more than once")]
+    DuplicateKey(String),
+
+    #[error("{field} is not supported and must be empty")]
+    UnsupportedTypeField { field: &'static str },
+
+    #[error("handle key {0} occurs as more than one kind of handle")]
+    HandleKindConflict(u64),
+
     /// Carries only the input length, not the input itself — untrusted hex
     /// blobs can be up to the FFI decode cap (~67M chars), and embedding
     /// them in error messages bloats logs and exposes payload contents.

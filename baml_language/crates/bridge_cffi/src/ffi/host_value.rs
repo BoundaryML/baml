@@ -187,6 +187,10 @@ pub extern "C" fn complete_host_call(
             host_dispatch::complete_with_value(call_id, BexExternalValue::Null);
             return;
         }
+        // A payload the bridge cannot decode, or that states what no host
+        // value is, is the bridge's fault and never the callable's: it lands
+        // as a `BridgeFailure` (`baml.panics.SdkPanic` on the host), which no
+        // declared `throws` admits, the same as an empty throw payload below.
         let inbound = match InboundValue::decode(bytes) {
             Ok(v) => v,
             Err(e) => {
@@ -194,7 +198,7 @@ pub extern "C" fn complete_host_call(
                     call_id,
                     OpError::new(
                         SysOp::BamlHostCallHostValue,
-                        VmBamlError::ParseError {
+                        VmInternalError::BridgeFailure {
                             message: format!("complete_host_call decode failure: {e}"),
                         },
                     ),
@@ -208,7 +212,7 @@ pub extern "C" fn complete_host_call(
                 call_id,
                 OpError::new(
                     SysOp::BamlHostCallHostValue,
-                    VmBamlError::ParseError {
+                    VmInternalError::BridgeFailure {
                         message: format!("complete_host_call decode failure: {e}"),
                     },
                 ),
@@ -257,7 +261,7 @@ pub extern "C" fn complete_host_call(
                     call_id,
                     OpError::new(
                         SysOp::BamlHostCallHostValue,
-                        VmBamlError::ParseError {
+                        VmInternalError::BridgeFailure {
                             message: format!(
                                 "complete_host_call throw-payload decode failure: {e}"
                             ),
@@ -273,7 +277,7 @@ pub extern "C" fn complete_host_call(
                 call_id,
                 OpError::new(
                     SysOp::BamlHostCallHostValue,
-                    VmBamlError::ParseError {
+                    VmInternalError::BridgeFailure {
                         message: format!("complete_host_call throw-payload decode failure: {e}"),
                     },
                 ),

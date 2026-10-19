@@ -398,6 +398,39 @@ mod tests {
     /// decode sorted to `A, Z`, so the constraint compares/hashes equal regardless
     /// of wire order.
     #[test]
+    fn unsupported_type_fields_are_refused_not_ignored() {
+        let alias = BamlTy {
+            ty: Some(TyVariant::TypeAlias(
+                crate::baml_bridge::cffi::BamlTyTypeAlias {
+                    name: "user.Tree".to_string(),
+                    type_args: vec![runtime_ty_to_proto_ty(&RuntimeTy::int())],
+                },
+            )),
+        };
+        assert!(matches!(
+            crate::ty_decode::proto_ty_to_runtime_ty(&alias),
+            Err(crate::CtypesError::UnsupportedTypeField {
+                field: "BamlTyTypeAlias.type_args"
+            })
+        ));
+        let mut function = runtime_ty_to_proto_ty(&RuntimeTy::Function {
+            params: Box::new([]),
+            ret: Box::new(RuntimeTy::int()),
+            throws: Box::new(RuntimeTy::Never),
+        });
+        let Some(TyVariant::Function(f)) = &mut function.ty else {
+            panic!("a function type encodes as a function");
+        };
+        f.generic_params.push("T".to_string());
+        assert!(matches!(
+            crate::ty_decode::proto_ty_to_runtime_ty(&function),
+            Err(crate::CtypesError::UnsupportedTypeField {
+                field: "BamlTyFunction.generic_params"
+            })
+        ));
+    }
+
+    #[test]
     fn decode_sorts_interface_bindings() {
         let unsorted = BamlTy {
             ty: Some(TyVariant::Interface(BamlTyInterface {

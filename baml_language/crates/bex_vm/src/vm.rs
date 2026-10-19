@@ -3189,6 +3189,11 @@ impl BexVm {
         })
     }
 
+    /// The declaration of the standard library's error class `class`.
+    pub fn error_class_ptr(&self, class: ErrorClass) -> HeapPtr {
+        self.error_class_ptrs[class as usize]
+    }
+
     /// Whether `value` is a panic of exactly `class`, by the class's identity.
     pub fn is_panic_of(&self, value: Value, class: PanicClass) -> bool {
         value.as_object_ptr().is_some_and(|ptr| {

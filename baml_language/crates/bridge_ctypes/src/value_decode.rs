@@ -30,23 +30,41 @@ use crate::{
     handle_table::CffiHandleTable,
 };
 
-/// Owns every remaining wire occurrence, including values after a malformed
+/// Owns every remaining wire reference, including those after a malformed
 /// sibling. Recursive decoding shares this inventory, so drained references
-/// are never released a second time on an error.
+/// are never released a second time on an error. A key is one reference
+/// however often it occurs: a host registers each shipped handle once, and
+/// the release it owes is one per key. A key that occurs under two handle
+/// kinds names two different things with one identity and is refused.
 struct InboundOwners<'a> {
     table: &'a CffiHandleTable,
     handles: Vec<crate::baml_bridge::cffi::BamlHandle>,
+    conflict: Option<u64>,
 }
 impl<'a> InboundOwners<'a> {
     fn new(table: &'a CffiHandleTable) -> Self {
         Self {
             table,
             handles: Vec::new(),
+            conflict: None,
+        }
+    }
+    /// Refuse the whole value when one key arrived under two handle kinds.
+    fn consistent(&self) -> Result<(), CtypesError> {
+        match self.conflict {
+            Some(key) => Err(CtypesError::HandleKindConflict(key)),
+            None => Ok(()),
         }
     }
     fn collect(&mut self, value: &InboundValue) {
         match &value.value {
-            Some(InboundValueVariant::Handle(handle)) => self.handles.push(*handle),
+            Some(InboundValueVariant::Handle(handle)) => {
+                match self.handles.iter().find(|owned| owned.key == handle.key) {
+                    None => self.handles.push(*handle),
+                    Some(owned) if owned.handle_type == handle.handle_type => {}
+                    Some(_) => self.conflict = Some(handle.key),
+                }
+            }
             Some(InboundValueVariant::ListValue(list)) => {
                 for value in &list.values {
                     self.collect(value);
@@ -70,7 +88,11 @@ impl<'a> InboundOwners<'a> {
         }
     }
     fn take(&mut self, handle: &crate::baml_bridge::cffi::BamlHandle) {
-        if let Some(index) = self.handles.iter().position(|owned| owned == handle) {
+        if let Some(index) = self
+            .handles
+            .iter()
+            .position(|owned| owned.key == handle.key)
+        {
             self.handles.swap_remove(index);
         }
     }
@@ -101,6 +123,7 @@ pub fn inbound_to_external(
 ) -> Result<BexExternalValue, CtypesError> {
     let mut owners = InboundOwners::new(handle_table);
     owners.collect(&value);
+    owners.consistent()?;
     decode_inbound(value, handle_table, &mut owners)
 }
 
@@ -120,8 +143,8 @@ fn decode_inbound(
         && let Some(var) = crate::ty_decode::first_type_var(stated)
     {
         return Err(CtypesError::ValueTypeNotRealized {
-            stated: bounded_ty(stated),
-            var: var.name().to_string(),
+            stated: bounded(stated.to_string()),
+            var: bounded(var.name().to_string()),
         });
     }
     let Some(variant) = value.value else {
@@ -216,6 +239,12 @@ fn decode_inbound(
             ))))
         }
         InboundValueVariant::Handle(handle) => {
+            // Key 0 names no slot in any table. A host handle carrying it
+            // would reach the host as a callback frame whose callable identity
+            // the frame decoder refuses, and the call would never complete.
+            if handle.key == 0 {
+                return Err(CtypesError::InvalidHandleKey(0));
+            }
             // HOST_VALUE_* keys do NOT live in HANDLE_TABLE. The host
             // bridge owns the lookup; we construct the Arc stub here so
             // last-drop fires the registered HostReleaseFn.
@@ -306,15 +335,15 @@ fn shape(node: &'static str, expected: &'static str, stated: &RuntimeTy) -> Ctyp
     CtypesError::ValueTypeShape {
         node,
         expected,
-        stated: bounded_ty(stated),
+        stated: bounded(stated.to_string()),
     }
 }
 
 /// A type as a message carries it: the host's text, cut to a length a message
 /// can hold.
-fn bounded_ty(ty: &RuntimeTy) -> String {
+/// A rendering for a refusal, cut so no host-chosen text is echoed in full.
+fn bounded(text: String) -> String {
     const LIMIT: usize = 200;
-    let text = ty.to_string();
     if text.chars().count() <= LIMIT {
         text
     } else {
@@ -444,7 +473,9 @@ fn convert_map(
             .map(|v| decode_inbound(v, handle_table, owners))
             .transpose()?
             .unwrap_or(BexExternalValue::Null);
-        entries.insert(key, value);
+        if entries.insert(key.clone(), value).is_some() {
+            return Err(CtypesError::DuplicateKey(bounded(key)));
+        }
     }
     Ok(BexExternalValue::Map {
         key_type,
@@ -468,7 +499,9 @@ fn convert_class(
             .map(|v| decode_inbound(v, handle_table, owners))
             .transpose()?
             .unwrap_or(BexExternalValue::Null);
-        fields.insert(key, value);
+        if fields.insert(key.clone(), value).is_some() {
+            return Err(CtypesError::DuplicateKey(bounded(key)));
+        }
     }
     Ok(BexExternalValue::Instance {
         class_name: name.to_string(),
@@ -511,6 +544,7 @@ pub fn kwargs_to_bex_values(
             owners.collect(value);
         }
     }
+    owners.consistent()?;
     let mut result = HashMap::new();
     for entry in kwargs {
         let key = extract_string_key(&entry)?;
@@ -519,7 +553,9 @@ pub fn kwargs_to_bex_values(
             .map(|v| decode_inbound(v, handle_table, &mut owners))
             .transpose()?
             .unwrap_or(BexExternalValue::Null);
-        result.insert(key, value);
+        if result.insert(key.clone(), value).is_some() {
+            return Err(CtypesError::DuplicateKey(bounded(key)));
+        }
     }
     Ok(result)
 }
@@ -544,6 +580,111 @@ mod tests {
             })),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn a_zero_handle_key_is_refused_for_every_handle_kind() {
+        let table = CffiHandleTable::new();
+        let callable_ty = RuntimeTy::Function {
+            params: Box::new([]),
+            ret: Box::new(RuntimeTy::int()),
+            throws: Box::new(RuntimeTy::Never),
+        };
+        let callable = typed_input(
+            &callable_ty,
+            InboundValueVariant::Handle(BamlHandle {
+                key: 0,
+                handle_type: BamlHandleType::HostValueCallable as i32,
+            }),
+        );
+        let opaque = InboundValue {
+            value: Some(InboundValueVariant::Handle(BamlHandle {
+                key: 0,
+                handle_type: BamlHandleType::HostValueOpaque as i32,
+            })),
+            ..Default::default()
+        };
+        for input in [callable, opaque, owned_input(0)] {
+            assert!(matches!(
+                inbound_to_external(input, &table),
+                Err(CtypesError::InvalidHandleKey(0))
+            ));
+        }
+    }
+
+    #[test]
+    fn duplicate_keys_fields_and_kwargs_are_refused() {
+        let table = CffiHandleTable::new();
+        let int = |n: i64| InboundValue {
+            value: Some(InboundValueVariant::IntValue(n)),
+            ..Default::default()
+        };
+        let entry = |key: &str, value: InboundValue| InboundMapEntry {
+            key: Some(crate::baml_bridge::cffi::inbound_map_entry::Key::StringKey(
+                key.into(),
+            )),
+            value: Some(value),
+        };
+        let map = typed_input(
+            &RuntimeTy::Map {
+                key: Box::new(RuntimeTy::string()),
+                value: Box::new(RuntimeTy::int()),
+            },
+            InboundValueVariant::MapValue(InboundMapValue {
+                entries: vec![entry("a", int(1)), entry("b", int(2)), entry("a", int(3))],
+            }),
+        );
+        assert!(matches!(
+            inbound_to_external(map, &table),
+            Err(CtypesError::DuplicateKey(key)) if key == "a"
+        ));
+        let class = typed_input(
+            &RuntimeTy::Class(
+                baml_type::TypeName::from_dotted_path("user.P"),
+                Box::new([]),
+            ),
+            InboundValueVariant::ClassValue(InboundClassValue {
+                fields: vec![entry("x", int(1)), entry("x", int(2))],
+            }),
+        );
+        assert!(matches!(
+            inbound_to_external(class, &table),
+            Err(CtypesError::DuplicateKey(key)) if key == "x"
+        ));
+        assert!(matches!(
+            kwargs_to_bex_values(vec![entry("n", int(1)), entry("n", int(2))], &table),
+            Err(CtypesError::DuplicateKey(key)) if key == "n"
+        ));
+    }
+
+    #[test]
+    fn one_handle_key_under_two_kinds_is_refused() {
+        let table = CffiHandleTable::new();
+        let callable_ty = RuntimeTy::Function {
+            params: Box::new([]),
+            ret: Box::new(RuntimeTy::int()),
+            throws: Box::new(RuntimeTy::Never),
+        };
+        let as_kind = |handle_type: BamlHandleType, stated: Option<&RuntimeTy>| InboundValue {
+            value_type: stated.map(crate::ty_encode::runtime_ty_to_proto_ty),
+            value: Some(InboundValueVariant::Handle(BamlHandle {
+                key: 42,
+                handle_type: handle_type as i32,
+            })),
+        };
+        let input = typed_input(
+            &RuntimeTy::list(RuntimeTy::unknown()),
+            InboundValueVariant::ListValue(InboundListValue {
+                values: vec![
+                    as_kind(BamlHandleType::HostValueOpaque, None),
+                    as_kind(BamlHandleType::HostValueCallable, Some(&callable_ty)),
+                ],
+            }),
+        );
+        assert!(matches!(
+            inbound_to_external(input, &table),
+            Err(CtypesError::HandleKindConflict(42))
+        ));
     }
 
     #[test]

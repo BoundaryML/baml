@@ -487,6 +487,104 @@ async fn host_callable_handle_can_be_invoked_as_engine_entry_point() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn an_explicit_type_argument_wins_over_a_live_handles_type() {
+    let source = r#"
+        function make_adder(offset: int) -> (value: int) -> int throws never {
+            return (x: int) -> int { offset + x }
+        }
+        function wrap<T>(x: T) -> T[] { [x] }
+    "#;
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+    let returned = engine
+        .call_function(
+            "make_adder",
+            vec![BexExternalValue::Int(10)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            false,
+        )
+        .await
+        .expect("returning the closure should succeed");
+    let BexExternalValue::Handle(_) = &returned else {
+        panic!("returned closure should cross the boundary as a handle");
+    };
+    // The closure's own type is `(int) -> int throws never`; the host binds
+    // `T` to the wider `((int) -> int throws never) | null`. The frame holds
+    // the host's `T`, so the list comes back at the wider element type.
+    let closure_ty = RuntimeTy::Function {
+        params: Box::new([RuntimeFunctionParamTy::required(None, RuntimeTy::int())]),
+        ret: Box::new(RuntimeTy::int()),
+        throws: Box::new(RuntimeTy::Never),
+    };
+    let wide = RuntimeTy::Union(Box::new([closure_ty, RuntimeTy::Null]));
+    let wrapped = engine
+        .call_function(
+            "wrap",
+            vec![returned],
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_type_args(IndexMap::from([("T".to_string(), wide.clone())]))
+                .build(),
+            true,
+        )
+        .await
+        .expect("the closure inhabits the wider explicit `T`");
+    let BexExternalValue::Array {
+        element_type,
+        items,
+    } = wrapped
+    else {
+        panic!("expected a list, got {wrapped:?}");
+    };
+    assert_eq!(items.len(), 1);
+    assert_eq!(element_type, wide);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_callable_value_takes_no_type_arguments() {
+    let source = r#"
+        function make_adder(offset: int) -> (value: int) -> int throws never {
+            return (x: int) -> int { offset + x }
+        }
+    "#;
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("engine construction"),
+    );
+    let returned = engine
+        .call_function(
+            "make_adder",
+            vec![BexExternalValue::Int(10)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            false,
+        )
+        .await
+        .expect("returning the closure should succeed");
+    let BexExternalValue::Handle(handle) = returned else {
+        panic!("returned closure should cross the boundary as a handle");
+    };
+    // The closure is already specialized; a type argument has nothing to bind.
+    let err = engine
+        .call_callable(
+            handle,
+            vec![BexExternalValue::Int(5)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_type_args(IndexMap::from([("T".to_string(), RuntimeTy::int())]))
+                .build(),
+            true,
+        )
+        .await
+        .expect_err("a type argument on a callable value is refused");
+    let EngineError::TypeMismatch { message } = err else {
+        panic!("expected a type mismatch, got {err:?}");
+    };
+    assert!(message.contains("takes no type arguments"), "{message}");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn returned_closure_required_arguments_bind_by_position_not_source_name() {
     let source = r#"
         function make_adder(offset: int) -> (value: int) -> int throws never {

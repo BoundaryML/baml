@@ -44,7 +44,20 @@ can do without (an unspecified primitive, a literal without its value, an empty
 type), one of another shape than its node, a missing statement, and a statement
 on a node whose type is implied. Only a recursive alias exists as a declaration
 at run time, so a statement spells a non-recursive alias by its body. A host
-states a callback's open effect parameter as `unknown`.
+states a callback's open effect parameter as `unknown`. A handle's key is
+nonzero: key 0 names no slot and is refused.
+
+A `type_definition` in `type_args` declares fresh runtime declarations for the
+call. One named like a declaration the program has is refused: a declaration's
+identity is itself, never its name, and the program's declarations are reached
+by name alone.
+
+A class with a `$rust_type` field holds native data only the runtime creates
+(a media wrapper's payload, a cipher's state, a cancel token). A host passes
+such an instance back as it received it, the field holding a handle to the
+runtime's data; a value of the host's own in that field is refused. The
+exception is `baml.errors.HostCallable`, whose payload is the host's own
+handle to the exception it raised and which the runtime only carries back.
 
 Map keys, class field names and keyword-argument names cross the boundary as
 strings only. The decoder refuses an `int_key`, `bool_key` or `enum_key`
@@ -62,7 +75,12 @@ and from explicit `type_args`. A variable that occurs under a union or optional
 the value did not pin because a concrete sibling took it (`"hi"`, `null`), is
 `never`: the value could be a `T` or not, and the tie breaks to the type no
 value has. A call that leaves a variable unbound otherwise (nothing arrived
-for it, or only an empty container) is refused. A refusal from the engine
+for it, or only an empty container) is refused. A type parameter with an
+interface bound (`T extends baml.ops.Compare`) takes one concrete type that
+implements every bound at the bound's own arguments, whether the type was
+inferred (`int` and `"x"` join to `int | string`, which is not one concrete
+type) or stated in `type_args`; otherwise the call is refused. A callable
+value is already specialized and takes no `type_args`. A refusal from the engine
 names the parameter and the path; a refusal from the decoder names the node:
 
 ```
