@@ -1536,10 +1536,6 @@ impl BexHeap {
         &self,
         roots: &[HeapPtr],
     ) -> (GcStats, Vec<HeapPtr>, ForwardingMap) {
-        debug_assert!(
-            self.card_marking(),
-            "a minor collection reads the card table, which this heap does not keep"
-        );
         // SAFETY: collection caller guarantees exclusive heap access.
         let mut profile = unsafe { crate::gc_profile::GcProfiler::start(self, roots.len()) };
         // SAFETY: collection caller guarantees exclusive heap access.
@@ -1723,8 +1719,6 @@ impl BexHeap {
     /// Dispatch to the appropriate generational collection algorithm.
     ///
     /// - `Minor`: Gen0 + Gen1 traced; Gen0 survivors → new Gen1, Gen1 survivors → Gen2.
-    ///   On a heap without card marking ([`BexHeap::disable_card_marking`]), a
-    ///   full collection.
     /// - `Major`: Full GC — equivalent to [`BexHeap::collect_garbage`], all generations traced.
     ///
     /// # Safety
@@ -1740,14 +1734,8 @@ impl BexHeap {
         level: CollectionLevel,
     ) -> (GcStats, Vec<HeapPtr>, ForwardingMap) {
         match level {
-            // A heap that keeps no card table cannot find old-to-young
-            // references, so a minor collection there is a full one.
-            CollectionLevel::Minor if self.card_marking() => unsafe {
-                self.collect_garbage_minor(roots)
-            },
-            CollectionLevel::Minor | CollectionLevel::Major => unsafe {
-                self.collect_garbage(roots)
-            },
+            CollectionLevel::Minor => unsafe { self.collect_garbage_minor(roots) },
+            CollectionLevel::Major => unsafe { self.collect_garbage(roots) },
         }
     }
 }
