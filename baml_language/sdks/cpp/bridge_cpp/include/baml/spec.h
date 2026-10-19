@@ -390,10 +390,15 @@ class prompt {
   explicit prompt(detail::pb::BamlValuePromptAst value)
       : value_(std::move(value)) {}
 
+  // A prompt_ast_value implies its own type, so it states none: the engine
+  // refuses a prompt node that carries a value_type.
+  void encode_into(detail::pb::InboundValue& target) const {
+    target.mutable_prompt_ast_value()->CopyFrom(value_);
+  }
+
   void add_self(detail::args_encoder& args) const {
     args.add_arg("self", [&](detail::pb::InboundValue& target) {
-      target.mutable_prompt_ast_value()->CopyFrom(value_);
-      target.mutable_value_type()->mutable_prompt_ast();
+      encode_into(target);
     });
   }
 
@@ -495,8 +500,7 @@ struct codec<prompt> {
   }
 
   static void encode(detail::pb::InboundValue& target, const prompt& value) {
-    target.mutable_prompt_ast_value()->CopyFrom(value.value_);
-    target.mutable_value_type()->CopyFrom(baml_ty());
+    value.encode_into(target);
   }
 
   static prompt decode(const detail::pb::BamlOutboundValue& raw) {

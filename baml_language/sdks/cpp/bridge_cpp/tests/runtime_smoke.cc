@@ -255,6 +255,8 @@ static void TestTypedSpecStreamAndPortableValueCodecs() {
   Require(encoded_prompt.has_prompt_ast_value() &&
               encoded_prompt.prompt_ast_value().simple().string() == "portable",
           "Prompt codec did not preserve portable data");
+  Require(!encoded_prompt.has_value_type(),
+          "a prompt implies its own type; the engine refuses a stated one");
 
   const baml::image image = baml::image::from_url(
       "https://example.test/cat.png", std::string("image/png"));

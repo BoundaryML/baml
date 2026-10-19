@@ -8,6 +8,7 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -70,6 +71,20 @@ BAML_TEST(flat_stream_calls_exact_companion_fqn) {
   BAML_ASSERT(bindings.find("$render_prompt") == std::string::npos);
   BAML_ASSERT(bindings.find("$build_request") == std::string::npos);
   BAML_ASSERT(bindings.find("$parse") == std::string::npos);
+}
+
+// A prompt_ast_value implies its own type, so the engine refuses one that
+// states a value_type; `text()` and `messages()` pass the prompt as `self`.
+// SDK_PARITY_LINT(skip): pins that a C++ prompt crosses back as an argument.
+BAML_TEST(function_spec_prompt_is_accepted_as_an_argument) {
+  const baml::prompt prompt =
+      baml_sdk::lorem::ExtractResume_spec("Ada Lovelace").prompt();
+  const std::string first = prompt.text();
+  BAML_ASSERT(first.find("Ada Lovelace") != std::string::npos);
+  BAML_ASSERT(prompt.text() == first);
+  const auto messages =
+      prompt.messages<std::vector<baml_sdk::vendor::ai::PromptMessage>>();
+  BAML_ASSERT(!messages.empty());
 }
 
 BAML_TEST_MAIN()
