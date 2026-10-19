@@ -222,9 +222,7 @@ impl Drop for AbortOnCollectionUnwind {
     }
 }
 
-/// The engine's [`bex_vm::compiled_rt::CompiledCollector`] for one thread's
-/// VM: `own` is that thread's permit cell, which the collection reads through
-/// the VM itself rather than through the guard.
+/// The running VM owns `own`; collection must skip that cell in the guard.
 struct InPlaceCollector {
     engine: std::sync::Weak<BexEngine>,
     own: usize,
@@ -1082,6 +1080,7 @@ pub struct BexEngine {
     checking_gc: AtomicBool,
     /// Set when compiled code collected in place; its awaited tail is owed.
     gc_followup: AtomicBool,
+    has_native_bodies: bool,
     /// Used to notify long-running threads that they should park the VM even if they aren't at a typical yield point.
     #[cfg(not(target_arch = "wasm32"))]
     park_requested: Arc<AtomicBool>,
@@ -1821,6 +1820,8 @@ impl BexEngine {
         // The init order, before the executable is consumed.
         let init_order = bytecode_program.init_order.clone();
 
+        let has_native_bodies = native_bodies.is_some();
+
         // Convert the pure bytecode to a VM-ready program with native functions attached
         let bytecode = bex_vm::vm::convert_program_with_natives(
             bytecode_program,
@@ -2029,8 +2030,9 @@ impl BexEngine {
                 // bytecode, but events and GC safepoints may still yield.
                 loop {
                     let state = vm.exec();
-                    // There is no live-output subscriber during $init.
-                    vm.pending_logs.clear();
+                    if has_native_bodies {
+                        vm.pending_logs.clear();
+                    }
                     match state {
                         Ok(VmExecState::Complete(_)) => {
                             if let Some(telemetry) = &telemetry {
@@ -2225,6 +2227,7 @@ impl BexEngine {
             heap_permit_manager,
             checking_gc: AtomicBool::new(false),
             gc_followup: AtomicBool::new(false),
+            has_native_bodies,
             #[cfg(not(target_arch = "wasm32"))]
             park_requested,
             active_calls: Mutex::new(HashMap::new()),
@@ -3107,9 +3110,7 @@ impl BexEngine {
         true
     }
 
-    /// What follows a collection compiled code ran in place
-    /// ([`Self::collect_in_place`]), run with no permit held, as
-    /// [`Self::collect_garbage_parked`] runs it after its guard drops.
+    /// Must run without an active heap permit.
     async fn collect_in_place_followup(self: &Arc<Self>) {
         if !self.gc_followup.swap(false, Ordering::AcqRel) {
             return;
@@ -4881,7 +4882,9 @@ impl BexEngine {
     /// a `SetOnce`) — calling [`Self::gc_safepoint`] there would do an
     /// extra release-and-reacquire pair around the heuristic for nothing.
     async fn maybe_collect_garbage(self: &Arc<Self>) {
-        self.collect_in_place_followup().await;
+        if self.has_native_bodies {
+            self.collect_in_place_followup().await;
+        }
         let i_am_checking = self
             .checking_gc
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
@@ -5777,28 +5780,23 @@ impl BexEngine {
         let result = async {
             let mut thread = active.as_mut().expect("active execution permit");
 
+            if self.has_native_bodies && thread.vm.compiled_collector.is_none() {
+                thread.vm.compiled_collector = Some(Arc::new(InPlaceCollector {
+                    engine: Arc::downgrade(self),
+                    own: thread.cell_id(),
+                }));
+            }
             loop {
-                // A collection compiled code ran in place leaves its awaited
-                // tail to here, between `exec` calls, with no permit held.
-                if self.gc_followup.load(Ordering::Acquire) {
+                if self.has_native_bodies && self.gc_followup.load(Ordering::Acquire) {
                     let inactive = active.take().expect("active execution permit").release();
                     self.collect_in_place_followup().await;
                     thread = active.insert(inactive.acquire().await);
-                }
-                if thread.vm.compiled_collector.is_none() {
-                    thread.vm.compiled_collector = Some(Arc::new(InPlaceCollector {
-                        engine: Arc::downgrade(self),
-                        own: thread.cell_id(),
-                    }));
                 }
                 if let Some(telemetry) = &self.telemetry {
                     telemetry.validate(&thread.vm, false);
                 }
                 let vm_exec_result = thread.vm.exec();
-                // Logs compiled code queued while it ran, in order, before
-                // whatever `exec` returned: as bytecode's `Log` would have
-                // reached here first.
-                if !thread.vm.pending_logs.is_empty() {
+                if self.has_native_bodies && !thread.vm.pending_logs.is_empty() {
                     for log in std::mem::take(&mut thread.vm.pending_logs) {
                         self.capture_baml_log_event(
                             thread,

@@ -11,13 +11,16 @@
 //! heap/container access is only sound while holding [`HeapGuard`] (all mutators
 //! parked) or during proven single-threaded setup.
 
-use ::bex_vm_types::{ForwardingMap, HeapPtr, PermitProof, RootHaver};
+use ::bex_vm_types::{HeapPtr, PermitProof, RootHaver};
 use ::core::{
     cell::UnsafeCell,
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
-use ::std::sync::{Arc, Weak};
+use ::std::{
+    collections::HashMap,
+    sync::{Arc, Weak},
+};
 
 /// The lesser of [`u32::MAX`] and [`tokio::sync::Semaphore::MAX_PERMITS`] (depends on compilation target pointer width).
 const MAX_PERMITS: u32 = {
@@ -93,10 +96,9 @@ impl<T: RootHaver> ActiveHeapPermit<T> {
     pub async fn renew(self) -> Self {
         self.release().acquire().await
     }
-    /// See [`InactiveHeapPermit::cell_id`].
     #[inline]
     pub fn cell_id(&self) -> usize {
-        self.state.cell_id()
+        Arc::as_ptr(&self.state.holder).cast::<()>() as usize
     }
 }
 impl<T: RootHaver> HeapPermit<T> for ActiveHeapPermit<T> {
@@ -157,12 +159,6 @@ impl<T: RootHaver> InactiveHeapPermit<T> {
             _permit: permit,
             _marker: PhantomData,
         }
-    }
-    /// The identity of this permit's holder cell, as a [`HeapGuard`] names
-    /// it: what [`HeapGuard::collect_roots_except`] skips.
-    #[inline]
-    pub fn cell_id(&self) -> usize {
-        Arc::as_ptr(&self.holder).cast::<()>() as usize
     }
     /// ## Safety
     ///
@@ -252,12 +248,8 @@ impl HeapPermitManager {
         }
     }
 
-    /// Exclusive access for a mutator that holds one active permit and finds
-    /// every other permit free: `None` at once if any other holder is active,
-    /// a collection is queued, or a permit is being created. The caller's own
-    /// holder stays out of the guard's reach through
-    /// [`HeapGuard::collect_roots_except`] and [`HeapGuard::forward_roots_except`],
-    /// since the caller is using it.
+    /// The caller must hold one active permit and exclude its holder cell
+    /// from root scanning and forwarding through the returned guard.
     pub fn try_park_others(&self) -> Option<HeapGuard<'_>> {
         let permits = self.active.try_acquire_many(MAX_PERMITS - 1).ok()?;
         let mut guard = self.holders.try_lock().ok()?;
@@ -289,7 +281,7 @@ impl RootHaver for HeapGuard<'_> {
             }
         }
     }
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         for permit_holder in self.guard.iter() {
             if let Some(permit_holder) = permit_holder.upgrade() {
                 let ptr = permit_holder.get();
@@ -301,8 +293,6 @@ impl RootHaver for HeapGuard<'_> {
     }
 }
 impl HeapGuard<'_> {
-    /// [`RootHaver::collect_roots`] of every holder but the one whose cell is
-    /// `skip` ([`InactiveHeapPermit::cell_id`]).
     pub fn collect_roots_except(&self, skip: usize, roots: &mut Vec<HeapPtr>) {
         for permit_holder in self.guard.iter() {
             if Weak::as_ptr(permit_holder).cast::<()>() as usize == skip {
@@ -316,9 +306,7 @@ impl HeapGuard<'_> {
             }
         }
     }
-    /// [`RootHaver::forward_roots`] of every holder but the one whose cell is
-    /// `skip`.
-    pub fn forward_roots_except(&mut self, skip: usize, roots: &ForwardingMap) {
+    pub fn forward_roots_except(&mut self, skip: usize, roots: &HashMap<HeapPtr, HeapPtr>) {
         for permit_holder in self.guard.iter() {
             if Weak::as_ptr(permit_holder).cast::<()>() as usize == skip {
                 continue;
