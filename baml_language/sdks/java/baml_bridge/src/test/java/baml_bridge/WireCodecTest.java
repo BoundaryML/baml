@@ -1829,6 +1829,40 @@ class WireCodecTest {
         assertArrayEquals(expected.toByteArray(), got);
     }
 
+    /**
+     * A class instance states its own class. A bag that names another class for
+     * the slot is refused host-side, rather than stated over the instance and
+     * built by the engine out of the instance's fields.
+     */
+    @Test
+    void encode_call_args_explicit_class_refuses_an_instance_of_another_class() {
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoWriter.encodeCallFunctionArgs(
+                        new String[] {"x"},
+                        new Object[] {new BamlTypedValue(new Resume("Alice", 30L), BamlType.typeVar("T"))},
+                        5L,
+                        BamlTypes.of("T", BamlType.classByFqn(BOX_FQN))));
+        assertEquals(
+                "cannot encode argument 'x': a " + RESUME_FQN + " instance is not a " + BOX_FQN,
+                ex.getMessage());
+    }
+
+    /**
+     * An instance bound to its type arguments states them under a slot of its
+     * class, even where the bag names others: they are the instance's own, and
+     * the engine judges them against the slot.
+     */
+    @Test
+    void encode_bound_instance_states_its_own_type_args_under_an_explicit_class() {
+        Shapes shapes = new Shapes(List.of(1L));
+        TypeRegistry.bindTypeArgs(shapes, List.of(BamlType.INT));
+        byte[] got = ProtoWriter.encodeInboundValue(
+                new BamlTypedValue(shapes, BamlType.classByFqn(SHAPES_FQN, BamlType.STRING)));
+        assertArrayEquals(
+                BamlType.classByFqn(SHAPES_FQN, BamlType.INT).toWireTy(), valueTypeOf(got));
+    }
+
     /** Regression pin: no bag → byte-identical to the pre-generics 3-arg encoding. */
     @Test
     void encode_call_args_without_type_args_is_byte_identical() {

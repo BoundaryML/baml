@@ -53,6 +53,7 @@ import baml_sdk.generic_tests.GenericRecursive;
 import baml_sdk.generic_tests.GenericTriple;
 import baml_sdk.generic_tests.NamedStatic;
 import baml_sdk.generic_tests.StringIntPair;
+import baml_sdk.raises_test.ParseError;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -104,6 +105,28 @@ class TestGenericCalls {
                                         BamlType.of(GenericBox.class, BamlType.STRING),
                                         BamlType.FLOAT,
                                         BamlType.BOOL))));
+    }
+
+    @Test
+    void test_generic_calls_identity_explicit_class_cannot_restate_an_instance() {
+        // An instance states its own class. Naming another class for `T` does
+        // not make the engine build that class out of the instance's fields,
+        // even when the two classes have the same fields.
+        ParseError error = new ParseError("boom");
+        IllegalArgumentException ex =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () ->
+                                Fns.<Object>identity(
+                                        error,
+                                        BamlTypes.of(
+                                                "T",
+                                                BamlType.classByFqn(
+                                                        "user.method_self_edges.MethodSelfError"))));
+        String message = String.valueOf(ex.getMessage());
+        assertTrue(message.contains("'x'"), message);
+        assertTrue(message.contains("user.raises_test.ParseError"), message);
+        assertTrue(message.contains("user.method_self_edges.MethodSelfError"), message);
     }
 
     @Test

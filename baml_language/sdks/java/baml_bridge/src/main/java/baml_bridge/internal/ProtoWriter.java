@@ -425,19 +425,26 @@ public final class ProtoWriter {
             if (cw == null) {
                 throw unsupported(value);
             }
-            // A class node states the slot's class type where the slot fixes
-            // one, and its fields are encoded under that type's arguments;
-            // otherwise it states the instance's own type.
+            // An instance states its own class, never the slot's: classes are
+            // nominal, so a slot of another class (one an explicit type
+            // argument named) cannot take it, and stating that class would
+            // have the engine build one out of this instance's fields.
             List<BamlType> typeArgs;
             if (contextualType != null
                     && contextualType.kind() == BamlType.Kind.CLASS
                     && isExact(contextualType)) {
-                w.writeMessage(IV_VALUE_TYPE, contextualType.toWireTy());
-                typeArgs = contextualType.classTypeArgs();
+                if (!cw.fqn.equals(contextualType.fqn())) {
+                    throw new UnsupportedInboundTypeException(
+                            "a " + cw.fqn + " instance is not a " + contextualType);
+                }
+                // Java erases type arguments: the ones the instance was bound
+                // with are its own, and an unbound instance takes the slot's.
+                List<BamlType> bound = TypeRegistry.typeArgsOf(value);
+                typeArgs = bound.isEmpty() ? contextualType.classTypeArgs() : bound;
             } else {
                 typeArgs = instanceTypeArgs(value, cw);
-                writeClassType(w, cw.fqn, typeArgs);
             }
+            writeClassType(w, cw.fqn, typeArgs);
             w.writeMessage(IV_CLASS, encodeClass(cw, typeArgs));
         }
         // A container's natural type can mention a type variable (from a slot
