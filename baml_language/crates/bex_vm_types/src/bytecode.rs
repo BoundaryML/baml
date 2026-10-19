@@ -2113,12 +2113,17 @@ pub struct DebugLocalScope {
 /// transfers control to `handler_pc`, with the exception value stored
 /// in the frame-local slot `error_slot`.
 ///
+/// Each catch clause has its own handler PC, including clauses written in a
+/// chain. The first clause's handler body is protected by the next clause's
+/// handler, just as for explicitly nested catches. A function's table stores
+/// the distinct clauses' entries together; they are never flattened into one
+/// dispatch handler.
+///
 /// One catch region contributes one entry per coalesced run of its protected
 /// blocks (block layout can fragment a region across non-contiguous PCs), so
-/// several entries may share a `handler_pc`. Entries are stably sorted by
-/// `start_pc`; the VM picks the innermost covering entry by largest
-/// `start_pc`, then smallest `end_pc`, then latest table order (identical
-/// ranges are emitted outer-region-first).
+/// several entries may share a `handler_pc`. Each emitted block records its
+/// innermost unwind target, giving disjoint ranges sorted by `start_pc`.
+/// Adjacent ranges coalesce only when they name the same handler.
 ///
 /// All exceptions (user-thrown values and VM panics) are routed to the
 /// handler. The handler bytecode is responsible for filtering: a wildcard arm

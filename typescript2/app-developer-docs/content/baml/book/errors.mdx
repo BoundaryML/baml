@@ -440,7 +440,7 @@ Unlike `match`, `catch` is intentionally non-exhaustive. You can handle the erro
 
 `catch (e)` binds the thrown value. In the `BadToolInput` arm, `e` is a `BadToolInput`, so you can read its `message` field. An unmatched `ToolUnavailable` or `baml.errors.InvalidArgument` continues to the caller, which is why both remain in the function's `throws` contract.
 
-You can chain clauses: `f() catch (e) { A => … } catch_all (e2) { _ => … }`. Every clause handles errors from `f()`, tried in order; an error thrown from inside an arm continues to the caller rather than to a later clause.
+Put alternative handlers in one block, using `catch_all` when that block must cover every ordinary error. Chain catches for successive recovery stages: `f() catch (e) { A => recover() } catch_all (e2) { _ => fallback }` means `(f() catch (e) { A => recover() }) catch_all (e2) { _ => fallback }`. The later clause handles both errors left unhandled by the first clause and errors thrown by `recover()`. Throws from an arm bypass sibling arms in its own block. When an earlier handler completes normally, later handlers do not run.
 
 ## Handle every error
 

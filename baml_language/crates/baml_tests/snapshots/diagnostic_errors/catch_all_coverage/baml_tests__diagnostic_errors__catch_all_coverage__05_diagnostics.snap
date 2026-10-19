@@ -86,3 +86,39 @@ source: crates/baml_tests/src/generated_tests.rs
  120 │ │           baml.panics.IndexOutOfBounds { index: 0 } => "index 0",
  121 │ ╰─▶     }
      ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all on type int; missing: int
+     ╭─[catch_all_coverage.baml:126:5]
+ 126 │ ╭─▶     greet(1) catch (first) {
+ 127 │ │           _ => throw 42,
+ 128 │ │       } catch_all (second) {
+ 129 │ │           string => "not the replacement type",
+ 130 │ ╰─▶     }
+     ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+     ╭─[catch_all_coverage.baml:129:19]
+ 129 │         string => "not the replacement type",
+     ·                   ──────────────────────────
+     ╰────
+
+  [type] E0096
+
+  × declared throws is `never`, but this function may also throw `int`
+     ╭─[catch_all_coverage.baml:135:5]
+ 135 │ ╭─▶     greet(1) catch (first) {
+ 136 │ │           _ => throw 42,
+ 137 │ ╰─▶     } catch (second) {
+     ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+     ╭─[catch_all_coverage.baml:138:19]
+ 138 │         string => "not the replacement type",
+     ·                   ──────────────────────────
+     ╰────

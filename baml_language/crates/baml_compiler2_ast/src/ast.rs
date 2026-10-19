@@ -899,9 +899,11 @@ pub enum Expr {
         scrutinee: ExprId,
         pattern: PatId,
     },
+    /// One protected expression and one handler. Chained catches nest these
+    /// nodes, so a later handler also protects earlier handler bodies.
     Catch {
         base: ExprId,
-        clauses: Vec<CatchClause>,
+        clause: CatchClause,
     },
     Throw {
         value: ExprId,
@@ -1415,8 +1417,8 @@ pub struct MatchArm {
     pub body: ExprId,
 }
 
-/// The three catch clause keywords. They share one implementation in every
-/// phase; a kind only selects the [`CatchClauseKind::requires_error_coverage`]
+/// Every catch clause creates its own protected expression and handler. The
+/// three keywords select the [`CatchClauseKind::requires_error_coverage`]
 /// and [`CatchClauseKind::wildcard_traps_panics`] policies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CatchClauseKind {
@@ -1441,7 +1443,7 @@ impl CatchClauseKind {
     }
 
     /// Whether the clause's arms must cover every error that reaches it
-    /// (E0062 otherwise). Nothing the clause receives propagates past it.
+    /// (E0062 otherwise). The clause's own arm-body errors may still propagate.
     pub fn requires_error_coverage(self) -> bool {
         !matches!(self, CatchClauseKind::Catch)
     }

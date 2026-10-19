@@ -6134,9 +6134,8 @@ impl<'db> LoweringContext<'db> {
                 self.builder.set_current_block(bb_join);
             }
 
-            AstExpr::Catch { base, clauses } => {
-                let clauses_owned = clauses;
-                self.lower_catch(expr_id, base, &clauses_owned, &dest)?;
+            AstExpr::Catch { base, clause } => {
+                self.lower_catch(expr_id, base, &clause, &dest)?;
             }
 
             AstExpr::Throw { value } => {
@@ -14684,7 +14683,7 @@ impl LoweringContext<'_> {
         &mut self,
         _expr_id: AstExprId,
         base: AstExprId,
-        clauses: &[baml_compiler2_ast::CatchClause],
+        clause: &baml_compiler2_ast::CatchClause,
         dest: &Place,
     ) -> Lowered<()> {
         /// A clause's own bindings — `catch (e)` / `catch (e, trace)` — by
@@ -14734,25 +14733,19 @@ impl LoweringContext<'_> {
 
         let bb_join = self.builder.create_block();
 
-        // Use the user-provided binding name (e.g. `e` from `catch (e)`) so it
-        // shows up in bytecode instead of an anonymous `_N` temp. Only do this
-        // for single-clause catches with a non-captured binding.
-        let single_clause_binding_name = match clauses {
-            [clause] => self.body.patterns[clause.binding]
-                .binding_name(&self.body.patterns)
-                .cloned()
-                .filter(|name| {
-                    !self.pattern_binding_is_captured(
-                        clause.binding,
-                        DefinitionSite::CatchBinding(clause.binding),
-                        name,
-                    )
-                }),
-            _ => None,
-        };
-        let error_local =
-            self.builder
-                .declare_local(single_clause_binding_name, RuntimeTy::Unknown, None);
+        let binding_name = self.body.patterns[clause.binding]
+            .binding_name(&self.body.patterns)
+            .cloned()
+            .filter(|name| {
+                !self.pattern_binding_is_captured(
+                    clause.binding,
+                    DefinitionSite::CatchBinding(clause.binding),
+                    name,
+                )
+            });
+        let error_local = self
+            .builder
+            .declare_local(binding_name, RuntimeTy::Unknown, None);
 
         // Every landing receives the caught error's context, bound or not: a
         // rethrow from an arm carries it, and a throw during an arm takes it
@@ -14767,35 +14760,29 @@ impl LoweringContext<'_> {
             context_local,
         });
 
-        let clause_bindings: Vec<ClauseBindings> = clauses
+        let name_of = |pattern: AstPatId| {
+            self.body.patterns[pattern]
+                .binding_name(&self.body.patterns)
+                .cloned()
+                .map(|name| (name, pattern))
+        };
+        let clause_bindings = ClauseBindings {
+            error: name_of(clause.binding),
+            stack_trace: clause.stack_trace_binding.and_then(name_of),
+        };
+        let arms: Vec<_> = clause
+            .arms
             .iter()
-            .map(|clause| {
-                let name_of = |pattern: AstPatId| {
-                    self.body.patterns[pattern]
-                        .binding_name(&self.body.patterns)
-                        .cloned()
-                        .map(|name| (name, pattern))
-                };
-                ClauseBindings {
-                    error: name_of(clause.binding),
-                    stack_trace: clause.stack_trace_binding.and_then(name_of),
-                }
+            .map(|&id| {
+                let arm = self.body.catch_arms[id].clone();
+                let skips_panics = self.is_irrefutable_catch_all(arm.pattern)
+                    && !clause.kind.wildcard_traps_panics();
+                (arm, skips_panics)
             })
             .collect();
 
-        // Flatten all arms from all clauses into one dispatch, in source
-        // order (blocks created lazily below). Every clause kind shares it;
-        // a kind only decides whether its wildcard arms skip panics.
-        let mut arms: Vec<(baml_compiler2_ast::CatchArm, bool, usize)> = Vec::new();
-        for (clause_idx, clause) in clauses.iter().enumerate() {
-            for &arm_id in &clause.arms {
-                let arm = self.body.catch_arms[arm_id].clone();
-                let skips_panics = self.is_irrefutable_catch_all(arm.pattern)
-                    && !clause.kind.wildcard_traps_panics();
-                arms.push((arm, skips_panics, clause_idx));
-            }
-        }
-
+        // A chained catch is a nested base. Its own landing and arm blocks
+        // are protected by this handler; its base uses its own handler.
         // The try body unwinds to `bb_handler`; what follows the catch
         // expression unwinds to the outer handler again.
         let outer_unwind = self.builder.unwind();
@@ -14811,7 +14798,7 @@ impl LoweringContext<'_> {
         // Switch on Rvalue::TypeTag instead of a sequential is_type chain.
         let switch_arms: Vec<(AstPatId, AstExprId, Option<AstExprId>)> = arms
             .iter()
-            .map(|(arm, _, _)| (arm.pattern, arm.body, None))
+            .map(|(arm, _)| (arm.pattern, arm.body, None))
             .collect();
         // The arms are lowered out of line in `bb_handler`, unwinding to the
         // outer handler, as this catch's handler body: a throw in an arm is
@@ -14820,25 +14807,23 @@ impl LoweringContext<'_> {
             self.builder
                 .begin_out_of_line(bb_handler, outer_unwind, Some(bb_handler));
         let switch_rethrow_mark = self.catch_rethrow_locals.len();
-        if let [clause] = clause_bindings.as_slice() {
-            let error_copy = install_clause_bindings(self, error_local, context_local, clause)?;
-            self.catch_rethrow_locals.push((error_local, context_local));
-            self.catch_rethrow_locals
-                .extend(error_copy.map(|copy| (copy, context_local)));
-        }
-        let lowered_as_switch = clauses.len() == 1
-            && self.try_lower_as_switch(
+        let error_copy =
+            install_clause_bindings(self, error_local, context_local, &clause_bindings)?;
+        self.catch_rethrow_locals.push((error_local, context_local));
+        self.catch_rethrow_locals
+            .extend(error_copy.map(|copy| (copy, context_local)));
+        let lowered_as_switch = self.try_lower_as_switch(
+            error_local,
+            &switch_arms,
+            dest.clone(),
+            bb_join,
+            SwitchOtherwise::Catch {
                 error_local,
-                &switch_arms,
-                dest.clone(),
-                bb_join,
-                SwitchOtherwise::Catch {
-                    error_local,
-                    context_local,
-                    wildcard_skips_panics: arms.iter().any(|(_, skips, _)| *skips),
-                },
-                None,
-            )?;
+                context_local,
+                wildcard_skips_panics: arms.iter().any(|(_, skips)| *skips),
+            },
+            None,
+        )?;
         self.catch_rethrow_locals.truncate(switch_rethrow_mark);
         if lowered_as_switch {
             self.builder.end_out_of_line(arms_out_of_line);
@@ -14851,19 +14836,12 @@ impl LoweringContext<'_> {
         // doesn't leave orphaned unterminated blocks).
         let arms_with_blocks: Vec<_> = arms
             .iter()
-            .map(|(arm, skips_panics, clause_idx)| {
-                (
-                    arm.clone(),
-                    self.builder.create_block(),
-                    *skips_panics,
-                    *clause_idx,
-                )
-            })
+            .map(|(arm, skips_panics)| (arm.clone(), self.builder.create_block(), *skips_panics))
             .collect();
 
-        for &(ref arm, body_block, skips_panics, _) in &arms_with_blocks {
-            // A panic passing over this arm tries the next one: a later
-            // clause's arm may still trap it.
+        for &(ref arm, body_block, skips_panics) in &arms_with_blocks {
+            // Try remaining arms in this handler. An unmatched value rethrows
+            // through this clause's own exception region to an outer catch.
             let bb_arm_next = self.builder.create_block();
             self.emit_catch_wildcard_entry(error_local, skips_panics, bb_arm_next);
             self.lower_pattern_test(error_local, arm.pattern, body_block, bb_arm_next)?;
@@ -14877,14 +14855,10 @@ impl LoweringContext<'_> {
         }
 
         // Lower each arm body.
-        for &(ref arm, body_block, _, clause_idx) in &arms_with_blocks {
+        for &(ref arm, body_block, _) in &arms_with_blocks {
             self.builder.set_current_block(body_block);
-            let error_copy = install_clause_bindings(
-                self,
-                error_local,
-                context_local,
-                &clause_bindings[clause_idx],
-            )?;
+            let error_copy =
+                install_clause_bindings(self, error_local, context_local, &clause_bindings)?;
             self.bind_pattern(
                 error_local,
                 arm.pattern,

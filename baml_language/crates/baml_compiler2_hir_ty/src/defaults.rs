@@ -165,29 +165,27 @@ fn collect_default_expr_forward_references(
         Expr::Is { scrutinee, .. } => {
             collect_default_expr_forward_references(*scrutinee, body, later_params, shadowed, refs);
         }
-        Expr::Catch { base, clauses } => {
+        Expr::Catch { base, clause } => {
             collect_default_expr_forward_references(*base, body, later_params, shadowed, refs);
-            for clause in clauses {
-                let clause_saved_len = shadowed.len();
-                push_pattern_bindings(clause.binding, body, shadowed);
-                if let Some(stack_trace_binding) = clause.stack_trace_binding {
-                    push_pattern_bindings(stack_trace_binding, body, shadowed);
-                }
-                for arm_id in &clause.arms {
-                    let arm = &body.catch_arms[*arm_id];
-                    let arm_saved_len = shadowed.len();
-                    push_pattern_bindings(arm.pattern, body, shadowed);
-                    collect_default_expr_forward_references(
-                        arm.body,
-                        body,
-                        later_params,
-                        shadowed,
-                        refs,
-                    );
-                    shadowed.truncate(arm_saved_len);
-                }
-                shadowed.truncate(clause_saved_len);
+            let clause_saved_len = shadowed.len();
+            push_pattern_bindings(clause.binding, body, shadowed);
+            if let Some(stack_trace_binding) = clause.stack_trace_binding {
+                push_pattern_bindings(stack_trace_binding, body, shadowed);
             }
+            for arm_id in &clause.arms {
+                let arm = &body.catch_arms[*arm_id];
+                let arm_saved_len = shadowed.len();
+                push_pattern_bindings(arm.pattern, body, shadowed);
+                collect_default_expr_forward_references(
+                    arm.body,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+                shadowed.truncate(arm_saved_len);
+            }
+            shadowed.truncate(clause_saved_len);
         }
         Expr::Throw { value } | Expr::Unary { expr: value, .. } => {
             collect_default_expr_forward_references(*value, body, later_params, shadowed, refs);

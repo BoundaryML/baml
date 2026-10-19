@@ -1,9 +1,6 @@
-// `catch`, `catch_all`, and `catch_all_panics` share one dispatch: every arm
-// of every clause in a chain is tried in source order, and a clause's kind
-// only decides whether its wildcard arms (`_`, a bare `let x`) receive
-// panics. A panic passes over a wildcard arm whose clause does not trap
-// panics and is offered to the arms after it, so a later clause in the same
-// chain can still catch it.
+// Chained catches nest left to right: each clause protects the expression
+// and handler bodies before it. Every clause has its own landing and panic
+// policy. Arms within a single clause remain alternatives.
 
 class NotFound {
     key: string,
@@ -133,9 +130,10 @@ function cc_bare_name_base() -> int {
 }
 
 function cc_bare_literal_operand() -> int {
-    1 + 1 catch (e) {
-        _ => 2,
-    }
+    1
+        + 1 catch (e) {
+            _ => 2,
+        }
 }
 
 test "a bare name or literal can be the protected expression" {
@@ -150,13 +148,354 @@ function cc_wildcard_binding_is_a_panic() -> string {
         _ => "unused",
     };
     cc_index_panic().to_string() catch_all_panics (e) {
-        let p => match (p) {
-            let oob: baml.panics.IndexOutOfBounds => "index " + oob.index.to_string(),
-            _ => "other panic",
+        let p => {
+            match (p) {
+                let oob: baml.panics.IndexOutOfBounds => "index " + oob.index.to_string(),
+                _ => "other panic",
+            }
         },
     }
 }
 
 test "a catch_all_panics wildcard binding receives the panic" {
     assert.equal(cc_wildcard_binding_is_a_panic(), "index 5")
+}
+
+// The declared closed contract also checks that the later clause consumes
+// the new error effect produced by the first handler.
+function cc_arm_throw_catch_then_catch() -> int throws never {
+    {
+        throw "original"
+    } catch (original) {
+        _ => throw 42,
+    } catch (replacement) {
+        int => 7,
+        baml.panics.Panic => -1,
+    }
+}
+
+test "arm throw from catch reaches later catch" {
+    assert.equal(cc_arm_throw_catch_then_catch(), 7)
+}
+
+// The declared closed contract also checks that the later clause consumes
+// the new error effect produced by the first handler.
+function cc_arm_throw_catch_then_catch_all() -> int throws never {
+    {
+        throw "original"
+    } catch (original) {
+        _ => throw 42,
+    } catch_all (replacement) {
+        int => 7,
+        baml.panics.Panic => -1,
+    }
+}
+
+test "arm throw from catch reaches later catch_all" {
+    assert.equal(cc_arm_throw_catch_then_catch_all(), 7)
+}
+
+// The declared closed contract also checks that the later clause consumes
+// the new error effect produced by the first handler.
+function cc_arm_throw_catch_then_catch_all_panics() -> int throws never {
+    {
+        throw "original"
+    } catch (original) {
+        _ => throw 42,
+    } catch_all_panics (replacement) {
+        int => 7,
+        baml.panics.Panic => -1,
+    }
+}
+
+test "arm throw from catch reaches later catch_all_panics" {
+    assert.equal(cc_arm_throw_catch_then_catch_all_panics(), 7)
+}
+
+// The declared closed contract also checks that the later clause consumes
+// the new error effect produced by the first handler.
+function cc_arm_throw_catch_all_then_catch() -> int throws never {
+    {
+        throw "original"
+    } catch_all (original) {
+        _ => throw 42,
+    } catch (replacement) {
+        int => 7,
+        baml.panics.Panic => -1,
+    }
+}
+
+test "arm throw from catch_all reaches later catch" {
+    assert.equal(cc_arm_throw_catch_all_then_catch(), 7)
+}
+
+// The declared closed contract also checks that the later clause consumes
+// the new error effect produced by the first handler.
+function cc_arm_throw_catch_all_then_catch_all() -> int throws never {
+    {
+        throw "original"
+    } catch_all (original) {
+        _ => throw 42,
+    } catch_all (replacement) {
+        int => 7,
+        baml.panics.Panic => -1,
+    }
+}
+
+test "arm throw from catch_all reaches later catch_all" {
+    assert.equal(cc_arm_throw_catch_all_then_catch_all(), 7)
+}
+
+// The declared closed contract also checks that the later clause consumes
+// the new error effect produced by the first handler.
+function cc_arm_throw_catch_all_then_catch_all_panics() -> int throws never {
+    {
+        throw "original"
+    } catch_all (original) {
+        _ => throw 42,
+    } catch_all_panics (replacement) {
+        int => 7,
+        baml.panics.Panic => -1,
+    }
+}
+
+test "arm throw from catch_all reaches later catch_all_panics" {
+    assert.equal(cc_arm_throw_catch_all_then_catch_all_panics(), 7)
+}
+
+// The declared closed contract also checks that the later clause consumes
+// the new error effect produced by the first handler.
+function cc_arm_throw_catch_all_panics_then_catch() -> int throws never {
+    {
+        throw "original"
+    } catch_all_panics (original) {
+        _ => throw 42,
+    } catch (replacement) {
+        int => 7,
+        baml.panics.Panic => -1,
+    }
+}
+
+test "arm throw from catch_all_panics reaches later catch" {
+    assert.equal(cc_arm_throw_catch_all_panics_then_catch(), 7)
+}
+
+// The declared closed contract also checks that the later clause consumes
+// the new error effect produced by the first handler.
+function cc_arm_throw_catch_all_panics_then_catch_all() -> int throws never {
+    {
+        throw "original"
+    } catch_all_panics (original) {
+        _ => throw 42,
+    } catch_all (replacement) {
+        int => 7,
+        baml.panics.Panic => -1,
+    }
+}
+
+test "arm throw from catch_all_panics reaches later catch_all" {
+    assert.equal(cc_arm_throw_catch_all_panics_then_catch_all(), 7)
+}
+
+// The declared closed contract also checks that the later clause consumes
+// the new error effect produced by the first handler.
+function cc_arm_throw_catch_all_panics_then_catch_all_panics() -> int throws never {
+    {
+        throw "original"
+    } catch_all_panics (original) {
+        _ => throw 42,
+    } catch_all_panics (replacement) {
+        int => 7,
+        baml.panics.Panic => -1,
+    }
+}
+
+test "arm throw from catch_all_panics reaches later catch_all_panics" {
+    assert.equal(cc_arm_throw_catch_all_panics_then_catch_all_panics(), 7)
+}
+
+class ChainedTimeout {
+    ms: int,
+}
+
+function cc_timeout_source() -> string {
+    throw ChainedTimeout { ms: 5 }
+}
+
+function cc_timeout_rethrow(events: string[]) -> string throws never {
+    cc_timeout_source() catch (first, first_context) {
+        ChainedTimeout => {
+            events.push("timeout handler 1");
+            throw first
+        },
+    } catch (second, second_context) {
+        ChainedTimeout => {
+            events.push("timeout handler 2");
+            let before = first_line_for_timeout(second_context);
+            if (second_context.cause != null) {
+                "unexpected cause"
+            } else {
+                before
+            }
+        },
+    }
+}
+
+function first_line_for_timeout(ctx: baml.errors.Context) -> string {
+    let frames = ctx.stack_trace.frames;
+    let origin = frames[frames.length() - 1];
+    if (origin.function_name.includes("cc_timeout_source")) {
+        "timeout error"
+    } else {
+        "lost original trace"
+    }
+}
+
+function cc_timeout_log() -> string {
+    let events: string[] = [];
+    let result = cc_timeout_rethrow(events);
+    events.join("|") + ";" + result
+}
+
+test "a chained handler rethrow runs both timeout handlers and preserves context" {
+    assert.equal(cc_timeout_log(), "timeout handler 1|timeout handler 2;timeout error")
+}
+
+function cc_panic_in_arm() -> string {
+    {
+        throw "original"
+    } catch (e) {
+        string => {
+            let xs = [1];
+            xs[5].to_string()
+        },
+    } catch_all_panics (panic, context) {
+        baml.panics.IndexOutOfBounds => {
+            match (context.cause) {
+                let cause: baml.errors.Context => cause.error.to_string(),
+                _ => "missing cause",
+            }
+        },
+        _ => "unexpected error",
+    }
+}
+
+test "a panic raised by an earlier arm reaches a later boundary with its cause" {
+    assert.equal(cc_panic_in_arm(), "original")
+}
+
+function cc_lambda_in_arm() -> string throws never {
+    {
+        throw "original"
+    } catch (first) {
+        string => {
+            let fail = () -> string throws bool {
+                throw true
+            };
+            fail()
+        },
+    } catch_all (second) {
+        bool => "lambda recovered",
+    }
+}
+
+test "a throwing lambda called by an arm reaches the next clause" {
+    assert.equal(cc_lambda_in_arm(), "lambda recovered")
+}
+
+function cc_original_or_int(n: int) -> string {
+    match (n) {
+        0 => throw "original",
+        _ => throw 1,
+    }
+}
+
+function cc_sibling_arm_does_not_catch() -> string {
+    cc_original_or_int(0) catch (e) {
+        string => throw 42,
+        int => "incorrect sibling",
+    } catch (outer) {
+        int => "later clause",
+    }
+}
+
+test "an arm throw bypasses sibling arms and reaches a later clause" {
+    assert.equal(cc_sibling_arm_does_not_catch(), "later clause")
+}
+
+function cc_successful_arm_stops() -> string {
+    {
+        throw "original"
+    } catch (first) {
+        string => "recovered",
+    } catch_all (second) {
+        _ => "incorrect later handler",
+    }
+}
+
+test "a successful earlier arm skips later handlers" {
+    assert.equal(cc_successful_arm_stops(), "recovered")
+}
+
+function cc_three_handlers() -> string throws never {
+    {
+        throw "original"
+    } catch (first) {
+        string => throw 42,
+    } catch_all (second) {
+        int => throw true,
+    } catch_all (third) {
+        bool => "third handler",
+    }
+}
+
+test "three chained handlers catch each preceding handler's errors" {
+    assert.equal(cc_three_handlers(), "third handler")
+}
+
+function cc_captured_first_binding() -> string {
+    let remembered: (() -> string throws never)? = null;
+    {
+        throw "first"
+    } catch (first) {
+        string => {
+            remembered
+                = () -> string {
+                    first
+                };
+            throw 42
+        },
+    } catch (second) {
+        int => 0,
+    };
+    match (remembered) {
+        let read: () -> string throws never => read(),
+        _ => "missing captured binding",
+    }
+}
+
+test "captured earlier clause bindings survive a later handler landing" {
+    assert.equal(cc_captured_first_binding(), "first")
+}
+
+function cc_arm_defer_before_next_handler() -> string {
+    let events: string[] = [];
+    {
+        throw "original"
+    } catch (first) {
+        string => {
+            defer { events.push("cleanup"); }
+            throw 42
+        },
+    } catch (second) {
+        int => {
+            events.push("next handler");
+            0
+        },
+    };
+    events.join("|")
+}
+
+test "a throwing arm runs its defer before the next catch handler" {
+    assert.equal(cc_arm_defer_before_next_handler(), "cleanup|next handler")
 }

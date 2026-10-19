@@ -173,12 +173,10 @@ impl<'a> AstGraphBuilder<'a> {
             } => {
                 self.visit_match(id, *scrutinee, arms);
             }
-            ast::Expr::Catch { base, clauses } => {
+            ast::Expr::Catch { base, clause } => {
                 self.visit_expr(*base);
-                for clause in clauses {
-                    for arm_id in &clause.arms {
-                        self.visit_expr(self.body.catch_arms[*arm_id].body);
-                    }
+                for arm_id in &clause.arms {
+                    self.visit_expr(self.body.catch_arms[*arm_id].body);
                 }
             }
             ast::Expr::Throw { value } => {
@@ -916,12 +914,10 @@ fn collect_callee_names_expr(body: &ast::ExprBody, id: ast::ExprId, names: &mut 
             }
         }
         ast::Expr::Is { scrutinee, .. } => collect_callee_names_expr(body, *scrutinee, names),
-        ast::Expr::Catch { base, clauses } => {
+        ast::Expr::Catch { base, clause } => {
             collect_callee_names_expr(body, *base, names);
-            for clause in clauses {
-                for arm_id in &clause.arms {
-                    collect_callee_names_expr(body, body.catch_arms[*arm_id].body, names);
-                }
+            for arm_id in &clause.arms {
+                collect_callee_names_expr(body, body.catch_arms[*arm_id].body, names);
             }
         }
         ast::Expr::Throw { value } => collect_callee_names_expr(body, *value, names),
@@ -1183,12 +1179,10 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
             format!("{}?.({})", callee_str, args_str.join(", "))
         }
         ast::Expr::Throw { value } => format!("throw {}", render_expr_compact_ast(body, *value)),
-        ast::Expr::Catch { base, clauses } => {
+        ast::Expr::Catch { base, clause } => {
             let mut out = render_expr_compact_ast(body, *base);
-            for clause in clauses {
-                let kind = clause.kind.keyword();
-                write!(out, " {kind}(...)").unwrap();
-            }
+            let kind = clause.kind.keyword();
+            write!(out, " {kind}(...)").unwrap();
             out
         }
         ast::Expr::Object {

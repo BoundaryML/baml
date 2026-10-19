@@ -120,3 +120,21 @@ function RefutablePanicArm() -> string {
         baml.panics.IndexOutOfBounds { index: 0 } => "index 0",
     }
 }
+
+// Later exhaustive handlers must cover new errors raised by preceding arms.
+function ChainMissingArmError() -> string throws never {
+    greet(1) catch (first) {
+        _ => throw 42,
+    } catch_all (second) {
+        string => "not the replacement type",
+    }
+}
+
+// A partial later catch leaves the preceding arm's error in the contract.
+function ChainPartialLeavesArmError() -> string throws never {
+    greet(1) catch (first) {
+        _ => throw 42,
+    } catch (second) {
+        string => "not the replacement type",
+    }
+}

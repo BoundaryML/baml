@@ -474,12 +474,10 @@ fn collect_catch_arm_bodies(body: &ExprBody) -> Vec<(&str, baml_compiler2_ast::E
     // Structural: a `catch` inside a lambda scopes only that lambda's rethrows.
     for node in body_nodes(body) {
         let BodyNode::Expr(id) = node else { continue };
-        if let Expr::Catch { clauses, .. } = &body.exprs[id] {
-            for clause in clauses {
-                if let Some(name) = body.patterns[clause.binding].binding_name(&body.patterns) {
-                    for &arm_id in &clause.arms {
-                        arms.push((name.as_str(), body.catch_arms[arm_id].body));
-                    }
+        if let Expr::Catch { clause, .. } = &body.exprs[id] {
+            if let Some(name) = body.patterns[clause.binding].binding_name(&body.patterns) {
+                for &arm_id in &clause.arms {
+                    arms.push((name.as_str(), body.catch_arms[arm_id].body));
                 }
             }
         }
