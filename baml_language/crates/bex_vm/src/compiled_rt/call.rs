@@ -3,7 +3,7 @@
 
 use bex_vm_types::{
     HeapPtr, Object, RealizedTy, StackIndex, Value,
-    types::{ConstValue, Function},
+    types::Function,
 };
 
 use super::{CompiledBody, stack_address};
@@ -652,21 +652,6 @@ impl BexVm {
             )),
             Err(error) => Err(Box::new(error)),
         }
-    }
-
-    // ── Type tests ────────────────────────────────────────────────────────────
-
-    /// `value is T` against a type constant from the function's constant pool,
-    /// with the caller's resolved generic type arguments (empty when the
-    /// enclosing function is not generic).
-    pub fn value_is_type(
-        &self,
-        type_args: &[RealizedTy],
-        value: Value,
-        raw_const: &ConstValue,
-        resolved_const: Value,
-    ) -> Result<bool, VmInternalError> {
-        self.value_matches_type_constant_with_type_args(type_args, value, raw_const, resolved_const)
     }
 }
 

@@ -39,65 +39,12 @@ impl BexVm {
         }
     }
 
-    /// `int - int`, overflow-checked into the i63 range.
-    #[inline]
-    pub fn sub_int(&mut self, l: Value, r: Value) -> Result<Value, VmError> {
-        match Value::tagged_int_sub_checked(l, r) {
-            Some(v) => Ok(v),
-            None => Err(self.tagged_int_overflow(l, '-', r)),
-        }
-    }
-
-    /// `int * int` on raw operands, overflow-checked.
-    #[inline]
-    pub fn mul_int(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        self.int_arith_result(l.checked_mul(r), l, '*', r)
-    }
-
-    /// `int / int` on raw operands. A zero divisor throws `DivisionByZero`;
-    /// `INT_MIN / -1` throws `IntegerOverflow`.
-    #[inline]
-    pub fn div_int(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        if r == 0 {
-            return Err(self.division_by_zero(l, r));
-        }
-        self.finish_int(l / r, l, '/', r)
-    }
-
-    /// `int % int` on raw operands. A zero divisor throws `DivisionByZero`.
-    #[inline]
-    pub fn mod_int(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        if r == 0 {
-            return Err(self.division_by_zero(l, r));
-        }
-        self.finish_int(l % r, l, '%', r)
-    }
-
-    /// `int << int` with the i63 semantics constant folding uses.
-    #[inline]
-    pub fn shl_int(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        self.int_shl(l, r)
-    }
-
-    /// `int >> int` with the i63 semantics constant folding uses.
-    #[inline]
-    pub fn shr_int(&mut self, l: i64, r: i64) -> Result<Value, VmError> {
-        self.int_shr(l, r)
-    }
-
     /// Box a float result. Floats live on the heap behind a `HeapPtr`; compiled
     /// code keeps raw `f64` locals and boxes only when a value crosses into
     /// `Value` form.
     #[inline]
     pub fn float_value(&mut self, f: f64) -> Value {
         Value::object(self.alloc_float(f))
-    }
-
-    /// Unbox a heap float. `None` for any other value, including ints.
-    #[inline]
-    #[must_use]
-    pub fn float_of(value: Value) -> Option<f64> {
-        value_as_float(value)
     }
 
     /// Unary minus over `int`, `float`, and `bigint`.
