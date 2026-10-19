@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 924. IDs with complete required parity: 190. Required gaps: 5072.
+Distinct exact test IDs: 931. IDs with complete required parity: 190. Required gaps: 5133.
 
-Baseline ratchet: WORSE. Required gaps: 5072 (baseline: 4949). Present declarations: 2481 (baseline: 2439). Newly missing required pairs: 151. Resolved baseline gaps: 28. Weakened requirements: 0.
+Baseline ratchet: WORSE. Required gaps: 5133 (baseline: 5072). Present declarations: 2491 (baseline: 2481). Newly missing required pairs: 65. Resolved baseline gaps: 4. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -21,7 +21,7 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | rust | 230 / 448 | 51.3% |
 | go | 14 / 448 | 3.1% |
 | java | 300 / 448 | 67.0% |
-| swift | 182 / 448 | 40.6% |
+| swift | 185 / 448 | 41.3% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -189,13 +189,14 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_calls_choose_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_consume_int_wrapper_baseline | y | - | - | - | - | - | y | - | y | y | all |  |
 | function_calls/generic_calls_extract_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
-| function_calls/generic_calls_generic_free_fn_requires_binding | y | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/generic_calls_generic_free_fn_requires_binding | y | - | - | - | - | - | y | - | y | y | all |  |
 | function_calls/generic_calls_generic_static_infers_binding | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_genericbox_get_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_genericbox_new_static_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_genericbox_pair_with_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_identity_async_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_identity_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance | - | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_calls_instance_method_unparameterized_receiver_raises | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_list_head_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_make_int_box_reified | y | - | - | - | - | - | y | - | y | y | all |  |
@@ -204,14 +205,17 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_calls_make_nested_box_reified | y | - | - | - | - | - | y | - | y | y | all |  |
 | function_calls/generic_calls_make_triple_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_named_static_distinct_typevar_names | y | - | - | - | - | - | y | - | y | - | all |  |
-| function_calls/generic_calls_one_type_arg_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
-| function_calls/generic_calls_parse_as_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/generic_calls_one_type_arg_explicit | y | - | - | - | - | - | y | - | y | y | all |  |
+| function_calls/generic_calls_optional_only_unset_names_its_type_arg | - | - | - | - | - | - | - | - | - | y | all |  |
+| function_calls/generic_calls_parse_as_explicit | y | - | - | - | - | - | y | - | y | y | all |  |
 | function_calls/generic_calls_read_items_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_second_of_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_subscript_wrong_arity_raises | y | - | - | - | - | - | y | - | y | - | all |  |
 | function_calls/generic_calls_tag_or_value_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
-| function_calls/generic_calls_two_type_args_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/generic_calls_two_type_args_explicit | y | - | - | - | - | - | y | - | y | y | all |  |
 | function_calls/generic_calls_wrap_explicit | y | - | - | - | - | - | y | - | y | - | all |  |
+| function_calls/generic_class_instantiated_at_int | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/generic_class_with_a_json_field_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_classes_containers_and_concrete_outputs | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_identity_accepts_nested_dynamic_containers | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/generic_identity_inference_and_explicit_types | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -229,7 +233,7 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_inference_elem_type_three_way_heterogeneous_array_unifies | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_extract_fully_unbound_nested_pair_recovers_all_vars | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_extract_infers_four_typevars_from_nesting | y | - | - | - | - | - | - | - | y | y | all |  |
-| function_calls/generic_inference_first_or_empty_list_requires_binding | y | - | - | - | - | - | - | - | y | - | python_pydantic2, java | a dynamic host has no static element type for an empty container; the typed SDKs state theirs and round-trip |
+| function_calls/generic_inference_first_or_empty_list_requires_binding | y | - | - | - | - | - | - | - | y | y | python_pydantic2, java, swift | a dynamic host has no static element type for an empty container; the typed SDKs state theirs and round-trip |
 | function_calls/generic_inference_first_or_empty_list_round_trips_none | - | - | - | - | - | - | - | - | - | y | all |  |
 | function_calls/generic_inference_first_or_nonempty_infers_element | y | - | - | - | - | - | - | - | y | y | all |  |
 | function_calls/generic_inference_generic_static_infers_own_typevar | y | - | - | - | - | - | - | - | y | y | all |  |
@@ -274,8 +278,10 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_inference_triple_choose_join_includes_enum_variant | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_triple_choose_three_covariant_join | y | - | - | - | - | - | - | - | y | y | all |  |
 | function_calls/generic_inference_two_typevar_union_is_uninferrable_rejects | y | - | - | - | - | - | - | - | y | - | all |  |
-| function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never | y | - | - | - | - | - | - | - | y | y | all |  |
-| function_calls/generic_inference_union_null_actual_binds_null | y | - | - | - | - | - | - | - | y | y | all |  |
+| function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never | y | - | - | - | - | - | - | - | y | - | all |  |
+| function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg | - | - | - | - | - | - | - | - | - | y | all |  |
+| function_calls/generic_inference_union_null_actual_binds_null | y | - | - | - | - | - | - | - | y | - | all |  |
+| function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg | - | - | - | - | - | - | - | - | - | y | all |  |
 | function_calls/generic_inference_union_with_concrete_sibling_infers_typevar | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_values_of_empty_map_requires_binding | y | - | - | - | - | - | - | - | y | - | python_pydantic2, java | a dynamic host has no static value type for an empty map; the typed SDKs state theirs and round-trip |
 | function_calls/generic_inference_values_of_empty_map_round_trips_empty_list | - | - | - | - | - | - | - | - | - | y | all |  |
@@ -508,6 +514,7 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | function_calls/returned_callable_accepts_controls_async | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/returned_closure_preserves_callback_error_and_remains_reusable | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/returned_closure_retains_host_callback | y | y | y | y | - | - | - | - | - | - | all |  |
+| function_calls/returned_function_is_accepted_as_an_argument | - | - | - | - | - | - | y | - | - | - | all |  |
 | function_calls/reused_callback_uses_current_async_local_storage_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node event loop, AsyncLocalStorage, or cooperative Promise cancellation |
 | function_calls/runtime_executes_the_generated_sdk_in_a_browser | - | - | y | - | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, cpp, csharp, rust, go, java, swift |  |
 | function_calls/runtime_executes_the_generated_sdk_in_node | - | y | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift |  |
@@ -646,7 +653,7 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | llm_functions/main_streaming_extract_spec_and_stream_bindings | - | - | - | - | - | - | y | - | - | - | rust | pins Rust generated streaming spec and stream binding spellings |
 | llm_functions/main_types_and_bindings_reachable | - | - | - | - | - | - | - | - | - | y | all |  |
 | llm_functions/on_event_plain_call_delivers_events | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
-| llm_functions/on_event_plain_call_delivers_llm_call_model | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
+| llm_functions/on_event_plain_call_delivers_model_call_model | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
 | llm_functions/on_event_plain_call_raising_listener_does_not_fail | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
 | llm_functions/on_event_stream_delivers_settle_events | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
 | llm_functions/on_event_stream_raising_listener_does_not_fail | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
@@ -954,186 +961,76 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 
 ### Newly missing required pairs
 
-- `function_calls/empty_json_containers_round_trip` in `cpp`
-- `function_calls/empty_json_containers_round_trip` in `csharp`
-- `function_calls/empty_json_containers_round_trip` in `go`
-- `function_calls/empty_json_containers_round_trip` in `python_pydantic2`
-- `function_calls/empty_json_containers_round_trip` in `rust`
-- `function_calls/empty_json_containers_round_trip` in `swift`
-- `function_calls/empty_json_containers_round_trip` in `typescript_node`
-- `function_calls/empty_json_containers_round_trip` in `typescript_web_chromium`
-- `function_calls/empty_json_containers_round_trip` in `typescript_web_cloudflare_workers`
-- `function_calls/generic_identity_accepts_nested_dynamic_containers` in `cpp`
-- `function_calls/generic_identity_accepts_nested_dynamic_containers` in `csharp`
-- `function_calls/generic_identity_accepts_nested_dynamic_containers` in `java`
-- `function_calls/generic_identity_accepts_nested_dynamic_containers` in `python_pydantic2`
-- `function_calls/generic_identity_accepts_nested_dynamic_containers` in `rust`
-- `function_calls/generic_identity_accepts_nested_dynamic_containers` in `swift`
-- `function_calls/generic_identity_accepts_nested_dynamic_containers` in `typescript_node`
-- `function_calls/generic_identity_accepts_nested_dynamic_containers` in `typescript_web_chromium`
-- `function_calls/generic_identity_accepts_nested_dynamic_containers` in `typescript_web_cloudflare_workers`
-- `function_calls/generic_inference_first_or_empty_list_round_trips_none` in `java`
-- `function_calls/generic_inference_first_or_empty_list_round_trips_none` in `python_pydantic2`
-- `function_calls/generic_inference_identity_null_binds_null` in `cpp`
-- `function_calls/generic_inference_identity_null_binds_null` in `csharp`
-- `function_calls/generic_inference_identity_null_binds_null` in `go`
-- `function_calls/generic_inference_identity_null_binds_null` in `rust`
-- `function_calls/generic_inference_identity_null_binds_null` in `typescript_node`
-- `function_calls/generic_inference_identity_null_binds_null` in `typescript_web_chromium`
-- `function_calls/generic_inference_identity_null_binds_null` in `typescript_web_cloudflare_workers`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never` in `cpp`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never` in `csharp`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never` in `go`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never` in `rust`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never` in `typescript_node`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never` in `typescript_web_chromium`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never` in `typescript_web_cloudflare_workers`
-- `function_calls/generic_inference_union_null_actual_binds_null` in `cpp`
-- `function_calls/generic_inference_union_null_actual_binds_null` in `csharp`
-- `function_calls/generic_inference_union_null_actual_binds_null` in `go`
-- `function_calls/generic_inference_union_null_actual_binds_null` in `rust`
-- `function_calls/generic_inference_union_null_actual_binds_null` in `typescript_node`
-- `function_calls/generic_inference_union_null_actual_binds_null` in `typescript_web_chromium`
-- `function_calls/generic_inference_union_null_actual_binds_null` in `typescript_web_cloudflare_workers`
-- `function_calls/generic_inference_values_of_empty_map_round_trips_empty_list` in `java`
-- `function_calls/generic_inference_values_of_empty_map_round_trips_empty_list` in `python_pydantic2`
-- `function_calls/host_callable_failure_under_open_throws_is_catchable` in `cpp`
-- `function_calls/host_callable_failure_under_open_throws_is_catchable` in `csharp`
-- `function_calls/host_callable_failure_under_open_throws_is_catchable` in `java`
-- `function_calls/host_callable_failure_under_open_throws_is_catchable` in `python_pydantic2`
-- `function_calls/host_callable_failure_under_open_throws_is_catchable` in `rust`
-- `function_calls/host_callable_failure_under_open_throws_is_catchable` in `swift`
-- `function_calls/host_callable_failure_under_open_throws_is_catchable` in `typescript_node`
-- `function_calls/host_callable_failure_under_open_throws_is_catchable` in `typescript_web_chromium`
-- `function_calls/host_callable_failure_under_open_throws_is_catchable` in `typescript_web_cloudflare_workers`
-- `function_calls/host_callables_literal_union_callback_states_its_literal_types` in `cpp`
-- `function_calls/host_callables_literal_union_callback_states_its_literal_types` in `csharp`
-- `function_calls/host_callables_literal_union_callback_states_its_literal_types` in `go`
-- `function_calls/host_callables_literal_union_callback_states_its_literal_types` in `java`
-- `function_calls/host_callables_literal_union_callback_states_its_literal_types` in `python_pydantic2`
-- `function_calls/host_callables_literal_union_callback_states_its_literal_types` in `rust`
-- `function_calls/host_callables_literal_union_callback_states_its_literal_types` in `typescript_node`
-- `function_calls/host_callables_literal_union_callback_states_its_literal_types` in `typescript_web_chromium`
-- `function_calls/host_callables_literal_union_callback_states_its_literal_types` in `typescript_web_cloudflare_workers`
-- `function_calls/host_callables_media_callback_states_the_media_type` in `cpp`
-- `function_calls/host_callables_media_callback_states_the_media_type` in `csharp`
-- `function_calls/host_callables_media_callback_states_the_media_type` in `go`
-- `function_calls/host_callables_media_callback_states_the_media_type` in `java`
-- `function_calls/host_callables_media_callback_states_the_media_type` in `python_pydantic2`
-- `function_calls/host_callables_media_callback_states_the_media_type` in `rust`
-- `function_calls/host_callables_media_callback_states_the_media_type` in `typescript_node`
-- `function_calls/host_callables_media_callback_states_the_media_type` in `typescript_web_chromium`
-- `function_calls/host_callables_media_callback_states_the_media_type` in `typescript_web_cloudflare_workers`
-- `function_calls/host_callables_overlapping_container_union_callback_states_the_selected_list` in `cpp`
-- `function_calls/host_callables_overlapping_container_union_callback_states_the_selected_list` in `csharp`
-- `function_calls/host_callables_overlapping_container_union_callback_states_the_selected_list` in `go`
-- `function_calls/host_callables_overlapping_container_union_callback_states_the_selected_list` in `java`
-- `function_calls/host_callables_overlapping_container_union_callback_states_the_selected_list` in `python_pydantic2`
-- `function_calls/host_callables_overlapping_container_union_callback_states_the_selected_list` in `rust`
-- `function_calls/host_callables_overlapping_container_union_callback_states_the_selected_list` in `typescript_node`
-- `function_calls/host_callables_overlapping_container_union_callback_states_the_selected_list` in `typescript_web_chromium`
-- `function_calls/host_callables_overlapping_container_union_callback_states_the_selected_list` in `typescript_web_cloudflare_workers`
-- `function_calls/host_supplied_empty_and_null_bearing_json_containers_state_the_alias` in `cpp`
-- `function_calls/host_supplied_empty_and_null_bearing_json_containers_state_the_alias` in `csharp`
-- `function_calls/host_supplied_empty_and_null_bearing_json_containers_state_the_alias` in `go`
-- `function_calls/host_supplied_empty_and_null_bearing_json_containers_state_the_alias` in `java`
-- `function_calls/host_supplied_empty_and_null_bearing_json_containers_state_the_alias` in `python_pydantic2`
-- `function_calls/host_supplied_empty_and_null_bearing_json_containers_state_the_alias` in `rust`
-- `function_calls/host_supplied_empty_and_null_bearing_json_containers_state_the_alias` in `typescript_node`
-- `function_calls/host_supplied_empty_and_null_bearing_json_containers_state_the_alias` in `typescript_web_chromium`
-- `function_calls/host_supplied_empty_and_null_bearing_json_containers_state_the_alias` in `typescript_web_cloudflare_workers`
-- `function_calls/json_bigint_round_trips_as_bigint` in `cpp`
-- `function_calls/json_bigint_round_trips_as_bigint` in `csharp`
-- `function_calls/json_bigint_round_trips_as_bigint` in `go`
-- `function_calls/json_bigint_round_trips_as_bigint` in `python_pydantic2`
-- `function_calls/json_bigint_round_trips_as_bigint` in `rust`
-- `function_calls/json_bigint_round_trips_as_bigint` in `swift`
-- `function_calls/json_bigint_round_trips_as_bigint` in `typescript_node`
-- `function_calls/json_bigint_round_trips_as_bigint` in `typescript_web_chromium`
-- `function_calls/json_bigint_round_trips_as_bigint` in `typescript_web_cloudflare_workers`
-- `function_calls/optional_args_bigint_in_i64_range` in `cpp`
-- `function_calls/optional_args_bigint_in_i64_range` in `csharp`
-- `function_calls/optional_args_bigint_in_i64_range` in `go`
-- `function_calls/optional_args_bigint_in_i64_range` in `python_pydantic2`
-- `function_calls/optional_args_bigint_in_i64_range` in `rust`
-- `function_calls/optional_args_bigint_in_i64_range` in `swift`
-- `function_calls/optional_args_bigint_in_i64_range` in `typescript_node`
-- `function_calls/optional_args_bigint_in_i64_range` in `typescript_web_chromium`
-- `function_calls/optional_args_bigint_in_i64_range` in `typescript_web_cloudflare_workers`
-- `type_shapes/media_round_trip_image_list` in `cpp`
-- `type_shapes/media_round_trip_image_list` in `csharp`
-- `type_shapes/media_round_trip_image_list` in `go`
-- `type_shapes/media_round_trip_image_list` in `java`
-- `type_shapes/media_round_trip_image_list` in `python_pydantic2`
-- `type_shapes/media_round_trip_image_list` in `rust`
-- `type_shapes/media_round_trip_image_list` in `typescript_node`
-- `type_shapes/media_round_trip_image_list` in `typescript_web_chromium`
-- `type_shapes/media_round_trip_image_list` in `typescript_web_cloudflare_workers`
-- `type_shapes/media_round_trip_image_map` in `cpp`
-- `type_shapes/media_round_trip_image_map` in `csharp`
-- `type_shapes/media_round_trip_image_map` in `go`
-- `type_shapes/media_round_trip_image_map` in `java`
-- `type_shapes/media_round_trip_image_map` in `python_pydantic2`
-- `type_shapes/media_round_trip_image_map` in `rust`
-- `type_shapes/media_round_trip_image_map` in `typescript_node`
-- `type_shapes/media_round_trip_image_map` in `typescript_web_chromium`
-- `type_shapes/media_round_trip_image_map` in `typescript_web_cloudflare_workers`
-- `type_shapes/media_round_trip_image_or_audio` in `cpp`
-- `type_shapes/media_round_trip_image_or_audio` in `csharp`
-- `type_shapes/media_round_trip_image_or_audio` in `go`
-- `type_shapes/media_round_trip_image_or_audio` in `java`
-- `type_shapes/media_round_trip_image_or_audio` in `python_pydantic2`
-- `type_shapes/media_round_trip_image_or_audio` in `rust`
-- `type_shapes/media_round_trip_image_or_audio` in `typescript_node`
-- `type_shapes/media_round_trip_image_or_audio` in `typescript_web_chromium`
-- `type_shapes/media_round_trip_image_or_audio` in `typescript_web_cloudflare_workers`
-- `type_shapes/media_round_trip_media_shapes` in `cpp`
-- `type_shapes/media_round_trip_media_shapes` in `csharp`
-- `type_shapes/media_round_trip_media_shapes` in `go`
-- `type_shapes/media_round_trip_media_shapes` in `java`
-- `type_shapes/media_round_trip_media_shapes` in `python_pydantic2`
-- `type_shapes/media_round_trip_media_shapes` in `rust`
-- `type_shapes/media_round_trip_media_shapes` in `typescript_node`
-- `type_shapes/media_round_trip_media_shapes` in `typescript_web_chromium`
-- `type_shapes/media_round_trip_media_shapes` in `typescript_web_cloudflare_workers`
-- `type_shapes/media_round_trip_optional_image_list` in `cpp`
-- `type_shapes/media_round_trip_optional_image_list` in `csharp`
-- `type_shapes/media_round_trip_optional_image_list` in `go`
-- `type_shapes/media_round_trip_optional_image_list` in `java`
-- `type_shapes/media_round_trip_optional_image_list` in `python_pydantic2`
-- `type_shapes/media_round_trip_optional_image_list` in `rust`
-- `type_shapes/media_round_trip_optional_image_list` in `typescript_node`
-- `type_shapes/media_round_trip_optional_image_list` in `typescript_web_chromium`
-- `type_shapes/media_round_trip_optional_image_list` in `typescript_web_cloudflare_workers`
+- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `cpp`
+- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `csharp`
+- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `go`
+- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `python_pydantic2`
+- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `rust`
+- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `swift`
+- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `typescript_node`
+- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `typescript_web_chromium`
+- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `typescript_web_cloudflare_workers`
+- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `cpp`
+- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `csharp`
+- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `go`
+- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `java`
+- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `python_pydantic2`
+- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `rust`
+- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `typescript_node`
+- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `typescript_web_chromium`
+- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `typescript_web_cloudflare_workers`
+- `function_calls/generic_class_instantiated_at_int` in `cpp`
+- `function_calls/generic_class_instantiated_at_int` in `csharp`
+- `function_calls/generic_class_instantiated_at_int` in `java`
+- `function_calls/generic_class_instantiated_at_int` in `python_pydantic2`
+- `function_calls/generic_class_instantiated_at_int` in `rust`
+- `function_calls/generic_class_instantiated_at_int` in `swift`
+- `function_calls/generic_class_instantiated_at_int` in `typescript_node`
+- `function_calls/generic_class_instantiated_at_int` in `typescript_web_chromium`
+- `function_calls/generic_class_instantiated_at_int` in `typescript_web_cloudflare_workers`
+- `function_calls/generic_class_with_a_json_field_round_trips` in `cpp`
+- `function_calls/generic_class_with_a_json_field_round_trips` in `csharp`
+- `function_calls/generic_class_with_a_json_field_round_trips` in `java`
+- `function_calls/generic_class_with_a_json_field_round_trips` in `python_pydantic2`
+- `function_calls/generic_class_with_a_json_field_round_trips` in `rust`
+- `function_calls/generic_class_with_a_json_field_round_trips` in `swift`
+- `function_calls/generic_class_with_a_json_field_round_trips` in `typescript_node`
+- `function_calls/generic_class_with_a_json_field_round_trips` in `typescript_web_chromium`
+- `function_calls/generic_class_with_a_json_field_round_trips` in `typescript_web_cloudflare_workers`
+- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never` in `swift`
+- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `cpp`
+- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `csharp`
+- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `go`
+- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `java`
+- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `python_pydantic2`
+- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `rust`
+- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `typescript_node`
+- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `typescript_web_chromium`
+- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `typescript_web_cloudflare_workers`
+- `function_calls/generic_inference_union_null_actual_binds_null` in `swift`
+- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `cpp`
+- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `csharp`
+- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `go`
+- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `java`
+- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `python_pydantic2`
+- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `rust`
+- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `typescript_node`
+- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `typescript_web_chromium`
+- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `typescript_web_cloudflare_workers`
+- `function_calls/returned_function_is_accepted_as_an_argument` in `cpp`
+- `function_calls/returned_function_is_accepted_as_an_argument` in `csharp`
+- `function_calls/returned_function_is_accepted_as_an_argument` in `go`
+- `function_calls/returned_function_is_accepted_as_an_argument` in `java`
+- `function_calls/returned_function_is_accepted_as_an_argument` in `python_pydantic2`
+- `function_calls/returned_function_is_accepted_as_an_argument` in `swift`
+- `function_calls/returned_function_is_accepted_as_an_argument` in `typescript_node`
+- `function_calls/returned_function_is_accepted_as_an_argument` in `typescript_web_chromium`
+- `function_calls/returned_function_is_accepted_as_an_argument` in `typescript_web_cloudflare_workers`
 
 ### Resolved baseline gaps
 
-- `function_calls/generic_inference_identity_null_round_trips` in `cpp`
-- `function_calls/generic_inference_identity_null_round_trips` in `csharp`
-- `function_calls/generic_inference_identity_null_round_trips` in `go`
-- `function_calls/generic_inference_identity_null_round_trips` in `rust`
-- `function_calls/generic_inference_identity_null_round_trips` in `typescript_node`
-- `function_calls/generic_inference_identity_null_round_trips` in `typescript_web_chromium`
-- `function_calls/generic_inference_identity_null_round_trips` in `typescript_web_cloudflare_workers`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_rust_type` in `cpp`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_rust_type` in `csharp`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_rust_type` in `go`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_rust_type` in `rust`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_rust_type` in `typescript_node`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_rust_type` in `typescript_web_chromium`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_rust_type` in `typescript_web_cloudflare_workers`
-- `function_calls/generic_inference_union_null_actual_binds_rust_type` in `cpp`
-- `function_calls/generic_inference_union_null_actual_binds_rust_type` in `csharp`
-- `function_calls/generic_inference_union_null_actual_binds_rust_type` in `go`
-- `function_calls/generic_inference_union_null_actual_binds_rust_type` in `rust`
-- `function_calls/generic_inference_union_null_actual_binds_rust_type` in `typescript_node`
-- `function_calls/generic_inference_union_null_actual_binds_rust_type` in `typescript_web_chromium`
-- `function_calls/generic_inference_union_null_actual_binds_rust_type` in `typescript_web_cloudflare_workers`
-- `function_calls/host_callable_void_signatures` in `cpp`
-- `function_calls/host_callable_void_signatures` in `java`
-- `function_calls/host_callable_void_signatures` in `python_pydantic2`
-- `function_calls/host_callable_void_signatures` in `rust`
-- `function_calls/host_callable_void_signatures` in `typescript_node`
-- `function_calls/host_callable_void_signatures` in `typescript_web_chromium`
-- `function_calls/host_callable_void_signatures` in `typescript_web_cloudflare_workers`
+- `function_calls/generic_calls_generic_free_fn_requires_binding` in `swift`
+- `function_calls/generic_calls_one_type_arg_explicit` in `swift`
+- `function_calls/generic_calls_parse_as_explicit` in `swift`
+- `function_calls/generic_calls_two_type_args_explicit` in `swift`
 
