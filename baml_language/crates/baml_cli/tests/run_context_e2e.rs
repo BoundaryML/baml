@@ -31,7 +31,21 @@ dash = ["--function", "Check", "--", "--value", "-"]
 }
 
 fn piped_cli(project: &Path, args: &[&str], input: Option<&str>) -> Output {
-    let mut child = Command::new(common::baml_cli())
+    piped_cli_with_env_context(project, args, None, input)
+}
+
+fn piped_cli_with_env_context(
+    project: &Path,
+    args: &[&str],
+    env_context: Option<&str>,
+    input: Option<&str>,
+) -> Output {
+    let mut command = Command::new(common::baml_cli());
+    command.env_remove("BAML_CONTEXT");
+    if let Some(context) = env_context {
+        command.env("BAML_CONTEXT", context);
+    }
+    let mut child = command
         .args(args)
         .current_dir(project)
         .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
@@ -435,4 +449,43 @@ fn invalid_context_stdin_fails_before_execution() {
         assert!(output.stdout.is_empty());
         assert!(String::from_utf8_lossy(&output.stderr).contains("--context"));
     }
+}
+
+#[test]
+fn baml_context_env_applies_and_context_flag_overrides_it() {
+    let project = project();
+    assert_success(
+        &piped_cli_with_env_context(
+            project.path(),
+            &["run", "Check", "--", "--value", "env"],
+            Some(CONTEXT),
+            None,
+        ),
+        r#""env""#,
+    );
+    assert_success(
+        &piped_cli_with_env_context(
+            project.path(),
+            &[
+                "run",
+                "Check",
+                "--context",
+                CONTEXT,
+                "--",
+                "--value",
+                "flag",
+            ],
+            Some(r#"{"distinct_id":"other"}"#),
+            None,
+        ),
+        r#""flag""#,
+    );
+    let output = piped_cli_with_env_context(
+        project.path(),
+        &["run", "Check", "--", "--json-args", "-"],
+        Some("-"),
+        None,
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("only one stdin consumer"));
 }

@@ -454,3 +454,100 @@ fn pack_e2e_manifest_less_baml_src() {
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("hi, Ada"));
 }
+
+fn run_with_context(binary: &Path, args: &[&str], context: Option<&str>, stdin: &str) -> Output {
+    use std::io::Write as _;
+    let mut cmd = Command::new(binary);
+    cmd.args(args)
+        .env_remove("BAML_CONTEXT")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    if let Some(context) = context {
+        cmd.env("BAML_CONTEXT", context);
+    }
+    let mut child = cmd.spawn().expect("spawn packed binary");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(stdin.as_bytes())
+        .unwrap();
+    child.wait_with_output().unwrap()
+}
+
+/// `BAML_CONTEXT` is the packed-binary equivalent of `baml run --context`:
+/// same sources, same shape, same stdin rules, in both dispatch modes.
+#[test]
+fn pack_e2e_baml_context_env() {
+    const CONTEXT: &str = r#"{"distinct_id":"pipe-user","metadata":{"phase":"launch"}}"#;
+    let built = common::ensure_built();
+    let source = include_str!("fixtures/launch_context/baml_src/main.baml");
+    let (tmp, single) = pack_project(built, source, &["Check"]);
+    let (_multi_tmp, multi) = pack_project(built, source, &["--function", "Check"]);
+    let context_file = tmp.path().join("context.json");
+    std::fs::write(&context_file, CONTEXT).unwrap();
+    let at_file = format!("@{}", context_file.display());
+
+    let succeeds = |out: &Output, expected: &str| {
+        assert!(
+            out.status.success(),
+            "stderr: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), expected);
+    };
+    for (bin, prefix) in [(&single, &[][..]), (&multi, &["Check"][..])] {
+        let args = |rest: &[&'static str]| -> Vec<&'static str> {
+            prefix.iter().chain(rest).copied().collect()
+        };
+        for context in [CONTEXT, at_file.as_str()] {
+            succeeds(
+                &run_with_context(bin, &args(&["--value", "x"]), Some(context), ""),
+                r#""x""#,
+            );
+        }
+        succeeds(
+            &run_with_context(bin, &args(&["--value", "x"]), Some("-"), CONTEXT),
+            r#""x""#,
+        );
+        succeeds(
+            &run_with_context(
+                bin,
+                &args(&["--json-args", "-"]),
+                Some(CONTEXT),
+                r#"{"value":"json"}"#,
+            ),
+            r#""json""#,
+        );
+
+        // Help never reads the context, so an empty stdin is fine.
+        let out = run_with_context(bin, &args(&["--help"]), Some("-"), "");
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let out = run_with_context(bin, &args(&["--json-args", "-"]), Some("-"), CONTEXT);
+        assert!(!out.status.success());
+        assert!(out.stdout.is_empty());
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("only one stdin consumer"),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let out = run_with_context(bin, &args(&["--value", "x"]), Some("[]"), "");
+        assert!(!out.status.success());
+        assert!(out.stdout.is_empty());
+        assert!(String::from_utf8_lossy(&out.stderr).contains("invalid BAML_CONTEXT"));
+
+        // Unset and empty both mean no context, so the fixture's assertions fail.
+        for context in [None, Some("")] {
+            let out = run_with_context(bin, &args(&["--value", "x"]), context, "");
+            assert!(!out.status.success(), "{context:?}");
+            assert!(!String::from_utf8_lossy(&out.stderr).contains("BAML_CONTEXT"));
+        }
+    }
+}

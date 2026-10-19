@@ -22,6 +22,8 @@ bex_events = { workspace = true }
 bex_project = { workspace = true, default-features = false, features = [ "ring-crypto" ] }
 bex_vm_types = { workspace = true }
 btel_settings = { workspace = true }
+btel_types = { workspace = true }
+serde_json = { workspace = true }
 sys_native = { workspace = true, default-features = false, features = [ "bundle-http", "ring-crypto" ] }
 libsui = { workspace = true }
 tokio = { workspace = true, features = [ "rt" ] }
