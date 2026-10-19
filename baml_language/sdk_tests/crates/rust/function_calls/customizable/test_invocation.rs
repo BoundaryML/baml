@@ -454,6 +454,29 @@ mod invocation_dynamic {
             .is_err()
         );
     }
+    /// A BAML function returned to the host goes back as an argument: the
+    /// engine typed its handle, which implies the function's type.
+    #[test]
+    fn test_returned_function_is_accepted_as_an_argument() {
+        let add = invoke(
+            Target::named("user.host_callable_tests.make_adder"),
+            Arguments::from([("offset".into(), Input::new(3i64))]),
+            TypeBindings::new(),
+            BamlOptions::default(),
+        )
+        .unwrap();
+        let result = invoke(
+            Target::named("user.host_callable_tests.call_int_callback"),
+            Arguments::from([
+                ("callback".into(), Input::new(add)),
+                ("x".into(), Input::new(4i64)),
+            ]),
+            TypeBindings::new(),
+            BamlOptions::default(),
+        )
+        .unwrap();
+        assert_eq!(result.decode::<i64>().unwrap(), 7);
+    }
     #[tokio::test]
     async fn test_dynamic_name_and_handle_accept_controls_async() {
         let result = invoke_async(

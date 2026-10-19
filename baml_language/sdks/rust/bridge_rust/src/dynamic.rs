@@ -121,11 +121,17 @@ fn outbound_to_inbound(value: wire::BamlOutboundValue) -> wire::InboundValue {
         Some(Out::MediaValue(value)) => Some(In::MediaValue(value)),
         Some(Out::PromptAstValue(value)) => Some(In::PromptAstValue(value)),
         Some(Out::HandleValue(handle)) => {
-            // A handle is live and typed on the heap; only a callable, which
-            // has no type of its own, states the function type it was given.
-            value_type = handle
-                .ty
-                .filter(|ty| matches!(ty.ty, Some(wire::baml_ty::Ty::Function(_))));
+            // Every handle the engine creates is live and typed on its heap,
+            // a BAML function reference included: the type the engine sent
+            // beside it describes it, and stating it back is refused. Only a
+            // host callable has no type of its own; it goes back under the
+            // function type this process registered it with.
+            value_type = match wire::BamlHandleType::try_from(handle.handle_type) {
+                Ok(wire::BamlHandleType::HostValueCallable) => {
+                    crate::host_value::registered_function_type(handle.key)
+                }
+                _ => None,
+            };
             Some(In::Handle(wire::BamlHandle {
                 key: handle.key,
                 handle_type: handle.handle_type,
@@ -360,6 +366,56 @@ mod tests {
             entries: vec![],
         })));
         assert!(map.value_type.is_none());
+    }
+
+    /// A BAML function the engine returned implies its own type: it goes
+    /// back as a bare handle, whatever type the engine sent beside it.
+    #[test]
+    fn function_references_state_nothing() {
+        let function_type = crate::baml_value::internal::function_ty(
+            vec![crate::baml_value::internal::function_param(None, int_ty())],
+            int_ty(),
+            crate::baml_value::internal::leaf_ty(Ty::Never(wire::BamlTyNever {})),
+        );
+        let resent = outbound_to_inbound(out(Out::HandleValue(wire::BamlOutboundHandle {
+            key: 7,
+            handle_type: wire::BamlHandleType::FunctionRef as i32,
+            ty: Some(function_type),
+        })));
+        assert_eq!(resent.value_type, None);
+        assert!(matches!(
+            resent.value,
+            Some(In::Handle(wire::BamlHandle { key: 7, handle_type }))
+                if handle_type == wire::BamlHandleType::FunctionRef as i32
+        ));
+    }
+
+    /// A host callable has no type of its own: it goes back under the
+    /// function type it was registered with.
+    #[test]
+    fn host_callables_state_their_registered_type() {
+        let function_type = crate::baml_value::internal::function_ty(
+            vec![crate::baml_value::internal::function_param(None, int_ty())],
+            int_ty(),
+            crate::baml_value::internal::leaf_ty(Ty::Never(wire::BamlTyNever {})),
+        );
+        let sent = crate::host_value::callable_handle(
+            |x: i64| x + 1,
+            &[crate::HostParam {
+                name: "x",
+                optional: false,
+            }],
+            function_type.clone(),
+        );
+        let Some(In::Handle(handle)) = sent.value else {
+            panic!("a host callable is sent as a handle: {sent:?}");
+        };
+        let resent = outbound_to_inbound(out(Out::HandleValue(wire::BamlOutboundHandle {
+            key: handle.key,
+            handle_type: handle.handle_type,
+            ty: None,
+        })));
+        assert_eq!(resent.value_type, Some(function_type));
     }
 
     /// A union envelope says which member a value came out of; the value
