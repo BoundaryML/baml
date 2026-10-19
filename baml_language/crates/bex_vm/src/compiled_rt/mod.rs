@@ -52,6 +52,9 @@ use crate::{
 /// the box is paid only on throw.
 pub type CompiledBody = fn(&mut BexVm, &[Value]) -> Result<Value, Box<VmError>>;
 
+const _: () =
+    assert!(std::mem::size_of::<Result<Value, Box<VmError>>>() == 2 * std::mem::size_of::<usize>());
+
 /// A natively compiled body that can suspend: a state machine the VM drives.
 ///
 /// It keeps its arguments, every local live across a suspension and the point

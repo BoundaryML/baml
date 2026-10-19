@@ -265,9 +265,7 @@ impl BexVm {
         let name = if event_name.is_null() || event_name.is_omitted() {
             None
         } else {
-            let name = self
-                .as_string(&event_name)
-                .map_err(|error| Box::new(VmError::from(error)))?;
+            let name = self.as_string(&event_name)?;
             Some(std::sync::Arc::<str>::from(name.as_str()))
         };
         let top = self.frames.len().saturating_sub(1);
@@ -632,10 +630,7 @@ impl BexVm {
         let mut frame_idx = top;
         // SAFETY: the running compiled frame's function object lives in the
         // compile-time heap, which is never collected; see `load_function`.
-        let mut function = unsafe {
-            self.load_function(top)
-                .map_err(|error| Box::new(VmError::InternalError(error)))?
-        };
+        let mut function = unsafe { self.load_function(top)? };
         let outcome = self.compiled_caller_call(
             callee,
             locals_offset,

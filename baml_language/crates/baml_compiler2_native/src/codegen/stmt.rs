@@ -527,14 +527,13 @@ impl Generator<'_, '_> {
         Ok(out)
     }
 
-    /// Wrap a fallible expression (`Result<_, VmError>` or
-    /// `Result<_, Box<VmError>>`) for `block`: route a thrown value to the
-    /// block's handler when it has one, otherwise propagate with `?`.
+    /// Wrap a fallible expression (`Result<_, Box<VmError>>`) for `block`:
+    /// route a thrown value to its handler, otherwise propagate with `?`.
     pub(super) fn fallible(&mut self, block: BlockId, code: &str) -> Gen<String> {
         if self.body.blocks[block.0].unwind.is_none() {
             return Ok(format!("{code}?"));
         }
-        let jump = self.unwind_jump(block, "e.into()", 0)?;
+        let jump = self.unwind_jump(block, "e", 0)?;
         Ok(format!(
             "(match {code} {{ Ok(v) => v, Err(e) => {{ {jump} }} }})"
         ))

@@ -243,9 +243,8 @@ impl BexVm {
         callable: Value,
         type_args: &[RealizedTy],
     ) -> Result<Value, Box<VmError>> {
-        let callable_ptr = self
-            .as_object_ptr(callable, ObjectType::from(FunctionType::Callable))
-            .map_err(|error| Box::new(VmError::InternalError(error)))?;
+        let callable_ptr =
+            self.as_object_ptr(callable, ObjectType::from(FunctionType::Callable))?;
         let wrapped = match self.get_object(callable_ptr) {
             Object::Function(_) => Some((callable_ptr, Vec::new(), Vec::new())),
             Object::Closure(closure) => Some((

@@ -17,25 +17,25 @@ impl BexVm {
     /// specialized opcodes accept, including `bigint`, the `bigint`/`int` mix,
     /// mixed `int`/`float`, and string concatenation for `+`.
     #[inline]
-    pub fn binop(&mut self, op: BinOp, left: Value, right: Value) -> Result<Value, VmError> {
-        self.binop_values(op, left, right)
+    pub fn binop(&mut self, op: BinOp, left: Value, right: Value) -> Result<Value, Box<VmError>> {
+        self.binop_values(op, left, right).map_err(Box::new)
     }
 
     /// The generic comparison operator, total over the same operand pairs as
     /// [`Self::binop`] plus strings, byte arrays, enum variants, and `type`
     /// values.
     #[inline]
-    pub fn cmpop(&mut self, op: CmpOp, left: Value, right: Value) -> Result<Value, VmError> {
-        self.cmpop_values(op, left, right)
+    pub fn cmpop(&mut self, op: CmpOp, left: Value, right: Value) -> Result<Value, Box<VmError>> {
+        self.cmpop_values(op, left, right).map_err(Box::new)
     }
 
     /// `int + int`, overflow-checked into the i63 range. Operands are
     /// `Int`-tagged values; the hot path neither untags nor retags.
     #[inline]
-    pub fn add_int(&mut self, l: Value, r: Value) -> Result<Value, VmError> {
+    pub fn add_int(&mut self, l: Value, r: Value) -> Result<Value, Box<VmError>> {
         match Value::tagged_int_add_checked(l, r) {
             Some(v) => Ok(v),
-            None => Err(self.tagged_int_overflow(l, '+', r)),
+            None => Err(Box::new(self.tagged_int_overflow(l, '+', r))),
         }
     }
 
@@ -48,14 +48,16 @@ impl BexVm {
     }
 
     /// Unary minus over `int`, `float`, and `bigint`.
-    pub fn neg(&mut self, val: Value) -> Result<Value, VmError> {
+    pub fn neg(&mut self, val: Value) -> Result<Value, Box<VmError>> {
         if let Some(n) = val.as_int() {
             // Negating INT_MIN = -2^62 yields 2^62, which fits i64
             // (INT_MIN != i64::MIN) but not i63, so the range-check
             // in try_int catches it.
             return match Value::try_int(n.wrapping_neg()) {
                 Some(v) => Ok(v),
-                None => Err(self.integer_overflow(format!("-({n}) overflows int"))),
+                None => Err(Box::new(
+                    self.integer_overflow(format!("-({n}) overflows int")),
+                )),
             };
         }
         if let Some(n) = value_as_float(val) {
@@ -70,7 +72,7 @@ impl BexVm {
                 _ => None,
             };
             if let Some(arc) = negated {
-                return self.alloc_bigint(arc);
+                return self.alloc_bigint(arc).map_err(Box::new);
             }
         }
         Err(VmInternalError::CannotApplyUnaryOp {
@@ -98,83 +100,93 @@ impl BexVm {
 
     /// `l + r` on raw ints, overflow-checked into the i63 range.
     #[inline]
-    pub fn add_i64(&mut self, l: i64, r: i64) -> Result<i64, VmError> {
+    pub fn add_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         let v = l.wrapping_add(r);
         if Value::try_int(v).is_some() {
             Ok(v)
         } else {
-            Err(self.integer_overflow(format!("{l} + {r} overflows int")))
+            Err(Box::new(
+                self.integer_overflow(format!("{l} + {r} overflows int")),
+            ))
         }
     }
 
     /// `l - r` on raw ints, overflow-checked into the i63 range.
     #[inline]
-    pub fn sub_i64(&mut self, l: i64, r: i64) -> Result<i64, VmError> {
+    pub fn sub_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         let v = l.wrapping_sub(r);
         if Value::try_int(v).is_some() {
             Ok(v)
         } else {
-            Err(self.integer_overflow(format!("{l} - {r} overflows int")))
+            Err(Box::new(
+                self.integer_overflow(format!("{l} - {r} overflows int")),
+            ))
         }
     }
 
     /// `l * r` on raw ints, overflow-checked.
     #[inline]
-    pub fn mul_i64(&mut self, l: i64, r: i64) -> Result<i64, VmError> {
+    pub fn mul_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         match l.checked_mul(r).filter(|v| Value::try_int(*v).is_some()) {
             Some(v) => Ok(v),
-            None => Err(self.integer_overflow(format!("{l} * {r} overflows int"))),
+            None => Err(Box::new(
+                self.integer_overflow(format!("{l} * {r} overflows int")),
+            )),
         }
     }
 
     /// `l / r` on raw ints: `DivisionByZero` for a zero divisor,
     /// `IntegerOverflow` for `INT_MIN / -1`.
     #[inline]
-    pub fn div_i64(&mut self, l: i64, r: i64) -> Result<i64, VmError> {
+    pub fn div_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         if r == 0 {
-            return Err(self.division_by_zero(l, r));
+            return Err(Box::new(self.division_by_zero(l, r)));
         }
         let v = l / r;
         if Value::try_int(v).is_some() {
             Ok(v)
         } else {
-            Err(self.integer_overflow(format!("{l} / {r} overflows int")))
+            Err(Box::new(
+                self.integer_overflow(format!("{l} / {r} overflows int")),
+            ))
         }
     }
 
     /// `l % r` on raw ints: `DivisionByZero` for a zero divisor.
     #[inline]
-    pub fn mod_i64(&mut self, l: i64, r: i64) -> Result<i64, VmError> {
+    pub fn mod_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         if r == 0 {
-            return Err(self.division_by_zero(l, r));
+            return Err(Box::new(self.division_by_zero(l, r)));
         }
         Ok(l % r)
     }
 
     /// `l << r` on raw ints with the i63 semantics constant folding uses.
     #[inline]
-    pub fn shl_i64(&mut self, l: i64, r: i64) -> Result<i64, VmError> {
+    pub fn shl_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         self.int_shl(l, r)?
             .as_int()
-            .ok_or_else(|| checker_hole("int"))
+            .ok_or_else(|| Box::new(checker_hole("int")))
     }
 
     /// `l >> r` on raw ints with the i63 semantics constant folding uses.
     #[inline]
-    pub fn shr_i64(&mut self, l: i64, r: i64) -> Result<i64, VmError> {
+    pub fn shr_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         self.int_shr(l, r)?
             .as_int()
-            .ok_or_else(|| checker_hole("int"))
+            .ok_or_else(|| Box::new(checker_hole("int")))
     }
 
     /// `-n` on a raw int: `IntegerOverflow` for `INT_MIN`.
     #[inline]
-    pub fn neg_i64(&mut self, n: i64) -> Result<i64, VmError> {
+    pub fn neg_i64(&mut self, n: i64) -> Result<i64, Box<VmError>> {
         let v = n.wrapping_neg();
         if Value::try_int(v).is_some() {
             Ok(v)
         } else {
-            Err(self.integer_overflow(format!("-({n}) overflows int")))
+            Err(Box::new(
+                self.integer_overflow(format!("-({n}) overflows int")),
+            ))
         }
     }
 
