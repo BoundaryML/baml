@@ -908,8 +908,7 @@ impl<'db> Generator<'_, 'db> {
                             "a traced call without its attachment".into(),
                         ));
                     };
-                    let trace = self.operand(block, trace)?;
-                    let trace = self.value_arg(&trace.code, trace.repr);
+                    let trace = self.value_operand(block, trace)?;
                     let code = self.fallible(block, &format!("vm.set_call_trace({trace})"))?;
                     self.statement(&format!("{code};"));
                     args
@@ -1003,8 +1002,7 @@ impl<'db> Generator<'_, 'db> {
                             "a traced call without its attachment".into(),
                         ));
                     };
-                    let trace = self.operand(block, trace)?;
-                    let trace = self.value_arg(&trace.code, trace.repr);
+                    let trace = self.value_operand(block, trace)?;
                     let code = self.fallible(block, &format!("vm.set_call_trace({trace})"))?;
                     self.statement(&format!("{code};"));
                     args
@@ -1043,14 +1041,12 @@ impl<'db> Generator<'_, 'db> {
                 ("Step::Await(operand)".to_string(), Vec::new())
             }
             Terminator::AwaitAny { futures, .. } => {
-                let futures = self.operand(block, futures)?;
-                let futures = self.value_arg(&futures.code, futures.repr);
+                let futures = self.value_operand(block, futures)?;
                 self.statement(&format!("let operand = {futures};"));
                 ("Step::AwaitAny(operand)".to_string(), Vec::new())
             }
             Terminator::Spawn { plan, .. } => {
-                let plan = self.operand(block, plan)?;
-                let plan = self.value_arg(&plan.code, plan.repr);
+                let plan = self.value_operand(block, plan)?;
                 self.statement(&format!("let operand = {plan};"));
                 ("Step::Spawn(operand)".to_string(), Vec::new())
             }
@@ -1288,6 +1284,12 @@ impl<'db> Generator<'_, 'db> {
 
     /// `code`, held as `repr`, coerced to a `Value` that can be a VM call
     /// argument.
+    /// `operand` as a `Value` call argument.
+    fn value_operand(&mut self, block: BlockId, operand: &Operand<'db>) -> Gen<String> {
+        let operand = self.operand(block, operand)?;
+        Ok(self.value_arg(&operand.code, operand.repr))
+    }
+
     fn value_arg(&mut self, code: &str, repr: Repr) -> String {
         let coerced = coerce(code, repr, Repr::Value);
         self.hoist(Expr::new(coerced, Repr::Value)).code

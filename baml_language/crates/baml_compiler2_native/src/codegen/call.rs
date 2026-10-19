@@ -114,8 +114,7 @@ impl<'db> Generator<'_, 'db> {
                 return unsupported("call of a constant that is not a function");
             }
             Operand::Copy(_) | Operand::Move(_) => {
-                let value = self.operand(block, callee)?;
-                let value = self.value_arg(&value.code, value.repr);
+                let value = self.value_operand(block, callee)?;
                 format!("bex_vm::compiled_rt::callee_ptr({value})?")
             }
         };

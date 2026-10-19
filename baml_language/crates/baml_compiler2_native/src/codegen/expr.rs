@@ -48,16 +48,14 @@ impl<'db> Generator<'_, 'db> {
                 ))
             }
             Rvalue::IsTypeTag { operand, tag } => {
-                let value = self.operand(block, operand)?;
-                let value = self.value_arg(&value.code, value.repr);
+                let value = self.value_operand(block, operand)?;
                 Ok(Expr::new(
                     format!("(bex_vm::compiled_rt::type_tag({value}) == {tag}i64)"),
                     Repr::Bool,
                 ))
             }
             Rvalue::IsType { operand, test } => {
-                let value = self.operand(block, operand)?;
-                let value = self.value_arg(&value.code, value.repr);
+                let value = self.value_operand(block, operand)?;
                 let code = self.type_test(&format!("({value})"), test)?;
                 Ok(Expr::new(code, Repr::Bool))
             }
@@ -100,13 +98,10 @@ impl<'db> Generator<'_, 'db> {
                     format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
                     Repr::Value,
                 ));
+                let class = format!("{}.as_object_ptr().expect(\"class object\")", class.code);
                 if type_arg_templates.is_empty() {
                     return Ok(Expr::new(
-                        format!(
-                            "vm.new_instance({}.as_object_ptr().expect(\"class object\"), vec![{}])",
-                            class.code,
-                            values.join(", ")
-                        ),
+                        format!("vm.new_instance({class}, vec![{}])", values.join(", ")),
                         Repr::Value,
                     ));
                 }
@@ -115,8 +110,7 @@ impl<'db> Generator<'_, 'db> {
                 let type_args = self.realized_all(type_arg_templates)?;
                 Ok(Expr::new(
                     format!(
-                        "vm.new_generic_instance({}.as_object_ptr().expect(\"class object\"), Box::new([{}]), vec![{}])",
-                        class.code,
+                        "vm.new_generic_instance({class}, Box::new([{}]), vec![{}])",
                         type_args.join(", "),
                         values.join(", ")
                     ),
@@ -226,8 +220,7 @@ impl<'db> Generator<'_, 'db> {
                 let Some((object, _)) = self.index.function(self.db, *func)? else {
                     return unsupported(format!("method `{name}` not found in the program"));
                 };
-                let receiver = self.operand(block, receiver)?;
-                let receiver = self.value_arg(&receiver.code, receiver.repr);
+                let receiver = self.value_operand(block, receiver)?;
                 Ok(Expr::new(
                     format!(
                         "vm.make_bound_method(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {receiver})"
@@ -264,8 +257,7 @@ impl<'db> Generator<'_, 'db> {
                 value,
                 type_arg_templates,
             } => {
-                let value = self.operand(block, value)?;
-                let value = self.value_arg(&value.code, value.repr);
+                let value = self.value_operand(block, value)?;
                 let type_args = self.realized_all(type_arg_templates)?;
                 let code = self.fallible(
                     block,
@@ -287,8 +279,7 @@ impl<'db> Generator<'_, 'db> {
             } => {
                 let (iface, iface_args, _) = self.interface_operands(iface)?;
                 let types = self.realized_all(type_args)?;
-                let receiver = self.operand(block, receiver)?;
-                let receiver = self.value_arg(&receiver.code, receiver.repr);
+                let receiver = self.value_operand(block, receiver)?;
                 let code = self.fallible(
                     block,
                     &format!(
@@ -323,8 +314,7 @@ impl<'db> Generator<'_, 'db> {
                 ..
             } => {
                 let (iface, iface_args, _) = self.interface_operands(iface)?;
-                let receiver = self.operand(block, receiver)?;
-                let receiver = self.value_arg(&receiver.code, receiver.repr);
+                let receiver = self.value_operand(block, receiver)?;
                 let code = self.fallible(
                     block,
                     &format!(
@@ -361,8 +351,7 @@ impl<'db> Generator<'_, 'db> {
             // The bound loads as bytecode loads it (`LoadType` of the
             // constraint), then the VM's own check decides.
             Rvalue::SatisfiesBound { ty, bound } => {
-                let value = self.operand(block, ty)?;
-                let value = self.value_arg(&value.code, value.repr);
+                let value = self.value_operand(block, ty)?;
                 let template = bound.to_template();
                 let realized = self.realized(&template)?;
                 let bound = self.hoist(Expr::new(

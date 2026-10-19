@@ -211,8 +211,7 @@ impl Generator<'_, '_> {
                     let [value] = args.as_slice() else {
                         return Err(Rejection::Invalid("`BindType` takes one operand".into()));
                     };
-                    let value = self.operand(id, value)?;
-                    let value = self.value_arg(&value.code, value.repr);
+                    let value = self.value_operand(id, value)?;
                     let code =
                         self.fallible(id, &format!("vm.bind_type(depth, {slot}, {value})"))?;
                     self.statement(&format!("{code};"));
@@ -232,8 +231,7 @@ impl Generator<'_, '_> {
                     let Some(data) = args.first() else {
                         return Err(Rejection::Invalid("`log` without its data".into()));
                     };
-                    let data = self.operand(id, data)?;
-                    let data = self.value_arg(&data.code, data.repr);
+                    let data = self.value_operand(id, data)?;
                     let name = match args.get(1) {
                         Some(name) => {
                             let name = self.operand(id, name)?;
@@ -257,10 +255,8 @@ impl Generator<'_, '_> {
                     ..
                 } => {
                     let (iface, iface_args, _) = self.interface_operands(iface)?;
-                    let receiver = self.operand(id, receiver)?;
-                    let receiver = self.value_arg(&receiver.code, receiver.repr);
-                    let value = self.operand(id, value)?;
-                    let value = self.value_arg(&value.code, value.repr);
+                    let receiver = self.value_operand(id, receiver)?;
+                    let value = self.value_operand(id, value)?;
                     let code = self.fallible(
                         id,
                         &format!(
@@ -387,10 +383,8 @@ impl Generator<'_, '_> {
             // Before a wildcard catch arm: a panic is raised again, with its
             // context, rather than swallowed.
             Terminator::ThrowIfPanic { value, context, .. } => {
-                let value = self.operand(id, value)?;
-                let value = self.value_arg(&value.code, value.repr);
-                let context = self.operand(id, context)?;
-                let context = self.value_arg(&context.code, context.repr);
+                let value = self.value_operand(id, value)?;
+                let context = self.value_operand(id, context)?;
                 let error = format!("bex_vm::compiled_rt::rethrow({value}, {context})");
                 let raise = if block.unwind.is_some() {
                     self.unwind_jump(id, &error)?
@@ -428,8 +422,7 @@ impl Generator<'_, '_> {
                 }
             }
             Terminator::Throw { value } => {
-                let value = self.operand(id, value)?;
-                let value = self.value_arg(&value.code, value.repr);
+                let value = self.value_operand(id, value)?;
                 let error = format!("bex_vm::compiled_rt::throw({value})");
                 if block.unwind.is_some() {
                     let jump = self.unwind_jump(id, &error)?;
@@ -440,10 +433,8 @@ impl Generator<'_, '_> {
                 }
             }
             Terminator::Rethrow { value, context } => {
-                let value = self.operand(id, value)?;
-                let value = self.value_arg(&value.code, value.repr);
-                let context = self.operand(id, context)?;
-                let context = self.value_arg(&context.code, context.repr);
+                let value = self.value_operand(id, value)?;
+                let context = self.value_operand(id, context)?;
                 let error = format!("bex_vm::compiled_rt::rethrow({value}, {context})");
                 if block.unwind.is_some() {
                     let jump = self.unwind_jump(id, &error)?;
