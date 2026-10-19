@@ -33,12 +33,11 @@ pub fn gc_stress() -> bool {
 pub use baml_base::Literal;
 /// The freshness of a `RealizedTy::Literal` built by generated code.
 pub use baml_type::Freshness;
+use bex_vm_types::{HeapPtr, Value, types::Function};
 /// Severity of a log emitted by generated code.
 pub use btel_records::LogLevel;
 #[cfg(test)]
 pub(crate) use call::FORCE_CALL_FUNNEL;
-
-use bex_vm_types::{HeapPtr, Value, types::Function};
 pub use r#virtual::VirtualSite;
 
 use crate::{
