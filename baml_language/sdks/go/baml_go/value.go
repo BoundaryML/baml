@@ -246,9 +246,6 @@ func MetaTypeBAMLType() BAMLType {
 	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_MetaType{MetaType: &cffi.BamlTyMetaType{}}}}
 }
 
-// UnknownBAMLType describes BAML's top type `unknown`. A dynamic Go container
-// whose elements are `any` is a container of it; each element states its own
-// type.
 // FunctionParamBAMLType is one parameter of a FunctionBAMLType. An optional
 // (by-name) parameter carries its wire name; a positional one has none.
 type FunctionParamBAMLType struct {
@@ -283,6 +280,10 @@ func NeverBAMLType() BAMLType {
 	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Never{Never: &cffi.BamlTyNever{}}}}
 }
 
+// UnknownBAMLType describes BAML's top type `unknown`. A dynamic Go container
+// whose elements are `any` is a container of it; each element states its own
+// type. It is also the throws type of a callback whose slot leaves `throws`
+// open: a Go failure then stays a catchable BAML error.
 func UnknownBAMLType() BAMLType {
 	return BAMLType{value: &cffi.BamlTy{Ty: &cffi.BamlTy_Unknown{Unknown: &cffi.BamlTyUnknown{}}}}
 }

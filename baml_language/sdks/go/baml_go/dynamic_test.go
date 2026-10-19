@@ -1,8 +1,11 @@
 package baml_go
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
+
+	"github.com/boundaryml/baml-go/internal/cffi"
 )
 
 type nilTestMarshaler struct{}
@@ -116,7 +119,6 @@ func TestAnyPreservesStaticTypesForEmptyContainers(t *testing.T) {
 	}
 }
 
-
 func TestAnyStatesUnknownElementsForInterfaceContainers(t *testing.T) {
 	list := Any([]any{int64(1), "two"})
 	if list.err != nil || list.value.GetValueType() == nil {
@@ -136,3 +138,50 @@ func TestAnyStatesUnknownElementsForInterfaceContainers(t *testing.T) {
 	}
 }
 
+func TestAnyStatesNestedInterfaceContainersAtEveryDepth(t *testing.T) {
+	unknownList := ListBAMLType(UnknownBAMLType())
+	unknownMap := MapBAMLType(PrimitiveBAMLType(StringType), UnknownBAMLType())
+	for _, tc := range []struct {
+		name  string
+		value any
+		want  BAMLType
+	}{
+		{"list of lists", [][]any{{int64(1), "a"}, {}}, ListBAMLType(unknownList)},
+		{"list of maps", []map[string]any{{"k": int64(1)}, {}}, ListBAMLType(unknownMap)},
+		{"map of lists", map[string][]any{"k": {int64(1), "a"}, "empty": {}}, MapBAMLType(PrimitiveBAMLType(StringType), unknownList)},
+		{"empty list of lists", [][]any{}, ListBAMLType(unknownList)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := Any(tc.value)
+			if input.err != nil {
+				t.Fatal(input.err)
+			}
+			if stated := input.value.GetValueType(); stated == nil || !(BAMLType{value: stated}).Equal(tc.want) {
+				t.Fatalf("stated %#v; want %#v", stated, tc.want.value)
+			}
+			assertContainersStated(t, "value", input.value)
+		})
+	}
+}
+
+// assertContainersStated fails when any list or map node beneath value
+// leaves its type unstated; the engine refuses such a node.
+func assertContainersStated(t *testing.T, path string, value *cffi.InboundValue) {
+	t.Helper()
+	switch payload := value.GetValue().(type) {
+	case *cffi.InboundValue_ListValue:
+		if value.GetValueType() == nil {
+			t.Fatalf("%s: list states no type", path)
+		}
+		for index, item := range payload.ListValue.GetValues() {
+			assertContainersStated(t, fmt.Sprintf("%s[%d]", path, index), item)
+		}
+	case *cffi.InboundValue_MapValue:
+		if value.GetValueType() == nil {
+			t.Fatalf("%s: map states no type", path)
+		}
+		for _, entry := range payload.MapValue.GetEntries() {
+			assertContainersStated(t, fmt.Sprintf("%s[%q]", path, entry.GetStringKey()), entry.GetValue())
+		}
+	}
+}

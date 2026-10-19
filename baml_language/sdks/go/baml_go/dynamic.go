@@ -98,17 +98,14 @@ func InvalidInput(message string) Input {
 	return Input{err: fmt.Errorf("%s", message)}
 }
 
-// dynamicElementType is the BAML type of a dynamic container's elements: the
-// reflected type when Go's element type has one, `unknown` when the element
-// type is an interface (each element then states its own type), and nothing
-// otherwise.
+// dynamicElementType is the BAML type a dynamic container states for its
+// elements of Go type typ. An interface position, at any depth, is `unknown`
+// (each element then states its own type), so `[][]any` states
+// `unknown[][]`. It is nil only when typ has no BAML shape at all; encoding
+// a non-empty container of it fails on its first element.
 func dynamicElementType(typ reflect.Type) *BAMLType {
-	if inferred, ok := reflectedBAMLType(typ); ok {
+	if inferred, ok := reflectBAMLType(typ, interfacesAreUnknown); ok {
 		return &inferred
-	}
-	if typ.Kind() == reflect.Interface {
-		unknown := UnknownBAMLType()
-		return &unknown
 	}
 	return nil
 }
@@ -216,7 +213,26 @@ func anyMap(values map[string]Input, valueType *BAMLType) Input {
 	return mapInput(keys, inputs, valueType)
 }
 
+// interfacePolicy is what an interface-typed Go position reflects to.
+type interfacePolicy bool
+
+const (
+	// interfacesAreErased: a type token cannot reify an interface. Go's `any`
+	// also carries `baml.json.json`, whose nominal identity it erases, so
+	// guessing would state a type the value may not inhabit.
+	interfacesAreErased interfacePolicy = false
+	// interfacesAreUnknown: a dynamic value's container states `unknown` for an
+	// interface position; every element beneath it states its own type.
+	interfacesAreUnknown interfacePolicy = true
+)
+
+// reflectedBAMLType is the exact BAML type of Go type typ, or false when Go's
+// surface erases it.
 func reflectedBAMLType(typ reflect.Type) (BAMLType, bool) {
+	return reflectBAMLType(typ, interfacesAreErased)
+}
+
+func reflectBAMLType(typ reflect.Type, interfaces interfacePolicy) (BAMLType, bool) {
 	if typ == reflect.TypeOf(BAMLType{}) {
 		return MetaTypeBAMLType(), true
 	}
@@ -225,7 +241,7 @@ func reflectedBAMLType(typ reflect.Type) (BAMLType, bool) {
 		return PrimitiveBAMLType(BigintType), true
 	}
 	if typ.Kind() == reflect.Pointer {
-		inner, ok := reflectedBAMLType(typ.Elem())
+		inner, ok := reflectBAMLType(typ.Elem(), interfaces)
 		if !ok {
 			return BAMLType{}, false
 		}
@@ -234,6 +250,9 @@ func reflectedBAMLType(typ reflect.Type) (BAMLType, bool) {
 	// Marker interfaces describe concrete generated/runtime values. Their zero
 	// interface value has no dynamic receiver and must not be invoked.
 	if typ.Kind() == reflect.Interface {
+		if interfaces == interfacesAreUnknown {
+			return UnknownBAMLType(), true
+		}
 		return BAMLType{}, false
 	}
 	if typ.Implements(reflect.TypeOf((*DynamicType)(nil)).Elem()) {
@@ -264,7 +283,7 @@ func reflectedBAMLType(typ reflect.Type) (BAMLType, bool) {
 		}
 		fallthrough
 	case reflect.Array:
-		inner, ok := reflectedBAMLType(typ.Elem())
+		inner, ok := reflectBAMLType(typ.Elem(), interfaces)
 		if !ok {
 			return BAMLType{}, false
 		}
@@ -273,7 +292,7 @@ func reflectedBAMLType(typ reflect.Type) (BAMLType, bool) {
 		if typ.Key().Kind() != reflect.String {
 			return BAMLType{}, false
 		}
-		value, ok := reflectedBAMLType(typ.Elem())
+		value, ok := reflectBAMLType(typ.Elem(), interfaces)
 		if !ok {
 			return BAMLType{}, false
 		}

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"baml.local/sdk/baml_sdk"
+	baml_go "github.com/boundaryml/baml-go"
 )
 
 func Test_generic_identity_inference_and_explicit_types(t *testing.T) {
@@ -182,5 +183,53 @@ func Test_generic_union_input_and_engine_validation(t *testing.T) {
 	_, err = baml_sdk.GenericTestsTagOrValue[int64](ctx, true)
 	if err == nil || !strings.Contains(err.Error(), "BAML") {
 		t.Fatalf("invalid generic union argument = %v", err)
+	}
+}
+
+// Go's `any` erases the element types of nested dynamic containers, so each
+// list and map node states `unknown` elements at every depth and the engine
+// accepts the value under an `unknown` slot exactly as given.
+func Test_generic_identity_accepts_nested_dynamic_containers(t *testing.T) {
+	ctx := context.Background()
+	for _, test := range []struct {
+		name  string
+		value any
+	}{
+		{"list of lists", [][]any{{int64(1), "a"}, {}}},
+		{"list of maps", []map[string]any{{"k": int64(1), "s": "a"}, {}}},
+		{"map of lists", map[string][]any{"k": {int64(1), "a"}, "empty": {}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := baml_sdk.GenericTestsIdentity[any](ctx, test.value, baml_go.WithTypeArg("T", baml_go.UnknownBAMLType()))
+			if err != nil {
+				t.Fatalf("identity %T: %v", test.value, err)
+			}
+			if want := erasedContainer(test.value); !reflect.DeepEqual(got, want) {
+				t.Fatalf("identity %T = %#v; want %#v", test.value, got, want)
+			}
+		})
+	}
+}
+
+// erasedContainer is value as an `unknown`-typed result decodes in Go: every
+// list a []any and every map a map[string]any.
+func erasedContainer(value any) any {
+	reflected := reflect.ValueOf(value)
+	switch reflected.Kind() {
+	case reflect.Slice:
+		items := make([]any, reflected.Len())
+		for index := range items {
+			items[index] = erasedContainer(reflected.Index(index).Interface())
+		}
+		return items
+	case reflect.Map:
+		entries := make(map[string]any, reflected.Len())
+		iterator := reflected.MapRange()
+		for iterator.Next() {
+			entries[iterator.Key().String()] = erasedContainer(iterator.Value().Interface())
+		}
+		return entries
+	default:
+		return value
 	}
 }

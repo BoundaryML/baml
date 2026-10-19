@@ -167,7 +167,7 @@ func TestTransactionalEncodingRollsBackTopLevelAndNestedPartialFailures(t *testi
 			}),
 		},
 		{
-			name: "union payload",
+			name:  "media list payload",
 			input: ListEncoderWithType(ImageBAMLType(), func(value Input) Input { return value })([]Input{fakeImageInput(), InvalidInput("bad union payload sibling")}),
 		},
 	}
