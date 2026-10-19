@@ -177,11 +177,11 @@ pub struct PackArgs {
 /// The cargo profile a `--native` build compiles the generated crate under.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
 pub enum NativeProfile {
-    /// The shipping build: slow to compile, fast to run.
+    // The shipping build: slow to compile, fast to run.
     #[default]
     Release,
-    /// A quick compile for correctness runs; not representative of release
-    /// speed or size.
+    // A quick compile for correctness runs; not representative of release
+    // speed or size.
     Fast,
 }
 
@@ -542,7 +542,7 @@ impl PackArgs {
             // A BAML function with thousands of locals becomes one Rust
             // function as large, and rustc's default stack can overflow
             // generating its debug info; give it room unless the caller chose.
-            if std::env::var_os("RUST_MIN_STACK").is_none() {
+            if baml_env::os_var("RUST_MIN_STACK").is_none() {
                 cargo.env("RUST_MIN_STACK", (256usize << 20).to_string());
             }
             cargo
@@ -1509,7 +1509,7 @@ mod tests {
     fn test_native_manifest_release_profile() {
         let manifest = native_manifest(Path::new("/ws"), NativeProfile::Release);
         assert_eq!(
-            manifest,
+            manifest.replace(r"\\", "/"),
             "[package]\nname = \"baml_native_program\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\
              publish = false\n\n[workspace]\n\n[lib]\npath = \"src/lib.rs\"\n\n\
              [[bin]]\nname = \"baml_native_program\"\npath = \"src/main.rs\"\n\n\

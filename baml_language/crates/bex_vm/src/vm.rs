@@ -978,7 +978,7 @@ pub(crate) mod tests {
             args: &[Value],
         ) -> Result<Value, Box<crate::errors::VmError>> {
             CALLS.fetch_add(1, Ordering::Relaxed);
-            Ok(vm.add_int(args[0], args[1])?)
+            vm.add_int(args[0], args[1])
         }
         // `Same<T>(x: T, y: T) -> bool { y is T }`: a generic body reading
         // its frame, calling a compiled generic callee with its own type

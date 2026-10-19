@@ -1186,7 +1186,10 @@ fn runtime_types_dispatch_and_bound_methods_compile() {
             .collect::<String>()
     };
     let describe = compact("user.generic_describe");
-    assert!(describe.contains("vm.virtual_target_uncached("), "{describe}");
+    assert!(
+        describe.contains("vm.virtual_target_uncached("),
+        "{describe}"
+    );
     assert!(!describe.contains("staticS"), "{describe}");
     let fns = compact("user.fns");
     assert!(fns.contains("vm.frame_type_constant(depth,"), "{fns}");

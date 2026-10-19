@@ -2,12 +2,10 @@
 
 use baml_compiler2_mir::{
     AggregateKind, BinOp, BlockId, Rvalue, TyTemplate, TypeTest, UnaryOp, class_display_name,
-    enum_display_name,
+    enum_display_name, function_display_name,
 };
 use baml_type::typetag;
 use bex_vm_types::ConstValue;
-
-use baml_compiler2_mir::function_display_name;
 
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{

@@ -181,7 +181,11 @@ impl<'db> Generator<'_, 'db> {
         for operand in operands {
             let local = match operand {
                 Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => local.0,
-                _ => return unsupported(format!("{what} with a type argument that is not a type local")),
+                _ => {
+                    return unsupported(format!(
+                        "{what} with a type argument that is not a type local"
+                    ));
+                }
             };
             if let Some(ty) = self.analysis.static_types.get(&local) {
                 types.push(ty.code.clone());
@@ -189,7 +193,9 @@ impl<'db> Generator<'_, 'db> {
                 fixed = false;
                 types.push(self.realized(&template)?);
             } else {
-                return unsupported(format!("{what} with a type argument that is not a type local"));
+                return unsupported(format!(
+                    "{what} with a type argument that is not a type local"
+                ));
             }
         }
         Ok((types, fixed))

@@ -76,10 +76,11 @@ impl BexVm {
         let ConstValue::Type(template) = &function.bytecode.constants[index] else {
             return Err(Box::new(VmInternalError::UnexpectedConstantKind.into()));
         };
-        let type_args: &[RealizedTy] = match depth.checked_sub(1).and_then(|top| self.frames.get(top)) {
-            Some(crate::vm::Frame::Bytecode(frame)) => &frame.type_args,
-            _ => &[],
-        };
+        let type_args: &[RealizedTy] =
+            match depth.checked_sub(1).and_then(|top| self.frames.get(top)) {
+                Some(crate::vm::Frame::Bytecode(frame)) => &frame.type_args,
+                _ => &[],
+            };
         template.substitute(type_args, self).map_err(|error| {
             Box::new(
                 VmInternalError::TypeSubstitution {

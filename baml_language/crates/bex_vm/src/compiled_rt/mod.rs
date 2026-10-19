@@ -26,19 +26,18 @@ pub trait CompiledCollector: Send + Sync {
 #[must_use]
 pub fn gc_stress() -> bool {
     static STRESS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *STRESS.get_or_init(|| std::env::var_os("BAML_GC_STRESS").is_some_and(|value| value == "1"))
+    *STRESS.get_or_init(|| baml_env::os_var("BAML_GC_STRESS").is_some_and(|value| value == "1"))
 }
 
 /// The literal in a `RealizedTy::Literal` built by generated code.
 pub use baml_base::Literal;
 /// The freshness of a `RealizedTy::Literal` built by generated code.
 pub use baml_type::Freshness;
+use bex_vm_types::{HeapPtr, Value, types::Function};
 /// Severity of a log emitted by generated code.
 pub use btel_records::LogLevel;
 #[cfg(test)]
 pub(crate) use call::FORCE_CALL_FUNNEL;
-
-use bex_vm_types::{HeapPtr, Value, types::Function};
 pub use r#virtual::VirtualSite;
 
 use crate::{
@@ -48,10 +47,11 @@ use crate::{
 
 /// A natively compiled BAML function body. Errors are the VM's own: a thrown
 /// BAML exception keeps its throw kind and context end to end, and an internal
-/// error keeps its own variant. Boxed so the `Result` stays two words wide;
-/// the box is paid only on throw.
+/// error keeps its own variant. Boxed so the `Result` stays two words wide
+/// on 64-bit targets; the box is paid only on throw.
 pub type CompiledBody = fn(&mut BexVm, &[Value]) -> Result<Value, Box<VmError>>;
 
+#[cfg(target_pointer_width = "64")]
 const _: () =
     assert!(std::mem::size_of::<Result<Value, Box<VmError>>>() == 2 * std::mem::size_of::<usize>());
 

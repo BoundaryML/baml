@@ -5805,7 +5805,7 @@ impl BexEngine {
                 if !thread.vm.pending_logs.is_empty() {
                     for log in std::mem::take(&mut thread.vm.pending_logs) {
                         self.capture_baml_log_event(
-                            &thread,
+                            thread,
                             log_capture.as_ref(),
                             log.level,
                             log.event_name.as_deref(),

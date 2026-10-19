@@ -209,6 +209,3 @@ baml_language/sdks/typescript/bridge_typescript/dist/*.node
 !/baml_language/vendor/
 /baml_language/vendor/*
 !/baml_language/vendor/quanta/
-
-# Telemetry CAS a bex_engine test run writes beside the crate.
-baml_language/crates/bex_engine/cas/

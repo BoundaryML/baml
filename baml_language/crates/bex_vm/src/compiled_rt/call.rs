@@ -115,14 +115,14 @@ impl BexVm {
     }
 
     /// Push an argument of the call a resumable body is about to request
-    /// ([`Step::Call`]); arguments sit above the body's slots, rooted.
+    /// ([`Step::Call`](super::Step::Call)); arguments sit above the body's slots, rooted.
     #[inline]
     pub fn push_arg(&mut self, value: Value) {
         self.stack.push(value);
     }
 
     /// Push a type argument of the call a resumable body is about to request
-    /// ([`Step::Call`]), into a buffer the VM reuses: a generic call
+    /// ([`Step::Call`](super::Step::Call)), into a buffer the VM reuses: a generic call
     /// allocates nothing for them.
     #[inline]
     pub fn push_type_arg(&mut self, ty: RealizedTy) {
@@ -132,7 +132,7 @@ impl BexVm {
     /// The value of `future` when it has settled with one and awaiting it
     /// would not poll for a yield: `await`'s fast path, with no suspension.
     /// `None` sends the body through the interpreter's own `Await`
-    /// ([`Step::Await`]), which raises, parks or yields exactly as bytecode
+    /// ([`Step::Await`](super::Step::Await)), which raises, parks or yields exactly as bytecode
     /// does. Counts the `Await`'s control-flow check, as bytecode does.
     #[inline]
     pub fn ready(&mut self, future: Value) -> Option<Value> {
@@ -150,7 +150,7 @@ impl BexVm {
         Some(value)
     }
 
-    /// Whether a resumable body should yield ([`Step::Yield`]) at a loop back
+    /// Whether a resumable body should yield ([`Step::Yield`](super::Step::Yield)) at a loop back
     /// edge: the interpreter's control-flow check.
     #[inline]
     pub fn should_yield(&mut self) -> bool {
@@ -194,6 +194,7 @@ impl BexVm {
     /// Record `pc` as the running compiled function's call site, in the
     /// top frame (the caller's, before it pushes its callee); see
     /// [`Self::call_compiled`].
+    #[allow(clippy::inline_always)]
     #[inline(always)]
     pub(crate) fn note_call_pc(&mut self, pc: u32) {
         if let Some(crate::vm::Frame::Bytecode(frame)) = self.frames.last_mut() {
@@ -300,7 +301,7 @@ impl BexVm {
     /// for a bytecode call.
     ///
     /// The frame limit is the only limit a program sees: the Rust stack the
-    /// callee runs on is the VM's concern ([`Self::with_stack_room`]).
+    /// callee runs on is the VM's concern (`Self::with_stack_room`).
     ///
     /// `pc` is the call's: the index of its call instruction in the
     /// caller's bytecode. It goes into the caller's frame before the callee
@@ -681,6 +682,36 @@ mod tests {
         use crate::compiled_rt::{CompiledCollector, CompiledFn};
 
         const CHILD: &str = "BAML_COMPILED_GC_STRESS_TEST_CHILD";
+        struct Collector;
+        impl CompiledCollector for Collector {
+            fn collect_in_place(&self, vm: &mut BexVm) -> bool {
+                let mut roots = Vec::new();
+                vm.collect_roots(&mut roots);
+                // SAFETY: this test owns the heap's only VM; collect_here roots its
+                // compiled body's live values before entering the collector.
+                let (_, _, forwarding) = unsafe {
+                    vm.heap
+                        .collect_garbage_generational(&roots, CollectionLevel::Major)
+                };
+                vm.forward_roots(&forwarding);
+                true
+            }
+        }
+
+        #[allow(clippy::unnecessary_wraps, reason = "matches the compiled body ABI")]
+        fn body(vm: &mut BexVm, _: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
+            vm.compiled_collector = Some(Arc::new(Collector));
+            let mut live = [vm.string_value("still live")];
+            for _ in 0..3 {
+                assert!(vm.gc_due(), "stress must collect at every compiled check");
+                let before = live[0];
+                vm.collect_here(&mut live);
+                assert_ne!(live[0], before, "the live value must actually move");
+                assert_eq!(vm.as_string(&live[0]).unwrap().as_str(), "still live");
+            }
+            Ok(live[0])
+        }
+
         if std::env::var_os(CHILD).is_none() {
             let output = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([
@@ -699,35 +730,6 @@ mod tests {
                 String::from_utf8_lossy(&output.stderr),
             );
             return;
-        }
-
-        struct Collector;
-        impl CompiledCollector for Collector {
-            fn collect_in_place(&self, vm: &mut BexVm) -> bool {
-                let mut roots = Vec::new();
-                vm.collect_roots(&mut roots);
-                // SAFETY: this test owns the heap's only VM; collect_here roots its
-                // compiled body's live values before entering the collector.
-                let (_, _, forwarding) = unsafe {
-                    vm.heap
-                        .collect_garbage_generational(&roots, CollectionLevel::Major)
-                };
-                vm.forward_roots(&forwarding);
-                true
-            }
-        }
-
-        fn body(vm: &mut BexVm, _: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
-            vm.compiled_collector = Some(Arc::new(Collector));
-            let mut live = [vm.string_value("still live")];
-            for _ in 0..3 {
-                assert!(vm.gc_due(), "stress must collect at every compiled check");
-                let before = live[0];
-                vm.collect_here(&mut live);
-                assert_ne!(live[0], before, "the live value must actually move");
-                assert_eq!(vm.as_string(&live[0]).unwrap().as_str(), "still live");
-            }
-            Ok(live[0])
         }
 
         assert_eq!(
