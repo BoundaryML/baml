@@ -101,13 +101,6 @@ impl<'db> Generator<'_, 'db> {
         match place {
             Place::Local(local) => {
                 let code = coerce(&value.code, value.repr, self.repr(*local));
-                if self.suspends && self.write_through.contains(&local.0) {
-                    let slot = coerce(&format!("l{}", local.0), self.repr(*local), Repr::Value);
-                    return Ok(format!(
-                        "l{0} = {code}; vm.set_slot(depth, {0}, {slot});",
-                        local.0
-                    ));
-                }
                 Ok(format!("l{} = {code};", local.0))
             }
             Place::Field { base, field } => {

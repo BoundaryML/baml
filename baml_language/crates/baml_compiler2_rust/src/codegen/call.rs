@@ -6,10 +6,10 @@ use baml_compiler2_mir::{
 };
 use bex_vm_types::FunctionKind;
 
-use super::{Expr, Gen, Generator, unsupported};
+use super::{Gen, Generator, unsupported};
 use crate::{
     admit::{FunctionInfo, Rejection},
-    analysis::{Repr, builtin_is_callable, call_shape, static_realized},
+    analysis::{builtin_is_callable, call_shape, static_realized},
 };
 
 impl<'db> Generator<'_, 'db> {
@@ -37,13 +37,9 @@ impl<'db> Generator<'_, 'db> {
         let args = format!("&[{}]", values.join(", "));
         match info.kind {
             FunctionKind::Bytecode => {
-                let Some(symbol) = self
-                    .symbols
-                    .get(&object)
-                    .filter(|_| !self.resumable.contains(&object))
-                else {
+                let Some(symbol) = self.symbols.get(&object) else {
                     return Err(Rejection::Invalid(format!(
-                        "suspending call to `{name}` emitted inline"
+                        "call to uncompiled `{name}` emitted directly"
                     )));
                 };
                 // A generic callee's frame starts with the call's type
@@ -59,7 +55,7 @@ impl<'db> Generator<'_, 'db> {
                         types.join(", ")
                     )
                 };
-                if self.may_collect.contains(&object) {
+                if self.pausing.contains(&object) {
                     self.rooted_call(block, &call)
                 } else {
                     self.fallible(block, &call)
@@ -222,18 +218,15 @@ impl<'db> Generator<'_, 'db> {
         ))
     }
 
-    /// The request of an interface method call in a resumable body: bind
-    /// `callee` to the method's implementation for the receiver through the
-    /// site's inline cache (a `static` of this body, which also pushes the
-    /// call's type arguments); when that callee is a compiled body that runs
-    /// to completion, call it in place and continue at `target`; otherwise
-    /// push the value arguments laid over the callee's slots and return the
-    /// `Step` expression. `args` are the method's type arguments then its
+    /// An `R<Value>` expression for an interface method call: bind `callee` to
+    /// the method's implementation for the receiver through the site's inline
+    /// cache (a `static` of this body, which also pushes the call's type
+    /// arguments); a compiled implementation with a matching arity runs in
+    /// place, anything else is requested from the VM with the value arguments
+    /// laid over its slots. `args` are the method's type arguments then its
     /// value arguments in declared order; `self_arg` indexes the receiver
     /// among the value arguments.
     #[allow(clippy::too_many_arguments)]
-    /// Call an inline implementation or return a VM request.
-    /// `self_arg` indexes the receiver among the value arguments.
     pub(super) fn virtual_request(
         &mut self,
         block: BlockId,
@@ -244,8 +237,6 @@ impl<'db> Generator<'_, 'db> {
         ntypeargs: usize,
         self_arg: usize,
         layout: Option<&baml_type::CallLayout>,
-        destination: &Place,
-        target: BlockId,
     ) -> Gen<String> {
         let (iface, iface_args, iface_fixed) = self.interface_operands(iface)?;
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
@@ -259,17 +250,20 @@ impl<'db> Generator<'_, 'db> {
         };
         // Implementations may add optional parameters, so only matching arities run inline.
         let named = layout.is_some_and(|layout| layout.0.iter().any(Option::is_some));
-        let layout = layout.map(|layout| {
-            let slots: Vec<String> = layout
-                .0
-                .iter()
-                .map(|slot| match slot {
-                    Some(name) => format!("Some({:?})", name.as_str()),
-                    None => "None".to_string(),
-                })
-                .collect();
-            format!("Some(&[{}])", slots.join(", "))
-        });
+        let layout = layout.map_or_else(
+            || "None".to_string(),
+            |layout| {
+                let slots: Vec<String> = layout
+                    .0
+                    .iter()
+                    .map(|slot| match slot {
+                        Some(name) => format!("Some({:?})", name.as_str()),
+                        None => "None".to_string(),
+                    })
+                    .collect();
+                format!("Some(&[{}])", slots.join(", "))
+            },
+        );
         // The receiver-only cache is valid only for a static instantiation.
         if iface_fixed && types_fixed {
             let site = format!("S{}", block.0);
@@ -289,26 +283,19 @@ impl<'db> Generator<'_, 'db> {
                 ),
             );
         }
+        let site = self.site_pc(block);
+        let values = values.join(", ");
+        let suspend = format!(
+            "{{ let argc = vm.push_virtual_args(callee, {layout}, &[{values}])?; \
+             vm.note_pc(depth, {site}); vm.suspend(Step::Call {{ callee, argc }}) }}"
+        );
         // The VM must apply trace attachments, so traced calls cannot run inline.
-        if !named && !traced {
-            let site = self.site_pc(block);
-            let call = self.rooted_call(
-                block,
-                &format!("vm.call_inline(callee, &[{}], {site})", values.join(", ")),
-            )?;
-            self.flush_bindings();
-            let store = self.store(block, destination, &Expr::new("v", Repr::Value))?;
-            let jump = self.jump_to(target.0);
-            self.emit_line(&format!("if let Some(v) = {call} {{"));
-            self.emit_line(&store);
-            self.emit_line(&jump);
-            self.emit_line("}");
+        if named || traced {
+            return Ok(suspend);
         }
-        let layout = layout.unwrap_or_else(|| "None".to_string());
-        self.emit_statement(&format!(
-            "let argc = vm.push_virtual_args(callee, {layout}, &[{}])?;",
-            values.join(", ")
-        ));
-        Ok("Step::Call { callee, argc }".to_string())
+        Ok(format!(
+            "match vm.call_inline(callee, &[{values}], {site}) {{ \
+             Ok(Some(v)) => Ok(v), Ok(None) => {suspend}, Err(e) => Err(e) }}"
+        ))
     }
 }

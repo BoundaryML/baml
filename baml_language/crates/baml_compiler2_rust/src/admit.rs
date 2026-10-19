@@ -71,8 +71,6 @@ pub struct CompiledFunction {
     pub object: usize,
     /// Its arity.
     pub arity: usize,
-    /// Whether the body needs a resumable frame.
-    pub resumable: bool,
     /// Number of frame slots.
     pub slots: u32,
     /// Frame slot holding the active catch cause.
@@ -239,31 +237,15 @@ fn admission_fixpoint(
 ) -> (String, Vec<CompiledFunction>, BTreeMap<String, usize>) {
     // Every failed round removes at least one unit.
     loop {
-        let mut resumable: BTreeSet<usize> = units
+        // A body suspends if it polls at a loop, suspends directly, or calls a
+        // body that does; callers root their live values around such calls.
+        let mut pausing: BTreeSet<usize> = units
             .iter()
-            .filter(|(_, unit)| unit.analysis.suspends)
+            .filter(|(_, unit)| unit.analysis.pauses())
             .map(|(&object, _)| object)
             .collect();
-        propagate(units, &mut resumable, |_, callee, resumable| {
-            !units.contains_key(&callee) || resumable.contains(&callee)
-        });
-        // Inline callers must root live values around any call that may collect.
-        let recursive = recursive_units(units);
-        let checks: HashMap<usize, GcChecks> = units
-            .iter()
-            .filter(|(object, _)| !resumable.contains(*object))
-            .map(|(&object, unit)| {
-                let checks = GcChecks {
-                    loops: unit.analysis.loop_allocates,
-                    entry: recursive.contains(&object) && unit.analysis.allocates,
-                };
-                (object, checks)
-            })
-            .filter(|(_, checks)| checks.loops || checks.entry)
-            .collect();
-        let mut may_collect: BTreeSet<usize> = checks.keys().copied().collect();
-        propagate(units, &mut may_collect, |caller, callee, may_collect| {
-            !resumable.contains(&caller) && may_collect.contains(&callee)
+        propagate(units, &mut pausing, |_, callee, pausing| {
+            !units.contains_key(&callee) || pausing.contains(&callee)
         });
         let symbols: HashMap<usize, String> = units
             .keys()
@@ -278,16 +260,9 @@ fn admission_fixpoint(
                 db,
                 index,
                 symbols: &symbols,
-                resumable: &resumable,
-                may_collect: &may_collect,
+                pausing: &pausing,
             };
-            let mut generator = Generator::new(
-                &program,
-                &mut builtins,
-                object,
-                unit,
-                checks.get(&object).copied().unwrap_or_default(),
-            );
+            let mut generator = Generator::new(&program, &mut builtins, object, unit);
             match generator.function(&symbols[&object]) {
                 Ok(code) => {
                     let (slots, cause_slot) =
@@ -305,7 +280,6 @@ fn admission_fixpoint(
                         symbol: symbols[&object].clone(),
                         object,
                         arity: index.info(object).arity,
-                        resumable: resumable.contains(&object),
                         slots,
                         cause_slot,
                     });
@@ -1112,15 +1086,6 @@ fn package_ordinals(
     ordinals
 }
 
-/// Where an inline body checks for a garbage collection.
-#[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct GcChecks {
-    /// At the header of each loop: some loop of the body allocates.
-    pub(crate) loops: bool,
-    /// On entry: the function is recursive and allocates.
-    pub(crate) entry: bool,
-}
-
 /// Propagate a call effect until the set stops growing.
 fn propagate(
     units: &BTreeMap<usize, Unit<'_>>,
@@ -1145,79 +1110,6 @@ fn propagate(
         }
         set.extend(grown);
     }
-}
-
-/// Find recursive call components with iterative Tarjan traversal.
-fn recursive_units(units: &BTreeMap<usize, Unit<'_>>) -> BTreeSet<usize> {
-    let edges = |object: usize| -> Vec<usize> {
-        units[&object]
-            .analysis
-            .user_callees
-            .iter()
-            .copied()
-            .filter(|callee| units.contains_key(callee))
-            .collect()
-    };
-    let mut index_of: HashMap<usize, usize> = HashMap::new();
-    let mut low: HashMap<usize, usize> = HashMap::new();
-    let mut on_stack: BTreeSet<usize> = BTreeSet::new();
-    let mut stack: Vec<usize> = Vec::new();
-    let mut recursive = BTreeSet::new();
-    for &root in units.keys() {
-        if index_of.contains_key(&root) {
-            continue;
-        }
-        let mut work: Vec<(usize, Vec<usize>, usize)> = Vec::new();
-        let start = index_of.len();
-        index_of.insert(root, start);
-        low.insert(root, start);
-        stack.push(root);
-        on_stack.insert(root);
-        work.push((root, edges(root), 0));
-        while let Some((node, successors, next)) = work.last_mut() {
-            let node = *node;
-            if let Some(&succ) = successors.get(*next) {
-                *next += 1;
-                if succ == node {
-                    recursive.insert(node);
-                }
-                if let Some(&succ_index) = index_of.get(&succ) {
-                    if on_stack.contains(&succ) {
-                        let lowest = low[&node].min(succ_index);
-                        low.insert(node, lowest);
-                    }
-                } else {
-                    let i = index_of.len();
-                    index_of.insert(succ, i);
-                    low.insert(succ, i);
-                    stack.push(succ);
-                    on_stack.insert(succ);
-                    work.push((succ, edges(succ), 0));
-                }
-                continue;
-            }
-            work.pop();
-            if let Some((parent, _, _)) = work.last() {
-                let lowest = low[parent].min(low[&node]);
-                low.insert(*parent, lowest);
-            }
-            if low[&node] == index_of[&node] {
-                let mut component = Vec::new();
-                loop {
-                    let member = stack.pop().expect("the component's members are stacked");
-                    on_stack.remove(&member);
-                    component.push(member);
-                    if member == node {
-                        break;
-                    }
-                }
-                if component.len() > 1 {
-                    recursive.extend(component);
-                }
-            }
-        }
-    }
-    recursive
 }
 
 fn checked_frame_slots(

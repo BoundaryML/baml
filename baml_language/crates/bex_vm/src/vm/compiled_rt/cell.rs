@@ -2,7 +2,7 @@
 
 use bex_vm_types::{HeapPtr, Object, ObjectType, StackIndex, Value, types::Cell};
 
-use super::{CompiledFn, InlineBody};
+use super::CompiledFn;
 use crate::{
     errors::{VmError, VmInternalError, VmPanic},
     vm::{BexVm, Frame},
@@ -81,10 +81,10 @@ impl BexVm {
         }
     }
 
-    /// Find an inline body eligible for a direct call with `argc` arguments.
+    /// The compiled body a direct call with `argc` arguments may run in place.
     #[inline]
     #[must_use]
-    pub fn closure_inline_body(&self, callee: HeapPtr, argc: usize) -> Option<InlineBody> {
+    pub fn closure_compiled_body(&self, callee: HeapPtr, argc: usize) -> Option<CompiledFn> {
         let function = match self.get_object(callee) {
             Object::Closure(closure) => closure.function,
             Object::Function(_) => callee,
@@ -96,18 +96,15 @@ impl BexVm {
         if function.arity != argc || function.trace_passthrough {
             return None;
         }
-        match super::compiled_fn(function)? {
-            CompiledFn::Inline(body) => Some(body),
-            CompiledFn::Resumable(_) => None,
-        }
+        super::compiled_fn(function)
     }
 
-    /// Call an inline body with the callee's captures and type arguments.
+    /// Call a compiled body with the callee's captures and type arguments.
     #[inline]
     pub fn call_closure_compiled(
         &mut self,
         callee: HeapPtr,
-        body: InlineBody,
+        body: CompiledFn,
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
@@ -117,14 +114,15 @@ impl BexVm {
                 self.panic_to_exception_value(VmPanic::StackOverflow),
             )));
         }
-        self.with_stack_room(|vm| vm.call_closure_compiled_here(callee, body, args))
+        self.stack_room()?;
+        self.call_closure_compiled_here(callee, body, args)
     }
 
     #[inline]
     fn call_closure_compiled_here(
         &mut self,
         callee: HeapPtr,
-        body: InlineBody,
+        body: CompiledFn,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         if self.telemetry.is_some() {

@@ -1,20 +1,23 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use bex_vm_types::{HeapPtr, RealizedTy, RootHaver, Value, types::TypeValue};
 
-use super::{CompiledCollector, PendingLog};
+use super::{Fiber, fiber::YielderPtr};
 use crate::errors::VmError;
 
 /// VM state that only compiled code uses.
 #[derive(Default)]
 pub struct CompiledState {
-    /// Logs drained by the engine before it handles the result of `exec`.
-    pub pending_logs: Vec<PendingLog>,
-    /// The engine's collector, or `None` to disable collection.
-    pub collector: Option<Arc<dyn CompiledCollector>>,
+    /// The stack compiled bodies run on, mapped on first use.
+    pub(crate) fiber: Option<Fiber>,
+    /// How a body on the fiber switches back to the VM.
+    pub(crate) yielder: Option<YielderPtr>,
+    /// Whether the VM is currently driving the fiber, so a compiled callee may
+    /// run in place.
+    pub(crate) on_fiber: bool,
     /// Type arguments compiled code passes to a generic builtin.
     pub(crate) builtin_type_args: Vec<RealizedTy>,
-    /// Type arguments of the call a resumable body requests.
+    /// Type arguments of the call a body suspends on.
     pub(crate) call_type_args: Vec<RealizedTy>,
     /// Pending type arguments preserved across nested compiled calls.
     pub(crate) saved_call_types: Vec<SavedCallTypes>,
@@ -22,8 +25,6 @@ pub struct CompiledState {
     pub(crate) type_arg_pool: Vec<Vec<RealizedTy>>,
     /// An error the unwinder delivered to a suspended compiled body.
     pub(crate) delivery: Option<Box<VmError>>,
-    /// Lowest stack address compiled code may grow down to, or 0 if unknown.
-    pub(crate) stack_floor: usize,
 }
 
 #[derive(Default)]
@@ -50,11 +51,9 @@ impl CompiledState {
             Some(VmError::Thrown(thrown)) => Some(thrown),
             _ => None,
         };
-        self.pending_logs.iter_mut().map(|log| &mut log.data).chain(
-            delivered.into_iter().flat_map(|thrown| {
-                std::iter::once(&mut thrown.value).chain(thrown.context.iter_mut())
-            }),
-        )
+        delivered
+            .into_iter()
+            .flat_map(|thrown| std::iter::once(&mut thrown.value).chain(thrown.context.iter_mut()))
     }
 }
 
@@ -67,11 +66,6 @@ impl RootHaver for CompiledState {
                 }
             });
         }
-        roots.extend(
-            self.pending_logs
-                .iter()
-                .filter_map(|log| log.data.as_object_ptr()),
-        );
         if let Some(VmError::Thrown(thrown)) = self.delivery.as_deref() {
             roots.extend(thrown.value.as_object_ptr());
             roots.extend(thrown.context.and_then(|value| value.as_object_ptr()));

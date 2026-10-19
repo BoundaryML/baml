@@ -46,9 +46,8 @@ pub(crate) struct ProgramContext<'a, 'db> {
     pub(crate) db: &'db dyn baml_compiler2_mir::Db,
     pub(crate) index: &'a ProgramIndex,
     pub(crate) symbols: &'a HashMap<usize, String>,
-    pub(crate) resumable: &'a BTreeSet<usize>,
-    /// Calls to these functions require rooting live caller values.
-    pub(crate) may_collect: &'a BTreeSet<usize>,
+    /// Functions that may suspend, so a call to one roots the caller's live values.
+    pub(crate) pausing: &'a BTreeSet<usize>,
 }
 
 pub(crate) struct Generator<'a, 'db> {
@@ -58,16 +57,12 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) object: usize,
     pub(crate) package: Option<u32>,
     pub(crate) symbols: &'a HashMap<usize, String>,
-    pub(crate) resumable: &'a BTreeSet<usize>,
-    /// Calls to these functions require rooting live caller values.
-    pub(crate) may_collect: &'a BTreeSet<usize>,
-    pub(crate) gc_checks: crate::admit::GcChecks,
-    /// First spill slot used to root values across collecting calls.
+    pub(crate) pausing: &'a BTreeSet<usize>,
+    /// First spill slot used to root values across a suspension.
     pub(crate) spill_base: usize,
-    /// Suspensions require a resumable state machine.
-    pub(crate) suspends: bool,
-    /// Jumps continue the block loop after the resume prologue.
-    pub(crate) in_loop: bool,
+    /// Whether this body may suspend: it then polls at loop back edges and
+    /// keeps live heap values in frame slots across every suspension.
+    pub(crate) pauses: bool,
     /// Builtin keys mapped to stable binding ordinals.
     pub(crate) builtins: &'a mut BTreeMap<String, usize>,
     pub(crate) body: &'a MirFunctionBody<'db>,
@@ -82,17 +77,13 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) pending: Vec<String>,
     pub(crate) temps: usize,
     pub(crate) live_in: Vec<Vec<bool>>,
-    /// Locals and iterator positions precede the suspension point and cause slots.
+    /// The cause slot, then the spill slots.
     pub(crate) slots: usize,
     /// Active handler context used by the VM cause chain.
     pub(crate) cause_slot: Option<usize>,
-    pub(crate) point_slot: usize,
     pub(crate) preds: Vec<Vec<usize>>,
     pub(crate) loop_headers: BTreeSet<usize>,
-    /// Locals assigned outside loops whose slots stay current across suspensions.
-    pub(crate) write_through: BTreeSet<usize>,
     pub(crate) call_types: Vec<String>,
-    /// Inline bodies have structured control flow; resumable bodies do not.
     pub(crate) structured: Option<Structured>,
     /// Frame-derived types hoisted into `ty{k}` locals.
     pub(crate) frame_templates: Vec<baml_compiler2_mir::TyTemplate>,
@@ -110,7 +101,6 @@ impl<'a, 'db> Generator<'a, 'db> {
         builtins: &'a mut BTreeMap<String, usize>,
         object: usize,
         unit: &'a crate::admit::Unit<'db>,
-        gc_checks: crate::admit::GcChecks,
     ) -> Self {
         Self {
             db: program.db,
@@ -118,12 +108,9 @@ impl<'a, 'db> Generator<'a, 'db> {
             object,
             package: unit.package,
             symbols: program.symbols,
-            resumable: program.resumable,
-            may_collect: program.may_collect,
-            gc_checks,
+            pausing: program.pausing,
             spill_base: 0,
-            suspends: program.resumable.contains(&object),
-            in_loop: false,
+            pauses: program.pausing.contains(&object),
             builtins,
             body: crate::admit::body_of(unit.mir),
             lambdas: &unit.mir.lambdas,
@@ -136,10 +123,8 @@ impl<'a, 'db> Generator<'a, 'db> {
             live_in: Vec::new(),
             slots: 0,
             cause_slot: None,
-            point_slot: 0,
             preds: Vec::new(),
             loop_headers: BTreeSet::new(),
-            write_through: BTreeSet::new(),
             call_types: Vec::new(),
             structured: None,
             frame_templates: Vec::new(),
@@ -149,12 +134,11 @@ impl<'a, 'db> Generator<'a, 'db> {
     }
 }
 
-/// Loop iterations of a resumable body per check for a yield; see
-/// `Generator::leaf`.
+/// Loop iterations between polls for a yield; see `Generator::loop_check`.
 const YIELD_EVERY: u32 = 16;
 
-/// What a suspension keeps: live locals (local `i` in slot `i`), then live
-/// array iterators with the slot of their position.
+/// What is live across a suspension: locals, then array iterators with the
+/// slot their position would take.
 type Saved = (Vec<usize>, Vec<(usize, usize)>);
 
 /// A PC argument of generated code: the position's own, or the last one the
@@ -179,15 +163,6 @@ impl<'db> Generator<'_, 'db> {
             ));
         }
         self.prepare();
-        if self.suspends {
-            self.resumable_function(symbol)
-        } else {
-            self.inline_function(symbol)
-        }
-    }
-
-    /// A body that cannot suspend: structured Rust that runs to completion.
-    fn inline_function(&mut self, symbol: &str) -> Gen<String> {
         let structured = structurize(&self.analysis.cfg)
             .map_err(|error| Rejection::Invalid(error.to_string()))?;
         let stmts = structured.stmts.clone();
@@ -196,7 +171,7 @@ impl<'db> Generator<'_, 'db> {
         self.header(&format!(
             "#[inline]\npub fn {symbol}(vm: &mut BexVm, args: &[Value]) -> R<Value>"
         ));
-        self.declare_locals(true, self.gc_checks.loops);
+        self.declare_locals(!self.loop_headers.is_empty());
         if self.slots > 0 {
             self.emit_line(&format!("vm.reserve_slots(depth, {});", self.slots));
         }
@@ -204,112 +179,10 @@ impl<'db> Generator<'_, 'db> {
             self.emit_line(&format!("vm.set_slot(depth, {slot}, Value::NULL);"));
         }
         let prologue = std::mem::take(&mut self.out);
-        if self.gc_checks.entry {
-            self.gc_check(self.body.entry, "vm.gc_due()");
-        }
         self.stmts(&stmts)?;
         // Every path ends in an `Exit`; this keeps the closure well-typed.
         self.emit_line("#[allow(unreachable_code)]");
         self.emit_line("Ok(Value::NULL)");
-        self.footer();
-        Ok(self.assemble(prologue))
-    }
-
-    /// Live locals stay in frame slots while the VM suspends this state machine.
-    fn resumable_function(&mut self, symbol: &str) -> Gen<String> {
-        let arity = self.arity_locals();
-        let slots = self.slots;
-        let point_slot = self.point_slot;
-        self.out.clear();
-        self.header(&format!(
-            "pub fn {symbol}(vm: &mut BexVm, resume: Resume) -> R<Step>"
-        ));
-        self.declare_locals(false, !self.loop_headers.is_empty());
-        self.in_loop = false;
-        self.emit_line("let mut bb: usize;");
-        self.emit_line("match resume {");
-        self.emit_line("Resume::Start => {");
-        self.emit_line(&format!("vm.reserve_slots(depth, {slots});"));
-        if let Some(cause) = self.cause_slot {
-            self.emit_line(&format!("vm.set_slot(depth, {cause}, Value::NULL);"));
-        }
-        // Initialize slots so overestimated liveness still restores typed values.
-        for local in 0..self.analysis.reprs.len() {
-            if !self.write_through.contains(&local) {
-                continue;
-            }
-            if local > arity {
-                let repr = self.repr(Local(local));
-                let default = coerce(repr.default_value(), repr, Repr::Value);
-                self.emit_line(&format!("vm.set_slot(depth, {local}, {default});"));
-            }
-        }
-        // Argument `i` arrives in slot `i - 1` but local `i` keeps slot `i`:
-        // read every argument before writing any write-through slot.
-        for i in 1..=arity {
-            let arg = format!("vm.slot(depth, {})", i - 1);
-            if self.body.locals[i].is_captured {
-                self.emit_line(&format!("let arg = {arg};"));
-                self.emit_line(&format!("l{i} = vm.new_cell(arg);"));
-            } else {
-                let arg = coerce(&arg, Repr::Value, self.repr(Local(i)));
-                self.emit_line(&format!("l{i} = {arg};"));
-            }
-        }
-        let synced: Vec<usize> = (1..=arity)
-            .filter(|i| self.write_through.contains(i))
-            .collect();
-        for i in synced {
-            let slot = coerce(&format!("l{i}"), self.repr(Local(i)), Repr::Value);
-            self.emit_line(&format!("vm.set_slot(depth, {i}, {slot});"));
-        }
-        self.emit_line(&format!("bb = {};", self.body.entry.0));
-        self.emit_line("}");
-        self.emit_line("resume => {");
-        self.emit_line(&format!(
-            "let point = bex_vm::compiled_rt::expect_int(vm.slot(depth, {point_slot}))?;"
-        ));
-        self.emit_line("match (point, resume) {");
-        for block in 0..self.body.blocks.len() {
-            if self.block_suspends(block) {
-                self.resume_arms(BlockId(block))?;
-            }
-        }
-        for header in 0..self.body.blocks.len() {
-            if !self.loop_headers.contains(&header) {
-                continue;
-            }
-            self.emit_line(&format!(
-                "({}, Resume::Yielded) => {{",
-                self.yield_point(header)
-            ));
-            self.restore(self.saved(|i| self.live_in[header][i]));
-            self.emit_line(&format!("bb = {header};"));
-            self.emit_line("}");
-        }
-        self.emit_line("(_, Resume::Thrown(e)) => return Err(e),");
-        self.emit_line("_ => return Err(bex_vm::compiled_rt::unreachable()),");
-        self.emit_line("}");
-        self.emit_line("}");
-        self.emit_line("}");
-        // Every entry rebuilds the frame-derived types, since a collection
-        // may have moved their heads while the body was suspended.
-        let prologue = std::mem::take(&mut self.out);
-        self.in_loop = true;
-        self.emit_line("loop {");
-        self.emit_line("match bb {");
-        for block in 0..self.body.blocks.len() {
-            if self.body.blocks[block].terminator.is_none() {
-                continue;
-            }
-            self.emit_line(&format!("{block} => {{"));
-            self.leaf(BlockId(block))?;
-            self.transfer(BlockId(block))?;
-            self.emit_line("}");
-        }
-        self.emit_line("_ => return Err(bex_vm::compiled_rt::unreachable()),");
-        self.emit_line("}");
-        self.emit_line("}");
         self.footer();
         Ok(self.assemble(prologue))
     }
@@ -339,9 +212,9 @@ impl<'db> Generator<'_, 'db> {
         self.emit_line("}");
     }
 
-    fn declare_locals(&mut self, from_args: bool, iterations: bool) {
+    fn declare_locals(&mut self, iterations: bool) {
         let analysis = self.analysis;
-        let arity = if from_args { self.arity_locals() } else { 0 };
+        let arity = self.arity_locals();
         for (i, &repr) in analysis.reprs.iter().enumerate() {
             if analysis.is_type_local(i) {
                 continue;
@@ -506,7 +379,7 @@ impl<'db> Generator<'_, 'db> {
             }
         }
         let catches = blocks.iter().any(|block| block.handling.is_some());
-        self.hoist_types = !blocks.iter().any(|block| {
+        let binds_types = blocks.iter().any(|block| {
             block.statements.iter().any(|statement| {
                 matches!(
                     statement.kind,
@@ -517,198 +390,79 @@ impl<'db> Generator<'_, 'db> {
                 )
             })
         });
-        // A collection moves runtime declarations the hoisted types name;
-        // a body that may meet one builds each type where it is used.
-        if self.may_collect.contains(&self.object) || (self.suspends && self.calls_in_place()) {
-            self.hoist_types = false;
-        }
-        if self.suspends {
-            let arity = self.arity_locals();
-            let base = self.analysis.reprs.len().max(arity) + self.iters().len();
-            self.point_slot = base;
-            self.cause_slot = catches.then_some(base + 1);
-            self.slots = base + 1 + usize::from(catches);
-            self.live_in = baml_compiler2_mir::live_in_precise(self.body);
-            let (headers, in_loop) = loops(self.body);
-            self.loop_headers = headers;
-            self.write_through = self.write_through_locals(&in_loop);
-        } else {
-            self.cause_slot = catches.then_some(0);
-            self.slots = usize::from(catches);
-            if self.may_collect.contains(&self.object) {
-                self.live_in = baml_compiler2_mir::live_in_precise(self.body);
-            }
-            if self.gc_checks.loops {
-                self.loop_headers = loops(self.body).0;
-            }
-        }
-        // Frame slots for the values live across a call that may collect: as
-        // many as the widest call site keeps.
+        // A collection while this body is suspended moves the runtime
+        // declarations a hoisted type names, so a pausing body builds each
+        // type where it is used.
+        self.hoist_types = !binds_types && !self.pauses;
+        self.cause_slot = catches.then_some(0);
+        self.slots = usize::from(catches);
         self.spill_base = self.slots;
-        if self.may_collect.contains(&self.object) || (self.suspends && self.calls_in_place()) {
-            let widest = (0..blocks.len())
-                .filter(|&b| {
-                    matches!(
-                        blocks[b].terminator,
-                        Some(Terminator::Call { .. } | Terminator::VirtualCall { .. })
-                    )
-                })
-                .filter_map(|b| self.rooted_locals(BlockId(b)).ok())
-                .map(|live| live.len())
-                .max()
-                .unwrap_or(0);
-            self.slots += widest;
+        if !self.pauses {
+            return;
         }
-    }
-
-    /// A resumable body may call a collecting callee before requesting suspension.
-    fn calls_in_place(&self) -> bool {
-        self.body
-            .blocks
+        self.live_in = baml_compiler2_mir::live_in_precise(self.body);
+        self.loop_headers = loops(self.body).0;
+        // Spill slots for the values live across a suspension: as many as the
+        // widest site keeps.
+        let at_sites = (0..blocks.len())
+            .filter(|&block| self.continuation(BlockId(block)).is_ok())
+            .filter_map(|block| self.rooted_locals(BlockId(block)).ok())
+            .map(|live| live.len());
+        let at_headers = self
+            .loop_headers
             .iter()
-            .any(|block| match &block.terminator {
-                Some(Terminator::Call {
-                    callee: Operand::Constant(Constant::Function(func)),
-                    ..
-                }) => self
-                    .index
-                    .function(self.db, *func)
-                    .ok()
-                    .flatten()
-                    .is_some_and(|(object, _)| self.may_collect.contains(&object)),
-                Some(Terminator::Call { .. }) => true,
-                Some(terminator @ Terminator::VirtualCall { .. }) => {
-                    !self.array_iteration(terminator)
-                }
-                _ => false,
-            })
+            .map(|&header| self.header_locals(header).len());
+        self.slots += at_sites.chain(at_headers).max().unwrap_or(0);
     }
 
+    /// The heap values live across the suspension `block`'s terminator may make.
     fn rooted_locals(&self, block: BlockId) -> Gen<Vec<usize>> {
         let (locals, _) = self.saved_at(block)?;
-        Ok(locals
+        Ok(self.heap_locals(locals))
+    }
+
+    /// The heap values live at a loop header's poll.
+    fn header_locals(&self, header: usize) -> Vec<usize> {
+        let (locals, _) = self.saved(|i| self.live_in[header][i]);
+        self.heap_locals(locals)
+    }
+
+    fn heap_locals(&self, locals: Vec<usize>) -> Vec<usize> {
+        locals
             .into_iter()
             .filter(|&i| self.repr(Local(i)) == Repr::Value)
-            .collect())
-    }
-
-    /// Root live values across a collecting call and reload them on either outcome.
-    pub(super) fn rooted_call(&mut self, block: BlockId, call: &str) -> Gen<String> {
-        let live = self.rooted_locals(block)?;
-        if live.is_empty() {
-            return self.fallible(block, call);
-        }
-        let k = self.temps;
-        self.temps += 1;
-        let base = self.spill_base;
-        for (j, i) in live.iter().enumerate() {
-            self.pending
-                .push(format!("vm.set_slot(depth, {}, l{i});", base + j));
-        }
-        self.pending.push(format!("let r{k} = {call};"));
-        for (j, i) in live.iter().enumerate() {
-            self.pending
-                .push(format!("l{i} = vm.slot(depth, {});", base + j));
-        }
-        self.fallible(block, &format!("r{k}"))
-    }
-
-    /// Root live values while collecting and reload them afterward.
-    pub(super) fn gc_check(&mut self, block: BlockId, guard: &str) {
-        let live = &self.live_in[block.0];
-        let locals: Vec<usize> = (0..self.analysis.reprs.len())
-            .filter(|&i| {
-                live[i] && !self.analysis.is_type_local(i) && self.repr(Local(i)) == Repr::Value
-            })
-            .collect();
-        self.emit_line(&format!("if {guard} {{"));
-        let values: Vec<String> = locals.iter().map(|i| format!("l{i}")).collect();
-        self.emit_line(&format!("let mut live = [{}];", values.join(", ")));
-        self.emit_line("vm.collect_here(&mut live);");
-        for (j, i) in locals.iter().enumerate() {
-            self.emit_line(&format!("l{i} = live[{j}];"));
-        }
-        self.emit_line("}");
-    }
-
-    /// Write through locals assigned outside loops, excluding boxed floats,
-    /// iterators, and handler locals that have separate storage rules.
-    fn write_through_locals(&self, in_loop: &[bool]) -> BTreeSet<usize> {
-        let mut kept = BTreeSet::new();
-        for block in 0..self.body.blocks.len() {
-            if self.block_suspends(block)
-                && let Ok((locals, _)) = self.saved_at(BlockId(block))
-            {
-                kept.extend(locals);
-            }
-        }
-        for &header in &self.loop_headers {
-            kept.extend(self.saved(|i| self.live_in[header][i]).0);
-        }
-        let mut excluded: BTreeSet<usize> = self.analysis.array_iters.keys().copied().collect();
-        for block in &self.body.blocks {
-            if let Some(landing) = block.landing {
-                excluded.insert(landing.error_local.0);
-                excluded.insert(landing.context_local.0);
-            }
-        }
-        for (block, &looped) in self.body.blocks.iter().zip(in_loop) {
-            if !looped {
-                continue;
-            }
-            for statement in &block.statements {
-                if let StatementKind::Assign {
-                    destination: Place::Local(local),
-                    ..
-                }
-                | StatementKind::FreshCell { local, .. } = &statement.kind
-                {
-                    excluded.insert(local.0);
-                }
-            }
-            if let Some(
-                Terminator::Call {
-                    destination: Place::Local(local),
-                    ..
-                }
-                | Terminator::VirtualCall {
-                    destination: Place::Local(local),
-                    ..
-                }
-                | Terminator::SysOp {
-                    destination: Place::Local(local),
-                    ..
-                }
-                | Terminator::Await {
-                    destination: Place::Local(local),
-                    ..
-                }
-                | Terminator::AwaitAny {
-                    destination: Place::Local(local),
-                    ..
-                }
-                | Terminator::Spawn {
-                    future: Place::Local(local),
-                    ..
-                },
-            ) = &block.terminator
-            {
-                excluded.insert(local.0);
-            }
-            if let Some(Terminator::NarrowBind { destination, .. }) = &block.terminator {
-                excluded.insert(destination.0);
-            }
-        }
-        kept.into_iter()
-            .filter(|local| {
-                !excluded.contains(local) && !matches!(self.repr(Local(*local)), Repr::Float)
-            })
             .collect()
     }
 
-    /// Keep resume-entry locals except the result, plus unwind-entry locals.
+    /// Root the caller's live values across `call`, a suspending callee or
+    /// request, reloading them whatever its outcome.
+    pub(super) fn rooted_call(&mut self, block: BlockId, call: &str) -> Gen<String> {
+        let live = self.rooted_locals(block)?;
+        let call = self.rooted(&live, call);
+        self.fallible(block, &call)
+    }
+
+    /// `call` with `live` written to the spill slots before and read back after.
+    fn rooted(&self, live: &[usize], call: &str) -> String {
+        if live.is_empty() {
+            return call.to_string();
+        }
+        let mut out = String::from("{ ");
+        for (j, i) in live.iter().enumerate() {
+            let _ = write!(out, "vm.set_slot(depth, {}, l{i}); ", self.spill_base + j);
+        }
+        let _ = write!(out, "let r = {call}; ");
+        for (j, i) in live.iter().enumerate() {
+            let _ = write!(out, "l{i} = vm.slot(depth, {}); ", self.spill_base + j);
+        }
+        out.push_str("r }");
+        out
+    }
+
+    /// Keep what the continuation reads except the result, plus what the
+    /// handler reads.
     fn saved_at(&self, block: BlockId) -> Gen<Saved> {
-        let (destination, target) = self.resume_edge(block)?;
+        let (destination, target) = self.continuation(block)?;
         let overwritten = match destination {
             Place::Local(local) => Some(local.0),
             _ => None,
@@ -746,84 +500,46 @@ impl<'db> Generator<'_, 'db> {
         (locals, iters)
     }
 
-    fn restore_locals(&mut self, block: BlockId) -> Gen<()> {
-        let saved = self.saved_at(block)?;
-        self.restore(saved);
-        Ok(())
-    }
-
-    fn restore(&mut self, (locals, iters): Saved) {
-        for i in locals {
-            let value = coerce(
-                &format!("vm.slot(depth, {i})"),
-                Repr::Value,
-                self.repr(Local(i)),
-            );
-            self.emit_line(&format!("l{i} = {value};"));
-        }
-        for (iter, slot) in iters {
-            self.emit_line(&format!(
-                "i{iter} = bex_vm::compiled_rt::expect_int(vm.slot(depth, {slot}))?;"
-            ));
-        }
-    }
-
-    /// Write-through locals already have current frame slots.
-    fn save(&mut self, (locals, iters): Saved) {
-        for i in locals {
-            if self.write_through.contains(&i) {
-                continue;
-            }
-            let value = self.value_arg(&format!("l{i}"), self.repr(Local(i)));
-            self.emit_statement(&format!("vm.set_slot(depth, {i}, {value});"));
-        }
-        for (iter, slot) in iters {
-            self.emit_statement(&format!("vm.set_slot(depth, {slot}, Value::int(i{iter}));"));
-        }
-    }
-
-    /// Save live locals and request suspension; settled awaits continue immediately.
-    fn pause(&mut self, block: BlockId) -> Gen<()> {
-        let point = block.0 + 1;
+    /// Store what the block's suspending terminator produces: an answer the
+    /// body gets without the VM (a settled future, a compiled callee run in
+    /// place) or the outcome of suspending on the request.
+    pub(super) fn suspension(&mut self, block: BlockId) -> Gen<()> {
         let terminator = self.body.blocks[block.0]
             .terminator
             .as_ref()
             .expect("checked");
-        let (step, args) = self.pause_request(block, terminator)?;
-        let saved = self.saved_at(block)?;
-        self.save(saved);
-        self.flush_bindings();
-        let point_slot = self.point_slot;
-        self.emit_line(&format!(
-            "vm.set_slot(depth, {point_slot}, Value::int({point}));"
-        ));
-        for arg in &args {
-            self.emit_line(&format!("vm.push_arg({arg});"));
-        }
-        for ty in std::mem::take(&mut self.call_types) {
-            self.emit_line(&format!("vm.push_type_arg({ty});"));
-        }
-        let site = self.site_pc(block);
-        self.emit_line(&format!("vm.note_pc(depth, {site});"));
-        self.emit_line(&format!("return Ok({step});"));
+        let (destination, _) = self.continuation(block)?;
+        let request = self.request(block, terminator)?;
+        let call = self.rooted_call(block, &request)?;
+        let store = self.store(block, &destination, &Expr::new(call, Repr::Value))?;
+        self.emit_statement(&store);
         Ok(())
     }
 
-    fn pause_request(
-        &mut self,
-        block: BlockId,
-        terminator: &Terminator<'db>,
-    ) -> Gen<(String, Vec<String>)> {
+    /// An `R<Value>` expression that suspends with `step` after pushing `args`
+    /// and the pending call types.
+    fn suspend_expr(&mut self, block: BlockId, step: &str, args: &[String]) -> String {
+        let mut out = String::from("{ ");
+        for arg in args {
+            let _ = write!(out, "vm.push_arg({arg}); ");
+        }
+        for ty in std::mem::take(&mut self.call_types) {
+            let _ = write!(out, "vm.push_type_arg({ty}); ");
+        }
+        let site = self.site_pc(block);
+        let _ = write!(out, "vm.note_pc(depth, {site}); vm.suspend({step}) }}");
+        out
+    }
+
+    /// An `R<Value>` expression answering the block's suspending terminator.
+    fn request(&mut self, block: BlockId, terminator: &Terminator<'db>) -> Gen<String> {
         Ok(match terminator {
             Terminator::Call { .. } => self.call_request(block, terminator)?,
-
             Terminator::SysOp { callee, args, .. } => {
                 self.callee_ptr(block, callee)?;
                 let args = self.arg_values(block, args)?;
-                (
-                    format!("Step::Call {{ callee, argc: {} }}", args.len()),
-                    args,
-                )
+                let step = format!("Step::Call {{ callee, argc: {} }}", args.len());
+                self.suspend_expr(block, &step, &args)
             }
             Terminator::VirtualCall {
                 iface,
@@ -832,8 +548,6 @@ impl<'db> Generator<'_, 'db> {
                 ntypeargs,
                 self_arg,
                 argument_layout,
-                destination,
-                target,
                 has_trace,
                 ..
             } => {
@@ -850,7 +564,7 @@ impl<'db> Generator<'_, 'db> {
                 } else {
                     args
                 };
-                let step = self.virtual_request(
+                self.virtual_request(
                     block,
                     iface,
                     method,
@@ -859,47 +573,34 @@ impl<'db> Generator<'_, 'db> {
                     *ntypeargs,
                     *self_arg,
                     argument_layout.as_ref(),
-                    destination,
-                    *target,
-                )?;
-                (step, Vec::new())
+                )?
             }
-            Terminator::Await {
-                future,
-                destination,
-                target,
-                ..
-            } => {
+            Terminator::Await { future, .. } => {
                 let future = self.load(block, future)?;
                 let future = self.value_arg(&future.code, future.repr);
                 self.emit_statement(&format!("let operand = {future};"));
-                let store = self.store(block, destination, &Expr::new("v", Repr::Value))?;
-                self.emit_line("if let Some(v) = vm.ready(operand) {");
-                self.emit_statement(&store);
-                let jump = self.jump_to(target.0);
-                self.emit_line(&jump);
-                self.emit_line("}");
-                ("Step::Await(operand)".to_string(), Vec::new())
+                let suspend = self.suspend_expr(block, "Step::Await(operand)", &[]);
+                format!("match vm.ready(operand) {{ Some(v) => Ok(v), None => {suspend} }}")
             }
             Terminator::AwaitAny { futures, .. } => {
                 let futures = self.value_operand(block, futures)?;
                 self.emit_statement(&format!("let operand = {futures};"));
-                ("Step::AwaitAny(operand)".to_string(), Vec::new())
+                self.suspend_expr(block, "Step::AwaitAny(operand)", &[])
             }
             Terminator::Spawn { plan, .. } => {
                 let plan = self.value_operand(block, plan)?;
                 self.emit_statement(&format!("let operand = {plan};"));
-                ("Step::Spawn(operand)".to_string(), Vec::new())
+                self.suspend_expr(block, "Step::Spawn(operand)", &[])
             }
-            _ => return Err(Rejection::Invalid("pause at a non-suspending block".into())),
+            _ => {
+                return Err(Rejection::Invalid(
+                    "suspension at a non-suspending block".into(),
+                ));
+            }
         })
     }
 
-    fn call_request(
-        &mut self,
-        block: BlockId,
-        terminator: &Terminator<'db>,
-    ) -> Gen<(String, Vec<String>)> {
+    fn call_request(&mut self, block: BlockId, terminator: &Terminator<'db>) -> Gen<String> {
         let Terminator::Call {
             callee,
             args,
@@ -927,158 +628,58 @@ impl<'db> Generator<'_, 'db> {
             args
         };
         let (types, _) = self.call_type_args(type_args)?;
-        self.callee_ptr(block, callee)?;
-        let mut laid_out = false;
-        let args = match callee {
-            Operand::Constant(Constant::Function(func)) => {
-                let name = function_display_name(self.db, *func);
-                let Some((_, info)) = self.index.function(self.db, *func)? else {
-                    return unsupported(format!("callee `{name}` not found in the program"));
-                };
-                self.laid_out_args(block, &name, info, argument_layout.as_ref(), args)?
-            }
-            // Function values need their named arguments mapped at runtime.
-            _ if argument_layout
-                .as_ref()
-                .is_some_and(|layout| layout.0.iter().any(Option::is_some)) =>
-            {
-                let layout = argument_layout.as_ref().expect("checked");
-                let slots: Vec<String> = layout
-                    .0
-                    .iter()
-                    .map(|slot| match slot {
-                        Some(name) => format!("Some({:?})", name.as_str()),
-                        None => "None".to_string(),
-                    })
-                    .collect();
-                let values = self.arg_values(block, args)?;
-                self.emit_statement(&format!(
-                    "let argc = vm.push_indirect_args(callee, &[{}], &[{}])?;",
-                    slots.join(", "),
-                    values.join(", ")
-                ));
-                laid_out = true;
-                Vec::new()
-            }
-            _ => self.arg_values(block, args)?,
-        };
-        if !matches!(callee, Operand::Constant(_)) && types.is_empty() && !*has_trace && !laid_out {
-            self.direct_closure_call(block, &args)?;
-        }
+        let plain = types.is_empty() && !*has_trace;
         self.call_types = types;
-        Ok(if laid_out {
-            ("Step::Call { callee, argc }".to_string(), args)
-        } else {
-            (
-                format!("Step::Call {{ callee, argc: {} }}", args.len()),
-                args,
-            )
-        })
-    }
-
-    /// Run compiled inline closures in place before falling back to a VM request.
-    fn direct_closure_call(&mut self, block: BlockId, args: &[String]) -> Gen<()> {
-        let (destination, target) = self.resume_edge(block)?;
-        self.flush_bindings();
-        self.emit_line(&format!(
-            "if let Some(body) = vm.closure_inline_body(callee, {}) {{",
-            args.len()
-        ));
+        self.callee_ptr(block, callee)?;
+        let named = argument_layout
+            .as_ref()
+            .is_some_and(|layout| layout.0.iter().any(Option::is_some));
+        if let Operand::Constant(Constant::Function(func)) = callee {
+            let name = function_display_name(self.db, *func);
+            let Some((_, info)) = self.index.function(self.db, *func)? else {
+                return unsupported(format!("callee `{name}` not found in the program"));
+            };
+            let values = self.laid_out_args(block, &name, info, argument_layout.as_ref(), args)?;
+            let step = format!("Step::Call {{ callee, argc: {} }}", values.len());
+            return Ok(self.suspend_expr(block, &step, &values));
+        }
+        let values = self.arg_values(block, args)?;
+        // Function values need their named arguments mapped at runtime.
+        if named {
+            let layout = argument_layout.as_ref().expect("checked");
+            let slots: Vec<String> = layout
+                .0
+                .iter()
+                .map(|slot| match slot {
+                    Some(name) => format!("Some({:?})", name.as_str()),
+                    None => "None".to_string(),
+                })
+                .collect();
+            self.emit_statement(&format!(
+                "let argc = vm.push_indirect_args(callee, &[{}], &[{}])?;",
+                slots.join(", "),
+                values.join(", ")
+            ));
+            return Ok(self.suspend_expr(block, "Step::Call { callee, argc }", &[]));
+        }
+        let step = format!("Step::Call {{ callee, argc: {} }}", values.len());
+        let suspend = self.suspend_expr(block, &step, &values);
+        if !plain {
+            return Ok(suspend);
+        }
+        // A compiled closure runs in place.
         let site = self.site_pc(block);
-        let call = self.rooted_call(
-            block,
-            &format!(
-                "vm.call_closure_compiled(callee, body, &[{}], {site})",
-                args.join(", ")
-            ),
-        )?;
-        let store = self.store(block, &destination, &Expr::new(call, Repr::Value))?;
-        self.emit_statement(&store);
-        let jump = self.jump_to(target.0);
-        self.emit_line(&jump);
-        self.emit_line("}");
-        Ok(())
+        let values = values.join(", ");
+        Ok(format!(
+            "match vm.closure_compiled_body(callee, {}) {{ \
+             Some(body) => vm.call_closure_compiled(callee, body, &[{values}], {site}), \
+             None => {suspend} }}",
+            args.len()
+        ))
     }
 
-    fn transfer(&mut self, id: BlockId) -> Gen<()> {
-        if self.block_suspends(id.0) {
-            return self.pause(id);
-        }
-        let terminator = self.body.blocks[id.0].terminator.as_ref().expect("checked");
-        let b = id.0;
-        let code = match terminator {
-            Terminator::Goto { target }
-            | Terminator::Call { target, .. }
-            | Terminator::VirtualCall { target, .. } => self.jump_to(target.0),
-            Terminator::Branch {
-                then_block,
-                else_block,
-                ..
-            }
-            | Terminator::NarrowBind {
-                then_block,
-                else_block,
-                ..
-            } => format!(
-                "bb = if c{b} {{ {} }} else {{ {} }}; continue;",
-                then_block.0, else_block.0
-            ),
-            Terminator::ShortCircuit { eval_rhs, join, .. } => format!(
-                "bb = if c{b} {{ {} }} else {{ {} }}; continue;",
-                join.0, eval_rhs.0
-            ),
-            Terminator::Switch {
-                arms, otherwise, ..
-            } => {
-                let mut arms_code = String::new();
-                for (key, target) in arms {
-                    let pattern = self.switch_pattern(key)?;
-                    let _ = write!(arms_code, "{pattern} => {}, ", target.0);
-                }
-                format!(
-                    "bb = match d{b} {{ {arms_code}_ => {} }}; continue;",
-                    otherwise.0
-                )
-            }
-            Terminator::Return
-            | Terminator::Unreachable
-            | Terminator::Throw { .. }
-            | Terminator::Rethrow { .. } => return self.exit(id),
-            Terminator::ThrowIfPanic { otherwise, .. } => self.jump_to(otherwise.0),
-            Terminator::SysOp { .. }
-            | Terminator::Spawn { .. }
-            | Terminator::Await { .. }
-            | Terminator::AwaitAny { .. } => unreachable!("suspensions are emitted by `pause`"),
-        };
-        self.emit_line(&code);
-        Ok(())
-    }
-
-    /// Resume with a result or route an error to the suspension site's handler.
-    fn resume_arms(&mut self, block: BlockId) -> Gen<()> {
-        let point = block.0 + 1;
-        let (destination, target) = self.resume_edge(block)?;
-        if !matches!(destination, Place::Local(_) | Place::Deref(_)) {
-            return unsupported("a suspending call's result stored into a field or element");
-        }
-        self.emit_line(&format!("({point}, Resume::Value(v)) => {{"));
-        self.restore_locals(block)?;
-        let store = self.store(block, &destination, &Expr::new("v", Repr::Value))?;
-        self.emit_statement(&store);
-        self.emit_line(&format!("bb = {};", target.0));
-        self.emit_line("}");
-        if self.body.blocks[block.0].unwind.is_some() {
-            self.emit_line(&format!("({point}, Resume::Thrown(e)) => {{"));
-            self.restore_locals(block)?;
-            let jump = self.unwind_jump(block, "e")?;
-            self.flush_bindings();
-            self.out.push_str(&jump);
-            self.emit_line("}");
-        }
-        Ok(())
-    }
-
-    fn resume_edge(&self, block: BlockId) -> Gen<(Place, BlockId)> {
+    /// Where a suspending terminator stores its result and continues.
+    fn continuation(&self, block: BlockId) -> Gen<(Place, BlockId)> {
         match self.body.blocks[block.0].terminator.as_ref() {
             Some(
                 Terminator::Call {
@@ -1109,27 +710,14 @@ impl<'db> Generator<'_, 'db> {
             ) => Ok((destination.clone(), *target)),
             Some(Terminator::Spawn { future, resume, .. }) => Ok((future.clone(), *resume)),
             _ => Err(Rejection::Invalid(
-                "resume after a non-suspending block".into(),
+                "continuation of a non-suspending block".into(),
             )),
-        }
-    }
-
-    fn jump_to(&self, block: usize) -> String {
-        if self.in_loop {
-            format!("bb = {block}; continue;")
-        } else {
-            format!("bb = {block};")
         }
     }
 
     /// Iterator positions take slots in this order after the locals.
     fn iters(&self) -> Vec<usize> {
         self.analysis.array_iters.keys().copied().collect()
-    }
-
-    /// Yield points follow suspension points so their IDs cannot overlap.
-    fn yield_point(&self, header: usize) -> usize {
-        self.body.blocks.len() + 1 + header
     }
 
     fn cause_changes_at(&self, block: usize) -> bool {
@@ -1202,27 +790,13 @@ impl<'db> Generator<'_, 'db> {
         pc_arg(self.positions.block(block.0).and_then(|pcs| pcs.terminator))
     }
 
-    fn block_suspends(&self, block: usize) -> bool {
-        match self.body.blocks[block].terminator.as_ref() {
-            Some(
-                Terminator::SysOp { .. }
-                | Terminator::Spawn { .. }
-                | Terminator::Await { .. }
-                | Terminator::AwaitAny { .. },
-            ) => true,
-            Some(terminator @ Terminator::Call { .. }) => self.call_suspends(terminator),
-            Some(terminator @ Terminator::VirtualCall { .. }) => !self.array_iteration(terminator),
-            _ => false,
-        }
-    }
-
     /// Array iteration is inline; other virtual calls can suspend.
     pub(super) fn array_iteration(&self, terminator: &Terminator<'db>) -> bool {
         array_iter_call(self.body, self.analysis.arity, terminator).is_some()
             || array_next_call(terminator, &self.analysis.array_iters).is_some()
     }
 
-    /// Uncompiled or resumable callees require a VM request.
+    /// Calls the VM must make: anything but a compiled callee entered directly.
     fn call_suspends(&self, terminator: &Terminator<'db>) -> bool {
         if suspends_directly(
             self.db,
@@ -1236,9 +810,8 @@ impl<'db> Generator<'_, 'db> {
         let Terminator::Call { callee, .. } = terminator else {
             return false;
         };
-        user_callee(self.db, self.index, callee).is_some_and(|object| {
-            !self.symbols.contains_key(&object) || self.resumable.contains(&object)
-        })
+        user_callee(self.db, self.index, callee)
+            .is_some_and(|object| !self.symbols.contains_key(&object))
     }
 
     fn arity(&self) -> usize {

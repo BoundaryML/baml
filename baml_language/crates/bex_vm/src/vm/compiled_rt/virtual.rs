@@ -187,10 +187,8 @@ impl BexVm {
             return Ok(None);
         }
         match super::compiled_fn(function) {
-            Some(super::CompiledFn::Inline(body)) => {
-                self.call_compiled(callee, body, args, pc).map(Some)
-            }
-            _ => Ok(None),
+            Some(body) => self.call_compiled(callee, body, args, pc).map(Some),
+            None => Ok(None),
         }
     }
 
@@ -445,7 +443,7 @@ mod tests {
 
     use super::VirtualSite;
     use crate::{
-        compiled_rt::{CompiledFn, Resume, Step},
+        compiled_rt::Step,
         errors::VmError,
         vm::{
             BexVm,
@@ -453,7 +451,7 @@ mod tests {
         },
     };
 
-    type Out = Result<Step, Box<VmError>>;
+    type Out = Result<Value, Box<VmError>>;
 
     fn object(index: &AtomicU32) -> ObjectIndex {
         ObjectIndex::from_raw(index.load(Ordering::Relaxed) as usize)
@@ -461,35 +459,25 @@ mod tests {
 
     fn dispatch(
         vm: &mut BexVm,
-        resume: Resume,
+        args: &[Value],
         site: &VirtualSite,
         iface: &AtomicU32,
         iface_args: &[RealizedTy],
         method: &str,
     ) -> Out {
-        let depth = vm.frame_depth();
-        match resume {
-            Resume::Start => {
-                vm.reserve_slots(depth, 3);
-                let receiver = vm.slot(depth, 0);
-                vm.set_slot(depth, 2, Value::int(1));
-                let iface = vm.idx_to_ptr(object(iface));
-                let callee = vm.virtual_target(site, receiver, iface, iface_args, method, &[])?;
-                let argc = vm.push_virtual_args(callee, None, &[receiver])?;
-                Ok(Step::Call { callee, argc })
-            }
-            Resume::Value(value) => Ok(Step::Return(value)),
-            Resume::Thrown(error) => Err(error),
-            Resume::Yielded => unreachable!("the body never yields"),
-        }
+        let receiver = args[0];
+        let iface = vm.idx_to_ptr(object(iface));
+        let callee = vm.virtual_target(site, receiver, iface, iface_args, method, &[])?;
+        let argc = vm.push_virtual_args(callee, None, &[receiver])?;
+        vm.suspend(Step::Call { callee, argc })
     }
 
     #[test]
     fn explicit_implementations_dispatch_and_cache() {
         static SHAPE: AtomicU32 = AtomicU32::new(0);
         static SITE: VirtualSite = VirtualSite::new();
-        fn total(vm: &mut BexVm, resume: Resume) -> Out {
-            dispatch(vm, resume, &SITE, &SHAPE, &[], "area")
+        fn total(vm: &mut BexVm, args: &[Value]) -> Out {
+            dispatch(vm, args, &SITE, &SHAPE, &[], "area")
         }
         const SOURCE: &str = r#"
             interface Shape { function area(self) -> int throws never }
@@ -516,7 +504,7 @@ mod tests {
         for telemetry in [false, true] {
             let out = run_with_compiled_bodies(
                 SOURCE,
-                &[("user.Total", CompiledFn::Resumable(total))],
+                &[("user.Total", total)],
                 &[("user.Shape", &SHAPE)],
                 telemetry,
             );
@@ -535,25 +523,15 @@ mod tests {
             let side = test_int(vm.load_field(args[0], 0)?);
             Ok(Value::int(side * side))
         }
-        fn total(vm: &mut BexVm, resume: Resume) -> Out {
-            let depth = vm.frame_depth();
-            match resume {
-                Resume::Start => {
-                    vm.reserve_slots(depth, 3);
-                    let receiver = vm.slot(depth, 0);
-                    let iface = vm.idx_to_ptr(object(&SHAPE));
-                    let callee = vm.virtual_target(&SITE, receiver, iface, &[], "area", &[])?;
-                    if let Some(value) = vm.call_inline(callee, &[receiver], 0)? {
-                        return Ok(Step::Return(value));
-                    }
-                    vm.set_slot(depth, 2, Value::int(1));
-                    let argc = vm.push_virtual_args(callee, None, &[receiver])?;
-                    Ok(Step::Call { callee, argc })
-                }
-                Resume::Value(value) => Ok(Step::Return(value)),
-                Resume::Thrown(error) => Err(error),
-                Resume::Yielded => unreachable!("the body never yields"),
+        fn total(vm: &mut BexVm, args: &[Value]) -> Out {
+            let receiver = args[0];
+            let iface = vm.idx_to_ptr(object(&SHAPE));
+            let callee = vm.virtual_target(&SITE, receiver, iface, &[], "area", &[])?;
+            if let Some(value) = vm.call_inline(callee, &[receiver], 0)? {
+                return Ok(value);
             }
+            let argc = vm.push_virtual_args(callee, None, &[receiver])?;
+            vm.suspend(Step::Call { callee, argc })
         }
         const SOURCE: &str = r#"
             interface Shape { function area(self) -> int throws never }
@@ -576,11 +554,8 @@ mod tests {
             let out = run_with_compiled_bodies(
                 SOURCE,
                 &[
-                    ("user.Total", CompiledFn::Resumable(total)),
-                    (
-                        "user.<(user.Square as user.Shape)>.area",
-                        CompiledFn::Inline(square_area),
-                    ),
+                    ("user.Total", total),
+                    ("user.<(user.Square as user.Shape)>.area", square_area),
                 ],
                 &[("user.Shape", &SHAPE)],
                 telemetry,
@@ -594,8 +569,8 @@ mod tests {
     fn adopted_defaults_carry_their_frame_through_the_cache() {
         static GREETER: AtomicU32 = AtomicU32::new(0);
         static SITE: VirtualSite = VirtualSite::new();
-        fn greet(vm: &mut BexVm, resume: Resume) -> Out {
-            dispatch(vm, resume, &SITE, &GREETER, &[], "greet")
+        fn greet(vm: &mut BexVm, args: &[Value]) -> Out {
+            dispatch(vm, args, &SITE, &GREETER, &[], "greet")
         }
         const SOURCE: &str = r#"
             interface Greeter {
@@ -607,7 +582,7 @@ mod tests {
         "#;
         let out = run_with_compiled_bodies(
             SOURCE,
-            &[("user.Greet", CompiledFn::Resumable(greet))],
+            &[("user.Greet", greet)],
             &[("user.Greeter", &GREETER)],
             false,
         );
@@ -619,8 +594,8 @@ mod tests {
     fn structural_defaults_resolve_without_caching() {
         static TO_STRING: AtomicU32 = AtomicU32::new(0);
         static SITE: VirtualSite = VirtualSite::new();
-        fn show(vm: &mut BexVm, resume: Resume) -> Out {
-            dispatch(vm, resume, &SITE, &TO_STRING, &[], "to_string")
+        fn show(vm: &mut BexVm, args: &[Value]) -> Out {
+            dispatch(vm, args, &SITE, &TO_STRING, &[], "to_string")
         }
         const SOURCE: &str = r#"
             class Plain { x int }
@@ -630,7 +605,7 @@ mod tests {
         let expected = run_with_compiled_bodies(SOURCE, &[], &[], false);
         let out = run_with_compiled_bodies(
             SOURCE,
-            &[("user.Show", CompiledFn::Resumable(show))],
+            &[("user.Show", show)],
             &[("baml.ToString", &TO_STRING)],
             false,
         );
@@ -643,8 +618,8 @@ mod tests {
     fn generic_interfaces_dispatch_on_their_instantiation() {
         static CONV: AtomicU32 = AtomicU32::new(0);
         static SITE: VirtualSite = VirtualSite::new();
-        fn describe(vm: &mut BexVm, resume: Resume) -> Out {
-            dispatch(vm, resume, &SITE, &CONV, &[RealizedTy::Int], "describe")
+        fn describe(vm: &mut BexVm, args: &[Value]) -> Out {
+            dispatch(vm, args, &SITE, &CONV, &[RealizedTy::Int], "describe")
         }
         const SOURCE: &str = r#"
             interface Conv<T> { function describe(self) -> string throws never }
@@ -657,7 +632,7 @@ mod tests {
         "#;
         let out = run_with_compiled_bodies(
             SOURCE,
-            &[("user.Describe", CompiledFn::Resumable(describe))],
+            &[("user.Describe", describe)],
             &[("user.Conv", &CONV)],
             false,
         );
@@ -686,7 +661,7 @@ mod tests {
         "#;
         let out = run_with_compiled_bodies(
             SOURCE,
-            &[("user.AreaFn", CompiledFn::Inline(area_fn))],
+            &[("user.AreaFn", area_fn)],
             &[("user.Shape", &SHAPE)],
             false,
         );
@@ -720,7 +695,7 @@ mod tests {
         "#;
         let out = run_with_compiled_bodies(
             SOURCE,
-            &[("user.Rename", CompiledFn::Inline(rename))],
+            &[("user.Rename", rename)],
             &[("user.Named", &NAMED)],
             false,
         );

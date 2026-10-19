@@ -65,7 +65,6 @@ unsafe impl Sync for FunctionKind {}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CompiledBody {
     ptr: *const (),
-    resumable: bool,
     slots: u32,
     cause_slot: Option<u32>,
 }
@@ -73,19 +72,12 @@ pub struct CompiledBody {
 impl CompiledBody {
     /// # Safety
     ///
-    /// `ptr` must be a `bex_vm::compiled_rt::ResumableBody` function pointer
-    /// when `resumable` is true, or an `InlineBody` function pointer otherwise.
+    /// `ptr` must be a `bex_vm::compiled_rt::CompiledFn` function pointer.
     #[must_use]
     #[allow(unsafe_code)]
-    pub const unsafe fn new(
-        ptr: *const (),
-        resumable: bool,
-        slots: u32,
-        cause_slot: Option<u32>,
-    ) -> Self {
+    pub const unsafe fn new(ptr: *const (), slots: u32, cause_slot: Option<u32>) -> Self {
         Self {
             ptr,
-            resumable,
             slots,
             cause_slot,
         }
@@ -95,12 +87,6 @@ impl CompiledBody {
     #[must_use]
     pub const fn ptr(self) -> *const () {
         self.ptr
-    }
-
-    /// Whether the VM drives the body as a resumable state machine.
-    #[must_use]
-    pub const fn resumable(self) -> bool {
-        self.resumable
     }
 
     /// The number of frame slots reserved from the locals offset, including the cause slot.

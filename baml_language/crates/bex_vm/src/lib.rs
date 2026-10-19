@@ -47,6 +47,6 @@ pub use package_baml::NativeFunction;
 pub use vm::compiled_rt;
 pub use vm::{
     BexVm, BytecodeFrame, BytecodeProgram, Frame, VmEventSourceLocation, VmExecState,
-    compiled_rt::{CompiledBodies, CompiledBodyTable, FramePosition, PendingLog},
+    compiled_rt::{CompiledBodies, CompiledBodyTable, FramePosition},
     convert_program, convert_program_with_compiled_bodies, prepare_compact_code,
 };

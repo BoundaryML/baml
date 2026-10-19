@@ -15,7 +15,7 @@ const PRELUDE: &str = "\
     unused_parens, unreachable_code, unreachable_patterns, non_snake_case, clippy::all,
     clippy::pedantic)]
 use bex_vm::{BexVm, NativeFunction, CompiledBodyTable, errors::VmError};
-use bex_vm::compiled_rt::{CompiledEntry, CompiledFn, Resume, Step};
+use bex_vm::compiled_rt::{CompiledEntry, Step};
 use bex_vm_types::{BinOp, CmpOp, GlobalIndex, ObjectIndex, RealizedTy, Value};
 type R<T> = Result<T, Box<VmError>>;
 ";
@@ -68,14 +68,9 @@ fn write_module(
             entries: &["
     )?;
     for function in functions {
-        let shape = if function.resumable {
-            "Resumable"
-        } else {
-            "Inline"
-        };
         writeln!(
             out,
-            "CompiledEntry {{ object: {}, name: {:?}, arity: {}, body: CompiledFn::{shape}({}), \
+            "CompiledEntry {{ object: {}, name: {:?}, arity: {}, body: {}, \
              slots: {}, cause_slot: {:?} }},",
             function.object,
             function.name,

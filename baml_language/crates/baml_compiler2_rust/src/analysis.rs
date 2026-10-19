@@ -75,9 +75,8 @@ pub(crate) struct Analysis {
     pub(crate) suspends: bool,
     /// Iterator local to array local for iteration compiled as an index walk.
     pub(crate) array_iters: BTreeMap<usize, usize>,
-    pub(crate) loop_allocates: bool,
-    /// Allocation other than through user calls, used for recursion checks.
-    pub(crate) allocates: bool,
+    /// The body has a loop, which polls for a yield at its back edge.
+    pub(crate) loops: bool,
 }
 
 impl Analysis {
@@ -103,7 +102,7 @@ impl Analysis {
             user_callees,
             suspends,
         } = body_flow(db, index, body, mir.arity, &static_types, &array_iters)?;
-        let (loop_allocates, allocates) = allocation_effects(db, index, body, &reprs);
+        let loops = !loops(body).0.is_empty();
         Ok(Self {
             arity: mir.arity,
             reprs,
@@ -115,9 +114,13 @@ impl Analysis {
             frame_types,
             suspends,
             array_iters,
-            loop_allocates,
-            allocates,
+            loops,
         })
+    }
+
+    /// Whether the body may suspend on its own, before its callees are known.
+    pub(crate) fn pauses(&self) -> bool {
+        self.suspends || self.loops
     }
 
     /// Type locals have no runtime `Value` binding.
@@ -277,83 +280,6 @@ fn body_flow<'db>(
         user_callees,
         suspends,
     })
-}
-
-fn allocation_effects(
-    db: &dyn baml_compiler2_mir::Db,
-    index: &ProgramIndex,
-    body: &MirFunctionBody<'_>,
-    reprs: &[Repr],
-) -> (bool, bool) {
-    let (_, in_loop) = loops(body);
-    let loop_allocates = body
-        .blocks
-        .iter()
-        .any(|block| in_loop[block.id.0] && block_allocates(db, index, reprs, block, true));
-    let allocates = body
-        .blocks
-        .iter()
-        .any(|block| block_allocates(db, index, reprs, block, false));
-    (loop_allocates, allocates)
-}
-
-/// Conservatively detect allocation so loops cannot retain uncollected garbage.
-fn block_allocates(
-    db: &dyn baml_compiler2_mir::Db,
-    index: &ProgramIndex,
-    reprs: &[Repr],
-    block: &baml_compiler2_mir::BasicBlock<'_>,
-    user_calls: bool,
-) -> bool {
-    let statement_allocates = |kind: &StatementKind<'_>| match kind {
-        StatementKind::Nop | StatementKind::Drop(_) => false,
-        StatementKind::Assign {
-            destination: Place::Local(local),
-            value,
-        } => {
-            if reprs[local.0] != Repr::Value {
-                !matches!(
-                    value,
-                    Rvalue::Use(_)
-                        | Rvalue::BinaryOp { .. }
-                        | Rvalue::UnaryOp { .. }
-                        | Rvalue::IsType { .. }
-                        | Rvalue::IsTypeTag { .. }
-                        | Rvalue::TypeTag(_)
-                        | Rvalue::Discriminant(_)
-                        | Rvalue::Len(_)
-                        | Rvalue::LoadType(_)
-                )
-            } else {
-                !match value {
-                    Rvalue::Use(Operand::Copy(place) | Operand::Move(place)) => match place {
-                        Place::Local(source) => reprs[source.0] == Repr::Value,
-                        _ => true,
-                    },
-                    Rvalue::Use(Operand::Constant(constant)) => {
-                        !matches!(constant, Constant::Float(_))
-                    }
-                    Rvalue::LoadType(_) => true,
-                    _ => false,
-                }
-            }
-        }
-        _ => true,
-    };
-    if block
-        .statements
-        .iter()
-        .any(|statement| statement_allocates(&statement.kind))
-    {
-        return true;
-    }
-    match &block.terminator {
-        Some(Terminator::Call { callee, .. }) => {
-            user_calls || user_callee(db, index, callee).is_none()
-        }
-        Some(Terminator::SysOp { .. } | Terminator::Spawn { .. }) => true,
-        _ => false,
-    }
 }
 
 /// Defaulted parameters must preserve `OmittedArg`; in-place bool coercions

@@ -1,14 +1,5 @@
 use crate::vm::*;
 
-/// A log event queued for the engine in [`super::CompiledState::pending_logs`].
-#[derive(Debug, Clone)]
-pub struct PendingLog {
-    pub level: btel_records::LogLevel,
-    pub event_name: Option<Arc<str>>,
-    pub data: Value,
-    pub source_location: Option<VmEventSourceLocation>,
-}
-
 /// Compiled entry points for one program.
 pub struct CompiledBodyTable {
     pub fingerprint: [u8; 32],
@@ -142,7 +133,8 @@ impl BexVm {
         Ok((value, ctx))
     }
 
-    /// Resume a compiled body at its stub offset, retaining its frame on error.
+    /// Enter or resume the compiled body of the top frame, which stands at
+    /// its stub, and carry out what it asks for next.
     #[cold]
     #[inline(never)]
     pub(crate) fn resume_compiled(
@@ -150,7 +142,7 @@ impl BexVm {
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
-        use crate::compiled_rt::{Resume, stub};
+        use crate::compiled_rt::{Request, stub};
         let (Some(start), Some(body)) = (
             crate::compiled_rt::stub_start(function),
             crate::compiled_rt::compiled_fn(function),
@@ -161,41 +153,48 @@ impl BexVm {
             .into());
         };
         let offset = self.cur_pc - start;
-        if let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] {
-            frame.instruction_ptr = crate::compiled_rt::RUNNING;
-        }
-        match body {
-            // Inline calls execute in the call path; only entry points reach here.
-            CompiledFn::Inline(body) => {
-                let Frame::Bytecode(frame) = &self.frames[*frame_idx] else {
-                    unreachable!("a compiled frame is a bytecode frame");
-                };
-                let locals_offset = frame.locals_offset.raw();
-                let args: SmallVec<[Value; 4]> = (0..function.arity)
+        let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] else {
+            unreachable!("a compiled frame is a bytecode frame");
+        };
+        frame.instruction_ptr = crate::compiled_rt::RUNNING;
+        let locals_offset = frame.locals_offset.raw();
+        let request = match offset {
+            stub::START => {
+                let args = (0..function.arity)
                     .map(|i| self.stack.get_at(StackIndex::from_raw(locals_offset + i)))
                     .collect();
-                let outcome = self.with_stack_room(|vm| body(vm, &args));
-                self.settle();
+                self.enter_compiled(body, args)
+            }
+            stub::AFTER_YIELD => self.resume_body(Ok(Value::NULL)),
+            // Results arrive on the stack; errors arrive through `delivery`.
+            _ => match self.compiled.delivery.take() {
+                Some(error) => self.resume_body(Err(error)),
+                None => {
+                    let value = self.stack.ensure_pop();
+                    self.resume_body(Ok(value))
+                }
+            },
+        };
+        self.settle();
+        // The request comes from the fiber's innermost body, whose frame may be
+        // deeper than the one entered here: a body pushes a frame for each
+        // compiled callee it calls directly.
+        *frame_idx = self.frames.len() - 1;
+        // SAFETY: see `load_function`.
+        *function = unsafe { self.load_function(*frame_idx)? };
+        match request {
+            Request::Done(outcome) => {
                 self.complete_compiled(frame_idx, function, outcome.map_err(|error| *error))
             }
-            CompiledFn::Resumable(body) => {
-                // Results arrive on the stack; errors arrive through `delivery`.
-                let resume = match offset {
-                    stub::START => Resume::Start,
-                    stub::AFTER_YIELD => Resume::Yielded,
-                    _ => match self.compiled.delivery.take() {
-                        Some(error) => Resume::Thrown(error),
-                        None => Resume::Value(self.stack.ensure_pop()),
-                    },
-                };
-                let step = body(self, resume);
-                self.settle();
-                self.carry_out(step.map_err(|error| *error)?, start, frame_idx, function)
+            Request::Step(step) => {
+                let start = crate::compiled_rt::stub_start(function)
+                    .expect("a suspending body has a compiled function");
+                self.carry_out(step, start, frame_idx, function)
             }
         }
     }
 
-    /// Handle a resumable body's request and park its frame at the resume offset.
+    /// Carry out a body's request and park its frame at the matching stub offset.
     pub(crate) fn carry_out(
         &mut self,
         step: Step,
@@ -210,7 +209,6 @@ impl BexVm {
             }
         };
         match step {
-            Step::Return(value) => self.complete_compiled(frame_idx, function, Ok(value)),
             Step::Call { callee, argc } => {
                 park(self, *frame_idx, stub::AFTER_CALL);
                 let mut argc = argc as usize;
@@ -238,20 +236,44 @@ impl BexVm {
                 outcome
             }
             // The stub executes the operation before resuming the compiled body.
-            Step::Await(operand) | Step::AwaitAny(operand) | Step::Spawn(operand) => {
-                let offset = match step {
-                    Step::Await(_) => stub::AWAIT,
-                    Step::AwaitAny(_) => stub::AWAIT_ANY,
-                    _ => stub::SPAWN,
-                };
-                self.stack.push(operand);
-                park(self, *frame_idx, offset);
+            Step::Await(operand) => {
+                self.park_operand(*frame_idx, start + stub::AWAIT, operand);
                 Ok(None)
+            }
+            Step::AwaitAny(operand) => {
+                self.park_operand(*frame_idx, start + stub::AWAIT_ANY, operand);
+                Ok(None)
+            }
+            Step::Spawn(operand) => {
+                self.park_operand(*frame_idx, start + stub::SPAWN, operand);
+                Ok(None)
+            }
+            Step::Log {
+                level,
+                event_name,
+                data,
+                source_location,
+            } => {
+                park(self, *frame_idx, stub::AFTER_YIELD);
+                Ok(Some(VmExecState::Log {
+                    level,
+                    event_name,
+                    data,
+                    source_location,
+                }))
             }
             Step::Yield => {
                 park(self, *frame_idx, stub::AFTER_YIELD);
                 Ok(Some(VmExecState::EarlyYield))
             }
+        }
+    }
+
+    /// Park the frame at a stub opcode that consumes `operand` from the stack.
+    fn park_operand(&mut self, frame_idx: usize, instruction_ptr: usize, operand: Value) {
+        self.stack.push(operand);
+        if let Frame::Bytecode(frame) = &mut self.frames[frame_idx] {
+            frame.instruction_ptr = instruction_ptr;
         }
     }
 
@@ -444,7 +466,7 @@ impl BexVm {
         Ok(None)
     }
 
-    /// Bind pending type arguments before an inline body runs inside the call path.
+    /// Bind pending type arguments before a body runs in place inside the call path.
     #[cold]
     #[inline(never)]
     pub(crate) fn bind_passed_type_args(&mut self, frame_idx: usize) {

@@ -3,9 +3,10 @@
 mod arith;
 mod call;
 mod cell;
+mod fiber;
 mod frame;
 pub(crate) use frame::attach_compiled_bodies;
-pub use frame::{CompiledBodies, CompiledBodyTable, FramePosition, PendingLog};
+pub use frame::{CompiledBodies, CompiledBodyTable, FramePosition};
 pub use state::CompiledState;
 pub(crate) use state::SavedCallTypes;
 mod heap;
@@ -17,14 +18,8 @@ mod r#virtual;
 #[cfg(test)]
 pub(crate) mod tests;
 
-/// Coordinates in-place collection with the other mutators.
-pub trait CompiledCollector: Send + Sync {
-    /// Collect and forward `vm` roots if due and all other mutators are parked, returning
-    /// whether collection ran.
-    fn collect_in_place(&self, vm: &mut crate::BexVm) -> bool;
-}
-
-/// Whether `BAML_GC_STRESS=1` forces collection at every compiled GC check.
+/// Whether `BAML_GC_STRESS=1` makes compiled code yield at every check and the engine collect
+/// at every yield.
 #[must_use]
 pub fn gc_stress() -> bool {
     static STRESS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -40,6 +35,7 @@ use bex_vm_types::{HeapPtr, Value, types::Function};
 pub use btel_records::LogLevel;
 #[cfg(test)]
 pub(crate) use call::FORCE_CALL_FUNNEL;
+pub(crate) use fiber::{Fiber, Request};
 pub use r#virtual::VirtualSite;
 
 use crate::{
@@ -47,34 +43,16 @@ use crate::{
     vm::{BexVm, value_as_float},
 };
 
-/// A compiled BAML function body that runs without suspending.
-pub type InlineBody = fn(&mut BexVm, &[Value]) -> Result<Value, Box<VmError>>;
+/// A compiled BAML function body. It runs on its VM's fiber, so it may pause through
+/// [`BexVm::suspend`] anywhere in its call chain.
+pub type CompiledFn = fn(&mut BexVm, &[Value]) -> Result<Value, Box<VmError>>;
 
 #[cfg(target_pointer_width = "64")]
 const _: () =
     assert!(std::mem::size_of::<Result<Value, Box<VmError>>>() == 2 * std::mem::size_of::<usize>());
 
-/// A compiled state machine whose arguments, live locals, and resume point reside in GC-scanned
-/// frame slots.
-pub type ResumableBody = fn(&mut BexVm, Resume) -> Result<Step, Box<VmError>>;
-
-/// The outcome delivered to a [`ResumableBody`] at its saved resume point.
-pub enum Resume {
-    /// The body starts.
-    Start,
-    /// The call or await returned this value.
-    Value(Value),
-    /// The call or await raised this error.
-    Thrown(Box<VmError>),
-    /// The body yielded at a loop back edge and continues.
-    Yielded,
-}
-
-/// A VM request whose resume point the body must save in its frame before returning.
-#[derive(Clone, Copy)]
+/// What a body asks the VM to do while it waits on the fiber; see [`BexVm::suspend`].
 pub enum Step {
-    /// The body finished with this value.
-    Return(Value),
     /// Call `callee` with arguments pushed by [`BexVm::push_arg`] and [`BexVm::push_type_arg`].
     Call { callee: HeapPtr, argc: u32 },
     /// Await a future on this frame.
@@ -83,17 +61,15 @@ pub enum Step {
     AwaitAny(Value),
     /// `spawn plan`: the spawned task's future.
     Spawn(Value),
-    /// Yield to the scheduler before continuing.
+    /// Deliver a `log.*` event.
+    Log {
+        level: LogLevel,
+        event_name: Option<std::sync::Arc<str>>,
+        data: Value,
+        source_location: Option<crate::vm::VmEventSourceLocation>,
+    },
+    /// Let the engine collect, park, or cancel before continuing.
     Yield,
-}
-
-/// A compiled body, by whether it can suspend.
-#[derive(Clone, Copy)]
-pub enum CompiledFn {
-    /// Runs to completion inside the call that enters it.
-    Inline(InlineBody),
-    /// Driven by the VM; see [`ResumableBody`].
-    Resumable(ResumableBody),
 }
 
 /// One compiled function in a generated module's table.
@@ -105,7 +81,6 @@ pub struct CompiledEntry {
     pub name: &'static str,
     /// That function's arity, checked at attach.
     pub arity: usize,
-    /// The body.
     pub body: CompiledFn,
     /// Frame slot count; see [`bex_vm_types::types::CompiledBody::slots`].
     pub slots: u32,
@@ -115,14 +90,14 @@ pub struct CompiledEntry {
 
 impl CompiledEntry {
     pub(crate) fn erase(self) -> bex_vm_types::types::CompiledBody {
-        let (ptr, resumable) = match self.body {
-            CompiledFn::Inline(body) => (body as *const (), false),
-            CompiledFn::Resumable(body) => (body as *const (), true),
-        };
-        // SAFETY: `ptr` is cast from the body type `resumable` names.
+        // SAFETY: `ptr` is cast from a `CompiledFn`.
         #[allow(unsafe_code)]
         unsafe {
-            bex_vm_types::types::CompiledBody::new(ptr, resumable, self.slots, self.cause_slot)
+            bex_vm_types::types::CompiledBody::new(
+                self.body as *const (),
+                self.slots,
+                self.cause_slot,
+            )
         }
     }
 }
@@ -170,32 +145,11 @@ pub(crate) mod stub {
 }
 
 /// The `instruction_ptr` of a compiled frame whose body is running on the
-/// Rust stack; see [`stub`].
+/// fiber; see [`stub`].
 pub(crate) const RUNNING: usize = usize::MAX;
 
-/// Stack space reserved for a compiled callee, its builtins, and unwinding.
-#[cfg(not(target_arch = "wasm32"))]
+/// Fiber stack a compiled callee must still have below it: its builtins and unwinding.
 const STACK_RED_ZONE: usize = 256 << 10;
-
-/// Size of the lazily mapped stack segment used by `BexVm::with_stack_room`.
-#[cfg(not(target_arch = "wasm32"))]
-pub(crate) const STACK_SEGMENT: usize = 8 << 20;
-
-/// Stack limit plus [`STACK_RED_ZONE`], or zero if the limit is unknown.
-pub(crate) fn stack_floor() -> usize {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        stacker::remaining_stack().map_or(0, |left| {
-            stack_address()
-                .saturating_sub(left)
-                .saturating_add(STACK_RED_ZONE)
-        })
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        0
-    }
-}
 
 #[inline]
 fn stack_address() -> usize {
@@ -308,13 +262,6 @@ pub fn callee_ptr(value: Value) -> Result<HeapPtr, Box<VmError>> {
 #[allow(unsafe_code)]
 pub(crate) fn compiled_fn(function: &Function) -> Option<CompiledFn> {
     let body = function.compiled_body?;
-    // SAFETY: `CompiledBody::new` requires `resumable` to match the original function pointer
-    // type.
-    Some(unsafe {
-        if body.resumable() {
-            CompiledFn::Resumable(std::mem::transmute::<*const (), ResumableBody>(body.ptr()))
-        } else {
-            CompiledFn::Inline(std::mem::transmute::<*const (), InlineBody>(body.ptr()))
-        }
-    })
+    // SAFETY: `CompiledEntry::erase` cast the pointer from a `CompiledFn`.
+    Some(unsafe { std::mem::transmute::<*const (), CompiledFn>(body.ptr()) })
 }

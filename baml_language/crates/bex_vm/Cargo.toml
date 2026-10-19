@@ -61,9 +61,8 @@ toml = { workspace = true }
 
 # Native-only: tokio runtime so CancelToken.any can `tokio::spawn` its watcher.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# Compiled bodies recurse on the Rust stack; the call path checks what is
-# left of it so deep compiled recursion raises `StackOverflow`, not a crash.
-stacker = { workspace = true }
+# Compiled bodies run on a fiber per VM so they can pause mid-body.
+corosensei = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "macros" ] }
 
 # WASM-only: wasm-bindgen-futures for spawning the watcher.
