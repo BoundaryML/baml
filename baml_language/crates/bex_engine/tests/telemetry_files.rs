@@ -344,7 +344,7 @@ async fn telemetry_disabled_inside_an_owned_span_does_not_stop_execution() {
             .unwrap()
             .unwrap()
             .path();
-        std::fs::rename(&dir, dir.with_extension("disabled")).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
         std::fs::write(&dir, b"not a directory").unwrap();
     });
     assert_eq!(
