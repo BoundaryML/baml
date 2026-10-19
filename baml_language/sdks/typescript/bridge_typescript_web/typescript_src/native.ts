@@ -523,12 +523,14 @@ export function completeHostCall(callId: number, isError: number, content: Uint8
 }
 /**
  * Complete a host call with its result, encoded by the bridge against the
- * return type the callable was bound to. A result that does not fit throws
- * and leaves the call open for the caller to complete as an error.
+ * return type the callable was bound to. A result that does not fit completes
+ * the call as a `HostContractViolation` panic; an error raised while the value
+ * was read throws and leaves the call open for the caller to complete as an
+ * error. Returns the outcome the engine sees, `'ok'` or `'error'`.
  */
-export function completeHostCallValue(callId: number, value: unknown): void {
+export function completeHostCallValue(callId: number, value: unknown): string {
     let completed = false;
-    try { completeWebHostCallValue(callId, value); completed = true; }
+    try { const outcome = completeWebHostCallValue(callId, value); completed = true; return outcome; }
     catch (error) { throw wrapNativeError(error); }
     finally { if (completed) finishHostCall(callId); }
 }

@@ -284,7 +284,7 @@ export declare function completeHostCallThrow(callId: number, value: unknown): v
  * raised while the value was read is raised here, and the JS dispatch
  * wrapper then completes the call with that error.
  */
-export declare function completeHostCallValue(callId: number, value: unknown): void
+export declare function completeHostCallValue(callId: number, value: unknown): string
 
 export declare function getBridgeRuntimeVersion(): string
 

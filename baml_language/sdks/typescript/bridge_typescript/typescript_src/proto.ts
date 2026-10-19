@@ -1040,11 +1040,10 @@ function dispatchHostCallable(userFn: (...args: unknown[]) => unknown, callId: n
             // exactly once. The handlers only call the defended send*
             // helpers (they can't throw synchronously).
             return Promise.resolve(result).then(
-                (resolved) => { observeHostCallbackResult(callId, false, resolved); sendHostCallableResult(callId, resolved); },
+                (resolved) => { sendHostCallableResult(callId, resolved); },
                 (err) => { observeHostCallbackResult(callId, true, err); sendHostCallableError(callId, err); }
             );
         } else {
-            observeHostCallbackResult(callId, false, result);
             sendHostCallableResult(callId, result);
         }
     } catch (err) {
@@ -1065,13 +1064,18 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
 function sendHostCallableResult(callId: number, value: unknown): void {
     // The bridge encodes the result against the return type of the slot the
     // callable was bound to; a value that does not fit completes the call as
-    // a `HostContractViolation` panic. Only a failure to reach the bridge at
-    // all is left for the error path here.
+    // a `HostContractViolation` panic. The trace records what the engine saw,
+    // so the outcome is observed after the bridge has decided it. Only an
+    // error raised while the value was read is left for the error path here.
+    let outcome: string;
     try {
-        completeHostCallValue(callId, value);
+        outcome = completeHostCallValue(callId, value);
     } catch (err) {
+        observeHostCallbackResult(callId, true, err);
         sendHostCallableError(callId, err);
+        return;
     }
+    observeHostCallbackResult(callId, outcome !== 'ok', value);
 }
 
 /**

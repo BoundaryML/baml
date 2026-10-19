@@ -160,9 +160,10 @@ pub(crate) fn encode_request(
 /// `baml.panics.HostContractViolation`; a value the bridge could not carry as
 /// a `baml.panics.SdkPanic`; an error the callable's own code raised while
 /// the value was read is raised here, and the runtime completes the call with
-/// it.
+/// it. Returns the outcome the engine sees, `"ok"` or `"error"`, for the
+/// runtime's instrumentation.
 #[wasm_bindgen(js_name = completeWebHostCallValue)]
-pub fn complete_web_host_call_value(call_id: u32, value: JsValue) -> Result<bool, JsValue> {
+pub fn complete_web_host_call_value(call_id: u32, value: JsValue) -> Result<String, JsValue> {
     let key = sys_wasm::host_callable_key_for_call(call_id);
     let ret = SIGNATURES.with(
         |cell| match key.and_then(|key| cell.borrow().get(&key).cloned()) {
@@ -170,16 +171,22 @@ pub fn complete_web_host_call_value(call_id: u32, value: JsValue) -> Result<bool
             Some(_) | None => RuntimeTy::Unknown,
         },
     );
-    Ok(match encode_result(value, &ret) {
-        Completion::Wire(value) => sys_wasm::complete_host_call(call_id, 0, &value.encode_to_vec()),
+    let outcome = match encode_result(value, &ret) {
+        Completion::Wire(value) => {
+            sys_wasm::complete_host_call(call_id, 0, &value.encode_to_vec());
+            "ok"
+        }
         Completion::HostError(error) => return Err(error),
         // The host broke the callable's contract: a panic, as the engine's
         // own return check reports it, not a catchable error.
-        Completion::ContractViolation(error) => sys_wasm::complete_host_call(
-            call_id,
-            1,
-            &bridge_encode::host_contract_violation(&error.to_string(), "web").encode_to_vec(),
-        ),
+        Completion::ContractViolation(error) => {
+            sys_wasm::complete_host_call(
+                call_id,
+                1,
+                &bridge_encode::host_contract_violation(&error.to_string(), "web").encode_to_vec(),
+            );
+            "error"
+        }
         Completion::BridgeFailure(fault) => {
             let message = match fault {
                 BridgeFault::Value(error) => error.to_string(),
@@ -189,9 +196,11 @@ pub fn complete_web_host_call_value(call_id: u32, value: JsValue) -> Result<bool
                 call_id,
                 1,
                 &bridge_encode::sdk_panic(&message).encode_to_vec(),
-            )
+            );
+            "error"
         }
-    })
+    };
+    Ok(outcome.to_string())
 }
 
 /// Complete an in-flight host call with a thrown BAML value, encoded as the

@@ -321,19 +321,33 @@ pub(crate) fn register_callable(
 /// raised while the value was read is raised here, and the JS dispatch
 /// wrapper then completes the call with that error.
 #[napi(js_name = "completeHostCallValue")]
-pub fn complete_host_call_value(env: Env, call_id: u32, value: Unknown<'_>) -> napi::Result<()> {
+pub fn complete_host_call_value(
+    env: Env,
+    call_id: u32,
+    value: Unknown<'_>,
+) -> napi::Result<String> {
     let ret = match take_callback_signature(call_id) {
         Some(bex_project::RuntimeTy::Function { ret, .. }) => *ret,
         Some(_) | None => bex_project::RuntimeTy::Unknown,
     };
-    match crate::encode::encode_result(&env, value, &ret) {
-        Completion::Wire(value) => complete_host_call_bytes(call_id, 0, &value.encode_to_vec()),
+    // The outcome the engine sees, for the caller's instrumentation: a value
+    // that completed the call as a panic is an error in the trace, whatever
+    // the callable returned.
+    let outcome = match crate::encode::encode_result(&env, value, &ret) {
+        Completion::Wire(value) => {
+            complete_host_call_bytes(call_id, 0, &value.encode_to_vec());
+            "ok"
+        }
         Completion::HostError(error) => return Err(error),
-        Completion::ContractViolation(error) => complete_host_call_bytes(
-            call_id,
-            1,
-            &bridge_encode::host_contract_violation(&error.to_string(), "nodejs").encode_to_vec(),
-        ),
+        Completion::ContractViolation(error) => {
+            complete_host_call_bytes(
+                call_id,
+                1,
+                &bridge_encode::host_contract_violation(&error.to_string(), "nodejs")
+                    .encode_to_vec(),
+            );
+            "error"
+        }
         Completion::BridgeFailure(fault) => {
             let message = match fault {
                 BridgeFault::Value(error) => error.to_string(),
@@ -344,9 +358,10 @@ pub fn complete_host_call_value(env: Env, call_id: u32, value: Unknown<'_>) -> n
                 1,
                 &bridge_encode::sdk_panic(&message).encode_to_vec(),
             );
+            "error"
         }
-    }
-    Ok(())
+    };
+    Ok(outcome.to_string())
 }
 
 /// Complete an in-flight host call with a thrown BAML value (the `value` of

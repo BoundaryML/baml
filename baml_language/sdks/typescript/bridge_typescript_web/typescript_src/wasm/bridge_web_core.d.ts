@@ -88,10 +88,14 @@ export function completeWebHostCallThrow(call_id: number, value: any): boolean;
  * Complete an in-flight host call with its JavaScript result, encoded
  * against the return type of the slot the dispatched callable was bound to
  * (the runtime's own I/O callables have none, and send their results as the
- * types they have). A value that does not fit completes the call with a
- * `baml.panics.HostContractViolation` instead.
+ * types they have). A value that does not fit completes the call as a
+ * `baml.panics.HostContractViolation`; a value the bridge could not carry as
+ * a `baml.panics.SdkPanic`; an error the callable's own code raised while
+ * the value was read is raised here, and the runtime completes the call with
+ * it. Returns the outcome the engine sees, `"ok"` or `"error"`, for the
+ * runtime's instrumentation.
  */
-export function completeWebHostCallValue(call_id: number, value: any): boolean;
+export function completeWebHostCallValue(call_id: number, value: any): string;
 
 export function configureWebSysops(fetch_key: bigint, read_file_sync_key: bigint): void;
 
@@ -154,7 +158,8 @@ export function newFunctionCall(): bigint;
 
 /**
  * Install the runtime's adapter: `classOf(value)`, `typeArgsOf(value)`,
- * `leafOf(value)`, `dispatchFor(fn)` and `describe(value)`.
+ * `leafKindOf(value)`, `leafOf(value)`, `dispatchFor(fn)` and
+ * `describe(value)`.
  */
 export function registerHostAdapter(adapter: object): void;
 
@@ -220,31 +225,22 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
-    readonly _testHandleTableEntryCount: () => [number, number, number];
-    readonly cloneHandle: (a: bigint) => [bigint, number, number];
-    readonly releaseHandle: (a: bigint) => number;
-    readonly seedFunctionRefHandle: (a: number) => [bigint, number, number];
-    readonly seedGenericMediaHandle: () => [bigint, number, number];
-    readonly callFunction: (a: number, b: number, c: any, d: any) => any;
-    readonly callFunctionSync: (a: number, b: number, c: any, d: any) => [number, number, number, number];
-    readonly stageRuntimeBytecode: (a: any, b: number, c: number) => [number, number];
-    readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
     readonly __wbg_cancellationwatch_free: (a: number, b: number) => void;
     readonly cloneOutboundValue: (a: number, b: number) => [number, number, number, number];
     readonly invocationContext: (a: bigint) => [number, number, number, number];
     readonly isInvocationCancelled: (a: bigint) => [number, number, number];
     readonly traceSelection: (a: bigint, b: bigint) => [number, number, number];
     readonly watchInvocationCancellation: (a: bigint, b: any) => [number, number, number];
-    readonly cancelFunctionCall: (a: bigint) => number;
-    readonly configureWorkerdRuntime: () => void;
-    readonly getBridgeRuntimeVersion: () => [number, number];
-    readonly getToolchainVersion: () => [number, number];
-    readonly getVersion: () => [number, number];
-    readonly init: () => void;
-    readonly invocationClockNs: (a: bigint) => [bigint, number, number];
-    readonly invocationProtocolVersion: () => number;
-    readonly newFunctionCall: () => [bigint, number, number];
-    readonly releaseFunctionCall: (a: bigint) => number;
+    readonly _encodeWebInbound: (a: any, b: number, c: number) => [number, number, number, number];
+    readonly completeWebHostCallThrow: (a: number, b: any) => [number, number, number];
+    readonly completeWebHostCallValue: (a: number, b: any) => [number, number, number, number];
+    readonly registerHostAdapter: (a: any) => void;
+    readonly registerProgramDescriptor: (a: number, b: number) => [number, number];
+    readonly _testHandleTableEntryCount: () => [number, number, number];
+    readonly cloneHandle: (a: bigint) => [bigint, number, number];
+    readonly releaseHandle: (a: bigint) => number;
+    readonly seedFunctionRefHandle: (a: number) => [bigint, number, number];
+    readonly seedGenericMediaHandle: () => [bigint, number, number];
     readonly _testWebFireHostRelease: (a: bigint) => void;
     readonly _testWebHostCallableCount: () => number;
     readonly _testWebHostReleaseCallbackInstalled: () => number;
@@ -258,6 +254,16 @@ export interface InitOutput {
     readonly registerWebHostCancelCallback: (a: any) => number;
     readonly registerWebHostValueReleaseCallback: (a: any) => number;
     readonly releaseWebHostCallable: (a: bigint) => void;
+    readonly cancelFunctionCall: (a: bigint) => number;
+    readonly configureWorkerdRuntime: () => void;
+    readonly getBridgeRuntimeVersion: () => [number, number];
+    readonly getToolchainVersion: () => [number, number];
+    readonly getVersion: () => [number, number];
+    readonly init: () => void;
+    readonly invocationClockNs: (a: bigint) => [bigint, number, number];
+    readonly invocationProtocolVersion: () => number;
+    readonly newFunctionCall: () => [bigint, number, number];
+    readonly releaseFunctionCall: (a: bigint) => number;
     readonly mediaBase64: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaFromBase64: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
     readonly mediaFromFileBytes: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [bigint, number, number];
@@ -266,23 +272,23 @@ export interface InitOutput {
     readonly mediaMimeType: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaName: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaUrl: (a: bigint, b: number) => [number, number, number, number];
-    readonly _encodeWebInbound: (a: any, b: number, c: number) => [number, number, number, number];
-    readonly completeWebHostCallThrow: (a: number, b: any) => [number, number, number];
-    readonly completeWebHostCallValue: (a: number, b: any) => [number, number, number];
-    readonly registerHostAdapter: (a: any) => void;
-    readonly registerProgramDescriptor: (a: number, b: number) => [number, number];
+    readonly callFunction: (a: number, b: number, c: any, d: any) => any;
+    readonly callFunctionSync: (a: number, b: number, c: any, d: any) => [number, number, number, number];
+    readonly stageRuntimeBytecode: (a: any, b: number, c: number) => [number, number];
+    readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
     readonly completeHostCall: (a: number, b: number, c: number, d: number) => number;
     readonly mintHostValueKey: () => bigint;
     readonly registerHostCallable: (a: any) => bigint;
     readonly registerHostCancelCallback: (a: any) => number;
     readonly registerHostValueReleaseCallback: (a: any) => number;
     readonly releaseHostCallable: (a: bigint) => void;
-    readonly free_buffer: (a: number) => void;
     readonly cancel_function_call: (a: bigint) => number;
     readonly new_function_call: () => bigint;
     readonly release_function_call: (a: bigint) => number;
+    readonly free_buffer: (a: number) => void;
     readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke___wasm_bindgen_d111f01290b9b4d6___JsValue__core_f0fd674eaa06beef___result__Result_____wasm_bindgen_d111f01290b9b4d6___JsError___true_: (a: number, b: number, c: any) => [number, number];
     readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke___js_sys_738bc4453a2434d1___Function_fn_wasm_bindgen_d111f01290b9b4d6___JsValue_____wasm_bindgen_d111f01290b9b4d6___sys__Undefined___js_sys_738bc4453a2434d1___Function_fn_wasm_bindgen_d111f01290b9b4d6___JsValue_____wasm_bindgen_d111f01290b9b4d6___sys__Undefined_______true_: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke___wasm_bindgen_d111f01290b9b4d6___JsValue______true_: (a: number, b: number, c: any) => void;
     readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke___bool__true_: (a: number, b: number) => number;
     readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke_______true_: (a: number, b: number) => void;
     readonly __wbindgen_exn_store_command_export: (a: number) => void;
