@@ -18,7 +18,7 @@ use std::fmt::Write as _;
 use baml_sdkgen_types::{Class, Function, Ty, TypeAlias};
 
 use crate::{
-    emit::ty_contains_type_var,
+    emit::returned_callable_type_var,
     translate_ty::{TranslateCtx, translate_optional_arg_inner, translate_ty},
 };
 
@@ -35,22 +35,14 @@ pub(crate) struct Skip {
 }
 
 /// Why `render_callable` returned `None` for this function. Probes in
-/// the renderer's own order: generic coverage, then parameters, then
-/// the return type.
+/// the renderer's own order: a returned callable's type variables, then
+/// parameters, then the return type.
 pub(crate) fn callable_skip_reason(function: &Function, ctx: &TranslateCtx) -> String {
-    for param in &function.generic_params {
-        let covered = function
-            .arguments
-            .iter()
-            .any(|arg| arg.default.is_none() && ty_contains_type_var(&arg.ty, param.as_str()));
-        if !covered {
-            return format!(
-                "generic parameter `{}` appears only in the return type — \
-                 the engine has no argument value to infer it from \
-                 (needs the wire type-hint hook)",
-                param.as_str()
-            );
-        }
+    if let Some(name) = returned_callable_type_var(&function.return_type) {
+        return format!(
+            "returns a callable whose signature mentions type variable `{name}` — \
+             its Swift type is declared outside the generic scope"
+        );
     }
     for arg in &function.arguments {
         let ok = if arg.default.is_some() {

@@ -685,10 +685,29 @@ public struct BamlArgument {
     }
 }
 
+/// One type argument of a generic call: the type parameter's name and the
+/// exact type it is bound to.
+///
+/// The engine binds a type parameter from the values only where a value pins
+/// it, and refuses a call that leaves one unbound (`one_type_arg<T>()`). A
+/// Swift generic always knows its `T`, so generated code names every type
+/// parameter of the callee this way, and the arguments are encoded under the
+/// same `T`'s slot.
+public struct BamlTypeArgument: Sendable {
+    let name: String
+    let type: BamlTypeDescriptor
+
+    public init(_ name: String, _ type: BamlTypeDescriptor) {
+        self.name = name
+        self.type = type
+    }
+}
+
 /// Serialize one call's kwargs to `CallFunctionArgs` bytes. An omitted
 /// optional argument is absent from `args` (see `BamlOptional`).
 func encodeCallArgs(
     _ args: [BamlArgument],
+    typeArgs: [BamlTypeArgument] = [],
     callId: UInt64,
     callTarget: BamlBridge_Cffi_V1_CallFunctionArgs.OneOf_CallTarget,
     baml: BamlInvocationOptions = .init()
@@ -720,6 +739,12 @@ func encodeCallArgs(
         entry.stringKey = argument.name
         entry.value = argument.encode().raw
         return entry
+    }
+    msg.typeArgs = typeArgs.map { argument in
+        var wire = BamlBridge_Cffi_V1_BamlTyArg()
+        wire.typeVar = argument.name
+        wire.typeValue = argument.type.raw
+        return wire
     }
     return try msg.serializedData()
     } catch {

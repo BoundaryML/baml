@@ -432,7 +432,9 @@ fn render_supported_class(
             &method_fqn,
             &method_names[method.name.as_str()],
             method,
-            FnKind::Static,
+            FnKind::Static {
+                class_params: &class.generic_params,
+            },
             ctx,
         ) {
             methods.push(rendered);
@@ -451,7 +453,9 @@ fn render_supported_class(
             &method_fqn,
             &method_names[method.name.as_str()],
             method,
-            FnKind::Instance,
+            FnKind::Instance {
+                class_params: &class.generic_params,
+            },
             ctx,
         ) {
             methods.push(rendered);
@@ -942,6 +946,50 @@ mod tests {
                 .contains("BamlField(\"items\", self.items, as: BamlSlots.list(_bamlArgument0))"),
             "{emitted}"
         );
+    }
+
+    #[test]
+    fn generic_calls_name_every_type_parameter() {
+        let t = || Ty::TypeVar(ParamTy::new(0, "T".into()));
+        let generic = |name: &str, arguments: Vec<(&str, Ty)>, return_type: Ty| {
+            let Symbol::Function(mut function) = function(name, arguments, return_type) else {
+                unreachable!("`function` builds a function symbol");
+            };
+            function.generic_params = vec!["T".into()];
+            Symbol::Function(function)
+        };
+        let pool = SymbolPool::from([
+            (
+                user("first_or"),
+                generic(
+                    "first_or",
+                    vec![("xs", list(t()))],
+                    union(vec![t(), null()]),
+                ),
+            ),
+            (
+                user("parse_as"),
+                generic("parse_as", vec![("source", string())], t()),
+            ),
+        ]);
+        let emitted = emit(&pool);
+        let type_args = "typeArgs: [BamlTypeArgument(\"T\", BamlSlot<T>.own.type)]";
+        // A parameter a value's Swift type mentions is inferred by Swift; the
+        // wire still names it.
+        assert!(
+            emitted.contains(
+                "public static func first_or<T: BamlCodableValue>(xs: [T], baml: Baml.BamlOptions = .init())"
+            ),
+            "{emitted}"
+        );
+        // One no value mentions is named by the caller with a metatype.
+        assert!(
+            emitted.contains(
+                "public static func parse_as<T: BamlCodableValue>(source: Swift.String, T _: T.Type, baml: Baml.BamlOptions = .init())"
+            ),
+            "{emitted}"
+        );
+        assert_eq!(emitted.matches(type_args).count(), 4, "{emitted}");
     }
 
     #[test]

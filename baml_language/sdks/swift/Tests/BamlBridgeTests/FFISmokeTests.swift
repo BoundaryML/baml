@@ -32,6 +32,30 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertTrue(decoded.kwargs.first?.value.hasValueType == false)
     }
 
+    /// A generic call's type arguments ride `CallFunctionArgs.type_args`, in
+    /// the order given, beside the arguments encoded under the same types.
+    func testCallArgsCarryTypeArguments() throws {
+        let bytes = try encodeCallArgs(
+            [BamlArgument("xs", [Int](), as: BamlSlots.list(BamlSlot<Int>.own))],
+            typeArgs: [
+                BamlTypeArgument("T", BamlSlot<Int>.own.type),
+                BamlTypeArgument("U", .list(.string)),
+            ],
+            callId: 7,
+            callTarget: .functionName("first_or")
+        )
+        let decoded = try BamlBridge_Cffi_V1_CallFunctionArgs(serializedBytes: bytes)
+        XCTAssertEqual(decoded.typeArgs.map(\.typeVar), ["T", "U"])
+        XCTAssertEqual(decoded.typeArgs[0].typeValue, BamlTypeDescriptor.int.raw)
+        XCTAssertEqual(decoded.typeArgs[1].typeValue, BamlTypeDescriptor.list(.string).raw)
+        XCTAssertEqual(decoded.kwargs.first?.value.valueType, BamlTypeDescriptor.list(.int).raw)
+
+        let plain = try BamlBridge_Cffi_V1_CallFunctionArgs(
+            serializedBytes: encodeCallArgs([], callId: 7, callTarget: .functionName("f"))
+        )
+        XCTAssertTrue(plain.typeArgs.isEmpty)
+    }
+
     func testBigIntPreservesArbitraryPrecisionWireValues() throws {
         let value = try BamlBigInt(hexadecimal: "18ee90ff6c373e0ee4e3f0ad2")
         let encoded = value._bamlEncode().raw

@@ -306,12 +306,13 @@ pub(crate) fn render_class(
 /// How a callable is bound: a free function in a namespace, a static
 /// method on a class, or an instance method (whose receiver rides as
 /// required kwarg 0 under the name `self`, the cross-bridge
-/// convention Python implements via the descriptor protocol).
-#[derive(Clone, Copy, PartialEq)]
-pub(crate) enum FnKind {
+/// convention Python implements via the descriptor protocol). A method
+/// carries its class's generic parameters, which its Swift struct binds.
+#[derive(Clone, Copy)]
+pub(crate) enum FnKind<'a> {
     Free,
-    Static,
-    Instance,
+    Static { class_params: &'a [baml_base::Name] },
+    Instance { class_params: &'a [baml_base::Name] },
 }
 
 /// Render one callable as a sync + async pair, or `None` if any part
@@ -321,7 +322,7 @@ pub(crate) fn render_callable(
     fqn: &str,
     binding_name: &str,
     function: &Function,
-    kind: FnKind,
+    kind: FnKind<'_>,
     ctx: &TranslateCtx,
 ) -> Option<String> {
     // Items before statements (clippy::items_after_statements).
@@ -350,25 +351,15 @@ pub(crate) fn render_callable(
     // ordinary function returning `ai.stream.Stream<T>` (→ BamlStream).
     let bare = binding_name;
 
-    // Generic functions/methods: emit a Swift generic signature when
-    // every TypeVar appears in a required-parameter position — the
-    // engine infers bindings from argument values (inbound inference),
-    // which state their types from each `T`'s own slot. A TypeVar visible only in the return
-    // type (`parse_as<T>`) has no value to infer from and needs an
-    // explicit wire type hint — unsupported until that hook exists
-    // (Python requires `_types=` for those calls too).
+    // A returned callable's Swift type is declared beside the function, outside
+    // the scope of any generic parameter, so it cannot mention one.
+    if returned_callable_type_var(&function.return_type).is_some() {
+        return None;
+    }
+
     let generic_sig = if function.generic_params.is_empty() {
         String::new()
     } else {
-        for param in &function.generic_params {
-            let covered = function
-                .arguments
-                .iter()
-                .any(|arg| arg.default.is_none() && ty_contains_type_var(&arg.ty, param.as_str()));
-            if !covered {
-                return None;
-            }
-        }
         format!(
             "<{}>",
             function
@@ -379,6 +370,56 @@ pub(crate) fn render_callable(
                 .join(", ")
         )
     };
+    // A Swift generic always knows its `T`, while the engine binds a type
+    // parameter from the values only where one pins it: not in
+    // `one_type_arg<T>()`, nor in `tag_or_value<T>(x: T | string | null)` with
+    // a `string`. So every type parameter of the callee rides the wire as an
+    // explicit type argument, the one the arguments are encoded under. The
+    // class's come first, the wire's De Bruijn order: all of them for an
+    // instance method, whose receiver is stated with them, and the ones a
+    // static method mentions.
+    let class_params: Vec<&baml_base::Name> = match kind {
+        FnKind::Free => Vec::new(),
+        FnKind::Static { class_params } => class_params
+            .iter()
+            .filter(|param| callable_mentions_type_var(function, param.as_str()))
+            .collect(),
+        FnKind::Instance { class_params } => class_params.iter().collect(),
+    };
+    let type_args = class_params
+        .into_iter()
+        .chain(&function.generic_params)
+        .map(|param| {
+            format!(
+                "BamlTypeArgument({:?}, {}.type)",
+                param.as_str(),
+                own_slot(&escape_ident(param.as_str()))
+            )
+        })
+        .collect::<Vec<_>>();
+    let type_args_arg = if type_args.is_empty() {
+        String::new()
+    } else {
+        format!(", typeArgs: [{}]", type_args.join(", "))
+    };
+    // A type parameter no required argument's Swift type mentions cannot be
+    // inferred by Swift (`parse_as<T>(source: string) -> T`, or a `throws E`
+    // of a callback), so the caller names it with a metatype parameter
+    // labelled like it: `T: Int.self`.
+    let explicit_type_params = function
+        .generic_params
+        .iter()
+        .filter(|param| {
+            !function
+                .arguments
+                .iter()
+                .any(|arg| arg.default.is_none() && swift_type_mentions(&arg.ty, param.as_str()))
+        })
+        .map(|param| {
+            let swift = escape_ident(param.as_str());
+            format!("{swift} _: {swift}.Type")
+        })
+        .collect::<Vec<_>>();
 
     let mut params = Vec::new();
     for arg in &function.arguments {
@@ -445,6 +486,7 @@ pub(crate) fn render_callable(
             }
             Param::Callable { name, ty, .. } => format!("{name}: {ty}"),
         })
+        .chain(explicit_type_params)
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -471,7 +513,7 @@ pub(crate) fn render_callable(
     // append conditionally (`.unset` omits the kwarg, Python-style).
     // Instance methods pass the receiver as required kwarg 0.
     let mut required_pair_list: Vec<String> = Vec::new();
-    if kind == FnKind::Instance {
+    if matches!(kind, FnKind::Instance { .. }) {
         required_pair_list.push("BamlArgument(\"self\", self, as: BamlSlot<Self>.own)".to_string());
     }
     required_pair_list.extend(params.iter().filter_map(|p| match p {
@@ -539,7 +581,7 @@ pub(crate) fn render_callable(
     }
 
     let mut out = String::new();
-    let static_kw = if kind == FnKind::Instance {
+    let static_kw = if matches!(kind, FnKind::Instance { .. }) {
         ""
     } else {
         "static "
@@ -557,13 +599,13 @@ pub(crate) fn render_callable(
                     out,
                     "{definition}\n{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\tlet _raw = try BamlRuntime.shared.callRawSync(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
+                     {args_setup}\tlet _raw = try BamlRuntime.shared.callRawSync(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
                      \tlet _function = try BamlFunctionHandle.decode(_raw)\n\
                      {closure}\n\
                      }}\n\n\
                      {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\tlet _raw = try await BamlRuntime.shared.callRaw(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
+                     {args_setup}\tlet _raw = try await BamlRuntime.shared.callRaw(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
                      \tlet _function = try BamlFunctionHandle.decode(_raw)\n\
                      {closure}\n\
                      }}\n"
@@ -573,11 +615,11 @@ pub(crate) fn render_callable(
                     out,
                     "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
+                     {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
                      }}\n\n\
                      {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
+                     {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
                      }}\n"
                 );
             }
@@ -587,11 +629,11 @@ pub(crate) fn render_callable(
                 out,
                 "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws {{\n\
                  \t_ = Baml._initialized\n\
-                 {args_setup}\ttry BamlRuntime.shared.callSyncVoid(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
+                 {args_setup}\ttry BamlRuntime.shared.callSyncVoid(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
                  }}\n\n\
                  {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws {{\n\
                  \t_ = Baml._initialized\n\
-                 {args_setup}\ttry await BamlRuntime.shared.callVoid(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
+                 {args_setup}\ttry await BamlRuntime.shared.callVoid(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
                  }}\n"
             );
         }
@@ -599,18 +641,70 @@ pub(crate) fn render_callable(
     Some(out)
 }
 
-/// Does `ty` mention `TypeVar` `name` in a position the engine can infer
-/// from a VALUE? Deliberately does NOT recurse into `Callable` — host
-/// callables are opaque handles, so their parameter/return types carry
-/// no inferable value (Python's `apply<T, R>` needs `_types=` for the
-/// same reason).
-pub(crate) fn ty_contains_type_var(ty: &Ty, name: &str) -> bool {
+/// Does `ty` mention the type variable `name` anywhere, a callable's
+/// signature included?
+pub(crate) fn mentions_type_var(ty: &Ty, name: &str) -> bool {
     match ty {
         Ty::TypeVar(v) => v.as_str() == name,
-        // These values are opaque or unsupported, so do not infer from their types.
-        Ty::Function { .. } | Ty::Interface(..) | Ty::Future(..) => false,
-        _ => baml_sdkgen_types::any_type_child(ty, |child| ty_contains_type_var(child, name)),
+        _ => baml_sdkgen_types::any_type_child(ty, |child| mentions_type_var(child, name)),
     }
+}
+
+/// Does the Swift type of a value of `ty` mention the type variable `name`?
+/// A closure's Swift type has its parameters and result but no throws type,
+/// so a variable only a callable's throws type mentions is not inferable by
+/// Swift.
+fn swift_type_mentions(ty: &Ty, name: &str) -> bool {
+    match ty {
+        Ty::TypeVar(v) => v.as_str() == name,
+        Ty::Function { params, ret, .. } => {
+            params
+                .iter()
+                .any(|param| swift_type_mentions(&param.ty, name))
+                || swift_type_mentions(ret, name)
+        }
+        _ => baml_sdkgen_types::any_type_child(ty, |child| swift_type_mentions(child, name)),
+    }
+}
+
+/// The first generic parameter a returned callable's Swift type (its
+/// parameters and result) mentions, or `None` when `return_type` is not a
+/// callable or mentions none. The throws type is not part of the Swift type,
+/// and a synthetic effect parameter is no Swift generic parameter.
+pub(crate) fn returned_callable_type_var(return_type: &Ty) -> Option<String> {
+    fn first(ty: &Ty) -> Option<String> {
+        if let Ty::TypeVar(param) = ty
+            && !is_synthetic_effect_param(param.name())
+        {
+            return Some(param.as_str().to_string());
+        }
+        let mut found = None;
+        baml_sdkgen_types::any_type_child(ty, |child| {
+            found = first(child);
+            found.is_some()
+        });
+        found
+    }
+    let Ty::Function { params, ret, .. } = return_type else {
+        return None;
+    };
+    params
+        .iter()
+        .map(|param| &param.ty)
+        .chain([&**ret])
+        .find_map(first)
+}
+
+/// Does `function`'s signature (its arguments, return type or throws type)
+/// mention the type variable `name`?
+fn callable_mentions_type_var(function: &Function, name: &str) -> bool {
+    function
+        .arguments
+        .iter()
+        .map(|arg| &arg.ty)
+        .chain([&function.return_type])
+        .chain(&function.throws)
+        .any(|ty| mentions_type_var(ty, name))
 }
 
 pub(crate) fn indent_lines(block: &str, depth: usize) -> String {
@@ -945,18 +1039,28 @@ mod shared_traversal_tests {
     use super::*;
 
     #[test]
-    fn value_inference_traverses_containers_but_not_opaque_signatures() {
+    fn type_var_mentions_traverse_containers_and_callable_signatures() {
         let variable = || Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, "T".into()));
-        assert!(ty_contains_type_var(&Ty::List(Box::new(variable())), "T"));
+        assert!(mentions_type_var(&Ty::List(Box::new(variable())), "T"));
+        assert!(!mentions_type_var(&Ty::List(Box::new(variable())), "U"));
         let callable = Ty::Function {
             params: Box::new([]),
             ret: Box::new(variable()),
             throws: Box::new(Ty::Never),
         };
-        assert!(!ty_contains_type_var(&callable, "T"));
-        assert!(!ty_contains_type_var(
-            &Ty::Future(Box::new(variable()), Box::new(Ty::Never)),
-            "T"
-        ));
+        assert!(mentions_type_var(&callable, "T"));
+        let throwing = Ty::Function {
+            params: Box::new([]),
+            ret: Box::new(Ty::Int),
+            throws: Box::new(variable()),
+        };
+        assert!(mentions_type_var(&throwing, "T"));
+        assert!(!swift_type_mentions(&throwing, "T"));
+        assert!(swift_type_mentions(&callable, "T"));
+        assert_eq!(returned_callable_type_var(&callable).as_deref(), Some("T"));
+        assert_eq!(
+            returned_callable_type_var(&Ty::List(Box::new(variable()))),
+            None
+        );
     }
 }
