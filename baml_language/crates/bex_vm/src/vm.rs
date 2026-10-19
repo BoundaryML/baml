@@ -327,9 +327,8 @@ pub struct BytecodeFrame {
     pub(crate) context: Context,
 }
 
-// 112 bytes normally; heap_debug enlarges HeapPtr with its allocation epoch.
-#[cfg(target_pointer_width = "64")]
-const _: () = assert!(std::mem::size_of::<BytecodeFrame>() == 104 + std::mem::size_of::<HeapPtr>());
+#[cfg(all(target_pointer_width = "64", not(feature = "heap_debug")))]
+const _: () = assert!(std::mem::size_of::<BytecodeFrame>() == 112);
 
 /// A type-value site, with disjoint bytecode and compiled namespaces.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -1190,7 +1189,6 @@ pub(crate) mod tests {
         slots: u32,
     ) -> bex_vm_types::types::NativeBody {
         crate::compiled_rt::CompiledEntry {
-            program_fingerprint: [0; 32],
             object: 0,
             name: "",
             arity: 0,
@@ -1946,29 +1944,72 @@ pub(crate) mod tests {
 
         let program = baml_test_support::compile_source("function Main() -> int { 1 }");
         let object = program.rendered_callables()["user.Main"].object;
-        let table = [CompiledEntry {
-            program_fingerprint: program.bytecode_fingerprint().unwrap(),
+        let entries = Box::leak(Box::new([CompiledEntry {
             object: u32::try_from(object.raw()).unwrap(),
             name: "user.Main",
             arity: 0,
             body: CompiledFn::Inline(body),
             slots: 0,
             cause_slot: None,
-        }];
+        }]));
         let artifact =
             baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
-        let decoded =
-            baml_artifact::decode(baml_artifact::ArtifactKind::Program, &artifact).unwrap();
-        let loaded = super::convert_program_with_natives(decoded, true, Some(&table)).unwrap();
+        let (decoded, digest) =
+            baml_artifact::decode_with_digest(baml_artifact::ArtifactKind::Program, &artifact)
+                .unwrap();
+        let table = Box::leak(Box::new(super::NativeBodyTable {
+            fingerprint: digest,
+            entries,
+        }));
+        let bodies = super::NativeBodies {
+            table,
+            artifact_fingerprint: digest,
+        };
+        let loaded = super::convert_program_with_natives(decoded, true, Some(bodies)).unwrap();
         let Object::Function(function) = &loaded.objects[object] else {
             panic!("compiled entry must be a function")
         };
         assert!(function.native_body.is_some());
 
         let changed = baml_test_support::compile_source("function Main() -> int { 2 }");
-        let error = super::convert_program_with_natives(changed, true, Some(&table))
+        let artifact =
+            baml_artifact::encode(baml_artifact::ArtifactKind::Program, &changed).unwrap();
+        let (changed, digest) =
+            baml_artifact::decode_with_digest(baml_artifact::ArtifactKind::Program, &artifact)
+                .unwrap();
+        let bodies = super::NativeBodies {
+            table,
+            artifact_fingerprint: digest,
+        };
+        let error = super::convert_program_with_natives(changed, true, Some(bodies))
             .err()
             .expect("same signature with a different body must be refused");
+        assert!(error.to_string().contains("fingerprint mismatch"));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn empty_native_table_still_requires_matching_artifact() {
+        static TABLE: super::NativeBodyTable = super::NativeBodyTable {
+            fingerprint: [0; 32],
+            entries: &[],
+        };
+        let program = baml_test_support::compile_source("function Main() -> int { 1 }");
+        let artifact =
+            baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
+        let (program, artifact_fingerprint) =
+            baml_artifact::decode_with_digest(baml_artifact::ArtifactKind::Program, &artifact)
+                .unwrap();
+        let error = super::convert_program_with_natives(
+            program,
+            true,
+            Some(super::NativeBodies {
+                table: &TABLE,
+                artifact_fingerprint,
+            }),
+        )
+        .err()
+        .expect("an empty table must not bypass artifact validation");
         assert!(error.to_string().contains("fingerprint mismatch"));
     }
 
@@ -3449,30 +3490,44 @@ pub fn convert_program_with_trace_hooks(
 
 /// Natively compiled bodies for one program, as the BAML-to-Rust compiler
 /// emits them; see [`crate::compiled_rt::CompiledEntry`].
-pub type NativeBodyTable = [crate::compiled_rt::CompiledEntry];
+pub struct NativeBodyTable {
+    pub fingerprint: [u8; 32],
+    pub entries: &'static [crate::compiled_rt::CompiledEntry],
+}
+
+/// Compiled bodies paired with the digest verified while decoding their artifact.
+#[derive(Clone, Copy)]
+pub struct NativeBodies {
+    pub table: &'static NativeBodyTable,
+    pub artifact_fingerprint: [u8; 32],
+}
 
 /// [`convert_program_with_trace_hooks`], additionally attaching natively
 /// compiled bodies to the bytecode functions they were compiled from.
 pub fn convert_program_with_natives(
     program: bex_vm_types::Program,
     enabled: bool,
-    native_bodies: Option<&NativeBodyTable>,
+    native_bodies: Option<NativeBodies>,
 ) -> Result<BytecodeProgram, VmInternalError> {
     // The one road from an executable into a VM: a decoded program is
     // checked against the format's laws here, and everything after — the
     // rendered views, the loader — indexes into a program that keeps them.
     program.validate()?;
-    let fingerprint = native_bodies
-        .map(|_| program.bytecode_fingerprint())
-        .transpose()
-        .map_err(|error| VmInternalError::CompiledBody {
-            message: format!("failed to fingerprint bytecode program: {error}"),
-        })?;
+    if let Some(bodies) = native_bodies
+        && bodies.table.fingerprint != bodies.artifact_fingerprint
+    {
+        return Err(VmInternalError::CompiledBody {
+            message: "compiled bodies were compiled from another program: fingerprint mismatch"
+                .into(),
+        });
+    }
     let callables = program.rendered_callables();
     // The names compiled bodies were generated against, as the loader will
     // render them; pooled functions have no owner until load.
-    let native_names: Vec<Option<String>> = native_bodies.map_or_else(Vec::new, |table| {
-        table
+    let native_names: Vec<Option<String>> = native_bodies.map_or_else(Vec::new, |bodies| {
+        bodies
+            .table
+            .entries
             .iter()
             .map(|entry| {
                 let index = entry.object as usize;
@@ -3491,8 +3546,8 @@ pub fn convert_program_with_natives(
 
     // Compiled bodies attach before compact code is prepared: call
     // specialization reads the callee to choose a call fast path.
-    if let (Some(table), Some(fingerprint)) = (native_bodies, fingerprint) {
-        attach_native_bodies(&mut objects, table, &native_names, fingerprint)?;
+    if let Some(bodies) = native_bodies {
+        attach_native_bodies(&mut objects, bodies.table, &native_names)?;
     }
 
     if !enabled {
@@ -3522,31 +3577,18 @@ pub fn convert_program_with_natives(
     })
 }
 
-/// Attach each compiled body to the bytecode function it was compiled from.
-///
-/// An entry names its function by object index, the identity the generated
-/// code already depends on (it bakes callee and class indices in), and
-/// repeats the program fingerprint, function's link name and arity so a table
-/// from another build is refused instead of running stale code. A mismatch
-/// or a non-bytecode kind is a build inconsistency, not a user error.
 fn attach_native_bodies(
     objects: &mut [Object],
     table: &NativeBodyTable,
     names: &[Option<String>],
-    fingerprint: [u8; 32],
 ) -> Result<(), VmInternalError> {
-    for (entry, name) in table.iter().zip(names) {
+    for (entry, name) in table.entries.iter().zip(names) {
         let mismatch = |why: &str| VmInternalError::CompiledBody {
             message: format!(
                 "compiled body for `{}` (object {}) {why}",
                 entry.name, entry.object
             ),
         };
-        if entry.program_fingerprint != fingerprint {
-            return Err(mismatch(
-                "was compiled from another program: fingerprint mismatch",
-            ));
-        }
         let Some(Object::Function(function)) = objects.get_mut(entry.object as usize) else {
             return Err(mismatch("does not name a function in this program"));
         };

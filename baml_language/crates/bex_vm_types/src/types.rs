@@ -133,12 +133,6 @@ pub struct Program {
 pub struct InvalidProgram(pub String);
 
 impl Program {
-    /// SHA-256 of the serialized bytecode program, excluding runtime metadata.
-    pub fn bytecode_fingerprint(&self) -> std::io::Result<[u8; 32]> {
-        use sha2::{Digest, Sha256};
-        Ok(Sha256::digest(borsh::to_vec(self)?).into())
-    }
-
     pub fn new() -> Self {
         Self::default()
     }

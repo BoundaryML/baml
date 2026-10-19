@@ -92,7 +92,7 @@ pub use bcs_api::diagnostics::Diagnostic as CloudAuthorizationFailure;
 mod thread;
 /// Natively compiled bodies an engine runs in place of bytecode
 /// ([`EngineConfig::native_bodies`]).
-pub use bex_vm::NativeBodyTable;
+pub use bex_vm::{NativeBodies, NativeBodyTable};
 #[cfg(not(target_arch = "wasm32"))]
 pub use btel_types::ProcessStatus;
 #[cfg(not(target_arch = "wasm32"))]
@@ -912,12 +912,8 @@ pub struct EngineConfig {
     pub artifact_telemetry: Option<btel_settings::artifact::ArtifactTelemetry>,
     #[cfg(not(target_arch = "wasm32"))]
     pub recording: Option<TelemetryRecording>,
-    /// Natively compiled bodies for this program's functions, keyed by the
-    /// object index of each function (its name and arity are checked at
-    /// load), as emitted by the BAML-to-Rust compiler alongside the program
-    /// they were compiled from. Attached at load; absent for ordinary
-    /// bytecode execution.
-    pub native_bodies: Option<&'static bex_vm::NativeBodyTable>,
+    /// Compiled bodies and the verified digest of the artifact containing `program`.
+    pub native_bodies: Option<bex_vm::NativeBodies>,
 }
 
 impl Default for EngineConfig {
