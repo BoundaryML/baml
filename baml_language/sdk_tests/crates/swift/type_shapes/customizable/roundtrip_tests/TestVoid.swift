@@ -5,6 +5,6 @@ import Baml
 
 final class TestVoid: XCTestCase {
     func test_void_no_op() throws {
-        try Baml.void.no_op()
+        try Baml.unit.no_op()
     }
 }

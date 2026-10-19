@@ -42,7 +42,7 @@ var (
 	_ func(context.Context, bool, ...baml_go.CallOption) (bool, error)     = baml_sdk.LiteralsRoundTripLiteralTrue
 	_ func(context.Context, bool, ...baml_go.CallOption) (bool, error)     = baml_sdk.LiteralsRoundTripLiteralFalse
 
-	_ func(context.Context, ...baml_go.CallOption) error = baml_sdk.VoidNoOp
+	_ func(context.Context, ...baml_go.CallOption) error = baml_sdk.UnitNoOp
 
 	_ func(context.Context, string, ...baml_go.CallOption) (string, error)                                                                                           = baml_sdk.GoCodegenLeftEcho
 	_ func(context.Context, string, ...baml_go.CallOption) (string, error)                                                                                           = baml_sdk.GoCodegenRightEcho

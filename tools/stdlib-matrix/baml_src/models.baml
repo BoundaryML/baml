@@ -124,15 +124,25 @@ class ExportImplMethod {
     from_default: bool?,
 }
 
-/// A top-level impl record. `interface` is a declarable field name, but the
-/// parser rejects it in struct-literal position, so this class can only be
-/// built by JSON decoding — which is how it always arrives (tests build
-/// fixtures as `json` literals decoded with `baml.json.to` for the same reason).
+/// A top-level impl record. The field is `iface` in BAML and `interface` on
+/// the wire, since `interface` is a keyword; the override below reads that key
+/// the same way `ExportSignature` reads `throws`.
 class ExportImpl {
     id: string,
-    interface: string,
+    iface: string,
     for_ty: TyRef,
     methods: ExportImplMethod[],
+
+    implements baml.FromJson {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
+            ExportImpl {
+                id: baml.json.to<string>(baml.json.field(j, "id")),
+                iface: baml.json.to<string>(baml.json.field(j, "interface")),
+                for_ty: baml.json.to<TyRef>(baml.json.field(j, "for_ty")),
+                methods: baml.json.to<ExportImplMethod[]>(baml.json.field(j, "methods")),
+            }
+        }
+    }
 }
 
 class PackageExportDoc {

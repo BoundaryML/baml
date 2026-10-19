@@ -387,7 +387,7 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
     }
 
     for (let impl_record in doc.impls) {
-        let step = ImplStep { base: impl_record.for_ty.display, iface: impl_record.interface.split(".") };
+        let step = ImplStep { base: impl_record.for_ty.display, iface: impl_record.iface.split(".") };
         for (let method in impl_record.methods) {
             if (method.name.includes("$")) {
                 continue;
@@ -399,7 +399,7 @@ function extract_symbols(doc: PackageExportDoc) -> BamlSymbol[] {
                     id: method.id,
                     declared_by: method.declared_by,
                     symbol: impl_path,
-                    display: `(${impl_record.for_ty.display} as ${impl_record.interface}).${method.name}`,
+                    display: `(${impl_record.for_ty.display} as ${impl_record.iface}).${method.name}`,
                     kind: "function",
                     origin: "impl_method",
                     generics: [],

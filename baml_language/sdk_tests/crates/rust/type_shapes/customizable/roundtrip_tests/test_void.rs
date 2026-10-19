@@ -1,6 +1,6 @@
 //! Roundtrip coverage for `baml_sdk::void` — `void` return lowers to `()`.
 
-use baml_sdk::void::no_op;
+use baml_sdk::unit::no_op;
 
 #[test]
 fn test_void_no_op() {

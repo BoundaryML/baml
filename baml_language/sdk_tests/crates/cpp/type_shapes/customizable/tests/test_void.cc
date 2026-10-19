@@ -4,6 +4,6 @@
 #include <baml_test.h>
 
 BAML_TEST(void_no_op) {
-  baml_sdk::void_::no_op();  // returns void; completing without throwing is the
+  baml_sdk::unit::no_op();  // returns void; completing without throwing is the
                              // assertion
 }
