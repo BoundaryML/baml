@@ -290,67 +290,17 @@ fn read_only_after_load(
                 return false;
             }
         }
-        if terminator_mentions(candidate.terminator.as_ref(), local) && (b != block || bound) {
+        if candidate
+            .terminator
+            .as_ref()
+            .is_some_and(|terminator| terminator_mentions(terminator, local))
+            && (b != block || bound)
+        {
             return false;
         }
     }
     true
 }
-
-fn place_mentions(place: &Place, local: usize) -> bool {
-    match place {
-        Place::Local(l) | Place::Deref(CellId::Local(l)) => l.0 == local,
-        Place::Field { base, .. } => place_mentions(base, local),
-        Place::Index { base, index, .. } => index.0 == local || place_mentions(base, local),
-        Place::Capture(_) | Place::Deref(CellId::Capture(_)) => false,
-    }
-}
-
-fn operand_mentions(operand: &Operand<'_>, local: usize) -> bool {
-    match operand {
-        Operand::Copy(place) | Operand::Move(place) => place_mentions(place, local),
-        Operand::Constant(_) => false,
-    }
-}
-
-fn terminator_mentions(terminator: Option<&Terminator<'_>>, local: usize) -> bool {
-    let operands: Vec<&Operand<'_>> = match terminator {
-        None | Some(Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable) => {
-            Vec::new()
-        }
-        Some(
-            Terminator::Branch {
-                condition: operand, ..
-            }
-            | Terminator::NarrowBind {
-                source: operand, ..
-            }
-            | Terminator::Switch {
-                discriminant: operand,
-                ..
-            }
-            | Terminator::Spawn { plan: operand, .. }
-            | Terminator::AwaitAny {
-                futures: operand, ..
-            }
-            | Terminator::Throw { value: operand }
-            | Terminator::ShortCircuit { operand, .. },
-        ) => vec![operand],
-        Some(Terminator::Call { callee, args, .. } | Terminator::SysOp { callee, args, .. }) => {
-            std::iter::once(callee).chain(args).collect()
-        }
-        Some(Terminator::VirtualCall { args, .. }) => args.iter().collect(),
-        Some(Terminator::Await { future, .. }) => return place_mentions(future, local),
-        Some(
-            Terminator::Rethrow { value, context }
-            | Terminator::ThrowIfPanic { value, context, .. },
-        ) => vec![value, context],
-    };
-    operands
-        .into_iter()
-        .any(|operand| operand_mentions(operand, local))
-}
-
 
 /// Array iterators a loop consumes in place, as iterator local to array
 /// local. The index walk stands in for the `ArrayIterator` only while the
