@@ -13,7 +13,7 @@
 //! - `\uHHHH` and `\u{H...}` (strings only): `\u{...}` takes 1-6 hex digits,
 //!   with `_` allowed between digits. A high surrogate immediately followed by
 //!   a low surrogate, written in either form, combines into one code point
-//!   (`😀` is U+1F600), so JSON string bodies can be pasted as-is.
+//!   (`\uD83D\uDE00` is U+1F600), so JSON string bodies can be pasted as-is.
 //!   An unpaired surrogate is invalid.
 //!
 //! `\$` covers the `\${` disambiguation from §8 of BEP-049: backslash before
@@ -547,8 +547,8 @@ mod tests {
 
     #[test]
     fn decodes_unicode_escapes() {
-        assert_eq!(unescape_string_literal(r"é"), "é");
-        assert_eq!(unescape_string_literal(r"中"), "中");
+        assert_eq!(unescape_string_literal(r"\u00E9"), "é");
+        assert_eq!(unescape_string_literal(r"\u4E2D"), "中");
         assert_eq!(unescape_string_literal(r"\u{41}"), "A");
         assert_eq!(unescape_string_literal(r"\u{1F600}"), "😀");
         assert_eq!(unescape_string_literal(r"\u{10FFFF}"), "\u{10FFFF}");
@@ -560,7 +560,7 @@ mod tests {
     #[test]
     fn pairs_surrogates_in_any_form() {
         for pair in [
-            r"😀",
+            r"\uD83D\uDE00",
             r"\uD83D\u{DE00}",
             r"\u{D83D}\uDE00",
             r"\u{D83D}\u{DE00}",
@@ -589,8 +589,8 @@ mod tests {
         );
         // A high surrogate followed by something other than a low surrogate
         // reports only the high surrogate; the next escape decodes normally.
-        assert_eq!(issue_spans(r"\uD83DA"), vec![r"\uD83D"]);
-        assert_eq!(unescape_string_literal(r"\uD83DA"), "\\uD83DA");
+        assert_eq!(issue_spans(r"\uD83D\u0041"), vec![r"\uD83D"]);
+        assert_eq!(unescape_string_literal(r"\uD83D\u0041"), "\\uD83DA");
         assert_eq!(issue_spans(r"\uD83Dx\uDE00"), vec![r"\uD83D", r"\uDE00"]);
     }
 

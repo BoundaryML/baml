@@ -89,7 +89,7 @@ test "invalid quoted strings still produce compiler errors" {
 // literals, and byte strings.
 
 function json_escapes() -> string {
-    "\"\\\/\b\f\n\r\tA"
+    "\"\\\/\b\f\n\r\t\u0041"
 }
 
 function quote_and_template_escapes() -> string {
@@ -109,11 +109,11 @@ function hex_escape() -> string {
 }
 
 function unicode_escapes() -> string {
-    "é中\u{41}\u{1F600}\u{1F_600}\u{10FFFF}"
+    "\u00E9\u4E2D\u{41}\u{1F600}\u{1F_600}\u{10FFFF}"
 }
 
 function backtick_code_point_escapes() -> string {
-    `\x41B\u{43}`
+    `\x41\u0042\u{43}`
 }
 
 test "JSON escapes decode" {
@@ -145,11 +145,11 @@ test "unicode escapes decode" {
 }
 
 test "surrogate pairs combine in any form" {
-    assert.equal("😀", "😀");
+    assert.equal("\uD83D\uDE00", "😀");
     assert.equal("\uD83D\u{DE00}", "😀");
     assert.equal("\u{D83D}\uDE00", "😀");
     assert.equal("\u{D83D}\u{DE00}", "😀");
-    assert.equal(`😀`.length(), 1)
+    assert.equal(`\uD83D\uDE00`.length(), 1)
 }
 
 test "malformed hex and unicode escapes are compile errors" {
