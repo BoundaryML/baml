@@ -21,6 +21,8 @@ const PROBES: &[&str] = &[
     "Iterators",
     "BoundTypes",
     "RuntimeClass",
+    "Hidden",
+    "Hooked",
 ];
 
 #[test]

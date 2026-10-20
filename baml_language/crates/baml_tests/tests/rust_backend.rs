@@ -701,6 +701,104 @@ function has_spec(topic: string) -> bool {
     assert!(!body.contains("vm.call_compiled"), "{body}");
 }
 
+/// A declaration hook compiles as its bytecode prologue: a built-in mode
+/// resolves the hook the VM's call path left pending for the frame; a hook
+/// function gets its settings from the VM, runs on the VM's call path (it
+/// suppresses hooks under it and attributes it to the target's caller), and
+/// its decision is applied before the body. The stdlib's hidden functions
+/// (`String.length`, the iterators) compile, so their callers enter them
+/// directly.
+#[test]
+fn declaration_trace_hooks_compile() {
+    let module = compile(
+        r#"
+/// baml:$trace=trace.hidden
+function hidden(n: int) -> int { n + 1 }
+
+/// baml:$trace=trace.timing
+function timing(n: int) -> int { n + 2 }
+
+/// baml:$trace=trace.span
+function spanned(n: int) -> int { n + 3 }
+
+/// baml:$trace=trace.empty_span
+function empty(n: int) -> int { n + 4 }
+
+function decide(n: int, settings: trace.Settings) -> trace.Options? throws never {
+  trace.hidden()
+}
+
+/// baml:$trace=decide
+function hooked(n: int) -> int { n + 5 }
+
+function plain_hook() -> trace.Options throws never { trace.hidden() }
+
+/// baml:$trace=plain_hook
+function hooked_without_settings(n: int) -> int { n + 6 }
+
+function total(words: string[]) -> int {
+  let total = 0;
+  let i = 0;
+  while (i < words.length()) {
+    total += words[i].length();
+    i += 1;
+  }
+  for (let k in baml.iter.Range.new(0, 3)) { total += k; }
+  total
+}
+"#,
+    );
+    for (name, mode) in [
+        ("user.hidden", "Hidden"),
+        ("user.timing", "Timing"),
+        ("user.spanned", "Span"),
+        ("user.empty", "EmptySpan"),
+    ] {
+        let body = body_of(&module, name);
+        assert!(
+            body.contains(&format!(
+                "vm.builtin_trace_hook(depth, bex_vm::compiled_rt::TraceHookMode::{mode})?"
+            )),
+            "{body}"
+        );
+        assert!(!body.contains("vm.suspend("), "{body}");
+    }
+    for (name, with_settings) in [
+        ("user.hooked", true),
+        ("user.hooked_without_settings", false),
+    ] {
+        let body = body_of(&module, name);
+        assert!(
+            body.contains(&format!("vm.begin_trace_hook(depth, {with_settings})?")),
+            "{body}"
+        );
+        assert!(body.contains("vm.finish_trace_hook(depth, "), "{body}");
+        assert!(body.contains("vm.suspend(Step::Call {"), "{body}");
+        assert!(!body.contains("vm.call_compiled("), "{body}");
+    }
+    let admitted: Vec<&str> = module
+        .functions
+        .iter()
+        .map(|f| f.display.as_str())
+        .collect();
+    for name in [
+        "baml.String.length",
+        "baml.iter.Range.new",
+        "baml.<(baml.iter.Range as baml.iter.Iterator)>.next",
+        "baml.<(baml.iter.Range as baml.iter.Iterable)>.iter",
+    ] {
+        assert!(
+            admitted.contains(&name),
+            "{name} should compile; got {admitted:?}"
+        );
+    }
+    // `String.length` is entered directly; the `Range` dispatch runs in place.
+    let total = body_of(&module, "user.total");
+    assert!(total.contains(".call_compiled("), "{total}");
+    assert!(total.contains(".call_inline("), "{total}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
 /// An array's iterator that the function returns leaves the body, so it is
 /// the `ArrayIterator` the dispatch builds rather than the index walk a
 /// local loop compiles to: a caller's `next` resolves against it.

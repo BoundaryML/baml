@@ -229,7 +229,40 @@ impl<'db> Generator<'_, 'db> {
                 )?;
                 self.emit_statement(&format!("{code};"));
             }
-            StatementKind::Intrinsic { .. } => return unsupported("compiler intrinsic"),
+            StatementKind::Intrinsic { op, args } => match op {
+                // The declaration's hook prologue resolves the hook the VM's
+                // call path left pending for this frame.
+                IntrinsicOp::BuiltinTraceHook(mode) => {
+                    let mode = match mode {
+                        baml_compiler2_mir::BuiltinTraceHook::Hidden => "Hidden",
+                        baml_compiler2_mir::BuiltinTraceHook::Timing => "Timing",
+                        baml_compiler2_mir::BuiltinTraceHook::Span => "Span",
+                        baml_compiler2_mir::BuiltinTraceHook::Rich => "Rich",
+                        baml_compiler2_mir::BuiltinTraceHook::EmptySpan => "EmptySpan",
+                    };
+                    let code = self.fallible(
+                        id,
+                        &format!(
+                            "vm.builtin_trace_hook(depth, bex_vm::compiled_rt::TraceHookMode::{mode})"
+                        ),
+                    )?;
+                    self.emit_statement(&format!("{code};"));
+                }
+                IntrinsicOp::ApplyTraceHook => {
+                    let [result] = args.as_slice() else {
+                        return Err(Rejection::Invalid(
+                            "`ApplyTraceHook` takes one operand".into(),
+                        ));
+                    };
+                    let result = self.value_operand(id, result)?;
+                    let code =
+                        self.fallible(id, &format!("vm.finish_trace_hook(depth, {result})"))?;
+                    self.emit_statement(&format!("{code};"));
+                }
+                IntrinsicOp::BindType(_) | IntrinsicOp::Log(_) => {
+                    return unsupported("compiler intrinsic");
+                }
+            },
             StatementKind::VirtualFieldStore {
                 iface,
                 receiver,
