@@ -17,7 +17,10 @@
 
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{
+        Arc, RwLock,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use baml_base::{LangItem, LangPackage};
@@ -58,6 +61,15 @@ pub struct DynRuleEntry {
 #[derive(Default, Debug)]
 pub struct DynDispatchTables {
     impl_rules: RwLock<IndexMap<HeapPtr, Vec<DynRuleEntry>>>,
+    /// Generation of the *rule world*: everything an impl-resolution answer
+    /// can depend on beyond the immutable program image — this table, every
+    /// runtime package's published `impl_rules`, and the heap addresses of
+    /// the rules and packages themselves. Each VM's
+    /// [`ImplRuleCache`](crate::package_baml::ImplRuleCache) remembers the
+    /// epoch it was filled at and drops everything when the epoch moves, so a
+    /// cached answer (including a negative one) never outlives the world it
+    /// was computed in. Shared by every VM of an engine through the `Arc`.
+    rule_world_epoch: AtomicU64,
 }
 
 impl DynDispatchTables {
@@ -68,6 +80,23 @@ impl DynDispatchTables {
             .entry(interface)
             .or_default()
             .push(entry);
+        self.note_rule_world_changed();
+    }
+
+    /// The current rule-world generation; see [`Self::note_rule_world_changed`].
+    #[inline]
+    pub fn rule_world_epoch(&self) -> u64 {
+        self.rule_world_epoch.load(Ordering::Acquire)
+    }
+
+    /// Record that the set of impl rules any resolver can see, or where they
+    /// live, has changed: a witness was registered, a runtime package
+    /// published a load, or a collection moved or freed heap objects. Every
+    /// per-VM resolution cache filled under an older epoch is stale from
+    /// here on. Call *after* the change is visible so a VM that observes the
+    /// new epoch resolves against the new world.
+    pub fn note_rule_world_changed(&self) {
+        self.rule_world_epoch.fetch_add(1, Ordering::AcqRel);
     }
 
     /// The witness rules registered for `interface`, as pointers to their heap
@@ -153,6 +182,11 @@ impl DynDispatchTables {
                 table.entry(interface).or_default().extend(rules);
             }
         }
+        // A collection moved or freed rules, packages, and the declarations
+        // cached answers point at; every VM's resolution cache must refill.
+        // (Each VM also clears its own in `forward_roots`; this covers a VM
+        // that was not a permit holder while the collection ran.)
+        self.note_rule_world_changed();
     }
 
     #[cfg(test)]

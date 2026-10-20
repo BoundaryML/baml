@@ -527,6 +527,7 @@ pub(crate) mod tests {
             pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
+            impl_rule_cache: std::cell::RefCell::default(),
             telemetry: Some(TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
@@ -1787,6 +1788,13 @@ pub struct BexVm {
     /// program-image rules enter this cache, so runtime package loading and
     /// dynamic builder registration remain live on every dynamic dispatch.
     static_virtual_call_cache: HashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
+    /// Memoized impl-rule selections
+    /// ([`ImplResolver::resolve_implements_rule`](crate::package_baml::ImplResolver::resolve_implements_rule)),
+    /// keyed on the question and the resolver's world, dropped whenever the
+    /// shared rule-world epoch moves or a collection runs. Interior
+    /// mutability because the resolver holds `&BexVm`; a VM runs on one
+    /// thread at a time, so no lock. See `ImplRuleCache`.
+    pub(crate) impl_rule_cache: std::cell::RefCell<crate::package_baml::ImplRuleCache>,
 }
 
 /// VM execution state.
@@ -2519,6 +2527,7 @@ impl BexVm {
             pending_call_passes_type_args: false,
             static_load_type_cache: HashMap::new(),
             static_virtual_call_cache: HashMap::new(),
+            impl_rule_cache: std::cell::RefCell::default(),
             telemetry,
             trace_scope,
             manual_activations: Vec::new(),
@@ -11795,6 +11804,9 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 self.static_virtual_call_cache.insert(key, target);
             }
         }
+        // Every memoized impl selection names heap objects by address; the
+        // collection may have moved or freed them.
+        self.impl_rule_cache.get_mut().clear();
         for transfer in &mut self.context_transfers {
             for value in [&mut transfer.handling, &mut transfer.target] {
                 if let Some(ptr) = value.as_object_ptr()
