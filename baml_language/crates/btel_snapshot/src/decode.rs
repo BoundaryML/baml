@@ -379,9 +379,14 @@ fn decode(r: &mut Reader<'_, '_>) -> Result<DecodedSnapshot, BlobError> {
     r.charge(object_count as usize * std::mem::size_of::<DecodedObject>())?;
 
     // One stream, fed in byte order as the hash format defines it: the root,
-    // the objects, then the child table and object count.
-    let mut blob_hash = Hasher::versioned(HashDomain::Blob, version);
-    let root = match r.u8()? {
+    // the objects, then the child table and object count. A definition group
+    // is hashed under the definition encoding's version, not the blob's.
+    let tag = r.u8()?;
+    let mut blob_hash = match tag {
+        2 if version >= 5 => Hasher::new(HashDomain::Definitions),
+        _ => Hasher::versioned(HashDomain::Blob, version),
+    };
+    let root = match tag {
         0 => {
             blob_hash.byte(0);
             let value = r.value(&mut blob_hash)?;

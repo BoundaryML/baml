@@ -287,8 +287,10 @@ fn a_definition_round_trips_with_its_metadata() {
 }
 
 /// The ID depends on the definition alone: the same in every run and
-/// process, on every machine. Changing this value changes every recorded
-/// definition's ID, which is a format change.
+/// process, on every machine, and under every blob format version, which
+/// the ID does not cover. Changing these values changes every recorded
+/// definition's ID: that takes a new definition version
+/// (`hash::DEFINITION_PREFIX`), never only a new blob version.
 #[test]
 fn definition_ids_are_pinned() {
     let made = group(&left_right(true));
@@ -302,13 +304,13 @@ fn definition_ids_are_pinned() {
     )]);
     assert_eq!(hex(&id(&person)), PINNED_PERSON);
 }
-const PINNED_LEFT_RIGHT: &str = "444384790fde70b5ca1c9c20b24e9382";
-const PINNED_PERSON: &str = "edf9df1b604a29f2ecdb31d6a00166df";
+const PINNED_LEFT_RIGHT: &str = "c6278ef0511ff9c8f84f9bd7eaad0f92";
+const PINNED_PERSON: &str = "2e6311ca9df8865f07a2f92fdc13b1b7";
 
 /// A definition blob with no children whose content is `content`, with
 /// the ID it hashes to.
 fn sealed(content: &[u8]) -> Vec<u8> {
-    let mut h = Hasher::new(HashDomain::Blob);
+    let mut h = Hasher::new(HashDomain::Definitions);
     h.byte(RootTag::Definitions as u8);
     h.absorb(content);
     h.size(0);

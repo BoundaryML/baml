@@ -22,7 +22,13 @@
 //! name, not its runtime tag, and its definition are what the hash covers:
 //! identical runtime classes hash identically. A definition blob's ID is the
 //! hash of its root tag and its content bytes as written, which hold no
-//! leaves to replace, then its child table and an object count of zero.
+//! leaves to replace, then its child table and an object count of zero,
+//! under a prefix of its own: the definition encoding's version, not the
+//! blob format's. The ID does not cover the blob's header, so a later blob
+//! format that writes definitions the same way gives each the same ID, and a
+//! `def_id` compares across BAML releases. Changing how a definition is
+//! encoded, the Borsh type encoding in its fields included, requires a new
+//! definition version.
 use std::{
     cell::RefCell,
     io::{self, Write},
@@ -37,6 +43,10 @@ use super::{BexStr, OwnedType, TypeIdentity, tags::HashDomain};
 
 /// What every leaf's hash input starts with, before its domain.
 const LEAF_PREFIX: &[u8] = b"baml.snapshot.xxh3-128.v3\0";
+/// What a definition group's hash input starts with: the definition
+/// encoding's version, which only a change to how definitions are encoded
+/// bumps.
+const DEFINITION_PREFIX: &[u8] = b"baml.definition.xxh3-128.v1\0";
 
 /// Content identity of one blob. A zero digest is a valid hash, never absence.
 #[repr(transparent)]
@@ -71,9 +81,12 @@ pub(crate) trait Absorb {
 }
 
 /// What a hash's input starts with, before its domain byte. Leaf encodings
-/// are unchanged since v3; only blob identities change in v4 and v5.
+/// are unchanged since v3; only blob identities change in v4 and v5. A
+/// definition group's identity follows the definition encoding instead, so
+/// a blob format version that leaves definitions alone keeps their IDs.
 fn prefix(domain: HashDomain, version: u32) -> &'static [u8] {
     match domain {
+        HashDomain::Definitions => DEFINITION_PREFIX,
         HashDomain::Blob if version >= 5 => b"baml.snapshot.xxh3-128.v5\0",
         HashDomain::Blob if version == 4 => b"baml.snapshot.xxh3-128.v4\0",
         _ => LEAF_PREFIX,
@@ -383,5 +396,27 @@ mod tests {
         }
         assert!(gathered.stream.is_none());
         assert_eq!(gathered.finish(), streamed.finish());
+    }
+
+    /// A definition group's ID follows the definition encoding, so a blob
+    /// format change leaves it alone; a value blob's follows the blob format.
+    #[test]
+    fn a_definition_id_does_not_depend_on_the_blob_version() {
+        let digest = |domain, version| {
+            let mut h = Hasher::versioned(domain, version);
+            h.absorb(b"the same content");
+            h.finish()
+        };
+        let definition = digest(HashDomain::Definitions, crate::BLOB_VERSION);
+        assert_eq!(definition, digest(HashDomain::Definitions, 4));
+        assert_eq!(
+            definition,
+            digest(HashDomain::Definitions, crate::BLOB_VERSION + 1)
+        );
+        assert_ne!(definition, digest(HashDomain::Blob, crate::BLOB_VERSION));
+        assert_ne!(
+            digest(HashDomain::Blob, 4),
+            digest(HashDomain::Blob, crate::BLOB_VERSION)
+        );
     }
 }

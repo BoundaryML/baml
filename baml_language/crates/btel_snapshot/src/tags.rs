@@ -97,6 +97,9 @@ pub(super) enum HashDomain {
     /// One member of a cycle with its references left out, to choose the
     /// cycle's root. Never stored.
     CycleRoot = 7,
+    /// A definition group's blob, hashed under the definition encoding's
+    /// version rather than the blob format's (see `hash::prefix`).
+    Definitions = 8,
 }
 
 pub(super) fn limit(value: Limit) -> u8 {

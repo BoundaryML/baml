@@ -425,7 +425,7 @@ where
 /// The blob of a group whose content is `content` and which names
 /// `children`.
 fn seal(content: &[u8], children: Vec<Arc<DefinitionBlob>>) -> Arc<DefinitionBlob> {
-    let mut h = Hasher::new(HashDomain::Blob);
+    let mut h = Hasher::new(HashDomain::Definitions);
     h.byte(RootTag::Definitions as u8);
     h.absorb(content);
     h.size(children.len());
