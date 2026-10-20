@@ -1112,6 +1112,19 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
         Ok(Some(current(&s)?.resolve(handle)?.1.label()))
     })?;
     let s = slot.clone();
+    conn.create_scalar_function("__btel_code", 1, io, move |ctx| {
+        let Some(handle) = opt_blob(ctx, 0)? else {
+            return Ok(None);
+        };
+        let cx = current(&s)?;
+        Ok(cx
+            .with_nav(handle, |nav| match nav {
+                Nav::Value(found) => value::render_code(&*cx, found, &cx.limits.render),
+                Nav::Arguments(_) | Nav::Missing | Nav::Unavailable(_) => None,
+            })?
+            .flatten())
+    })?;
+    let s = slot.clone();
     conn.create_scalar_function("__btel_is_null", 1, io, move |ctx| {
         let Some(handle) = opt_blob(ctx, 0)? else {
             // No capture at all: null-like.

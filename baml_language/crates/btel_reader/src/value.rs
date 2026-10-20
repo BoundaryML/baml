@@ -27,6 +27,7 @@ use serde_json::{Map, Value as Json};
 
 use crate::evidence::ArgumentNames;
 
+mod code;
 pub mod equality;
 mod span;
 mod ty;
@@ -728,6 +729,72 @@ pub fn render_arguments(
         incomplete: renderer.incomplete,
         cut: renderer.cut,
     }
+}
+
+/// BAML code that rebuilds the type `found` is, or the type of the instance
+/// or enum value it is: a block expression whose value is that type as a
+/// `reflect.Type`, rebuilding each class and enum made at run time from its
+/// recorded definition. `None` for any other value, and when a definition
+/// the type names could not be read.
+pub fn render_code(
+    source: &(impl BlobSource + ?Sized),
+    found: &Located,
+    limits: &RenderLimits,
+) -> Option<String> {
+    let value = DecodedValue::from(found.value());
+    let blob = found.blob();
+    let declaration = |id: NodeId| match blob.object(id) {
+        DecodedObject::Declaration {
+            name,
+            definition,
+            is_enum,
+            ..
+        } => Some((&name.0, *definition, *is_enum)),
+        _ => None,
+    };
+    let start = match found.value() {
+        Found::Type(ty) => code::Start::Type(ty.decoded.as_deref()?),
+        Found::Enum {
+            declaration: id, ..
+        } => {
+            let (name, definition, is_enum) = declaration(*id)?;
+            code::Start::Declaration {
+                name,
+                definition,
+                is_enum,
+                arguments: Vec::new(),
+            }
+        }
+        Found::Object(id) => {
+            let DecodedObject::Instance {
+                type_arguments,
+                declaration: class,
+                ..
+            } = blob.object(*id)
+            else {
+                return None;
+            };
+            let (name, definition, is_enum) = declaration(*class)?;
+            code::Start::Declaration {
+                name,
+                definition,
+                is_enum,
+                arguments: type_arguments
+                    .iter()
+                    .map(|ty| ty.decoded.as_deref())
+                    .collect::<Option<_>>()?,
+            }
+        }
+        _ => return None,
+    };
+    let span = Span::load(
+        source,
+        [(blob, &value)],
+        Examine::Structure,
+        limits.max_blobs,
+        limits.max_blob_bytes,
+    );
+    code::render(&span, &start)
 }
 
 /// Render one value as a bounded JSON envelope. Plain JSON where it is
