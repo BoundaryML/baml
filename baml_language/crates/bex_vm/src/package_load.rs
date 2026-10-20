@@ -15,16 +15,13 @@
 //! reserve a placeholder slot per impl rule and per package, build the heap
 //! unsealed, fill each slot with its resolved pointers, then seal.
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 use baml_base::{LangItem, LangPackage};
 use baml_type::{MediaKind, Name};
 use bex_heap::{BexHeap, Generation};
 use bex_vm_types::{
-    HeapPtr, Object, ObjectIndex, TypeHead,
+    ForwardingMap, HeapPtr, Object, ObjectIndex, TypeHead,
     types::{
         LocalName, MethodImpl, Package, PackageKind, ProgramImplRule, ProgramPackage,
         RuntimeImplRule,
@@ -114,7 +111,7 @@ impl DynDispatchTables {
     /// pointers the collection left in place.
     pub fn sweep_and_forward(
         &self,
-        forwarding: &HashMap<HeapPtr, HeapPtr>,
+        forwarding: &ForwardingMap,
         survived: impl Fn(HeapPtr) -> bool,
     ) {
         // Forward a weak pointer, or report it dead.
@@ -183,7 +180,7 @@ impl DynDispatchRoot {
 impl bex_vm_types::RootHaver for DynDispatchRoot {
     fn collect_roots(&self, _roots: &mut Vec<HeapPtr>) {}
 
-    fn forward_roots(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn forward_roots(&mut self, forwarding: &ForwardingMap) {
         // A pointer the collection left in place is one that still lives in
         // Gen2 (a minor collection never moves or frees Gen2; a major moves
         // every survivor to a fresh buffer, so no stale address lands there)
@@ -990,9 +987,10 @@ mod tests {
         #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
         let (_, _, forwarding) =
             unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Minor) };
-        assert!(
-            !forwarding.contains_key(&old_class),
-            "precondition: an unvisited Gen2 object is absent from a minor forwarding map"
+        assert_eq!(
+            forwarding.get(&old_class).copied().unwrap_or(old_class),
+            old_class,
+            "precondition: a minor collection leaves an unvisited Gen2 object where it is"
         );
         hook.forward_roots(&forwarding);
         assert_eq!(

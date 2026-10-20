@@ -11,7 +11,6 @@
 )]
 
 use std::{
-    collections::HashMap,
     mem::size_of,
     sync::{
         Arc,
@@ -19,7 +18,7 @@ use std::{
     },
 };
 
-use bex_vm_types::{Function, FunctionKind, FunctionMeta, HeapPtr, Value};
+use bex_vm_types::{ForwardingMap, Function, FunctionKind, FunctionMeta, HeapPtr, Value};
 use btel_clock::ClockEpoch;
 use btel_settings::mode::AutoTelemetryLevel;
 pub use btel_types::{
@@ -1577,7 +1576,7 @@ impl TelemetryState {
         }
     }
 
-    pub(crate) fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+    pub(crate) fn forward_roots(&mut self, roots: &ForwardingMap) {
         let old_paths = std::mem::take(&mut self.call_paths);
         self.call_path_keys.clear();
         for (mut key, id) in old_paths {
@@ -2103,8 +2102,8 @@ mod tests {
         state.forward_roots(&forwarding);
         assert_eq!(definitions(&state), before);
         let moved = CallPathKey {
-            visible_caller: Some(forwarding[&caller]),
-            callee: forwarding[&callee],
+            visible_caller: Some(forwarding.forwarded(caller)),
+            callee: forwarding.forwarded(callee),
             ..key
         };
         assert_eq!(

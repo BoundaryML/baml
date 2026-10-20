@@ -1,6 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
-use bex_vm_types::{EntryId, HeapPtr, MapData, Object, Value};
+use bex_vm_types::{EntryId, ForwardingMap, HeapPtr, MapData, Object, Value};
 
 use super::{BamlClassMap, Continuation, MapView, NativeCallResult, PackageBamlImpl};
 use crate::{BexVm, VmPanic, errors::VmRustFnError};
@@ -162,7 +162,7 @@ impl Continuation for MapDriver {
             .collect()
     }
 
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
         for value in [
             &mut self.map,
             &mut self.key,

@@ -1647,6 +1647,7 @@ dependencies = [
  "hex",
  "indexmap",
  "num-bigint",
+ "rustc-hash 2.1.2",
  "serde_json",
  "sha2",
  "thiserror 2.0.18",
