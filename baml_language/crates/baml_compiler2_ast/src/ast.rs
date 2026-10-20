@@ -899,9 +899,11 @@ pub enum Expr {
         scrutinee: ExprId,
         pattern: PatId,
     },
+    /// One protected expression and one handler. Chained catches nest these
+    /// nodes, so a later handler also protects earlier handler bodies.
     Catch {
         base: ExprId,
-        clauses: Vec<CatchClause>,
+        clause: CatchClause,
     },
     Throw {
         value: ExprId,
@@ -1415,18 +1417,56 @@ pub struct MatchArm {
     pub body: ExprId,
 }
 
+/// Every catch clause creates its own protected expression and handler. The
+/// three keywords select the [`CatchClauseKind::requires_error_coverage`]
+/// and [`CatchClauseKind::wildcard_traps_panics`] policies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CatchClauseKind {
+    /// `catch`: handles the listed errors; the rest keep propagating.
     Catch,
+    /// `catch_all`: must handle every error the protected expression can
+    /// still throw.
     CatchAll,
+    /// `catch_all_panics`: `catch_all`, plus its arms must handle panics,
+    /// which its wildcard arms receive.
     CatchAllPanics,
+}
+
+impl CatchClauseKind {
+    /// The clause keyword as written in source.
+    pub fn keyword(self) -> &'static str {
+        match self {
+            CatchClauseKind::Catch => "catch",
+            CatchClauseKind::CatchAll => "catch_all",
+            CatchClauseKind::CatchAllPanics => "catch_all_panics",
+        }
+    }
+
+    /// Whether the clause's arms must cover every error that reaches it
+    /// (E0062 otherwise). The clause's own arm-body errors may still propagate.
+    pub fn requires_error_coverage(self) -> bool {
+        !matches!(self, CatchClauseKind::Catch)
+    }
+
+    /// Whether a wildcard arm (`_`, a bare `let x`) of this clause receives
+    /// panics. Elsewhere a panic passes over wildcard arms and is only
+    /// caught by an arm that names its type.
+    pub fn wildcard_traps_panics(self) -> bool {
+        matches!(self, CatchClauseKind::CatchAllPanics)
+    }
+
+    /// Whether the clause's arms must also cover every panic (E0062
+    /// otherwise): the boundary promise of `catch_all_panics`.
+    pub fn requires_panic_coverage(self) -> bool {
+        matches!(self, CatchClauseKind::CatchAllPanics)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatchClause {
     pub kind: CatchClauseKind,
     pub binding: PatId,
-    /// Optional second binding for the stack trace: `catch (e, st) { ... }`
+    /// Optional second binding for the error context: `catch (e, ctx) { ... }`
     pub stack_trace_binding: Option<PatId>,
     pub arms: Vec<CatchArmId>,
 }

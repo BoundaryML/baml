@@ -579,7 +579,7 @@ catch:
       errors.NotFound => other_value,
     }
   details: |
-    `expr catch (e) { ErrorType => handler, ... }` binds the caught error to `e` and dispatches on its type. Only the listed error types are handled; any other error keeps propagating, so `catch` need not be exhaustive. Chain a `catch_all` to handle the rest.
+    `expr catch (e) { ErrorType => handler, ... }` binds the caught error to `e` and dispatches on its type. Only the listed error types are handled; any other error keeps propagating, so `catch` need not be exhaustive. Put alternative handlers in one block; use `catch_all` for that block when it must cover every ordinary error. Chained clauses nest left to right: `expr catch (a) { ... } catch (b) { ... }` means `(expr catch (a) { ... }) catch (b) { ... }`. A later clause handles both unhandled errors from the preceding expression and errors thrown by its handler arms. Throws bypass sibling arms in the same block. A normally completing handler supplies the result and skips later handlers. A wildcard arm (`_` or a bare `let x`) takes every remaining error but not panics: a panic passes over it to the arms after it, and is caught only by an arm that names its type (`baml.panics.Cancelled => ...`) or by a `catch_all_panics` wildcard.
 
 catch_all:
   summary: "Handles every error type a preceding expression can throw (exhaustive over errors, not panics)."
@@ -588,16 +588,17 @@ catch_all:
       _ => fallback_value,
     }
   details: |
-    `expr catch_all (e) { ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The compiler reports a non-exhaustive `catch_all` if a throw type is left unhandled. Panics (`baml.panics.*`, such as `baml.panics.Cancelled`) are not part of an expression's throws-set, so the `_` wildcard does not catch them — a panic keeps unwinding past `catch_all`. To intercept a panic, name its type explicitly in an arm, e.g. `risky_call() catch (e) { baml.panics.Cancelled => ... }`; the bare `_` never catches panics.
+    `expr catch_all (e) { ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The compiler reports a non-exhaustive `catch_all` (E0062) if a throw type is left unhandled, so a callee that gains a new error type breaks the build here instead of silently propagating it. In a chain, a `catch_all` protects the whole preceding expression, including earlier handler bodies, and must cover their residual errors and new arm-body errors. Its own arm-body errors can still propagate; a later catch can handle them. Panics (`baml.panics.*`, such as `baml.panics.Cancelled`) are not part of an expression's throws-set, so the `_` wildcard does not catch them — a panic keeps unwinding past `catch_all`. To intercept a panic, name its type explicitly in an arm, e.g. `risky_call() catch (e) { baml.panics.Cancelled => ... }`; the bare `_` never catches panics.
 
 catch_all_panics:
-  summary: "Handles every panic raised by a preceding expression."
+  summary: "Handles every error and every panic raised by a preceding expression."
   syntax: |
-    let result = risky_call() catch_all_panics (panic) {
-      _ => fallback_value,
+    let result = risky_call() catch_all_panics (e) {
+      let panic: baml.panics.Panic => fallback_value,
+      _ => other_value,
     }
   details: |
-    Use `catch_all` for ordinary declared errors. `catch_all_panics` is the explicit boundary for runtime panics.
+    Use `catch_all` for ordinary declared errors. `catch_all_panics` is the explicit boundary for runtime panics: like `catch_all` it must cover every error the expression can throw, and it must also cover every panic — with a wildcard arm (`_` or a bare `let x`, which here receives panics too) or an arm naming `baml.panics.Panic` (or each `baml.panics.*` class). The compiler reports a non-exhaustive `catch_all_panics` (E0062) otherwise. Like every chained catch, a later `catch_all_panics` protects earlier handler bodies too, so it can recover from a panic raised while an earlier error is being handled. Its own handler failures propagate to an enclosing or later catch.
 
 defer:
   summary: "Schedules a block to run when the enclosing block exits, in LIFO order."
@@ -623,7 +624,7 @@ cleanup:
       }
     }
   details: |
-    `cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return (or `-> null`, the same type), and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with `... catch { ... }`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.
+    `cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return (or `-> null`, the same type), and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with `... catch_all (e) { ... }`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.
 
 match:
   summary: "Pattern matching — branches based on the shape or type of a value."

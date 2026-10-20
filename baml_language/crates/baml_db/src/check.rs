@@ -1885,14 +1885,15 @@ fn source_aware_tir_type_error_message(
             }
         }
         TirTypeError::NonExhaustiveCatchAll {
+            keyword,
             caught_type,
             missing_cases,
         } => {
             if missing_cases.is_empty() {
-                format!("non-exhaustive catch_all on type {}", ty(caught_type))
+                format!("non-exhaustive {keyword} on type {}", ty(caught_type))
             } else {
                 format!(
-                    "non-exhaustive catch_all on type {}; missing: {}",
+                    "non-exhaustive {keyword} on type {}; missing: {}",
                     ty(caught_type),
                     missing_cases.join(", ")
                 )

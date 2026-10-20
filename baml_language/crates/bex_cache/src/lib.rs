@@ -202,7 +202,13 @@ use sha2::{Digest, Sha256};
 /// as, which owns every function in it.
 ///
 /// Version 21: `FunctionMeta` gained the appended `ModelInvoke` variant.
-pub const FORMAT_VERSION: u32 = 21;
+///
+/// Version 22: the `ThrowIfPanic` instruction is gone. A catch's wildcard
+/// arm that does not trap panics is now entered after an `IsType` test
+/// against the `PANIC` pseudo-tag (`baml_type::typetag::PANIC`), so the
+/// discriminants of every opcode declared after `TypeTag` shifted down by
+/// one.
+pub const FORMAT_VERSION: u32 = 22;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

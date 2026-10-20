@@ -1,0 +1,124 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0062
+
+  × non-exhaustive catch_all on type int | string | Greeting; missing: string
+    ╭─[catch_all_coverage.baml:23:5]
+ 23 │ ╭─▶     greet(1) catch_all (e) {
+ 24 │ │           int => "int",
+ 25 │ │           Greeting => "greeting",
+ 26 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all on type int | string | Greeting; missing: string
+    ╭─[catch_all_coverage.baml:32:5]
+ 32 │ ╭─▶     greet(1) catch_all (e) {
+ 33 │ │           int => "int",
+ 34 │ │           Greeting => "greeting",
+ 35 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all on type string | Greeting; missing: string
+    ╭─[catch_all_coverage.baml:45:5]
+ 45 │ ╭─▶     greet(1) catch (e) {
+ 46 │ │           int => "int",
+ 47 │ │       } catch_all (e2) {
+ 48 │ │           Greeting => "greeting",
+ 49 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all on type string | NotFound; missing: string
+    ╭─[catch_all_coverage.baml:61:5]
+ 61 │ ╭─▶     declared(0) catch_all (e) {
+ 62 │ │           NotFound => 1,
+ 63 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all_panics on type int | string | Greeting; missing: Greeting
+    ╭─[catch_all_coverage.baml:68:5]
+ 68 │ ╭─▶     greet(1) catch_all_panics (e) {
+ 69 │ │           int => "int",
+ 70 │ │           string => "string",
+ 71 │ │           baml.panics.Panic => "panic",
+ 72 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all_panics on type int | string | Greeting; missing: baml.panics.Panic
+    ╭─[catch_all_coverage.baml:77:5]
+ 77 │ ╭─▶     greet(1) catch_all_panics (e) {
+ 78 │ │           int => "int",
+ 79 │ │           string => "string",
+ 80 │ │           Greeting => "greeting",
+ 81 │ ╰─▶     }
+    ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all on type int | string | Greeting; missing: Greeting
+     ╭─[catch_all_coverage.baml:107:5]
+ 107 │ ╭─▶     greet(1) catch_all (e) {
+ 108 │ │           int => "int",
+ 109 │ │           string => "string",
+ 110 │ │           Greeting { text: "hi" } => "hi",
+ 111 │ ╰─▶     }
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all_panics on type int | string | Greeting; missing: baml.panics.Panic
+     ╭─[catch_all_coverage.baml:116:5]
+ 116 │ ╭─▶     greet(1) catch_all_panics (e) {
+ 117 │ │           int => "int",
+ 118 │ │           string => "string",
+ 119 │ │           Greeting => "greeting",
+ 120 │ │           baml.panics.IndexOutOfBounds { index: 0 } => "index 0",
+ 121 │ ╰─▶     }
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive catch_all on type int; missing: int
+     ╭─[catch_all_coverage.baml:126:5]
+ 126 │ ╭─▶     greet(1) catch (first) {
+ 127 │ │           _ => throw 42,
+ 128 │ │       } catch_all (second) {
+ 129 │ │           string => "not the replacement type",
+ 130 │ ╰─▶     }
+     ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+     ╭─[catch_all_coverage.baml:129:19]
+ 129 │         string => "not the replacement type",
+     ·                   ──────────────────────────
+     ╰────
+
+  [type] E0096
+
+  × declared throws is `never`, but this function may also throw `int`
+     ╭─[catch_all_coverage.baml:135:5]
+ 135 │ ╭─▶     greet(1) catch (first) {
+ 136 │ │           _ => throw 42,
+ 137 │ ╰─▶     } catch (second) {
+     ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+     ╭─[catch_all_coverage.baml:138:19]
+ 138 │         string => "not the replacement type",
+     ·                   ──────────────────────────
+     ╰────

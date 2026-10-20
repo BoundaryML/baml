@@ -1831,8 +1831,8 @@ function f() -> int {
                 other => panic!("expected return statement, got {other:?}"),
             };
 
-            let (catch_base, catch_clauses) = match &body.exprs[ret_expr] {
-                Expr::Catch { base, clauses } => (*base, clauses),
+            let (catch_base, catch_clause) = match &body.exprs[ret_expr] {
+                Expr::Catch { base, clause } => (*base, clause),
                 other => panic!("expected return expression to be Expr::Catch, got {other:?}"),
             };
 
@@ -1845,8 +1845,7 @@ function f() -> int {
                 "expected throw payload to be call expression"
             );
 
-            assert_eq!(catch_clauses.len(), 1);
-            let first_arm = catch_clauses[0].arms[0];
+            let first_arm = catch_clause.arms[0];
             let arm_span = sm.catch_arm_span(first_arm);
             assert!(
                 !arm_span.is_empty(),

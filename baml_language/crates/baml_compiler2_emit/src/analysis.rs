@@ -1023,8 +1023,7 @@ fn collect_uses_in_terminator<'db>(
         Terminator::Throw { value } => {
             collect_uses_in_operand(value, block, StatementRef::Terminator, def_use);
         }
-        Terminator::Rethrow { value, context }
-        | Terminator::ThrowIfPanic { value, context, .. } => {
+        Terminator::Rethrow { value, context } => {
             collect_uses_in_operand(value, block, StatementRef::Terminator, def_use);
             collect_uses_in_operand(context, block, StatementRef::Terminator, def_use);
         }

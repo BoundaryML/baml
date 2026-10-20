@@ -264,7 +264,6 @@ pub(crate) fn display_instruction(
         | Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
-        | Instruction::ThrowIfPanic
         | Instruction::Unreachable
         | Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
@@ -469,8 +468,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::NarrowBind { .. }
         | Instruction::LoadType(_)
         | Instruction::BindType(_)
-        | Instruction::SatisfiesBound
-        | Instruction::ThrowIfPanic => Style::new().blue().bright(),
+        | Instruction::SatisfiesBound => Style::new().blue().bright(),
         Instruction::Unreachable => Style::new().red().bright(),
         Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
@@ -1019,7 +1017,6 @@ fn display_instruction_textual(
                 .unwrap_or_default();
             format!("dense_tag [{names}]")
         }
-        Instruction::ThrowIfPanic => "throw_if_panic".to_string(),
 
         // --- Closures and cells ---
         Instruction::MakeClosure {
@@ -1343,7 +1340,6 @@ pub fn display_compact_bytecode(
             | OpCode::Discriminant
             | OpCode::TypeTag
             | OpCode::Truthy
-            | OpCode::ThrowIfPanic
             | OpCode::Unreachable
             | OpCode::MakeCell
             | OpCode::SendEvent

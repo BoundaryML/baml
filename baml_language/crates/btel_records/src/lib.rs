@@ -627,6 +627,9 @@ pub const MAX_INHERITED_TEXT_BYTES: usize = 256;
 pub enum RaiseKind {
     Throw,
     Rethrow,
+    /// Retired: a wildcard catch passing a panic on. A panic no catch arm
+    /// takes is now a [`RaiseKind::Rethrow`] (no-match); kept so older
+    /// recordings decode.
     PanicRethrow,
     Await,
     AwaitCancelled,

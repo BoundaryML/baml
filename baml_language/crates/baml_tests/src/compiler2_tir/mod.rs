@@ -35,8 +35,7 @@ pub(crate) mod support {
     use std::fmt::Write;
 
     use baml_compiler2_ast::{
-        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FunctionDefaults, Literal, PatId,
-        Stmt, StmtId,
+        DefaultExprId, Expr, ExprBody, ExprId, FunctionDefaults, Literal, PatId, Stmt, StmtId,
     };
     use baml_compiler2_hir::{
         body::FunctionBody, contributions::Definition, item_tree::DefaultExprRef, scope::ScopeKind,
@@ -218,34 +217,25 @@ pub(crate) mod support {
                     pat_desc(*pattern, body)
                 )
             }
-            Expr::Catch { base, clauses } => {
+            Expr::Catch { base, clause } => {
                 let base_desc = expr_desc(*base, body);
-                let clause_descs: Vec<String> = clauses
+
+                let kind = clause.kind.keyword();
+                let binding = pat_desc(clause.binding, body);
+                let arms_desc = clause
+                    .arms
                     .iter()
-                    .map(|clause| {
-                        let kind = match clause.kind {
-                            CatchClauseKind::Catch => "catch",
-                            CatchClauseKind::CatchAll => "catch_all",
-                            CatchClauseKind::CatchAllPanics => "catch_all_panics",
-                        };
-                        let binding = pat_desc(clause.binding, body);
-                        let arms_desc = clause
-                            .arms
-                            .iter()
-                            .map(|arm_id| {
-                                let arm = &body.catch_arms[*arm_id];
-                                format!(
-                                    "{} => {}",
-                                    pat_desc(arm.pattern, body),
-                                    expr_desc(arm.body, body)
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        format!("{kind} ({binding}) {{ {arms_desc} }}")
+                    .map(|arm_id| {
+                        let arm = &body.catch_arms[*arm_id];
+                        format!(
+                            "{} => {}",
+                            pat_desc(arm.pattern, body),
+                            expr_desc(arm.body, body)
+                        )
                     })
-                    .collect();
-                format!("{base_desc} {}", clause_descs.join(" "))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{base_desc} {kind} ({binding}) {{ {arms_desc} }}")
             }
             Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
             Expr::Return { value } => match value {
@@ -534,24 +524,21 @@ pub(crate) mod support {
                     render_expr(vp, arm.body, body, inference, indent + 4, output);
                 }
             }
-            Expr::Catch { base, clauses } => {
+            Expr::Catch { base, clause } => {
                 let base_desc = expr_desc_rich(*base, body, inference);
                 let base_ty = expr_ty(vp, inference, *base);
                 writeln!(output, "{pad}catch ({base_desc} : {base_ty}) : {ty}").ok();
-                for clause in clauses {
-                    let kind = match clause.kind {
-                        CatchClauseKind::Catch => "catch",
-                        CatchClauseKind::CatchAll => "catch_all",
-                        CatchClauseKind::CatchAllPanics => "catch_all_panics",
-                    };
-                    let binding = pat_desc(clause.binding, body);
-                    writeln!(output, "{pad}  {kind} ({binding})").ok();
-                    for arm_id in &clause.arms {
-                        let arm = &body.catch_arms[*arm_id];
-                        let pat = pat_desc(arm.pattern, body);
-                        writeln!(output, "{pad}    {pat} =>").ok();
-                        render_expr(vp, arm.body, body, inference, indent + 6, output);
-                    }
+                if matches!(body.exprs[*base], Expr::Catch { .. }) {
+                    render_expr(vp, *base, body, inference, indent + 2, output);
+                }
+                let kind = clause.kind.keyword();
+                let binding = pat_desc(clause.binding, body);
+                writeln!(output, "{pad}  {kind} ({binding})").ok();
+                for arm_id in &clause.arms {
+                    let arm = &body.catch_arms[*arm_id];
+                    let pat = pat_desc(arm.pattern, body);
+                    writeln!(output, "{pad}    {pat} =>").ok();
+                    render_expr(vp, arm.body, body, inference, indent + 6, output);
                 }
             }
             Expr::Lambda(func_def) => {
@@ -1346,7 +1333,7 @@ pub(crate) mod support {
 
     /// Render a file's canonical item tree as readable text.
     pub fn render_hir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-        use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal};
+        use baml_compiler2_ast::{Expr, ExprBody, Literal};
         use baml_compiler2_hir::{file_package::file_package, file_semantic_index};
 
         fn qualify_type_name(
@@ -1826,35 +1813,25 @@ pub(crate) mod support {
                     expr_desc_hir(*scrutinee, body, prefix, local_type_names),
                     pat_desc_hir(*pattern, body, prefix, local_type_names),
                 ),
-                Expr::Catch { base, clauses } => {
+                Expr::Catch { base, clause } => {
                     let base_desc = expr_desc_hir(*base, body, prefix, local_type_names);
-                    let clause_descs: Vec<String> = clauses
+
+                    let kind = clause.kind.keyword();
+                    let binding = pat_desc_hir(clause.binding, body, prefix, local_type_names);
+                    let arms_desc = clause
+                        .arms
                         .iter()
-                        .map(|clause| {
-                            let kind = match clause.kind {
-                                CatchClauseKind::Catch => "catch",
-                                CatchClauseKind::CatchAll => "catch_all",
-                                CatchClauseKind::CatchAllPanics => "catch_all_panics",
-                            };
-                            let binding =
-                                pat_desc_hir(clause.binding, body, prefix, local_type_names);
-                            let arms_desc = clause
-                                .arms
-                                .iter()
-                                .map(|arm_id| {
-                                    let arm = &body.catch_arms[*arm_id];
-                                    format!(
-                                        "{} => {}",
-                                        pat_desc_hir(arm.pattern, body, prefix, local_type_names),
-                                        expr_desc_hir(arm.body, body, prefix, local_type_names)
-                                    )
-                                })
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                            format!("{kind} ({binding}) {{ {arms_desc} }}")
+                        .map(|arm_id| {
+                            let arm = &body.catch_arms[*arm_id];
+                            format!(
+                                "{} => {}",
+                                pat_desc_hir(arm.pattern, body, prefix, local_type_names),
+                                expr_desc_hir(arm.body, body, prefix, local_type_names)
+                            )
                         })
-                        .collect();
-                    format!("{base_desc} {}", clause_descs.join(" "))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("{base_desc} {kind} ({binding}) {{ {arms_desc} }}")
                 }
                 Expr::Throw { value } => {
                     format!(
