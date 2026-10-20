@@ -4918,7 +4918,7 @@ impl BexVm {
         // stack so a nested entry over live frames cannot wipe in-flight
         // throw state.
         if self.frames.is_empty() {
-            self.name_passthrough_entry(function);
+            self.name_root_thread(function);
             if let Some(telemetry) = &mut self.telemetry {
                 telemetry.set_context(self.root_context.clone());
                 telemetry.start_thread();
@@ -8049,23 +8049,19 @@ impl BexVm {
         unsafe { state.close_network_span(span, at, outcome, error, raw_urls) };
     }
 
-    /// A pass-through entry records no call of its own, so without a name its
-    /// root future would take the name of the first function it calls.
-    fn name_passthrough_entry(&mut self, callable: HeapPtr) {
-        if self.telemetry.is_none() {
-            return;
-        }
-        let Some(function) = self.callable_function_identity(callable) else {
-            return;
-        };
-        // SAFETY: the entry callable roots its function under the heap permit.
-        let Object::Function(function) = (unsafe { function.get() }) else {
-            return;
-        };
-        if !function.trace_passthrough {
-            return;
-        }
-        if let (Some(state), Some(metadata)) = (&mut self.telemetry, function.runtime_metadata()) {
+    /// Name a root future after its entry function, which may record no call
+    /// of its own (a pass-through LLM function, or one hidden by its policy).
+    fn name_root_thread(&mut self, callable: HeapPtr) {
+        let metadata = self
+            .callable_function_identity(callable)
+            .and_then(|function| {
+                // SAFETY: the entry callable roots its function under the heap permit.
+                match unsafe { function.get() } {
+                    Object::Function(function) => function.runtime_metadata(),
+                    _ => None,
+                }
+            });
+        if let (Some(state), Some(metadata)) = (&mut self.telemetry, metadata) {
             state.name_root_thread(&metadata.fqn);
         }
     }

@@ -238,6 +238,7 @@ impl BexEngine {
         let frame = telemetry.as_mut().and_then(|telemetry| {
             let _scope = telemetry.host_recording_scope();
             telemetry.set_context(context.clone());
+            telemetry.name_root_thread(&metadata.fqn);
             telemetry.start_thread();
             telemetry.mark_running();
             let captured_inputs =
