@@ -17,6 +17,7 @@ const PROBES: &[&str] = &[
     "Recursion",
     "Allocation",
     "Logs",
+    "Depth",
 ];
 
 #[test]

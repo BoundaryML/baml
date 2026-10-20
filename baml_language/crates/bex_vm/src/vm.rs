@@ -9729,6 +9729,9 @@ impl BexVm {
                     // across dispatch, so recover it from the parked frame.
                     OpCode::ResumeCompiled => {
                         let outcome = self.resume_compiled(frame_idx, function);
+                        // The fiber may have replaced the frame at this depth
+                        // with another function's, so the cached code follows.
+                        *code = &function.bytecode.compact.as_ref().unwrap().code;
                         if let Some(Frame::Bytecode(frame)) = self.frames.get(*frame_idx) {
                             *pc = frame.instruction_ptr;
                         }
