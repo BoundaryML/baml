@@ -60,7 +60,11 @@ def build_baml(cli, workload, stage):
     project = stage / workload["id"].replace("/", "__")
     src = project / "baml_src"
     src.mkdir(parents=True)
-    (project / "baml.toml").write_text('[package]\nname = "speedtest_workload"\n')
+    # Bind BAML_TELEMETRY so the packed binary honours the row's level; an
+    # unbound pack runs at the baked default (medium) whatever the env says.
+    (project / "baml.toml").write_text(
+        '[package]\nname = "speedtest_workload"\n[pack.env_var_names]\nBAML_TELEMETRY = "BAML_TELEMETRY"\n'
+    )
     shutil.copy(workload["files"]["baml"], src / "main.baml")
     shutil.copy(SETUP_DRIVER if _has_setup(workload["baml"]) else DRIVER, src / "speedtest_driver.baml")
     out = project / "workload"
