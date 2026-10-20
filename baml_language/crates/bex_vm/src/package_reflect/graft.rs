@@ -357,6 +357,10 @@ fn publish(
     package.init = init;
     package.test_init = test_init;
     vm.tlab.heap().conservative_write_barrier(package_ptr);
+    // The package's rule table is now different: every impl-resolution
+    // answer cached under the old world (a later load can override a
+    // structural default, or add the sole impl for a type) is stale.
+    vm.dynamic_dispatch.note_rule_world_changed();
 }
 
 fn link_error(message: impl std::fmt::Display) -> LinkError {

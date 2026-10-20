@@ -44,7 +44,7 @@ mod prompt;
 mod random;
 mod regex;
 pub(crate) mod resolve;
-pub(crate) use resolve::ImplResolver;
+pub(crate) use resolve::{ImplResolver, ImplRuleCache};
 pub(crate) mod root;
 mod sap;
 mod spawn;
