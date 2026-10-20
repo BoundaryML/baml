@@ -23,6 +23,7 @@ def build_parser():
     run_p.add_argument("--seed", type=int, default=1, help="Seed for the trial order (default 1)")
     run_p.add_argument("--cpu", type=int, default=None, help="Pin every trial to this CPU (Linux)")
     run_p.add_argument("--build", action="store_true", help="cargo build --release baml-cli and the pack host first")
+    run_p.add_argument("--build-jobs", type=int, default=1, help="Pack this many workloads at a time (default 1)")
     run_p.add_argument("--baml", default=None, help="Path to baml-cli (default: target/release/baml-cli)")
     run_p.add_argument("--tag", default=None, metavar="NAME", help="Also save this run as baseline NAME")
     run_p.add_argument("--out", default=None, metavar="DIR", help="Also copy the report bundle here (e.g. a CI artifact dir)")

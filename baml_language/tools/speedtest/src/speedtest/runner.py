@@ -14,6 +14,7 @@
 
 import csv
 import os
+import queue
 import random
 import re
 import shutil
@@ -21,6 +22,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from statistics import median, stdev
 
@@ -56,7 +58,7 @@ def _cli_env():
     return {**os.environ, "DEV_BAML_CLI_DISABLE_AGENT_DETECTION": "1"}
 
 
-def build_baml(cli, workload, stage, backend, repo):
+def build_baml(cli, workload, stage, backend, repo, build_dir):
     """Pack main.baml plus the driver into one executable with `backend`. Returns a build record."""
     project = stage / backend / workload["id"].replace("/", "__")
     src = project / "baml_src"
@@ -67,9 +69,8 @@ def build_baml(cli, workload, stage, backend, repo):
     out = project / "workload"
     cmd = [str(cli), "--no-progress", "--color", "never", "pack"]
     if backend == "rust":
-        # One build directory per run, so the runtime compiles once and each
-        # workload's crate reuses it.
-        cmd += ["--rust", "--rust-workspace", str(repo), "--rust-build-dir", str(stage / "rust-build")]
+        # The runtime compiles once per build directory; each workload's crate reuses it.
+        cmd += ["--rust", "--rust-workspace", str(repo), "--rust-build-dir", str(build_dir)]
     start = time.perf_counter()
     r = subprocess.run(cmd + ["speedtest_driver", "-o", str(out)],
                        cwd=project, capture_output=True, text=True, env=_cli_env(), stdin=subprocess.DEVNULL)
@@ -78,6 +79,25 @@ def build_baml(cli, workload, stage, backend, repo):
         lines = [l for l in r.stderr.strip().splitlines() if l.strip() and not l.startswith("warning:")]
         return {"status": "failed", "error": (lines[-1] if lines else f"exit {r.returncode}")[:400]}
     return {"status": "ok", "artifact": str(out), "seconds": seconds, "bytes": out.stat().st_size}
+
+
+def _build_all(cli, workloads, backends, stage, repo, jobs):
+    """Pack every (workload, backend), `jobs` at a time. Rust packs are mostly a
+    single-threaded LTO link, so parallel slots each get their own build
+    directory and pay for the runtime once."""
+    dirs = queue.Queue()
+    for slot in range(max(jobs, 1)):
+        dirs.put(stage / f"rust-build-{slot}")
+
+    def one(w, backend):
+        build_dir = dirs.get()
+        try:
+            return (w["id"], backend), build_baml(cli, w, stage, backend, repo, build_dir)
+        finally:
+            dirs.put(build_dir)
+
+    with ThreadPoolExecutor(max_workers=max(jobs, 1)) as pool:
+        return dict(pool.map(lambda wb: one(*wb), [(w, b) for w in workloads for b in backends]))
 
 
 def _stats(values):
@@ -213,12 +233,11 @@ def cmd_run(args):
     try:
         backends = sorted({r.backend for r in row_list if r.is_baml})
         _log(f"building {len(workloads)} workloads as {', '.join(backends)} with {cli}")
-        for w in workloads:
-            builds[w["id"]] = {}
-            for backend in backends:
-                b = builds[w["id"]][backend] = build_baml(cli, w, stage, backend, repo)
-                if b["status"] != "ok":
-                    _log(f"  {w['name']} [{backend}]: pack failed: {b['error']}")
+        builds = _build_all(cli, workloads, backends, stage, repo, args.build_jobs)
+        for (wid, backend), b in builds.items():
+            if b["status"] != "ok":
+                _log(f"  {wid} [{backend}]: pack failed: {b['error']}")
+        builds = {w["id"]: {backend: builds[(w["id"], backend)] for backend in backends} for w in workloads}
 
         _log(f"verifying {len(cells)} (workload, row) pairs")
         for (wid, _), cell in cells.items():
