@@ -225,3 +225,44 @@ function Iterators() -> void {
         `${plain}:${passed}:${chained.length()}:${chained_total}:${lazy}:${grown.length()}:${seen}`,
     );
 }
+
+function TypeName<T>() -> string {
+    reflect.Type.of<T>().to_string()
+}
+
+// A type bound at run time (`let type`) is passed on by generic calls, and
+// sibling bindings reuse one frame slot.
+function BoundTypes() -> void {
+    let type T = int.type();
+    let held = match (21) {
+        let n: T => Identity<T>(n) is int,
+        _ => false,
+    };
+    baml.io.println(`${TypeName<T>()}:${held}`);
+    let first: string = {
+        let type A = string.type();
+        TypeName<A>()
+    };
+    let second: string = {
+        let type B = Point.type();
+        TypeName<B>()
+    };
+    baml.io.println(`${first}:${second}`);
+}
+
+// A class declared at run time is bound as a type, parsed into and tested.
+function RuntimeClass() -> void {
+    let saved = reflect.Class.new("Saved", { "height": int.type(), "name": string.type() });
+    let type Saved = saved;
+    let text = {
+        let parsed = baml.sap.parse<Saved>(`{"height": 180, "name": "Ada"}`);
+        baml.json.to_string(parsed)
+    } catch (e, ctx) {
+        _ => "parse failed"
+    };
+    baml.io.println(text);
+    let again = baml.sap.parse_type(saved.as_type(), `{"height": 1, "name": "b"}`) catch (e, ctx) {
+        _ => null
+    };
+    baml.io.println(`${again is Saved}:${TypeName<Saved>()}`);
+}

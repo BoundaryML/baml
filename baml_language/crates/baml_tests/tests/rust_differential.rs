@@ -19,6 +19,8 @@ const PROBES: &[&str] = &[
     "Logs",
     "Depth",
     "Iterators",
+    "BoundTypes",
+    "RuntimeClass",
 ];
 
 #[test]
