@@ -2669,9 +2669,9 @@ impl BexVm {
         self.inherited_hook_suppression = suppressed;
     }
 
-    fn begin_trace_hook(&mut self, frame: usize, with_settings: bool) -> Result<Value, VmError> {
+    fn begin_trace_hook_in(&mut self, frame: usize, with_settings: bool) -> Result<Value, VmError> {
         if self.telemetry.is_none() || self.hooks_suppressed() {
-            self.finish_trace_hook(frame, Value::NULL)?;
+            self.finish_trace_hook_in(frame, Value::NULL)?;
             return Ok(Value::NULL);
         }
         let pending = self.pending_trace_hooks.last_mut().expect("hooked entry");
@@ -2693,7 +2693,7 @@ impl BexVm {
         Ok(crate::package_trace::alloc_settings(self, &options))
     }
 
-    fn finish_trace_hook(&mut self, frame_idx: usize, result: Value) -> Result<(), VmError> {
+    fn finish_trace_hook_in(&mut self, frame_idx: usize, result: Value) -> Result<(), VmError> {
         let returned = if result.is_null() {
             None
         } else {
@@ -5197,7 +5197,6 @@ impl BexVm {
                     _ => None,
                 };
                 if let Some(stub) = stub
-                    && !hooked
                     && let Some(Frame::Bytecode(frame)) = self.frames.last_mut()
                 {
                     frame.instruction_ptr = stub + crate::compiled_rt::stub::START;
@@ -6610,6 +6609,27 @@ impl BexVm {
                     .zip(crate::compiled_rt::stub_start(frame_function))
                     .map(|(body, stub)| (body.slots() as usize, stub))
                     .expect("a suspended compiled frame has a compiled body");
+                // A recoverable hook failure answers the hook call with null,
+                // so the body lands at its decision boundary as bytecode does
+                // below. Task cancellation keeps unwinding normally.
+                if self
+                    .pending_trace_hooks
+                    .last()
+                    .is_some_and(|hook| hook.frame == depth && hook.evaluating)
+                    && !self.as_instance(&exception_value).is_ok_and(|instance| {
+                        instance.class == self.panic_class_ptrs[PanicClass::Cancelled as usize]
+                    })
+                {
+                    self.stack.truncate(frame_locals_offset.raw() + slots);
+                    self.stack.push(Value::NULL);
+                    if let Some(evidence) = evidence.take() {
+                        self.error_hook_fallback(evidence);
+                    }
+                    self.restore_caller_context(depth);
+                    *frame_idx = depth;
+                    *function = frame_function;
+                    return Ok(());
+                }
                 let context = match &context {
                     InFlightContext::Carried(context) => *context,
                     InFlightContext::Fresh { trace, cause } => {
@@ -6654,10 +6674,12 @@ impl BexVm {
 
             // Recoverable hook failures land at the decision boundary, before
             // the target starts. Task cancellation keeps unwinding normally.
-            if self
-                .pending_trace_hooks
-                .last()
-                .is_some_and(|hook| hook.frame == depth && hook.evaluating)
+            // A running compiled body has left its prologue with the error.
+            if compiled.is_none()
+                && self
+                    .pending_trace_hooks
+                    .last()
+                    .is_some_and(|hook| hook.frame == depth && hook.evaluating)
             {
                 let cancelled = self.as_instance(&exception_value).is_ok_and(|instance| {
                     instance.class == self.panic_class_ptrs[PanicClass::Cancelled as usize]
@@ -7625,12 +7647,9 @@ impl BexVm {
 
                 *function = callee;
 
-                // Trace-hooked callees must run their bytecode prologue first.
-                let compiled = if hooked {
-                    None
-                } else {
-                    crate::compiled_rt::compiled_fn(callee)
-                };
+                // A compiled body's prologue resolves a pending hook as the
+                // bytecode prologue does.
+                let compiled = crate::compiled_rt::compiled_fn(callee);
                 match compiled {
                     None => {
                         let new_len = self.stack.len() + callee.real_local_count;
@@ -9673,7 +9692,7 @@ impl BexVm {
                     // ── Call ──────────────────────────────────────────────────────
                     OpCode::BeginTraceHook => {
                         let with_settings = read_i8_unchecked(code, pc) != 0;
-                        let value = self.begin_trace_hook(*frame_idx, with_settings)?;
+                        let value = self.begin_trace_hook_in(*frame_idx, with_settings)?;
                         self.stack.push(value);
                     }
                     OpCode::TraceHookHidden
@@ -9723,7 +9742,7 @@ impl BexVm {
                     }
                     OpCode::EndTraceHook => {
                         let result = self.stack.ensure_pop();
-                        self.finish_trace_hook(*frame_idx, result)?;
+                        self.finish_trace_hook_in(*frame_idx, result)?;
                     }
                     // Passing `pc` to an outlined call prevents register allocation
                     // across dispatch, so recover it from the parked frame.

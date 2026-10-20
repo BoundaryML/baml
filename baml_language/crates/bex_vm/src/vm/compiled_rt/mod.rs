@@ -12,6 +12,7 @@ pub(crate) use state::SavedCallTypes;
 mod heap;
 mod program;
 mod state;
+mod trace;
 mod types;
 mod r#virtual;
 
@@ -36,6 +37,7 @@ pub use btel_records::LogLevel;
 #[cfg(test)]
 pub(crate) use call::FORCE_CALL_FUNNEL;
 pub(crate) use fiber::{Fiber, Request};
+pub use trace::TraceHookMode;
 pub use r#virtual::VirtualSite;
 
 use crate::{

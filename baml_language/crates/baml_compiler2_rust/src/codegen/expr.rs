@@ -140,7 +140,13 @@ impl<'db> Generator<'_, 'db> {
                     Repr::Value,
                 ))
             }
-            Rvalue::TraceHookSettings { .. } => unsupported("trace hook"),
+            // Null when the hook is not to run; the hook call then takes the
+            // VM's call path (see `analysis::hook_call`).
+            Rvalue::TraceHookSettings { with_settings } => self.fallible_expr(
+                block,
+                &format!("vm.begin_trace_hook(depth, {with_settings})"),
+                Repr::Value,
+            ),
             Rvalue::SatisfiesBound { ty, bound } => {
                 let value = self.value_operand(block, ty)?;
                 let template = bound.to_template();

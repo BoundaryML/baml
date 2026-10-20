@@ -172,7 +172,8 @@ impl<'db> Generator<'_, 'db> {
             "#[inline]\npub fn {symbol}(vm: &mut BexVm, args: &[Value]) -> R<Value>"
         ));
         self.declare_locals(!self.loop_headers.is_empty());
-        if self.slots > 0 {
+        // The call path leaves the arguments in a hooked body's leading slots.
+        if self.slots > self.slot_base() {
             self.emit_line(&format!("vm.reserve_slots(depth, {});", self.slots));
         }
         if let Some(slot) = self.cause_slot {
@@ -185,6 +186,26 @@ impl<'db> Generator<'_, 'db> {
         self.emit_line("Ok(Value::NULL)");
         self.footer();
         Ok(self.assemble(prologue))
+    }
+
+    /// The first slot the body may write. A hook prologue reads the
+    /// arguments from the frame when it resolves, after the hook call has
+    /// spilled across its suspension, so a hooked body keeps them in their
+    /// leading slots.
+    fn slot_base(&self) -> usize {
+        let hooked = self.body.blocks.iter().any(|block| {
+            block.statements.iter().any(|statement| {
+                matches!(
+                    statement.kind,
+                    StatementKind::Intrinsic {
+                        op: baml_compiler2_mir::IntrinsicOp::ApplyTraceHook
+                            | baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(_),
+                        ..
+                    }
+                )
+            })
+        });
+        if hooked { self.arity() } else { 0 }
     }
 
     fn arity_locals(&self) -> usize {
@@ -394,8 +415,9 @@ impl<'db> Generator<'_, 'db> {
         // declarations a hoisted type names, so a pausing body builds each
         // type where it is used.
         self.hoist_types = !binds_types && !self.pauses;
-        self.cause_slot = catches.then_some(0);
-        self.slots = usize::from(catches);
+        let base = self.slot_base();
+        self.cause_slot = catches.then_some(base);
+        self.slots = base + usize::from(catches);
         self.spill_base = self.slots;
         if !self.pauses {
             return;

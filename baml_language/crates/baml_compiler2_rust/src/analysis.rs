@@ -481,6 +481,9 @@ pub(crate) fn suspends_directly<'db>(
         Terminator::Call {
             has_trace: true, ..
         } => true,
+        // The VM's call path runs a declaration hook: it suppresses hooks
+        // under it and attributes it to the target's caller.
+        terminator if hook_call(body, terminator) => true,
         Terminator::Call {
             callee,
             args,
@@ -509,6 +512,34 @@ pub(crate) fn suspends_directly<'db>(
         }
         _ => false,
     }
+}
+
+/// Whether `terminator` calls the body's declaration hook: its result is
+/// what `ApplyTraceHook` applies.
+pub(crate) fn hook_call(body: &MirFunctionBody<'_>, terminator: &Terminator<'_>) -> bool {
+    let Terminator::Call {
+        destination: Place::Local(result),
+        ..
+    } = terminator
+    else {
+        return false;
+    };
+    body.blocks
+        .iter()
+        .flat_map(|block| &block.statements)
+        .any(|statement| {
+            matches!(
+                &statement.kind,
+                StatementKind::Intrinsic {
+                    op: IntrinsicOp::ApplyTraceHook,
+                    args,
+                } if args.iter().any(|arg| matches!(
+                    arg,
+                    Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))
+                        if local == result
+                ))
+            )
+        })
 }
 
 pub(crate) fn user_callee<'db>(

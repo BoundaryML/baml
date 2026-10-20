@@ -186,3 +186,60 @@ function Depth() -> void {
     let second = string.from(Sized(5));
     baml.io.println(`${first}:${second}`);
 }
+
+// `String.length`, `Range` and the iterator adapters carry `trace.hidden`
+// hooks; their compiled bodies resolve them as bytecode's prologue does.
+function Hidden() -> void {
+    let words = ["a", "bb", "ccc", ""];
+    let total = 0;
+    let i = 0;
+    while (i < words.length()) {
+        total += words[i].length();
+        i += 1;
+    }
+    let ranged = 0;
+    for (let k in baml.iter.Range.new(0, 5)) {
+        ranged += k;
+    }
+    let chained = [1, 2, 3, 4, 5, 6].iter().filter((x: int) -> bool {
+        x % 2 == 0
+    }).map((x: int) -> int {
+        x * 10
+    }).collect();
+    baml.io.println(`${total}:${ranged}:${chained}`);
+}
+
+class HookCounts {
+    hooks: int,
+    bodies: int,
+}
+
+function choose(counts: HookCounts, n: int, settings: trace.Settings) -> trace.Options? throws never {
+    counts.hooks += 1;
+    trace.hidden()
+}
+
+/// baml:$trace=choose
+function chosen(counts: HookCounts, n: int) -> int {
+    counts.bodies += 1;
+    n * 2
+}
+
+function failing_hook(counts: HookCounts, settings: trace.Settings) -> trace.Options? throws never {
+    counts.hooks += 1;
+    baml.sys.panic("hook failure")
+}
+
+/// baml:$trace=failing_hook
+function after_failure(counts: HookCounts) -> int {
+    counts.bodies += 1;
+    7
+}
+
+function Hooked() -> void {
+    let counts = HookCounts { hooks: 0, bodies: 0 };
+    let a = chosen(counts, 21);
+    let b = after_failure(counts);
+    let c = chosen(counts, 4);
+    baml.io.println(`${a}:${b}:${c}:${counts.bodies}`);
+}
