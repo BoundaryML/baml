@@ -731,35 +731,35 @@ impl Printable for QuotedString {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RawString {
+pub struct HashString {
     pub token_span: TextRange,
 }
-impl FromCST for RawString {
+impl FromCST for HashString {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::RAW_STRING_LITERAL)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::HASH_STRING_LITERAL)?;
 
         // Find the opening hash token to strip preceding trivia
         let start = node
             .first_child_token_of_kind(SyntaxKind::HASH)
             .ok_or_else(|| StrongAstError::missing(SyntaxKind::HASH, node.text_range()))?;
 
-        Ok(RawString {
+        Ok(HashString {
             token_span: TextRange::new(start.text_range().start(), node.text_range().end()),
         })
     }
 }
-impl Token for RawString {
+impl Token for HashString {
     fn span(&self) -> TextRange {
         self.token_span
     }
 }
-impl KnownKind for RawString {
+impl KnownKind for HashString {
     fn kind() -> SyntaxKind {
-        SyntaxKind::RAW_STRING_LITERAL
+        SyntaxKind::HASH_STRING_LITERAL
     }
 }
-impl Printable for RawString {
+impl Printable for HashString {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let text = &printer.input[self.span()];
         let multi_lined = text.contains('\n');
@@ -975,6 +975,57 @@ impl Printable for BacktickString {
             Some(reindented) => printer.print_str(&reindented),
             None => printer.print_raw_token(self),
         }
+        PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.start(),
+            self.token_span.start() + TextSize::from(1),
+        )
+    }
+    fn rightmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.end() - TextSize::from(1),
+            self.token_span.end(),
+        )
+    }
+}
+
+/// A raw `r"..."` string literal. Its body is verbatim, so it always prints
+/// as written.
+#[derive(Debug)]
+pub struct RawString {
+    pub token_span: TextRange,
+}
+impl FromCST for RawString {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::RAW_STRING_LITERAL)?;
+
+        // Find the `r` prefix word token to strip preceding trivia.
+        let start = node
+            .first_child_or_token_by_kind(&|kind| kind == SyntaxKind::WORD)
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, node.text_range()))?;
+
+        Ok(RawString {
+            token_span: TextRange::new(start.text_range().start(), node.text_range().end()),
+        })
+    }
+}
+impl Token for RawString {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for RawString {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::RAW_STRING_LITERAL
+    }
+}
+impl Printable for RawString {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let multi_lined = printer.input[self.span()].contains('\n');
+        printer.print_raw_token(self);
         PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {

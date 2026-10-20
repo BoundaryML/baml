@@ -161,9 +161,14 @@ mod tests {
     }
 
     #[test]
+    fn unescape_string_literal_decodes_code_point_escapes() {
+        assert_eq!(unescape_string_literal(r"\x41"), "A");
+        assert_eq!(unescape_string_literal(r"\u0041\u{42}"), "AB");
+    }
+
+    #[test]
     fn unescape_string_literal_preserves_unknown_sequences() {
-        assert_eq!(unescape_string_literal(r"\x41"), "\\x41");
-        assert_eq!(unescape_string_literal(r"\u0041"), "\\u0041");
+        assert_eq!(unescape_string_literal(r"\d+"), "\\d+");
     }
 
     #[test]
@@ -1117,7 +1122,7 @@ function legacy() -> string {
         let root = SyntaxNode::new_root(green);
         assert!(
             root.descendants()
-                .any(|node| node.kind() == SyntaxKind::RAW_STRING_LITERAL),
+                .any(|node| node.kind() == SyntaxKind::HASH_STRING_LITERAL),
             "the parser must retain the hash string CST for error recovery"
         );
         let (items, _diags, _env_var_refs) = lower_file(&root);
@@ -2030,6 +2035,97 @@ retry_policy MyRetry {
                 crate::LoweringDiagnostic::RetryPolicyRemoved { name, .. } if name == "MyRetry"
             )),
             "expected RetryPolicyRemoved, got: {diags:#?}"
+        );
+    }
+
+    /// The source text each `InvalidStringEscape` diagnostic points at.
+    fn escape_diagnostic_spans(source: &str) -> Vec<&str> {
+        let tokens = lex_lossless(source, FileId::new(0));
+        let (green, errors) = parse_file(&tokens);
+        assert!(errors.is_empty(), "unexpected parse errors: {errors:#?}");
+        let (_items, diags, _env_var_refs) = lower_file(&SyntaxNode::new_root(green));
+        diags
+            .iter()
+            .map(|diag| match diag {
+                crate::LoweringDiagnostic::InvalidStringEscape { span, .. } => &source[*span],
+                other => panic!("unexpected diagnostic: {other:#?}"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn invalid_escapes_are_reported_once_per_sequence_in_every_literal_kind() {
+        let source = r#"
+type Choice = "\q" | "ok"
+
+function main() -> string {
+  let a = "\d+\x41\xE9";
+  let b = b"\xFF\u{E9}é";
+  let c = `\v ${"\e"} \uD83D\uDE00 \U0001F600`;
+  let d = r"\d \v";
+  a
+}
+"#;
+        assert_eq!(
+            escape_diagnostic_spans(source),
+            vec![
+                r"\q",
+                r"\d",
+                r"\xE9",
+                r"\u{E9}",
+                "é",
+                r"\v",
+                r"\U0001F600",
+                r"\e",
+            ]
+        );
+    }
+
+    #[test]
+    fn raw_string_literals_keep_backslashes() {
+        let source = r#"
+function main() -> string {
+  r"\d+\"\u{41}"
+}
+"#;
+
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected root expr");
+        let Expr::Block { tail_expr, .. } = &body.exprs[root] else {
+            panic!("expected block root expression");
+        };
+        let tail = tail_expr.expect("expected tail expression");
+
+        assert_eq!(
+            &body.exprs[tail],
+            &Expr::Literal(crate::ast::Literal::String(r#"\d+\"\u{41}"#.to_string()))
+        );
+    }
+
+    #[test]
+    fn byte_string_literals_decode_any_hex_byte() {
+        let source = r#"
+function main() -> uint8array {
+  b"\xFF\'\/"
+}
+"#;
+
+        let function = first_function(parse_and_lower(source));
+        let Some(FunctionBodyDef::Expr(body, _)) = &function.body else {
+            panic!("expected expression body");
+        };
+        let root = body.root_expr.expect("expected root expr");
+        let Expr::Block { tail_expr, .. } = &body.exprs[root] else {
+            panic!("expected block root expression");
+        };
+        let tail = tail_expr.expect("expected tail expression");
+
+        assert_eq!(
+            &body.exprs[tail],
+            &Expr::ByteStringLiteral(vec![0xFF, b'\'', b'/'])
         );
     }
 

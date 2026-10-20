@@ -2126,9 +2126,10 @@ impl<'a> Parser<'a> {
 
                 if p.at_raw(TokenKind::Backslash) {
                     p.bump_raw(); // Consume backslash
-                    if p.current < p.tokens.len() {
-                        p.bump_raw(); // Consume the escaped character (whatever it is)
-                    }
+                    // Consume exactly the escaped token, even if it is trivia:
+                    // `bump_raw` would skip a space or newline and swallow the
+                    // closing quote after it.
+                    p.bump_one_token_raw();
                     continue;
                 }
 
@@ -2147,27 +2148,42 @@ impl<'a> Parser<'a> {
 
     /// Parse a byte string literal: `b"..."`.
     ///
-    /// The lexer emits `Word("b"), Quote, (content tokens), Quote`.
-    /// We check adjacency: the raw token immediately after `Word("b")` must be
-    /// `Quote` with no intervening trivia. This distinguishes `b"hello"` (byte
-    /// string) from `b "hello"` (identifier `b` followed by a string).
-    ///
     /// Must only be called when `self.current()` is `Word("b")`.
     pub(crate) fn parse_byte_string(&mut self) -> bool {
-        // Adjacency check: the raw token immediately after `Word("b")` must be
+        self.parse_prefixed_string(SyntaxKind::BYTE_STRING_LITERAL, "byte string")
+    }
+
+    /// Parse a raw string literal: `r"..."`. Its body is taken verbatim, but
+    /// it is delimited like a regular string: a backslash still keeps the next
+    /// character from closing the literal, so `r"\""` is the two characters
+    /// `\"`.
+    ///
+    /// Must only be called when `self.current()` is `Word("r")`.
+    pub(crate) fn parse_raw_string(&mut self) -> bool {
+        self.parse_prefixed_string(SyntaxKind::RAW_STRING_LITERAL, "raw string")
+    }
+
+    /// Parse a string literal with a one-letter prefix, like `b"..."`.
+    ///
+    /// The lexer emits `Word(prefix), Quote, (content tokens), Quote`.
+    /// We check adjacency: the raw token immediately after the prefix must be
+    /// `Quote` with no intervening trivia. This distinguishes `b"hello"` (byte
+    /// string) from `b "hello"` (identifier `b` followed by a string).
+    fn parse_prefixed_string(&mut self, kind: SyntaxKind, what: &str) -> bool {
+        // Adjacency check: the raw token immediately after the prefix must be
         // `Quote` with no trivia in between.
-        let Some(b_index) = self.current_non_trivia_index() else {
+        let Some(prefix_index) = self.current_non_trivia_index() else {
             return false;
         };
-        if self.tokens.get(b_index + 1).map(|t| t.kind) != Some(TokenKind::Quote) {
+        if self.tokens.get(prefix_index + 1).map(|t| t.kind) != Some(TokenKind::Quote) {
             return false;
         }
 
         // Before starting the node, handle all leading trivia.
         while self.eat_trivia() {}
 
-        self.with_node(SyntaxKind::BYTE_STRING_LITERAL, |p| {
-            p.bump_raw(); // Consume the `b` prefix
+        self.with_node(kind, |p| {
+            p.bump_raw(); // Consume the prefix
 
             p.bump_raw(); // Opening quote
 
@@ -2176,17 +2192,16 @@ impl<'a> Parser<'a> {
             while !p.at_end_raw() {
                 loop_counter += 1;
                 if loop_counter > 100_000 {
-                    p.error_unexpected_token(
-                        "Byte string parsing exceeded iteration limit".to_string(),
-                    );
+                    p.error_unexpected_token(format!(
+                        "Exceeded iteration limit while parsing {what} literal"
+                    ));
                     return;
                 }
 
                 if p.at_raw(TokenKind::Backslash) {
                     p.bump_raw(); // Consume backslash
-                    if p.current < p.tokens.len() {
-                        p.bump_raw(); // Consume the escaped character (whatever it is)
-                    }
+                    // Consume exactly the escaped token, even if it is trivia.
+                    p.bump_one_token_raw();
                     continue;
                 }
 
@@ -2198,7 +2213,7 @@ impl<'a> Parser<'a> {
                 p.bump_raw();
             }
 
-            p.error_unexpected_token("Unclosed byte string literal".to_string());
+            p.error_unexpected_token(format!("Unclosed {what} literal"));
         });
 
         true
@@ -2207,15 +2222,15 @@ impl<'a> Parser<'a> {
     /// Parse a removed hash string literal for lossless recovery.
     /// Lexer emits: Hash+, Quote, (content tokens), Quote, Hash+
     /// Parser assembles and validates matching hash counts
-    pub(crate) fn parse_raw_string(&mut self) -> bool {
-        self.parse_raw_string_with_removed_feature_error(true)
+    pub(crate) fn parse_hash_string(&mut self) -> bool {
+        self.parse_hash_string_with_removed_feature_error(true)
     }
 
-    fn parse_raw_string_without_removed_feature_error(&mut self) -> bool {
-        self.parse_raw_string_with_removed_feature_error(false)
+    fn parse_hash_string_without_removed_feature_error(&mut self) -> bool {
+        self.parse_hash_string_with_removed_feature_error(false)
     }
 
-    fn parse_raw_string_with_removed_feature_error(
+    fn parse_hash_string_with_removed_feature_error(
         &mut self,
         report_removed_feature: bool,
     ) -> bool {
@@ -2235,24 +2250,24 @@ impl<'a> Parser<'a> {
         // `find_token_after_hashes` can point at the EOF slot (== tokens.len())
         // on incomplete input, so index through `get` rather than `[]`.
         if quote_pos.and_then(|i| self.tokens.get(i)).map(|t| t.kind) != Some(TokenKind::Quote) {
-            // Just hashes, not a raw string
+            // Just hashes, not a hash string
             return false;
         }
 
-        // before starting the RAW_STRING_LITERAL node, handle all leading trivia
+        // before starting the HASH_STRING_LITERAL node, handle all leading trivia
         while self.eat_trivia() {}
 
         let start_span = self.current().map(|token| token.span).unwrap_or_default();
 
-        self.with_node(SyntaxKind::RAW_STRING_LITERAL, |p| {
+        self.with_node(SyntaxKind::HASH_STRING_LITERAL, |p| {
             // Consume opening hashes
             for _ in 0..opening_hashes {
                 p.bump(); // #
             }
             p.bump(); // Opening "
 
-            // Parse raw string content as literal text.
-            p.parse_raw_string_content(opening_hashes);
+            // Parse hash string content as literal text.
+            p.parse_hash_string_content(opening_hashes);
         });
 
         if report_removed_feature {
@@ -2268,7 +2283,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the content inside a removed hash string.
-    fn parse_raw_string_content(&mut self, opening_hashes: usize) {
+    fn parse_hash_string_content(&mut self, opening_hashes: usize) {
         let mut loop_counter = 0;
 
         loop {
@@ -2308,7 +2323,7 @@ impl<'a> Parser<'a> {
     /// Parse a quoted, backtick, or removed hash string.
     pub(crate) fn parse_any_string(&mut self) -> bool {
         if self.at(TokenKind::Hash) {
-            self.parse_raw_string()
+            self.parse_hash_string()
         } else if self.at(TokenKind::Quote) {
             self.parse_string()
         } else if self.at(TokenKind::Backtick) {
@@ -4618,7 +4633,7 @@ impl<'a> Parser<'a> {
             // Keep the prompt-specific Jinja migration diagnostic emitted by
             // lowering instead of also reporting the general hash-string error.
             let parsed = if p.at(TokenKind::Hash) {
-                p.parse_raw_string_without_removed_feature_error()
+                p.parse_hash_string_without_removed_feature_error()
             } else {
                 p.parse_any_string()
             };
@@ -7069,6 +7084,8 @@ impl<'a> Parser<'a> {
             let text: String = self.current().map(|t| t.text.clone()).unwrap_or_default();
             if text == "b" && self.parse_byte_string() {
                 // Byte string literal b"..."
+            } else if text == "r" && self.parse_raw_string() {
+                // Raw string literal r"..."
             } else if text == "map" && self.peek(1).map(|t| t.kind) == Some(TokenKind::LBrace) {
                 self.parse_map_literal();
             } else if text == "env"
@@ -8643,7 +8660,7 @@ impl<'a> Parser<'a> {
             // The declaration-level removal diagnostic is more actionable than
             // also reporting the general hash-string error for its body.
             let parsed = if p.at(TokenKind::Hash) {
-                p.parse_raw_string_without_removed_feature_error()
+                p.parse_hash_string_without_removed_feature_error()
             } else {
                 p.parse_any_string()
             };
@@ -12946,6 +12963,39 @@ function Demo(n: int) -> string {
             root.descendants()
                 .any(|n| n.kind() == SyntaxKind::BACKTICK_ENDIF)
         );
+    }
+
+    #[test]
+    fn raw_string_literal_requires_an_adjacent_quote() {
+        let source = r#"
+function Demo() -> string {
+    let a = r"\d+\"";
+    let r = "x";
+    r + a
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        let raw: Vec<_> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::RAW_STRING_LITERAL)
+            .map(|n| n.text().to_string())
+            .collect();
+        // A backslash keeps the next quote from closing the literal; `r` used
+        // as an identifier is not a prefix.
+        assert_eq!(raw, vec![r#"r"\d+\"""#]);
+    }
+
+    #[test]
+    fn backslash_before_trivia_does_not_swallow_the_closing_quote() {
+        for source in [
+            "function Demo() -> string { \"a\\ \" }",
+            "function Demo() -> uint8array { b\"a\\ \" }",
+            "function Demo() -> string { r\"a\\ \" }",
+        ] {
+            let (_root, errors) = parse_source(source);
+            assert_no_errors(&errors);
+        }
     }
 
     #[test]

@@ -447,7 +447,7 @@ impl Printable for AttributeArgs {
 #[derive(Debug)]
 pub enum AttributeArg {
     QuotedString(t::QuotedString),
-    RawString(t::RawString),
+    HashString(t::HashString),
     Backtick(t::BacktickString),
     /// Something like `{{ this > 0 }}`
     ///
@@ -466,9 +466,9 @@ impl FromCST for AttributeArg {
                 let string = t::QuotedString::from_cst(elem)?;
                 Ok(AttributeArg::QuotedString(string))
             }
-            SyntaxKind::RAW_STRING_LITERAL => {
-                let string = t::RawString::from_cst(elem)?;
-                Ok(AttributeArg::RawString(string))
+            SyntaxKind::HASH_STRING_LITERAL => {
+                let string = t::HashString::from_cst(elem)?;
+                Ok(AttributeArg::HashString(string))
             }
             SyntaxKind::BACKTICK_STRING_LITERAL => {
                 let string = t::BacktickString::from_cst(elem)?;
@@ -497,7 +497,7 @@ impl FromCST for AttributeArg {
             }
             found => Err(StrongAstError::UnexpectedKindDesc {
                 expected_desc:
-                    "STRING_LITERAL, RAW_STRING_LITERAL, BACKTICK_STRING_LITERAL, EXPR, or UNQUOTED_STRING"
+                    "STRING_LITERAL, HASH_STRING_LITERAL, BACKTICK_STRING_LITERAL, EXPR, or UNQUOTED_STRING"
                         .into(),
                 found,
                 at: elem.text_range(),
@@ -510,7 +510,7 @@ impl Printable for AttributeArg {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
             AttributeArg::QuotedString(s) => printer.print(s, shape),
-            AttributeArg::RawString(s) => printer.print(s, shape),
+            AttributeArg::HashString(s) => printer.print(s, shape),
             AttributeArg::Backtick(s) => printer.print(s, shape),
             AttributeArg::AttrExpr(range) => {
                 printer.print_input_range(*range);
@@ -527,7 +527,7 @@ impl Printable for AttributeArg {
     fn leftmost_token(&self) -> TextRange {
         match self {
             AttributeArg::QuotedString(s) => s.leftmost_token(),
-            AttributeArg::RawString(s) => s.leftmost_token(),
+            AttributeArg::HashString(s) => s.leftmost_token(),
             AttributeArg::Backtick(s) => s.leftmost_token(),
             AttributeArg::AttrExpr(range) => {
                 TextRange::new(range.start(), range.start() + TextSize::from(1))
@@ -538,7 +538,7 @@ impl Printable for AttributeArg {
     fn rightmost_token(&self) -> TextRange {
         match self {
             AttributeArg::QuotedString(s) => s.rightmost_token(),
-            AttributeArg::RawString(s) => s.rightmost_token(),
+            AttributeArg::HashString(s) => s.rightmost_token(),
             AttributeArg::Backtick(s) => s.rightmost_token(),
             AttributeArg::AttrExpr(range) => {
                 TextRange::new(range.end(), range.end() + TextSize::from(1))

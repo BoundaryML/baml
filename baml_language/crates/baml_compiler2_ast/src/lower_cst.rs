@@ -294,7 +294,105 @@ fn lower_file_with_path_and_test_owner_impl(
         items.push(Item::Function(init_fn));
     }
 
+    check_string_escapes(root, &mut diags);
+
     (items, diags, env_var_refs)
+}
+
+/// Report invalid escape sequences in every `"..."`, `b"..."`, and backtick
+/// string literal in the file, plus non-ASCII characters in byte strings.
+/// Decoding happens wherever a literal is lowered and keeps such sequences
+/// verbatim; this pass is the one place that diagnoses them, so each literal
+/// is reported exactly once no matter how many call sites decode it.
+fn check_string_escapes(root: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) {
+    use baml_base::escape::{
+        EscapeIssue, backtick_string_literal_escape_issues, byte_string_literal_escape_issues,
+        string_literal_escape_issues,
+    };
+
+    let offset =
+        |n: usize| text_size::TextSize::from(u32::try_from(n).expect("literal exceeds u32 length"));
+    let mut report = |body_start: text_size::TextSize, issues: Vec<EscapeIssue>| {
+        for issue in issues {
+            let start = body_start + offset(issue.start);
+            diags.push(LoweringDiagnostic::InvalidStringEscape {
+                kind: issue.kind,
+                span: text_size::TextRange::new(start, start + offset(issue.len)),
+            });
+        }
+    };
+
+    for node in root.descendants() {
+        let check: fn(&str) -> Vec<EscapeIssue> = match node.kind() {
+            SyntaxKind::STRING_LITERAL => string_literal_escape_issues,
+            SyntaxKind::BYTE_STRING_LITERAL => byte_string_literal_escape_issues,
+            SyntaxKind::BACKTICK_STRING_LITERAL => {
+                for (run_start, run) in backtick_text_runs(&node) {
+                    report(run_start, backtick_string_literal_escape_issues(&run));
+                }
+                continue;
+            }
+            _ => continue,
+        };
+        let text = node.text().to_string();
+        let Some(open) = text.find('"') else { continue };
+        // Unclosed literals already have a parse error.
+        let Some(body) = text[open + 1..].strip_suffix('"') else {
+            continue;
+        };
+        let body_start = node.text_range().start() + offset(open + 1);
+        report(body_start, check(body));
+    }
+}
+
+/// The contiguous runs of literal text in a backtick string literal, between
+/// its delimiters and any `${...}` parts, as (source start, raw text) pairs.
+fn backtick_text_runs(node: &SyntaxNode) -> Vec<(text_size::TextSize, String)> {
+    let Some(lit) = ast::BacktickStringLiteral::cast(node.clone()) else {
+        return Vec::new();
+    };
+    let n = lit.delimiter_count();
+    let elements: Vec<_> = node.children_with_tokens().collect();
+    let total_backticks = elements
+        .iter()
+        .filter(|el| el.kind() == SyntaxKind::BACKTICK)
+        .count();
+    if n == 0 || total_backticks < 2 * n {
+        return Vec::new();
+    }
+    let closing_start = total_backticks - n;
+    let mut runs: Vec<text_size::TextRange> = Vec::new();
+    let mut current: Option<text_size::TextRange> = None;
+    let mut bt_seen = 0usize;
+    for el in &elements {
+        let is_text = match el.kind() {
+            SyntaxKind::BACKTICK => {
+                let inside = bt_seen >= n && bt_seen < closing_start;
+                bt_seen += 1;
+                inside
+            }
+            SyntaxKind::BACKTICK_INTERPOLATION
+            | SyntaxKind::BACKTICK_FOR_OPEN
+            | SyntaxKind::BACKTICK_ENDFOR
+            | SyntaxKind::BACKTICK_IF_OPEN
+            | SyntaxKind::BACKTICK_ELSE_IF
+            | SyntaxKind::BACKTICK_ELSE
+            | SyntaxKind::BACKTICK_ENDIF => false,
+            _ => bt_seen >= n && bt_seen <= closing_start,
+        };
+        if is_text {
+            let range = el.text_range();
+            current = Some(current.map_or(range, |c| c.cover(range)));
+        } else if let Some(run) = current.take() {
+            runs.push(run);
+        }
+    }
+    runs.extend(current);
+    let text = node.text().to_string();
+    let node_start = node.text_range().start();
+    runs.into_iter()
+        .map(|run| (run.start(), text[run - node_start].to_string()))
+        .collect()
 }
 
 /// Check if a just-lowered type expression contains `TypeExprKind::Missing` at the root.
@@ -384,7 +482,7 @@ fn lower_function(
 
         // Jinja prompts are removed: the single-path world renders prompts as
         // plain backtick templates through the spec.
-        if let Some(raw_prompt) = llm.prompt_field().and_then(|pf| pf.raw_string()) {
+        if let Some(raw_prompt) = llm.prompt_field().and_then(|pf| pf.hash_string()) {
             diags.push(LoweringDiagnostic::LlmJinjaPromptRemoved {
                 span: raw_prompt.syntax().span_range(),
             });

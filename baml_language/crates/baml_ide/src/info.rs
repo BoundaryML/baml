@@ -812,6 +812,7 @@ fn literal_type_info(token: &SyntaxToken) -> Option<TypeInfo> {
                 matches!(
                     node.kind(),
                     SyntaxKind::STRING_LITERAL
+                        | SyntaxKind::HASH_STRING_LITERAL
                         | SyntaxKind::RAW_STRING_LITERAL
                         | SyntaxKind::BYTE_STRING_LITERAL
                 )

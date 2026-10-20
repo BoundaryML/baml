@@ -1101,7 +1101,7 @@ impl Printable for ToolsField {
 /// positions, so the formatter accepts and re-emits any of them.
 #[derive(Debug)]
 pub enum StringLiteralValue {
-    RawString(t::RawString),
+    HashString(t::HashString),
     String(t::QuotedString),
     Backtick(t::BacktickString),
 }
@@ -1109,9 +1109,9 @@ pub enum StringLiteralValue {
 impl FromCST for StringLiteralValue {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
-            SyntaxKind::RAW_STRING_LITERAL => {
-                Ok(StringLiteralValue::RawString(t::RawString::from_cst(elem)?))
-            }
+            SyntaxKind::HASH_STRING_LITERAL => Ok(StringLiteralValue::HashString(
+                t::HashString::from_cst(elem)?,
+            )),
             SyntaxKind::STRING_LITERAL => {
                 Ok(StringLiteralValue::String(t::QuotedString::from_cst(elem)?))
             }
@@ -1119,7 +1119,7 @@ impl FromCST for StringLiteralValue {
                 t::BacktickString::from_cst(elem)?,
             )),
             found => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "STRING_LITERAL, RAW_STRING_LITERAL, or BACKTICK_STRING_LITERAL"
+                expected_desc: "STRING_LITERAL, HASH_STRING_LITERAL, or BACKTICK_STRING_LITERAL"
                     .into(),
                 found,
                 at: elem.text_range(),
@@ -1131,21 +1131,21 @@ impl FromCST for StringLiteralValue {
 impl Printable for StringLiteralValue {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         match self {
-            StringLiteralValue::RawString(raw_string) => printer.print(raw_string, shape),
+            StringLiteralValue::HashString(raw_string) => printer.print(raw_string, shape),
             StringLiteralValue::String(string) => printer.print(string, shape),
             StringLiteralValue::Backtick(backtick) => printer.print(backtick, shape),
         }
     }
     fn leftmost_token(&self) -> TextRange {
         match self {
-            StringLiteralValue::RawString(raw_string) => raw_string.leftmost_token(),
+            StringLiteralValue::HashString(raw_string) => raw_string.leftmost_token(),
             StringLiteralValue::String(string) => string.leftmost_token(),
             StringLiteralValue::Backtick(backtick) => backtick.leftmost_token(),
         }
     }
     fn rightmost_token(&self) -> TextRange {
         match self {
-            StringLiteralValue::RawString(raw_string) => raw_string.rightmost_token(),
+            StringLiteralValue::HashString(raw_string) => raw_string.rightmost_token(),
             StringLiteralValue::String(string) => string.rightmost_token(),
             StringLiteralValue::Backtick(backtick) => backtick.rightmost_token(),
         }
@@ -2697,7 +2697,7 @@ pub enum ConfigItemKey {
     Word(t::Word),
     String(t::QuotedString),
     // parser allows raw strings as keys, but that's not a good idea
-    // RawString(t::RawString),
+    // HashString(t::HashString),
     RetryPolicy(t::RetryPolicy),
     Enum(t::Enum),
     Class(t::Class),
