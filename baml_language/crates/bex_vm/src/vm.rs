@@ -16,6 +16,8 @@
 
 use std::{collections::HashMap, sync::Arc};
 
+use rustc_hash::FxHashMap;
+
 use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use btel_types::context::{Context, ContextPatch};
 use smallvec::SmallVec;
@@ -463,6 +465,8 @@ pub(crate) mod tests {
     use std::sync::atomic::AtomicBool;
     use std::{collections::HashMap, sync::Arc};
 
+    use rustc_hash::FxHashMap;
+
     use bex_heap::{BexHeap, CollectionLevel, Tlab};
     use bex_vm_types::{
         EarlyYieldCheck, FunctionKind, GlobalPool, HeapPtr, Object, ObjectIndex, RootHaver, Value,
@@ -525,8 +529,8 @@ pub(crate) mod tests {
             pending_call_type_values: Vec::new(),
             compiled: super::compiled_rt::CompiledState::default(),
             pending_call_passes_type_args: false,
-            static_load_type_cache: HashMap::new(),
-            static_virtual_call_cache: HashMap::new(),
+            static_load_type_cache: FxHashMap::default(),
+            static_virtual_call_cache: FxHashMap::default(),
             telemetry: Some(TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
@@ -1780,13 +1784,15 @@ pub struct BexVm {
     /// Created-once immutable type objects for fully realized `LoadType`
     /// constants in static functions. The compact numeric key keeps the
     /// per-iteration lookup cheaper than re-hashing the full realized type.
-    /// Entries are explicit VM GC roots.
-    static_load_type_cache: HashMap<(usize, TypeValueSite), HeapPtr>,
+    /// Entries are explicit VM GC roots. Fx-hashed: the key is a function
+    /// address and a site index, nothing a program chooses, and the map is
+    /// only ever iterated to rebuild itself or to list its values as roots.
+    static_load_type_cache: FxHashMap<(usize, TypeValueSite), HeapPtr>,
     /// Monomorphic static virtual-call results keyed by caller site and the
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
     /// dynamic builder registration remain live on every dynamic dispatch.
-    static_virtual_call_cache: HashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
+    static_virtual_call_cache: FxHashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
 }
 
 /// VM execution state.
@@ -2517,8 +2523,8 @@ impl BexVm {
             pending_call_type_values: Vec::new(),
             compiled: compiled_rt::CompiledState::default(),
             pending_call_passes_type_args: false,
-            static_load_type_cache: HashMap::new(),
-            static_virtual_call_cache: HashMap::new(),
+            static_load_type_cache: FxHashMap::default(),
+            static_virtual_call_cache: FxHashMap::default(),
             telemetry,
             trace_scope,
             manual_activations: Vec::new(),

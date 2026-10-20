@@ -1486,6 +1486,7 @@ dependencies = [
  "indexmap",
  "num-bigint",
  "parking_lot",
+ "rustc-hash 2.1.2",
  "thiserror 2.0.18",
  "tokio",
  "tracing",

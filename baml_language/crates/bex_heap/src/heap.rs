@@ -24,6 +24,7 @@ use std::{
 use ::bex_vm_types::{ForwardingMap, Value, errors::StackFrame, types::FutureId};
 use bex_external_types::{Handle, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object, WriteBarrier};
+use rustc_hash::FxHashMap;
 
 use crate::{
     HeapDebuggerConfig, HeapDebuggerState, card_table::CardTable, chunked_vec::ChunkedVec,
@@ -176,7 +177,7 @@ pub struct BexHeap {
     ///
     /// Uses `RwLock<HashMap>` instead of sharded_slab to allow in-place
     /// updates after GC moves objects.
-    pub(crate) handles: RwLock<HashMap<usize, HeapPtr>>,
+    pub(crate) handles: RwLock<FxHashMap<usize, HeapPtr>>,
 
     /// The live handle for each held object, so one object has one key.
     ///
@@ -197,7 +198,7 @@ pub struct BexHeap {
     /// for exactly that drop.
     ///
     /// [`HandleInner`]: bex_external_types::HandleInner
-    handles_by_ptr: RwLock<HashMap<HeapPtr, (usize, Weak<bex_external_types::HandleInner>)>>,
+    handles_by_ptr: RwLock<FxHashMap<HeapPtr, (usize, Weak<bex_external_types::HandleInner>)>>,
 
     /// Next handle key to allocate.
     next_handle_key: AtomicUsize,
@@ -362,8 +363,8 @@ impl BexHeap {
             inactive: UnsafeCell::new(ChunkedVec::new()),
             gen0_next_chunk: AtomicUsize::new(0),
             gen2_cards: UnsafeCell::new(CardTable::new()),
-            handles: RwLock::new(HashMap::new()),
-            handles_by_ptr: RwLock::new(HashMap::new()),
+            handles: RwLock::new(FxHashMap::default()),
+            handles_by_ptr: RwLock::new(FxHashMap::default()),
             next_handle_key: AtomicUsize::new(0),
             pending_finalizers: Mutex::new(Vec::new()),
             pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
