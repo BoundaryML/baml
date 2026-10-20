@@ -1,0 +1,201 @@
+//! Host-call argument validation: a host value whose kind contradicts its
+//! declared parameter type is rejected at the call boundary as a
+//! `TypeMismatch`, before the VM runs type-specialized code (`AddInt`, typed
+//! field loads) that trusts the declared type. Covers the argument itself and
+//! every nested node materialization lands — list elements, map values, class
+//! fields, alias bodies (BoundaryML/baml#5332).
+
+mod common;
+
+use std::sync::Arc;
+
+use baml_type::RuntimeTy;
+use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
+use common::compile_for_engine;
+use indexmap::IndexMap;
+use sys_native::SysOpsExt;
+
+const SOURCE: &str = r#"
+    class Counter { n int }
+    type Ids = int[]
+
+    function plus(value: int) -> int { value + 1 }
+    function half(value: float) -> float { value / 2.0 }
+    function maybe_plus(value: int?) -> int {
+        if (value == null) { 0 } else { value + 1 }
+    }
+    function first_plus(values: int[]) -> int { values[0] + 1 }
+    function first_id_plus(ids: Ids) -> int { ids[0] + 1 }
+    function counter_plus(counter: Counter) -> int { counter.n + 1 }
+    function counters_plus(counters: Counter[]) -> int { counters[0].n + 1 }
+    function entry_count(entries: map<string, int>) -> int { entries.length() }
+    function main() -> int { 0 }
+"#;
+
+async fn call(
+    function: &str,
+    args: Vec<BexExternalValue>,
+) -> Result<BexExternalValue, EngineError> {
+    let snapshot = compile_for_engine(SOURCE);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+    engine
+        .call_function(
+            function,
+            args,
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+}
+
+/// Assert the call is rejected as a `TypeMismatch` whose message contains each
+/// of `needles`.
+async fn assert_rejected(function: &str, args: Vec<BexExternalValue>, needles: &[&str]) {
+    let err = call(function, args)
+        .await
+        .expect_err("a mistyped host argument must be rejected");
+    let EngineError::TypeMismatch { message } = &err else {
+        panic!("expected TypeMismatch, got {err:?}");
+    };
+    for needle in needles {
+        assert!(
+            message.contains(needle),
+            "missing {needle:?} in TypeMismatch message: {message:?}"
+        );
+    }
+}
+
+fn string(value: &str) -> BexExternalValue {
+    BexExternalValue::String(value.into())
+}
+
+fn list(element_type: RuntimeTy, items: Vec<BexExternalValue>) -> BexExternalValue {
+    BexExternalValue::Array {
+        element_type,
+        items,
+    }
+}
+
+fn counter(n: BexExternalValue) -> BexExternalValue {
+    BexExternalValue::instance("Counter", IndexMap::from_iter([("n", n)]))
+}
+
+#[tokio::test]
+async fn int_param_accepts_int() {
+    let out = call("plus", vec![BexExternalValue::Int(41)]).await.unwrap();
+    assert_eq!(out, BexExternalValue::Int(42));
+}
+
+#[tokio::test]
+async fn int_param_rejects_string() {
+    assert_rejected(
+        "plus",
+        vec![string("bad")],
+        &["`plus`", "argument 1", "`string`", "`int`"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn int_param_rejects_bool_and_float() {
+    assert_rejected("plus", vec![BexExternalValue::Bool(true)], &["`bool`"]).await;
+    assert_rejected("plus", vec![BexExternalValue::Float(1.5)], &["`float`"]).await;
+}
+
+#[tokio::test]
+async fn float_param_still_widens_int() {
+    let out = call("half", vec![BexExternalValue::Int(3)]).await.unwrap();
+    assert_eq!(out, BexExternalValue::Float(1.5));
+}
+
+#[tokio::test]
+async fn optional_int_param() {
+    let out = call("maybe_plus", vec![BexExternalValue::Null])
+        .await
+        .unwrap();
+    assert_eq!(out, BexExternalValue::Int(0));
+    let out = call("maybe_plus", vec![BexExternalValue::Int(1)])
+        .await
+        .unwrap();
+    assert_eq!(out, BexExternalValue::Int(2));
+    // Union selection already rejects a value no member admits.
+    assert_rejected("maybe_plus", vec![string("bad")], &["string"]).await;
+}
+
+#[tokio::test]
+async fn list_param_checks_elements() {
+    let out = call(
+        "first_plus",
+        vec![list(RuntimeTy::int(), vec![BexExternalValue::Int(1)])],
+    )
+    .await
+    .unwrap();
+    assert_eq!(out, BexExternalValue::Int(2));
+    assert_rejected(
+        "first_plus",
+        vec![list(RuntimeTy::string(), vec![string("bad")])],
+        &["`string`", "`int`"],
+    )
+    .await;
+    assert_rejected("first_plus", vec![string("bad")], &["`first_plus`"]).await;
+}
+
+#[tokio::test]
+async fn alias_param_checks_elements() {
+    let out = call(
+        "first_id_plus",
+        vec![list(RuntimeTy::int(), vec![BexExternalValue::Int(1)])],
+    )
+    .await
+    .unwrap();
+    assert_eq!(out, BexExternalValue::Int(2));
+    assert_rejected(
+        "first_id_plus",
+        vec![list(RuntimeTy::string(), vec![string("bad")])],
+        &["`string`", "`int`"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn map_param_checks_values() {
+    let entries = |value| BexExternalValue::Map {
+        key_type: RuntimeTy::string(),
+        value_type: RuntimeTy::Unknown,
+        entries: IndexMap::from_iter([("a".to_string(), value)]),
+    };
+    let out = call("entry_count", vec![entries(BexExternalValue::Int(1))])
+        .await
+        .unwrap();
+    assert_eq!(out, BexExternalValue::Int(1));
+    assert_rejected("entry_count", vec![entries(string("bad"))], &["`string`"]).await;
+}
+
+#[tokio::test]
+async fn class_param_checks_fields() {
+    let out = call("counter_plus", vec![counter(BexExternalValue::Int(1))])
+        .await
+        .unwrap();
+    assert_eq!(out, BexExternalValue::Int(2));
+    assert_rejected(
+        "counter_plus",
+        vec![counter(string("bad"))],
+        &["`string`", "`int`"],
+    )
+    .await;
+    assert_rejected(
+        "counters_plus",
+        vec![list(RuntimeTy::Unknown, vec![counter(string("bad"))])],
+        &["`string`", "`int`"],
+    )
+    .await;
+    assert_rejected(
+        "counter_plus",
+        vec![BexExternalValue::Int(1)],
+        &["`counter_plus`"],
+    )
+    .await;
+}

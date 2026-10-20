@@ -1396,6 +1396,21 @@ impl BexEngine {
                 holder.holder_mut().tlab_mut().alloc_rust_data(arc),
             ));
         }
+        // Never land a value whose kind contradicts its declared slot: the VM
+        // runs type-specialized code on it without re-checking (#5332).
+        if let Some(expected) = expected_ty
+            && !inbound_kind_admitted(&external, expected, &self.inbound_alias_view)
+        {
+            return Err(EngineError::TypeMismatch {
+                message: format!(
+                    "host value of type `{}` does not match the declared type `{expected}`",
+                    external.type_name()
+                ),
+            });
+        }
+        // See through a user alias so a container's declared element/value
+        // type still reaches its children (`type Ids = int[]`).
+        let expected_ty = expected_ty.map(|ty| self.expand_inbound_alias(ty));
         let overlay =
             InboundRuntimeOverlay::new(dynamic_classes, dynamic_enums, runtime_named_objects);
         Ok(match external {
@@ -3655,6 +3670,96 @@ pub(crate) fn check_generic_arg(
     }
 }
 
+/// Whether a host value's *kind* can inhabit the declared slot `ty`.
+///
+/// The VM trusts declared types: specialized opcodes (`AddInt`, typed field
+/// loads, ...) assume the compiler-proven operand type and skip dispatch, so a
+/// host value whose kind contradicts its slot (a `string` bound to an `int`
+/// parameter) is undefined behavior once it lands on the heap
+/// (BoundaryML/baml#5332). Materialization calls this at every node it lands —
+/// the argument itself, then each list element, map value and class field
+/// against its declared type — so the check is shallow here and deep overall.
+///
+/// Strict for plain host data against a concrete type; lenient wherever the
+/// shallow kind is not the value's identity or the type is not concrete:
+/// engine-minted and opaque carriers (handles, ADTs, host values), transient
+/// union carriers (materialization re-checks them against their selected
+/// type), `json`, type variables, and opaque type shapes.
+pub(crate) fn inbound_kind_admitted(
+    value: &BexExternalValue,
+    ty: &RuntimeTy,
+    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+) -> bool {
+    fn admitted(
+        value: &BexExternalValue,
+        ty: &RuntimeTy,
+        aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+        depth: usize,
+    ) -> bool {
+        // Alias expansion is the only recursion that does not consume type
+        // structure; bound it so a non-productive alias cycle stays lenient.
+        if depth > 64 {
+            return true;
+        }
+        match ty {
+            RuntimeTy::TypeAlias(name) if is_canonical_json_alias(name) => true,
+            RuntimeTy::TypeAlias(name) => aliases
+                .get(name)
+                .is_none_or(|expanded| admitted(value, expanded, aliases, depth + 1)),
+            RuntimeTy::Union(members) => members
+                .iter()
+                .any(|member| admitted(value, member, aliases, depth + 1)),
+            RuntimeTy::Null
+            | RuntimeTy::Bool
+            | RuntimeTy::Int
+            | RuntimeTy::Float
+            | RuntimeTy::Bigint
+            | RuntimeTy::String
+            | RuntimeTy::Uint8Array
+            | RuntimeTy::Literal(..) => bex_external_types::validate_host_return(value, ty).is_ok(),
+            RuntimeTy::List(_) => matches!(value, BexExternalValue::Array { .. }),
+            RuntimeTy::Map { .. } => matches!(value, BexExternalValue::Map { .. }),
+            // A plain host object (`Map`) is promoted to an instance of the
+            // declared class during materialization; media arrives either as
+            // its ADT (opaque, above) or as the class-shaped wrapper.
+            RuntimeTy::Class(..) | RuntimeTy::Media(..) => matches!(
+                value,
+                BexExternalValue::Instance { .. } | BexExternalValue::Map { .. }
+            ),
+            // TypeScript string enums cross as their member's string value.
+            // The VM type-checks enum operations on what lands, so admit it.
+            RuntimeTy::Enum(_) | RuntimeTy::EnumVariant(..) => matches!(
+                value,
+                BexExternalValue::Variant { .. } | BexExternalValue::String(_)
+            ),
+            // Plain data is never callable.
+            RuntimeTy::Function { .. } => false,
+            _ => true,
+        }
+    }
+
+    match value {
+        BexExternalValue::Handle(_)
+        | BexExternalValue::Adt(_)
+        | BexExternalValue::HostValue(_)
+        | BexExternalValue::RustData(_)
+        | BexExternalValue::FunctionRef { .. }
+        | BexExternalValue::Union { .. } => true,
+        BexExternalValue::Null
+        | BexExternalValue::Int(_)
+        | BexExternalValue::Bigint(_)
+        | BexExternalValue::Float(_)
+        | BexExternalValue::JsNumber(_)
+        | BexExternalValue::Bool(_)
+        | BexExternalValue::String(_)
+        | BexExternalValue::Uint8Array(_)
+        | BexExternalValue::Array { .. }
+        | BexExternalValue::Map { .. }
+        | BexExternalValue::Instance { .. }
+        | BexExternalValue::Variant { .. } => admitted(value, ty, aliases, 0),
+    }
+}
+
 /// Whether an `Instance` value is admitted by `expected`, peeling `Union`
 /// (covers `Optional`, which lowers to `T | null`) so a class instance matches
 /// its union/optional member. Defers the actual class+args comparison to
@@ -4185,6 +4290,42 @@ impl BexEngine {
             &self.inbound_class_view,
             crate::inbound_config::inbound_union_ambiguity_policy(),
         )
+    }
+
+    /// [`inbound_kind_admitted`] for a host-call argument, as a mismatch
+    /// `detail` the caller frames with the function and argument position.
+    pub(crate) fn check_inbound_arg_kind(
+        &self,
+        value: &BexExternalValue,
+        expected: &RuntimeTy,
+    ) -> Result<(), String> {
+        if inbound_kind_admitted(value, expected, &self.inbound_alias_view) {
+            Ok(())
+        } else {
+            Err(format!(
+                "has type `{}`, which doesn't match the expected type `{expected}`",
+                value.type_name(),
+            ))
+        }
+    }
+
+    /// Follow a chain of user aliases to the type it names. The canonical
+    /// `json` alias, and any alias the inbound view cannot represent, stay as
+    /// they are.
+    fn expand_inbound_alias<'a>(&'a self, mut ty: &'a RuntimeTy) -> &'a RuntimeTy {
+        for _ in 0..64 {
+            let RuntimeTy::TypeAlias(name) = ty else {
+                break;
+            };
+            if is_canonical_json_alias(name) {
+                break;
+            }
+            let Some(expanded) = self.inbound_alias_view.get(name) else {
+                break;
+            };
+            ty = expanded;
+        }
+        ty
     }
 }
 
