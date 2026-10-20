@@ -1,0 +1,5 @@
+name = "generic apply with inferred type args 1m"
+description = "1,000,000 calls of a generic function with inferred type arguments"
+expect = "999999000000"
+jobs = 2
+warmup = 1

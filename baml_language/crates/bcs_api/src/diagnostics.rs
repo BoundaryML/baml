@@ -552,7 +552,7 @@ mod tests {
 
     fn context(operation: Operation, source: CredentialSource) -> Context {
         Context {
-            endpoint: Some(crate::Endpoint::parse("https://api.cloud.boundaryml.com").unwrap()),
+            endpoint: Some(crate::Endpoint::parse("https://api.prod.bcs.boundaryml.com").unwrap()),
             source,
             operation,
         }
@@ -562,8 +562,8 @@ mod tests {
     fn normalized_default_endpoint_is_omitted() {
         for endpoint in [
             crate::auth::DEFAULT_API_URL,
-            "https://api.cloud.boundaryml.com/",
-            "https://API.CLOUD.BOUNDARYML.COM:443/",
+            "https://api.prod.bcs.boundaryml.com/",
+            "https://API.PROD.BCS.BOUNDARYML.COM:443/",
         ] {
             let mut context = context(Operation::Query, CredentialSource::SavedLogin);
             context.endpoint = Some(crate::Endpoint::parse(endpoint).unwrap());

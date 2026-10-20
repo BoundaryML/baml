@@ -10,16 +10,16 @@ function Render<T>() -> T {
 }
 
 function main() -> string {
-    let left = reflect.class.new(
+    let left = reflect.Class.new(
         "SameName",
-        { "first": reflect.Type.of<int>(), "second": reflect.Type.of<string>() },
+        { "first": int.type(), "second": string.type() },
     );
-    let right = reflect.class.new(
+    let right = reflect.Class.new(
         "SameName",
-        { "second": reflect.Type.of<string>(), "first": reflect.Type.of<int>() },
+        { "second": string.type(), "first": int.type() },
     );
-    type Left = unreflect(left.as_type())
-    type Right = unreflect(right.as_type())
+    let type Left = left;
+    let type Right = right;
     return Render@render_prompt<Left>().text()
         + "\n<RIGHT>\n"
         + Render@render_prompt<Right>().text()

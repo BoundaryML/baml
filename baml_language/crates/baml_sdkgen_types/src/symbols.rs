@@ -235,7 +235,6 @@ impl WalkAllUnions for Ty {
             | Ty::String
             | Ty::Bool
             | Ty::Null
-            | Ty::Void
             | Ty::Uint8Array
             | Ty::Media(..)
             | Ty::Enum(..)

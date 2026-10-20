@@ -341,7 +341,8 @@ bite first — everything else, `baml describe` it:
 1. **Class fields are `name: type,`** (trailing comma); construct with `Point { x: 1 }`.
    Methods take an explicit `self`; static factories don't. `baml fmt` normalizes layout.
 2. **Last expression in a block is its value** (Rust-style). Early exit is `return x;` (with
-   trailing `;`). A no-value function is `-> null` with a trailing `null`.
+   trailing `;`). A no-value function is `-> void` and ends in a statement: a value left as
+   its last expression is an error (and so is one ending a `test` body), so end it with `;`.
 3. **`for (let x in xs)`** iterates values and requires `let`. `if` / `match` / blocks are
    expressions; `match (v) { 0 => "a", _ => "b" }`.
 4. **No implicit string coercion** — `"n=" + 5` will NOT compile; use `baml.unstable.string(5)`.
@@ -349,7 +350,9 @@ bite first — everything else, `baml describe` it:
    Closures are `(x: T) -> R { ... }`; the `=>` arrow is **match-only**. `.map`/`.filter`
    return arrays directly (no `.collect()`). **Map keys must be `string`.**
 5. **`catch` arms are type-only and non-exhaustive**: `f(x) catch (e) { BadInput => fallback }`.
-   `throws T` is part of a function's signature; **panics are not catchable**.
+   `catch_all` must cover every error (E0062). `throws T` is part of a function's signature;
+   **panics are not errors**: `_` lets them pass, so catch one by naming it
+   (`baml.panics.IndexOutOfBounds => …`) or at a `catch_all_panics` boundary.
 
 ## Recommended workflow
 

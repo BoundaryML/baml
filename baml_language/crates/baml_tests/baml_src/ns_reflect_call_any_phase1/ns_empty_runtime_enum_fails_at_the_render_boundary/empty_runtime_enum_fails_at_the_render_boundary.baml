@@ -10,12 +10,12 @@ function Classify<T>(input: string) -> T {
 }
 
 function main() -> string throws never {
-    let t = reflect.enum.new("Category", []) catch (e) {
+    let t = reflect.Enum.new("Category", []) catch (e) {
         _ => {
             return "constructor threw";
         }
     };
-    type T = unreflect(t)
+    let type T = t;
     let rendered = Classify@render_prompt<T>("sample") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
         _ => "wrong render error",

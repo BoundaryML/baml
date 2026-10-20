@@ -1,5 +1,5 @@
 function main() -> string throws never {
-    let result = reflect.enum.new("Category", ["RED", "RED"]) catch (e) {
+    let result = reflect.Enum.new("Category", ["RED", "RED"]) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message
     };
     if (result is string) {

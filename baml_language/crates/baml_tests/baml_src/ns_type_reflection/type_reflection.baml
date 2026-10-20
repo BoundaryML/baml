@@ -97,13 +97,13 @@ test "permuted union equality operators agree" {
 }
 
 function foo_type() -> reflect.Type {
-    reflect.Type.of<Foo>()
+    Foo.type()
 }
 
 test "static declaration identity survives evaluation and a helper boundary" {
     assert.is_true(
-        reflect.Type.of<Foo>() == reflect.Type.of<Foo>()
-            && reflect.Type.of<Foo>() == foo_type()
+        Foo.type() == Foo.type()
+            && Foo.type() == foo_type()
             && foo_type() == foo_type(),
     )
 }

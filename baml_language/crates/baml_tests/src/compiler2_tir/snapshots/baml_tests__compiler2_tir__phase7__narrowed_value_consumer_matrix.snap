@@ -5,7 +5,7 @@ expression: "render_labeled_cases(&[(\"narrowed_type_captured_in_let_binding\",\
 === narrowed_type_captured_in_let_binding ===
 function user.f(x: int | null) -> int throws never {
   { : never
-    if (x == null : bool) : void
+    if (x == null : bool) : null
       { : never
         return 0 : 0
       }
@@ -19,7 +19,7 @@ block user.f {
 === narrowed_int_arithmetic_no_error ===
 function user.f(x: int | null) -> int throws never {
   { : never
-    if (x != null : bool) : void
+    if (x != null : bool) : null
       { : never
         return x + 1 : int
       }

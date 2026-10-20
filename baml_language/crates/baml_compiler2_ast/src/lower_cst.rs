@@ -8,7 +8,7 @@
 //! No LLM function expansion, no attribute validation, no duplicate detection —
 //! all of that moves downstream.
 
-use baml_base::Name;
+use baml_base::{Name, Path, compiler_path};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode, SyntaxNodeExt, ast};
 use rowan::ast::AstNode;
 
@@ -23,7 +23,6 @@ use crate::{
     },
     companions::expand_companions,
     lower_expr_body, lower_type_expr,
-    lowering_diagnostic::TypeExprOwner,
 };
 
 // ── Test/Testset desugaring intermediate types ───────────────────
@@ -31,8 +30,8 @@ use crate::{
 /// Intermediate representation of a test/testset block before synthesis.
 ///
 /// Collected during file lowering, then passed to `synthesize_init_test_function`
-/// which emits a per-file `$init_test_<path>` function containing
-/// `registry.register_test(...)` / `registry.register_test_set(...)` calls.
+/// which emits a per-file `$init_test_<path>` function registering each with
+/// the collector it is handed (`register_test` / `register_test_set`).
 enum TestRegistrationItem {
     Test {
         /// The name expression CST element (`STRING_LITERAL`, `BINARY_EXPR`, etc.).
@@ -215,6 +214,13 @@ fn lower_file_with_path_and_test_owner_impl(
                     });
                 }
             }
+            // `let type` binds a runtime type for the rest of a block, and a
+            // file has no block for it to bind in.
+            baml_compiler_syntax::SyntaxKind::TYPE_BINDING_STMT => {
+                diags.push(LoweringDiagnostic::TopLevelLetNotSupported {
+                    span: child.span_range(),
+                });
+            }
             baml_compiler_syntax::SyntaxKind::IMPLEMENTS_FOR => {
                 if let Some(imp) = lower_implements_for(&child, &mut diags, &mut env_var_refs) {
                     items.push(Item::ImplementsFor(imp));
@@ -243,10 +249,8 @@ fn lower_file_with_path_and_test_owner_impl(
         }
         let target_name = match &imp.for_target.kind {
             crate::ast::TypeExprKind::Path {
-                segments,
-                generic_args,
-                ..
-            } if segments.len() == 1 && generic_args.is_empty() => segments.first().cloned(),
+                path, generic_args, ..
+            } if path.len() == 1 && generic_args.is_empty() => path.first().cloned(),
             _ => None,
         };
         if let Some(target_name) = target_name {
@@ -349,18 +353,9 @@ fn lower_function(
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
     let return_type = func.return_type().map(|te| {
-        let mut expr =
-            lower_type_expr::lower_type_expr_node(&te, diags, TypeExprOwner::Declaration);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
         check_missing_type(&expr, format!("return type of `{name}`"), te_span, diags);
-        // void is allowed as a bare return type, but not wrapped (void?, void[], etc.).
-        lower_type_expr::check_void_type(
-            &expr,
-            format!("return type of `{name}`"),
-            te_span,
-            true,
-            diags,
-        );
         lower_type_expr::check_wildcard_type(&mut expr, "a return type", te_span, diags);
         expr.with_span(te_span)
     });
@@ -369,8 +364,7 @@ fn lower_function(
         .throws_clause()
         .and_then(|tc| tc.type_expr())
         .map(|te| {
-            let mut expr =
-                lower_type_expr::lower_type_expr_node(&te, diags, TypeExprOwner::Declaration);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             lower_type_expr::check_throws_wildcard(&mut expr, te_span, diags);
             expr.with_span(te_span)
@@ -445,6 +439,20 @@ fn lower_function(
                 lower_expr_body::synthesize_llm_spec_body(
                     name.as_str(),
                     &param_names,
+                    &generic_params
+                        .iter()
+                        .map(|param| param.name.clone())
+                        .collect::<Vec<_>>(),
+                    class_method.map(|owner| owner.name),
+                    &class_method
+                        .map(|owner| {
+                            owner
+                                .generic_params
+                                .iter()
+                                .map(|param| param.name.clone())
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default(),
                     &client_spec,
                     return_type.clone(),
                     tools_value.as_ref(),
@@ -519,10 +527,16 @@ fn lower_function(
         return_type,
         throws,
         body,
-        declarative_meta,
-        metadata: crate::ast::FunctionMetadata::user_facing(
-            crate::ast::FunctionOrigin::UserDefined,
-        ),
+        declarative_meta: declarative_meta.clone(),
+        metadata: crate::ast::FunctionMetadata {
+            trace_passthrough: declarative_meta.is_some()
+                || crate::docstring::has_baml_marker(node, "trace_passthrough"),
+            explicit_trace_passthrough: crate::docstring::has_baml_marker(
+                node,
+                "trace_passthrough",
+            ),
+            ..crate::ast::FunctionMetadata::user_facing(crate::ast::FunctionOrigin::UserDefined)
+        },
         attributes,
         docstring,
         is_tagged_template_tag,
@@ -652,20 +666,12 @@ pub(crate) fn lower_param(
     Some(Param {
         name: Name::new(&param_name_str),
         type_expr: param.ty().map(|te| {
-            let mut expr =
-                lower_type_expr::lower_type_expr_node(&te, diags, TypeExprOwner::Declaration);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             check_missing_type(
                 &expr,
                 format!("parameter `{param_name_str}` in `{function_name}`"),
                 te_span,
-                diags,
-            );
-            lower_type_expr::check_void_type(
-                &expr,
-                "a parameter type".to_string(),
-                te_span,
-                false,
                 diags,
             );
             lower_type_expr::check_wildcard_type(&mut expr, "a parameter type", te_span, diags);
@@ -724,7 +730,7 @@ pub(crate) fn append_spec_client_param(
         id
     };
     let client_ty = TypeExprKind::Path {
-        segments: vec![Name::new("ai"), Name::new("Client")],
+        path: baml_base::compiler_path!(ai.Client),
         generic_args: vec![],
         associated_type_bindings: vec![],
     }
@@ -761,7 +767,7 @@ pub(crate) fn append_spec_on_event_param(
         id
     };
     let event_ty = TypeExprKind::Path {
-        segments: vec![Name::new("ai"), Name::new("events"), Name::new("Event")],
+        path: baml_base::compiler_path!(ai.events.Event),
         generic_args: vec![],
         associated_type_bindings: vec![],
     }
@@ -772,7 +778,7 @@ pub(crate) fn append_spec_on_event_param(
             optional: false,
             ty: event_ty,
         }],
-        ret: Box::new(TypeExprKind::Void.at(span)),
+        ret: Box::new(TypeExprKind::Null.at(span)),
         throws: None,
     }
     .at(span);
@@ -885,19 +891,29 @@ fn llm_tools_present(llm_body: &ast::LlmFunctionBody) -> bool {
 /// every provider implements `ai.Client`, so `ai` sits below them in the
 /// package graph — and the two lowerings cannot drift because they read one
 /// list.
-pub const SHORTHAND_PROVIDERS: &[(&str, &str, &str)] = &[
-    ("openai", "openai", "ResponsesClient"),
-    ("openai-chat", "openai", "ChatClient"),
-    ("openai-images", "openai", "ImageClient"),
-    ("ollama", "openai", "OllamaClient"),
-    ("openrouter", "openai", "OpenRouterClient"),
-    ("anthropic", "anthropic", "Client"),
-    ("typesafeai", "typesafeai", "Client"),
-    ("google", "google", "GeminiClient"),
-    ("vertex", "google", "VertexClient"),
-    ("bedrock", "aws", "BedrockClient"),
-    ("ai-gateway-images", "vercel", "AiGatewayImageClient"),
-    ("claude-code", "claude_code", "ClaudeCodeClient"),
+pub const SHORTHAND_PROVIDERS: &[(&str, Path)] = &[
+    ("openai", compiler_path!(openai.ResponsesClient.new)),
+    ("openai-chat", compiler_path!(openai.ChatClient.new)),
+    (
+        "openai-decisions",
+        compiler_path!(openai.DecisionsClient.new),
+    ),
+    ("openai-images", compiler_path!(openai.ImageClient.new)),
+    ("ollama", compiler_path!(openai.OllamaClient.new)),
+    ("openrouter", compiler_path!(openai.OpenRouterClient.new)),
+    ("anthropic", compiler_path!(anthropic.Client.new)),
+    ("typesafeai", compiler_path!(typesafeai.Client.new)),
+    ("google", compiler_path!(google.GeminiClient.new)),
+    ("vertex", compiler_path!(google.VertexClient.new)),
+    ("bedrock", compiler_path!(aws.BedrockClient.new)),
+    (
+        "ai-gateway-images",
+        compiler_path!(vercel.AiGatewayImageClient.new),
+    ),
+    (
+        "claude-code",
+        compiler_path!(claude_code.ClaudeCodeClient.new),
+    ),
 ];
 
 /// Why a literal `client: "azure/<model>"` is rejected. `ai.clients.resolve`
@@ -906,13 +922,14 @@ const AZURE_SHORTHAND_REMOVED: &str = "there is no \"azure/<model>\" shorthand: 
      request goes to a deployment, which a model name does not identify; build \
      openai.AzureClient.new(model = ..., deployment_id = ..., resource_name = ...)";
 
-/// The provider a `"provider/model"` literal names, as `(package, class)`.
-pub(crate) fn spec_client_provider(client: &str) -> Option<(&'static str, &'static str)> {
+/// The constructor a `"provider/model"` literal's provider names
+/// (`<package>.<Client>.new`).
+pub(crate) fn spec_client_provider(client: &str) -> Option<&'static Path> {
     let (prefix, _model) = client.split_once('/')?;
     SHORTHAND_PROVIDERS
         .iter()
-        .find(|(known, _, _)| *known == prefix)
-        .map(|(_, pkg, class)| (*pkg, *class))
+        .find(|(known, _)| *known == prefix)
+        .map(|(_, constructor)| constructor)
 }
 
 /// The prompt literal shapes an LLM function accepts.
@@ -967,8 +984,9 @@ pub(crate) enum LlmClientSpec {
     /// A `"provider/model"` string, mapped at compile time to a builtin
     /// provider constructor.
     Provider {
-        pkg: &'static str,
-        class: &'static str,
+        /// The client constructor, `<package>.<Client>.new`, from
+        /// [`SHORTHAND_PROVIDERS`].
+        constructor: &'static Path,
         model: String,
     },
     /// An arbitrary expression evaluating to `ai.Selector` (a declared
@@ -1003,7 +1021,7 @@ fn resolve_llm_client(
                 });
                 return None;
             };
-            let Some((pkg, class)) = spec_client_provider(&text) else {
+            let Some(constructor) = spec_client_provider(&text) else {
                 if prefix == "azure" {
                     diags.push(LoweringDiagnostic::InvalidLlmClient {
                         function_name: function_name.to_string(),
@@ -1024,8 +1042,7 @@ fn resolve_llm_client(
                 return None;
             };
             return Some(LlmClientSpec::Provider {
-                pkg,
-                class,
+                constructor,
                 model: model.to_string(),
             });
         }
@@ -1094,23 +1111,12 @@ fn lower_class(
             let type_expr = f.ty().map_or_else(
                 || TypeExprKind::Error.at(f.syntax().span_range()),
                 |te| {
-                    let mut expr = lower_type_expr::lower_type_expr_node(
-                        &te,
-                        diags,
-                        TypeExprOwner::Declaration,
-                    );
+                    let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
                     let te_span = te.syntax().span_range();
                     check_missing_type(
                         &expr,
                         format!("field `{class_name}.{field_name_str}`"),
                         te_span,
-                        diags,
-                    );
-                    lower_type_expr::check_void_type(
-                        &expr,
-                        "a class field type".to_string(),
-                        te_span,
-                        false,
                         diags,
                     );
                     lower_type_expr::check_wildcard_type(
@@ -1204,13 +1210,13 @@ pub(crate) fn extract_generic_params_with_bounds(
             if param_node.kind() != SyntaxKind::GENERIC_PARAM {
                 continue;
             }
-            let mut name: Option<Name> = None;
+            let mut name: Option<(Name, text_size::TextRange)> = None;
             for elem in param_node.children_with_tokens() {
                 if let Some(token) = elem.as_token()
                     && token.kind() == SyntaxKind::WORD
                     && name.is_none()
                 {
-                    name = Some(Name::new(token.text()));
+                    name = Some((Name::new(token.text()), token.text_range()));
                 }
             }
             let bounds: Vec<crate::ast::TypeExpr> = param_node
@@ -1221,11 +1227,7 @@ pub(crate) fn extract_generic_params_with_bounds(
                         .children()
                         .filter_map(|n| {
                             let te = baml_compiler_syntax::ast::TypeExpr::cast(n)?;
-                            let mut bound = lower_type_expr::lower_type_expr_node(
-                                &te,
-                                diags,
-                                TypeExprOwner::Declaration,
-                            );
+                            let mut bound = lower_type_expr::lower_type_expr_node(&te, diags);
                             let span = bound.span;
                             lower_type_expr::check_wildcard_type(
                                 &mut bound,
@@ -1238,8 +1240,12 @@ pub(crate) fn extract_generic_params_with_bounds(
                         .collect()
                 })
                 .unwrap_or_default();
-            if let Some(name) = name {
-                out.push(crate::ast::GenericParam { name, bounds });
+            if let Some((name, name_span)) = name {
+                out.push(crate::ast::GenericParam {
+                    name,
+                    bounds,
+                    name_span,
+                });
             }
         }
     }
@@ -1313,8 +1319,7 @@ fn lower_interface(
     let requires: Vec<TypeExpr> = parent_type_nodes
         .into_iter()
         .map(|te| {
-            let mut expr =
-                lower_type_expr::lower_type_expr_node(&te, diags, TypeExprOwner::Declaration);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             check_missing_type(
                 &expr,
@@ -1348,23 +1353,12 @@ fn lower_interface(
             let type_expr = f.ty().map_or_else(
                 || TypeExprKind::Error.at(f.syntax().span_range()),
                 |te| {
-                    let mut expr = lower_type_expr::lower_type_expr_node(
-                        &te,
-                        diags,
-                        TypeExprOwner::Declaration,
-                    );
+                    let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
                     let te_span = te.syntax().span_range();
                     check_missing_type(
                         &expr,
                         format!("interface field `{iface_name}.{field_name_str}`"),
                         te_span,
-                        diags,
-                    );
-                    lower_type_expr::check_void_type(
-                        &expr,
-                        "an interface field type".to_string(),
-                        te_span,
-                        false,
                         diags,
                     );
                     lower_type_expr::check_wildcard_type(
@@ -1430,7 +1424,7 @@ fn lower_associated_type_def(
     };
     let name = Name::new(name_token.text());
     let bound = decl.bound().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te, diags, TypeExprOwner::Declaration);
+        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
         check_missing_type(
             &expr,
@@ -1441,7 +1435,7 @@ fn lower_associated_type_def(
         expr.with_span(span)
     });
     let default = decl.default_or_binding().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te, diags, TypeExprOwner::Declaration);
+        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
         check_missing_type(
             &expr,
@@ -1473,7 +1467,7 @@ fn lower_associated_type_binding_def(
     };
     let name = Name::new(name_token.text());
     let type_expr = decl.default_or_binding().map(|te| {
-        let expr = lower_type_expr::lower_type_expr_node(&te, diags, TypeExprOwner::Declaration);
+        let expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let span = te.syntax().span_range();
         check_missing_type(
             &expr,
@@ -1514,24 +1508,15 @@ fn lower_method_sig(
         .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
     let return_type = sig.return_type().map(|te| {
-        let mut expr =
-            lower_type_expr::lower_type_expr_node(&te, diags, TypeExprOwner::Declaration);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
         check_missing_type(&expr, format!("return type of `{name}`"), te_span, diags);
-        lower_type_expr::check_void_type(
-            &expr,
-            format!("return type of `{name}`"),
-            te_span,
-            true,
-            diags,
-        );
         lower_type_expr::check_wildcard_type(&mut expr, "a return type", te_span, diags);
         expr.with_span(te_span)
     });
 
     let throws = sig.throws_clause().and_then(|tc| tc.type_expr()).map(|te| {
-        let mut expr =
-            lower_type_expr::lower_type_expr_node(&te, diags, TypeExprOwner::Declaration);
+        let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
         let te_span = te.syntax().span_range();
         // A bodyless method signature (interface required method) has nothing to
         // infer an open `throws … | _` from, and its declared throws is compared
@@ -1568,9 +1553,7 @@ fn lower_implements_block(
     let target_node = block.target()?;
     let target_te = target_node.type_expr()?;
     let target_span = target_te.syntax().span_range();
-    let target =
-        lower_type_expr::lower_type_expr_node(&target_te, diags, TypeExprOwner::Declaration)
-            .with_span(target_span);
+    let target = lower_type_expr::lower_type_expr_node(&target_te, diags).with_span(target_span);
     check_missing_type(
         &target,
         "interface name in `implements`".to_string(),
@@ -1579,7 +1562,7 @@ fn lower_implements_block(
     );
 
     let target_label = match &target.kind {
-        crate::ast::TypeExprKind::Path { segments, .. } => segments
+        crate::ast::TypeExprKind::Path { path, .. } => path
             .last()
             .map(|n: &Name| n.to_string())
             .unwrap_or_else(|| "?".to_string()),
@@ -1639,8 +1622,7 @@ fn lower_implements_for(
     let target_te = target_node.type_expr()?;
     let target_span = target_te.syntax().span_range();
     let interface_target =
-        lower_type_expr::lower_type_expr_node(&target_te, diags, TypeExprOwner::Declaration)
-            .with_span(target_span);
+        lower_type_expr::lower_type_expr_node(&target_te, diags).with_span(target_span);
     check_missing_type(
         &interface_target,
         "interface name in `implements ... for`".to_string(),
@@ -1652,9 +1634,7 @@ fn lower_implements_for(
     let for_node = imp.for_target()?;
     let for_te = for_node.type_expr()?;
     let for_span = for_te.syntax().span_range();
-    let for_target =
-        lower_type_expr::lower_type_expr_node(&for_te, diags, TypeExprOwner::Declaration)
-            .with_span(for_span);
+    let for_target = lower_type_expr::lower_type_expr_node(&for_te, diags).with_span(for_span);
     check_missing_type(
         &for_target,
         "target type in `implements ... for`".to_string(),
@@ -1663,7 +1643,7 @@ fn lower_implements_for(
     );
 
     let iface_label = match &interface_target.kind {
-        crate::ast::TypeExprKind::Path { segments, .. } => segments
+        crate::ast::TypeExprKind::Path { path, .. } => path
             .last()
             .map(|n: &Name| n.to_string())
             .unwrap_or_else(|| "?".to_string()),
@@ -1755,17 +1735,9 @@ fn lower_type_alias(
     Some(TypeAliasDef {
         name: Name::new(&alias_name),
         type_expr: alias.ty().map(|te| {
-            let mut expr =
-                lower_type_expr::lower_type_expr_node(&te, diags, TypeExprOwner::Declaration);
+            let mut expr = lower_type_expr::lower_type_expr_node(&te, diags);
             let te_span = te.syntax().span_range();
             check_missing_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
-            lower_type_expr::check_void_type(
-                &expr,
-                "a type alias".to_string(),
-                te_span,
-                false,
-                diags,
-            );
             lower_type_expr::check_wildcard_type(&mut expr, "a type alias", te_span, diags);
             expr.with_span(te_span)
         }),
@@ -1892,18 +1864,19 @@ fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
 /// Synthesize a `$init_test` function that registers tests and testsets
 /// into a `testing.Registry` parameter.
 ///
-/// The function body calls `registry.register_test(name, lambda, null)` for each test
-/// and `registry.register_test_set(name, collector_lambda, null)` for each testset.
+/// The function body calls the collector's `register_test(name, lambda, null)`
+/// for each test and `register_test_set(name, collector_lambda, null)` for
+/// each testset.
 ///
 /// Lambda bodies are lowered from the original CST `BLOCK_EXPR` nodes.
 ///
-/// Derive the `$init_test_<key>` suffix from a file path.
+/// Derive the `$init_test_<key>` suffix from a file's root-relative path.
 ///
 /// Strips the extension and replaces every character that isn't a letter,
 /// digit, or `_` (notably the path separators and `.`, which would otherwise
 /// break the `.`-delimited namespace routing of function names). The result is
-/// stable across compilations and unique per file, e.g.
-/// `ns_arrays/arrays.baml` -> `ns_arrays_arrays`.
+/// stable across compilations, unique per file within its package, and free of
+/// the checkout's location, e.g. `ns_arrays/arrays.baml` -> `ns_arrays_arrays`.
 fn init_test_key_from_path(path: &std::path::Path) -> String {
     path.with_extension("")
         .to_string_lossy()
@@ -2001,12 +1974,13 @@ fn synthesize_init_test_function(
     diags.extend(finish_diags);
     env_var_refs.extend(finish_env_refs);
 
-    // The single parameter: `registry: testing.TestCollector`
+    // The single parameter: `__registry: testing.TestCollector`, spelled
+    // with a leading space so no test body can name it.
     let registry_param = Param {
-        name: Name::new("registry"),
+        name: Name::new(" __registry"),
         type_expr: Some(
             crate::ast::TypeExprKind::Path {
-                segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                path: baml_base::compiler_path!(testing.TestCollector),
                 generic_args: vec![],
                 associated_type_bindings: vec![],
             }
@@ -2038,8 +2012,8 @@ fn synthesize_init_test_function(
     }
 }
 
-/// Synthesize a single `registry.register_test(name, lambda, runner)` or
-/// `registry.register_test_set(name, collector_lambda, runner)` call expression.
+/// Synthesize a single `register_test(name, lambda, runner)` or
+/// `register_test_set(name, collector_lambda, runner)` call on the collector.
 fn synthesize_register_call(
     reg: &TestRegistrationItem,
     test_owner: &str,
@@ -2059,7 +2033,7 @@ fn synthesize_register_call(
                 kind: LambdaKind::Anonymous,
                 params: vec![],
                 defaults: FunctionDefaults::empty(),
-                return_type: Some(crate::ast::TypeExprKind::Void.at(span)),
+                return_type: Some(crate::ast::TypeExprKind::Null.at(span)),
                 throws: None,
                 body: Some(lambda_body),
                 span,
@@ -2067,7 +2041,10 @@ fn synthesize_register_call(
 
             // registry.register_test_at(owner, ...)
             let method_call_target = ctx.alloc_expr(
-                Expr::Path(vec![Name::new("registry"), Name::new("register_test_at")]),
+                Expr::Path(baml_base::Path::new(vec![
+                    Name::new(" __registry"),
+                    Name::new("register_test_at"),
+                ])),
                 span,
             );
 
@@ -2115,7 +2092,7 @@ fn synthesize_register_call(
                 name: Name::new("testset"),
                 type_expr: Some(
                     crate::ast::TypeExprKind::Path {
-                        segments: vec![Name::new("testing"), Name::new("TestCollector")],
+                        path: baml_base::compiler_path!(testing.TestCollector),
                         generic_args: vec![],
                         associated_type_bindings: vec![],
                     }
@@ -2130,7 +2107,7 @@ fn synthesize_register_call(
                 kind: LambdaKind::Anonymous,
                 params: vec![testset_param],
                 defaults: FunctionDefaults::empty(),
-                return_type: Some(crate::ast::TypeExprKind::Void.at(span)),
+                return_type: Some(crate::ast::TypeExprKind::Null.at(span)),
                 throws: None,
                 body: Some(collector_exprs),
                 span,
@@ -2138,10 +2115,10 @@ fn synthesize_register_call(
 
             // registry.register_test_set_at(owner, ...)
             let method_call_target = ctx.alloc_expr(
-                Expr::Path(vec![
-                    Name::new("registry"),
+                Expr::Path(baml_base::Path::new(vec![
+                    Name::new(" __registry"),
                     Name::new("register_test_set_at"),
-                ]),
+                ])),
                 span,
             );
 

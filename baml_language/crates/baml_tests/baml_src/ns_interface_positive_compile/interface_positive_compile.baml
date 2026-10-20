@@ -836,7 +836,7 @@ test "namespaced_class_can_implement_root_qualified_interface" {
         {
             "main.baml": `
                 function main() -> string {
-                    let d = pets.Dog {}
+                    let d = root.pets.Dog {}
                     return d.describe()
                 }
             `,
@@ -864,7 +864,7 @@ test "namespaced_class_method_body_resolves_root_qualified_interface_type" {
         {
             "main.baml": `
                 function main() -> string {
-                    let d = pets.Dog {}
+                    let d = root.pets.Dog {}
                     return d.greet()
                 }
             `,
@@ -938,16 +938,16 @@ test "ambiguous_method_namespace_qualified_fix_compiles" {
         {
             "main.baml": `
                 class Parrot {
-                    implements zoo.Animal {
+                    implements root.zoo.Animal {
                         function speak(self) -> string { return "squawk" }
                     }
-                    implements farm.Animal {
+                    implements root.farm.Animal {
                         function speak(self) -> string { return "cluck" }
                     }
                 }
                 function main() -> string {
                     let p = Parrot {}
-                    return p.as<zoo.Animal>.speak()
+                    return p.as<root.zoo.Animal>.speak()
                 }
             `,
             "ns_zoo/zoo.baml": `interface Animal { function speak(self) -> string throws never }`,
@@ -977,7 +977,7 @@ test "wf3_impl_type_param_in_interface_args_is_accepted" {
 test "wf3_pure_diamond_single_method_across_namespaces_no_false_ambiguity" {
     root.compiler.AssertCompiles(
         {
-            "main.baml": `function main() -> string { let w = b.W {} return w.f() }`,
+            "main.baml": `function main() -> string { let w = root.b.W {} return w.f() }`,
             "ns_a/a.baml": `interface Base { function f(self) -> string throws never }`,
             "ns_b/b.baml": `
                 interface Derived requires root.a.Base {}
@@ -993,7 +993,7 @@ test "wf3_pure_diamond_single_method_across_namespaces_no_false_ambiguity" {
 test "wf3_three_level_requires_chain_single_method_no_false_ambiguity" {
     root.compiler.AssertCompiles(
         {
-            "main.baml": `function main() -> string { let w = c.W {} return w.f() }`,
+            "main.baml": `function main() -> string { let w = root.c.W {} return w.f() }`,
             "ns_a/a.baml": `interface A { function f(self) -> string throws never }`,
             "ns_b/b.baml": `interface B requires root.a.A {}`,
             "ns_c/c.baml": `

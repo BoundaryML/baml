@@ -17,11 +17,11 @@ pub struct EnumVariant {
 /// Runtime enum representation.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Enum {
-    /// How this declaration is named: package-qualified for a compiled enum,
-    /// a bare item name for a runtime-created one. Display and boundary
-    /// spelling only — identity is `type_tag` and the declaration object
-    /// itself. Use `name.display_name()` for the display string.
-    pub name: crate::DeclarationName,
+    /// Where this enum is declared inside its package: its namespace path
+    /// and item name (an enum minted through `reflect` has only the item
+    /// name). All of its name it carries — see [`Self::name`]. Never an
+    /// identity: that is `type_tag` and the declaration object itself.
+    pub path: super::LocalName,
 
     /// This enum's head identity — assigned by the linker (`CLASS_BASE +` its
     /// object index in the image) or minted fresh by the grafter; in a unit,
@@ -57,9 +57,19 @@ pub struct Enum {
     pub telemetry_definition: btel_types::DefinitionCell,
 }
 
+impl Enum {
+    /// How this enum is named: its path under its package's display name, or
+    /// the bare path for one no package owns. Display and boundary spelling
+    /// only — see [`declaration_name`](super::declaration_name).
+    #[must_use]
+    pub fn name(&self) -> crate::DeclarationName {
+        self.owner.name_of(&self.path)
+    }
+}
+
 impl std::fmt::Display for Enum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<enum {}>", self.name)
+        write!(f, "<enum {}>", self.name())
     }
 }
 

@@ -179,6 +179,6 @@ test "warning preserves function truthiness and call behavior" {
             `,
         },
     );
-    let main = package.get_function<() -> int>("root.main") ?? baml.sys.panic("missing main");
+    let main = package.get_function<() -> int>("root.main");
     assert.equal(main(), 12)
 }

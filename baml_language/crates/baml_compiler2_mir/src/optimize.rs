@@ -189,7 +189,6 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
             }
         }
         Terminator::Throw { .. } | Terminator::Rethrow { .. } => {}
-        Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
         Terminator::ShortCircuit { eval_rhs, join, .. } => {
             remap(eval_rhs);
             remap(join);
@@ -262,7 +261,6 @@ fn rewrite_block_ids_in_terminator_with_map(
             }
         }
         Terminator::Throw { .. } | Terminator::Rethrow { .. } => {}
-        Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
         Terminator::ShortCircuit { eval_rhs, join, .. } => {
             remap(eval_rhs);
             remap(join);
@@ -403,7 +401,9 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
             crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
                 scan_place_read(p, set);
             }
-            crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
+            crate::Rvalue::IsType { operand, .. }
+            | crate::Rvalue::IsTypeTag { operand, .. }
+            | crate::Rvalue::SatisfiesBound { ty: operand, .. } => {
                 scan_operand(operand, set);
             }
             crate::Rvalue::MakeClosure { captures, .. } => {
@@ -426,7 +426,7 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
             }
             crate::Rvalue::LoadType(_)
             | crate::Rvalue::TraceHookSettings { .. }
-            | crate::Rvalue::CurrentPackage(_)
+            | crate::Rvalue::CurrentPackage
             | crate::Rvalue::MakeGenericFunction { .. } => {
                 // LoadType takes no local operands.
             }
@@ -521,8 +521,7 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                 Terminator::Throw { value } => {
                     scan_operand(value, &mut set);
                 }
-                Terminator::Rethrow { value, context }
-                | Terminator::ThrowIfPanic { value, context, .. } => {
+                Terminator::Rethrow { value, context } => {
                     scan_operand(value, &mut set);
                     scan_operand(context, &mut set);
                 }
@@ -696,7 +695,9 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::Discriminant(p) => count_in_place(p, uses),
         crate::Rvalue::TypeTag(p) => count_in_place(p, uses),
         crate::Rvalue::Len(p) => count_in_place(p, uses),
-        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
+        crate::Rvalue::IsType { operand, .. }
+        | crate::Rvalue::IsTypeTag { operand, .. }
+        | crate::Rvalue::SatisfiesBound { ty: operand, .. } => {
             count_in_operand(operand, uses);
         }
         crate::Rvalue::MakeClosure { captures, .. } => {
@@ -719,7 +720,7 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         }
         crate::Rvalue::LoadType(_)
         | crate::Rvalue::TraceHookSettings { .. }
-        | crate::Rvalue::CurrentPackage(_)
+        | crate::Rvalue::CurrentPackage
         | crate::Rvalue::MakeGenericFunction { .. } => {
             // No local operands.
         }
@@ -835,8 +836,7 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
         Terminator::Throw { value } => {
             count_in_operand(value, uses);
         }
-        Terminator::Rethrow { value, context }
-        | Terminator::ThrowIfPanic { value, context, .. } => {
+        Terminator::Rethrow { value, context } => {
             count_in_operand(value, uses);
             count_in_operand(context, uses);
         }
@@ -1103,7 +1103,9 @@ fn apply_subst_to_rvalue<'db>(rv: &mut crate::Rvalue<'db>, subst: &HashMap<Local
         crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
             apply_subst_to_place_locals(p, subst);
         }
-        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
+        crate::Rvalue::IsType { operand, .. }
+        | crate::Rvalue::IsTypeTag { operand, .. }
+        | crate::Rvalue::SatisfiesBound { ty: operand, .. } => {
             apply_subst_to_operand(operand, subst);
         }
         crate::Rvalue::MakeClosure { captures, .. } => {
@@ -1126,7 +1128,7 @@ fn apply_subst_to_rvalue<'db>(rv: &mut crate::Rvalue<'db>, subst: &HashMap<Local
         }
         crate::Rvalue::LoadType(_)
         | crate::Rvalue::TraceHookSettings { .. }
-        | crate::Rvalue::CurrentPackage(_)
+        | crate::Rvalue::CurrentPackage
         | crate::Rvalue::MakeGenericFunction { .. } => {
             // No local operands — nothing to substitute.
         }
@@ -1192,8 +1194,7 @@ fn apply_subst_to_terminator<'db>(
         Terminator::Throw { value } => {
             apply_subst_to_operand(value, subst);
         }
-        Terminator::Rethrow { value, context }
-        | Terminator::ThrowIfPanic { value, context, .. } => {
+        Terminator::Rethrow { value, context } => {
             apply_subst_to_operand(value, subst);
             apply_subst_to_operand(context, subst);
         }
@@ -1429,7 +1430,9 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
             remap_place(p, map);
         }
-        crate::Rvalue::IsType { operand, .. } | crate::Rvalue::IsTypeTag { operand, .. } => {
+        crate::Rvalue::IsType { operand, .. }
+        | crate::Rvalue::IsTypeTag { operand, .. }
+        | crate::Rvalue::SatisfiesBound { ty: operand, .. } => {
             remap_operand(operand, map);
         }
         crate::Rvalue::MakeClosure { captures, .. } => {
@@ -1452,7 +1455,7 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
         }
         crate::Rvalue::LoadType(_)
         | crate::Rvalue::TraceHookSettings { .. }
-        | crate::Rvalue::CurrentPackage(_)
+        | crate::Rvalue::CurrentPackage
         | crate::Rvalue::MakeGenericFunction { .. } => {
             // No local operands — nothing to remap.
         }
@@ -1553,8 +1556,7 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
         Terminator::Throw { value } => {
             remap_operand(value, map);
         }
-        Terminator::Rethrow { value, context }
-        | Terminator::ThrowIfPanic { value, context, .. } => {
+        Terminator::Rethrow { value, context } => {
             remap_operand(value, map);
             remap_operand(context, map);
         }
@@ -1705,7 +1707,8 @@ fn verify_mir(
                         | crate::Rvalue::TypeTag(p)
                         | crate::Rvalue::Len(p) => check_place(p, &blk),
                         crate::Rvalue::IsType { operand, .. }
-                        | crate::Rvalue::IsTypeTag { operand, .. } => {
+                        | crate::Rvalue::IsTypeTag { operand, .. }
+                        | crate::Rvalue::SatisfiesBound { ty: operand, .. } => {
                             check_operand(operand, &blk);
                         }
                         crate::Rvalue::MakeClosure { captures, .. } => {
@@ -1728,7 +1731,7 @@ fn verify_mir(
                         }
                         crate::Rvalue::LoadType(_)
                         | crate::Rvalue::TraceHookSettings { .. }
-                        | crate::Rvalue::CurrentPackage(_)
+                        | crate::Rvalue::CurrentPackage
                         | crate::Rvalue::MakeGenericFunction { .. } => {
                             // LoadType takes no local operands — nothing to check.
                         }
@@ -1829,8 +1832,7 @@ fn verify_mir(
                 Terminator::Throw { value } => {
                     check_operand(value, &blk);
                 }
-                Terminator::Rethrow { value, context }
-                | Terminator::ThrowIfPanic { value, context, .. } => {
+                Terminator::Rethrow { value, context } => {
                     check_operand(value, &blk);
                     check_operand(context, &blk);
                 }
@@ -2053,7 +2055,6 @@ fn verify_definite_assignment(
                 .chain(unwind.map(|block| (block, None)))
                 .collect(),
             Terminator::Spawn { future, resume, .. } => vec![(*resume, local_of(future))],
-            Terminator::ThrowIfPanic { otherwise, .. } => vec![(*otherwise, None)],
             Terminator::ShortCircuit {
                 destination,
                 eval_rhs,
@@ -2357,10 +2358,7 @@ fn verify_definite_assignment(
                 write_place(&state, destination);
             }
             Some(Terminator::Throw { value }) => read_operand(&state, value),
-            Some(
-                Terminator::Rethrow { value, context }
-                | Terminator::ThrowIfPanic { value, context, .. },
-            ) => {
+            Some(Terminator::Rethrow { value, context }) => {
                 read_operand(&state, value);
                 read_operand(&state, context);
             }

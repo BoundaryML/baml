@@ -128,7 +128,7 @@ function defer_armed_only_risky(log: string[]) -> void {
   defer { log.push("a") }
   defer_armed_only_maybe_throw(1)
   defer { log.push("b") }
-  log.push("body")
+  log.push("body");
 }
 
 function defer_armed_only_main() -> string[] {

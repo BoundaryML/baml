@@ -23,8 +23,9 @@ use borsh::{BorshDeserialize, BorshSerialize};
 /// report `MyAlias` rather than whatever it expands to.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct TypeAliasDef {
-    /// Type identity: carries short name, module path, and display name.
-    pub name: baml_type::TypeName,
+    /// Where this alias is declared inside its package: its namespace path
+    /// and item name. All of its name it carries — see [`Self::name`].
+    pub path: super::LocalName,
 
     /// This alias's head identity — assigned by the linker (`CLASS_BASE +` its
     /// object index in the image) or minted fresh by the grafter; in a unit,
@@ -50,8 +51,20 @@ pub struct TypeAliasDef {
     pub owner: crate::HeapPtr,
 }
 
+impl TypeAliasDef {
+    /// How this alias is named: its path under its package's display name.
+    /// Display and boundary spelling only — see
+    /// [`declaration_name`](super::declaration_name). An alias always
+    /// belongs to a package, so the name is declared once it is loaded;
+    /// before the loader places it, it is the path alone.
+    #[must_use]
+    pub fn name(&self) -> crate::DeclarationName {
+        super::declaration_name((!self.owner.is_null()).then_some(self.owner), &self.path)
+    }
+}
+
 impl std::fmt::Display for TypeAliasDef {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<type {}>", self.name)
+        write!(f, "<type {}>", self.name())
     }
 }

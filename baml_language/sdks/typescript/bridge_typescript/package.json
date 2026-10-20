@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml-bridge",
-  "version": "0.20.1",
+  "version": "0.22.2",
   "type": "module",
   "repository": {
     "type": "git",
@@ -58,5 +58,6 @@
   },
   "dependencies": {
     "protobufjs": "^7.6.2"
-  }
+  },
+  "license": "Apache-2.0"
 }

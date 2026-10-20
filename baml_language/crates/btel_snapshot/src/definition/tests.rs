@@ -174,12 +174,12 @@ fn a_group_names_the_groups_it_uses_as_children() {
         vec![
             field(
                 "resume",
-                TyTemplate::Class(Head::Defined(&resume_name, &resume[0]), Box::new([])),
+                TyTemplate::Class(Head::Defined(resume_name.clone(), &resume[0]), Box::new([])),
             ),
             field(
                 "again",
                 TyTemplate::List(Box::new(TyTemplate::Class(
-                    Head::Defined(&resume_name, &resume[0]),
+                    Head::Defined(resume_name, &resume[0]),
                     Box::new([]),
                 ))),
             ),
@@ -581,7 +581,7 @@ fn carrying_a_group_carries_what_it_names_first() {
         declared("user.Holder"),
         vec![field(
             "resume",
-            TyTemplate::Class(Head::Defined(&resume_name, &resume[0]), Box::new([])),
+            TyTemplate::Class(Head::Defined(resume_name, &resume[0]), Box::new([])),
         )],
     )]);
     let capture = |carried: &mut Carried| {
@@ -665,7 +665,7 @@ fn indistinguishable_members_get_one_position_in_any_order() {
             anonymous("Holder"),
             vec![field(
                 "node",
-                TyTemplate::Class(Head::Defined(&name, &node), Box::new([])),
+                TyTemplate::Class(Head::Defined(name, &node), Box::new([])),
             )],
         )]))
     };

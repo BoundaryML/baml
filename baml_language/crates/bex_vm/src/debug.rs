@@ -264,7 +264,6 @@ pub(crate) fn display_instruction(
         | Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
-        | Instruction::ThrowIfPanic
         | Instruction::Unreachable
         | Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
@@ -281,7 +280,8 @@ pub(crate) fn display_instruction(
         | Instruction::ContainerLen
         | Instruction::Spawn
         | Instruction::LoadType(_)
-        | Instruction::BindType(_) => String::new(),
+        | Instruction::BindType(_)
+        | Instruction::SatisfiesBound => String::new(),
     };
 
     (instruction.to_string(), metadata)
@@ -336,9 +336,9 @@ fn display_object_from_pool(index: usize, objects: &ObjectPool) -> String {
     if let Some(obj) = objects.get(index) {
         match obj {
             Object::String(s) => format!("{s:?}"),
-            Object::Function(f) => format!("<fn {}>", f.name),
-            Object::Class(c) => format!("<class {}>", c.name),
-            Object::Enum(e) => format!("<enum {}>", e.name),
+            Object::Function(f) => format!("<fn {}>", f.name()),
+            Object::Class(c) => format!("<class {}>", c.name()),
+            Object::Enum(e) => format!("<enum {}>", e.name()),
             _ => format!("<object {index}>"),
         }
     } else {
@@ -356,7 +356,7 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
             // SAFETY: During debug display, we assume the pointer is valid
             let class = unsafe { instance.class.get() };
             match class {
-                Object::Class(class) => format!("<{} instance>", class.name),
+                Object::Class(class) => format!("<{} instance>", class.name()),
                 // This will most likely never happen, but we're trying not
                 // to panic.
                 other => format!("<{other} instance>"),
@@ -367,7 +367,7 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
             // SAFETY: During debug display, we assume the pointer is valid
             let enm = unsafe { variant.enm.get() };
             match enm {
-                Object::Enum(enm) => format!("<{} variant>", enm.name),
+                Object::Enum(enm) => format!("<{} variant>", enm.name()),
                 other => format!("<{other} variant>"),
             }
         }
@@ -468,7 +468,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::NarrowBind { .. }
         | Instruction::LoadType(_)
         | Instruction::BindType(_)
-        | Instruction::ThrowIfPanic => Style::new().blue().bright(),
+        | Instruction::SatisfiesBound => Style::new().blue().bright(),
         Instruction::Unreachable => Style::new().red().bright(),
         Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
@@ -965,6 +965,7 @@ fn display_instruction_textual(
         Instruction::TraceHookSpan => "trace_hook_span".into(),
         Instruction::TraceHookRich => "trace_hook_rich".into(),
         Instruction::TraceHookEmptySpan => "trace_hook_empty_span".into(),
+        Instruction::SatisfiesBound => "satisfies_bound".into(),
 
         Instruction::CallIndirect => "call_indirect".to_string(),
         Instruction::SetCallTrace => "set_call_trace".to_string(),
@@ -1016,7 +1017,6 @@ fn display_instruction_textual(
                 .unwrap_or_default();
             format!("dense_tag [{names}]")
         }
-        Instruction::ThrowIfPanic => "throw_if_panic".to_string(),
 
         // --- Closures and cells ---
         Instruction::MakeClosure {
@@ -1320,6 +1320,7 @@ pub fn display_compact_bytecode(
             }
             // Unit ops: no operands
             OpCode::Return
+            | OpCode::SatisfiesBound
             | OpCode::Await
             | OpCode::AwaitAny
             | OpCode::Throw
@@ -1339,7 +1340,6 @@ pub fn display_compact_bytecode(
             | OpCode::Discriminant
             | OpCode::TypeTag
             | OpCode::Truthy
-            | OpCode::ThrowIfPanic
             | OpCode::Unreachable
             | OpCode::MakeCell
             | OpCode::SendEvent

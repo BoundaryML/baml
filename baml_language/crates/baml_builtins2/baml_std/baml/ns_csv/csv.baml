@@ -827,7 +827,7 @@ function open(
     path: string,
     options: ReaderOptions? = null,
 ) -> Reader throws Error | root.errors.Io {
-    let f = baml.fs.open(path, "r") catch (_) {
+    let f = root.fs.open(path, "r") catch (_) {
         root.errors.InvalidArgument { message } => throw root.errors.Io { message: message },
     };
     _reader(f, options, true)
@@ -994,7 +994,7 @@ function create(
     path: string,
     options: WriterOptions? = null,
 ) -> Writer throws Error | root.errors.Io {
-    let f = baml.fs.open(path, "w") catch (_) {
+    let f = root.fs.open(path, "w") catch (_) {
         root.errors.InvalidArgument { message } => throw root.errors.Io { message: message },
     };
     _writer(f, options, true)

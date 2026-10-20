@@ -7,7 +7,7 @@ use url::Url;
 
 use crate::error::{Error, Result, require};
 
-pub const DEFAULT_API_URL: &str = "https://api.cloud.boundaryml.com";
+pub const DEFAULT_API_URL: &str = "https://api.prod.bcs.boundaryml.com";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_RESPONSE_BYTES: u64 = 1024 * 1024;
 
@@ -248,7 +248,7 @@ mod tests {
     #[test]
     fn endpoint_normalization_and_transport_safety() {
         assert_eq!(
-            Endpoint::parse("https://API.CLOUD.BOUNDARYML.COM:443/")
+            Endpoint::parse("https://API.PROD.BCS.BOUNDARYML.COM:443/")
                 .unwrap()
                 .as_str(),
             DEFAULT_API_URL

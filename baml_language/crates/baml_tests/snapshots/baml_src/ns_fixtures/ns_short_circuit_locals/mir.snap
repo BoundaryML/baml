@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/corpus.rs
-assertion_line: 122
 ---
 === MIR2 ===
 fn user.fixtures.short_circuit_locals.chained_and(a: bool, b: bool, c: bool) -> bool {
@@ -166,7 +165,7 @@ fn user.fixtures.short_circuit_locals.mixed_join(a: bool, b: bool, cond: bool) -
 fn user.fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> bool {
     // Locals:
     let _0: bool // _0 // return
-    let _1: fixtures.short_circuit_locals.ShortCircuitBox // box
+    let _1: user.fixtures.short_circuit_locals.ShortCircuitBox // box
     let _2: int[]
     let _3: map<string, int>
     let _4: map<string, int>

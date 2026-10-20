@@ -26,7 +26,7 @@ use text_size::TextRange;
 
 use crate::render::{Spell, Viewpoint};
 
-/// How a value typed by a block-scoped `type T = …` binding would leave its
+/// How a value typed by a block-scoped `let type T = …` binding would leave its
 /// block (E0172); the two roads have different remedies.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScopedTypeEscapeKind {
@@ -48,6 +48,104 @@ pub enum ScopedTypeEscapeKind {
     /// the block leaves undecided. The remedy is an annotation on the
     /// binding the value flows into.
     Inferred,
+}
+
+/// A form that evaluates to the unit value without the author writing it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImplicitUnitForm {
+    /// A block with no final expression.
+    BlockWithoutTail {
+        /// Its last statement is an expression of the expected type,
+        /// discarded by its `;`.
+        discards_value: bool,
+    },
+    /// An `if` / `if let` with no `else`.
+    IfWithoutElse,
+    /// `return;`.
+    BareReturn,
+}
+
+impl ImplicitUnitForm {
+    /// The message, as the text before and after the expected type.
+    /// `admits_unit`: the expected type admits `null`, which then has to be
+    /// written.
+    pub fn around_expected(self, admits_unit: bool) -> (&'static str, &'static str) {
+        match (self, admits_unit) {
+            // The value at hand is the likelier intent than a `null`.
+            (
+                Self::BlockWithoutTail {
+                    discards_value: true,
+                },
+                true | false,
+            ) => (
+                "expected ",
+                ", but this value is discarded; remove the `;` to use it",
+            ),
+            (
+                Self::BlockWithoutTail {
+                    discards_value: false,
+                },
+                true,
+            ) => (
+                "expected ",
+                ", but this block ends without a value; write `null` as its final expression to produce it",
+            ),
+            (
+                Self::BlockWithoutTail {
+                    discards_value: false,
+                },
+                false,
+            ) => ("expected ", ", but this block ends without a value"),
+            // Whatever the context admits, both branches have to produce it.
+            (Self::IfWithoutElse, true | false) => (
+                "expected ",
+                ", but an `if` without `else` evaluates to `null`; add an `else` branch",
+            ),
+            (Self::BareReturn, true) => (
+                "expected a value of type ",
+                ", but a bare `return` returns `null` only where the return type is `null` itself; write `return null`",
+            ),
+            (Self::BareReturn, false) => (
+                "expected a value of type ",
+                ", but a bare `return` returns `null`",
+            ),
+        }
+    }
+}
+
+/// Where a value was produced although only the unit type is admitted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnitContext {
+    /// The final expression of a block the unit type is expected of — the
+    /// body of a unit-returning function, most often.
+    Block,
+    /// The branch of an `if` / `if let` with no `else`, where the unit type
+    /// is expected of the `if`.
+    IfWithoutElse,
+    /// The branch of an `if` / `if let` with no `else` whose value is used:
+    /// bound to a name, say. Discarding the branch's value would leave the
+    /// author with a `null` they did not ask for.
+    UsedIfWithoutElse,
+}
+
+impl UnitContext {
+    /// The message, as the text before and after the type that was found.
+    pub fn around_found(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Block => (
+                "expected `null`, found ",
+                "; end this with `;` to discard the value",
+            ),
+            Self::IfWithoutElse => (
+                "an `if` without `else` evaluates to `null`, so its branch cannot produce ",
+                "; add an `else` branch, or end this with `;` to discard the value",
+            ),
+            Self::UsedIfWithoutElse => (
+                "an `if` without `else` evaluates to `null`, so its branch cannot produce ",
+                "; add an `else` branch",
+            ),
+        }
+    }
 }
 
 /// The syntactic context an irrefutable-pattern rule fires in.
@@ -160,12 +258,25 @@ pub enum TirTypeError {
     /// declare it independently (via distinct interfaces), but those are different
     /// members — the union has no single agreed-upon one.
     UnionMemberNoCommonInterface { union: Ty, member: Name },
+    /// A path that resolved to nothing started at an item of this namespace
+    /// spelled like a package: the package is out of reach by that name.
+    ItemShadowsPackage { name: Name },
     /// Name could not be resolved at all.
-    UnresolvedName { name: Name },
+    UnresolvedName {
+        name: Name,
+        /// "Did you mean" candidates, each a fully qualified `root.…` path.
+        suggestions: Box<[Name]>,
+    },
     /// A value name was written bare in a generic slot. A runtime type is
-    /// lifted into a type position only by a `type T = unreflect(value)`
-    /// binding; the slot then names `T`.
-    ComputedGenericArgumentRequiresUnreflect { name: Name },
+    /// lifted into a type position only by a `let type T = value;` binding;
+    /// the slot then names `T`.
+    ComputedGenericArgumentRequiresLetType { name: Name },
+    /// A `let type T extends … = …` statement has no `else` block. Its bounds
+    /// are checked when it runs, so it must say what a miss does.
+    BoundedLetTypeRequiresElse { name: Name },
+    /// A `let type` operand is a class builder's pending type, which is not a
+    /// type until the builder is built.
+    LetTypePendingOperand,
     /// A mounted callable whose implementation is compiler-owned and has no
     /// location-free link ABI was invoked from a source-less consumer.
     MountedPackageCallUnsupported { path: Name },
@@ -226,17 +337,19 @@ pub enum TirTypeError {
     /// A constructor head that is an alias of a type no object literal can
     /// construct (anything but a class).
     CannotConstructAlias { name: Name, denotes: baml_type::Ty },
+    /// A constructor head that is a type parameter or a scoped `type`
+    /// binding: it shadows every item and names no class.
+    ConstructedTypeParameter { name: Name },
     /// A builtin that is lowered where it is called (`log.info`,
     /// `baml.spawn.__spawn`, ...) was referenced as a value.
     CallSiteBuiltinValue { reference: String },
     /// Unreachable code after a diverging statement (return/break/continue).
     DeadCode { unreachable_count: usize },
-    /// A `void` expression (e.g. `if` without `else`) was used where a value
-    /// is required — assigned to a variable, passed as an argument, or returned.
-    VoidUsedAsValue,
-    /// The return value of a void-returning function was used where a value
-    /// is required — assigned to a variable, passed as an argument, etc.
-    VoidFunctionResultUsed,
+    /// A value was produced where only the unit type is admitted: the final
+    /// expression of a block expected to be unit, the branch of an `if` with
+    /// no `else`. The value would be dropped silently, so the author
+    /// discards it with `;`.
+    UnitExpected { context: UnitContext, found: Ty },
     /// Expression is not callable (e.g. `42(1)` or `Foo(1)` where Foo is a class).
     NotCallable { ty: Ty },
     /// Expression is not iterable (e.g. `for let i in 42 { ... }` where 42 is an int).
@@ -319,6 +432,10 @@ pub enum TirTypeError {
     CannotInferType,
     /// An ordinary inference variable remained unresolved at writeback.
     TypeMustBeKnown { full_type: Ty },
+    /// A member was accessed on a value whose type was still being inferred.
+    /// Member lookup needs the receiver's structure at that point; resolving
+    /// the variable later cannot retroactively choose the member.
+    ReceiverTypeMustBeKnown { member: Name },
     /// An associated-type projection references `member`, but the subject it
     /// projects through does not declare (or cannot declare) it as an
     /// associated type.
@@ -360,8 +477,16 @@ pub enum TirTypeError {
     SelfParamDefault,
     /// A default expression referenced a later parameter from the same signature.
     DefaultParamForwardReference { param: Name, referenced: Name },
-    /// Function body ends without returning a value.
-    MissingReturn { expected: Ty },
+    /// An implicit unit — a block with no final expression, an `if` with no
+    /// `else`, a bare `return;` — stands where a type other than the unit
+    /// type is expected. `null <: int?` does not admit it: the value the
+    /// author left out must be written.
+    ImplicitUnit {
+        form: ImplicitUnitForm,
+        expected: Ty,
+        /// `expected` admits `null`.
+        admits_unit: bool,
+    },
     /// Type alias participates in an invalid (unguarded) cycle.
     ///
     /// Examples: `type A = A`, `type A = B; type B = A`.
@@ -379,8 +504,11 @@ pub enum TirTypeError {
         scrutinee_type: Ty,
         missing_cases: Vec<String>,
     },
-    /// `catch_all` is missing arms for one or more caught throw types.
+    /// A `catch_all` / `catch_all_panics` clause is missing arms for one or
+    /// more caught throw types (or, for `catch_all_panics`, panics).
     NonExhaustiveCatchAll {
+        /// The clause keyword: `catch_all` or `catch_all_panics`.
+        keyword: &'static str,
         caught_type: Ty,
         missing_cases: Vec<String>,
     },
@@ -486,7 +614,7 @@ pub enum TirTypeError {
         expected: usize,
         got: usize,
     },
-    /// A value typed by a body-scoped `type T = …` binding would be
+    /// A value typed by a body-scoped `let type T = …` binding would be
     /// observable outside the block that binds `T` (E0172): the block's
     /// value, or a thrown type an inferred `throws` clause would publish.
     /// `value` is the escaping type as it mentions `T`.
@@ -1051,14 +1179,43 @@ impl TirTypeError {
                         union.spell(vp)
                     )
                 }
-                TirTypeError::UnresolvedName { name } => {
-                    write!(f, "unresolved name: {name}")
+                TirTypeError::ItemShadowsPackage { name } => write!(
+                    f,
+                    "`{name}` is an item of this namespace, which shadows the package `{name}`: \
+                     the package cannot be reached by that name from here"
+                ),
+                TirTypeError::UnresolvedName { name, suggestions } => {
+                    write!(f, "unresolved name: {name}")?;
+                    match &**suggestions {
+                        [] => Ok(()),
+                        [only] => write!(f, ". Did you mean `{only}`?"),
+                        many => {
+                            let joined = many
+                                .iter()
+                                .map(Name::as_str)
+                                .collect::<Vec<_>>()
+                                .join("`, `");
+                            write!(f, ". Did you mean one of these: `{joined}`?")
+                        }
+                    }
                 }
-                TirTypeError::ComputedGenericArgumentRequiresUnreflect { name } => {
+                TirTypeError::ComputedGenericArgumentRequiresLetType { name } => {
                     let diagnostic =
-                    baml_compiler_diagnostics::runtime_type::computed_generic_argument_requires_unreflect(
+                    baml_compiler_diagnostics::runtime_type::computed_generic_argument_requires_let_type(
                         name.as_str(),
                     );
+                    f.write_str(diagnostic.message.as_str())
+                }
+                TirTypeError::BoundedLetTypeRequiresElse { name } => {
+                    let diagnostic =
+                        baml_compiler_diagnostics::runtime_type::bounded_let_type_requires_else(
+                            name.as_str(),
+                        );
+                    f.write_str(diagnostic.message.as_str())
+                }
+                TirTypeError::LetTypePendingOperand => {
+                    let diagnostic =
+                        baml_compiler_diagnostics::runtime_type::let_type_pending_operand();
                     f.write_str(diagnostic.message.as_str())
                 }
                 TirTypeError::UnresolvedPropertyShorthand { name, suggestions } => {
@@ -1157,6 +1314,10 @@ impl TirTypeError {
                     "cannot construct `{name}`: it is an alias of `{}`, not a class",
                     denotes.spell(vp)
                 ),
+                TirTypeError::ConstructedTypeParameter { name } => write!(
+                    f,
+                    "cannot construct `{name}`: it is a type parameter here, not a class"
+                ),
                 TirTypeError::MountedPackageCallUnsupported { path } => {
                     let diagnostic =
                         baml_compiler_diagnostics::runtime_type::mounted_package_call_unsupported(
@@ -1189,14 +1350,9 @@ impl TirTypeError {
                         "unreachable code: {unreachable_count} statement(s) after diverging statement"
                     )
                 }
-                TirTypeError::VoidUsedAsValue => {
-                    write!(
-                        f,
-                        "`if` without `else` cannot be used as a value; add an `else` branch"
-                    )
-                }
-                TirTypeError::VoidFunctionResultUsed => {
-                    write!(f, "cannot use return value of a void function")
+                TirTypeError::UnitExpected { context, found } => {
+                    let (before, after) = context.around_found();
+                    write!(f, "{before}`{}`{after}", found.spell(vp))
                 }
                 TirTypeError::NotCallable { ty } => {
                     write!(
@@ -1328,6 +1484,13 @@ impl TirTypeError {
                 TirTypeError::CannotInferType => {
                     write!(f, "type inference failed; write the type explicitly")
                 }
+                TirTypeError::ReceiverTypeMustBeKnown { member } => {
+                    write!(
+                        f,
+                        "type annotations needed: the type of this value must be known \
+                         before accessing `{member}`"
+                    )
+                }
                 TirTypeError::TypeMustBeKnown { full_type } => {
                     write!(
                         f,
@@ -1369,7 +1532,7 @@ impl TirTypeError {
                             f,
                             "write `{replacement}` instead. The `type` keyword itself is unchanged: \
                          it still names aliases (`type UserId = string`) and scoped type \
-                         bindings (`type T = unreflect(t)`)"
+                         bindings (`let type T = t;`)"
                         )
                     } else {
                         write!(
@@ -1448,8 +1611,13 @@ impl TirTypeError {
                         "default for parameter `{param}` cannot reference later parameter `{referenced}`"
                     )
                 }
-                TirTypeError::MissingReturn { expected } => {
-                    write!(f, "missing return: expected `{}`", expected.spell(vp))
+                TirTypeError::ImplicitUnit {
+                    form,
+                    expected,
+                    admits_unit,
+                } => {
+                    let (before, after) = form.around_expected(*admits_unit);
+                    write!(f, "{before}`{}`{after}", expected.spell(vp))
                 }
                 TirTypeError::AliasCycle { name } => {
                     write!(f, "recursive type alias cycle: {name}")
@@ -1469,12 +1637,13 @@ impl TirTypeError {
                     )
                 }
                 TirTypeError::NonExhaustiveCatchAll {
+                    keyword,
                     caught_type,
                     missing_cases,
                 } => {
                     write!(
                         f,
-                        "non-exhaustive catch_all on `{}`; missing: {}",
+                        "non-exhaustive {keyword} on `{}`; missing: {}",
                         caught_type.spell(vp),
                         missing_cases.join(", ")
                     )
@@ -1780,6 +1949,12 @@ impl TirTypeError {
                 TirTypeError::TaggedTagBadBodyParam { name } => write!(
                     f,
                     "the first parameter of tagged-string function `{name}` must be `body: (...) -> baml.TaggedString`"
+                ),
+                // A value that is only ever `null` has nothing to coalesce:
+                // it is a unit expression, written for its effect.
+                TirTypeError::InterpolatedValueMaybeNull { ty: Ty::Null } => write!(
+                    f,
+                    "cannot interpolate a value of type `null`; to run the expression without rendering it, end it with `;`"
                 ),
                 TirTypeError::InterpolatedValueMaybeNull { ty } => write!(
                     f,
@@ -2586,10 +2761,7 @@ impl<'db> TirDiagnostic<'db> {
 
         RenderedTirDiagnostic {
             error: self.error.clone(),
-            message: self.error.render(&Viewpoint::user_facing(
-                db,
-                baml_compiler2_hir::file_package::file_package(db, scope_file).root,
-            )),
+            message: self.error.render(&Viewpoint::for_file(db, scope_file)),
             range: primary_range,
             severity: self.severity,
             related,

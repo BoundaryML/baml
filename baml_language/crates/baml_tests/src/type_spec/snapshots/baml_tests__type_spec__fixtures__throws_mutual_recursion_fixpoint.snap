@@ -4,7 +4,7 @@ expression: outcome.dump
 ---
 411..415 'ping': throws "stop"
 431..520 '{\n   ...(n)\n}': int
-465..506 'if (n ...n    }': void
+465..506 'if (n ...n    }': null
 469..470 'n': int
 469..475 'n == 0': bool
 474..475 '0': 0

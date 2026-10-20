@@ -256,6 +256,9 @@ pub(crate) struct Parser<'a> {
     /// Token indices of ambiguous pipes in the current outermost undelimited
     /// function type, reported with explicit groupings once it is parsed.
     ambiguous_pipes: Vec<usize>,
+    /// While parsing the right-hand side of a removed body-level `type T = …`
+    /// statement, whose own diagnostic already covers an `unreflect` there.
+    suppress_removed_unreflect_depth: u32,
 }
 
 impl<'a> Parser<'a> {
@@ -274,6 +277,7 @@ impl<'a> Parser<'a> {
             suppress_destructure_pattern_depth: 0,
             function_union_operand: false,
             ambiguous_pipes: Vec::new(),
+            suppress_removed_unreflect_depth: 0,
         }
     }
 
@@ -405,9 +409,19 @@ impl<'a> Parser<'a> {
         Self::token_is_contextual_kw(self.peek(n), kw)
     }
 
-    /// `type` is contextual in expressions, so only claim statement position
-    /// for the complete binding head `type Name =`.
-    fn at_type_binding_stmt(&self) -> bool {
+    /// `let type Name …`: a scoped runtime type binding. `type` is contextual,
+    /// so `let type = …` (a value named `type`) stays an ordinary `let`; only
+    /// a following name claims the statement.
+    fn at_let_type_binding_stmt(&self) -> bool {
+        self.at(TokenKind::Let)
+            && self.peek_is_contextual_kw(1, "type")
+            && self.peek(2).map(|token| token.kind) == Some(TokenKind::Word)
+    }
+
+    /// The removed body-level `type Name = …` statement. `type` is contextual
+    /// in expressions, so only claim statement position for the complete
+    /// binding head `type Name =`.
+    fn at_removed_type_binding_stmt(&self) -> bool {
         self.at_contextual_kw("type")
             && self.peek(1).map(|token| token.kind) == Some(TokenKind::Word)
             && self.peek(2).map(|token| token.kind) == Some(TokenKind::Equals)
@@ -3067,16 +3081,24 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type_primary(&mut self) {
-        // `unreflect(expr)` parses as a type atom everywhere so the removed
-        // inline spelling still recovers cleanly. Its legality is decided at
-        // CST→AST lowering: only the whole right-hand side of a body-level
-        // `type T = …;` statement lowers it; every other position reports
-        // E0168 and lowers to the error type.
+        // The removed `unreflect(expr)` still parses as a type atom so it
+        // recovers cleanly: it reports E0098 pointing at `let type`, and the
+        // position lowers to the error type.
         if self.at_contextual_kw("unreflect")
             && self
                 .peek(1)
                 .is_some_and(|token| token.kind == TokenKind::LParen)
         {
+            if self.suppress_removed_unreflect_depth == 0
+                && let Some(span) = self.current().map(|token| token.span)
+            {
+                self.events.push(Event::RemovedFeature {
+                    message: "`unreflect` was removed; bind the runtime type first with \
+                              `let type T = <expr>;` and write `T` here"
+                        .to_string(),
+                    span,
+                });
+            }
             self.with_node(SyntaxKind::UNREFLECT_TYPE, |p| {
                 p.bump();
                 p.expect(TokenKind::LParen);
@@ -4731,10 +4753,12 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        if self.at_binding_intro_stmt() {
-            self.parse_let_stmt();
-        } else if self.at_type_binding_stmt() {
+        if self.at_let_type_binding_stmt() {
             self.parse_type_binding_stmt();
+        } else if self.at_binding_intro_stmt() {
+            self.parse_let_stmt();
+        } else if self.at_removed_type_binding_stmt() {
+            self.parse_removed_type_binding_stmt();
         } else if self.at(TokenKind::Return) {
             self.parse_return_stmt();
         } else if self.at(TokenKind::While) {
@@ -4774,18 +4798,143 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// `let type T [extends A & B] = operand [else { … }];` — bind the
+    /// runtime type `operand` evaluates to as the block-scoped type `T`.
+    ///
+    /// CST shape: `KW_LET KW_TYPE WORD GENERIC_PARAM_BOUNDS? EQUALS <expr>
+    /// (KW_ELSE BLOCK_EXPR)? SEMICOLON?`. The bounds use the generic-parameter
+    /// syntax; the `else` block runs when the type misses a bound, so it is
+    /// meaningful only on the bounded form.
     fn parse_type_binding_stmt(&mut self) {
         self.with_node(SyntaxKind::TYPE_BINDING_STMT, |p| {
+            p.expect(TokenKind::Let);
             p.bump_contextual_kw_as("type", SyntaxKind::KW_TYPE);
             if p.at(TokenKind::Word) {
                 p.bump();
             } else {
                 p.error_unexpected_token("type binding name".to_string());
             }
-            p.expect(TokenKind::Equals);
-            p.parse_type();
+            let bounded = p.at(TokenKind::Extends);
+            if bounded {
+                p.with_node(SyntaxKind::GENERIC_PARAM_BOUNDS, |p| {
+                    p.expect(TokenKind::Extends);
+                    p.parse_type();
+                    while p.eat(TokenKind::And) {
+                        p.parse_type();
+                    }
+                });
+            }
+            if p.eat(TokenKind::Equals) {
+                // As in `let`: assignment operators do not chain into the
+                // operand (`let type T = a = b`).
+                p.parse_expr_bp(3);
+            } else {
+                p.error_unexpected_token("'=' and the runtime type".to_string());
+            }
+            if p.at(TokenKind::Else) {
+                if !bounded && let Some(span) = p.current().map(|token| token.span) {
+                    p.error(
+                        "`else` runs when the type misses a bound; add `extends` bounds or \
+                         remove the `else` block"
+                            .to_string(),
+                        span,
+                    );
+                }
+                p.bump(); // else
+                if p.at(TokenKind::LBrace) {
+                    p.parse_block_expr();
+                } else {
+                    p.error_unexpected_token("block after 'else'".to_string());
+                }
+            }
             p.eat(TokenKind::Semicolon);
         });
+    }
+
+    /// Recover from the removed body-level `type T = …;` statement (both
+    /// `type T = unreflect(e)` and a static right-hand side), reporting one
+    /// E0098 that spells the `let type` replacement. The statement still
+    /// parses as a `TYPE_BINDING_STMT` (without `KW_LET`, with a `TYPE_EXPR`
+    /// right-hand side) so `T` stays bound and its later uses do not cascade.
+    fn parse_removed_type_binding_stmt(&mut self) {
+        let start_span = self.current().map(|token| token.span).unwrap_or_default();
+        let name = self
+            .peek(1)
+            .map(|token| token.text.clone())
+            .unwrap_or_default();
+        let mut rhs = String::new();
+        self.with_node(SyntaxKind::TYPE_BINDING_STMT, |p| {
+            p.bump_contextual_kw_as("type", SyntaxKind::KW_TYPE);
+            p.bump(); // name
+            p.expect(TokenKind::Equals);
+            let rhs_start = p.current;
+            // The statement-level diagnostic below covers an `unreflect`
+            // inside the right-hand side too.
+            p.suppress_removed_unreflect_depth += 1;
+            p.parse_type();
+            p.suppress_removed_unreflect_depth -= 1;
+            rhs = p.tokens[rhs_start..p.current]
+                .iter()
+                .map(|token| token.text.as_str())
+                .collect::<String>()
+                .trim()
+                .to_string();
+            p.eat(TokenKind::Semicolon);
+        });
+        let message = match Self::whole_unreflect_operand(&rhs) {
+            Some(operand) => format!(
+                "body-level `type {name} = …` bindings were removed; write \
+                 `let type {name} = {operand};` instead"
+            ),
+            // Spelling the replacement verbatim would keep the removed
+            // `unreflect` inside it.
+            None if rhs.contains("unreflect") => format!(
+                "body-level `type {name} = …` bindings were removed; bind each `unreflect` \
+                 operand with `let type U = <expr>;` first, then write \
+                 `let type {name} = reflect.Type.of<…>();` naming `U`"
+            ),
+            None => format!(
+                "body-level `type {name} = …` bindings were removed; write \
+                 `let type {name} = reflect.Type.of<{rhs}>();` instead"
+            ),
+        };
+        let end_span = self.previous_non_trivia_span().unwrap_or(start_span);
+        self.events.push(Event::RemovedFeature {
+            message,
+            span: Self::span_from_to(start_span, end_span),
+        });
+    }
+
+    /// The operand text of a right-hand side that is exactly
+    /// `unreflect(<operand>)`, for the removed-statement suggestion. A
+    /// multi-line operand is elided rather than reflowed.
+    fn whole_unreflect_operand(rhs: &str) -> Option<&str> {
+        let inner = rhs
+            .strip_prefix("unreflect")?
+            .trim_start()
+            .strip_prefix('(')?
+            .strip_suffix(')')?;
+        // `unreflect(a) | unreflect(b)` also starts and ends with the
+        // marker's parentheses; only a balanced interior is one operand.
+        let mut depth = 0_i32;
+        for ch in inner.chars() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth < 0 {
+                        return None;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let inner = inner.trim();
+        (depth == 0 && !inner.is_empty()).then_some(if inner.contains('\n') {
+            "…"
+        } else {
+            inner
+        })
     }
 
     fn parse_let_stmt(&mut self) {
@@ -7700,7 +7849,7 @@ impl<'a> Parser<'a> {
         // unambiguous in segment position — a leading `spawn`/`await` is
         // handled before this point. `is_ident_token` in
         // `baml_compiler2_ast::lower_expr_body` must mirror this set.
-        let segment = |k: TokenKind| {
+        let path_start = |k: TokenKind| {
             matches!(
                 k,
                 TokenKind::Word
@@ -7713,10 +7862,15 @@ impl<'a> Parser<'a> {
                     | TokenKind::Function
             )
         };
+        // Once a path has started, any `.member` name continues it, so a member
+        // named by a keyword stays reachable deep in a path
+        // (`reflect.Class.extends`). Right after the head (`t.implements`) it
+        // is not a path start, and parses as member access instead.
+        let segment = |k: TokenKind| path_start(k) || Self::kind_is_member_name(k);
 
         // Check if this looks like a path (ident.client followed by dot and another ident)
         if self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
-            && self.peek(2).map(|t| segment(t.kind)).unwrap_or(false)
+            && self.peek(2).map(|t| path_start(t.kind)).unwrap_or(false)
             && !(self
                 .peek(2)
                 .is_some_and(|t| t.kind == TokenKind::Word && t.text == "as")
@@ -8579,6 +8733,9 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
             && parser.current().map(|t| t.text == "type").unwrap_or(false)
         {
             parser.parse_type_alias();
+        } else if parser.at_let_type_binding_stmt() {
+            // Only a body can bind a runtime type; lowering reports it here.
+            parser.parse_type_binding_stmt();
         } else if parser.at_binding_intro_stmt() {
             parser.parse_let_stmt();
         } else if parser.at_header_comment_start() {
@@ -8826,21 +8983,167 @@ testset "dynamic" {
     }
 
     #[test]
-    fn scoped_runtime_type_binding_parses_as_a_statement() {
-        let source = "function main(t: reflect.Type) -> reflect.Type {\n  type T = unreflect(t);\n  reflect.Type.of<T>()\n}\n";
+    fn let_type_parses_as_a_statement() {
+        let source = "function main(t: reflect.Type) -> reflect.Type {\n  let type T = t;\n  reflect.Type.of<T>()\n}\n";
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
-        assert!(
-            root.descendants()
-                .any(|node| node.kind() == SyntaxKind::TYPE_BINDING_STMT)
+        let binding = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::TYPE_BINDING_STMT)
+            .expect("a type binding statement");
+        let kinds: Vec<SyntaxKind> = binding
+            .children_with_tokens()
+            .map(|element| element.kind())
+            .filter(|kind| !kind.is_trivia())
+            .collect();
+        assert_eq!(
+            kinds,
+            [
+                SyntaxKind::KW_LET,
+                SyntaxKind::KW_TYPE,
+                SyntaxKind::WORD,
+                SyntaxKind::EQUALS,
+                SyntaxKind::WORD,
+                SyntaxKind::SEMICOLON,
+            ]
         );
     }
 
     #[test]
-    fn top_level_runtime_type_atom_parses_for_the_lowering_gate() {
-        let source = "type T = unreflect(reflect.Type.of<string>())\n";
+    fn bounded_let_type_parses_its_bounds_and_else_block() {
+        let source = "function main(t: reflect.Type) -> int {\n  let type T extends A & B<int> = t.as_type() else { return 0 };\n  1\n}\n";
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
+        let binding = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::TYPE_BINDING_STMT)
+            .expect("a type binding statement");
+        let bounds = binding
+            .children()
+            .find(|node| node.kind() == SyntaxKind::GENERIC_PARAM_BOUNDS)
+            .expect("the bounds");
+        assert_eq!(
+            bounds
+                .children()
+                .filter(|node| node.kind() == SyntaxKind::TYPE_EXPR)
+                .count(),
+            2
+        );
+        assert!(
+            binding
+                .children_with_tokens()
+                .any(|element| element.kind() == SyntaxKind::KW_ELSE)
+        );
+        assert!(
+            binding
+                .children()
+                .any(|node| node.kind() == SyntaxKind::BLOCK_EXPR)
+        );
+    }
+
+    #[test]
+    fn let_type_else_needs_a_bound() {
+        let source = "function main(t: reflect.Type) -> int {\n  let type T = t else { return 0 };\n  1\n}\n";
+        let (_, errors) = parse_source(source);
+        assert!(
+            matches!(
+                errors.as_slice(),
+                [ParseError::InvalidSyntax { message, .. }]
+                    if message.contains("add `extends` bounds")
+            ),
+            "expected one targeted error, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn a_value_named_type_stays_an_ordinary_let() {
+        let source = "function main() -> int {\n  let type = 1;\n  let type: int = 2;\n  type\n}\n";
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert!(
+            !root
+                .descendants()
+                .any(|node| node.kind() == SyntaxKind::TYPE_BINDING_STMT)
+        );
+        assert_eq!(
+            root.descendants()
+                .filter(|node| node.kind() == SyntaxKind::LET_STMT)
+                .count(),
+            2
+        );
+    }
+
+    fn removed_feature_messages(errors: &[ParseError]) -> Vec<&str> {
+        errors
+            .iter()
+            .map(|error| match error {
+                ParseError::RemovedFeature { message, .. } => message.as_str(),
+                other => panic!("expected only removed-feature errors, got {other:#?}"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn removed_type_statement_reports_its_let_type_replacement() {
+        for (statement, replacement) in [
+            ("type T = unreflect(t)", "let type T = t;"),
+            (
+                "type T = unreflect( pkg.get_class(\"C\").as_type() );",
+                "let type T = pkg.get_class(\"C\").as_type();",
+            ),
+            (
+                "type T = Wrapper<int>",
+                "let type T = reflect.Type.of<Wrapper<int>>();",
+            ),
+        ] {
+            let source =
+                format!("function main(t: reflect.Type) -> int {{\n  {statement}\n  1\n}}\n");
+            let (root, errors) = parse_source(&source);
+            assert_eq!(
+                removed_feature_messages(&errors),
+                [format!(
+                    "body-level `type T = …` bindings were removed; write `{replacement}` instead"
+                )],
+                "for {statement}"
+            );
+            assert!(
+                root.descendants()
+                    .any(|node| node.kind() == SyntaxKind::TYPE_BINDING_STMT),
+                "the removed statement still recovers as a binding: {statement}"
+            );
+            assert_eq!(
+                root.text().to_string(),
+                source,
+                "recovery must stay lossless"
+            );
+        }
+    }
+
+    #[test]
+    fn removed_type_statement_with_a_nested_unreflect_reports_once() {
+        // The statement's report covers the `unreflect` inside it, and its
+        // advice does not spell the removed `unreflect` back.
+        let source =
+            "function main(t: reflect.Type) -> int {\n  type T = Wrapper<unreflect(t)>\n  1\n}\n";
+        let (_, errors) = parse_source(source);
+        let messages = removed_feature_messages(&errors);
+        assert_eq!(messages.len(), 1, "{messages:#?}");
+        assert!(
+            messages[0].contains("let type T = reflect.Type.of<…>();"),
+            "{messages:#?}"
+        );
+    }
+
+    #[test]
+    fn removed_unreflect_type_atom_reports_let_type() {
+        let source = "type T = unreflect(reflect.Type.of<string>())\n";
+        let (root, errors) = parse_source(source);
+        assert_eq!(
+            removed_feature_messages(&errors),
+            [
+                "`unreflect` was removed; bind the runtime type first with `let type T = <expr>;` and write `T` here"
+            ]
+        );
         assert_eq!(
             root.descendants()
                 .filter(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
@@ -8855,12 +9158,16 @@ testset "dynamic" {
         let (root, errors) = parse_source(source);
         assert_eq!(
             errors.len(),
-            1,
+            2,
             "empty unreflect must not cause a parse-error cascade: {errors:#?}"
         );
         assert!(
+            matches!(&errors[0], ParseError::RemovedFeature { .. }),
+            "expected the removed-feature report first, got: {errors:#?}"
+        );
+        assert!(
             matches!(
-                &errors[0],
+                &errors[1],
                 ParseError::InvalidSyntax { message, .. }
                     if message == "`unreflect` requires an operand"
             ),
@@ -9654,7 +9961,7 @@ enum E {
             "function f(a: int @stream.done) -> int {\n  a\n}\n",
             "function f() -> int @stream.done {\n  1\n}\n",
             "function f() -> int {\n  let x: int @stream.done = 1;\n  x\n}\n",
-            "function f(t: reflect.Type) -> int {\n  type T = unreflect(t) @alias(\"x\")\n  1\n}\n",
+            "function f(t: reflect.Type) -> int {\n  let type T extends I @alias(\"x\") = t;\n  1\n}\n",
             "function f(x: int | string) -> int {\n  match (x) {\n    int @stream.done => 1,\n    _ => 0,\n  }\n}\n",
         ] {
             let (root, errors) = parse_source(source);
@@ -10023,6 +10330,36 @@ function f(ctx: Context) -> string {
             errors.is_empty(),
             "`ctx.client.provider` member access should parse cleanly: {errors:?}"
         );
+    }
+
+    #[test]
+    fn keyword_member_names_are_valid_deep_in_a_path() {
+        // `reflect.Class.extends<I>(…)`: a member named by a declaration
+        // keyword stays reachable past the second path segment.
+        let source = r#"
+function f() -> bool {
+  let a = reflect.Class.extends<Foo>("Foo", {});
+  let b = x.y.implements(z);
+  let c = x.y.requires;
+  true
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert!(
+            errors.is_empty(),
+            "keyword member names deep in a path should parse cleanly: {errors:?}"
+        );
+        let paths: Vec<String> = root
+            .descendants()
+            .filter(|n| n.kind() == SyntaxKind::PATH_EXPR)
+            .map(|n| n.text().to_string().trim().to_string())
+            .collect();
+        for expected in ["reflect.Class.extends", "x.y.implements", "x.y.requires"] {
+            assert!(
+                paths.iter().any(|path| path == expected),
+                "expected a `{expected}` path, got {paths:?}"
+            );
+        }
     }
 
     #[test]
@@ -11440,7 +11777,8 @@ function Demo(x: unknown, a: int, b: int) -> bool {
 "#;
 
         let (root, errors) = parse_source(source);
-        assert_no_errors(&errors);
+        // The removed spelling reports itself, and only itself.
+        assert_eq!(removed_feature_messages(&errors).len(), 1);
         let first_arm = root
             .descendants()
             .find(|node| node.kind() == SyntaxKind::MATCH_ARM)
@@ -14052,26 +14390,26 @@ function iterate(items: int[]) -> int {
     fn reflection_keyword_segments_parse_in_types_and_expressions() {
         let source = r#"
 class KeywordKinds {
-    class_kind reflect.class.Type
-    enum_kind reflect.enum.Type
-    interface_kind reflect.interface.Type
-    function_kind reflect.function.Type
+    class_field reflect.class.Field
+    enum_value reflect.enum.Value
+    interface_implementation reflect.interface.Implementation
+    function_parameter reflect.function.Parameter
 }
 
-function class_kind_value() -> reflect.class.Type {
-    reflect.class.Type
+function class_field_value() -> reflect.class.Field {
+    reflect.class.Field
 }
 
-function enum_kind_value() -> reflect.enum.Type {
-    reflect.enum.Type
+function enum_value_value() -> reflect.enum.Value {
+    reflect.enum.Value
 }
 
-function interface_kind_value() -> reflect.interface.Type {
-    reflect.interface.Type
+function interface_implementation_value() -> reflect.interface.Implementation {
+    reflect.interface.Implementation
 }
 
-function function_kind_value() -> reflect.function.Type {
-    reflect.function.Type
+function function_parameter_value() -> reflect.function.Parameter {
+    reflect.function.Parameter
 }
 "#;
         let (_, errors) = parse_source(source);

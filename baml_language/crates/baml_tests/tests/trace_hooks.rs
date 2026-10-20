@@ -12,6 +12,31 @@ fn errors(source: &str) -> Vec<String> {
 }
 
 #[test]
+fn owned_span_failure_requires_the_existing_error_context_type() {
+    assert!(
+        errors(
+            r#"
+function record(context: baml.errors.Context) -> void {
+    trace.start_span("failure").fail_with_context("replacement", context);
+}
+"#
+        )
+        .is_empty()
+    );
+    let invalid = errors(
+        r#"
+function record() -> void {
+    trace.start_span("failure").fail_with_context("replacement", { "error": "raw" });
+}
+"#,
+    );
+    assert!(
+        !invalid.is_empty(),
+        "a free-form map is not an error Context"
+    );
+}
+
+#[test]
 fn constant_and_argument_aware_hooks_compile() {
     assert_eq!(
         errors(
@@ -523,7 +548,9 @@ function Demo(text: string) -> string {
 }
 
 #[test]
-fn void_hook_is_not_a_value_returning_hook() {
+fn void_hook_is_a_null_returning_hook() {
+    // `void` is the unit type `null`, which a hook returns to keep the
+    // current settings.
     assert_eq!(
         errors(
             r#"
@@ -532,8 +559,75 @@ function policy() -> void throws never { }
 function target() -> int { 1 }
 "#
         ),
-        [r#"Invalid trace hook `policy` for function `target`.
-The hook returns `void`, but must return `trace.Options` or `null`.
-help: Return tracing options (for example `trace.span(inputs = true)`) or `null` to keep the current settings."#]
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn passthrough_directive_is_restricted_to_builtins() {
+    let messages = errors("//baml:trace_passthrough\nfunction target() -> int { 1 }");
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("trace_passthrough")),
+        "{messages:?}"
+    );
+}
+
+#[test]
+fn passthrough_directive_is_restricted_to_builtins_on_implementation_methods() {
+    for source in [
+        "interface Shape { function area(self) -> int; }
+class Square {
+    side: int,
+    implements Shape {
+        //baml:trace_passthrough
+        function area(self) -> int { self.side }
+    }
+}",
+        "interface Shape { function area(self) -> int; }
+class Square { side: int }
+implements Shape for Square {
+    //baml:trace_passthrough
+    function area(self) -> int { self.side }
+}",
+    ] {
+        let messages = errors(source);
+        assert!(
+            messages
+                .iter()
+                .any(|message| message.contains("trace_passthrough")),
+            "{source}: {messages:?}"
+        );
+    }
+}
+
+#[test]
+fn unattached_passthrough_directive_is_not_silently_ignored() {
+    let messages = errors("//baml:trace_passthrough\nclass Holder { value: int }");
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("trace_passthrough")),
+        "{messages:?}"
+    );
+}
+
+#[test]
+fn a_builtin_looking_filename_does_not_grant_passthrough_privileges() {
+    let db = setup_multi_file_db(&[(
+        "<builtin>/forged.baml",
+        "//baml:trace_passthrough\nfunction target() -> int { 1 }",
+    )]);
+    let messages: Vec<_> = check_user_files(&db)
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity == Severity::Error)
+        .map(|diagnostic| diagnostic.message)
+        .collect();
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("trace_passthrough")),
+        "{messages:?}"
     );
 }

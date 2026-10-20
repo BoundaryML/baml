@@ -60,7 +60,7 @@ test "pending runtime type is not a static reflect Type" {
             "main.baml": `
                 function accepts_type(value: reflect.Type) -> bool { true }
                 function main() -> bool {
-                    let builder = reflect.class.builder("StillPending")
+                    let builder = reflect.Class.builder("StillPending")
                     accepts_type(builder.type())
                 }
             `,
@@ -69,13 +69,13 @@ test "pending runtime type is not a static reflect Type" {
     )
 }
 
-test "unreflect operand must be a type value" {
+test "let type operand must be a type value" {
     root.compiler.AssertHasCode(
         {
             "main.baml": `
                 function generic<T>() -> bool { true }
                 function main() -> bool {
-                    type Bad = unreflect(42)
+                    let type Bad = 42;
                     generic<Bad>()
                 }
             `,
@@ -98,19 +98,19 @@ test "unknown values do not expose get_field" {
     )
 }
 
-test "computed generic argument diagnostic names unreflect" {
+test "computed generic argument diagnostic names let type" {
     assert_code_and_messages(
         {
             "main.baml": `
                 function id<T>(value: T) -> T { value }
                 function main() -> unknown {
-                    let runtime_t = reflect.Type.of<string>()
+                    let runtime_t = string.type()
                     id<runtime_t>("x")
                 }
             `,
         },
         "E0002",
-        ["unreflect"],
+        ["let type T = runtime_t;"],
     )
 }
 
@@ -131,11 +131,11 @@ test "runtime duplicate serialized key matches the static diagnostic" {
     assert.equal(static_matches.length(), 1);
     let expected = static_matches[0];
 
-    let result = reflect.class.new(
+    let result = reflect.Class.new(
         "Collision",
         {
-            "wire": reflect.Type.of<string>(),
-            "internal": reflect.Type.of<int>().meta(alias = "wire"),
+            "wire": string.type(),
+            "internal": int.type().meta(alias = "wire"),
         },
     ) catch (error) {
         reflect.errors.CompilationError => {
@@ -155,11 +155,11 @@ test "top-level runtime type binding is rejected" {
     root.compiler.AssertHasMessage(
         {
             "main.baml": `
-                type T = unreflect(reflect.Type.of<string>())
+                let type T = string.type();
                 function main() -> string { "unreachable" }
             `,
         },
-        "this runtime type must be given a name before it can be used here",
+        "top-level `let` bindings are not supported",
     )
 }
 
@@ -168,9 +168,9 @@ test "block-scoped runtime type binding does not escape" {
         {
             "main.baml": `
                 function invalid() -> unknown {
-                    let t = reflect.Type.of<string>()
+                    let t = string.type()
                     let escaped: unknown = {
-                        type T = unreflect(t)
+                        let type T = t;
                         null
                     }
                     let invalid: T = escaped

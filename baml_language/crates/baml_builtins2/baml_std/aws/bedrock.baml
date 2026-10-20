@@ -90,7 +90,7 @@ class BedrockClient {
     headers: map<string, string>?,
     /// Extra query parameters, appended (and percent-encoded) BEFORE signing.
     query_params: map<string, string>?,
-    /// Record request/response bodies on the LLMCall wire records delivered
+    /// Record request/response bodies on the ModelCall wire records delivered
     /// through on_event. Status, headers, and timing are always recorded; this
     /// flag only gates the bodies.
     capture_wire: bool,
@@ -157,8 +157,12 @@ class BedrockClient {
     }
 
     implements ai.Client {
-        function id(self) -> string {
-            `bedrock/${self.model}`
+        function requested_model(self) -> string {
+            self.model
+        }
+
+        function provider(self) -> string {
+            "aws-bedrock"
         }
 
         /// What a `${cache()}` sends as a `cachePoint` block: a checkpoint
@@ -166,7 +170,7 @@ class BedrockClient {
         /// Null for every other model, where Converse rejects a checkpoint;
         /// a `${cache()}` sends nothing there.
         function default_cache_args(self) -> baml.json.json {
-            if (aws.internal._supports_cache_point(self.model)) {
+            if (root.internal._supports_cache_point(self.model)) {
                 { "type": "default" }
             } else {
                 null
@@ -176,7 +180,7 @@ class BedrockClient {
         /// This is deliberately the unsigned Converse request. Signing is an
         /// invocation concern and would read credentials during a snapshot.
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            aws.internal.build_request(self, input, preview = true) catch_all (e) {
+            root.internal.build_request(self, input, preview = true) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

@@ -87,7 +87,7 @@ pub(crate) trait Resolver {
     /// that knows the blob a string was stored in answers from that blob, so
     /// the object can be written after its capture gave the string up.
     fn content_len(&mut self, s: &Graph, id: StringId) -> usize {
-        s.strings[id.0 as usize].len()
+        s.strings[id.0 as usize].byte_len()
     }
 }
 
@@ -490,7 +490,7 @@ impl<H: HashSink> Visitor for H {
     }
     #[inline]
     fn key(&mut self, text: &BexStr) -> Result<(), Self::Error> {
-        self.size(text.len());
+        self.size(text.byte_len());
         self.absorb(text.as_bytes());
         Ok(())
     }
@@ -583,13 +583,13 @@ impl Visitor for Length {
     #[inline(always)]
     fn string(&mut self, text: &BexStr) -> Result<(), Self::Error> {
         self.add(4);
-        self.add(text.len());
+        self.add(text.byte_len());
         Ok(())
     }
     #[inline(always)]
     fn key(&mut self, text: &BexStr) -> Result<(), Self::Error> {
         self.add(4);
-        self.add(text.len());
+        self.add(text.byte_len());
         Ok(())
     }
     #[inline(always)]

@@ -46,7 +46,7 @@ function through_the_sibling_interface() -> string {
         ` },
         packages = { "b": squares(c), "c": c },
     );
-    let go = consumer.get_function<() -> string>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<() -> string>("root.go");
     go()
 }
 
@@ -60,7 +60,7 @@ function without_the_third_package() -> int {
         ` },
         packages = { "b": squares(shapes()) },
     );
-    let go = consumer.get_function<() -> int>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<() -> int>("root.go");
     go()
 }
 
@@ -83,7 +83,7 @@ function through_a_standard_library_interface() -> string {
         ` },
         packages = { "app": app },
     );
-    let go = consumer.get_function<() -> string>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<() -> string>("root.go");
     go()
 }
 

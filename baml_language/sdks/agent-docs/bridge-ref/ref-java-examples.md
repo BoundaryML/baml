@@ -286,7 +286,7 @@ public static byte[] round_trip_uint8_array(byte[] b) {
 > `BamlType.union(BamlType.INT, BamlType.STRING)`), pooled per holder as a
 > `private static final BamlType $RET{n}` constant — so the decoder resolves union
 > arm order and element types without trusting the wire shape. A wholly
-> wire-driven return (bigint / uint8array / null / void / media / callable /
+> wire-driven return (bigint / uint8array / null / media / callable /
 > handle / the `unknown`-family) passes the literal `null`. The old
 > stringly-typed grammar (`"int"`, `"union[int;string]"`) and its hand-rolled
 > parser were **deleted** (`763a226ef`). Python's `.pyi` is the typed surface;

@@ -670,7 +670,7 @@ mod definitions {
                     let next = match chain.last() {
                         Some(next) => lists(
                             100,
-                            TyTemplate::Class(Head::Defined(&link, next), Box::new([])),
+                            TyTemplate::Class(Head::Defined(link.clone(), next), Box::new([])),
                         ),
                         None => TyTemplate::Int,
                     };

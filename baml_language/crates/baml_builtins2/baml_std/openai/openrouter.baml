@@ -24,7 +24,7 @@ class OpenRouterClient {
     top_p: float?,
     stop: string[]?,
     seed: int?,
-    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // Record request/response bodies (and raw SSE events) on the ModelCall wire
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
@@ -85,7 +85,7 @@ class OpenRouterClient {
     /// about this endpoint.
     function compat(self) -> root.internal.ChatCompat {
         root.internal.ChatCompat.new(
-            provider = "openrouter",
+            provider = self.provider(),
             base_url = self.resolved_base_url(),
             api_key_env = "OPENROUTER_API_KEY",
             api_key_required = true,
@@ -118,12 +118,16 @@ class OpenRouterClient {
     }
 
     implements ai.Client {
-        function id(self) -> string {
-            `openrouter/${self.model}`
+        function requested_model(self) -> string {
+            self.model
+        }
+
+        function provider(self) -> string {
+            "openrouter"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            openai.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
+            root.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

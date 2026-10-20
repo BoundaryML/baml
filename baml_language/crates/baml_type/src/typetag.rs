@@ -82,6 +82,12 @@ pub const CLASS_BASE: i64 = 100;
 /// Unknown/invalid type tag.
 pub const UNKNOWN: i64 = -1;
 
+/// Pseudo-tag of every panic (`baml.panics.*` instance). No value's own tag
+/// is ever `PANIC`: a coarse `IsTypeTag` test against it asks whether the
+/// value is a panic, the one runtime test a catch makes before handing a
+/// caught value to a wildcard arm that does not trap panics.
+pub const PANIC: i64 = -2;
+
 /// Width of the link-assigned space above [`CLASS_BASE`]: room for `2^47`
 /// declarations in one image, comfortably inside `i64` and disjoint both from
 /// the primitive tags below and the dynamic range above.

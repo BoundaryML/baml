@@ -247,6 +247,24 @@ impl ClockEpoch {
         self.metadata.domain
     }
 
+    /// Express a measured duration from another run in this epoch's ticks.
+    /// Owned spans can outlive their creating run, while later work keeps its
+    /// own execution clock. Origins do not matter for durations, but scales do.
+    /// This uses the retained mappings; epoch validity is still reported by
+    /// the recording's clock evidence, as it is for raw timestamps.
+    pub fn rescale_duration_from(&self, elapsed: ClockDuration, source: &Self) -> ClockDuration {
+        if self.domain() == source.domain() {
+            return elapsed;
+        }
+        rescale_duration(
+            elapsed,
+            source.metadata.multiplier,
+            source.metadata.shift,
+            self.metadata.multiplier,
+            self.metadata.shift,
+        )
+    }
+
     /// Attach this run's context to a raw record from this epoch. Do not attach
     /// another run's raw values: frames deliberately omit per-timestamp IDs.
     pub fn timestamp(&self, ticks: ClockInstant) -> Timestamp {
@@ -515,6 +533,20 @@ fn scale(ticks: ClockDuration, multiplier: u64, shift: u32) -> u64 {
 fn to_ticks(duration: Duration, multiplier: u64, shift: u32) -> ClockDuration {
     let numerator = duration.as_nanos().saturating_mul(1_u128 << shift);
     ClockDuration::from_ticks(narrow(numerator.div_ceil(u128::from(multiplier))))
+}
+
+fn rescale_duration(
+    elapsed: ClockDuration,
+    source_multiplier: u64,
+    source_shift: u32,
+    target_multiplier: u64,
+    target_shift: u32,
+) -> ClockDuration {
+    to_ticks(
+        Duration::from_nanos(scale(elapsed, source_multiplier, source_shift)),
+        target_multiplier,
+        target_shift,
+    )
 }
 
 #[cfg(test)]

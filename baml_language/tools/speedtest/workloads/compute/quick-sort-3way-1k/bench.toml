@@ -1,0 +1,6 @@
+name = "quick sort 3-way 1k"
+description = "three-way quicksort of 1,024 integers in four orders, serialized to JSON"
+origin = "native-bench 10_quick_sort"
+expect = "184236339"
+jobs = 50
+warmup = 3

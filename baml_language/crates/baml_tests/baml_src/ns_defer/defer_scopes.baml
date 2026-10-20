@@ -170,7 +170,7 @@ function closure_does_not_replay_parent_defers() -> string[] {
     let log: string[] = []
     {
         defer { log.push("outer") }
-        let g = () -> void { log.push("g") }
+        let g = () -> void { log.push("g"); }
         g()
         g()
     }
@@ -353,19 +353,19 @@ test "a_returned_field_read_happens_before_the_defer_writes_it" {
 function scoped_type_normal_exit(t: reflect.Type) -> string[] {
     let log: string[] = []
     {
-        type T = unreflect(t)
+        let type T = t;
         defer { log.push(reflect.Type.of<T>().to_string()) }
     }
     log
 }
 test "a_defer_names_a_scoped_type_on_normal_exit" {
-    assert.equal(scoped_type_normal_exit(reflect.Type.of<int>()), ["int"])
+    assert.equal(scoped_type_normal_exit(int.type()), ["int"])
 }
 
 function scoped_type_per_iteration() -> string[] {
     let log: string[] = []
-    for (let t in [reflect.Type.of<int>(), reflect.Type.of<string>()]) {
-        type T = unreflect(t)
+    for (let t in [int.type(), string.type()]) {
+        let type T = t;
         defer { log.push(reflect.Type.of<T>().to_string()) }
     }
     log
@@ -375,13 +375,13 @@ test "a_defer_sees_each_iterations_type_binding" {
 }
 
 function scoped_type_unwind_body(log: string[], t: reflect.Type) -> void {
-    type T = unreflect(t)
+    let type T = t;
     defer { log.push(reflect.Type.of<T>().to_string()) }
     throw "x"
 }
 function scoped_type_unwind() -> string[] {
     let log: string[] = []
-    scoped_type_unwind_body(log, reflect.Type.of<int>()) catch (e) { _ => { log.push("c") } }
+    scoped_type_unwind_body(log, int.type()) catch (e) { _ => { log.push("c") } }
     log
 }
 test "a_defer_names_a_scoped_type_on_unwind" {
@@ -390,7 +390,7 @@ test "a_defer_names_a_scoped_type_on_unwind" {
 
 function scoped_type_nested_return_body(log: Log, t: reflect.Type, early: bool) -> int {
     {
-        type T = unreflect(t)
+        let type T = t;
         defer { log.entries.push(reflect.Type.of<T>().to_string()) }
         if (early) { return 1 }
     }
@@ -398,7 +398,7 @@ function scoped_type_nested_return_body(log: Log, t: reflect.Type, early: bool) 
 }
 function scoped_type_nested_return() -> string[] {
     let log = Log { entries: [] }
-    let r = scoped_type_nested_return_body(log, reflect.Type.of<int>(), true)
+    let r = scoped_type_nested_return_body(log, int.type(), true)
     log.entries.push(`${r}`)
     log.entries
 }
@@ -409,7 +409,7 @@ test "a_defer_names_a_scoped_type_on_a_nested_return" {
 // The defer body binds a type of its own, on the return and normal exits.
 function scoped_type_bound_in_defer_body(log: Log, t: reflect.Type, early: bool) -> int {
     defer {
-        type U = unreflect(t)
+        let type U = t;
         log.entries.push(reflect.Type.of<U>().to_string())
     }
     if (early) { return 1 }
@@ -417,19 +417,19 @@ function scoped_type_bound_in_defer_body(log: Log, t: reflect.Type, early: bool)
 }
 function scoped_type_bound_in_defer() -> string[] {
     let log = Log { entries: [] }
-    let _ = scoped_type_bound_in_defer_body(log, reflect.Type.of<int>(), true)
-    let _ = scoped_type_bound_in_defer_body(log, reflect.Type.of<string>(), false)
+    let _ = scoped_type_bound_in_defer_body(log, int.type(), true)
+    let _ = scoped_type_bound_in_defer_body(log, string.type(), false)
     log.entries
 }
 test "a_defer_body_binds_its_own_scoped_type" {
     assert.equal(scoped_type_bound_in_defer(), ["int", "string"])
 }
 
-// A defer armed before a `type T = unreflect(e)` whose `e` throws runs.
+// A defer armed before a `let type T = e` whose `e` throws runs.
 function scoped_type_source_boom() -> reflect.Type throws string { throw "x" }
 function scoped_type_source_throws_body(log: string[]) -> void {
     defer { log.push("d") }
-    type T = unreflect(scoped_type_source_boom())
+    let type T = scoped_type_source_boom();
 }
 function scoped_type_source_throws() -> string[] {
     let log: string[] = []
@@ -446,7 +446,7 @@ test "a_defer_runs_when_a_type_bindings_source_throws" {
 function scoped_type_shadow_return_body<T>(log: Log, t: reflect.Type, early: bool) -> int {
     defer { log.entries.push(reflect.Type.of<T>().to_string()) }
     {
-        type T = unreflect(t)
+        let type T = t;
         log.entries.push(reflect.Type.of<T>().to_string())
         if (early) { return 1 }
     }
@@ -454,7 +454,7 @@ function scoped_type_shadow_return_body<T>(log: Log, t: reflect.Type, early: boo
 }
 function scoped_type_shadow_return() -> string[] {
     let log = Log { entries: [] }
-    let _ = scoped_type_shadow_return_body<string>(log, reflect.Type.of<int>(), true)
+    let _ = scoped_type_shadow_return_body<string>(log, int.type(), true)
     log.entries
 }
 test "an_outer_defer_replayed_under_a_shadowing_type_binding_keeps_its_own_T" {
@@ -465,14 +465,14 @@ function scoped_type_shadow_continue_body<T>(log: Log, t: reflect.Type) -> void 
     for (let i in [1, 2]) {
         defer { log.entries.push(reflect.Type.of<T>().to_string()) }
         {
-            type T = unreflect(t)
+            let type T = t;
             if (i == 1) { continue }
         }
     }
 }
 function scoped_type_shadow_continue() -> string[] {
     let log = Log { entries: [] }
-    scoped_type_shadow_continue_body<string>(log, reflect.Type.of<int>())
+    scoped_type_shadow_continue_body<string>(log, int.type())
     log.entries
 }
 test "an_outer_defer_replayed_at_continue_under_a_shadow_keeps_its_own_T" {
@@ -482,13 +482,13 @@ test "an_outer_defer_replayed_at_continue_under_a_shadow_keeps_its_own_T" {
 function scoped_type_shadow_unwind_body<T>(log: Log, t: reflect.Type) -> void {
     defer { log.entries.push(reflect.Type.of<T>().to_string()) }
     {
-        type T = unreflect(t)
+        let type T = t;
         throw "x"
     }
 }
 function scoped_type_shadow_unwind() -> string[] {
     let log = Log { entries: [] }
-    scoped_type_shadow_unwind_body<string>(log, reflect.Type.of<int>()) catch (e) { _ => { log.entries.push("c") } }
+    scoped_type_shadow_unwind_body<string>(log, int.type()) catch (e) { _ => { log.entries.push("c") } }
     log.entries
 }
 test "an_outer_defers_pad_under_a_shadow_keeps_its_own_T" {
@@ -843,7 +843,7 @@ function nested_int_body(log: string[]) -> void {
         }
     } catch (_) {
         string => { log.push("outer:string") }
-    }
+    };
 }
 test "an int lands in the inner catch after the defer" {
     let log: string[] = []
@@ -861,7 +861,7 @@ function nested_string_body(log: string[]) -> void {
         }
     } catch (_) {
         string => { log.push("outer:string") }
-    }
+    };
 }
 test "a string passes the inner arms and lands in the outer catch after the defer" {
     let log: string[] = []
@@ -885,7 +885,7 @@ function nested_throwing_defer_body(log: string[]) -> void {
                 _ => { log.push("nocause") },
             }
         }
-    }
+    };
 }
 test "a defer that throws while unwinding replaces the error and chains it" {
     let log: string[] = []
@@ -904,7 +904,7 @@ function nested_normal_exit_body(log: string[]) -> void {
         log.push("after inner")
     } catch (_) {
         string => { log.push("outer:string") }
-    }
+    };
 }
 test "with no throw the defer runs once and nothing is caught" {
     let log: string[] = []

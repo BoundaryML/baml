@@ -39,6 +39,42 @@ fn conversion_is_typed_clamped_and_rejects_cross_epoch_intervals() {
 }
 
 #[test]
+fn retained_operation_rescales_waits_from_a_later_clock_domain() {
+    let owner = fixture(125, 2); // 31.25 ns / tick
+    let later = fixture(1, 0); // 1 ns / tick
+    assert_ne!(owner.domain(), later.domain());
+    assert_eq!(
+        owner
+            .rescale_duration_from(ClockDuration::from_ticks(1_000), &later)
+            .get(),
+        32
+    );
+    assert_eq!(
+        later
+            .rescale_duration_from(ClockDuration::from_ticks(32), &owner)
+            .get(),
+        1_000
+    );
+    // Preserve exact ticks when the work stays in the original domain.
+    assert_eq!(
+        owner
+            .rescale_duration_from(ClockDuration::from_ticks(1), &owner)
+            .get(),
+        1
+    );
+    assert_eq!(
+        owner.rescale_duration_from(ClockDuration::ZERO, &later),
+        ClockDuration::ZERO
+    );
+    let fine = fixture(1, 63);
+    assert_eq!(
+        fine.rescale_duration_from(ClockDuration::from_ticks(u64::MAX), &later)
+            .get(),
+        u64::MAX
+    );
+}
+
+#[test]
 fn detector_accounts_for_sampling_scale_error_and_the_accuracy_target() {
     let epoch = fixture(1, 0);
     let origin = epoch.metadata.reference_tick;

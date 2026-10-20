@@ -55,7 +55,7 @@ class AzureClient {
     top_p: float?,
     stop: string[]?,
     seed: int?,
-    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // Record request/response bodies (and raw SSE events) on the ModelCall wire
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
@@ -172,7 +172,7 @@ class AzureClient {
             let _ = query.set("api-version", version);
         }
         root.internal.ChatCompat.new(
-            provider = "azure",
+            provider = self.provider(),
             base_url = self.resolved_base_url(),
             auth = root.internal.ChatAuth.ApiKeyHeader,
             api_key_env = "AZURE_OPENAI_API_KEY",
@@ -223,15 +223,19 @@ class AzureClient {
         /// from a Standard deployment, so a `${cache()}` on a GPT-5.6 PTU-M
         /// deployment is a 400.
         function default_cache_args(self) -> baml.json.json {
-            openai.internal.default_cache_breakpoint(self.model)
+            root.internal.default_cache_breakpoint(self.model)
         }
 
-        function id(self) -> string {
-            `azure/${self.model}`
+        function requested_model(self) -> string {
+            self.model
+        }
+
+        function provider(self) -> string {
+            "azure"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            openai.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
+            root.internal.chat_preview(self.compat(), self.params(preview = true), input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

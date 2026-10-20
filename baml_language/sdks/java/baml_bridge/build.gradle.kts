@@ -55,6 +55,11 @@ val bamlVersion = (project.findProperty("bamlVersion") as String?)?.takeIf { it.
 group = "com.boundaryml"
 version = bamlVersion
 
+// Keep the repository license in every published JAR, including classifiers.
+tasks.withType<Jar>().configureEach {
+    from(file("../../../../LICENSE")) { into("META-INF") }
+}
+
 // ---- Per-platform native jar --------------------------------------------
 // The cdylib is shipped in a classifier jar (`natives-<platform>`) at the
 // resource path NativeLibraryLoader reads: /native/<platform>/<mapped-lib-name>.

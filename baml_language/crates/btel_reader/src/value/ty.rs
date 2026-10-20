@@ -253,7 +253,6 @@ fn level(ty: &TyTemplate<Head>, cx: &mut impl Definitions) -> Json {
         TyTemplate::Type => leaf("type"),
         TyTemplate::Resource => leaf("resource"),
         TyTemplate::PromptAst => leaf("promptAst"),
-        TyTemplate::Void => leaf("void"),
         TyTemplate::Unknown => leaf("unknown"),
         TyTemplate::Never => leaf("never"),
         TyTemplate::TypeArgRef(index) => node("typeParam", [("index", Json::from(*index))]),

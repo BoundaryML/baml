@@ -576,7 +576,6 @@ fn depth<N: Clone>(ty: &TyTemplate<N>) -> usize {
         | TyTemplate::Type
         | TyTemplate::Resource
         | TyTemplate::PromptAst
-        | TyTemplate::Void
         | TyTemplate::TypeAlias(_)
         | TyTemplate::Unknown
         | TyTemplate::Never

@@ -215,7 +215,7 @@ function symbol_signature(signature: ExportSignature?) -> SymbolSignature? {
             }
         }
         let errors = normalize_ty_display(sig.throws_spec?.display ?? "never");
-        let returns = normalize_ty_display(sig.returns?.display ?? "void");
+        let returns = normalize_ty_display(sig.returns?.display ?? "null");
         // Rebuilt from the normalized parts rather than reusing the export's
         // rendering, so the display and the structured fields cannot disagree.
         out

@@ -2,7 +2,7 @@ function main() -> bool {
     let s = reflect.Session.new();
     s.eval(`let json = "local"`);
     let local = s.eval<string>(`json`);
-    let encoded = s.eval<string>(`json.stringify(7)`);
+    let encoded = s.eval<string>(`baml.json.stringify(7)`);
     local == "local" && encoded == "7"
 }
 

@@ -63,14 +63,14 @@ function _typed_arguments(
     args: map<string, unknown>,
 ) -> map<string, unknown> throws baml.errors.InvalidArgument {
     let sig = reflect.signature(handler);
-    let fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>> = {};
+    let fields: map<string, reflect.TypeView | reflect.WithMeta<reflect.Type>> = {};
     let sent: map<string, baml.json.json> = {};
     for (let param in sig.args.concat(sig.opts.values())) {
         if (!args.has(param.name)) {
             continue;
         }
         if let value: baml.json.json = args.get(param.name) {
-            type Declared = unreflect(param.type);
+            let type Declared = param.type;
             if (!(value is Declared)) {
                 let _ = fields.set(param.name, param.type);
                 let _ = sent.set(param.name, value);
@@ -80,12 +80,12 @@ function _typed_arguments(
     if (fields.length() == 0) {
         return args;
     }
-    let parameters = reflect.class.new("Arguments", fields) catch (e) {
+    let parameters = reflect.Class.new("Arguments", fields) catch (e) {
         reflect.errors.CompilationError => {
             throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${e.message}` }
         },
     };
-    type Arguments = unreflect(parameters.as_type());
+    let type Arguments = parameters;
     let aligned = baml.sap.coerce<Arguments>(sent) catch (e) {
         baml.errors.ParseError => {
             // The text goes back to the model, and it quotes the value that
@@ -98,7 +98,7 @@ function _typed_arguments(
         let _ = typed.set(name, args.get(name));
     }
     for (let name in fields.keys()) {
-        let value = reflect.class.get_field<unknown>(aligned, name) catch (e) {
+        let value = reflect.Class.get_field<unknown>(aligned, name) catch (e) {
             reflect.errors.CompilationError => {
                 baml.sys.panic(`the aligned arguments of ${tool} have no field ${name}`)
             },

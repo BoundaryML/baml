@@ -64,16 +64,35 @@ use bex_vm_types::{
     head_walk::visit_object_heads_mut,
     relink::{IndexOperand, visit_object_operands},
     types::{
-        EdgeKind, ExportSurface, LocalName, MethodImpl, Objects, Owner, Package, RuntimeImplRule,
-        Slots, Value,
+        ExportSurface, LocalName, MethodImpl, Objects, Owner, Package, PackageKind,
+        RuntimeImplRule, Slots, Value,
     },
 };
 use indexmap::IndexMap;
 
 use crate::{
     BexVm,
-    errors::{VmBamlError, VmRustFnError},
+    errors::{VmInternalError, VmRustFnError},
 };
+
+/// Why a compiled unit failed to load into its package.
+pub(super) enum LinkError {
+    /// The unit does not fit the package or the dependencies it binds.
+    Link(String),
+    Internal(VmInternalError),
+}
+
+impl LinkError {
+    /// The error the loading native returns: a link failure throws
+    /// `reflect.errors.InvalidArgument`, since `reflect` does not depend on
+    /// `baml`.
+    pub(super) fn into_native_error(self, vm: &mut BexVm) -> VmRustFnError {
+        match self {
+            Self::Link(message) => super::type_kinds::invalid_argument(vm, message),
+            Self::Internal(error) => VmRustFnError::InternalError(error),
+        }
+    }
+}
 
 /// Whose image a load extends.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -124,7 +143,7 @@ pub(super) fn load_package(
     target: LoadTarget,
     emitted: &EmittedPackage,
     commits: &[Commit<'_>],
-) -> Result<Loaded, VmRustFnError> {
+) -> Result<Loaded, LinkError> {
     let unit = &emitted.unit;
     if let Some(misplaced) = unit
         .misplaced_object()
@@ -237,7 +256,7 @@ fn load_tail(
     tail: &InitTail,
     commits: &[Commit<'_>],
     image: &mut Image,
-) -> Result<LoadedTail, VmRustFnError> {
+) -> Result<LoadedTail, LinkError> {
     let slots = bind_slots(vm, package_ptr, &tail.dependencies)?;
     let (locals, imports) = place_objects(
         vm,
@@ -263,7 +282,7 @@ fn load_tail(
     };
     relocate_all(vm, image, &space)?;
 
-    let tail_object = |index: u32| -> Result<HeapPtr, VmRustFnError> {
+    let tail_object = |index: u32| -> Result<HeapPtr, LinkError> {
         space
             .locals
             .get(index as usize)
@@ -340,10 +359,8 @@ fn publish(
     vm.tlab.heap().conservative_write_barrier(package_ptr);
 }
 
-fn link_error(message: impl std::fmt::Display) -> VmRustFnError {
-    VmRustFnError::from(VmBamlError::InvalidArgument {
-        message: format!("runtime link: {message}"),
-    })
+fn link_error(message: impl std::fmt::Display) -> LinkError {
+    LinkError::Link(format!("runtime link: {message}"))
 }
 
 fn live(ptr: HeapPtr) -> Option<HeapPtr> {
@@ -412,7 +429,7 @@ impl Image {
         unit: &CompilationUnit,
         space: &Space,
         slots: &IndexMap<DeclPath, u32>,
-    ) -> Result<(), VmRustFnError> {
+    ) -> Result<(), LinkError> {
         let mut exported: HashSet<&DeclPath> = HashSet::with_capacity(unit.exports.objects.len());
         for (path, local_ref) in &unit.exports.objects {
             if !exported.insert(path) {
@@ -435,7 +452,7 @@ impl Image {
                 let is_body = matches!(path, DeclPath::InterfaceBody(_));
                 if !matches!(
                     vm.get_object(ptr),
-                    Object::Function(function) if function.is_interface_body == is_body
+                    Object::Function(function) if function.is_interface_body() == is_body
                 ) {
                     return Err(link_error(format!(
                         "the unit exports `{path}` as a {:?} object",
@@ -504,7 +521,7 @@ impl Image {
     }
 
     /// The head of the declaration at `index`.
-    fn head(&self, index: usize) -> Result<TypeHead, VmRustFnError> {
+    fn head(&self, index: usize) -> Result<TypeHead, LinkError> {
         match self.tag(index) {
             Some(tag) => Ok(TypeHead::new(self.objects[index], tag)),
             None => Err(link_error(format!(
@@ -523,17 +540,25 @@ fn place_objects<'a>(
     slots: &[Bound],
     owned: impl IntoIterator<Item = &'a Object>,
     imports: &[ImportEntry],
-) -> Result<(Vec<usize>, Vec<usize>), VmRustFnError> {
+) -> Result<(Vec<usize>, Vec<usize>), LinkError> {
     // A declaration is minted with its identity here — the only place a
     // runtime tag comes from.
     let mut locals = Vec::new();
     for object in owned {
         let mut object = object.clone();
         adopt(&mut object, package_ptr);
+        // A class with a finalizer joins the heap: the collector's
+        // finalizer scan must run from now on, whatever the host's classes
+        // declare.
+        if let Object::Class(class) = &object
+            && class.cleanup.is_some()
+        {
+            vm.heap.note_finalizable_class();
+        }
         // A runtime function takes its telemetry identity at allocation.
         let ptr = vm
             .alloc_runtime_object(object)
-            .map_err(VmRustFnError::InternalError)?;
+            .map_err(LinkError::Internal)?;
         locals.push(image.add(vm, ptr));
     }
     let mut placed = Vec::with_capacity(imports.len());
@@ -551,7 +576,7 @@ fn place_globals(
     package_ptr: HeapPtr,
     slots: &[Bound],
     imports: &[ImportEntry],
-) -> Result<Vec<usize>, VmRustFnError> {
+) -> Result<Vec<usize>, LinkError> {
     let mut placed = Vec::with_capacity(imports.len());
     for entry in imports {
         placed.push(
@@ -573,7 +598,7 @@ fn slot_unit_functions(
     unit: &CompilationUnit,
     locals: &[usize],
     base_slot: usize,
-) -> Result<(), VmRustFnError> {
+) -> Result<(), LinkError> {
     let mut owned = vec![false; unit.exports.globals.len()];
     for (path, slot) in &unit.exports.globals {
         let Some(seen) = owned.get_mut(*slot as usize) else {
@@ -643,7 +668,7 @@ fn slot_unit_functions(
 
 /// Relocate every local of `space`, keeping the float constants it boxes in
 /// the image.
-fn relocate_all(vm: &mut BexVm, image: &mut Image, space: &Space) -> Result<(), VmRustFnError> {
+fn relocate_all(vm: &mut BexVm, image: &mut Image, space: &Space) -> Result<(), LinkError> {
     for &index in &space.locals {
         let floats = relocate(vm, image.objects[index], space, image)?;
         for float in floats {
@@ -674,7 +699,7 @@ fn bind_slots(
     vm: &BexVm,
     package_ptr: HeapPtr,
     entries: &[Locator],
-) -> Result<Vec<Bound>, VmRustFnError> {
+) -> Result<Vec<Bound>, LinkError> {
     let mut bound: Vec<Bound> = Vec::with_capacity(entries.len());
     for (index, locator) in entries.iter().enumerate() {
         let via = locator.via();
@@ -701,18 +726,35 @@ fn bind_slots(
         let Object::Package(package) = vm.get_object(parent) else {
             unreachable!("a bound dependency slot is a package")
         };
-        let edge = package.edges.get(locator.edge()).ok_or_else(|| {
+        // A prelude entry binds the executable's language package of that
+        // identity, through no edge; the other two locate an edge in the
+        // parent's table.
+        let edge_name = match locator {
+            Locator::Prelude(language) => {
+                let target = vm.packages.lang_package(*language).ok_or_else(|| {
+                    link_error(format!(
+                        "the language package `{}` is not loaded",
+                        language.manifest_name()
+                    ))
+                })?;
+                bound.push(Bound::Package(target));
+                continue;
+            }
+            Locator::Direct { edge, .. } | Locator::Transitive { edge, .. } => edge,
+        };
+        let edge = package.edges.get(edge_name).ok_or_else(|| {
             link_error(format!(
-                "dependency `{}` names no package the compile was given",
-                locator.edge()
+                "dependency `{edge_name}` names no package the compile was given"
             ))
         })?;
-        verify_fingerprint(vm, locator, edge.kind, edge.target)?;
-        bound.push(match edge.kind {
-            EdgeKind::Anonymous => Bound::Declaration(edge.target),
-            EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Prelude => {
-                Bound::Package(edge.target)
-            }
+        verify_fingerprint(vm, locator, edge.target)?;
+        bound.push(match vm.get_object(edge.target) {
+            Object::Package(_) => Bound::Package(edge.target),
+            Object::Class(_) | Object::Enum(_) => Bound::Declaration(edge.target),
+            other => unreachable!(
+                "a dependency edge targets a package or an anonymous declaration, found {:?}",
+                ObjectType::of(other)
+            ),
         });
     }
     Ok(bound)
@@ -724,37 +766,26 @@ fn bind_slots(
 /// package served from a compiled blob must still carry those bytes. A
 /// projected surface (a `with_types` view, an anonymous declaration) has no
 /// payload — the compile read the seam's projection of it — so the pin is its
-/// whole identity. A prelude entry binds a prelude edge and a transitive
-/// entry either kind; neither carries a digest, as in the static lane.
-fn verify_fingerprint(
-    vm: &BexVm,
-    locator: &Locator,
-    kind: EdgeKind,
-    target: HeapPtr,
-) -> Result<(), VmRustFnError> {
-    let (edge, expected) = match (locator, kind) {
-        (Locator::Prelude { .. }, EdgeKind::Prelude) | (Locator::Transitive { .. }, _) => {
-            return Ok(());
-        }
-        (
-            Locator::Prelude { edge },
-            EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Anonymous,
-        ) => {
-            return Err(link_error(format!(
-                "dependency `{edge}` carries no interface fingerprint"
-            )));
-        }
-        (Locator::Direct { edge, .. }, EdgeKind::Prelude) => {
+/// whole identity. A transitive entry binds anything and carries no digest,
+/// as in the static lane; a prelude entry is bound by identity before this
+/// is asked.
+fn verify_fingerprint(vm: &BexVm, locator: &Locator, target: HeapPtr) -> Result<(), LinkError> {
+    let target = vm.get_object(target);
+    let is_language = matches!(
+        target,
+        Object::Package(package) if matches!(package.kind, PackageKind::Language(_))
+    );
+    let (edge, expected) = match (locator, is_language) {
+        (Locator::Transitive { .. }, _) => return Ok(()),
+        (Locator::Prelude(_), _) => unreachable!("a prelude entry is bound by identity"),
+        (Locator::Direct { edge, .. }, true) => {
             return Err(link_error(format!(
                 "dependency `{edge}` is a prelude package but carries an interface fingerprint"
             )));
         }
-        (
-            Locator::Direct { edge, digest },
-            EdgeKind::Declared | EdgeKind::ReExported | EdgeKind::Anonymous,
-        ) => (edge, *digest),
+        (Locator::Direct { edge, digest }, false) => (edge, *digest),
     };
-    let blob = match vm.get_object(target) {
+    let blob = match target {
         Object::Package(target) => match &target.surface {
             ExportSurface::Compiled(blob) => blob,
             ExportSurface::Projected => return Ok(()),
@@ -780,11 +811,7 @@ fn verify_fingerprint(
     Ok(())
 }
 
-fn slot_binding(
-    package_ptr: HeapPtr,
-    slots: &[Bound],
-    dep: DepSlot,
-) -> Result<Bound, VmRustFnError> {
+fn slot_binding(package_ptr: HeapPtr, slots: &[Bound], dep: DepSlot) -> Result<Bound, LinkError> {
     match dep.dependency_index() {
         None => Ok(Bound::Package(package_ptr)),
         Some(index) => slots.get(index).copied().ok_or_else(|| {
@@ -803,10 +830,10 @@ fn slot_binding(
 fn anonymous_export(vm: &BexVm, declaration: HeapPtr, path: &DeclPath) -> Option<HeapPtr> {
     let exported = match (vm.get_object(declaration), path) {
         (Object::Class(class), DeclPath::Class(item)) => {
-            item.namespace.is_empty() && item.name == *class.name.item_name()
+            item.namespace.is_empty() && item.name == *class.path.name
         }
         (Object::Enum(enm), DeclPath::Enum(item)) => {
-            item.namespace.is_empty() && item.name == *enm.name.item_name()
+            item.namespace.is_empty() && item.name == *enm.path.name
         }
         _ => false,
     };
@@ -881,7 +908,7 @@ fn bound_tables<'a>(
     package_ptr: HeapPtr,
     slots: &[Bound],
     dep: DepSlot,
-) -> Result<BoundTables<'a>, VmRustFnError> {
+) -> Result<BoundTables<'a>, LinkError> {
     Ok(match slot_binding(package_ptr, slots, dep)? {
         Bound::Package(owner) if owner == package_ptr => BoundTables::Tables(Tables::Own(image)),
         Bound::Package(owner) => {
@@ -901,7 +928,7 @@ fn resolve_object(
     package_ptr: HeapPtr,
     slots: &[Bound],
     key: &DeclKey,
-) -> Result<HeapPtr, VmRustFnError> {
+) -> Result<HeapPtr, LinkError> {
     let tables = match bound_tables(vm, image, package_ptr, slots, key.dep)? {
         BoundTables::Tables(tables) => tables,
         BoundTables::Declaration(declaration) => {
@@ -983,7 +1010,7 @@ fn resolve_body(
     tables: Tables<'_>,
     path: &DeclPath,
     key: &BodyKey,
-) -> Result<Option<BoundBody>, VmRustFnError> {
+) -> Result<Option<BoundBody>, LinkError> {
     if let Tables::Own(image) = tables {
         return Ok(image.globals.get(path).copied().map(BoundBody::Own));
     }
@@ -1023,7 +1050,7 @@ fn resolve_global(
     package_ptr: HeapPtr,
     slots: &[Bound],
     key: &DeclKey,
-) -> Result<GlobalBinding, VmRustFnError> {
+) -> Result<GlobalBinding, LinkError> {
     let tables = match bound_tables(vm, image, package_ptr, slots, key.dep)? {
         BoundTables::Tables(tables) => tables,
         BoundTables::Declaration(_) => {
@@ -1082,7 +1109,7 @@ fn adopt(object: &mut Object, package_ptr: HeapPtr) {
             alias.type_tag = TypeTag::fresh_dynamic();
             alias.owner = package_ptr;
         }
-        Object::Function(function) => function.runtime_package = package_ptr,
+        Object::Function(function) => function.owner = package_ptr,
         Object::GenericFunction(function) => function.runtime_package = package_ptr,
         // Neither a declaration nor a body: nothing to mint or own.
         Object::String(_)
@@ -1118,7 +1145,7 @@ struct Space {
 }
 
 impl Space {
-    fn object(&self, raw: usize) -> Result<usize, VmRustFnError> {
+    fn object(&self, raw: usize) -> Result<usize, LinkError> {
         match import_ordinal(raw) {
             Some(ordinal) => self.imports.get(ordinal).copied(),
             None => self.locals.get(raw).copied(),
@@ -1126,7 +1153,7 @@ impl Space {
         .ok_or_else(|| link_error(format!("object operand {raw} is outside the unit")))
     }
 
-    fn global(&self, raw: usize) -> Result<usize, VmRustFnError> {
+    fn global(&self, raw: usize) -> Result<usize, LinkError> {
         match import_ordinal(raw) {
             Some(ordinal) => self.import_slots.get(ordinal).copied(),
             None => self.local_slots.get(raw).copied(),
@@ -1144,7 +1171,7 @@ fn relocate(
     ptr: HeapPtr,
     space: &Space,
     image: &Image,
-) -> Result<Vec<HeapPtr>, VmRustFnError> {
+) -> Result<Vec<HeapPtr>, LinkError> {
     let mut failure = None;
     let mut metered = vm.get_object_mut(ptr);
     let object = &mut *metered;
@@ -1185,7 +1212,7 @@ fn relocate(
                 let SwitchDispatch::Keys(keys) = &switch.dispatch else {
                     return Err(link_error(format!(
                         "function `{}` states a switch by values instead of keys",
-                        function.name
+                        function.name()
                     )));
                 };
                 if let Some(index) = keys.iter().find_map(|key| match key {
@@ -1280,7 +1307,7 @@ fn relocate_template(
     template: &mut TyTemplate,
     space: &Space,
     image: &Image,
-) -> Result<(), VmRustFnError> {
+) -> Result<(), LinkError> {
     let mut failure = None;
     template.visit_heads_mut(&mut |head| {
         if failure.is_some() {
@@ -1299,7 +1326,7 @@ fn relocate_template(
 
 /// The declaration operand of a unit-convention head; a head outside the
 /// convention is a link error.
-fn head_operand(head: &TypeHead) -> Result<ObjectIndex, VmRustFnError> {
+fn head_operand(head: &TypeHead) -> Result<ObjectIndex, LinkError> {
     head.try_operand()
         .ok_or_else(|| link_error("the unit carries a type head outside the unit convention"))
 }
@@ -1313,7 +1340,7 @@ fn load_rule(
     space: &Space,
     image: &Image,
     type_count: usize,
-) -> Result<(HeapPtr, HeapPtr), VmRustFnError> {
+) -> Result<(HeapPtr, HeapPtr), LinkError> {
     let interface_ptr = image.objects[space.object(rule.interface_head.raw())?];
     if !matches!(vm.get_object(interface_ptr), Object::Interface(_)) {
         return Err(link_error(
@@ -1332,7 +1359,8 @@ fn load_rule(
                 ))
             })?;
         let fqn = image.objects[*local];
-        if !matches!(vm.get_object(fqn), Object::Function(function) if function.is_interface_body) {
+        if !matches!(vm.get_object(fqn), Object::Function(function) if function.is_interface_body())
+        {
             return Err(link_error(format!(
                 "impl method `{name}` resolves to an object that is not an interface body"
             )));

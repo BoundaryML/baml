@@ -49,7 +49,7 @@ function main() -> string {
     prompt: Shape@spec().prompt_template,
     journal: ai.Journal { log: [] },
     toolbox: ai.tools.Toolbox.new([]),
-    output_type: reflect.Type.of<string>(),
+    output_type: string.type(),
   }
   let c: ai.Client = Vertex
   let request = c.render(input)

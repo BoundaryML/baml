@@ -5,7 +5,7 @@
 //     `sse_responses` are null while status/headers/timing are still real;
 //     with it on, both bodies appear and credential-bearing query params in
 //     the request URL are redacted (`key=abc` -> `key=REDACTED`);
-//   * test 9 — the streaming settle record carries `ttft_ms` and the open
+//   * test 9 — the streaming settle record carries `ttft` and the open
 //     status/headers, and `sse_responses` only under capture_wire.
 //
 // Per the ns_llm_mock README every case body is a top-level `function` and
@@ -19,10 +19,10 @@ function WireEcho(question: string) -> string {
     `
 }
 
-// The listener drops the one LLMCall it sees here; a class instance so the
+// The listener drops the one ModelCall it sees here; a class instance so the
 // lambda mutates shared state.
 class WireCallBox {
-    call: ai.events.LLMCall?,
+    call: ai.events.ModelCall?,
 }
 
 // ─── test 8: capture_wire gating on the unary path ───────────────────────────
@@ -34,7 +34,7 @@ function _wire_unary_run(capture: bool) -> string {
         (mock: root.llm_mock.MockJsonServer) -> {
             let box = WireCallBox { call: null };
             let cb = (e: ai.events.Event) -> void {
-                if let c: ai.events.LLMCall = e {
+                if let c: ai.events.ModelCall = e {
                     box.call = c;
                 };
             };
@@ -46,7 +46,7 @@ function _wire_unary_run(capture: bool) -> string {
                 capture_wire = capture,
             );
             let value = WireEcho("Say pong.", client = cl, on_event = cb);
-            let call = box.call ?? baml.sys.panic("no LLMCall was delivered");
+            let call = box.call ?? baml.sys.panic("no ModelCall was delivered");
             let resp = call.http_response ?? baml.sys.panic("no http_response on the record");
             let req_state = match (call.http_request) {
                 let req: baml.http.Request => {
@@ -60,7 +60,6 @@ function _wire_unary_run(capture: bool) -> string {
             };
             [
                 value,
-                if (call.selected) { "sel" } else { "leg" },
                 req_state,
                 `status=${resp.status}`,
                 match (resp.body) {
@@ -69,7 +68,7 @@ function _wire_unary_run(capture: bool) -> string {
                 },
                 if (call.sse_responses == null) { "sse=null" } else { "sse=set" },
                 if (resp.headers.get("content-type") == null) { "hdr=missing" } else { "hdr=set" },
-                if (call.timing.duration_ms == null) { "dur=null" } else { "dur=set" },
+                if (call.timing.duration == null) { "dur=null" } else { "dur=set" },
             ].join("|")
         },
     )
@@ -78,14 +77,14 @@ function _wire_unary_run(capture: bool) -> string {
 test "wire_capture_off_unary" {
     assert.equal(
         _wire_unary_run(false),
-        "pong|sel|req=null|status=200|respbody=null|sse=null|hdr=set|dur=set",
+        "pong|req=null|status=200|respbody=null|sse=null|hdr=set|dur=set",
     )
 }
 
 test "wire_capture_on_unary" {
     assert.equal(
         _wire_unary_run(true),
-        "pong|sel|req=redacted,body|status=200|respbody=set|sse=null|hdr=set|dur=set",
+        "pong|req=redacted,body|status=200|respbody=set|sse=null|hdr=set|dur=set",
     )
 }
 
@@ -102,7 +101,7 @@ function _wire_stream_run(capture: bool) -> string {
         (mock: root.llm_mock.MockSseServer) -> {
             let box = WireCallBox { call: null };
             let cb = (e: ai.events.Event) -> void {
-                if let c: ai.events.LLMCall = e {
+                if let c: ai.events.ModelCall = e {
                     box.call = c;
                 };
             };
@@ -118,7 +117,7 @@ function _wire_stream_run(capture: bool) -> string {
                 on_event = cb,
             );
             let value = stream.final();
-            let call = box.call ?? baml.sys.panic("settle delivered no LLMCall");
+            let call = box.call ?? baml.sys.panic("settle delivered no ModelCall");
             let resp = call.http_response ?? baml.sys.panic("no http_response on the stream record");
             let sse_state = match (call.sse_responses) {
                 let records: ai.events.SseEventRecord[] => {
@@ -128,9 +127,8 @@ function _wire_stream_run(capture: bool) -> string {
             };
             [
                 value,
-                if (call.selected) { "sel" } else { "leg" },
-                if (call.timing.ttft_ms == null) { "ttft=null" } else { "ttft=set" },
-                if (call.timing.duration_ms == null) { "dur=null" } else { "dur=set" },
+                if (call.timing.ttft == null) { "ttft=null" } else { "ttft=set" },
+                if (call.timing.duration == null) { "dur=null" } else { "dur=set" },
                 `status=${resp.status}`,
                 `ct=${resp.headers.get("content-type") ?? "missing"}`,
                 sse_state,
@@ -142,13 +140,13 @@ function _wire_stream_run(capture: bool) -> string {
 test "wire_capture_on_stream" {
     assert.equal(
         _wire_stream_run(true),
-        "pong|sel|ttft=set|dur=set|status=200|ct=text/event-stream|sse=set",
+        "pong|ttft=set|dur=set|status=200|ct=text/event-stream|sse=set",
     )
 }
 
 test "wire_capture_off_stream" {
     assert.equal(
         _wire_stream_run(false),
-        "pong|sel|ttft=set|dur=set|status=200|ct=text/event-stream|sse=null",
+        "pong|ttft=set|dur=set|status=200|ct=text/event-stream|sse=null",
     )
 }

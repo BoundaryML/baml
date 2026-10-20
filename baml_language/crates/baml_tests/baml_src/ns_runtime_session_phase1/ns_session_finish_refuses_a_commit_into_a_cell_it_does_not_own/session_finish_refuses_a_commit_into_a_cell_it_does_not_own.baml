@@ -11,7 +11,7 @@ function main() -> string {
     let artifact = a._compile<unknown>(`n = 9`);
     let refused = "accepted";
     let _ = b._finish<unknown>(artifact) catch (e) {
-        baml.errors.InvalidArgument => {
+        reflect.errors.InvalidArgument => {
             refused = "refused"
         },
         _ => {

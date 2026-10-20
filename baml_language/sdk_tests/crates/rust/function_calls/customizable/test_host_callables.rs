@@ -20,9 +20,11 @@
 use baml_sdk::host_callable_tests::{
     Person, ValidationError, call_callback_with_optional_args_all_set,
     call_callback_with_optional_args_all_unset, call_callback_with_optional_args_partially_set,
-    call_int_callback, call_repeatedly, call_with_callback, call_with_class_callback,
-    call_with_throwing, call_with_two_args, call_with_typed_throws,
+    call_int_callback, call_repeatedly, call_throwing_void_callback, call_void_callback,
+    call_void_callback_three_args, call_void_callback_two_args, call_with_callback,
+    call_with_class_callback, call_with_throwing, call_with_two_args, call_with_typed_throws,
     call_with_typed_throws_propagating, make_adder, make_counter, make_pair_builder,
+    make_void_callback, make_void_forwarder,
 };
 
 /// Stand-in for python's builtin `ValueError`: an arbitrary host error value
@@ -106,6 +108,72 @@ fn test_baml_closure_is_reusable_and_retains_mutable_captures() {
     let next_value = make_counter(40).unwrap();
     assert_eq!(next_value.call(()).unwrap(), 41);
     assert_eq!(next_value.call(()).unwrap(), 42);
+}
+
+#[test]
+fn test_host_callable_void_signatures() {
+    // A unit callable has no result to carry in either direction: a host
+    // closure returns `()` whatever its arity, and calling a BAML closure
+    // returned to the host yields `()`.
+    use std::sync::{Arc, Mutex};
+
+    let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+
+    let one = {
+        let seen = Arc::clone(&seen);
+        move |value: i64| seen.lock().unwrap().push(format!("{value}"))
+    };
+    assert_eq!(call_void_callback(one, 1).unwrap(), 1);
+
+    let two = {
+        let seen = Arc::clone(&seen);
+        move |value: i64, label: String| seen.lock().unwrap().push(format!("{value}:{label}"))
+    };
+    assert_eq!(
+        call_void_callback_two_args(two, 2, "two".to_string()).unwrap(),
+        2
+    );
+
+    let three = {
+        let seen = Arc::clone(&seen);
+        move |value: i64, label: String, flag: bool| {
+            seen.lock().unwrap().push(format!("{value}:{label}:{flag}"));
+        }
+    };
+    assert_eq!(
+        call_void_callback_three_args(three, 3, "three".to_string(), true).unwrap(),
+        3
+    );
+
+    call_throwing_void_callback(|_value: i64| -> Result<(), ValueError> { Ok(()) }, 4).unwrap();
+    let raised = ValueError("void failed".to_string());
+    let failing = {
+        let raised = raised.clone();
+        move |_value: i64| -> Result<(), ValueError> { Err(raised.clone()) }
+    };
+    let err = call_throwing_void_callback(failing, 4).unwrap_err();
+    let baml_bridge::Error::Thrown { value, .. } = err else {
+        panic!("expected the callback's error, got {err}");
+    };
+    assert_eq!(value.downcast_ref::<ValueError>(), Some(&raised));
+
+    make_void_callback().unwrap().call(()).unwrap();
+
+    let forwarded = {
+        let seen = Arc::clone(&seen);
+        move |value: i64, label: String| -> Result<(), ValueError> {
+            seen.lock().unwrap().push(format!("{value}:{label}"));
+            Ok(())
+        }
+    };
+    let forward = make_void_forwarder(forwarded).unwrap();
+    forward.call((5, "five".to_string())).unwrap();
+    forward.call((6, "six".to_string())).unwrap();
+
+    assert_eq!(
+        *seen.lock().unwrap(),
+        ["1", "2:two", "3:three:true", "5:five", "6:six"]
+    );
 }
 
 #[test]

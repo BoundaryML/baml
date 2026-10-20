@@ -356,17 +356,17 @@ test "explicit_credential_wins_per_client_family" {
 
 function resolve_shorthand_ids() -> string {
     [
-        ai.clients.resolve("anthropic/claude-haiku-4-5").id(),
-        ai.clients.resolve("openai/gpt-4o-mini").id(),
-        ai.clients.resolve("google/gemini-2.5-flash").id(),
-        ai.clients.resolve("openrouter/z-ai/glm-4.6").id(),
+        ai.clients.resolve("anthropic/claude-haiku-4-5").requested_model(),
+        ai.clients.resolve("openai/gpt-4o-mini").requested_model(),
+        ai.clients.resolve("google/gemini-2.5-flash").requested_model(),
+        ai.clients.resolve("openrouter/z-ai/glm-4.6").requested_model(),
     ].join("|")
 }
 
 test "resolve_shorthand_ids" {
     assert.equal(
         resolve_shorthand_ids(),
-        "anthropic/claude-haiku-4-5|openai/gpt-4o-mini|google/gemini-2.5-flash|openrouter/z-ai/glm-4.6",
+        "claude-haiku-4-5|gpt-4o-mini|gemini-2.5-flash|z-ai/glm-4.6",
     )
 }
 
@@ -375,17 +375,17 @@ test "resolve_shorthand_ids" {
 function resolve_of_a_client_value_is_identity() -> string {
     let inner = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
     let wrapped = ai.clients.Retry.new(inner = inner, max_attempts = 2);
-    `${ai.clients.resolve(inner).id()}|${ai.clients.resolve(wrapped).id()}`
+    `${ai.clients.resolve(inner).requested_model()}|${ai.clients.resolve(wrapped).requested_model()}`
 }
 
 test "resolve_of_a_client_value_is_identity" {
-    assert.equal(resolve_of_a_client_value_is_identity(), "openai/gpt-4o-mini|openai/gpt-4o-mini")
+    assert.equal(resolve_of_a_client_value_is_identity(), "gpt-4o-mini|gpt-4o-mini")
 }
 
 // An unknown prefix is a typed `ai.errors.Failure`, not a panic, and it lists
 // what it would have accepted.
 function resolve_unknown_prefix_is_typed() -> string {
-    ai.clients.resolve("acme-inc/super-model").id() catch (e) {
+    ai.clients.resolve("acme-inc/super-model").requested_model() catch (e) {
         ai.errors.InvalidRequest => `${e.provider}|${e.detail}`,
     }
 }
@@ -393,7 +393,7 @@ function resolve_unknown_prefix_is_typed() -> string {
 // Azure has no shorthand: a model name does not identify a deployment. The
 // error says what to build instead.
 function resolve_azure_shorthand_is_typed() -> string {
-    ai.clients.resolve("azure/gpt-4o").id() catch (e) {
+    ai.clients.resolve("azure/gpt-4o").requested_model() catch (e) {
         ai.errors.InvalidRequest => `${e.provider}|${e.detail}`,
     }
 }
@@ -411,7 +411,7 @@ test "resolve_unknown_prefix_is_typed" {
     // every prefix the compile-time map knows, so the two stay visibly in sync
     assert.contains(
         resolve_unknown_prefix_is_typed(),
-        "openai, openai-chat, openai-images, ollama, openrouter",
+        "openai, openai-chat, openai-decisions, openai-images, ollama, openrouter",
     );
     assert.contains(
         resolve_unknown_prefix_is_typed(),
@@ -421,7 +421,7 @@ test "resolve_unknown_prefix_is_typed" {
 }
 
 function resolve_without_a_slash_is_typed() -> string {
-    ai.clients.resolve("gpt-4o-mini").id() catch (e) {
+    ai.clients.resolve("gpt-4o-mini").requested_model() catch (e) {
         ai.errors.InvalidRequest => e.detail,
     }
 }
@@ -435,7 +435,7 @@ test "resolve_without_a_slash_is_typed" {
 // caller's catch_all.
 function resolve_of_a_ref_reads_at_call_time() -> string {
     let selector: ai.Selector = env.BAML_TEST_ENV_REF_UNSET_CLIENT;
-    ai.clients.resolve(selector).id() catch (e) {
+    ai.clients.resolve(selector).requested_model() catch (e) {
         ai.errors.InvalidRequest => e.detail,
     }
 }
@@ -468,13 +468,13 @@ function dynamic_client_selector_runs_against_the_mock() -> string {
             );
             let spec = EnvRefDynamicEcho@spec("Say pong.");
             let result = ai.Agent.new(client = cl).run(spec);
-            `${spec.default_client.id()}|${result.value}`
+            `${spec.default_client.requested_model()}|${result.value}`
         },
     )
 }
 
 test "dynamic_client_selector_runs_against_the_mock" {
-    assert.equal(dynamic_client_selector_runs_against_the_mock(), "openai/gpt-4o-mini|pong")
+    assert.equal(dynamic_client_selector_runs_against_the_mock(), "gpt-4o-mini|pong")
 }
 
 function explicit_resolve_selector_runs_against_the_mock() -> string {
@@ -489,13 +489,13 @@ function explicit_resolve_selector_runs_against_the_mock() -> string {
             );
             let spec = EnvRefResolvedEcho@spec("Say pong.");
             let result = ai.Agent.new(client = cl).run(spec);
-            `${spec.default_client.id()}|${result.value}`
+            `${spec.default_client.requested_model()}|${result.value}`
         },
     )
 }
 
 test "explicit_resolve_selector_runs_against_the_mock" {
-    assert.equal(explicit_resolve_selector_runs_against_the_mock(), "openai/gpt-4o-mini|pong")
+    assert.equal(explicit_resolve_selector_runs_against_the_mock(), "gpt-4o-mini|pong")
 }
 
 // ---------------------------------------------------------------------------

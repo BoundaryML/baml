@@ -2,55 +2,109 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[scoped_type_binding_forms.baml:18:18]
+ 18 │     let type T = x;
+    ·                  ┬
+    ·                  ╰── expected `reflect.TypeView`, found `unknown`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[scoped_type_binding_forms.baml:27:18]
+ 27 │     let type T = v;
+    ·                  ┬
+    ·                  ╰── expected `reflect.TypeView`, found `1`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[scoped_type_binding_forms.baml:34:18]
+ 34 │     let type T = t;
+    ·                  ┬
+    ·                  ╰── expected `reflect.TypeView`, found `reflect.Type | null`
+    ╰────
+
+  [type] E0001
+
+  × `let type` cannot bind a class builder's pending type; call `build()` and bind the class it returns
+    ╭─[scoped_type_binding_forms.baml:42:18]
+ 42 │     let type T = builder.type();
+    ·                  ──────────────
+    ╰────
+
+  [type] E0145
+
+  × generic bound `Wrapper<int>` is not an interface; bounds must be interfaces
+    ╭─[scoped_type_binding_forms.baml:51:24]
+ 51 │     let type A extends Wrapper<int> = t else { return 0 };
+    ·                        ────────────
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: Missing
+    ╭─[scoped_type_binding_forms.baml:52:24]
+ 52 │     let type B extends Missing = t else { return 0 };
+    ·                        ───────
+    ╰────
+
+  [type] E0154
+
+  × `reflect.AnyFunction` cannot be used as a generic bound; use it as a value type instead (e.g. `f: reflect.AnyFunction`)
+    ╭─[scoped_type_binding_forms.baml:53:24]
+ 53 │     let type C extends reflect.AnyFunction = t else { return 0 };
+    ·                        ───────────────────
+    ╰────
+
   [type] E0147
 
   × type inference failed; write the type explicitly
-    ╭─[scoped_type_binding_forms.baml:12:22]
- 12 │     type T = Wrapper<_>
-    ·                      ─
+    ╭─[scoped_type_binding_forms.baml:54:39]
+ 54 │     let type D extends Named & Holder<_> = t else { return 0 };
+    ·                                       ─
     ╰────
 
-  [type] E0001
+  [type] E0002
 
-  × mismatched types
-    ╭─[scoped_type_binding_forms.baml:20:24]
- 20 │     type T = unreflect(x)
-    ·                        ┬
-    ·                        ╰── expected `reflect.Type | reflect.TypeView`, found `unknown`
+  × unresolved type: T
+    ╭─[scoped_type_binding_forms.baml:61:31]
+ 61 │     let type T extends Holder<T> = t else {
+    ·                               ─
     ╰────
 
-  [type] E0001
+  [type] E0002
 
-  × mismatched types
-    ╭─[scoped_type_binding_forms.baml:29:24]
- 29 │     type T = unreflect(v)
-    ·                        ┬
-    ·                        ╰── expected `reflect.Type | reflect.TypeView`, found `1`
+  × unresolved type: T
+    ╭─[scoped_type_binding_forms.baml:62:21]
+ 62 │         let unseen: T? = null;
+    ·                     ──
     ╰────
 
-  [hir] E0168
+  [type] E0113
 
-  × this runtime type must be given a name before it can be used here
-    ╭─[scoped_type_binding_forms.baml:37:22]
- 37 │     type T = Wrapper<unreflect(t)>
-    ·                      ──────┬─────
-    ·                            ╰── a `type` binding lifts one runtime type as its whole right-hand side; give this one a `type` statement of its own first, then write that name here
+  × `let … else` requires a diverging else block (`return`, `throw`, `break`, or `continue`); got `0`
+    ╭─[scoped_type_binding_forms.baml:71:39]
+ 71 │     let type T extends Named = t else { 0 };
+    ·                                       ─────
     ╰────
 
-  [hir] E0168
+  [type] E0111
 
-  × this runtime type must be given a name before it can be used here
-    ╭─[scoped_type_binding_forms.baml:38:15]
- 38 │     type U = (unreflect(t))
-    ·               ──────┬─────
-    ·                     ╰── a `type` binding lifts one runtime type as its whole right-hand side; give this one a `type` statement of its own first, then write that name here
+  × `let type T extends …` checks its bounds when it runs, so it needs an `else` block for a type that misses them
+    ╭─[scoped_type_binding_forms.baml:79:5]
+ 79 │     let type T extends Named = t;
+    ·     ─────────────────────────────
     ╰────
 
-  [type] E0001
+  [type] E0111
 
-  × mismatched types
-    ╭─[scoped_type_binding_forms.baml:45:24]
- 45 │     type T = unreflect(t)
-    ·                        ┬
-    ·                        ╰── expected `reflect.Type | reflect.TypeView`, found `reflect.Type | null`
+  × `let type U extends …` checks its bounds when it runs, so it needs an `else` block for a type that misses them
+    ╭─[scoped_type_binding_forms.baml:80:5]
+ 80 │     let type U extends Named & Holder<int> = t;
+    ·     ───────────────────────────────────────────
     ╰────

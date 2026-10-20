@@ -23,9 +23,11 @@ use crate::{
 /// same pair is a cycle through a recursive type (a class field, or an alias such as
 /// `type J = int | J[]` whose array member tries a scalar as a single-item array).
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub(crate) enum VisitedType {
-    /// Classes are identified by declaration name.
-    Class(String),
+pub(crate) enum VisitedType<'t, N> {
+    /// Classes are identified by their name in the model: for a generic class,
+    /// the instantiation, so `Box<Box<int>>` holding a `Box<int>` is no cycle.
+    /// Borrowed from the model, as the visited set is copied at every step.
+    Class(&'t N),
     /// Anonymous array types are identified by the address of the model node.
     Array(*const ()),
 }
@@ -36,8 +38,8 @@ pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
     // two distinct but structurally identical subtrees are NOT treated as the
     // same visited node. This prevents false-positive circular-reference
     // errors when the input contains repeated equal objects or arrays.
-    visited_during_coerce: HashSet<(VisitedType, *const jsonish::Value<'s>)>,
-    visited_during_try_cast: HashSet<(VisitedType, *const jsonish::Value<'s>)>,
+    visited_during_coerce: HashSet<(VisitedType<'t, N>, *const jsonish::Value<'s>)>,
+    visited_during_try_cast: HashSet<(VisitedType<'t, N>, *const jsonish::Value<'s>)>,
     pub db: &'t TypeRefDb<'t, N>,
     /// Hint for union coercion: the variant index that succeeded on the previous
     /// array element. Used to optimize arrays of unions by trying the likely
@@ -91,7 +93,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
     /// Whether coercing `value` into `ty` is already on the stack.
     pub(crate) fn is_visiting(
         &self,
-        ty: &VisitedType,
+        ty: &VisitedType<'t, N>,
         value: &'v jsonish::Value<'s>,
         is_coerce: bool,
     ) -> bool {
@@ -108,7 +110,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
     // mutability or something.
     pub(crate) fn visit(
         &self,
-        ty: VisitedType,
+        ty: VisitedType<'t, N>,
         value: &'v jsonish::Value<'s>,
         is_coerce: bool,
     ) -> Self {
@@ -209,6 +211,18 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
                     causes: Vec::new(),
                 }],
             },
+        }
+    }
+
+    /// A value met `never`, the empty union: the parser's view of an interface
+    /// type, whose implementors it cannot choose between.
+    pub(crate) fn error_uninhabited(&self) -> ParsingError {
+        ParsingError {
+            reason: "Expected never (an interface type, whose implementors cannot be parsed), \
+                     got a value"
+                .to_string(),
+            scope: self.scope.clone(),
+            causes: Vec::new(),
         }
     }
 

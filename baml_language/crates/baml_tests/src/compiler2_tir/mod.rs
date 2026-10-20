@@ -35,8 +35,7 @@ pub(crate) mod support {
     use std::fmt::Write;
 
     use baml_compiler2_ast::{
-        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FunctionDefaults, Literal, PatId,
-        Stmt, StmtId,
+        DefaultExprId, Expr, ExprBody, ExprId, FunctionDefaults, Literal, PatId, Stmt, StmtId,
     };
     use baml_compiler2_hir::{
         body::FunctionBody, contributions::Definition, item_tree::DefaultExprRef, scope::ScopeKind,
@@ -133,16 +132,16 @@ pub(crate) mod support {
         }
     }
 
-    fn type_binding_value_desc(
-        value: &baml_compiler2_ast::TypeBindingValue,
-        body: &ExprBody,
+    /// ` extends A & B` for a `let type` binding's bounds; empty when none.
+    fn type_binding_bounds_desc(
+        bounds: &[baml_compiler2_ast::TypeExpr],
+        render: impl Fn(&baml_compiler2_ast::TypeExpr) -> String,
     ) -> String {
-        match value {
-            baml_compiler2_ast::TypeBindingValue::Runtime(operand) => {
-                format!("unreflect({})", expr_desc(*operand, body))
-            }
-            baml_compiler2_ast::TypeBindingValue::Static(ty) => ty.to_string(),
+        if bounds.is_empty() {
+            return String::new();
         }
+        let bounds: Vec<String> = bounds.iter().map(render).collect();
+        format!(" extends {}", bounds.join(" & "))
     }
 
     fn expr_desc(expr_id: ExprId, body: &ExprBody) -> String {
@@ -218,34 +217,25 @@ pub(crate) mod support {
                     pat_desc(*pattern, body)
                 )
             }
-            Expr::Catch { base, clauses } => {
+            Expr::Catch { base, clause } => {
                 let base_desc = expr_desc(*base, body);
-                let clause_descs: Vec<String> = clauses
+
+                let kind = clause.kind.keyword();
+                let binding = pat_desc(clause.binding, body);
+                let arms_desc = clause
+                    .arms
                     .iter()
-                    .map(|clause| {
-                        let kind = match clause.kind {
-                            CatchClauseKind::Catch => "catch",
-                            CatchClauseKind::CatchAll => "catch_all",
-                            CatchClauseKind::CatchAllPanics => "catch_all_panics",
-                        };
-                        let binding = pat_desc(clause.binding, body);
-                        let arms_desc = clause
-                            .arms
-                            .iter()
-                            .map(|arm_id| {
-                                let arm = &body.catch_arms[*arm_id];
-                                format!(
-                                    "{} => {}",
-                                    pat_desc(arm.pattern, body),
-                                    expr_desc(arm.body, body)
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        format!("{kind} ({binding}) {{ {arms_desc} }}")
+                    .map(|arm_id| {
+                        let arm = &body.catch_arms[*arm_id];
+                        format!(
+                            "{} => {}",
+                            pat_desc(arm.pattern, body),
+                            expr_desc(arm.body, body)
+                        )
                     })
-                    .collect();
-                format!("{base_desc} {}", clause_descs.join(" "))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{base_desc} {kind} ({binding}) {{ {arms_desc} }}")
             }
             Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
             Expr::Return { value } => match value {
@@ -534,24 +524,21 @@ pub(crate) mod support {
                     render_expr(vp, arm.body, body, inference, indent + 4, output);
                 }
             }
-            Expr::Catch { base, clauses } => {
+            Expr::Catch { base, clause } => {
                 let base_desc = expr_desc_rich(*base, body, inference);
                 let base_ty = expr_ty(vp, inference, *base);
                 writeln!(output, "{pad}catch ({base_desc} : {base_ty}) : {ty}").ok();
-                for clause in clauses {
-                    let kind = match clause.kind {
-                        CatchClauseKind::Catch => "catch",
-                        CatchClauseKind::CatchAll => "catch_all",
-                        CatchClauseKind::CatchAllPanics => "catch_all_panics",
-                    };
-                    let binding = pat_desc(clause.binding, body);
-                    writeln!(output, "{pad}  {kind} ({binding})").ok();
-                    for arm_id in &clause.arms {
-                        let arm = &body.catch_arms[*arm_id];
-                        let pat = pat_desc(arm.pattern, body);
-                        writeln!(output, "{pad}    {pat} =>").ok();
-                        render_expr(vp, arm.body, body, inference, indent + 6, output);
-                    }
+                if matches!(body.exprs[*base], Expr::Catch { .. }) {
+                    render_expr(vp, *base, body, inference, indent + 2, output);
+                }
+                let kind = clause.kind.keyword();
+                let binding = pat_desc(clause.binding, body);
+                writeln!(output, "{pad}  {kind} ({binding})").ok();
+                for arm_id in &clause.arms {
+                    let arm = &body.catch_arms[*arm_id];
+                    let pat = pat_desc(arm.pattern, body);
+                    writeln!(output, "{pad}    {pat} =>").ok();
+                    render_expr(vp, arm.body, body, inference, indent + 6, output);
                 }
             }
             Expr::Lambda(func_def) => {
@@ -666,9 +653,22 @@ pub(crate) mod support {
         let pad = " ".repeat(indent);
         let stmt = &body.stmts[stmt_id];
         match stmt {
-            Stmt::TypeBinding { name, value } => {
-                let value = type_binding_value_desc(value, body);
-                writeln!(output, "{pad}type {name} = {value}").ok();
+            Stmt::TypeBinding {
+                name,
+                operand,
+                bounds,
+                else_branch,
+            } => {
+                let bounds = type_binding_bounds_desc(bounds, ToString::to_string);
+                let operand = expr_desc(*operand, body);
+                let else_desc = else_branch
+                    .map(|else_expr| format!(" else {}", expr_desc(else_expr, body)))
+                    .unwrap_or_default();
+                writeln!(
+                    output,
+                    "{pad}let type {name}{bounds} = {operand}{else_desc}"
+                )
+                .ok();
             }
             Stmt::Let {
                 pattern,
@@ -815,17 +815,24 @@ pub(crate) mod support {
         let pad = " ".repeat(indent);
         let stmt = &body.stmts[stmt_id];
         match stmt {
-            Stmt::TypeBinding { name, value } => {
-                let (value_desc, value_ty) = match value {
-                    baml_compiler2_ast::TypeBindingValue::Runtime(operand) => (
-                        format!("unreflect({})", expr_desc_rich(*operand, body, inference)),
-                        expr_ty(vp, inference, *operand).to_string(),
-                    ),
-                    baml_compiler2_ast::TypeBindingValue::Static(ty) => {
-                        (ty.to_string(), "type".to_string())
-                    }
-                };
-                writeln!(output, "{pad}type {name} = {value_desc} : {value_ty}").ok();
+            Stmt::TypeBinding {
+                name,
+                operand,
+                bounds,
+                else_branch,
+            } => {
+                let bounds = type_binding_bounds_desc(bounds, ToString::to_string);
+                let operand_desc = expr_desc_rich(*operand, body, inference);
+                let operand_ty = expr_ty(vp, inference, *operand);
+                writeln!(
+                    output,
+                    "{pad}let type {name}{bounds} = {operand_desc} : {operand_ty}"
+                )
+                .ok();
+                if let Some(else_expr) = else_branch {
+                    writeln!(output, "{pad}  else:").ok();
+                    render_expr(vp, *else_expr, body, inference, indent + 4, output);
+                }
             }
             Stmt::Let {
                 pattern,
@@ -1036,7 +1043,8 @@ pub(crate) mod support {
             let fqn = qualified_name(
                 &index.scopes,
                 i,
-                baml_compiler2_hir::package::spelling(db).of(pkg_info.root),
+                &baml_compiler2_hir_ty::render::Viewpoint::canonical(db)
+                    .display_label(pkg_info.root),
             );
 
             // ── Structural scopes (class/enum/type alias) ───────────
@@ -1325,11 +1333,11 @@ pub(crate) mod support {
 
     /// Render a file's canonical item tree as readable text.
     pub fn render_hir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-        use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal};
+        use baml_compiler2_ast::{Expr, ExprBody, Literal};
         use baml_compiler2_hir::{file_package::file_package, file_semantic_index};
 
         fn qualify_type_name(
-            path: &baml_base::TypePath,
+            path: &baml_base::Path,
             pkg_prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
@@ -1352,21 +1360,21 @@ pub(crate) mod support {
         ) -> String {
             match &ty.kind {
                 baml_compiler2_ast::TypeExprKind::Path {
-                    segments,
+                    path,
                     generic_args,
                     associated_type_bindings,
                     ..
                 } => {
-                    let path = segments
+                    let dotted = path
                         .iter()
                         .map(|n| n.as_str())
                         .collect::<Vec<_>>()
                         .join(".");
-                    let first = segments.first().map(|n| n.as_str()).unwrap_or("");
+                    let first = path.first().map(|n| n.as_str()).unwrap_or("");
                     let mut rendered = if local_type_names.contains(first) {
-                        format!("{pkg_prefix}{path}")
+                        format!("{pkg_prefix}{dotted}")
                     } else {
-                        path
+                        dotted
                     };
                     if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
                         let mut args = generic_args
@@ -1393,7 +1401,6 @@ pub(crate) mod support {
                 baml_compiler2_ast::TypeExprKind::Bool => "bool".into(),
                 baml_compiler2_ast::TypeExprKind::Null => "null".into(),
                 baml_compiler2_ast::TypeExprKind::Never => "never".into(),
-                baml_compiler2_ast::TypeExprKind::Void => "void".into(),
                 baml_compiler2_ast::TypeExprKind::Uint8Array => "uint8array".into(),
                 baml_compiler2_ast::TypeExprKind::Media { kind: k, .. } => {
                     format!("{:?}", k).to_lowercase()
@@ -1500,20 +1507,20 @@ pub(crate) mod support {
             use baml_compiler2_hir::type_ref::TypeRefKind as K;
             match &store[id].kind {
                 K::Path {
-                    segments,
+                    path,
                     generic_args,
                     associated_type_bindings,
                 } => {
-                    let path = segments
+                    let dotted = path
                         .iter()
                         .map(|n| n.as_str())
                         .collect::<Vec<_>>()
                         .join(".");
-                    let first = segments.first().map(|n| n.as_str()).unwrap_or("");
+                    let first = path.first().map(|n| n.as_str()).unwrap_or("");
                     let mut rendered = if local_type_names.contains(first) {
-                        format!("{pkg_prefix}{path}")
+                        format!("{pkg_prefix}{dotted}")
                     } else {
-                        path
+                        dotted
                     };
                     if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
                         let mut args = generic_args
@@ -1542,7 +1549,6 @@ pub(crate) mod support {
                 K::Bool => "bool".into(),
                 K::Null => "null".into(),
                 K::Never => "never".into(),
-                K::Void => "void".into(),
                 K::Uint8Array => "uint8array".into(),
                 K::Media { kind: k } => format!("{:?}", k).to_lowercase(),
                 K::Optional { inner } => {
@@ -1807,35 +1813,25 @@ pub(crate) mod support {
                     expr_desc_hir(*scrutinee, body, prefix, local_type_names),
                     pat_desc_hir(*pattern, body, prefix, local_type_names),
                 ),
-                Expr::Catch { base, clauses } => {
+                Expr::Catch { base, clause } => {
                     let base_desc = expr_desc_hir(*base, body, prefix, local_type_names);
-                    let clause_descs: Vec<String> = clauses
+
+                    let kind = clause.kind.keyword();
+                    let binding = pat_desc_hir(clause.binding, body, prefix, local_type_names);
+                    let arms_desc = clause
+                        .arms
                         .iter()
-                        .map(|clause| {
-                            let kind = match clause.kind {
-                                CatchClauseKind::Catch => "catch",
-                                CatchClauseKind::CatchAll => "catch_all",
-                                CatchClauseKind::CatchAllPanics => "catch_all_panics",
-                            };
-                            let binding =
-                                pat_desc_hir(clause.binding, body, prefix, local_type_names);
-                            let arms_desc = clause
-                                .arms
-                                .iter()
-                                .map(|arm_id| {
-                                    let arm = &body.catch_arms[*arm_id];
-                                    format!(
-                                        "{} => {}",
-                                        pat_desc_hir(arm.pattern, body, prefix, local_type_names),
-                                        expr_desc_hir(arm.body, body, prefix, local_type_names)
-                                    )
-                                })
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                            format!("{kind} ({binding}) {{ {arms_desc} }}")
+                        .map(|arm_id| {
+                            let arm = &body.catch_arms[*arm_id];
+                            format!(
+                                "{} => {}",
+                                pat_desc_hir(arm.pattern, body, prefix, local_type_names),
+                                expr_desc_hir(arm.body, body, prefix, local_type_names)
+                            )
                         })
-                        .collect();
-                    format!("{base_desc} {}", clause_descs.join(" "))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("{base_desc} {kind} ({binding}) {{ {arms_desc} }}")
                 }
                 Expr::Throw { value } => {
                     format!(
@@ -2017,29 +2013,26 @@ pub(crate) mod support {
             prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
-            fn type_binding_value_desc_hir(
-                value: &baml_compiler2_ast::TypeBindingValue,
-                body: &ExprBody,
-                prefix: &str,
-                local_type_names: &std::collections::HashSet<&str>,
-            ) -> String {
-                match value {
-                    baml_compiler2_ast::TypeBindingValue::Runtime(operand) => format!(
-                        "unreflect({})",
-                        expr_desc_hir(*operand, body, prefix, local_type_names)
-                    ),
-                    baml_compiler2_ast::TypeBindingValue::Static(ty) => {
-                        type_expr_to_string_hir(ty, prefix, local_type_names)
-                    }
-                }
-            }
-
             use baml_compiler2_ast::Stmt;
             let stmt = &body.stmts[stmt_id];
             match stmt {
-                Stmt::TypeBinding { name, value } => format!(
-                    "type {name} = {}",
-                    type_binding_value_desc_hir(value, body, prefix, local_type_names)
+                Stmt::TypeBinding {
+                    name,
+                    operand,
+                    bounds,
+                    else_branch,
+                } => format!(
+                    "let type {name}{} = {}{}",
+                    type_binding_bounds_desc(bounds, |bound| {
+                        type_expr_to_string_hir(bound, prefix, local_type_names)
+                    }),
+                    expr_desc_hir(*operand, body, prefix, local_type_names),
+                    else_branch
+                        .map(|else_expr| format!(
+                            " else {}",
+                            expr_desc_hir(else_expr, body, prefix, local_type_names)
+                        ))
+                        .unwrap_or_default()
                 ),
                 Stmt::Let {
                     pattern,
@@ -2122,9 +2115,8 @@ pub(crate) mod support {
 
         let mut output = String::new();
         let pkg_info = file_package(db, file);
-        let package = baml_compiler2_hir::package::spelling(db)
-            .of(pkg_info.root)
-            .clone();
+        let package =
+            baml_compiler2_hir_ty::render::Viewpoint::canonical(db).display_label(pkg_info.root);
         let prefix = if pkg_info.namespace_path.is_empty() {
             format!("{package}.")
         } else {

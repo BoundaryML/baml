@@ -63,7 +63,7 @@ class ResponsesClient {
     headers: map<string, string>?,
     /// Extra URL query parameters, percent-encoded onto the endpoint.
     query_params: map<string, string>?,
-    // Record request/response bodies (and raw SSE events) on the LLMCall wire
+    // Record request/response bodies (and raw SSE events) on the ModelCall wire
     // records delivered through on_event. Status, headers, and timing are
     // always recorded; this flag only gates the bodies.
     capture_wire: bool,
@@ -135,19 +135,23 @@ class ResponsesClient {
     }
 
     implements ai.Client {
-        function id(self) -> string {
-            `openai/${self.model}`
+        function requested_model(self) -> string {
+            self.model
+        }
+
+        function provider(self) -> string {
+            "openai"
         }
 
         /// What a `${cache()}` sends as `prompt_cache_breakpoint` on the part
         /// before it: `{"mode": "explicit"}`. Null for GPT-5.5 and earlier,
         /// which reject the field; a `${cache()}` sends nothing there.
         function default_cache_args(self) -> baml.json.json {
-            openai.internal.default_cache_breakpoint(self.model)
+            root.internal.default_cache_breakpoint(self.model)
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
-            openai.internal.preview(self, input) catch_all (e) {
+            root.internal.preview(self, input) catch_all (e) {
                 _ => throw ai.errors.normalize(e),
             }
         }

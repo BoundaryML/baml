@@ -25,6 +25,7 @@
 //   * Sync cancellation via a background `ctx.cancel()` still surfaces as a
 //     `BamlPanic` whose `.value()` is a `Cancelled` (parity with Python).
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -77,7 +78,7 @@ class TestCancellation {
 
     @Test
     void test_cancellation_sync_call_returns_none() {
-        assertNull(Fns.SleepMs(1L));
+        assertDoesNotThrow(() -> Fns.SleepMs(1L));
     }
 
     @Test

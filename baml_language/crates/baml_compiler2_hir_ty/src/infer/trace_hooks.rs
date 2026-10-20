@@ -8,6 +8,7 @@ use baml_compiler2_hir::{
     contributions::Definition,
     item_data::MethodOwner,
     loc::{DeclRef, FunctionLoc},
+    package::PathHead,
 };
 use baml_type::interned::{InferTy, Ty};
 use rustc_hash::FxHashMap;
@@ -67,7 +68,7 @@ fn checked_declaration<'db>(
         .expect("hook source span");
     let hook_name = path.iter().map(Name::as_str).collect::<Vec<_>>().join(".");
     let package = baml_compiler2_hir::file_package::file_package(db, function.file(db));
-    let viewpoint = crate::render::Viewpoint::user_facing(db, package.root);
+    let viewpoint = crate::render::Viewpoint::for_file(db, function.file(db));
     let mut target_path = package.namespace_path;
     match baml_compiler2_hir::item_data::method_owner(db, function) {
         Some(MethodOwner::Class(class)) => target_path.push(
@@ -124,11 +125,26 @@ fn checked_declaration<'db>(
         .with_frame(function_generic_frame(db, function))
         .with_bounds(bounds.clone())
         .with_self_ty(crate::lower::owner_self_ty(db, function));
+    // The compiler names `trace.Options` and `trace.Settings` by identity —
+    // the `trace` package's own declarations under a `PathHead::Lang` head,
+    // which nothing the target's scope calls `trace` shadows. Without the
+    // package installed there is nothing to check the hook against.
+    let Some(trace) =
+        baml_compiler2_hir::package::lang_roots(db).get(baml_base::LangPackage::Trace)
+    else {
+        return (
+            vec![invalid(
+                "The `trace` package is not available, so the hook cannot be checked.".into(),
+            )],
+            None,
+        );
+    };
+    let trace = PathHead::Lang(trace);
     let options = crate::lower::reject_holes(
-        &lower.lower_type_path(&[Name::new("trace"), Name::new("Options")]),
+        &lower.lower_type_path(trace, &[Name::new("trace"), Name::new("Options")]),
     );
     let settings = crate::lower::reject_holes(
-        &lower.lower_type_path(&[Name::new("trace"), Name::new("Settings")]),
+        &lower.lower_type_path(trace, &[Name::new("trace"), Name::new("Settings")]),
     );
     let expected = Ty::from_plain(&baml_type::Ty::Union(
         vec![options, baml_type::Ty::Null].into(),
@@ -155,7 +171,9 @@ fn checked_declaration<'db>(
     for _ in 0..target_body.exprs.len() {
         body.exprs.alloc(Expr::Missing);
     }
-    let callee = body.exprs.alloc(Expr::Path(path.clone()));
+    let callee = body
+        .exprs
+        .alloc(Expr::Path(baml_base::Path::new(path.clone())));
     let call = body.exprs.alloc(Expr::Call {
         callee,
         type_args: vec![],
@@ -232,13 +250,13 @@ fn checked_declaration<'db>(
             let name = Name::new(format!("$trace_hook_arg_{index}"));
             inputs.insert(name.clone(), crate::impls::interned_ty(&param.ty));
             args.push(CallArg::positional(
-                body.exprs.alloc(Expr::Path(vec![name])),
+                body.exprs.alloc(Expr::Path(baml_base::Path::bare(name))),
             ));
         }
         let name = Name::new("$trace_hook_settings");
         inputs.insert(name.clone(), crate::impls::interned_ty(&settings));
         args.push(CallArg::positional(
-            body.exprs.alloc(Expr::Path(vec![name])),
+            body.exprs.alloc(Expr::Path(baml_base::Path::bare(name))),
         ));
     }
     context.template_params.push(inputs);

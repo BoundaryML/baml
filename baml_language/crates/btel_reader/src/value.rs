@@ -129,9 +129,11 @@ pub fn navigate(
                 Err(nav) => return nav,
             }
         }
-        (Root::Value, btel_snapshot::DecodedRoot::Value(value)) => (value, path),
-        (Root::Arguments, btel_snapshot::DecodedRoot::Value(_))
-        | (Root::Value, btel_snapshot::DecodedRoot::FunctionArgs { .. })
+        // Named argument maps (owned spans/host adapters) and positional
+        // FunctionArgs share the same query surface. The snapshot describes
+        // its representation; no span-provenance flag is needed to decode it.
+        (Root::Value | Root::Arguments, btel_snapshot::DecodedRoot::Value(value)) => (value, path),
+        (Root::Value, btel_snapshot::DecodedRoot::FunctionArgs { .. })
         | (_, btel_snapshot::DecodedRoot::Definitions(_)) => {
             return Nav::Unavailable(Unavailable::WrongRoot);
         }

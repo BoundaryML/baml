@@ -363,7 +363,7 @@ fn completion_variants_roundtrip_without_losing_wire_semantics() {
             &[0x38, u8::try_from(completion.completion_flags).unwrap()]
         );
     }
-    for bits in [0, 4, 5, 6, 7, 8, 12, 13, 14, 15, 16, u32::MAX] {
+    for bits in [0, 4, 5, 6, 7, 8, 12, 13, 14, 15, 17, u32::MAX] {
         assert!(CompletionFlags::from_wire(bits, false).is_none());
     }
     for bits in [9, 10, 11, 13, 14, 15] {

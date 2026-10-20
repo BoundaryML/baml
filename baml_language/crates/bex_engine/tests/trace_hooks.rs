@@ -299,8 +299,14 @@ async fn linked_hooked_callee_cannot_enter_through_call_exact_args() {
     for object in &mut program.objects.0 {
         // Reproduce only main's externally emitted call to target. Stdlib
         // helpers also have declared hooks and must keep their own call sites.
+        // A pooled function carries no name, only its identity; before the
+        // program is loaded nothing owns it, so match the declaration.
         if let bex_vm_types::Object::Function(function) = object
-            && function.name == "user.main"
+            && function
+                .identity
+                .declared_name()
+                .map(baml_type::Name::as_str)
+                == Some("main")
         {
             for instruction in &mut function.bytecode.instructions {
                 if let bex_vm_types::Instruction::CallHooked { callee, ntypeargs } = *instruction {
@@ -337,7 +343,12 @@ async fn internal_vm_failure_in_a_hook_is_not_treated_as_a_null_decision() {
     let mut replaced = false;
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(function) = object {
-            if function.name == "user.recovery_hook" {
+            if function
+                .identity
+                .declared_name()
+                .map(baml_type::Name::as_str)
+                == Some("recovery_hook")
+            {
                 function.bytecode = bex_vm_types::bytecode::Bytecode {
                     instructions: vec![
                         bex_vm_types::Instruction::LoadConst(0),
@@ -535,6 +546,91 @@ function main() -> int {
                 vec![],
                 FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
                 true
+            )
+            .await
+            .unwrap(),
+        BexExternalValue::Int(42)
+    );
+    engine.shutdown().await;
+}
+
+#[tokio::test]
+async fn passthrough_repeated_reads_continue_one_claim_with_post_hook_options() {
+    use btel_settings::artifact::{ArtifactTelemetry, RecordingLevel};
+    let mut program = common::compile_for_engine(
+        r#"
+function target() -> int { 42 }
+function hook() -> trace.Options throws never {
+    trace.span(inputs = true).context(metadata = { "hook": "yes" })
+}
+function ordinary() -> int { 1 }
+function unrelated(config: trace.Options | trace.ReservedSpan) -> void {
+    creator($trace = config);
+}
+function creator() -> trace.Span {
+    trace._create_span(target, inputs = { "value": 42 }, config = trace._passthrough())
+}
+/// baml:$trace=hook
+function entry(raw: trace.ReservedSpan) -> int {
+    let first = trace._passthrough();
+    let second = trace._passthrough();
+    if let forwarded: trace.ReservedSpan = first {
+        assert.equal(forwarded.id(), raw.id());
+        assert.equal(forwarded.inspect().capture.inputs, true);
+        assert.equal(forwarded.inspect().context.metadata["hook"], "yes");
+    } else { baml.sys.panic("claim must remain a ReservedSpan"); }
+    assert.equal(raw.inspect().capture.inputs, false);
+    assert.equal(raw.inspect().context.metadata.has("hook"), false);
+    let rejected = 0;
+    ordinary($trace = raw) catch_all_panics (error) { _ => { rejected += 1; } };
+    unrelated(second) catch_all_panics (error) { _ => { rejected += 1; } };
+    let span = creator($trace = first);
+    assert.equal(span.id(), raw.id());
+    span.run(() -> { assert.equal(trace.current_context().metadata["hook"], "yes"); });
+    span.finish(42);
+    creator($trace = second) catch_all_panics (error) { _ => { rejected += 1; } };
+    assert.equal(rejected, 3);
+    42
+}
+function main() -> int {
+    // This call has no hook or $trace, and still needs a held empty config.
+    let plain = creator();
+    plain.finish(1);
+    let reserved = trace.span(inputs = false).reserve();
+    entry(reserved, $trace = reserved)
+}
+"#,
+    );
+    for object in &mut program.objects.0 {
+        if let bex_vm_types::Object::Function(function) = object
+            && matches!(function.name().as_str(), "entry" | "creator")
+        {
+            // Test the internal strategy without allowing user source to opt in.
+            function.trace_passthrough = true;
+        }
+    }
+    let engine = Arc::new(
+        BexEngine::new_with_config(
+            program,
+            Arc::new(sys_native::SysOps::native()),
+            vec![],
+            bex_engine::EngineConfig {
+                artifact_telemetry: Some(ArtifactTelemetry {
+                    recording_level: RecordingLevel::High,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )
+        .unwrap(),
+    );
+    assert_eq!(
+        engine
+            .call_function(
+                "main",
+                vec![],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
             )
             .await
             .unwrap(),

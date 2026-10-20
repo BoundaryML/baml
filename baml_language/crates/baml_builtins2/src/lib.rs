@@ -189,14 +189,10 @@ pub const ALL: &[BuiltinFile] = &[
     // --- reflect package ---
     builtin!("reflect", "reflect.baml"),
     builtin!("reflect", "type.baml"),
+    builtin!("reflect", "kinds.baml"),
     builtin!("reflect", "ns_class/class.baml"),
     builtin!("reflect", "ns_enum/enum.baml"),
-    builtin!("reflect", "ns_union/union.baml"),
-    builtin!("reflect", "ns_literal/literal.baml"),
-    builtin!("reflect", "ns_array/array.baml"),
-    builtin!("reflect", "ns_map/map.baml"),
     builtin!("reflect", "ns_interface/interface.baml"),
-    builtin!("reflect", "ns_primitive/primitive.baml"),
     builtin!("reflect", "ns_function/function.baml"),
     builtin!("reflect", "ns_errors/errors.baml"),
     // --- trace package ---
@@ -241,6 +237,8 @@ pub const ALL: &[BuiltinFile] = &[
     // lives here; the render-context classes sit in ai/context.baml.
     builtin!("ai", "ns_internal/prompt.baml"),
     // --- provider client packages ---
+    builtin!("openai", "decisions.baml"),
+    builtin!("openai", "ns_internal/ns_decisions/decisions.baml"),
     builtin!("openai", "responses.baml"),
     builtin!("openai", "ns_internal/responses.baml"),
     builtin!("openai", "chat.baml"),
@@ -267,6 +265,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("vercel", "ns_internal/images.baml"),
     builtin!("claude_code", "cli.baml"),
     builtin!("claude_code", "ns_internal/cli.baml"),
+    builtin!("claude_code", "ns_internal/content.baml"),
     // ai.mcp: MCP servers as ordinary ai tools (part of the ai package).
     builtin!("ai", "ns_mcp/mcp.baml"),
     builtin!("ai", "ns_internal/mcp.baml"),

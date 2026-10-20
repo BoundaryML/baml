@@ -55,11 +55,11 @@ class BamlFunctionSpec(Generic[TOut]):
     async def tools_async(self, *, _baml: Any = None) -> Any:
         return await self._call_async("ai.FunctionSpec.tools", _baml=_baml)
 
-    def client_id(self, *, _baml: Any = None) -> str:
-        return self._call_sync("ai.FunctionSpec.client_id", _baml=_baml)
+    def requested_model(self, *, _baml: Any = None) -> str:
+        return self._call_sync("ai.FunctionSpec.requested_model", _baml=_baml)
 
-    async def client_id_async(self, *, _baml: Any = None) -> str:
-        return await self._call_async("ai.FunctionSpec.client_id", _baml=_baml)
+    async def requested_model_async(self, *, _baml: Any = None) -> str:
+        return await self._call_async("ai.FunctionSpec.requested_model", _baml=_baml)
 
     def build_request(self, *, _baml: Any = None, **kwargs: Any) -> Any:
         return self._call_sync("ai.FunctionSpec.build_request", kwargs, _baml=_baml)

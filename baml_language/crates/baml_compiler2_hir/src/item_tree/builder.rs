@@ -305,6 +305,8 @@ impl ItemTreeBuilder {
                 metadata: ast::FunctionMetadata {
                     origin: ast::FunctionOrigin::UserDefined,
                     is_language_internal: false,
+                    trace_passthrough: false,
+                    explicit_trace_passthrough: false,
                 },
                 docstring: m.docstring.clone(),
                 is_tagged_template_tag: false,

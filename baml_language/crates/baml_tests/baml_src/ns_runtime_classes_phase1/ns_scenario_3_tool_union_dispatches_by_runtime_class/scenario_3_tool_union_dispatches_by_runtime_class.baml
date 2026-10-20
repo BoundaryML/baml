@@ -15,26 +15,26 @@ class ScenarioResult {
 }
 
 function main() -> ScenarioResult {
-    let read_args_t = reflect.class.new("Tool0Args", { "path": reflect.Type.of<string>().meta(alias = "file_path") });
-    let read_t = reflect.class.new(
+    let read_args_t = reflect.Class.new("Tool0Args", { "path": string.type().meta(alias = "file_path") });
+    let read_t = reflect.Class.new(
         "Tool0Action",
         {
-            "tool": reflect.literal.new("filesystem/read_file").as_type(),
-            "args": read_args_t.as_type(),
+            "tool": reflect.Literal.new("filesystem/read_file"),
+            "args": read_args_t,
         },
     );
-    let search_args_t = reflect.class.new(
+    let search_args_t = reflect.Class.new(
         "Tool1Args",
-        { "query": reflect.Type.of<string>(), "limit": reflect.Type.of<int>().optional().as_type() },
+        { "query": string.type(), "limit": int.type().optional() },
     );
-    let search_t = reflect.class.new(
+    let search_t = reflect.Class.new(
         "Tool1Action",
-        { "tool": reflect.literal.new("web/search").as_type(), "args": search_args_t.as_type() },
+        { "tool": reflect.Literal.new("web/search"), "args": search_args_t },
     );
-    let action_t = reflect.union.new([read_t.as_type(), search_t.as_type()]);
-    type Action = unreflect(action_t.as_type())
-    type Read = unreflect(read_t.as_type())
-    type Search = unreflect(search_t.as_type())
+    let action_t = reflect.Union.new([read_t, search_t]);
+    let type Action = action_t;
+    let type Read = read_t;
+    let type Search = search_t;
     let prompt = PickAction@render_prompt<Action>("read the file").text();
     let action = PickAction@parse<Action>(`{"tool": "filesystem/read_file", "args": {"file_path": "/tmp/a.txt"}`);
 
@@ -49,9 +49,9 @@ function main() -> ScenarioResult {
         Search => "search",
         _ => "none",
     };
-    let args = reflect.class.get_field<unknown>(action, "args");
-    let path = reflect.class.get_field<string>(args, "path");
-    let tool = reflect.class.get_field<string>(action, "tool");
+    let args = reflect.Class.get_field<unknown>(action, "args");
+    let path = reflect.Class.get_field<string>(args, "path");
+    let tool = reflect.Class.get_field<string>(action, "tool");
     return ScenarioResult {
         text: prompt
             + "\n<RESULT>"

@@ -1740,9 +1740,6 @@ export namespace baml_bridge {
                 /** BamlTy promptAst */
                 promptAst?: (baml_bridge.cffi.v1.IBamlTyPromptAst|null);
 
-                /** BamlTy void */
-                "void"?: (baml_bridge.cffi.v1.IBamlTyVoid|null);
-
                 /** BamlTy typeVar */
                 typeVar?: (baml_bridge.cffi.v1.IBamlTyTypeVar|null);
 
@@ -1819,9 +1816,6 @@ export namespace baml_bridge {
                 /** BamlTy promptAst. */
                 public promptAst?: (baml_bridge.cffi.v1.IBamlTyPromptAst|null);
 
-                /** BamlTy void. */
-                public void?: (baml_bridge.cffi.v1.IBamlTyVoid|null);
-
                 /** BamlTy typeVar. */
                 public typeVar?: (baml_bridge.cffi.v1.IBamlTyTypeVar|null);
 
@@ -1832,7 +1826,7 @@ export namespace baml_bridge {
                 public never?: (baml_bridge.cffi.v1.IBamlTyNever|null);
 
                 /** BamlTy ty. */
-                public ty?: ("primitive"|"classTy"|"enum"|"list"|"map"|"optional"|"union"|"literal"|"typeAlias"|"unknown"|"media"|"interface"|"enumVariant"|"Function"|"future"|"rustType"|"metaType"|"resource"|"promptAst"|"void"|"typeVar"|"associatedTypeProjection"|"never");
+                public ty?: ("primitive"|"classTy"|"enum"|"list"|"map"|"optional"|"union"|"literal"|"typeAlias"|"unknown"|"media"|"interface"|"enumVariant"|"Function"|"future"|"rustType"|"metaType"|"resource"|"promptAst"|"typeVar"|"associatedTypeProjection"|"never");
 
                 /**
                  * Creates a new BamlTy instance using the specified properties.
@@ -4943,97 +4937,6 @@ export namespace baml_bridge {
 
                 /**
                  * Gets the default type url for BamlTyPromptAst
-                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
-                 * @returns The default type url
-                 */
-                public static getTypeUrl(typeUrlPrefix?: string): string;
-            }
-
-            /** Properties of a BamlTyVoid. */
-            interface IBamlTyVoid {
-            }
-
-            /** Represents a BamlTyVoid. */
-            class BamlTyVoid implements IBamlTyVoid {
-
-                /**
-                 * Constructs a new BamlTyVoid.
-                 * @param [properties] Properties to set
-                 */
-                constructor(properties?: baml_bridge.cffi.v1.IBamlTyVoid);
-
-                /**
-                 * Creates a new BamlTyVoid instance using the specified properties.
-                 * @param [properties] Properties to set
-                 * @returns BamlTyVoid instance
-                 */
-                public static create(properties?: baml_bridge.cffi.v1.IBamlTyVoid): baml_bridge.cffi.v1.BamlTyVoid;
-
-                /**
-                 * Encodes the specified BamlTyVoid message. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyVoid.verify|verify} messages.
-                 * @param message BamlTyVoid message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encode(message: baml_bridge.cffi.v1.IBamlTyVoid, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Encodes the specified BamlTyVoid message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.BamlTyVoid.verify|verify} messages.
-                 * @param message BamlTyVoid message or plain object to encode
-                 * @param [writer] Writer to encode to
-                 * @returns Writer
-                 */
-                public static encodeDelimited(message: baml_bridge.cffi.v1.IBamlTyVoid, writer?: $protobuf.Writer): $protobuf.Writer;
-
-                /**
-                 * Decodes a BamlTyVoid message from the specified reader or buffer.
-                 * @param reader Reader or buffer to decode from
-                 * @param [length] Message length if known beforehand
-                 * @returns BamlTyVoid
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.BamlTyVoid;
-
-                /**
-                 * Decodes a BamlTyVoid message from the specified reader or buffer, length delimited.
-                 * @param reader Reader or buffer to decode from
-                 * @returns BamlTyVoid
-                 * @throws {Error} If the payload is not a reader or valid buffer
-                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
-                 */
-                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.BamlTyVoid;
-
-                /**
-                 * Verifies a BamlTyVoid message.
-                 * @param message Plain object to verify
-                 * @returns `null` if valid, otherwise the reason why it is not
-                 */
-                public static verify(message: { [k: string]: any }): (string|null);
-
-                /**
-                 * Creates a BamlTyVoid message from a plain object. Also converts values to their respective internal types.
-                 * @param object Plain object
-                 * @returns BamlTyVoid
-                 */
-                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.BamlTyVoid;
-
-                /**
-                 * Creates a plain object from a BamlTyVoid message. Also converts values to other types if specified.
-                 * @param message BamlTyVoid
-                 * @param [options] Conversion options
-                 * @returns Plain object
-                 */
-                public static toObject(message: baml_bridge.cffi.v1.BamlTyVoid, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-                /**
-                 * Converts this BamlTyVoid to JSON.
-                 * @returns JSON object
-                 */
-                public toJSON(): { [k: string]: any };
-
-                /**
-                 * Gets the default type url for BamlTyVoid
                  * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
                  * @returns The default type url
                  */

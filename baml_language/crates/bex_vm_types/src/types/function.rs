@@ -1,6 +1,7 @@
+use baml_base::Name;
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use super::InterfaceBound;
+use super::{BodyKey, FnPath, ImplBodyKey, InterfaceBound, ItemPath};
 use crate::{Bytecode, HeapPtr, SysOp, TyTemplate, Value};
 
 /// Function type.
@@ -90,10 +91,16 @@ impl BorshDeserialize for FunctionKind {
     }
 }
 
-/// LLM-specific metadata for a function.
+/// What kind of model-facing function this is, when it is one.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum FunctionMeta {
-    Llm { client: String },
+    Llm {
+        client: String,
+    },
+    /// An `ai.Client.invoke` implementation, or the step that settles a
+    /// stream's turn: it returns an `ai.ModelTurn` whose own calls telemetry
+    /// charges as model usage.
+    ModelInvoke,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
@@ -120,6 +127,239 @@ impl FunctionOrigin {
     }
 }
 
+/// What a function IS, structurally: the identity every rendered name of it
+/// derives from ([`Function::name`]). A function carries no baked name — a
+/// declared one is its path in its package, a body its [`BodyKey`], a closure
+/// body its parent and ordinal, an initializer its role — and the package it
+/// belongs to is [`Function::owner`], so a name is always rendered from a
+/// viewpoint (today, lossily, the owner's display label), never stored.
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub enum FunctionIdentity {
+    /// A declared free function or class-inherent method.
+    Declared(FnPath),
+    /// An interface-machinery body: an interface's default-method body or an
+    /// `implements` block's provided method. Pooled and slotted like any
+    /// function — a statically resolved call stays a direct `Call(GlobalIndex)`
+    /// — but not a logical item: it enters no package name table, so no
+    /// rendered view of the executable names it, and every runtime name scan
+    /// skips it. Its rendering is display only (traces, snapshots).
+    InterfaceBody(BodyKey),
+    /// A closure body lowered inside `parent`: the `ordinal`-th of its `kind`
+    /// there. Renders as `<lambda(parent, ordinal)>` or
+    /// `<tagged(parent, ordinal)>` under an empty package segment, the
+    /// spelling the bytecode display pins.
+    Synthetic {
+        parent: Box<SyntheticParent>,
+        kind: SyntheticKind,
+        ordinal: u32,
+    },
+    /// A package's `$init`: runs its top-level `let` initializers in
+    /// dependency order.
+    Init,
+    /// The helper that evaluates a package's `ordinal`-th top-level `let`
+    /// initializer, which `$init` calls before storing the result.
+    InitLet(u32),
+    /// A package's `$init_test` chainer.
+    InitTest,
+    /// A trampoline the VM synthesizes at run time to enter a callee from the
+    /// host; `callee` is the callee's rendered name, display only. Never in
+    /// an executable: `Program::validate` refuses one.
+    Entry(Box<str>),
+}
+
+/// What a synthetic function was lowered from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub enum SyntheticKind {
+    /// A lambda expression.
+    Lambda,
+    /// A tagged template's body closure.
+    Tagged,
+}
+
+/// Where a synthetic function was lowered: a function (declared, body, or
+/// itself synthetic), or a top-level `let` initializer, which is lowered as a
+/// body and only ever OWNS synthetic functions.
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub enum SyntheticParent {
+    Function(FunctionIdentity),
+    Let(ItemPath),
+}
+
+impl FunctionIdentity {
+    /// A closure body's identity: the `ordinal`-th `kind` lowered in `parent`.
+    #[must_use]
+    pub fn synthetic(parent: SyntheticParent, kind: SyntheticKind, ordinal: u32) -> Self {
+        Self::Synthetic {
+            parent: Box::new(parent),
+            kind,
+            ordinal,
+        }
+    }
+
+    /// The name the function was declared with (`greet`, `bump`); `None` for
+    /// a callable with no source-level name — a closure body, an
+    /// initializer, an entry trampoline.
+    #[must_use]
+    pub fn declared_name(&self) -> Option<&Name> {
+        match self {
+            Self::Declared(FnPath::Free(path)) => Some(&path.name),
+            Self::Declared(FnPath::Method { name, .. }) => Some(name),
+            Self::InterfaceBody(BodyKey::Default { method, .. }) => Some(method),
+            Self::InterfaceBody(BodyKey::ImplMethod(body)) => Some(&body.method),
+            Self::Synthetic { .. }
+            | Self::Init
+            | Self::InitLet(_)
+            | Self::InitTest
+            | Self::Entry(_) => None,
+        }
+    }
+
+    /// Whether this is an interface-machinery body (see
+    /// [`InterfaceBody`](Self::InterfaceBody)).
+    #[must_use]
+    pub fn is_interface_body(&self) -> bool {
+        matches!(self, Self::InterfaceBody(_))
+    }
+
+    /// The namespace of the declaring package this function lives in, when
+    /// its identity carries one: a declared function's or its owner type's.
+    /// A provided impl body carries its coherence key, not a namespace.
+    #[must_use]
+    pub fn namespace(&self) -> &[Name] {
+        match self {
+            Self::Declared(FnPath::Free(path) | FnPath::Method { class: path, .. })
+            | Self::InterfaceBody(BodyKey::Default {
+                interface: path, ..
+            }) => &path.namespace,
+            Self::InterfaceBody(BodyKey::ImplMethod(_))
+            | Self::Synthetic { .. }
+            | Self::Init
+            | Self::InitLet(_)
+            | Self::InitTest
+            | Self::Entry(_) => &[],
+        }
+    }
+
+    /// The owner-qualified tail of the rendered name — everything after the
+    /// package and namespace segments: `f` for a free function, `Class.m` for
+    /// a method, `Interface.m` for a default body, `<(target as iface)>.m`
+    /// for a provided one, `<lambda(parent, i)>` for a closure body (its
+    /// parent by ITS tail), and the role name of an initializer or entry.
+    /// The ONE spelling of a function's tail: [`Function::name`] prefixes it,
+    /// and a nested synthetic names its parent by it, so the two cannot drift.
+    /// `label` is the owning package's display label; an impl-provided body
+    /// spells the heads of its own package by it (`<(user.X as user.I)>.m`),
+    /// the same label the name is prefixed with, so one name reads from one
+    /// viewpoint. `None` renders those heads as `root`.
+    #[must_use]
+    pub fn tail(&self, label: Option<&Name>) -> String {
+        match self {
+            Self::Declared(FnPath::Free(path)) => path.name.to_string(),
+            Self::Declared(FnPath::Method { class, name }) => format!("{}.{name}", class.name),
+            Self::InterfaceBody(BodyKey::Default { interface, method }) => {
+                format!("{}.{method}", interface.name)
+            }
+            Self::InterfaceBody(BodyKey::ImplMethod(body)) => impl_body_tail(body, label),
+            Self::Synthetic {
+                parent,
+                kind,
+                ordinal,
+            } => {
+                let kind = match kind {
+                    SyntheticKind::Lambda => "lambda",
+                    SyntheticKind::Tagged => "tagged",
+                };
+                let parent = match parent.as_ref() {
+                    SyntheticParent::Function(function) => function.tail(label),
+                    SyntheticParent::Let(path) => path.name.to_string(),
+                };
+                format!("<{kind}({parent}, {ordinal})>")
+            }
+            Self::Init => "$init".to_string(),
+            Self::InitLet(ordinal) => format!("$init_let_{ordinal}"),
+            Self::InitTest => "$init_test".to_string(),
+            Self::Entry(callee) => format!("$entry::{callee}"),
+        }
+    }
+
+    /// The rendered name under a package labelled `label` (`None`: a pooled
+    /// function before the loader placed it, or a closure body, which no
+    /// package table lists): `label.ns.tail` for a declared function or body,
+    /// `.tail` for a synthetic (an empty package segment), the bare tail for
+    /// an initializer or entry.
+    #[must_use]
+    pub fn render(&self, label: Option<&Name>) -> String {
+        match self {
+            Self::Declared(_) | Self::InterfaceBody(_) => {
+                let mut segments: Vec<&str> = Vec::new();
+                if let Some(label) = label {
+                    segments.push(label.as_str());
+                }
+                segments.extend(self.namespace().iter().map(Name::as_str));
+                let tail = self.tail(label);
+                segments.push(&tail);
+                segments.join(".")
+            }
+            Self::Synthetic { .. } => format!(".{}", self.tail(label)),
+            Self::Init | Self::InitLet(_) | Self::InitTest | Self::Entry(_) => self.tail(label),
+        }
+    }
+}
+
+/// `<(target as iface<args>)>.method` for a provided impl body. Every head is
+/// located from the body's own package by edge path; the body's own package
+/// is spelled by `label` (the owner's display label, as the name's prefix
+/// is) and a dependency by the edges that reach it (`edge.ns.X`).
+fn impl_body_tail(body: &ImplBodyKey, label: Option<&Name>) -> String {
+    /// Spells a head's package segment verbatim — the label or the edge
+    /// path — so no package folds away the way `TypeName`'s display elides a
+    /// local one.
+    struct BodySpelling<'a> {
+        label: Option<&'a Name>,
+    }
+    impl BodySpelling<'_> {
+        fn package(&self, path: &baml_type::wire::EdgePath) -> String {
+            match self.label {
+                Some(label) if path.is_own() => label.to_string(),
+                _ => path.to_string(),
+            }
+        }
+    }
+    impl baml_type::TyRenderStrategy<baml_type::PathName> for BodySpelling<'_> {
+        fn qtn(&self, head: &baml_type::PathName) -> String {
+            std::iter::once(self.package(head.key()))
+                .chain(head.namespace().iter().map(ToString::to_string))
+                .chain(std::iter::once(head.name().to_string()))
+                .collect::<Vec<_>>()
+                .join(".")
+        }
+
+        fn type_var(&self, name: &Name) -> String {
+            name.to_string()
+        }
+    }
+    let spelling = BodySpelling { label };
+    let display = |template: &baml_type::TyTemplate<baml_type::PathName>| {
+        template.to_display_ty().render_with(&spelling)
+    };
+    let mut interface = format!(
+        "{}.{}",
+        spelling.package(&body.interface.package),
+        body.interface.path
+    );
+    if !body.coherence.interface_args.is_empty() {
+        let args: Vec<String> = body.coherence.interface_args.iter().map(display).collect();
+        interface.push('<');
+        interface.push_str(&args.join(", "));
+        interface.push('>');
+    }
+    format!(
+        "<({} as {interface})>.{}",
+        display(&body.coherence.for_ty_pattern),
+        body.method
+    )
+}
+
 /// Represents any Baml function.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Function {
@@ -134,8 +374,9 @@ pub struct Function {
     #[borsh(skip)]
     pub telemetry_registration: btel_types::FunctionRegistration,
 
-    /// Function name.
-    pub name: String,
+    /// What this function is ([`FunctionIdentity`]); its name is rendered
+    /// from this and [`Self::owner`] by [`Self::name`], never stored.
+    pub identity: FunctionIdentity,
 
     /// Source file path where this function is defined.
     ///
@@ -147,14 +388,6 @@ pub struct Function {
     /// runtime reflection (BEP-062 `reflect.signature`); `None` for lambdas
     /// without docs and synthesized functions.
     pub docstring: Option<String>,
-
-    /// The name the function was declared with (`greet`, `bump`), recorded
-    /// at lowering.
-    /// `None` for callables that have no source-level name: lambdas and
-    /// compiler-synthesized bodies, whose [`Self::name`] is a debug identity
-    /// (`<lambda(...)>`), not a name. Surfaced by runtime reflection
-    /// (BEP-062 `reflect.signature`); never inferred from [`Self::name`].
-    pub declared_name: Option<String>,
 
     /// Number of arguments the function accepts.
     pub arity: usize,
@@ -254,24 +487,11 @@ pub struct Function {
     /// Provenance of this function in the compiler/runtime pipeline.
     pub origin: FunctionOrigin,
 
-    /// True for interface-machinery bodies: impl-block methods (in-class or
-    /// free) and interface default-method bodies.
-    ///
-    /// An interface body is pooled and slotted like any function —
-    /// statically resolved
-    /// calls stay direct `Call(GlobalIndex)` — but it is not itself a logical
-    /// item, so it has no name anywhere: bodies enter no package table, so no
-    /// rendered view of the executable names them, and every runtime name
-    /// scan skips them.
-    /// [`Self::name`] on an interface body is display-only (traces,
-    /// snapshots).
-    pub is_interface_body: bool,
-
     /// Native-dispatch key for `$rust_function` bodies (stdlib-only): the key
     /// `attach_builtins` resolves through each package's generated
     /// `get_native_fn` table. `None` for every bytecode/sys-op function.
     ///
-    /// This is deliberately separate from [`Self::name`]: the display string
+    /// This is deliberately separate from the rendered name: a display string
     /// is not an identity, while this key must match the codegen-produced
     /// dispatch tables exactly.
     pub native_key: Option<Box<str>>,
@@ -279,15 +499,50 @@ pub struct Function {
     /// LLM-specific metadata (prompt template, client name). `None` for non-LLM functions.
     pub body_meta: Option<FunctionMeta>,
 
-    /// Owning runtime package for dynamically grafted functions. Static
-    /// functions use null and address operands through the engine image.
+    /// Compiler/stdlib forwarding entry: hold controls without an automatic span.
+    pub trace_passthrough: bool,
+
+    /// The package this function belongs to — the same edge a class carries
+    /// to its package ([`super::Owner`]): bound by the loader for a static
+    /// package's functions, set by the grafter for a runtime package's. A
+    /// static function's owner is a compile-time pointer; a grafted
+    /// function's is the runtime package it addresses its operands through
+    /// (`BexVm::runtime_owner` tells the two apart). Every pooled function is
+    /// owned by the package that placed it (`ProgramPackage::objects`);
+    /// null only for the VM's own entry trampolines.
     #[borsh(skip)]
-    pub runtime_package: HeapPtr,
+    pub owner: HeapPtr,
+}
+
+impl Function {
+    /// The function's rendered name: [`FunctionIdentity::render`] under its
+    /// owner package's display label (lossy display, as a class's
+    /// [`name`](super::Class::name) is), or the identity alone when it has no
+    /// owner.
+    #[must_use]
+    pub fn name(&self) -> String {
+        self.identity
+            .render(super::owner::package_label(self.owner).as_ref())
+    }
+
+    /// The name the function was declared with; see
+    /// [`FunctionIdentity::declared_name`].
+    #[must_use]
+    pub fn declared_name(&self) -> Option<&Name> {
+        self.identity.declared_name()
+    }
+
+    /// Whether this is an interface-machinery body; see
+    /// [`FunctionIdentity::InterfaceBody`].
+    #[must_use]
+    pub fn is_interface_body(&self) -> bool {
+        self.identity.is_interface_body()
+    }
 }
 
 impl std::fmt::Display for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<fn {}>", self.name)
+        write!(f, "<fn {}>", self.name())
     }
 }
 
@@ -318,8 +573,8 @@ pub struct Closure {
 ///
 /// The type environment resolved when the method is bound is curried in via
 /// [`Self::type_args`], so `CallIndirect` carries no separate type arguments.
-/// See the field documentation for the ordinary-bound-method limitation around
-/// a later explicit generic application.
+/// A later explicit generic application appends method arguments while
+/// preserving the receiver and already-curried class/impl arguments.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct BoundMethod {
     /// Pointer to the underlying `Object::Function`.
@@ -491,20 +746,54 @@ impl Function {
     /// No runtime heap references escape in the returned value.
     pub fn runtime_metadata(&self) -> Option<btel_types::FunctionMetadata> {
         let function_id = self.telemetry_function_id?;
-        let fqn = self.name.clone();
-        let owner_type = derive_owner_type_definition_key(&fqn);
-        let (parent_function, lambda_path) = derive_lambda_metadata(&fqn);
-        let mut parts = fqn.split('.').map(str::to_string).collect::<Vec<_>>();
-        let display_name = parts.last().cloned().unwrap_or_else(|| fqn.clone());
-        let package_name = if parts.len() > 1 {
-            Some(parts.remove(0))
-        } else {
-            None
+        let label = super::owner::package_label(self.owner);
+        let fqn = self.identity.render(label.as_ref());
+        let display_name = self
+            .identity
+            .declared_name()
+            .map_or_else(|| self.identity.tail(label.as_ref()), ToString::to_string);
+        let package_name = label.as_ref().map(ToString::to_string);
+        let namespace: Vec<String> = self
+            .identity
+            .namespace()
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        // A method's owner type (its class; an interface default body's, its
+        // interface), and a closure body's parent and path within it, read off
+        // the identity rather than sniffed from a rendering. An impl-provided
+        // body has no owner type: its for-target is a pattern, not a
+        // declaration.
+        let under_label = |path: &super::LocalName| match &label {
+            Some(label) => path.under(label).to_string(),
+            None => path.to_string(),
         };
-        let namespace = if parts.len() > 1 {
-            parts[..parts.len() - 1].to_vec()
-        } else {
-            Vec::new()
+        let owner_type = match &self.identity {
+            FunctionIdentity::Declared(FnPath::Method { class, .. }) => Some(
+                btel_types::DefinitionKey(format!("class:{}", under_label(class))),
+            ),
+            FunctionIdentity::InterfaceBody(BodyKey::Default { interface, .. }) => Some(
+                btel_types::DefinitionKey(format!("interface:{}", under_label(interface))),
+            ),
+            FunctionIdentity::Declared(FnPath::Free(_))
+            | FunctionIdentity::InterfaceBody(BodyKey::ImplMethod(_))
+            | FunctionIdentity::Synthetic { .. }
+            | FunctionIdentity::Init
+            | FunctionIdentity::InitLet(_)
+            | FunctionIdentity::InitTest
+            | FunctionIdentity::Entry(_) => None,
+        };
+        let (parent_function, lambda_path) = match &self.identity {
+            FunctionIdentity::Synthetic { parent, .. } => {
+                let parent = match parent.as_ref() {
+                    SyntheticParent::Function(function) => Some(btel_types::DefinitionKey(
+                        format!("function:{}", function.render(label.as_ref())),
+                    )),
+                    SyntheticParent::Let(_) => None,
+                };
+                (parent, Some(self.identity.tail(label.as_ref())))
+            }
+            _ => (None, None),
         };
         let source_file = (!self.source_file.is_empty()).then(|| self.source_file.clone());
         let source_span = Some(btel_types::SourceSpan {
@@ -529,6 +818,7 @@ impl Function {
             namespace,
             argument_layout: self.telemetry_argument_layout(),
             source_map: self.telemetry_source_map(),
+            model_invoke: matches!(self.body_meta, Some(FunctionMeta::ModelInvoke)),
         })
     }
 
@@ -557,44 +847,6 @@ impl Function {
                 .collect(),
         })
     }
-}
-
-// TODO(bep-053): replace with compiler-owned metadata — capital-letter
-// sniffing on FQN segments is an acknowledged-interim heuristic and must not
-// become load-bearing.
-fn derive_owner_type_definition_key(fqn: &str) -> Option<btel_types::DefinitionKey> {
-    let parts = fqn.split('.').collect::<Vec<_>>();
-    if parts.len() < 3 {
-        return None;
-    }
-
-    let owner = parts[parts.len() - 2];
-    if !owner
-        .chars()
-        .next()
-        .is_some_and(|ch| ch.is_ascii_uppercase())
-    {
-        return None;
-    }
-
-    Some(btel_types::DefinitionKey(format!(
-        "class:{}",
-        parts[..parts.len() - 1].join(".")
-    )))
-}
-
-// TODO(bep-053): replace with compiler-owned lambda identity — the
-// `find("<lambda")` name sniff is an acknowledged-interim heuristic.
-fn derive_lambda_metadata(fqn: &str) -> (Option<btel_types::DefinitionKey>, Option<String>) {
-    let Some(lambda_start) = fqn.find("<lambda") else {
-        return (None, None);
-    };
-
-    let parent = fqn[..lambda_start].trim_end_matches(['.', ':']).to_string();
-    let parent_function =
-        (!parent.is_empty()).then(|| btel_types::DefinitionKey(format!("function:{parent}")));
-    let lambda_path = Some(fqn[lambda_start..].to_string());
-    (parent_function, lambda_path)
 }
 
 impl From<crate::FunctionKind> for btel_types::RuntimeFunctionKind {

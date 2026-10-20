@@ -75,6 +75,7 @@ fn companion_def(
     return_type: Option<crate::ast::TypeExpr>,
     body: (crate::ast::ExprBody, crate::ast::AstSourceMap),
 ) -> FunctionDef {
+    let trace_passthrough = name.as_str().ends_with("@spec") || name.as_str().ends_with("@stream");
     FunctionDef {
         name,
         generic_params: parent.generic_params.clone(),
@@ -84,7 +85,10 @@ fn companion_def(
         throws: None,
         body: Some(FunctionBodyDef::Expr(body.0, body.1)),
         declarative_meta: None,
-        metadata: crate::ast::FunctionMetadata::user_facing(crate::ast::FunctionOrigin::Companion),
+        metadata: crate::ast::FunctionMetadata {
+            trace_passthrough,
+            ..crate::ast::FunctionMetadata::user_facing(crate::ast::FunctionOrigin::Companion)
+        },
         attributes: vec![],
         docstring: parent.docstring.clone(),
         is_tagged_template_tag: parent.is_tagged_template_tag,
@@ -107,7 +111,7 @@ fn llm_spec(parent: &FunctionDef) -> Option<FunctionDef> {
     let out = parent.return_type.clone()?;
 
     let return_type = (TypeExprKind::Path {
-        segments: vec![Name::new("ai"), Name::new("FunctionSpec")],
+        path: baml_base::compiler_path!(ai.FunctionSpec),
         generic_args: vec![out],
         associated_type_bindings: vec![],
     })
@@ -146,7 +150,7 @@ fn llm_render_prompt(
         parent.span,
     );
     let return_type = (TypeExprKind::Path {
-        segments: vec![Name::new("ai"), Name::new("Prompt")],
+        path: baml_base::compiler_path!(ai.Prompt),
         generic_args: vec![],
         associated_type_bindings: vec![],
     })
@@ -197,7 +201,7 @@ fn llm_build_request(
         params,
         Some(
             (TypeExprKind::Path {
-                segments: vec![Name::new("baml"), Name::new("http"), Name::new("Request")],
+                path: baml_base::compiler_path!(baml.http.Request),
                 generic_args: vec![],
                 associated_type_bindings: vec![],
             })
@@ -249,7 +253,7 @@ fn llm_stream(
     // stream-shaped type.
     let type_args = vec![out];
     let return_type = (TypeExprKind::Path {
-        segments: vec![Name::new("ai"), Name::new("stream"), Name::new("Stream")],
+        path: baml_base::compiler_path!(ai.stream.Stream),
         generic_args: type_args.clone(),
         associated_type_bindings: vec![],
     })
@@ -262,11 +266,7 @@ fn llm_stream(
         .map(|mut param| {
             if param.name.as_str() == "client" {
                 let streaming_client = (TypeExprKind::Path {
-                    segments: vec![
-                        Name::new("ai"),
-                        Name::new("stream"),
-                        Name::new("StreamingClient"),
-                    ],
+                    path: baml_base::compiler_path!(ai.stream.StreamingClient),
                     generic_args: vec![],
                     associated_type_bindings: vec![],
                 })
@@ -295,11 +295,22 @@ fn llm_stream(
         type_args,
         span,
     );
-    Some(companion_def(
+    let mut stream = companion_def(
         parent,
         Name::new(format!("{}@stream", parent.name)),
         params,
         Some(return_type),
         body,
-    ))
+    );
+    // `@stream` is the LLM call when a caller streams, so it carries the
+    // parent's client for telemetry. It keeps none of the parent's companion
+    // bodies or prompt geometry: those belong to the declaration.
+    stream.declarative_meta = Some(DeclarativeMeta::Llm(crate::ast::LlmBodyDef {
+        client: llm.client.clone(),
+        companion_bodies: vec![],
+        prompt_spans: None,
+        has_tools: llm.has_tools,
+        span: llm.span,
+    }));
+    Some(stream)
 }

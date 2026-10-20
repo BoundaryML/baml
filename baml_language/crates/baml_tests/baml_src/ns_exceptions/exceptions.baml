@@ -1431,7 +1431,7 @@ test "throw_in_match_arm_propagates" {
         }
     } catch (e) {
         string => null
-    }
+    };
 }
 
 function s14_oob_fields() -> int {

@@ -967,6 +967,15 @@ fn classify_token(token: &SyntaxToken) -> Option<Class> {
             .and_then(|p| p.name())
             .filter(|name| name.text_range() == token.text_range())
             .map(|_| decl(SemanticTokenType::TypeParameter)),
+        // `let type T = …`: the first word is the bound type parameter's
+        // declaration (the operand is an expression and classifies on its
+        // own).
+        SyntaxKind::TYPE_BINDING_STMT => parent
+            .children_with_tokens()
+            .filter_map(NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::WORD)
+            .filter(|name| name.text_range() == token.text_range())
+            .map(|_| decl(SemanticTokenType::TypeParameter)),
         SyntaxKind::ENUM_DEF => word.then_some(decl(SemanticTokenType::Enum)),
         SyntaxKind::ENUM_VARIANT => word.then_some(decl(SemanticTokenType::EnumMember)),
         SyntaxKind::CLASS_DEF => word.then_some(decl(SemanticTokenType::Class)),
@@ -1178,6 +1187,34 @@ function projection(b: B) -> string throws never { (B as Shows).show(b) }
             "only the name, not the receiver"
         );
         assert_eq!(painted.token_type, SemanticTokenType::Method);
+    }
+
+    /// `let type T extends Named = t else { … };`: the keywords are keywords,
+    /// `T` is a type-parameter declaration, and the bound is a type reference.
+    #[test]
+    fn let_type_declares_a_type_parameter() {
+        let (db, file) = test_db(
+            r#"interface Named { name string }
+
+function f(t: reflect.Type) -> reflect.Type {
+    let type T extends Named = t else { return t };
+    reflect.Type.of<T>()
+}
+"#,
+        );
+        let tokens = semantic_tokens(&db, file);
+        let rendered = render(&db, file, tokens);
+        for expected in [
+            "keyword        \"let\"",
+            "keyword        \"type\"",
+            "typeParameter  [declaration] \"T\"",
+            "interface      \"Named\"",
+        ] {
+            assert!(
+                rendered.contains(expected),
+                "missing `{expected}` in:\n{rendered}"
+            );
+        }
     }
 
     fn test_db(source: &str) -> (ProjectDatabase, SourceFile) {

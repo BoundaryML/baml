@@ -1,5 +1,5 @@
 function main() -> string {
-    let result = reflect.union.new([]) catch (e) {
+    let result = reflect.Union.new([]) catch (e) {
         reflect.errors.CompilationError => {
             e.diagnostics[0].code + "|" + e.diagnostics[0].message
         }

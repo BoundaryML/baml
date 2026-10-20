@@ -298,9 +298,9 @@ fn meta<'a>(
 fn class_definition<'a>(
     class: &'a Class,
     position: &impl Fn(HeapPtr) -> Option<u32>,
-) -> definition::Class<baml_type::TyTemplate<Head<'a>>, &'a str, &'a DeclarationName> {
+) -> definition::Class<baml_type::TyTemplate<Head<'a>>, &'a str, DeclarationName> {
     definition::Class {
-        name: &class.name,
+        name: class.name(),
         type_params: u32::try_from(class.generic_param_count).expect("bounded generics"),
         meta: meta(
             class.description.as_ref(),
@@ -331,9 +331,9 @@ fn class_definition<'a>(
     }
 }
 
-fn enum_definition(enm: &Enum) -> definition::Enum<&str, &DeclarationName> {
+fn enum_definition(enm: &Enum) -> definition::Enum<&str, DeclarationName> {
     definition::Enum {
-        name: &enm.name,
+        name: enm.name(),
         meta: meta(
             enm.description.as_ref(),
             enm.alias.as_ref(),
@@ -375,11 +375,11 @@ fn group_head<'a>(head: &TypeHead, position: &impl Fn(HeapPtr) -> Option<u32>) -
     // SAFETY: the caller of the search holds the heap permit, and the head
     // is resolved.
     match unsafe { head.ptr().get() } {
-        Object::Class(class) => Head::Defined(&class.name, defined(&class.telemetry_definition)),
-        Object::Enum(enm) => Head::Defined(&enm.name, defined(&enm.telemetry_definition)),
+        Object::Class(class) => Head::Defined(class.name(), defined(&class.telemetry_definition)),
+        Object::Enum(enm) => Head::Defined(enm.name(), defined(&enm.telemetry_definition)),
         // An interface or a type alias: no recorded definition.
-        Object::Interface(iface) => Head::Named(DeclarationName::Declared(iface.name.clone())),
-        Object::TypeAlias(alias) => Head::Named(DeclarationName::Declared(alias.name.clone())),
+        Object::Interface(iface) => Head::Named(iface.name()),
+        Object::TypeAlias(alias) => Head::Named(alias.name()),
         _ => unreachable!("a live declaration's field names a declaration"),
     }
 }
@@ -397,7 +397,7 @@ mod tests {
 
     fn class(name: &str, tag: i64) -> Object {
         Object::Class(Box::new(Class {
-            name: DeclarationName::Anonymous(Name::new(name)),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new(name)),
             fields: Vec::new(),
             description: None,
             alias: None,
@@ -405,7 +405,7 @@ mod tests {
             other: IndexMap::new(),
             stream_done: false,
             type_tag: TypeTag::from_i64(tag),
-            has_cleanup: false,
+            cleanup: None,
             generic_param_count: 0,
             owner: Owner::anonymous(),
             methods: IndexMap::new(),

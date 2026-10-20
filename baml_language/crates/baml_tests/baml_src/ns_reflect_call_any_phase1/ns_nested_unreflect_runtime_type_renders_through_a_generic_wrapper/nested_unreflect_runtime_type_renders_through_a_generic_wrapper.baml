@@ -14,11 +14,11 @@ function Extract<T>(input: string) -> T {
 }
 
 function main() -> string {
-    let runtime_class = reflect.class.new(
+    let runtime_class = reflect.Class.new(
         "RuntimeTranscript",
-        { "speaker": reflect.Type.of<string>(), "words": reflect.Type.of<string[]>() },
+        { "speaker": string.type(), "words": reflect.Type.of<string[]>() },
     );
-    type Transcript = unreflect(runtime_class.as_type())
+    let type Transcript = runtime_class;
     Extract@render_prompt<Wrapper<Transcript>>("sample").text()
 }
 

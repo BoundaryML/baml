@@ -4,9 +4,9 @@
 //! The falsy set is uniform and type-agnostic (Python's rule): `false`,
 //! `null`, `0`, `0n`, `0.0`/`-0.0`, `""`, `[]`, `{}`, and an empty byte
 //! array. Everything else - including `NaN`, class instances, enum
-//! variants, functions, and media - is truthy. `void` conditions are an
-//! error (the value does not exist), and a condition whose static type
-//! decides the branch is a warning. The reachability pass also diagnoses
+//! variants, functions, and media - is truthy. A condition whose static
+//! type decides the branch is a warning (a unit condition is one: its only
+//! value, `null`, is falsy). The reachability pass also diagnoses
 //! written constants and labels the unreachable code; `while (true)`
 //! stays idiomatic.
 //!
@@ -94,7 +94,6 @@ pub(crate) fn truthiness(ty: &Ty) -> Truthiness {
         | InferTy::AssociatedTypeProjection { .. }
         | InferTy::TypeAlias(..)
         | InferTy::Never
-        | InferTy::Void
         | InferTy::Error
         | InferTy::InferVar { .. } => Truthiness::Runtime,
     }
@@ -153,8 +152,7 @@ impl<'db> InferenceContext<'db> {
 
     /// Type a branch condition (`if`/`while`/guard) and return what each
     /// outcome proves: any type is accepted, a non-`bool` records the
-    /// Truthy adjustment for MIR, `void` is a mismatch (there is no value
-    /// to test), and a statically-decided branch warns.
+    /// Truthy adjustment for MIR, and a statically-decided branch warns.
     ///
     /// Inference runs with NO expectation - a `bool` expectation would
     /// wrongly pin type variables the condition is free to leave open
@@ -174,9 +172,9 @@ impl<'db> InferenceContext<'db> {
     /// operand (records `Adjust::Truthy`) from a `!` operand (records
     /// nothing - `OpCode::Not` performs the truthiness coercion itself, so
     /// a recorded adjustment would be dead metadata with no MIR consumer);
-    /// everything else - acceptance, the `void` mismatch, the
-    /// always-constant warning - is identical, and keeping it in one place
-    /// is what stops the positions drifting apart again.
+    /// everything else - acceptance and the always-constant warning - is
+    /// identical, and keeping it in one place is what stops the positions
+    /// drifting apart again.
     pub(super) fn check_truthy_operand(
         &mut self,
         body: &ExprBody,
@@ -202,8 +200,17 @@ impl<'db> InferenceContext<'db> {
             });
             return (ty, facts);
         }
-        if let Some(decision) = Self::decide_condition(&resolved) {
-            self.apply_condition_decision(operand, resolved, is_literal, coerce, decision);
+        if Self::needs_truthy_coercion(&resolved) {
+            if coerce {
+                self.result.expr_adjustments.insert(
+                    operand,
+                    Box::new([Adjustment {
+                        kind: Adjust::Truthy,
+                        target: Ty::bool(),
+                    }]),
+                );
+            }
+            self.push_always_const_warning(operand, resolved, is_literal);
         }
         (ty, facts)
     }
@@ -227,63 +234,12 @@ impl<'db> InferenceContext<'db> {
             if resolved.has_error() || resolved.has_infer() {
                 continue;
             }
-            match Self::decide_condition(&resolved) {
-                Some(ConditionDecision::Mismatch) => {
-                    result
-                        .type_mismatches
-                        .entry(condition)
-                        .or_insert((Ty::bool(), resolved));
-                }
-                Some(ConditionDecision::Coerce) => {
-                    // A `!` operand (`coerce: false`) records nothing:
-                    // `OpCode::Not` coerces itself. It still owes the
-                    // warning.
-                    if coerce {
-                        result.expr_adjustments.insert(
-                            condition,
-                            Box::new([Adjustment {
-                                kind: Adjust::Truthy,
-                                target: Ty::bool(),
-                            }]),
-                        );
-                    }
-                    self.push_always_const_warning(condition, resolved, is_literal);
-                }
-                None => {}
-            }
-        }
-    }
-
-    /// The shared judgment: `None` for an already-boolean condition
-    /// (including `never`, which produces no value to coerce),
-    /// `Mismatch` for `void` (no value exists to test), `Coerce`
-    /// otherwise.
-    fn decide_condition(resolved: &Ty) -> Option<ConditionDecision> {
-        match resolved.kind() {
-            InferTy::Bool | InferTy::Literal(Literal::Bool(_), _) | InferTy::Never => None,
-            InferTy::Void => Some(ConditionDecision::Mismatch),
-            _ => Some(ConditionDecision::Coerce),
-        }
-    }
-
-    /// Eager-path application of a decision, writing through `self.result`.
-    fn apply_condition_decision(
-        &mut self,
-        condition: ExprId,
-        resolved: Ty,
-        is_literal: bool,
-        coerce: bool,
-        decision: ConditionDecision,
-    ) {
-        match decision {
-            ConditionDecision::Mismatch => {
-                self.result
-                    .type_mismatches
-                    .insert(condition, (Ty::bool(), resolved));
-            }
-            ConditionDecision::Coerce => {
+            if Self::needs_truthy_coercion(&resolved) {
+                // A `!` operand (`coerce: false`) records nothing:
+                // `OpCode::Not` coerces itself. It still owes the
+                // warning.
                 if coerce {
-                    self.result.expr_adjustments.insert(
+                    result.expr_adjustments.insert(
                         condition,
                         Box::new([Adjustment {
                             kind: Adjust::Truthy,
@@ -294,6 +250,16 @@ impl<'db> InferenceContext<'db> {
                 self.push_always_const_warning(condition, resolved, is_literal);
             }
         }
+    }
+
+    /// The shared judgment: an already-boolean condition (including
+    /// `never`, which produces no value to coerce) branches as it is; every
+    /// other value is coerced.
+    fn needs_truthy_coercion(resolved: &Ty) -> bool {
+        !matches!(
+            resolved.kind(),
+            InferTy::Bool | InferTy::Literal(Literal::Bool(_), _) | InferTy::Never
+        )
     }
 
     /// A statically-decided NON-literal condition is a likely bug
@@ -327,13 +293,4 @@ pub(crate) struct PendingCondition {
     /// Branch conditions record `Adjust::Truthy`; `!` operands do not
     /// (`OpCode::Not` coerces itself).
     pub(crate) coerce: bool,
-}
-
-/// What a condition position does with its (closed) type.
-#[derive(Clone, Copy)]
-enum ConditionDecision {
-    /// `void`: no value exists to test.
-    Mismatch,
-    /// Any non-boolean value: record the truthiness coercion.
-    Coerce,
 }

@@ -4,7 +4,7 @@ source: crates/baml_tests/src/corpus.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0097
 
-  ⚠ extraneous throws declaration: throw_context.Errors
+  ⚠ extraneous throws declaration: Errors
     ╭─[throw_context.baml:37:45]
  37 │ ╭─▶ function throwAlias() -> void throws Errors {
  38 │ │       throw [];

@@ -5,9 +5,9 @@ client MyClient = openai.ResponsesClient.new(
 );
 
 function main() -> string {
-    MyClient.id()
+    MyClient.requested_model()
 }
 
 test "client_declaration_methods_dispatch" {
-    assert.equal(main(), "openai/gpt-4o-mini")
+    assert.equal(main(), "gpt-4o-mini")
 }

@@ -48,7 +48,7 @@ function mti_probe(c1: reflect.Package, src: string) -> string throws unknown {
     let c2 = reflect.Package.compile({ "c2.baml": src }, packages = { "c1": c1 }) catch (e) {
         reflect.errors.CompilationError => { return "COMPILE " + e.diagnostics[0].code }
     };
-    let run = c2.get_function<() -> string>("root.run") ?? throw "missing run";
+    let run = c2.get_function<() -> string>("root.run");
     "RAN " + run()
 }
 

@@ -31,7 +31,7 @@ function old_qualified_call() -> string {
 type StillAnAlias = int | string;
 
 function type_keyword_still_works(t: reflect.Type) -> string {
-    type T = unreflect(t)
+    let type T = t;
     let type = reflect.Type.of<T>();
     type.to_string()
 }

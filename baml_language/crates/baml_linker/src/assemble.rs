@@ -33,7 +33,7 @@ impl Assembler<'_, '_> {
     pub(super) fn assemble(self) -> Result<Program, LinkError> {
         let mut program = Program::new();
         program.globals = vec![ConstValue::Null; self.slots.total];
-        self.place(&mut program)?;
+        let placed = self.place(&mut program)?;
 
         // A package's executable identity is its position: set order.
         let mut packages: Vec<ProgramPackage> = self
@@ -42,6 +42,7 @@ impl Assembler<'_, '_> {
             .iter()
             .map(|package| ProgramPackage {
                 name: package.name.clone(),
+                kind: package.kind,
                 edges: package
                     .edges
                     .iter()
@@ -55,6 +56,7 @@ impl Assembler<'_, '_> {
             })
             .collect();
         for (id, package) in self.set.ids().zip(&mut packages) {
+            package.objects = placed[id.0 as usize].clone();
             self.fill_slots(id, &mut program, package)?;
             self.fill_tables(id, package);
             self.fill_record(id, package);
@@ -93,9 +95,13 @@ impl Assembler<'_, '_> {
     }
 
     /// Push every object in layout order, relocating its operands and heads
-    /// and assigning each declaration the tag its image index is.
-    fn place(&self, program: &mut Program) -> Result<(), LinkError> {
+    /// and assigning each declaration the tag its image index is. Returns
+    /// each package's range of the pool, by package id: its unit's objects
+    /// then its tails', contiguous (`ProgramPackage::objects`).
+    fn place(&self, program: &mut Program) -> Result<Vec<std::ops::Range<u32>>, LinkError> {
+        let mut ranges = vec![0..0; self.set.packages.len()];
         for &id in self.order.members() {
+            let start = u32::try_from(program.objects.len()).expect("object pools fit u32");
             let space = self.unit_space(id);
             let placed = &space.objects.code;
             for bucket in Bucket::ALL {
@@ -121,9 +127,11 @@ impl Assembler<'_, '_> {
                     program.objects.push(object);
                 }
             }
+            let end = u32::try_from(program.objects.len()).expect("object pools fit u32");
+            ranges[id.0 as usize] = start..end;
         }
         debug_assert_eq!(program.objects.len(), self.objects.total);
-        Ok(())
+        Ok(ranges)
     }
 
     /// Fill a unit's global slots and its package's slot map: each cell as an
@@ -225,7 +233,7 @@ impl Assembler<'_, '_> {
                 // dispatch.
                 if !matches!(
                     program.objects.get(abs),
-                    Some(Object::Function(function)) if function.is_interface_body
+                    Some(Object::Function(function)) if function.is_interface_body()
                 ) {
                     return Err(LinkError::invalid(format!(
                         "package `{name}` impl method `{method}` resolves to an object that is \

@@ -109,7 +109,7 @@ function integration_consumer(dependency: reflect.Package) -> reflect.Package {
 test "real mounted packages select hooks for direct generic receiver virtual and spawned calls" {
     let dependency = integration_dependency();
     let consumer = integration_consumer(dependency);
-    let run = consumer.get_function<() -> int>("root.run") ?? baml.sys.panic("missing mounted entry");
+    let run = consumer.get_function<() -> int>("root.run");
     assert.equal(run(), 42);
     assert.equal(run(), 42);
 }
@@ -132,12 +132,10 @@ function integration_mount_in_hook() -> trace.Options throws never {
     };
     let custom = package.get_function<IntegrationCallable>("root.custom") catch (error) {
         _ => baml.sys.panic("custom lookup failed inside hook")
-    }
-        ?? baml.sys.panic("missing custom");
+    };
     let builtin = package.get_function<IntegrationCallable>("root.builtin") catch (error) {
         _ => baml.sys.panic("builtin lookup failed inside hook")
-    }
-        ?? baml.sys.panic("missing builtin");
+    };
     assert.equal(custom($trace = trace.span(inputs = true)), true);
     assert.equal(builtin($trace = trace.span(inputs = true)), true);
     trace.context(metadata = { "late_compiled": true })

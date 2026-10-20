@@ -1,0 +1,5 @@
+name = "closure apply 1m"
+description = "1,000,000 calls of a lambda passed as an argument"
+expect = "999999000000"
+jobs = 2
+warmup = 1

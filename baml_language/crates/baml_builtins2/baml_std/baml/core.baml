@@ -16,7 +16,19 @@ function deep_copy<T>(value: T) -> T throws never {
 ///
 /// Use it to test whether a type is concrete, or as a bound restricting a type
 /// parameter to concrete types.
-interface Concrete {}
+interface Concrete {
+    /// This type's runtime type value: `int.type()` is the same value as
+    /// `reflect.Type.of<int>()`.
+    ///
+    /// Spell it on a declared type written as one name, optionally qualified
+    /// or with generic arguments: `Foo.type()`, `root.models.Base.type()`,
+    /// `Box<int[]>.type()`. Array, optional, union, map and function types,
+    /// interfaces, and generic type parameters keep the `reflect.Type.of<T>()`
+    /// form. A type that declares its own `type` member keeps resolving to it.
+    function type() -> reflect.Type throws never {
+        reflect.Type.of<Self>()
+    }
+}
 
 implement<T> Concrete for T {
 

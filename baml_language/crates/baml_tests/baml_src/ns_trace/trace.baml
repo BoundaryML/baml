@@ -227,13 +227,14 @@ test "attachments work on methods closures and nested calls" {
 }
 
 function unsupported_native_does_not_leak(native: () -> trace.SpanId?) -> bool {
+    let observed_before = own_id() != null;
     let rejected = {
         native($trace = trace.span());
         false
     } catch_all_panics (error) {
         _ => true,
     };
-    assert.equal(own_id(), null);
+    assert.equal(own_id() != null, observed_before);
     rejected
 }
 

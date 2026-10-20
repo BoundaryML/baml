@@ -8,7 +8,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use baml_base::{Name, TypePath};
+use baml_base::{Name, Path};
 use la_arena::{Arena, Idx};
 use text_size::TextRange;
 
@@ -40,7 +40,7 @@ pub struct RawAttributeArg {
 pub enum TypeExprKind {
     /// Named type path: `User`, `baml.http.Request`, `Stream<T>`
     Path {
-        segments: Vec<Name>,
+        path: Path,
         /// Generic type arguments (e.g., `<T>` in `Stream<T>`). Empty for non-generic paths.
         generic_args: Vec<TypeExpr>,
         /// Named associated type bindings in type positions, e.g. `Iterator<Item = int>`.
@@ -60,8 +60,6 @@ pub enum TypeExprKind {
     Bool,
     Null,
     Never,
-    /// The `void` type — valid only as a function return type.
-    Void,
     /// `Uint8Array` (binary data) type
     Uint8Array,
     /// Media types
@@ -243,7 +241,6 @@ impl TypeExpr {
             | TypeExprKind::Null
             | TypeExprKind::Uint8Array
             | TypeExprKind::Never
-            | TypeExprKind::Void
             | TypeExprKind::Rust
             | TypeExprKind::Literal { .. }
             | TypeExprKind::Media { .. }
@@ -283,17 +280,17 @@ impl std::fmt::Display for TypeExprKind {
 
         match self {
             TypeExprKind::Path {
-                segments,
+                path,
                 generic_args,
                 associated_type_bindings,
                 ..
             } => {
-                let path = segments
+                let dotted = path
                     .iter()
                     .map(smol_str::SmolStr::as_str)
                     .collect::<Vec<_>>()
                     .join(".");
-                write!(f, "{path}")?;
+                write!(f, "{dotted}")?;
                 if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
                     write!(f, "<")?;
                     let mut first = true;
@@ -335,7 +332,6 @@ impl std::fmt::Display for TypeExprKind {
             TypeExprKind::Bool => write!(f, "bool"),
             TypeExprKind::Null => write!(f, "null"),
             TypeExprKind::Never => write!(f, "never"),
-            TypeExprKind::Void => write!(f, "void"),
             TypeExprKind::Uint8Array => write!(f, "uint8array"),
             TypeExprKind::Media { kind, .. } => write!(f, "{}", format!("{kind:?}").to_lowercase()),
             TypeExprKind::Optional { inner, .. } => {
@@ -432,6 +428,7 @@ pub struct AssociatedTypeBinding {
 pub struct GenericParam {
     pub name: Name,
     pub bounds: Vec<TypeExpr>,
+    pub name_span: TextRange,
 }
 
 // ── Expression Bodies ───────────────────────────────────────────
@@ -458,6 +455,12 @@ pub struct ExprBody {
     pub catch_arms: Arena<CatchArm>,
     /// Type annotations on let bindings etc.
     pub type_annotations: Arena<TypeExpr>,
+    /// Every `${expr}` a tagged template hands its tag as a value, in source
+    /// order. A tag takes its values as they are, so what holds of them is
+    /// checked here rather than at a parameter; and an LLM function's
+    /// `prompt:` is flattened in place with no [`Expr::Template`] of its own
+    /// to find them through.
+    pub tag_values: Vec<ExprId>,
     /// Root expression of the function body.
     pub root_expr: Option<ExprId>,
 }
@@ -471,6 +474,7 @@ impl Default for ExprBody {
             match_arms: Arena::new(),
             catch_arms: Arena::new(),
             type_annotations: Arena::new(),
+            tag_values: Vec::new(),
             root_expr: None,
         }
     }
@@ -612,7 +616,7 @@ pub struct AstSourceMap {
     /// entry. Absent for binds the compiler synthesizes, which have no name
     /// token to point at.
     pub bind_name_spans: HashMap<PatId, TextRange>,
-    /// The NAME token of each body `type T = …` binding, as distinct from its
+    /// The NAME token of each body `let type T = …` binding, as distinct from its
     /// statement's span. Absent when the statement has no name token.
     pub type_binding_name_spans: HashMap<StmtId, TextRange>,
     pub match_arm_spans: Arena<TextRange>,
@@ -765,7 +769,7 @@ impl AstSourceMap {
         self.bind_name_spans.get(&id).copied()
     }
 
-    /// The name token of a body `type T = …` binding, when it was written.
+    /// The name token of a body `let type T = …` binding, when it was written.
     pub fn type_binding_name_span(&self, id: StmtId) -> Option<TextRange> {
         self.type_binding_name_spans.get(&id).copied()
     }
@@ -850,8 +854,9 @@ pub enum Expr {
     /// Stores the fully-resolved bytes (escape sequences already processed).
     ByteStringLiteral(Vec<u8>),
     Null,
-    /// Path expression: `x`, `user.name`, `Status.Active`
-    Path(Vec<Name>),
+    /// Path expression: `x`, `user.name`, `Status.Active` — with who wrote
+    /// it, which decides how its first segment is read.
+    Path(Path),
     /// Generic instantiation as a value: `foo<int>` — a generic callable
     /// referenced with explicit type arguments but NOT called. The result is
     /// the specialized function value (`(int) -> int`). Distinct from
@@ -894,9 +899,11 @@ pub enum Expr {
         scrutinee: ExprId,
         pattern: PatId,
     },
+    /// One protected expression and one handler. Chained catches nest these
+    /// nodes, so a later handler also protects earlier handler bodies.
     Catch {
         base: ExprId,
-        clauses: Vec<CatchClause>,
+        clause: CatchClause,
     },
     Throw {
         value: ExprId,
@@ -936,7 +943,7 @@ pub enum Expr {
         /// object literal when a type name precedes the brace
         /// (`looks_like_object_constructor`), so a name-less `{ .. }` is a map or
         /// block, never an object literal.
-        type_name: TypePath,
+        type_name: Path,
         /// Explicit generic type args from syntax like `Foo<int> { ... }`.
         /// Empty when no `<...>` was written (e.g. bare `Foo { ... }`).
         type_args: Vec<TypeExpr>,
@@ -1078,6 +1085,19 @@ pub enum TemplateSegment {
     /// A `${expr}` interpolation. The wrapped `ExprId` is the lowered
     /// inner expression (already a block expression per BEP §4).
     Interp(ExprId),
+    /// A `${…}` that produces no value (BEP §4): a block with no final
+    /// expression, or one ending in an `if` with no `else`. It contributes
+    /// nothing to the template, neither text nor a value for a tag, and runs
+    /// for its effects in the template's own scope, so a `let` it makes is
+    /// visible to the segments after it.
+    Effect {
+        /// The interpolation as written. It locates the segment in the
+        /// source and is not itself evaluated.
+        block: ExprId,
+        /// What runs in its place: the block's statements, its final
+        /// expression (if any) last and held to the unit type.
+        stmts: Vec<StmtId>,
+    },
     /// A `${for (let p in c)}...${endfor}` block (iterator form).
     For {
         binding: PatId,
@@ -1129,28 +1149,23 @@ impl CallArg {
     }
 }
 
-/// The right-hand side of a body-level `type T = …;` binding.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypeBindingValue {
-    /// `unreflect(expr)`: the runtime type is the `reflect.Type` value the
-    /// operand evaluates to, evaluated once when the statement runs.
-    Runtime(ExprId),
-    /// A static type: the runtime type is its template, realized in the
-    /// enclosing frame when the statement runs.
-    Static(TypeExpr),
-}
-
 /// Statements — modeled after `Stmt` in `body.rs`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
     Expr(ExprId),
-    /// `type T = …;` inside a body: bind a rigid, block-scoped type parameter
-    /// `T` for the remainder of the enclosing block. The parameter is opaque
-    /// to static checking either way; only where its runtime type comes from
-    /// differs (see [`TypeBindingValue`]).
+    /// `let type T [extends A & B] = operand [else { … }];` inside a body:
+    /// bind a rigid, block-scoped type parameter `T` for the remainder of the
+    /// enclosing block. Its runtime type is the `reflect.Type` (or
+    /// `reflect.TypeView`) `operand` evaluates to, evaluated once when the
+    /// statement runs. `T` is opaque to static checking apart from its
+    /// `bounds`, which the statement checks at run time: a type that misses
+    /// one runs `else_branch`, which must diverge and which a bounded
+    /// statement must have.
     TypeBinding {
         name: Name,
-        value: TypeBindingValue,
+        operand: ExprId,
+        bounds: Vec<TypeExpr>,
+        else_branch: Option<ExprId>,
     },
     Let {
         /// The binding pattern. A `: T` annotation lives inside the pattern
@@ -1402,18 +1417,56 @@ pub struct MatchArm {
     pub body: ExprId,
 }
 
+/// Every catch clause creates its own protected expression and handler. The
+/// three keywords select the [`CatchClauseKind::requires_error_coverage`]
+/// and [`CatchClauseKind::wildcard_traps_panics`] policies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CatchClauseKind {
+    /// `catch`: handles the listed errors; the rest keep propagating.
     Catch,
+    /// `catch_all`: must handle every error the protected expression can
+    /// still throw.
     CatchAll,
+    /// `catch_all_panics`: `catch_all`, plus its arms must handle panics,
+    /// which its wildcard arms receive.
     CatchAllPanics,
+}
+
+impl CatchClauseKind {
+    /// The clause keyword as written in source.
+    pub fn keyword(self) -> &'static str {
+        match self {
+            CatchClauseKind::Catch => "catch",
+            CatchClauseKind::CatchAll => "catch_all",
+            CatchClauseKind::CatchAllPanics => "catch_all_panics",
+        }
+    }
+
+    /// Whether the clause's arms must cover every error that reaches it
+    /// (E0062 otherwise). The clause's own arm-body errors may still propagate.
+    pub fn requires_error_coverage(self) -> bool {
+        !matches!(self, CatchClauseKind::Catch)
+    }
+
+    /// Whether a wildcard arm (`_`, a bare `let x`) of this clause receives
+    /// panics. Elsewhere a panic passes over wildcard arms and is only
+    /// caught by an arm that names its type.
+    pub fn wildcard_traps_panics(self) -> bool {
+        matches!(self, CatchClauseKind::CatchAllPanics)
+    }
+
+    /// Whether the clause's arms must also cover every panic (E0062
+    /// otherwise): the boundary promise of `catch_all_panics`.
+    pub fn requires_panic_coverage(self) -> bool {
+        matches!(self, CatchClauseKind::CatchAllPanics)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatchClause {
     pub kind: CatchClauseKind,
     pub binding: PatId,
-    /// Optional second binding for the stack trace: `catch (e, st) { ... }`
+    /// Optional second binding for the error context: `catch (e, ctx) { ... }`
     pub stack_trace_binding: Option<PatId>,
     pub arms: Vec<CatchArmId>,
 }
@@ -1455,6 +1508,10 @@ pub enum FunctionOrigin {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FunctionMetadata {
+    /// Retain call tracing controls without an automatic invocation span.
+    pub trace_passthrough: bool,
+    /// Source directive (as opposed to compiler-generated metadata), for validation.
+    pub explicit_trace_passthrough: bool,
     pub origin: FunctionOrigin,
     /// Marks compiler/runtime implementation details that are outside BAML's
     /// user-facing language surface.
@@ -1470,6 +1527,8 @@ impl FunctionMetadata {
         Self {
             origin,
             is_language_internal: false,
+            trace_passthrough: false,
+            explicit_trace_passthrough: false,
         }
     }
 
@@ -1477,6 +1536,8 @@ impl FunctionMetadata {
         Self {
             origin,
             is_language_internal: true,
+            trace_passthrough: false,
+            explicit_trace_passthrough: false,
         }
     }
 }

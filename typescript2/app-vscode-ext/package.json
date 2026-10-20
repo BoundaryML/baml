@@ -112,6 +112,7 @@
     "vscode": ">=1.63.0"
   },
   "icon": "baml-logo.png",
+  "license": "Apache-2.0",
   "main": "./dist/extension.js",
   "name": "baml-language",
   "private": true,
@@ -128,5 +129,5 @@
     "typecheck": "tsc --noEmit"
   },
   "type": "commonjs",
-  "version": "0.20.1"
+  "version": "0.22.2"
 }

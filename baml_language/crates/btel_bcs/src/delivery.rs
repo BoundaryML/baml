@@ -72,7 +72,7 @@ pub struct DeliveryConfig {
     pub authorization: Option<bcs_api::credentials::RequestAuthorization>,
     /// Start ingestion authorization immediately, before any recording batch is sealed.
     pub initial_recording_id: Option<btel_types::RecordingId>,
-    /// Artifact failure policy applies after bounded initial connection retries.
+    /// Initial-failure policy applies after bounded initial connection retries.
     pub terminal_initial_connection: bool,
     pub max_pending_plans: usize,
     /// At most 32 captures, leaving default snapshot-pool headroom for VM

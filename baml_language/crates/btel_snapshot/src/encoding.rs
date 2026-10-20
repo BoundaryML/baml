@@ -65,7 +65,7 @@ fn original_len(w: &mut impl Write, n: usize) -> io::Result<()> {
         .serialize(w)
 }
 fn string(w: &mut impl Write, value: &BexStr) -> io::Result<()> {
-    size(w, value.len())?;
+    size(w, value.byte_len())?;
     w.write_all(value.as_bytes())
 }
 
@@ -250,7 +250,7 @@ impl Resolver for Stored<'_> {
                     .checked_sub(STRING_BLOB_HEADER_BYTES)
                     .unwrap_or_else(|| unreachable!("a string blob has its header"))
             }
-            None => s.strings[id.0 as usize].len(),
+            None => s.strings[id.0 as usize].byte_len(),
         }
     }
 }

@@ -140,24 +140,7 @@ impl<'db> InferenceContext<'db> {
                 let (_, guard_facts) = self.check_condition(body, guard);
                 self.apply_facts(&guard_facts.when_true);
             }
-            // A hard branch expectation CHECKS each arm (rustc coerces
-            // every arm to the expectation): a failing arm reports at
-            // ITSELF - and recovers as the expectation, so the join does
-            // not re-report the same mismatch on the whole match. A
-            // passing arm keeps its ACTUAL type (literal grain survives
-            // the join).
-            let arm_ty = match branch_expectation.only_has_type() {
-                Some(expected_ty) => {
-                    let expected_ty = expected_ty.clone();
-                    let actual = self.check_expr(body, arm.body, &expected_ty);
-                    if self.result.type_mismatches.contains_key(&arm.body) {
-                        expected_ty
-                    } else {
-                        actual
-                    }
-                }
-                None => self.infer_expr(body, arm.body, &branch_expectation),
-            };
+            let arm_ty = self.infer_branch(body, arm.body, &branch_expectation);
             all_diverge = all_diverge.and(self.diverges);
             self.flow = saved_flow;
             arm_tys.push(arm_ty);
@@ -170,6 +153,12 @@ impl<'db> InferenceContext<'db> {
             }
         }
         self.diverges = entry_diverges.or(all_diverge);
+        let parts = arms
+            .iter()
+            .zip(&arm_tys)
+            .map(|(&arm, ty)| (ty.clone(), self.take_units(body.match_arms[arm].body)))
+            .collect();
+        let units = self.join_units(parts, expected);
         // An unknown-FIELD in some arm's class pattern makes that arm's
         // matrix row a lie (the bad field dropped out), so usefulness
         // verdicts are noise - same suppression as an errored pattern.
@@ -217,6 +206,9 @@ impl<'db> InferenceContext<'db> {
                 });
             self.result.non_exhaustive_matches.insert(match_expr);
             return Ty::error();
+        }
+        if !units.is_empty() {
+            self.unjudged_units.insert(match_expr, units);
         }
         self.join(&arm_tys)
     }
@@ -358,7 +350,11 @@ impl<'db> InferenceContext<'db> {
                     .iter()
                     .map(|s| baml_type::Name::new(s.as_str()))
                     .collect();
-                let def = self.lower.resolve_type_definition(&segments)?;
+                let head = self.lower.path_head(&segments);
+                if self.scoped_type_param_heads(head, &segments) {
+                    return None;
+                }
+                let def = self.lower.resolve_type_definition(head, &segments)?;
                 let baml_compiler2_hir::contributions::Definition::Class(class_loc) = def else {
                     return None;
                 };
@@ -1190,7 +1186,12 @@ impl<'db> InferenceContext<'db> {
                 consumes_matched: false,
             };
         }
-        let definition = self.lower.resolve_type_definition(class_path);
+        // A type parameter or scoped `type` binding at the head shadows
+        // every item (as for a type pattern): no class is named.
+        let head = self.lower.path_head(class_path);
+        let definition = (!self.scoped_type_param_heads(head, class_path))
+            .then(|| self.lower.resolve_type_definition(head, class_path))
+            .flatten();
         // Destructure spelled with an INTERFACE name: the existential's
         // declared FIELDS destructure like a class's.
         if let Some(baml_compiler2_hir::contributions::Definition::Interface(interface)) =
@@ -1201,7 +1202,8 @@ impl<'db> InferenceContext<'db> {
         }
         let Some(baml_compiler2_hir::contributions::Definition::Class(class)) = definition else {
             // The destructured name resolves nowhere (or to a non-class):
-            // E0003 at the pattern, fields lower against the sentinel.
+            // E0002 at the pattern, as for a type pattern; fields lower
+            // against the sentinel.
             if definition.is_none() {
                 self.pending_diags
                     .push(super::PendingDiag::UnresolvedPatternName {
@@ -1213,6 +1215,7 @@ impl<'db> InferenceContext<'db> {
                                 .collect::<Vec<_>>()
                                 .join("."),
                         ),
+                        suggestions: self.lower.type_suggestions(class_path),
                     });
             }
             for &(_, field_pat) in field_pats {

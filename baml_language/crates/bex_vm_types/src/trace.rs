@@ -41,10 +41,19 @@ pub struct TraceOptionsData {
 }
 
 #[derive(Debug)]
+struct ReservationState {
+    attached: AtomicBool,
+    materialized: AtomicBool,
+}
+
+#[derive(Clone, Debug)]
 pub struct ReservedSpanData {
     pub options: TraceOptionsData,
     pub id: SpanId,
-    attached: AtomicBool,
+    state: Arc<ReservationState>,
+    // Only the runtime can derive this authority after a successful entry claim.
+    // Raw aliases share state, but never gain this bit by observing attachment.
+    forwarded_claim: bool,
 }
 
 impl ReservedSpanData {
@@ -53,7 +62,11 @@ impl ReservedSpanData {
         Self {
             options,
             id: SpanId::new(scope, allocate_telemetry_id()),
-            attached: AtomicBool::new(false),
+            state: Arc::new(ReservationState {
+                attached: AtomicBool::new(false),
+                materialized: AtomicBool::new(false),
+            }),
+            forwarded_claim: false,
         }
     }
 
@@ -61,10 +74,62 @@ impl ReservedSpanData {
         if self.id.scope != scope {
             return Err(ReservationError::WrongScope);
         }
-        self.attached
+        self.state
+            .attached
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .map(|_| self.id.local)
             .map_err(|_| ReservationError::AlreadyAttached)
+    }
+
+    /// Explicit continuation of a successful claim. Does not mutate the user's
+    /// reservation options and never duplicates attachment/materialization state.
+    #[must_use]
+    pub fn claimed_view(&self, options: TraceOptionsData) -> Self {
+        assert!(
+            self.state.attached.load(Ordering::Acquire),
+            "claim must precede forwarding"
+        );
+        Self {
+            options,
+            id: self.id,
+            state: self.state.clone(),
+            forwarded_claim: true,
+        }
+    }
+
+    pub fn is_forwarded_claim(&self) -> bool {
+        self.forwarded_claim
+    }
+
+    /// Identity of the shared claim, not merely its externally visible span ID.
+    pub fn shares_claim(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.state, &other.state)
+    }
+
+    /// Raw aliases still fail attach; only an explicit internal view continues it.
+    pub fn enter(&self, scope: RecordingId) -> Result<TelemetryId, ReservationError> {
+        if self.forwarded_claim {
+            self.id.local_in(scope).ok_or(ReservationError::WrongScope)
+        } else {
+            self.attach(scope)
+        }
+    }
+
+    /// Span creation consumes the existing claim's one creation opportunity,
+    /// independently of the earlier public attachment boundary.
+    pub fn materialize(&self, scope: RecordingId) -> Result<TelemetryId, &'static str> {
+        let id = self
+            .id
+            .local_in(scope)
+            .ok_or("reservation belongs to another runtime")?;
+        if !self.forwarded_claim {
+            return Err("span creation requires an explicitly forwarded reservation claim");
+        }
+        self.state
+            .materialized
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map(|_| id)
+            .map_err(|_| "reservation claim already created a span")
     }
 
     /// Preparation verifies ownership/liveness without claiming the span.
@@ -72,7 +137,7 @@ impl ReservedSpanData {
         if self.id.scope != scope {
             return Err(ReservationError::WrongScope);
         }
-        if self.attached.load(Ordering::Acquire) {
+        if !self.forwarded_claim && self.state.attached.load(Ordering::Acquire) {
             return Err(ReservationError::AlreadyAttached);
         }
         Ok(())
@@ -173,6 +238,58 @@ mod tests {
             reservation.attach(recording),
             Err(ReservationError::AlreadyAttached)
         );
+    }
+
+    #[test]
+    fn forwarding_preserves_effective_options_and_claim_without_reclaiming() {
+        let scope = RecordingId::generate();
+        let raw = ReservedSpanData::new(scope, TraceOptionsData::default());
+        let raw_alias = raw.clone();
+        let id = raw.enter(scope).unwrap();
+        let effective = TraceOptionsData {
+            inputs: Some(true),
+            ..raw.options.clone()
+        };
+        let forwarded = raw.claimed_view(effective);
+        assert_eq!(raw.options.inputs, None);
+        assert_eq!(forwarded.options.inputs, Some(true));
+        assert_eq!(
+            raw_alias.enter(scope),
+            Err(ReservationError::AlreadyAttached)
+        );
+        assert_eq!(forwarded.enter(scope), Ok(id));
+        assert_eq!(forwarded.enter(scope), Ok(id));
+        assert!(raw.materialize(scope).is_err());
+        assert_eq!(forwarded.materialize(scope), Ok(id));
+        assert!(forwarded.materialize(scope).is_err());
+    }
+
+    #[test]
+    fn forwarded_aliases_create_only_one_span() {
+        let scope = RecordingId::generate();
+        let raw = ReservedSpanData::new(scope, TraceOptionsData::default());
+        raw.enter(scope).unwrap();
+        let first = raw.claimed_view(raw.options.clone());
+        let second = raw.claimed_view(raw.options.clone());
+        let winners = std::thread::scope(|threads| {
+            let a = threads.spawn(|| usize::from(first.materialize(scope).is_ok()));
+            let b = threads.spawn(|| usize::from(second.materialize(scope).is_ok()));
+            a.join().unwrap() + b.join().unwrap()
+        });
+        assert_eq!(winners, 1);
+        assert_eq!(
+            first.enter(RecordingId::generate()),
+            Err(ReservationError::WrongScope)
+        );
+    }
+
+    #[test]
+    fn failed_setup_does_not_release_entry_claim() {
+        let scope = RecordingId::generate();
+        let raw = ReservedSpanData::new(scope, TraceOptionsData::default());
+        raw.enter(scope).unwrap();
+        drop(raw.claimed_view(raw.options.clone()));
+        assert_eq!(raw.enter(scope), Err(ReservationError::AlreadyAttached));
     }
 
     #[test]

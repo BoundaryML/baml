@@ -376,18 +376,20 @@ type:
       }
     }
     function from_runtime(t: reflect.Type) -> reflect.Type {
-      type T = unreflect(t)
+      let type T = t;
       reflect.Type.of<T>()
     }
   details: |
-    At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`. Inside a function, lambda, or block body, `type T = unreflect(t)` binds a block-scoped type parameter to a runtime type value (`t: reflect.Type | reflect.TypeView`, or a `reflect.class.PendingType` from a builder; an `unknown` must be narrowed first with `match` or `is`), and `type T = SomeType` binds one to a static type. `T` is a rigid type parameter for the rest of the block: nothing typed by `T` may leave the block except through a type that does not mention it, such as `unknown`. `unreflect` is legal only as the whole right-hand side of such a statement. The old `type.of<T>()` shorthand and bare `type` value annotation do not exist; write `reflect.Type.of<T>()` and `reflect.Type`.
+    At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`. Inside a function, lambda, or block body, `let type T = t;` binds a block-scoped type parameter to a runtime type value (`t: reflect.Type | reflect.TypeView`; an `unknown` must be narrowed first with `match` or `is`, and a class builder's pending type is not accepted: bind the class `build()` returns). `T` is a rigid type parameter for the rest of the block: nothing typed by `T` may leave the block except through a type that does not mention it, such as `unknown`. `let type T extends I = t else { ... };` also gives `T` the interface bound `I` (several bounds join with `&`): the statement checks the bound when it runs and runs the diverging `else { ... }` block when the type misses it. A bounded `let type` must have that `else` block. A body-level `type T = ...` alias and `unreflect(...)` no longer exist; write `let type`. The old `type.of<T>()` shorthand and bare `type` value annotation do not exist either; write `reflect.Type.of<T>()` and `reflect.Type`.
 
 void:
-  summary: "The return type of a function that produces no value."
+  summary: "The unit type, written as the return type of a function that produces no value."
   syntax: |
     function log_message(message: string) -> void {
       log.info(message)
     }
+  details: |
+    `void` is another spelling of `null`: the unit type, whose only value is `null`. The two are the same type in every position, and a call to a `void` function has a result like any other call — it is `null`. A function returning the unit type may leave out its final expression and may write a bare `return;`; both are shorthand for `null`. The shorthand holds only where the unit type itself is expected, or nothing is: a function returning `int?` must write its `null`, and a block with no final expression cannot be one branch of an `if` whose other branch produces a value. A unit-returning body is still checked against its return type, so a value left as its final expression is an error — end the expression with `;` to discard the value. An `if` with no `else` evaluates to `null` too, so when its value is used its branch must not produce one.
 
 never:
   summary: "The bottom type of an expression that never returns normally."
@@ -513,6 +515,9 @@ let:
   syntax: |
     let name = "Alice"
     let count = items.length()
+    let type T = runtime_type;
+  details: |
+    `let type T = t;` binds the runtime type value `t` as the block-scoped type `T`; see `type`.
 
 const:
   summary: "Declares a compile-time constant binding."
@@ -574,7 +579,7 @@ catch:
       errors.NotFound => other_value,
     }
   details: |
-    `expr catch (e) { ErrorType => handler, ... }` binds the caught error to `e` and dispatches on its type. Only the listed error types are handled; any other error keeps propagating, so `catch` need not be exhaustive. Chain a `catch_all` to handle the rest.
+    `expr catch (e) { ErrorType => handler, ... }` binds the caught error to `e` and dispatches on its type. Only the listed error types are handled; any other error keeps propagating, so `catch` need not be exhaustive. Put alternative handlers in one block; use `catch_all` for that block when it must cover every ordinary error. Chained clauses nest left to right: `expr catch (a) { ... } catch (b) { ... }` means `(expr catch (a) { ... }) catch (b) { ... }`. A later clause handles both unhandled errors from the preceding expression and errors thrown by its handler arms. Throws bypass sibling arms in the same block. A normally completing handler supplies the result and skips later handlers. A wildcard arm (`_` or a bare `let x`) takes every remaining error but not panics: a panic passes over it to the arms after it, and is caught only by an arm that names its type (`baml.panics.Cancelled => ...`) or by a `catch_all_panics` wildcard.
 
 catch_all:
   summary: "Handles every error type a preceding expression can throw (exhaustive over errors, not panics)."
@@ -583,16 +588,17 @@ catch_all:
       _ => fallback_value,
     }
   details: |
-    `expr catch_all (e) { ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The compiler reports a non-exhaustive `catch_all` if a throw type is left unhandled. Panics (`baml.panics.*`, such as `baml.panics.Cancelled`) are not part of an expression's throws-set, so the `_` wildcard does not catch them — a panic keeps unwinding past `catch_all`. To intercept a panic, name its type explicitly in an arm, e.g. `risky_call() catch (e) { baml.panics.Cancelled => ... }`; the bare `_` never catches panics.
+    `expr catch_all (e) { ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The compiler reports a non-exhaustive `catch_all` (E0062) if a throw type is left unhandled, so a callee that gains a new error type breaks the build here instead of silently propagating it. In a chain, a `catch_all` protects the whole preceding expression, including earlier handler bodies, and must cover their residual errors and new arm-body errors. Its own arm-body errors can still propagate; a later catch can handle them. Panics (`baml.panics.*`, such as `baml.panics.Cancelled`) are not part of an expression's throws-set, so the `_` wildcard does not catch them — a panic keeps unwinding past `catch_all`. To intercept a panic, name its type explicitly in an arm, e.g. `risky_call() catch (e) { baml.panics.Cancelled => ... }`; the bare `_` never catches panics.
 
 catch_all_panics:
-  summary: "Handles every panic raised by a preceding expression."
+  summary: "Handles every error and every panic raised by a preceding expression."
   syntax: |
-    let result = risky_call() catch_all_panics (panic) {
-      _ => fallback_value,
+    let result = risky_call() catch_all_panics (e) {
+      let panic: baml.panics.Panic => fallback_value,
+      _ => other_value,
     }
   details: |
-    Use `catch_all` for ordinary declared errors. `catch_all_panics` is the explicit boundary for runtime panics.
+    Use `catch_all` for ordinary declared errors. `catch_all_panics` is the explicit boundary for runtime panics: like `catch_all` it must cover every error the expression can throw, and it must also cover every panic — with a wildcard arm (`_` or a bare `let x`, which here receives panics too) or an arm naming `baml.panics.Panic` (or each `baml.panics.*` class). The compiler reports a non-exhaustive `catch_all_panics` (E0062) otherwise. Like every chained catch, a later `catch_all_panics` protects earlier handler bodies too, so it can recover from a panic raised while an earlier error is being handled. Its own handler failures propagate to an enclosing or later catch.
 
 defer:
   summary: "Schedules a block to run when the enclosing block exits, in LIFO order."
@@ -618,7 +624,7 @@ cleanup:
       }
     }
   details: |
-    `cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return, and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with `... catch { ... }`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.
+    `cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return (or `-> null`, the same type), and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with `... catch_all (e) { ... }`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.
 
 match:
   summary: "Pattern matching — branches based on the shape or type of a value."
@@ -1130,8 +1136,8 @@ query:
                 FROM profiler GROUP BY function_name ORDER BY self_ns DESC LIMIT 10"
     baml query "SELECT span_id, input_args['customer']['age'] AS age, output_value
                 FROM spans WHERE input_args['customer']['age'] >= 30" --format jsonl
-    baml query "SELECT span_name, temporary_projections['cost'] FROM spans
-                WHERE temporary_projections IS NOT NULL"
+    baml query "SELECT span_name, total_usage[0]['model'], total_usage[0]['input_tokens']
+                FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL"
     baml query --schema --table spans
   details: |
     Every `baml run`/`baml test` records to `.baml/btel`; the first query
@@ -1139,8 +1145,9 @@ query:
     Relations: `processes` (one row per process, with its status),
     `spans` (completed function calls that were retained, and futures: a
     root call is a future without a parent; `input_args`, `output_value`,
-    `error_value` (a `baml.errors.Context`) and `temporary_projections`
-    (model usage and cost) are BAML values), `span_announcements` (every
+    `error_value` (a `baml.errors.Context`), `self_usage` (the model usage
+    of the calls an `ai.Client.invoke` span made) and `total_usage` (every
+    call under a span, one entry per model with its token counts) are BAML values), `span_announcements` (every
     started span), and `profiler` (one row per calling-context node of an
     ended process: invocations, outcomes, total/self/I/O time). Value columns
     support ordinary subscripts and comparisons —

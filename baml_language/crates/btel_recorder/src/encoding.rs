@@ -81,6 +81,19 @@ impl EncodedSpans {
             self.select(thread, context);
         }
         match event {
+            // Usage has strings, so its rare completions leave the fixed-size path.
+            Event::FunctionCompletion(m) if !m.usage.is_empty() => {
+                self.require(btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR);
+                self.variable(4, &m);
+            }
+            Event::LateFunctionCompletion(m) if !m.usage.is_empty() => {
+                self.require(btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR);
+                self.variable(5, &m);
+            }
+            Event::ThreadCompletion(m) if !m.usage.is_empty() => {
+                self.require(btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR);
+                self.variable(2, &m);
+            }
             Event::FunctionCompletion(m) => self.completion(4, &m),
             Event::LateFunctionCompletion(m) => self.completion(5, &m),
             Event::Log(message) => {
@@ -105,6 +118,9 @@ impl EncodedSpans {
                         leaf(&mut self.bytes, 7, &m);
                     }
                     Event::FunctionAnnouncement(m) => {
+                        if m.manual {
+                            self.require(btel_settings::encoding::MANUAL_SPAN_FORMAT_MINOR);
+                        }
                         if m.type_args_cas_id.is_some() {
                             self.require(btel_settings::encoding::TYPE_ARGS_FORMAT_MINOR);
                         }
@@ -121,7 +137,7 @@ impl EncodedSpans {
         }
     }
 
-    fn require(&mut self, minor: u32) {
+    pub(crate) fn require(&mut self, minor: u32) {
         self.required_minor = self.required_minor.max(minor);
     }
 
@@ -135,6 +151,12 @@ impl EncodedSpans {
     #[inline]
     #[allow(unsafe_code)]
     fn completion(&mut self, tag: u8, message: &crate::proto::FunctionCompletion) {
+        if message.completion_flags & 16 != 0 && message.completion_flags & 32 == 0 {
+            self.require(btel_settings::encoding::OWNED_SPAN_FORMAT_MINOR);
+        }
+        if message.completion_flags & 32 != 0 {
+            self.require(btel_settings::encoding::MANUAL_SPAN_FORMAT_MINOR);
+        }
         // Maximum protobuf body: 3*(tag+10-byte varint), 3*(tag+fixed64),
         // one tag+5-byte uint32 = 66 bytes, plus two tag/length pairs = 70.
         // Optional CAS message adds tag+length+2*(tag+fixed64) = 20 bytes, and
@@ -325,6 +347,7 @@ mod tests {
                 high: u64::MAX,
             }),
             panicked: true,
+            usage: Vec::new(),
         };
         let events = vec![
             Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
@@ -332,8 +355,10 @@ mod tests {
                 completed_at_ticks: u64::MAX,
                 outcome: proto::InvocationOutcome::Errored as i32,
                 panicked: true,
+                usage: Vec::new(),
             }),
             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+                manual: false,
                 id: u64::MAX,
                 parent_id: u64::MAX,
                 call_path_id: u32::MAX,
@@ -349,7 +374,7 @@ mod tests {
             }),
             Event::FunctionCompletion(proto::FunctionCompletion {
                 completion_flags: 11,
-                ..completion
+                ..completion.clone()
             }),
             Event::LateFunctionCompletion(completion),
             // Network events' strings reserve their own bytes; the rest fits.
@@ -461,7 +486,7 @@ mod equivalence_tests {
                     }
                 }
                 for event in [
-                    Event::FunctionCompletion(message),
+                    Event::FunctionCompletion(message.clone()),
                     Event::LateFunctionCompletion(message),
                 ] {
                     let expected = crate::proto::ThreadSection {

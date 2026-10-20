@@ -26,7 +26,9 @@ pub(crate) fn reject_unsupported_trace_hooks(
         .descendants_with_tokens()
         .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
     {
-        if token.kind() != SyntaxKind::LINE_COMMENT || trace_directive_value(token.text()).is_none()
+        let passthrough = token.text().trim_end() == "//baml:trace_passthrough";
+        if token.kind() != SyntaxKind::LINE_COMMENT
+            || (!passthrough && trace_directive_value(token.text()).is_none())
         {
             continue;
         }
@@ -42,7 +44,11 @@ pub(crate) fn reject_unsupported_trace_hooks(
         });
         if !attached_to_function {
             diagnostics.push(crate::LoweringDiagnostic::InvalidTraceHook {
-                message: "Trace hooks can only be attached to function definitions.\nhelp: Place `/// baml:$trace=...` immediately before a function definition.".into(),
+                message: if passthrough {
+                    "The internal trace_passthrough directive must immediately precede a function definition.".into()
+                } else {
+                    "Trace hooks can only be attached to function definitions.\nhelp: Place `/// baml:$trace=...` immediately before a function definition.".into()
+                },
                 span: token.text_range(),
             });
         }

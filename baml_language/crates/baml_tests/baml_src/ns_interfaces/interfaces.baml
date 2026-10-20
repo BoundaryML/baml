@@ -773,7 +773,7 @@ class GictIntStack {
     items: int[]
     implements GictContainer<int> {
         function add(self, item: int) -> void {
-            self.items.push(item)
+            self.items.push(item);
         }
         function get(self, index: int) -> int? {
             return self.items[index]
@@ -863,7 +863,7 @@ class RitfDog {
     }
 }
 function ritf_main() -> bool {
-    return reflect.Type.of<RitfDog>().implements(reflect.Type.of<RitfAnimal>())
+    return RitfDog.type().implements(reflect.Type.of<RitfAnimal>())
 }
 test "reflect_implements_true_for_implementor" {
     assert.is_true(ritf_main())
@@ -877,7 +877,7 @@ class RiffRock {
     mass: int
 }
 function riff_main() -> bool {
-    return reflect.Type.of<RiffRock>().implements(reflect.Type.of<RiffAnimal>())
+    return RiffRock.type().implements(reflect.Type.of<RiffAnimal>())
 }
 test "reflect_implements_false_for_non_implementor" {
     assert.is_true(riff_main() == false)
@@ -893,8 +893,8 @@ class RibiDog {
     }
 }
 function ribi_main() -> bool {
-    let direct = reflect.Type.of<RibiDog>().implements(reflect.Type.of<RibiAnimal>())
-    let reverse = reflect.Type.of<RibiAnimal>().implemented_by(reflect.Type.of<RibiDog>())
+    let direct = RibiDog.type().implements(reflect.Type.of<RibiAnimal>())
+    let reverse = reflect.Type.of<RibiAnimal>().implemented_by(RibiDog.type())
     return direct == reverse
 }
 test "reflect_implemented_by_inverse_runtime" {
@@ -914,7 +914,7 @@ class RitvEmployee {
     }
 }
 function ritv_main() -> bool {
-    return reflect.Type.of<RitvEmployee>().implements(reflect.Type.of<RitvNamed>())
+    return RitvEmployee.type().implements(reflect.Type.of<RitvNamed>())
 }
 test "reflect_implements_transitive_via_requires" {
     assert.is_true(ritv_main())
@@ -1756,8 +1756,8 @@ implements OobvAnimal for OobvDog {
     function speak(self) -> string { return "woof" }
 }
 function oobv_main() -> bool {
-    return reflect.Type.of<OobvDog>().implements(reflect.Type.of<OobvAnimal>())
-        && reflect.Type.of<OobvAnimal>().implemented_by(reflect.Type.of<OobvDog>())
+    return OobvDog.type().implements(reflect.Type.of<OobvAnimal>())
+        && reflect.Type.of<OobvAnimal>().implemented_by(OobvDog.type())
 }
 test "out_of_body_implements_is_visible_to_reflection_registry" {
     assert.is_true(oobv_main())

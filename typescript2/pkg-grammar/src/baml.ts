@@ -2001,6 +2001,45 @@ const letStatement: Rule = {
   ],
 };
 
+// `let type T extends I & J = expr else { ... };` binds a type parameter for
+// the rest of the block. Sits before `letStatement`, which would read `type`
+// as the bound name and `T` as its annotation.
+const letTypeStatement: Rule = {
+  key: 'let-type-statement',
+  scope: 'meta.statement.let-type.baml',
+  begin: String.raw`${STATEMENT_START}(let)\s+(type)\s+(${IDENT})\b`,
+  beginCaptures: {
+    '1': { scope: 'keyword.declaration.binding.baml' },
+    '2': { scope: 'keyword.declaration.type-binding.baml' },
+    '3': { scope: 'entity.name.type.parameter.baml' },
+  },
+  end: STATEMENT_END,
+  patterns: [
+    comments,
+    {
+      key: 'let-type-bounds',
+      scope: 'meta.type-parameter.bounds.baml',
+      begin: String.raw`\b(extends)\b`,
+      beginCaptures: {
+        '1': { scope: 'keyword.operator.extends.baml' },
+      },
+      end: String.raw`(?=\s*=)`,
+      patterns: [
+        comments,
+        {
+          key: 'let-type-bound-intersection',
+          scope: 'keyword.operator.type.baml',
+          match: String.raw`&`,
+        },
+        typeExpression,
+      ],
+    },
+    assignmentOperator,
+    letElseClause,
+    expression,
+  ],
+};
+
 const watchStatement: Rule = keywordStatement(
   'watch-statement',
   'meta.statement.watch.baml',
@@ -2225,6 +2264,7 @@ blockContents.patterns = [
   testsetItem,
   testItem,
   watchStatement,
+  letTypeStatement,
   letStatement,
   returnStatement,
   breakStatement,

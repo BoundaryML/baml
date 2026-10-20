@@ -423,7 +423,7 @@ fn synthetic_defaulted_extract(
             injected: true,
             name: BaseName::new("on_event"),
             docstring: None,
-            ty: ty_union(vec![ty_callable(vec![ty_string()], Ty::Void), Ty::Null]),
+            ty: ty_union(vec![ty_callable(vec![ty_string()], Ty::Null), Ty::Null]),
             default: Some(FunctionArgumentDefault::Null),
         });
     }

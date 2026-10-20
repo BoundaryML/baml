@@ -10,7 +10,7 @@ fn function<'a>(program: &'a BytecodeProgram, name: &str) -> &'a Function {
         .objects
         .iter()
         .find_map(|object| match object {
-            Object::Function(function) if function.name == name => Some(function.as_ref()),
+            Object::Function(function) if function.name() == name => Some(function.as_ref()),
             _ => None,
         })
         .expect("function exists")
@@ -48,7 +48,7 @@ const SIMPLE: &str =
 #[test]
 fn exact_calls_preserve_operands_and_source_positions() {
     let program = convert_program(compile_source(SIMPLE)).unwrap();
-    let main = function(&program, "user.main");
+    let main = function(&program, "main");
     let original = main.bytecode.lower_to_compact();
     let compact = main.bytecode.compact.as_ref().unwrap();
     let mut restored = compact.code.clone();
@@ -71,6 +71,32 @@ fn exact_calls_preserve_operands_and_source_positions() {
 }
 
 #[test]
+fn passthrough_entries_are_not_specialized_as_ordinary_calls() {
+    let mut program = compile_source(SIMPLE);
+    let index = program.rendered_callables()["user.leaf"].object.raw();
+    let Object::Function(leaf) = &mut (*program.objects)[index] else {
+        unreachable!()
+    };
+    // Emulate compiler-owned metadata, including a linked definition whose
+    // callers were emitted before its pass-through strategy was known.
+    leaf.trace_passthrough = true;
+    let program = convert_program(program).unwrap();
+    let instructions = ops(function(&program, "main"));
+    assert_eq!(
+        instructions
+            .iter()
+            .filter(|(_, op)| *op == OpCode::Call)
+            .count(),
+        2
+    );
+    assert!(
+        !instructions
+            .iter()
+            .any(|(_, op)| *op == OpCode::CallExactArgs)
+    );
+}
+
+#[test]
 fn nonmatching_argument_layout_stays_general() {
     let mut program = compile_source(SIMPLE);
     let index = program.rendered_callables()["user.main"].object.raw();
@@ -82,7 +108,7 @@ fn nonmatching_argument_layout_stays_general() {
     }
     main.bytecode.compact = None;
     let program = convert_program(program).unwrap();
-    let instructions = ops(function(&program, "user.main"));
+    let instructions = ops(function(&program, "main"));
     assert_eq!(
         instructions
             .iter()
@@ -112,7 +138,7 @@ fn writable_callee_globals_are_not_specialized() {
         .push(Instruction::StoreGlobal(global));
     leaf.bytecode.compact = None;
     let program = convert_program(program).unwrap();
-    let instructions = ops(function(&program, "user.main"));
+    let instructions = ops(function(&program, "main"));
     assert_eq!(
         instructions
             .iter()
@@ -127,7 +153,7 @@ fn generic_calls_keep_type_arguments() {
     let source =
         "function identity<T>(n: T) -> T { n } function main() -> int { identity<int>(42) }";
     let program = convert_program(compile_source(source)).unwrap();
-    let instructions = ops(function(&program, "user.main"));
+    let instructions = ops(function(&program, "main"));
     assert!(instructions.iter().any(|(_, op)| *op == OpCode::Call));
     assert!(
         !instructions

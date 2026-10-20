@@ -167,7 +167,7 @@ impl Leaves<'_> {
     /// or a path. It is written wherever it is used. `None` when it is over
     /// the leaf limit, or no more names can be numbered.
     pub fn label(&mut self, text: &BexStr) -> Option<LabelId> {
-        if !self.limits.holds_leaf(text.len()) || self.labels.len() >= ARENA_ITEMS {
+        if !self.limits.holds_leaf(text.byte_len()) || self.labels.len() >= ARENA_ITEMS {
             return None;
         }
         let id = LabelId(u32::try_from(self.labels.len()).expect("bounded labels"));
@@ -177,7 +177,7 @@ impl Leaves<'_> {
     /// Hold content by handle: a string value, or a media value's text. `None`
     /// when it is over the leaf limit, or no more strings can be numbered.
     pub fn string(&mut self, text: &BexStr) -> Option<StringId> {
-        if !self.limits.holds_leaf(text.len()) || self.strings.len() >= ARENA_ITEMS {
+        if !self.limits.holds_leaf(text.byte_len()) || self.strings.len() >= ARENA_ITEMS {
             return None;
         }
         // A slice caches its hash in its own handle, not in what it views.
@@ -413,7 +413,7 @@ impl Builder {
         entries.reserve(count, meter);
         for item in source.take(count) {
             let (key, value) = convert(&mut leaves, item);
-            if leaves.limits.holds_leaf(key.len()) {
+            if leaves.limits.holds_leaf(key.byte_len()) {
                 entries.push(FieldEntry { key, value }, meter);
             }
         }

@@ -856,16 +856,6 @@ pub enum Instruction {
     /// Memory per switch scales with K (arms), not N (total classes).
     DenseTag(usize),
 
-    /// If the caught value is a panic instance (`baml.panics.*`), re-throw it
-    /// with the `baml.errors.Context` it was caught with. Otherwise pop both and
-    /// continue to the next instruction.
-    ///
-    /// Stack: `[value, context]` -> `[]` (continues) or unwinds (throws)
-    ///
-    /// Used in catch handlers before wildcard arms to prevent them from
-    /// swallowing panics the programmer didn't explicitly name.
-    ThrowIfPanic,
-
     /// Halt execution with an unreachable code error.
     ///
     /// This instruction should never be executed at runtime. If it is,
@@ -1085,6 +1075,15 @@ pub enum Instruction {
     /// Legacy opcode retained so existing serialized bytecode keeps its meaning.
     TraceHookRich,
     TraceHookEmptySpan,
+
+    /// Whether a type satisfies an interface bound, the check a
+    /// `let type T extends I = …` statement makes. Pops the bound (an
+    /// `Object::Type` of the interface constraint: its head, its type
+    /// arguments, and only the associated types the bound pins), then the
+    /// type, and pushes a bool. Pinned associated types must match; the
+    /// others are free. As for a generic parameter's bound, only a concrete
+    /// type can satisfy it.
+    SatisfiesBound,
 }
 
 /// Compact bytecode opcodes.
@@ -1106,7 +1105,6 @@ pub enum OpCode {
     CallIndirect,
     Discriminant,
     TypeTag,
-    ThrowIfPanic,
     Unreachable,
     MakeCell,
     SendEvent,
@@ -1301,6 +1299,9 @@ pub enum OpCode {
     // Preserve the legacy discriminant; new compilers select Span or EmptySpan.
     TraceHookRich,
     TraceHookEmptySpan,
+    // The `let type` bound check, appended to preserve serialized
+    // discriminants.
+    SatisfiesBound,
 }
 
 impl OpCode {
@@ -1320,7 +1321,6 @@ impl OpCode {
             | Self::SetCallTrace
             | Self::Discriminant
             | Self::TypeTag
-            | Self::ThrowIfPanic
             | Self::Unreachable
             | Self::MakeCell
             | Self::SendEvent
@@ -1446,7 +1446,8 @@ impl OpCode {
             | Self::TraceHookTiming
             | Self::TraceHookSpan
             | Self::TraceHookRich
-            | Self::TraceHookEmptySpan => 1,
+            | Self::TraceHookEmptySpan
+            | Self::SatisfiesBound => 1,
             Self::AllocInstance | Self::Call | Self::CallExactArgs | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
@@ -1482,7 +1483,6 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
             x if x == Self::LoadCurrentPackage as u8 => Ok(Self::LoadCurrentPackage),
-            x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
             x if x == Self::Unreachable as u8 => Ok(Self::Unreachable),
             x if x == Self::MakeCell as u8 => Ok(Self::MakeCell),
             x if x == Self::SendEvent as u8 => Ok(Self::SendEvent),
@@ -1606,6 +1606,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::TraceHookSpan as u8 => Ok(Self::TraceHookSpan),
             x if x == Self::TraceHookRich as u8 => Ok(Self::TraceHookRich),
             x if x == Self::TraceHookEmptySpan as u8 => Ok(Self::TraceHookEmptySpan),
+            x if x == Self::SatisfiesBound as u8 => Ok(Self::SatisfiesBound),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
@@ -1625,6 +1626,7 @@ impl std::fmt::Display for OpCode {
             Self::TraceHookSpan => "TRACE_HOOK_SPAN",
             Self::TraceHookRich => "TRACE_HOOK_RICH",
             Self::TraceHookEmptySpan => "TRACE_HOOK_EMPTY_SPAN",
+            Self::SatisfiesBound => "SATISFIES_BOUND",
 
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
@@ -1648,7 +1650,6 @@ impl std::fmt::Display for OpCode {
             Self::TypeTag => "TYPE_TAG",
             Self::LoadCurrentPackage => "LOAD_CURRENT_PACKAGE",
             Self::Truthy => "TRUTHY",
-            Self::ThrowIfPanic => "THROW_IF_PANIC",
             Self::Unreachable => "UNREACHABLE",
             Self::MakeCell => "MAKE_CELL",
             Self::SendEvent => "SEND_EVENT",
@@ -1943,6 +1944,7 @@ impl std::fmt::Display for Instruction {
             Instruction::TraceHookSpan => f.write_str("TRACE_HOOK_SPAN"),
             Instruction::TraceHookRich => f.write_str("TRACE_HOOK_RICH"),
             Instruction::TraceHookEmptySpan => f.write_str("TRACE_HOOK_EMPTY_SPAN"),
+            Instruction::SatisfiesBound => f.write_str("SATISFIES_BOUND"),
 
             Instruction::CallHooked { callee, ntypeargs } => {
                 write!(f, "CALL_HOOKED {callee} {ntypeargs}")
@@ -1998,7 +2000,6 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadType(i) => write!(f, "LOAD_TYPE {i}"),
             Instruction::BindType(i) => write!(f, "BIND_TYPE {i}"),
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
-            Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
             Instruction::MakeClosure {
                 obj_idx,
@@ -2112,17 +2113,22 @@ pub struct DebugLocalScope {
 /// transfers control to `handler_pc`, with the exception value stored
 /// in the frame-local slot `error_slot`.
 ///
+/// Each catch clause has its own handler PC, including clauses written in a
+/// chain. The first clause's handler body is protected by the next clause's
+/// handler, just as for explicitly nested catches. A function's table stores
+/// the distinct clauses' entries together; they are never flattened into one
+/// dispatch handler.
+///
 /// One catch region contributes one entry per coalesced run of its protected
 /// blocks (block layout can fragment a region across non-contiguous PCs), so
-/// several entries may share a `handler_pc`. Entries are stably sorted by
-/// `start_pc`; the VM picks the innermost covering entry by largest
-/// `start_pc`, then smallest `end_pc`, then latest table order (identical
-/// ranges are emitted outer-region-first).
+/// several entries may share a `handler_pc`. Each emitted block records its
+/// innermost unwind target, giving disjoint ranges sorted by `start_pc`.
+/// Adjacent ranges coalesce only when they name the same handler.
 ///
 /// All exceptions (user-thrown values and VM panics) are routed to the
-/// handler. The handler bytecode is responsible for filtering: a
-/// `ThrowIfPanic` instruction before wildcard arms rethrows panics the
-/// programmer didn't explicitly name.
+/// handler. The handler bytecode is responsible for filtering: a wildcard arm
+/// that does not trap panics is entered only after an `IsType` test against
+/// the `PANIC` pseudo-tag, and a value no arm takes is `Rethrow`n.
 #[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ExceptionTableEntry {
     /// First protected instruction (inclusive).
@@ -2476,7 +2482,8 @@ impl Bytecode {
 
             match instr {
                 // ── Unit ops: no operands ────────────────────────────
-                Instruction::EndTraceHook
+                Instruction::SatisfiesBound
+                | Instruction::EndTraceHook
                 | Instruction::TraceHookHidden
                 | Instruction::TraceHookTiming
                 | Instruction::TraceHookSpan
@@ -2494,7 +2501,6 @@ impl Bytecode {
                 | Instruction::SetCallTrace
                 | Instruction::Discriminant
                 | Instruction::TypeTag
-                | Instruction::ThrowIfPanic
                 | Instruction::Unreachable
                 | Instruction::MakeCell
                 | Instruction::SendEvent
@@ -2908,7 +2914,6 @@ impl Bytecode {
 
             Instruction::Discriminant => OpCode::Discriminant,
             Instruction::TypeTag => OpCode::TypeTag,
-            Instruction::ThrowIfPanic => OpCode::ThrowIfPanic,
             Instruction::Unreachable => OpCode::Unreachable,
             Instruction::MakeCell => OpCode::MakeCell,
             Instruction::SendEvent => OpCode::SendEvent,
@@ -2982,6 +2987,7 @@ impl Bytecode {
             Instruction::TraceHookSpan => OpCode::TraceHookSpan,
             Instruction::TraceHookRich => OpCode::TraceHookRich,
             Instruction::TraceHookEmptySpan => OpCode::TraceHookEmptySpan,
+            Instruction::SatisfiesBound => OpCode::SatisfiesBound,
 
             Instruction::Call { .. } => OpCode::Call,
 

@@ -14,13 +14,16 @@ function mismatch_is_catchable(value: reflect.AnyClass) -> bool throws never {
         reflect.errors.TypeMismatch { message } => {
             return message.includes("field `VetrecLike.first`");
         }
+        reflect.errors.NotFound => {
+            return false;
+        }
     };
     false
 }
 
 function main() -> bool {
-    let optional_string = reflect.Type.of<string>().optional().as_type();
-    let runtime_t = reflect.class.new(
+    let optional_string = string.type().optional().as_type();
+    let runtime_t = reflect.Class.new(
         "VetrecLike",
         {
             "first": optional_string.meta(description = "first field"),
@@ -30,13 +33,13 @@ function main() -> bool {
             "fifth": optional_string,
         },
     );
-    type Runtime = unreflect(runtime_t.as_type())
+    let type Runtime = runtime_t;
     let opaque = Extract@parse<Runtime>(`{"first":"one","second":"two","third":null,"fourth":"four","fifth":"five"}`);
     let record: reflect.AnyClass = opaque else {
         throw "Expected class"
     };
 
-    let first_field: reflect.class.Field = record.get_field("first") else {
+    let first_field: reflect.class.Field = record.find_field("first") else {
         throw "Expected first field"
     };
     let fields = record.list_fields();
@@ -51,7 +54,7 @@ function main() -> bool {
         && record.get<string?>("third") == null
         && record.get<string?>("fourth") == "four"
         && record.get<string?>("fifth") == "five"
-        && record.get<string?>("missing") == null
+        && record.find<string?>("missing") == null
         && fields.length() == 5
         && first_field.name == "first"
         && first_field.type == optional_string

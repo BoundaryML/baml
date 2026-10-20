@@ -464,7 +464,7 @@ end of a sitting as the conversation grows.
 ## Compiler issues surfaced by this tool
 
 Building the quiz is dogfooding, and each of these was found by it. Repros are
-minimal single-file packages. One has since been fixed and says so; the rest
+minimal single-file packages. Two have since been fixed and say so; the rest
 still reproduce. The numbering is referred to from code comments, so an entry
 keeps its number once it has one.
 
@@ -483,15 +483,20 @@ keeps its number once it has one.
    a closure's own parameter works at any depth, and so does handing the
    captured value to a function that makes the call, which is what
    `root.engine.generate` in `ns_engine/sample.baml` is for.
-2. **Run-time membership of a function value is exact, not a subtyping
-   check, and `Package.tests()` lies about its value type.** The map is
-   declared `map<string, () -> null throws unknown>` but its values reflect as
+2. **FIXED by BEP-079.** `void` is now a spelling of the unit type `null`, so
+   a test body's value reflects as `() -> null throws never` and is a member
+   of the declared `() -> null throws unknown`; `failure_of` in
+   `ns_engine/verify.baml` now looks the test up directly. The diagnosis
+   this entry first carried was half wrong: membership of a function value
+   was a subtyping check all along (`never` satisfies `unknown`), and the
+   whole mismatch was `void` against `null`, which were one type statically
+   and two at run time. As first reported: run-time membership of a function
+   value looked exact rather than a subtyping check, and `Package.tests()`
+   looked to lie about its value type. The map was declared
+   `map<string, () -> null throws unknown>` but its values reflected as
    `() -> void throws never`, so `if let f: () -> null throws unknown = t.get(k)`
-   and the matching `is` are both false for a present key, while a value from
-   `get_function<F>` matches `F` exactly. Either `void`/`never` should satisfy
-   `null`/`unknown` under function subtyping, or `tests()` should declare what
-   it returns. Workaround in `ns_engine/verify.baml` (`passes`); see also
-   SPEC_GAPS.md G-002.
+   and the matching `is` were both false for a present key, while a value
+   from `get_function<F>` matched `F` exactly. See also SPEC_GAPS.md G-002.
 3. **Parse ambiguities at block boundaries.** `else { "none" }` parses the block
    as a map literal (`expected ':'`), and an `if let … { `…` } else …` whose
    then-block is a bare template literal fails with `expected expression, found

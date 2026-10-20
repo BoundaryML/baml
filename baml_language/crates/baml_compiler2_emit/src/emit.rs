@@ -14,6 +14,7 @@ use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_hir_ty::{
     extern_loc::{ClassRef, FunctionRef},
     layout,
+    render::Viewpoint,
 };
 use baml_compiler2_mir::{
     BasicBlock, BinOp, BlockId, Constant, IndexKind, IntrinsicOp, Local, LogLevel, MirFunctionBody,
@@ -428,20 +429,20 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             .map(|(name, _)| name.clone())
     }
 
-    /// A MIR template as the program spells it: what operand metadata
-    /// prints. Display only — nothing resolves a declaration from it.
+    /// A MIR template rendered canonically: what operand metadata prints.
+    /// Display only — nothing resolves a declaration from it.
     fn spelled_template(&self, template: &TyTemplate) -> String {
-        let spelling = baml_compiler2_hir::package::spelling(self.db);
+        let viewpoint = Viewpoint::canonical(self.db);
         template
-            .map_heads(&mut |decl: &DeclName| spelling.wire(decl))
+            .map_heads(&mut |decl: &DeclName| viewpoint.wire_head(decl))
             .to_string()
     }
 
-    /// A declaration's display name as the program spells it: what operand
-    /// metadata prints for a class or enum head.
+    /// A declaration's canonical display name: what operand metadata prints
+    /// for a class or enum head.
     fn spelled_head(&self, head: &DeclName) -> String {
-        baml_compiler2_hir::package::spelling(self.db)
-            .wire(head)
+        Viewpoint::canonical(self.db)
+            .wire_head(head)
             .display_name()
             .to_string()
     }
@@ -609,7 +610,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             Rvalue::Uint8Array(_)
             | Rvalue::LoadType(_)
             | Rvalue::TraceHookSettings { .. }
-            | Rvalue::CurrentPackage(_)
+            | Rvalue::CurrentPackage
             | Rvalue::MakeGenericFunction { .. } => false,
             Rvalue::MakeGenericFunctionFromValue { value, .. } => {
                 self.operand_reads_spawn_captured_local(value, seen)
@@ -623,6 +624,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             }
             Rvalue::IsType { operand, .. }
             | Rvalue::IsTypeTag { operand, .. }
+            | Rvalue::SatisfiesBound { ty: operand, .. }
             | Rvalue::MakeBoundMethod {
                 receiver: operand, ..
             }
@@ -738,7 +740,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     }
 
     /// Compile a MIR function to bytecode.
-    fn compile(mut self) -> Function {
+    fn compile(mut self, identity: bex_vm_types::types::FunctionIdentity) -> Function {
         let mir = self.body;
         // 1. Allocate stack slots only for real locals
         self.allocate_real_locals(mir);
@@ -865,13 +867,11 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         let debug_locals = Self::build_debug_locals(mir, &self.local_slots);
 
         // 5. Build the Function
-        // Note: `name` is set by the caller after `compile_mir_function` returns.
         // `span` is set by `compile_mir_function` from the MIR function span.
         Function {
-            name: String::new(),
+            identity,
             source_file: String::new(), // caller sets this after compile_mir_function returns
             docstring: None,
-            declared_name: None,
             arity: self.arity,
             real_local_count: self.real_local_count,
             bytecode: self.bytecode,
@@ -893,11 +893,10 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             display_return_type: "null".to_string(),
             throws_type: bex_vm_types::TyTemplate::Never,
             origin: FunctionOrigin::Internal,
-            is_interface_body: false, // set from the item tree by attach_function_metadata
             native_key: None,
             body_meta: None,
-
-            runtime_package: bex_vm_types::HeapPtr::null(),
+            trace_passthrough: false,
+            owner: bex_vm_types::HeapPtr::null(),
         }
     }
 
@@ -1465,7 +1464,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     }
 
     fn emit_init_instance(&mut self, class: ClassRef<'ctx>, ntypeargs: u16, field_count: usize) {
-        let class_name = &baml_compiler2_mir::class_link_name(self.db, class);
+        let class_name = &baml_compiler2_mir::class_display_name(self.db, class);
         let class_obj_idx = self.refs.class(class);
         let fields = (0..field_count).collect::<Vec<_>>();
         let display_fields = fields
@@ -1713,7 +1712,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             )));
             self.set_operand(
                 inst,
-                OperandMeta::Global(baml_compiler2_mir::function_link_name(self.db, *func)),
+                OperandMeta::Global(baml_compiler2_mir::function_display_name(self.db, *func)),
             );
             return;
         }
@@ -1758,7 +1757,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             // Stack layout mirrors `MakeVirtualBoundMethod` with the `Self`
             // TYPE in the receiver's slot: `Self`, then the method-level type
             // args (already `Object::Type` OPERANDS — every one of them a
-            // `LoadType` temp, a scoped `type T = …` slot included),
+            // `LoadType` temp, a scoped `let type T = …` slot included),
             // then the interface type, then the method name — the opcode pops
             // in reverse.
             let self_template = self.refs.anchor_template(self_ty);
@@ -1824,7 +1823,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         {
             panic!(
                 "interface body has no Pass-1 slot: {}",
-                baml_compiler2_mir::function_link_name(self.db, func)
+                baml_compiler2_mir::function_display_name(self.db, func)
             );
         }
         // A method an impl of a SERVED package provides is slotted by no lane:
@@ -1838,7 +1837,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 "internal compiler error: `{}` is provided by an impl of a package served from \
                  its interface, so no lane slots it; it must be reached through its impl rule, \
                  never referenced directly",
-                baml_compiler2_mir::function_link_name(self.db, func)
+                baml_compiler2_mir::function_display_name(self.db, func)
             );
         }
         slot
@@ -1850,7 +1849,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         self.try_function_global_index(func).unwrap_or_else(|| {
             panic!(
                 "{what}: {}",
-                baml_compiler2_mir::function_link_name(self.db, func)
+                baml_compiler2_mir::function_display_name(self.db, func)
             )
         })
     }
@@ -1872,7 +1871,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         func: FunctionRef<'ctx>,
         type_args: &[baml_compiler2_mir::RealizedTy],
     ) {
-        let name_str = baml_compiler2_mir::function_link_name(self.db, func);
+        let name_str = baml_compiler2_mir::function_display_name(self.db, func);
         let global_idx = self.function_global_index(func, "undefined function");
         let gidx = GlobalIndex::from_raw(global_idx);
         // The pooled object carries runtime heads; anchor once and compare in
@@ -1967,7 +1966,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             Constant::GlobalItem(binding) => {
                 // A top-level `let` (a client, ...): read the value `$init`
                 // stored in its slot, unwrapped.
-                let name_str = baml_compiler2_mir::definition_link_name(
+                let name_str = baml_compiler2_mir::definition_display_name(
                     self.db,
                     baml_compiler2_hir::contributions::Definition::Let(*binding),
                 );
@@ -1981,7 +1980,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 self.emit_pooled_function_value(*func, type_args);
             }
             Constant::EnumVariant { enum_ref, index } => {
-                let enum_name_str = baml_compiler2_mir::enum_link_name(self.db, *enum_ref);
+                let enum_name_str = baml_compiler2_mir::enum_display_name(self.db, *enum_ref);
                 // TIR admitted the enum and MIR resolved it to a declaration
                 // (`enum_ref_of`), so the resolver answers with its object: a
                 // local ordinal for this package's own enum, an import
@@ -2169,7 +2168,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             | TyTemplate::Type
             | TyTemplate::Resource
             | TyTemplate::PromptAst
-            | TyTemplate::Void
             | TyTemplate::TypeAlias(..)
             | TyTemplate::Never) => {
                 // A fully-realized leaf (primitive, enum, alias, literal, ...):
@@ -2196,12 +2194,12 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 } else if let Some(tag) = realized_type_tag(realized) {
                     let c = self.add_constant(ConstValue::Int(tag));
                     let inst = self.emit(Instruction::IsType(c));
-                    let spelling = baml_compiler2_hir::package::spelling(self.db);
+                    let viewpoint = Viewpoint::canonical(self.db);
                     self.set_operand(
                         inst,
                         OperandMeta::Const(
                             realized
-                                .map_heads(&mut |decl: &DeclName| spelling.wire(decl))
+                                .map_heads(&mut |decl: &DeclName| viewpoint.wire_head(decl))
                                 .to_string(),
                         ),
                     );
@@ -2378,7 +2376,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     if let Some(func) = callee_item {
                         self.set_operand(
                             inst,
-                            OperandMeta::Callable(baml_compiler2_mir::function_link_name(
+                            OperandMeta::Callable(baml_compiler2_mir::function_display_name(
                                 self.db, func,
                             )),
                         );
@@ -2494,7 +2492,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 if let Some(func) = callee_item {
                     self.set_operand(
                         inst,
-                        OperandMeta::Callable(baml_compiler2_mir::function_link_name(
+                        OperandMeta::Callable(baml_compiler2_mir::function_display_name(
                             self.db, func,
                         )),
                     );
@@ -2563,19 +2561,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 self.emit_operand_pull(context);
                 self.restore_debug_span(throw_span);
                 self.emit(Instruction::Rethrow);
-            }
-
-            Terminator::ThrowIfPanic {
-                value,
-                context,
-                otherwise,
-            } => {
-                let throw_span = self.current_debug_span;
-                self.emit_operand_pull(value);
-                self.emit_operand_pull(context);
-                self.restore_debug_span(throw_span);
-                self.emit(Instruction::ThrowIfPanic);
-                self.emit_jump_unless_fallthrough(*otherwise);
             }
 
             Terminator::ShortCircuit {
@@ -3353,7 +3338,9 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         });
         self.set_operand(
             inst,
-            OperandMeta::Callable(baml_compiler2_mir::function_link_name(self.db, deep_copy)),
+            OperandMeta::Callable(baml_compiler2_mir::function_display_name(
+                self.db, deep_copy,
+            )),
         );
         Ok(())
     }
@@ -3461,12 +3448,13 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         // to the tag checks `is_type` emits for realized leaves. The operand
         // meta reproduces the strings the wildcarded container templates used
         // to render (`_[]` / `map<_, _>`) so bytecode display stays stable
-        // across the `IsTypeTag` re-home; other tags have no MIR producer.
+        // across the `IsTypeTag` re-home; `PANIC` is a catch's panic test.
         let c = self.add_constant(ConstValue::Int(tag));
         let inst = self.emit(Instruction::IsType(c));
         let meta = match tag {
             baml_type::typetag::LIST => "_[]".to_string(),
             baml_type::typetag::MAP => "map<_, _>".to_string(),
+            baml_type::typetag::PANIC => "baml.panics.Panic".to_string(),
             other => format!("type tag {other}"),
         };
         self.set_operand(inst, OperandMeta::Const(meta));
@@ -3486,11 +3474,20 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         Ok(())
     }
 
-    fn load_current_package(&mut self, package: &str) -> Result<(), Self::Error> {
+    fn satisfies_bound(&mut self) -> Result<(), Self::Error> {
+        self.emit(Instruction::SatisfiesBound);
+        Ok(())
+    }
+
+    fn load_current_package(&mut self) -> Result<(), Self::Error> {
         // The package is this unit's own; whoever lays the unit into an
-        // executable writes its ordinal here. The spelling is display only.
+        // executable writes its ordinal here. Displayed as the package
+        // spells itself.
         let inst = self.emit(Instruction::LoadCurrentPackage(0));
-        self.set_operand(inst, OperandMeta::Const(package.to_string()));
+        self.set_operand(
+            inst,
+            OperandMeta::Const(baml_compiler2_hir::package::ROOT_SEGMENT.to_string()),
+        );
         Ok(())
     }
 
@@ -3514,7 +3511,7 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         func: FunctionRef<'ctx>,
         ntypeargs: usize,
     ) -> Result<(), Self::Error> {
-        let func_name = baml_compiler2_mir::function_link_name(self.db, func);
+        let func_name = baml_compiler2_mir::function_display_name(self.db, func);
         let global_idx = self.function_global_index(func, "MakeGenericFunction: global not found");
         let ntypeargs = u16::try_from(ntypeargs).expect("ntypeargs fits u16");
         let inst = self.emit(Instruction::MakeGenericFunction {
@@ -3572,7 +3569,7 @@ impl<'db: 'ctx, 'ctx> StackifyCodegen<'db, 'ctx, '_, '_> {
     /// `AllocInstance` for `class`: the `PullSink::alloc_class_instance`
     /// implementation above and the field-copy-set route share it.
     fn alloc_instance_of(&mut self, class: ClassRef<'ctx>, ntypeargs: u16) {
-        let class_name = &baml_compiler2_mir::class_link_name(self.db, class);
+        let class_name = &baml_compiler2_mir::class_display_name(self.db, class);
         let class_obj_idx = self.refs.class(class);
         let inst = self.emit(Instruction::AllocInstance {
             class_obj: class_obj_idx,
@@ -3634,7 +3631,6 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
         | RealizedTy::RustType
         | RealizedTy::Resource
         | RealizedTy::PromptAst
-        | RealizedTy::Void
         | RealizedTy::TypeAlias(..)
         | RealizedTy::Unknown
         | RealizedTy::Never
@@ -3654,6 +3650,7 @@ fn realized_type_tag(ty: &RealizedTy) -> Option<i64> {
 pub(crate) fn compile_mir_function<'db: 'mir, 'mir>(
     body: &'mir MirFunctionBody,
     arity: usize,
+    identity: bex_vm_types::types::FunctionIdentity,
     mir_span: Option<baml_base::Span>,
     line_starts: &'mir [u32],
     ctx: MirCodegenContext<'db, 'mir, '_, '_>,
@@ -3666,7 +3663,7 @@ pub(crate) fn compile_mir_function<'db: 'mir, 'mir>(
 
     // Compile with stackification
     let codegen = StackifyCodegen::new(body, arity, line_starts, ctx, analysis);
-    let mut f = codegen.compile();
+    let mut f = codegen.compile(identity);
     if let Some(span) = mir_span {
         f.span = span;
     }
@@ -3740,6 +3737,7 @@ mod tests {
         let function = compile_mir_function(
             &body,
             1,
+            bex_vm_types::types::FunctionIdentity::Init,
             None,
             &line_starts,
             MirCodegenContext {

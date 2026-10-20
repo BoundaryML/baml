@@ -141,7 +141,7 @@ enum MediaTypeEnum {
 struct BamlTy {
     #[prost(
         oneof = "BamlTyVariant",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23, 24"
     )]
     ty: Option<BamlTyVariant>,
 }
@@ -186,8 +186,6 @@ enum BamlTyVariant {
     Resource(BamlTyResource),
     #[prost(message, tag = "19")]
     PromptAst(BamlTyPromptAst),
-    #[prost(message, tag = "20")]
-    Void(BamlTyVoid),
     #[prost(message, tag = "22")]
     TypeVar(BamlTyTypeVar),
     #[prost(message, tag = "23")]
@@ -420,13 +418,6 @@ struct BamlTyResource {}
     reason = "Empty message mirrors the outbound protobuf shape."
 )]
 struct BamlTyPromptAst {}
-
-#[derive(Clone, PartialEq, Message)]
-#[allow(
-    clippy::empty_structs_with_brackets,
-    reason = "Empty message mirrors the outbound protobuf shape."
-)]
-struct BamlTyVoid {}
 
 #[derive(Clone, PartialEq, Message)]
 #[allow(
@@ -668,7 +659,6 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
         RuntimeTy::Type => BamlTyVariant::MetaType(BamlTyMetaType {}),
         RuntimeTy::Resource => BamlTyVariant::Resource(BamlTyResource {}),
         RuntimeTy::PromptAst => BamlTyVariant::PromptAst(BamlTyPromptAst {}),
-        RuntimeTy::Void => BamlTyVariant::Void(BamlTyVoid {}),
         RuntimeTy::TypeVar(param) => BamlTyVariant::TypeVar(BamlTyTypeVar {
             name: param.as_str().to_string(),
             index: param.index(),

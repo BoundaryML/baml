@@ -1,0 +1,5 @@
+name = "nested field access 500k"
+description = "500,000 reads through three levels of nested fields"
+expect = "124999750000"
+jobs = 3
+warmup = 1

@@ -2,10 +2,12 @@
 //!
 //! Language-observable package behavior lives in the native BAML corpus under
 //! `root.runtime_package_compile_phase1`. These tests remain in Rust because
-//! they inspect host logger state or the `BexExternalValue` throw layout.
+//! they inspect host logger state or the `BexExternalValue` throw layout, or
+//! need a program of their own (the corpus is one program).
 
 use std::sync::Arc;
 
+use baml_tests::baml_test;
 use bex_engine::{
     BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder,
     logger::{TraceLogDrainReport, TraceLogger},
@@ -25,8 +27,7 @@ function init_ready() -> bool {
 class Ready { value string }
 ` })
   let init_ready = pkg.get_function<() -> bool>("root.init_ready")
-    ?? throw "missing init_ready"
-  pkg.get_class("root.Ready") != null && init_ready()
+  pkg.find_class("root.Ready") != null && init_ready()
 }
 "####;
 
@@ -78,7 +79,6 @@ function Run(state: app.AgentState) -> PlanThenAct {
     packages = { "app": reflect.Package.current() },
   )
   let run = skill.get_function<(AgentState) -> AgentAction>("root.Run")
-    ?? throw "missing root.Run"
   run(AgentState { goal: "ship", history: [] }).summary
 }
 "####;
@@ -324,4 +324,44 @@ async fn scenario_6_extracts_and_calls_the_live_aliased_function() {
     assert!(report.failures.is_empty(), "{:?}", report.failures);
     assert_eq!(report.logs.len(), 1);
     assert_eq!(report.logs[0].body, "LIVE_PLAN:ship");
+}
+
+/// A class a runtime-compiled package declares is finalized even though no
+/// class of the host program has a finalizer: the graft raises the heap's
+/// finalizable-classes flag, so the collector's scan runs. A program of its
+/// own, because the corpus program declares finalizers of its own.
+#[tokio::test]
+async fn a_runtime_packages_class_is_finalized_without_a_host_finalizer() {
+    let output = baml_test!(
+        r####"
+function main() -> string[] {
+  let log: string[] = [];
+  let pkg = reflect.Package.compile({ "app.baml": `
+class Resource {
+  log string[]
+  function cleanup(self) -> void { self.log.push("cleaned"); }
+}
+function abandon(log: string[]) -> void {
+  let resource = Resource { log: log };
+  resource.log.push("created");
+}
+` });
+  let abandon = pkg.get_function<(log: string[]) -> void>("root.abandon");
+  abandon(log);
+  baml.sys.collect_garbage();
+  log
+}
+"####
+    );
+    let BexExternalValue::Array { items, .. } = output.result.expect("main runs") else {
+        panic!("main returns the log");
+    };
+    let log: Vec<&str> = items
+        .iter()
+        .map(|item| match item {
+            BexExternalValue::String(s) => s.as_ref(),
+            other => panic!("a log entry is a string, got {other:?}"),
+        })
+        .collect();
+    assert_eq!(log, ["created", "cleaned"]);
 }

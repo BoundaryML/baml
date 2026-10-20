@@ -25,8 +25,11 @@ class TimeoutInvokeClient {
     probe: TimeoutInvocationProbe,
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "timeout-provider"
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -183,8 +186,11 @@ class FlakyTimeoutClient {
     probe: TimeoutInvocationProbe,
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             self.client_id
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -204,22 +210,22 @@ class FlakyTimeoutClient {
                 throw baml.errors.Timeout { message: `${self.client_id} timed out`, duration: baml.time.Duration.from_milliseconds(100), timeout_type: "timeout" }
             }
             ai.ModelTurn {
+                child_turns: [],
                 calls: [],
                 content: [ai.content.Text { text: `answer from ${self.client_id}` }],
                 stop_reason: ai.content.StopReason.Complete,
-                usage: null,
             }
         }
     }
 }
 
 function failed_leg_names(turn: ai.ModelTurn) -> string {
-    turn.calls
-        .filter((call) -> {
-            !call.selected
+    turn.child_turns
+        .filter((attempt) -> {
+            attempt.error != null
         })
-        .map((call) -> {
-            call.client_name
+        .map((attempt) -> {
+            attempt.requested_model ?? "-"
         })
         .join(",")
 }

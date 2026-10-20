@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_base::Name;
+use baml_base::{LangPackage, Name};
 use baml_compiler_diagnostics::{
     DiagnosticId, DiagnosticIdentifierKind, DiagnosticMessageHighlight, DiagnosticMessageKind,
     DiagnosticPhase, ParseError, Severity,
@@ -144,11 +144,13 @@ fn mount_order(
 /// target's path (`built` holds the targets' rows; the order the roots are
 /// created in guarantees it). A name exported twice is E0011.
 ///
-/// The surface spells every foreign head through one of the mount's own
-/// edges (or a language package's fixed name), so the blob's dependency
-/// table is exactly those edges: every non-prelude edge a direct entry
-/// carrying its target's digest (`digest_of`), a language package a prelude
-/// entry — the same table an export of a compiled package builds.
+/// Every head of the surface is a [`MountHead`]: the mount's own by path,
+/// another mount's through one of the mount's own edges, a language
+/// package's by identity. The blob's dependency table is exactly those edges
+/// — every one a direct entry carrying its target's digest (`digest_of`),
+/// since a mount edge never reaches a language package — plus a prelude
+/// entry for each language package a head names, under the package's fixed
+/// name: the same table an export of a compiled package builds.
 fn projected_interface(
     surface: &bex_vm_types::RuntimeProjectedSurface,
     edges: &IndexMap<Name, bex_vm_types::RuntimeMountEdge>,
@@ -158,8 +160,110 @@ fn projected_interface(
     use baml_compiler2_hir_ty::package_interface::{
         ExportedFieldAttrs, ExportedImpl, ExportedImplOrigin, ExportedType, ReExport,
     };
+    use bex_vm_types::MountHead;
 
-    let mut interface = PackageInterface::<TypeName> {
+    /// The blob's dependency table under construction: a slot per edge of
+    /// the mount, in edge order, then a prelude slot per language package the
+    /// surface names, in first-use order. An edge is found by its name and a
+    /// prelude slot by its package, each in its own table, so neither lookup
+    /// can answer with the other's entry.
+    struct Slots {
+        edges: Vec<(Name, Locator)>,
+        /// Each language package's slot index, by its position in
+        /// [`LangPackage::ALL`]; `None` until the surface names it.
+        prelude: [Option<usize>; LangPackage::ALL.len()],
+    }
+
+    impl Slots {
+        fn edge(&self, edge: &Name) -> Result<DepSlot, RuntimeCompileDiagnostic> {
+            self.edges
+                .iter()
+                .position(|(slotted, _)| slotted == edge)
+                .map(DepSlot::of_dependency_index)
+                .ok_or_else(|| {
+                    mount_diagnostic(
+                        "E_RUNTIME_MOUNT",
+                        format!(
+                            "the projected surface names a declaration through `{edge}`, which \
+                             is no edge of the mount"
+                        ),
+                    )
+                })
+        }
+
+        /// The slot of the language package `package`, by identity: the
+        /// next index past the edges on first use.
+        fn prelude(&mut self, package: LangPackage) -> DepSlot {
+            let next = self.edges.len() + self.prelude.iter().flatten().count();
+            let index = *self.prelude[package as usize].get_or_insert(next);
+            DepSlot::of_dependency_index(index)
+        }
+
+        /// The table in slot order: the edges, then the prelude slots in
+        /// the order they were handed out.
+        fn locators(self) -> Vec<Locator> {
+            let mut prelude: Vec<(usize, LangPackage)> = LangPackage::ALL
+                .into_iter()
+                .filter_map(|package| Some((self.prelude[package as usize]?, package)))
+                .collect();
+            prelude.sort_unstable_by_key(|(index, _)| *index);
+            self.edges
+                .into_iter()
+                .map(|(_, locator)| locator)
+                .chain(
+                    prelude
+                        .into_iter()
+                        .map(|(_, package)| Locator::Prelude(package)),
+                )
+                .collect()
+        }
+
+        fn wire(&mut self, head: &MountHead) -> Result<WireName, RuntimeCompileDiagnostic> {
+            match head {
+                MountHead::Own(path) => {
+                    Ok(WireName::own(path.namespace.clone(), path.name.clone()))
+                }
+                MountHead::Edge { edge, path } => Ok(WireName::qualified(
+                    self.edge(edge)?,
+                    path.namespace.clone(),
+                    path.name.clone(),
+                )),
+                MountHead::Prelude { package, path } => Ok(WireName::qualified(
+                    self.prelude(*package),
+                    path.namespace.clone(),
+                    path.name.clone(),
+                )),
+            }
+        }
+
+        fn wire_ty(
+            &mut self,
+            ty: &baml_type::Ty<MountHead>,
+        ) -> Result<baml_type::Ty<WireName>, RuntimeCompileDiagnostic> {
+            ty.try_map_heads(&mut |head| self.wire(head))
+        }
+    }
+
+    let mut slots = Slots {
+        prelude: [None; LangPackage::ALL.len()],
+        edges: edges
+            .iter()
+            .map(|(edge, mount_edge)| {
+                // A mount edge never reaches a language package (the prelude
+                // never crosses the seam), so every edge is a digested entry.
+                let locator = match mount_edge.kind {
+                    bex_vm_types::types::EdgeKind::Dependency
+                    | bex_vm_types::types::EdgeKind::ReExported => Locator::Direct {
+                        edge: edge.clone(),
+                        digest: digest_of(mount_edge.target),
+                    },
+                };
+                (edge.clone(), locator)
+            })
+            .collect(),
+    };
+
+    let mut interface = PackageInterface::<WireName> {
         types: IndexMap::new(),
         functions: IndexMap::new(),
         throw_sets: baml_compiler2_hir_ty::package_interface::FunctionThrowSets::default(),
@@ -170,7 +274,7 @@ fn projected_interface(
     let duplicate = |name: &LocalName| {
         mount_diagnostic("E0011", format!("duplicate exported type name `{name}`"))
     };
-    let exported = |interface: &PackageInterface<TypeName>, name: &LocalName| {
+    let exported = |interface: &PackageInterface<WireName>, name: &LocalName| {
         interface.lookup_type(&name.namespace, &name.name).is_some()
             || interface
                 .lookup_function(&name.namespace, &name.name)
@@ -179,9 +283,9 @@ fn projected_interface(
                 .lookup_reexport(&name.namespace, &name.name)
                 .is_some()
     };
-    let add_row = |interface: &mut PackageInterface<TypeName>,
+    let add_row = |interface: &mut PackageInterface<WireName>,
                    name: &LocalName,
-                   row: ExportedType<TypeName>|
+                   row: ExportedType<WireName>|
      -> Result<(), RuntimeCompileDiagnostic> {
         if exported(interface, name) {
             return Err(duplicate(name));
@@ -199,26 +303,27 @@ fn projected_interface(
             namespace: Vec::new(),
             name: class.name.clone(),
         };
+        let fields = class
+            .fields
+            .iter()
+            .map(|(name, ty, attrs)| {
+                Ok((
+                    name.clone(),
+                    slots.wire_ty(ty)?,
+                    ExportedFieldAttrs {
+                        alias: attrs.alias.clone(),
+                        description: attrs.description.clone(),
+                        docstring: attrs.docstring.clone(),
+                    },
+                ))
+            })
+            .collect::<Result<Vec<_>, RuntimeCompileDiagnostic>>()?;
         add_row(
             &mut interface,
             &name,
             ExportedType::Class {
-                qtn: baml_type::QualifiedTypeName::local(class.name.clone()),
-                fields: class
-                    .fields
-                    .iter()
-                    .map(|(name, ty, attrs)| {
-                        (
-                            name.clone(),
-                            ty.clone(),
-                            ExportedFieldAttrs {
-                                alias: attrs.alias.clone(),
-                                description: attrs.description.clone(),
-                                docstring: attrs.docstring.clone(),
-                            },
-                        )
-                    })
-                    .collect(),
+                qtn: WireName::own(Vec::new(), class.name.clone()),
+                fields,
                 methods: Vec::new(),
                 generic_params: Vec::new(),
                 generic_param_bounds: Vec::new(),
@@ -234,28 +339,25 @@ fn projected_interface(
             &mut interface,
             &name,
             ExportedType::Enum {
-                qtn: baml_type::QualifiedTypeName::local(enm.name.clone()),
+                qtn: WireName::own(Vec::new(), enm.name.clone()),
                 variants: enm.variants.iter().map(|(name, _)| name.clone()).collect(),
             },
         )?;
     }
     for alias in &surface.aliases {
+        let resolved = slots.wire_ty(&alias.ty)?;
         add_row(
             &mut interface,
             &alias.name,
             ExportedType::TypeAlias {
-                qtn: baml_type::QualifiedTypeName::qualified(
-                    baml_type::Package::Local,
-                    alias.name.namespace.clone(),
-                    alias.name.name.clone(),
-                ),
-                resolved: alias.ty.clone(),
+                qtn: WireName::own(alias.name.namespace.clone(), alias.name.name.clone()),
+                resolved,
             },
         )?;
     }
-    let add_reexport = |interface: &mut PackageInterface<TypeName>,
+    let add_reexport = |interface: &mut PackageInterface<WireName>,
                         name: &LocalName,
-                        reexport: ReExport<TypeName>|
+                        reexport: ReExport<WireName>|
      -> Result<(), RuntimeCompileDiagnostic> {
         if exported(interface, name) {
             return Err(duplicate(name));
@@ -269,7 +371,7 @@ fn projected_interface(
         Ok(())
     };
     for reexport in &surface.reexports {
-        let of = reexport.of.clone();
+        let of = slots.wire(&reexport.of)?;
         let entry = match reexport.kind {
             bex_vm_types::RuntimeReExportKind::Class
             | bex_vm_types::RuntimeReExportKind::Enum
@@ -291,8 +393,9 @@ fn projected_interface(
                 "a re-exported package is mounted after the package re-exporting it".to_string(),
             )
         })?;
+        let slot = slots.edge(edge)?;
         let spell = |namespace: &[Name], name: &Name| {
-            TypeName::new(edge.clone(), namespace.to_vec(), name.clone())
+            WireName::qualified(slot, namespace.to_vec(), name.clone())
         };
         for (namespace, items) in &target.types {
             for name in items.keys() {
@@ -336,17 +439,29 @@ fn projected_interface(
         }
     }
     for rule in &surface.impls {
+        let generics = rule
+            .interface
+            .generics
+            .iter()
+            .map(|ty| slots.wire_ty(ty))
+            .collect::<Result<Vec<_>, RuntimeCompileDiagnostic>>()?;
+        let associated_types = rule
+            .interface
+            .associated_types
+            .iter()
+            .map(|(name, ty)| Ok((name.clone(), slots.wire_ty(ty)?)))
+            .collect::<Result<Vec<_>, RuntimeCompileDiagnostic>>()?;
         interface.impls.push(ExportedImpl {
             // The bindings are the row's `associated_types`; the header
             // names the interface and its arguments only, exactly as a
             // source impl's does.
-            associated_types: rule.interface.associated_types.to_vec(),
+            associated_types,
             interface: baml_type::Interface::new(
-                rule.interface.name.clone(),
-                rule.interface.generics.clone(),
+                slots.wire(&rule.interface.name)?,
+                generics.into(),
                 Box::new([]),
             ),
-            for_ty_pattern: rule.for_ty.clone(),
+            for_ty_pattern: slots.wire_ty(&rule.for_ty)?,
             generic_params: Vec::new(),
             param_bounds: Vec::new(),
             field_links: rule.field_links.clone(),
@@ -354,62 +469,20 @@ fn projected_interface(
             methods: Vec::new(),
         });
     }
-    // Every edge of the mount is a slot, in edge order; a language package
-    // the surface names by its fixed name — the engine spells the prelude by
-    // its declared names, never through an edge — joins the table on demand.
-    let mut table: Vec<(Name, Locator)> = edges
-        .iter()
-        .map(|(edge, mount_edge)| {
-            let locator = match mount_edge.kind {
-                bex_vm_types::types::EdgeKind::Prelude => Locator::Prelude { edge: edge.clone() },
-                bex_vm_types::types::EdgeKind::Declared
-                | bex_vm_types::types::EdgeKind::ReExported
-                | bex_vm_types::types::EdgeKind::Anonymous => Locator::Direct {
-                    edge: edge.clone(),
-                    digest: digest_of(mount_edge.target),
-                },
-            };
-            (edge.clone(), locator)
-        })
-        .collect();
-    let rows = interface.try_map_heads(&mut |name: &TypeName| {
-        if name.is_local() {
-            return Ok(WireName::own(name.namespace().clone(), name.name().clone()));
-        }
-        let edge = name.package();
-        let index = match table.iter().position(|(slotted, _)| slotted == edge) {
-            Some(index) => index,
-            None if baml_builtins2::stdlib_package_names().contains(&edge.as_str()) => {
-                table.push((edge.clone(), Locator::Prelude { edge: edge.clone() }));
-                table.len() - 1
-            }
-            None => {
-                return Err(mount_diagnostic(
-                    "E_RUNTIME_MOUNT",
-                    format!("the projected surface names `{name}` through no edge of the mount"),
-                ));
-            }
-        };
-        Ok(WireName::qualified(
-            DepSlot::of_dependency_index(index),
-            name.namespace().clone(),
-            name.name().clone(),
-        ))
-    })?;
     Ok(WireInterface {
-        dependencies: table.into_iter().map(|(_, locator)| locator).collect(),
-        rows,
+        dependencies: slots.locators(),
+        rows: interface,
     })
 }
 
 /// The names the roots of a request take, made distinct: an aliased package
 /// is named by its first alias; a package no alias reaches — one a mount's
 /// edges reach — by the first edge name reaching it; either suffixed with
-/// `$k` when the name is taken or is one of the package's OWN edge names (a
-/// root's name resolves to the root itself, so it must not shadow an edge
-/// its blob spells). A root's name is what the program spells its
-/// declarations by where no edge reaches it; every declaration a consumer
-/// can write is spelled through an edge or a re-export instead.
+/// `$k` when the name is taken. A root's name is display metadata and what
+/// the program spells its declarations by where no edge reaches it; it
+/// resolves nothing — a package reaches itself as `root` only — so it may
+/// coincide with one of the package's own edge names. Every declaration a
+/// consumer can write is spelled through an edge or a re-export.
 fn root_names(
     packages: &IndexMap<bex_vm_types::RuntimePackageIdentity, RuntimePackageMount>,
     aliases: &IndexMap<String, bex_vm_types::RuntimePackageIdentity>,
@@ -425,16 +498,9 @@ fn root_names(
         if names.contains_key(&identity) {
             return;
         }
-        let own_edges = packages
-            .get(&identity)
-            .map(|mount| &mount.edges)
-            .into_iter()
-            .flat_map(|edges| edges.keys())
-            .cloned()
-            .collect::<HashSet<Name>>();
         let mut candidate = preferred.clone();
         let mut suffix = 1;
-        while taken.contains(&candidate) || own_edges.contains(&candidate) {
+        while taken.contains(&candidate) {
             candidate = Name::new(format!("{preferred}${suffix}"));
             suffix += 1;
         }
@@ -840,46 +906,80 @@ fn assignment_parts(source: &str) -> Option<(&str, &'static str, &str)> {
     Some((source[..start].trim(), operator, source[end..].trim()))
 }
 
-/// Recognize the statement-only `type T = unreflect(expr)` form and return
-/// the source-visible name plus the operand text. The parser has already
-/// validated the delimiters for block statements; this small lexical helper
-/// is also used to distinguish the same token shape from a top-level alias
-/// during Session's initial declaration-hoisting pass.
-fn runtime_type_binding_parts(source: &str) -> Option<(String, &str)> {
-    let tokens = lex_lossless(source, baml_base::FileId::new(0));
-    let words = tokens
-        .iter()
-        .enumerate()
-        .filter(|(_, token)| token.kind == TokenKind::Word)
-        .collect::<Vec<_>>();
-    let [(_, type_word), (_, name), (unreflect_index, unreflect), ..] = words.as_slice() else {
-        return None;
-    };
-    if type_word.text.as_str() != "type" || unreflect.text.as_str() != "unreflect" {
-        return None;
-    }
-    let open = tokens
-        .iter()
-        .skip(*unreflect_index + 1)
-        .find(|token| token.kind == TokenKind::LParen)?;
-    let close = tokens
-        .iter()
-        .rev()
-        .find(|token| token.kind == TokenKind::RParen)?;
-    let start = usize::from(open.span.range.end());
-    let end = usize::from(close.span.range.start());
-    (start <= end).then(|| (name.text.clone(), source[start..end].trim()))
+/// The source text of a session `let type T [extends …] = operand [else
+/// { … }];` step, sliced from the wrapped submission it was parsed from.
+struct RuntimeTypeBindingParts<'a> {
+    name: String,
+    /// The `extends A & B` clause, verbatim.
+    bounds: Option<&'a str>,
+    operand: &'a str,
+    /// The `{ … }` block after `else`, verbatim.
+    else_block: Option<&'a str>,
 }
 
+/// Split a `TYPE_BINDING_STMT` step into its source parts. `None` for the
+/// removed `type T = …` spelling (a parse error the session already reported)
+/// or an incomplete statement.
+fn runtime_type_binding_parts<'a>(
+    node: &SyntaxNode,
+    wrapped: &'a str,
+) -> Option<RuntimeTypeBindingParts<'a>> {
+    let text = |range: rowan::TextRange| -> &'a str {
+        wrapped[usize::from(range.start())..usize::from(range.end())].trim()
+    };
+    let mut name = None;
+    let mut bounds = None;
+    let mut operand: Option<rowan::TextRange> = None;
+    let mut else_block = None;
+    let (mut seen_let, mut seen_equals, mut seen_else) = (false, false, false);
+    for element in node.children_with_tokens() {
+        let range = element.text_range();
+        match element.kind() {
+            SyntaxKind::KW_LET => seen_let = true,
+            SyntaxKind::WORD if !seen_equals && name.is_none() => {
+                name = Some(text(range).to_string());
+            }
+            SyntaxKind::GENERIC_PARAM_BOUNDS => bounds = Some(text(range)),
+            SyntaxKind::EQUALS if !seen_equals => seen_equals = true,
+            SyntaxKind::KW_ELSE => seen_else = true,
+            SyntaxKind::SEMICOLON => {}
+            kind if kind.is_trivia() => {}
+            _ if seen_else => else_block = Some(text(range)),
+            _ if seen_equals => {
+                operand = Some(operand.map_or(range, |operand| operand.cover(range)));
+            }
+            _ => {}
+        }
+    }
+    if !seen_let {
+        return None;
+    }
+    Some(RuntimeTypeBindingParts {
+        name: name?,
+        bounds,
+        operand: text(operand?),
+        else_block,
+    })
+}
+
+/// Re-bind every earlier `let type` step's type for a later step, with its
+/// bounds, so `T` keeps the same static meaning there. A bounded `let type`
+/// must have an `else` block; the step that wrote the binding already checked
+/// the bounds, so this one is not expected to run.
 fn runtime_type_binding_prelude(bindings: &IndexMap<String, SessionVisibleSymbol>) -> String {
     let mut prelude = String::new();
-    for symbol in bindings.values() {
-        if let SessionVisibleKind::TypeBinding { type_value } = &symbol.kind {
-            let _ = writeln!(
-                prelude,
-                "type {} = unreflect({type_value});",
-                symbol.internal
-            );
+    for (name, symbol) in bindings {
+        if let SessionVisibleKind::TypeBinding { type_value, bounds } = &symbol.kind {
+            if bounds.is_empty() {
+                let _ = writeln!(prelude, "let type {} = {type_value};", symbol.internal);
+            } else {
+                let _ = writeln!(
+                    prelude,
+                    "let type {} {bounds} = {type_value} else {{ \
+                     baml.sys.panic(\"session type `{name}` no longer satisfies its bounds\") }};",
+                    symbol.internal
+                );
+            }
         }
     }
     prelude
@@ -1097,6 +1197,11 @@ struct SessionCompile {
 /// its edges names, else the package the compile world spells that way
 /// within its dependency closure (a contract may name a type the submission
 /// only reaches through a mount). `None` when the submission cannot reach it.
+// BUG: a session enforces neither the `root` reservation nor an own item's
+// precedence over a package spelled alike: a submission may declare `let root`,
+// `function root()` or a `class root`, and `function log()` beside `log.info(x)`
+// still reaches the stdlib, where a file and `reflect.Package.compile` refuse
+// both. Session submissions should be checked by the same HIR rules.
 // BUG: the contract crosses the compile seam by NAME (the engine spells it
 // with `TypeHead::to_name`), so it is read back by spelling. A session that
 // mounts a package under another name than the one its declarations display,
@@ -1112,17 +1217,26 @@ fn session_contract_head(
     workspace: baml_base::SourceRoot,
     name: &TypeName,
 ) -> Option<baml_type::DeclName> {
-    use baml_compiler2_hir::package::{accessible_package, package_dependency_closure, spelling};
+    use baml_compiler2_hir::package::{dependency_named, package_dependency_closure};
 
     let root = if name.is_local() {
         workspace
-    } else if let Some(root) = accessible_package(db, workspace, name.package()) {
+    } else if let Some(root) = dependency_named(db, workspace, name.package()) {
         root
     } else {
-        let root = spelling(db).root(name.package())?;
-        package_dependency_closure(db, workspace)
-            .contains(&root)
-            .then_some(root)?
+        // The closure package the engine labelled this way: the one declaring
+        // the name, else the one some closure member reaches by it.
+        let closure = package_dependency_closure(db, workspace);
+        closure
+            .iter()
+            .copied()
+            .find(|root| root.self_name(db).as_ref() == Some(name.package()))
+            .or_else(|| {
+                closure.iter().find_map(|member| {
+                    let root = dependency_named(db, *member, name.package())?;
+                    closure.contains(&root).then_some(root)
+                })
+            })?
     };
     Some(baml_type::DeclName::in_root(
         root,
@@ -1162,7 +1276,7 @@ fn local_item(name: &str) -> LocalName {
 }
 
 /// `erase_steps` names steps (by index into the lowered `steps`) whose value
-/// is typed by a session `type T = …` binding, as a first compile reported at
+/// is typed by a session `let type T = …` binding, as a first compile reported at
 /// their block tails (E0172). Such a step publishes through the erasing helper
 /// so its global carries `unknown` — the only type a binding-typed value may
 /// leave its block as — while every other step keeps its precise type.
@@ -1198,8 +1312,6 @@ fn lower_session_submission(
         .filter(|node| {
             declaration_kind(node.kind())
                 && (node.kind() == SyntaxKind::IMPLEMENTS_FOR || declaration_name(node).is_some())
-                && !(node.kind() == SyntaxKind::TYPE_ALIAS_DEF
-                    && runtime_type_binding_parts(&node.text().to_string()).is_some())
         })
         .collect::<Vec<_>>();
 
@@ -1322,6 +1434,11 @@ fn lower_session_submission(
     let mut step_ranges: Vec<std::ops::Range<usize>> = Vec::new();
     let mut result_step = None;
     let mut result_name: Option<String> = None;
+    // A header comment is not code: the last element that is decides what
+    // the submission evaluates to.
+    let last_code = elements
+        .iter()
+        .rposition(|element| !matches!(element, BlockElement::HeaderComment(_)));
 
     for (index, element) in elements.iter().enumerate() {
         let (node, wrapped_range, has_semicolon, is_statement) = match element {
@@ -1370,8 +1487,14 @@ fn lower_session_submission(
             locally_bound_names(node, outer_binding.as_ref().map(|(_, range)| range))
         });
         let prelude = runtime_type_binding_prelude(&active_type_bindings);
+        // Only the submission's final expression is its value. An earlier
+        // one is a statement, as it would be in a block: its value is
+        // dropped, so an `if` with no `else` there owes no unit branch.
+        let returns_value =
+            Some(index) == last_code && !is_outer_let && !is_statement && !has_semicolon;
         let (generated_name, step_source, commit_global, binding) = if is_type_binding {
-            let Some((name, operand)) = runtime_type_binding_parts(raw) else {
+            let Some(parts) = node.and_then(|node| runtime_type_binding_parts(node, &wrapped))
+            else {
                 return Err(vec![runtime_diagnostic(
                     DiagnosticId::InvalidSyntax,
                     &request.submission_name,
@@ -1380,20 +1503,42 @@ fn lower_session_submission(
                     "invalid runtime type binding",
                 )]);
             };
+            let rewrite = |text: &str| {
+                rewrite_identifiers(
+                    text,
+                    &visible_mapping,
+                    &IndexMap::new(),
+                    &HashSet::new(),
+                    &local_names,
+                )
+            };
+            let name = parts.name;
             let type_name = internal(&name);
             let backing_name = format!("__baml_session_{sequence}_type_value_{name}");
-            let operand = rewrite_identifiers(
-                operand,
-                &visible_mapping,
-                &IndexMap::new(),
-                &HashSet::new(),
-                &local_names,
-            );
-            let source = format!("let {backing_name} = {{\n{prelude}({operand})\n}}\n");
+            let operand = rewrite(parts.operand);
+            let bounds = parts.bounds.map(&rewrite).unwrap_or_default();
+            // The step stores the type value itself; later steps re-bind it
+            // (`runtime_type_binding_prelude`). A bounded binding checks its
+            // bounds here, where it is written, and runs its `else` block on
+            // a miss.
+            let source = if bounds.is_empty() {
+                format!("let {backing_name} = {{\n{prelude}({operand})\n}}\n")
+            } else {
+                let else_clause = parts
+                    .else_block
+                    .map(|block| format!(" else {}", rewrite(block)))
+                    .unwrap_or_default();
+                let checked = format!("{backing_name}_checked");
+                format!(
+                    "let {backing_name} = {{\n{prelude}let {checked} = ({operand});\n\
+                     let type {type_name} {bounds} = {checked}{else_clause};\n{checked}\n}}\n"
+                )
+            };
             let symbol = SessionVisibleSymbol {
                 internal: type_name,
                 kind: SessionVisibleKind::TypeBinding {
                     type_value: backing_name.clone(),
+                    bounds,
                 },
             };
             (backing_name, source, None, Some((name, symbol)))
@@ -1478,7 +1623,7 @@ fn lower_session_submission(
                     &local_names,
                 );
                 // A step's value leaves its block into a global that later
-                // submissions read, and a scoped `type T = …` binding lives
+                // submissions read, and a scoped `let type T = …` binding lives
                 // only inside that block: a value typed by one cannot leave
                 // (E0172) unless the block's context is a ground type. A
                 // step the first compile reported at its tail is re-lowered
@@ -1494,9 +1639,9 @@ fn lower_session_submission(
                     format!("{rewritten}\n")
                 } else if is_outer_let {
                     block_step(format!("{prelude}{rewritten}\n{generated_name}"))
-                } else if !is_statement && !has_semicolon && prelude.is_empty() {
+                } else if returns_value && prelude.is_empty() {
                     format!("let {generated_name} = ({rewritten})\n")
-                } else if !is_statement && !has_semicolon {
+                } else if returns_value {
                     block_step(format!("{prelude}{rewritten}"))
                 } else {
                     format!("let {generated_name} = {{\n{prelude}{rewritten}\nnull\n}}\n")
@@ -1508,8 +1653,6 @@ fn lower_session_submission(
         let step_start = generated.len();
         generated.push_str(&step_source);
         step_ranges.push(step_start..generated.len());
-        let returns_value =
-            index + 1 == elements.len() && !is_outer_let && !is_statement && !has_semicolon;
         if returns_value {
             result_step = Some(steps.len());
             result_name = Some(generated_name.clone());

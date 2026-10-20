@@ -156,7 +156,9 @@ pub fn walk_rvalue_places<'a>(rvalue: &'a Rvalue<'_>, f: &mut impl FnMut(&'a Pla
             }
         }
         Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => f(place),
-        Rvalue::IsType { operand, .. } | Rvalue::IsTypeTag { operand, .. } => {
+        Rvalue::IsType { operand, .. }
+        | Rvalue::IsTypeTag { operand, .. }
+        | Rvalue::SatisfiesBound { ty: operand, .. } => {
             walk_operand_places(operand, f);
         }
         Rvalue::MakeClosure { captures, .. } => {
@@ -176,7 +178,7 @@ pub fn walk_rvalue_places<'a>(rvalue: &'a Rvalue<'_>, f: &mut impl FnMut(&'a Pla
         }
         Rvalue::LoadType(_)
         | Rvalue::TraceHookSettings { .. }
-        | Rvalue::CurrentPackage(_)
+        | Rvalue::CurrentPackage
         | Rvalue::MakeGenericFunction { .. } => {
             // No place operands — the templates are compile-time data.
         }
@@ -210,6 +212,7 @@ pub fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
             AggregateKind::Array => {}
         },
         Rvalue::IsType { test, .. } => test.for_each_type_arg_ref(f),
+        Rvalue::SatisfiesBound { bound, .. } => bound.for_each_type_arg_ref(f),
         Rvalue::MakeClosure {
             type_arg_templates, ..
         }
@@ -247,7 +250,7 @@ pub fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
         | Rvalue::IsTypeTag { .. }
         | Rvalue::MakeBoundMethod { .. }
         | Rvalue::TraceHookSettings { .. }
-        | Rvalue::CurrentPackage(_) => {}
+        | Rvalue::CurrentPackage => {}
     }
 }
 
@@ -283,7 +286,6 @@ pub fn walk_terminator_type_slots(terminator: &Terminator<'_>, f: &mut impl FnMu
         | Terminator::Spawn { .. }
         | Terminator::Throw { .. }
         | Terminator::Rethrow { .. }
-        | Terminator::ThrowIfPanic { .. }
         | Terminator::ShortCircuit { .. } => {}
     }
 }
@@ -493,6 +495,8 @@ pub fn rvalue_reads(
         }
         // Some field of the receiver, resolved at run time — any field.
         Rvalue::VirtualFieldAccess { .. } => out.heap = true,
+        // The impl registry, which a runtime registration extends.
+        Rvalue::SatisfiesBound { .. } => out.heap = true,
         Rvalue::Use(_)
         | Rvalue::BinaryOp { .. }
         | Rvalue::UnaryOp { .. }
@@ -509,7 +513,7 @@ pub fn rvalue_reads(
         | Rvalue::MakeVirtualBoundMethod { .. }
         | Rvalue::MakeVirtualFunction { .. }
         | Rvalue::LoadType(_)
-        | Rvalue::CurrentPackage(_)
+        | Rvalue::CurrentPackage
         | Rvalue::MakeGenericFunction { .. }
         | Rvalue::MakeGenericFunctionFromValue { .. } => {}
     }
@@ -631,7 +635,7 @@ pub fn terminator_clobbers(model: ClobberModel, terminator: &Terminator<'_>) -> 
             out.heap = true;
             out.order = true;
         }
-        Terminator::Throw { .. } | Terminator::Rethrow { .. } | Terminator::ThrowIfPanic { .. } => {
+        Terminator::Throw { .. } | Terminator::Rethrow { .. } => {
             out.order = true;
         }
     }
@@ -680,11 +684,12 @@ pub fn rvalue_allocates_identity(rvalue: &Rvalue<'_>) -> bool {
         | Rvalue::Len(_)
         | Rvalue::IsType { .. }
         | Rvalue::IsTypeTag { .. }
+        | Rvalue::SatisfiesBound { .. }
         | Rvalue::VirtualFieldAccess { .. }
         | Rvalue::MakeGenericFunction { .. }
         | Rvalue::MakeGenericFunctionFromValue { .. }
         | Rvalue::LoadType(_)
-        | Rvalue::CurrentPackage(_) => false,
+        | Rvalue::CurrentPackage => false,
     }
 }
 
@@ -744,6 +749,7 @@ pub fn rvalue_can_trap<'db>(body: &MirFunctionBody<'db>, rvalue: &Rvalue<'db>) -
         | Rvalue::Len(_)
         | Rvalue::IsType { .. }
         | Rvalue::IsTypeTag { .. }
+        | Rvalue::SatisfiesBound { .. }
         | Rvalue::MakeClosure { .. }
         | Rvalue::MakeBoundMethod { .. }
         | Rvalue::MakeVirtualBoundMethod { .. }
@@ -752,7 +758,7 @@ pub fn rvalue_can_trap<'db>(body: &MirFunctionBody<'db>, rvalue: &Rvalue<'db>) -
         | Rvalue::MakeGenericFunctionFromValue { .. }
         | Rvalue::MakeVirtualFunction { .. }
         | Rvalue::LoadType(_)
-        | Rvalue::CurrentPackage(_) => false,
+        | Rvalue::CurrentPackage => false,
     }
 }
 
@@ -797,7 +803,6 @@ fn ty_could_be_int(ty: &RuntimeTy) -> bool {
         | RuntimeTy::String
         | RuntimeTy::Bool
         | RuntimeTy::Null
-        | RuntimeTy::Void
         | RuntimeTy::Media(..)
         | RuntimeTy::Class(..)
         | RuntimeTy::Enum(..)

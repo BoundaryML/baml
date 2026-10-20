@@ -23,13 +23,22 @@ const SOURCE: &str = r#"
 class Resource {
   log string[]
   function cleanup(self) -> void {
-    self.log.push("cleaned")
+    self.log.push("cleaned");
   }
 }
 function make_log() -> string[] { [] }
 function make_resource(log: string[]) -> Resource { Resource { log: log } }
 function clean(r: Resource) -> void { r.cleanup() }
 function read_log(log: string[]) -> string[] { log }
+
+class Crate<T> {
+  log string[]
+  item T
+  function cleanup(self) -> void {
+    self.log.push("crate");
+  }
+}
+function make_crate(log: string[]) -> Crate<int> { Crate { log: log, item: 7 } }
 "#;
 
 fn engine() -> Arc<BexEngine> {
@@ -142,4 +151,35 @@ async fn gc_does_not_rerun_cleanup_already_done_explicitly() {
         .await
         .unwrap();
     assert_eq!(expect_strings(&after), vec!["cleaned"]);
+}
+
+/// Here rather than in the corpus: the corpus runs every test in one engine,
+/// where another test's collection can take this instance's finalizer and
+/// leave it unfinished when this test's own collection returns (the `// BUG:`
+/// on `BexEngine::drain_finalizers`). This engine is the test's own, so its
+/// collection is the only one.
+#[tokio::test]
+async fn cleanup_runs_for_an_instance_of_a_generic_class() {
+    // The finalizer is the class's own method, reached through the instance;
+    // the class's type arguments ride on the instance, not on any name.
+    let engine = engine();
+
+    let log = engine
+        .call_function("make_log", vec![], ctx(), false)
+        .await
+        .unwrap();
+    let boxed = engine
+        .call_function("make_crate", vec![log.clone()], ctx(), false)
+        .await
+        .unwrap();
+    assert!(matches!(boxed, BexExternalValue::Handle(_)));
+
+    drop(boxed);
+    engine.collect_garbage(CollectionLevel::Major).await;
+
+    let after = engine
+        .call_function("read_log", vec![log], ctx(), true)
+        .await
+        .unwrap();
+    assert_eq!(expect_strings(&after), vec!["crate"]);
 }

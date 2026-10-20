@@ -9,8 +9,8 @@ function Classify<T>(input: string) -> T {
 }
 
 function main() -> null {
-    let t = reflect.enum.new("Category", ["RED"]);
-    type T = unreflect(t)
+    let t = reflect.Enum.new("Category", ["RED"]);
+    let type T = t;
     Classify@stream<T>("sample");
     return null;
 }

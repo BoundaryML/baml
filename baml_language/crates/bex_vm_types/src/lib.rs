@@ -44,7 +44,7 @@ pub use meter::{AllocDebt, Meter};
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
-    RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
+    MountHead, RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
     RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails, RuntimeDiagnosticHighlight,
     RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase, RuntimeDiagnosticRelatedInfo,
     RuntimeDiagnosticSeverity, RuntimeMountEdge, RuntimeMountSurface, RuntimeMountedAlias,

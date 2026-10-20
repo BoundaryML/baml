@@ -196,7 +196,7 @@ pub enum Head<'a> {
     /// handed over.
     Member(u32),
     /// A class or enum of a group made before, and its name.
-    Defined(&'a DeclarationName, &'a Definition),
+    Defined(DeclarationName, &'a Definition),
     /// A head with no recorded definition: an interface or a type alias.
     Named(DeclarationName),
 }

@@ -1,0 +1,5 @@
+name = "split medium literal 10k"
+description = "split a medium string 10,000 times"
+expect = "80000"
+jobs = 50
+warmup = 3

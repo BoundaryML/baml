@@ -114,7 +114,6 @@ impl Blob<'_> {
                     | RealizedTy::Type
                     | RealizedTy::Resource
                     | RealizedTy::PromptAst
-                    | RealizedTy::Void
                     | RealizedTy::TypeAlias(_)
                     | RealizedTy::Unknown
                     | RealizedTy::Never => 0,
@@ -179,7 +178,7 @@ impl Blob<'_> {
                 SnapshotValue::Null => 8,
                 SnapshotValue::Bool(_) => 8 + 1,
                 SnapshotValue::Int(_) | SnapshotValue::Float(_) => 8 + 8,
-                SnapshotValue::String(id) => 8 + snapshot.string(id).len() as u64,
+                SnapshotValue::String(id) => 8 + snapshot.string(id).byte_len() as u64,
                 SnapshotValue::Bigint(id) => 8 + snapshot.bigint(id).bits().div_ceil(8),
                 SnapshotValue::Enum { .. } => 8 + 8,
                 SnapshotValue::Type(id) => 8u64.checked_add(type_bytes(snapshot.ty(id))?)?,
@@ -263,17 +262,17 @@ impl Blob<'_> {
                             mime_type, source, ..
                         } => {
                             let metadata =
-                                mime_type.map_or(0, |id| snapshot.label(id).len() as u64);
+                                mime_type.map_or(0, |id| snapshot.label(id).byte_len() as u64);
                             8 + metadata
                                 + match *source {
                                     MediaSource::Url { url, data } => {
-                                        snapshot.label(url).len() as u64
+                                        snapshot.label(url).byte_len() as u64
                                             + data.map_or(0, |id| {
                                                 media_bytes(snapshot.string(id).as_str())
                                             })
                                     }
                                     MediaSource::File { path, data } => {
-                                        snapshot.label(path).len() as u64
+                                        snapshot.label(path).byte_len() as u64
                                             + data.map_or(0, |id| {
                                                 media_bytes(snapshot.string(id).as_str())
                                             })

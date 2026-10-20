@@ -22,7 +22,7 @@ test "mounted alias merely declared is a spelling of its target" {
         { "main.baml": `function go(s: app.Score) -> app.Score throws never { app.bump(s) }` },
         scores(),
     );
-    let go = consumer.get_function<(int) -> int>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<(int) -> int>("root.go");
     assert.equal(go(2), 3)
 }
 
@@ -36,7 +36,7 @@ test "mounted alias used in exported shapes resolves in the consumer" {
         ` },
         scores(),
     );
-    let go = consumer.get_function<() -> int>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<() -> int>("root.go");
     assert.equal(go(), 5)
 }
 
@@ -70,7 +70,7 @@ test "recursive alias across the mount in parameter and return positions" {
         ` },
         trees(),
     );
-    let go = consumer.get_function<() -> int>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<() -> int>("root.go");
     assert.equal(go(), 3)
 }
 
@@ -79,27 +79,27 @@ function empty_base() -> reflect.Package {
 }
 
 test "a mounted runtime class the consumer cannot name constructs a real instance" {
-    let cls = reflect.class.new("bad-name", { "n": reflect.Type.of<int>() });
+    let cls = reflect.Class.new("bad-name", { "n": int.type() });
     let app = empty_base().with_types({ "Good": cls });
     let consumer = consumer_of(
         { "main.baml": `function go() -> int throws never { app.Good { n: 4 }.n }` },
         app,
     );
-    let go = consumer.get_function<() -> int>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<() -> int>("root.go");
     assert.equal(go(), 4)
 }
 
 test "a mounted runtime class with an unspellable optional field constructs a real instance" {
-    let cls = reflect.class.new(
+    let cls = reflect.Class.new(
         "Opt",
-        { "ok": reflect.Type.of<bool>(), "bad-field": reflect.Type.of<int?>() },
+        { "ok": bool.type(), "bad-field": reflect.Type.of<int?>() },
     );
     let app = empty_base().with_types({ "Opt": cls });
     let consumer = consumer_of(
         { "main.baml": `function go() -> bool throws never { app.Opt { ok: true }.ok }` },
         app,
     );
-    let go = consumer.get_function<() -> bool>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<() -> bool>("root.go");
     assert.is_true(go())
 }
 
@@ -122,6 +122,6 @@ test "a namespaced class's methods dispatch across the mount" {
         ` },
         widgets(),
     );
-    let go = consumer.get_function<() -> int>("root.go") ?? throw "the consumer has no `go`";
+    let go = consumer.get_function<() -> int>("root.go");
     assert.equal(go(), 8)
 }

@@ -437,6 +437,7 @@ package reflect
 
 import (
 	"context"
+	"errors"
 
 	baml_go "github.com/boundaryml/baml-go"
 	"__SDK_IMPORT__/internal/bootstrap"
@@ -450,6 +451,7 @@ type Diagnostic = baml_go.Diagnostic
 type CompilationError = baml_go.CompilationError
 type EvaluationError = baml_go.EvaluationError
 type SessionBusy = baml_go.SessionBusy
+type NotFound = baml_go.NotFound
 
 func WithAlias(value string) MetadataOption { return baml_go.WithAlias(value) }
 func WithDescription(value string) MetadataOption { return baml_go.WithDescription(value) }
@@ -523,7 +525,7 @@ func Class(ctx context.Context, name string, fields []Field) (Type, error) {
 		if hasMetadata(field.Metadata) { value = withMetadataInput(field.Metadata) }
 		rows[index] = baml_go.NamedInput{Name: field.Name, Value: value}
 	}
-	result, err := baml_go.Call(ctx, "reflect.class.new", map[string]baml_go.Input{
+	result, err := baml_go.Call(ctx, "reflect.Class.new", map[string]baml_go.Input{
 		"name": baml_go.String(name),
 		"fields": baml_go.OrderedMap(rows),
 	})
@@ -541,7 +543,7 @@ func Enum(ctx context.Context, name string, values []EnumValue) (Type, error) {
 			"meta": metadataInput(value.Metadata),
 		})
 	}
-	result, err := baml_go.Call(ctx, "reflect.enum.new", map[string]baml_go.Input{
+	result, err := baml_go.Call(ctx, "reflect.Enum.new", map[string]baml_go.Input{
 		"name": baml_go.String(name),
 		"values": baml_go.List(rows, func(value baml_go.Input) baml_go.Input { return value }),
 	})
@@ -577,9 +579,23 @@ func (pkg *Package) input() baml_go.Input {
 	})
 }
 
-func (pkg *Package) GetClass(name string) (*Type, error) {
-	if pkg == nil { return nil, nil }
+// GetClass returns the exported class called name. A miss is a *NotFound
+// error; FindClass reports a miss as nil instead.
+func (pkg *Package) GetClass(name string) (Type, error) {
+	if pkg == nil { return Type{}, errors.New("reflect: GetClass called on a nil *Package") }
 	result, err := baml_go.Call(pkg.ctx, "reflect.Package.get_class", map[string]baml_go.Input{
+		"self": pkg.input(),
+		"name": baml_go.String(name),
+	})
+	if err != nil { return Type{}, err }
+	return result.Type()
+}
+
+// FindClass returns the exported class called name, or nil if the package
+// exports none.
+func (pkg *Package) FindClass(name string) (*Type, error) {
+	if pkg == nil { return nil, nil }
+	result, err := baml_go.Call(pkg.ctx, "reflect.Package.find_class", map[string]baml_go.Input{
 		"self": pkg.input(),
 		"name": baml_go.String(name),
 	})
@@ -1713,8 +1729,10 @@ fn supported_function_argument(
     }
 }
 
+/// A unit return (`-> void` / `-> null`) carries no information and a `never`
+/// return never arrives, so either is a Go function returning only `error`.
 fn function_returns_only_error(return_type: &Ty) -> bool {
-    matches!(return_type, Ty::Void | Ty::Never)
+    return_type.is_unit() || matches!(return_type, Ty::Never)
 }
 
 fn supported_wire_type(
@@ -2244,7 +2262,7 @@ fn render_functions(
             routed.go_name.wire().to_string()
         );
         out.push_str(")\n");
-        if matches!(function.return_type, Ty::Void) {
+        if function.return_type.is_unit() {
             let _ = writeln!(out, "\treturn {error_local}");
         } else if matches!(function.return_type, Ty::Never) {
             let _ = writeln!(out, "\tif {error_local} != nil {{");
@@ -5215,10 +5233,6 @@ mod tests {
         Ty::Uint8Array
     }
 
-    fn ty_void() -> Ty {
-        Ty::Void
-    }
-
     fn ty_never() -> Ty {
         Ty::Never
     }
@@ -5424,7 +5438,7 @@ mod tests {
                     name: BaseName::new("on_event"),
                     docstring: None,
                     ty: ty_union(vec![
-                        ty_callable(vec![ty_string()], ty_void(), ty_never()),
+                        ty_callable(vec![ty_string()], ty_null(), ty_never()),
                         ty_null(),
                     ]),
                     default: Some(FunctionArgumentDefault::Null),
@@ -6908,7 +6922,7 @@ mod tests {
             generic_params: vec![],
             docstring: None,
             arguments: vec![],
-            return_type: ty_void(),
+            return_type: ty_null(),
             throws: None,
             watchers: vec![],
             origin: origin(),
@@ -6949,8 +6963,16 @@ mod tests {
             watchers: vec![],
             origin: origin(),
         };
+        // `null` spells the same unit type as `void`: a unit return is
+        // error-only, while a unit parameter still has a value to pass.
+        let null_name = Name::new(
+            BaseName::new("user"),
+            vec![],
+            BaseName::new("round_trip_null"),
+        );
         let pool = SymbolPool::from([
             (void_name, Symbol::Function(void_function)),
+            round_trip_function(null_name, "value", ty_null()),
             (bigint_name, Symbol::Function(bigint_function)),
             (never_name, Symbol::Function(never_function)),
         ]);
@@ -6966,6 +6988,12 @@ mod tests {
         assert!(
             functions
                 .contains("func NoOp(ctx_ context.Context, options_ ...baml_go.CallOption) error")
+        );
+        assert!(
+            functions.contains(
+                "func RoundTripNull(ctx_ context.Context, value baml_go.Null, options_ ...baml_go.CallOption) error"
+            ),
+            "{functions}"
         );
         assert!(functions.contains(
             "func AlwaysPanics(ctx_ context.Context, options_ ...baml_go.CallOption) error"

@@ -960,9 +960,6 @@ impl GlobalState {
             .map(|root| RootEntry {
                 root,
                 path: root.path(&self.db).clone(),
-                spelling: baml_db::baml_compiler2_hir::package::spelling(&self.db)
-                    .of(root)
-                    .clone(),
                 self_name: root.self_name(&self.db),
                 kind: root.kind(&self.db),
             })

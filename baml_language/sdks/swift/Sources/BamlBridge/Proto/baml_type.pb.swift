@@ -344,14 +344,6 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTy: @unchecked Sendable {
     set {_uniqueStorage()._ty = .promptAst(newValue)}
   }
 
-  var void: BamlBridge_Cffi_V1_BamlTyVoid {
-    get {
-      if case .void(let v)? = _storage._ty {return v}
-      return BamlBridge_Cffi_V1_BamlTyVoid()
-    }
-    set {_uniqueStorage()._ty = .void(newValue)}
-  }
-
   var typeVar: BamlBridge_Cffi_V1_BamlTyTypeVar {
     get {
       if case .typeVar(let v)? = _storage._ty {return v}
@@ -403,7 +395,6 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTy: @unchecked Sendable {
     case metaType(BamlBridge_Cffi_V1_BamlTyMetaType)
     case resource(BamlBridge_Cffi_V1_BamlTyResource)
     case promptAst(BamlBridge_Cffi_V1_BamlTyPromptAst)
-    case void(BamlBridge_Cffi_V1_BamlTyVoid)
     case typeVar(BamlBridge_Cffi_V1_BamlTyTypeVar)
     case associatedTypeProjection(BamlBridge_Cffi_V1_BamlTyAssociatedTypeProjection)
     case never(BamlBridge_Cffi_V1_BamlTyNever)
@@ -1078,17 +1069,6 @@ nonisolated struct BamlBridge_Cffi_V1_BamlTyPromptAst: Sendable {
   init() {}
 }
 
-/// The void type — the type of effectful expressions (`RuntimeTy::Void`).
-nonisolated struct BamlBridge_Cffi_V1_BamlTyVoid: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  init() {}
-}
-
 /// A type variable / generic parameter such as `T` in `Array<T>`
 /// (`RuntimeTy::TypeVar`).
 nonisolated struct BamlBridge_Cffi_V1_BamlTyTypeVar: Sendable {
@@ -1173,7 +1153,7 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyFunctionParamMode: SwiftProtobuf.
 
 nonisolated extension BamlBridge_Cffi_V1_BamlTy: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   static let protoMessageName: String = _protobuf_package + ".BamlTy"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}primitive\0\u{3}class_ty\0\u{1}enum\0\u{1}list\0\u{1}map\0\u{1}optional\0\u{1}union\0\u{1}literal\0\u{3}type_alias\0\u{1}unknown\0\u{1}media\0\u{1}interface\0\u{3}enum_variant\0\u{1}function\0\u{1}future\0\u{3}rust_type\0\u{3}meta_type\0\u{1}resource\0\u{3}prompt_ast\0\u{1}void\0\u{4}\u{2}type_var\0\u{3}associated_type_projection\0\u{1}never\0")
+  static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}primitive\0\u{3}class_ty\0\u{1}enum\0\u{1}list\0\u{1}map\0\u{1}optional\0\u{1}union\0\u{1}literal\0\u{3}type_alias\0\u{1}unknown\0\u{1}media\0\u{1}interface\0\u{3}enum_variant\0\u{1}function\0\u{1}future\0\u{3}rust_type\0\u{3}meta_type\0\u{1}resource\0\u{3}prompt_ast\0\u{4}\u{3}type_var\0\u{3}associated_type_projection\0\u{1}never\0\u{b}void\0\u{c}\u{14}\u{1}")
 
   fileprivate class _StorageClass {
     var _ty: BamlBridge_Cffi_V1_BamlTy.OneOf_Ty?
@@ -1453,19 +1433,6 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTy: SwiftProtobuf.Message, SwiftPro
             _storage._ty = .promptAst(v)
           }
         }()
-        case 20: try {
-          var v: BamlBridge_Cffi_V1_BamlTyVoid?
-          var hadOneofValue = false
-          if let current = _storage._ty {
-            hadOneofValue = true
-            if case .void(let m) = current {v = m}
-          }
-          try decoder.decodeSingularMessageField(value: &v)
-          if let v = v {
-            if hadOneofValue {try decoder.handleConflictingOneOf()}
-            _storage._ty = .void(v)
-          }
-        }()
         case 22: try {
           var v: BamlBridge_Cffi_V1_BamlTyTypeVar?
           var hadOneofValue = false
@@ -1593,10 +1560,6 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTy: SwiftProtobuf.Message, SwiftPro
       case .promptAst?: try {
         guard case .promptAst(let v)? = _storage._ty else { preconditionFailure() }
         try visitor.visitSingularMessageField(value: v, fieldNumber: 19)
-      }()
-      case .void?: try {
-        guard case .void(let v)? = _storage._ty else { preconditionFailure() }
-        try visitor.visitSingularMessageField(value: v, fieldNumber: 20)
       }()
       case .typeVar?: try {
         guard case .typeVar(let v)? = _storage._ty else { preconditionFailure() }
@@ -2911,25 +2874,6 @@ nonisolated extension BamlBridge_Cffi_V1_BamlTyPromptAst: SwiftProtobuf.Message,
   }
 
   static func ==(lhs: BamlBridge_Cffi_V1_BamlTyPromptAst, rhs: BamlBridge_Cffi_V1_BamlTyPromptAst) -> Bool {
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension BamlBridge_Cffi_V1_BamlTyVoid: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  static let protoMessageName: String = _protobuf_package + ".BamlTyVoid"
-  static let _protobuf_nameMap = SwiftProtobuf._NameMap()
-
-  mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    // Load everything into unknown fields
-    while try decoder.nextFieldNumber() != nil {}
-  }
-
-  func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  static func ==(lhs: BamlBridge_Cffi_V1_BamlTyVoid, rhs: BamlBridge_Cffi_V1_BamlTyVoid) -> Bool {
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

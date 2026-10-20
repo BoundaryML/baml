@@ -196,7 +196,10 @@ impl TypeHead {
             reason = "recovering a head's name requires reading its declaration"
         )]
         let object = unsafe { self.ptr.get() };
-        object.declaration_name().cloned()
+        // An anonymous (runtime-created) declaration has no qualified name,
+        // so it is unnameable here by design — `to_name` refuses rather than
+        // fabricating a spelling nothing declares.
+        object.declaration_name()
     }
 
     /// This head's declaration name, or the head itself when it has none.
@@ -231,10 +234,10 @@ impl TypeHead {
         )]
         let object = unsafe { self.ptr.get() };
         match object {
-            crate::Object::Class(class) => Some(class.name.overlay_name()),
-            crate::Object::Enum(enm) => Some(enm.name.overlay_name()),
-            crate::Object::Interface(iface) => Some(iface.name.clone()),
-            crate::Object::TypeAlias(alias) => Some(alias.name.clone()),
+            crate::Object::Class(class) => Some(class.name().overlay_name()),
+            crate::Object::Enum(enm) => Some(enm.name().overlay_name()),
+            crate::Object::Interface(iface) => Some(iface.name().overlay_name()),
+            crate::Object::TypeAlias(alias) => Some(alias.name().overlay_name()),
             _ => None,
         }
     }
@@ -259,14 +262,10 @@ impl TypeHead {
         )]
         let object = unsafe { self.ptr.get() };
         let name = match object {
-            crate::Object::Class(class) => class.name.clone(),
-            crate::Object::Enum(enm) => enm.name.clone(),
-            crate::Object::Interface(iface) => {
-                baml_type::DeclarationName::Declared(iface.name.clone())
-            }
-            crate::Object::TypeAlias(alias) => {
-                baml_type::DeclarationName::Declared(alias.name.clone())
-            }
+            crate::Object::Class(class) => class.name(),
+            crate::Object::Enum(enm) => enm.name(),
+            crate::Object::Interface(iface) => iface.name(),
+            crate::Object::TypeAlias(alias) => alias.name(),
             _ => return None,
         };
         Some(baml_type::TaggedTypeName::new(self.tag, name))
@@ -368,10 +367,10 @@ impl baml_type::HeadDisplay for TypeHead {
         )]
         let object = unsafe { self.ptr.get() };
         match object {
-            crate::Object::Class(class) => class.name.display_name().to_string(),
-            crate::Object::Enum(enm) => enm.name.display_name().to_string(),
-            crate::Object::Interface(iface) => iface.name.display_name().to_string(),
-            crate::Object::TypeAlias(alias) => alias.name.display_name().to_string(),
+            crate::Object::Class(class) => class.name().display_name().to_string(),
+            crate::Object::Enum(enm) => enm.name().display_name().to_string(),
+            crate::Object::Interface(iface) => iface.name().display_name().to_string(),
+            crate::Object::TypeAlias(alias) => alias.name().display_name().to_string(),
             _ => format!("<type #{}>", self.tag.as_i64()),
         }
     }
@@ -595,13 +594,13 @@ mod tests {
     fn a_heap_headed_type_renders_through_its_declaration() {
         use baml_type::RealizedTy;
 
-        let name = baml_type::TypeName::new(
+        // A class's name is its path under its package's display name, so the
+        // class needs a package to be `demo.Person`.
+        let mut package = crate::Object::Package(Box::new(crate::types::Package::empty(
             baml_base::Name::new("demo"),
-            vec![],
-            baml_base::Name::new("Person"),
-        );
+        )));
         let mut declaration = crate::Object::Class(Box::new(crate::types::Class {
-            name: crate::DeclarationName::Declared(name),
+            path: crate::types::LocalName::new(vec![], baml_base::Name::new("Person")),
             fields: vec![],
             description: None,
             alias: None,
@@ -609,10 +608,10 @@ mod tests {
             other: indexmap::IndexMap::default(),
             stream_done: false,
             type_tag: TypeTag::of_static_index(0),
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
-            owner: crate::types::Owner::anonymous(),
+            owner: crate::types::Owner::Package(ptr_to(&mut package)),
             telemetry_definition: crate::DefinitionCell::default(),
         }));
 
@@ -641,7 +640,7 @@ mod tests {
 
         let type_tag = TypeTag::fresh_dynamic();
         let mut declaration = crate::Object::Class(Box::new(crate::types::Class {
-            name: crate::DeclarationName::Anonymous(baml_base::Name::new("Widget")),
+            path: crate::types::LocalName::new(vec![], baml_base::Name::new("Widget")),
             fields: vec![],
             description: None,
             alias: None,
@@ -649,7 +648,7 @@ mod tests {
             other: indexmap::IndexMap::default(),
             stream_done: false,
             type_tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: crate::types::Owner::anonymous(),

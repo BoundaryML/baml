@@ -163,7 +163,6 @@ public final class ProtoReader {
     private static final int TY_MEDIA = 11;
     private static final int TY_FUNCTION = 14;
     private static final int TY_RUST_TYPE = 16;
-    private static final int TY_VOID = 20;
 
     // Sub-message field numbers on the BamlTy variants.
     private static final int TY_NAME = 1; // BamlTyClass/BamlTyEnum.name
@@ -853,7 +852,7 @@ public final class ProtoReader {
 
     /**
      * Read one {@code BamlTy} into its {@link BamlType}, or {@code null} when it is
-     * outside the token grammar (media / function / rust_type / void / unknown, and
+     * outside the token grammar (media / function / rust_type / unknown, and
      * the {@code null} / {@code bytes} / {@code bigint} primitive kinds). Named
      * types (class / enum / type_alias) become a bare {@link BamlType#classByFqn}
      * (matching the emitter's arm rendering — a wire optional unwraps to its inner,

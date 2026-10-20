@@ -139,7 +139,9 @@ async fn main() {
     let mut program = baml_db::testing::compile_source(&source);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(function) = object
-            && function.name.rsplit('.').next() == Some("capture")
+            && function
+                .declared_name()
+                .is_some_and(|declared| declared == "capture")
         {
             // Real VM input/output capture without network/LLM noise.
             function.body_meta = Some(bex_vm_types::FunctionMeta::Llm {

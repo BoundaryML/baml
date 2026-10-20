@@ -85,7 +85,7 @@ pub struct DescribeArgs {
     pub limit: u16,
 
     /// Export a whole package's surface as one versioned JSON document
-    /// (NAME must be a package: `baml`, `user`, …). Cross-package references
+    /// (NAME must be a package: `root`, `baml`, …). Cross-package references
     /// are self-describing ids like `T:baml.time.Duration` — the prefix is
     /// the kind (`T:` type, `V:` value, `M:` method, `F:` field, `E:`
     /// variant, `A:` associated type; BAML's type and value namespaces are
@@ -133,7 +133,7 @@ pub fn suggest_similar_kinded(
 
     // The viewer's own package: items (kinded) + namespace dotted paths (no
     // kind).
-    for entry in baml_ide::list_package_items(db, viewer, internals) {
+    for entry in baml_ide::list_package_items(db, viewer, viewer, internals) {
         all_paths.push((entry.fqn(), Some(entry.kind)));
     }
     let own_items = package_items(db, viewer);
@@ -155,7 +155,7 @@ pub fn suggest_similar_kinded(
     for dependency in viewer.dependencies(db) {
         let (pkg_name, pkg) = (&dependency.name, dependency.root);
         all_paths.push((pkg_name.as_str().to_string(), None));
-        for entry in baml_ide::list_package_items(db, pkg, internals) {
+        for entry in baml_ide::list_package_items(db, viewer, pkg, internals) {
             all_paths.push((entry.fqn(), Some(entry.kind)));
         }
         let pkg_info = package_items(db, pkg);
@@ -227,7 +227,7 @@ fn print_did_you_mean(db: &ProjectDatabase, viewer: SourceRoot, name: &str) {
 /// packages it reaches by name) and delegates within-package path resolution
 /// to `baml_ide::resolve_target`.
 ///
-/// - Empty string → `Package(viewer)`
+/// - Empty string or `"root"` → `Package(viewer)`
 /// - `"baml"` → `Package(baml)`
 /// - `"baml.env"` → `resolve_target(baml_pkg, "env")` → `Namespace`
 /// - `"foo.bar.Baz"` → `resolve_target(viewer, "foo.bar.Baz")` → `Item`
@@ -253,6 +253,11 @@ pub fn dispatch<'db>(
     // Check for keyword (BAML or TS/JS crosswalk) before package routing.
     if baml_builtins2::has_describe_topic(name) {
         return Some(ResolvedTarget::Keyword(name.to_string()));
+    }
+
+    // `root` is the viewer's own package, as it is in source.
+    if name == baml_compiler2_hir::package::ROOT_SEGMENT {
+        return Some(ResolvedTarget::Package(viewer));
     }
 
     // Force own-package resolution with the `root.` prefix.
@@ -380,11 +385,11 @@ impl DescribeArgs {
         if self.export {
             let Some(ResolvedTarget::Package(exported)) = dispatch(&db, package, name) else {
                 eprintln!(
-                    "error: `--export` takes a package name (`baml`, `user`, …), got `{name}`"
+                    "error: `--export` takes a package name (`root`, `baml`, …), got `{name}`"
                 );
                 return Ok(crate::ExitCode::Other);
             };
-            let export = baml_ide::export_package(&db, exported);
+            let export = baml_ide::export_package(&db, package, exported);
             println!(
                 "{}",
                 serde_json::to_string_pretty(&export)
@@ -410,7 +415,7 @@ impl DescribeArgs {
                 Ok(crate::ExitCode::Success)
             }
             Some(ResolvedTarget::Package(pkg)) => {
-                let entries = baml_ide::list_package_items(&db, pkg, listed_internals);
+                let entries = baml_ide::list_package_items(&db, package, pkg, listed_internals);
                 if entries.is_empty() {
                     eprintln!("no symbols found");
                     return Ok(crate::ExitCode::Other);
@@ -443,10 +448,18 @@ impl DescribeArgs {
                 }
                 Ok(crate::ExitCode::Success)
             }
-            Some(ResolvedTarget::Namespace { package, ns_path }) => {
-                let entries =
-                    baml_ide::list_namespace_items(&db, package, &ns_path, listed_internals)
-                        .unwrap_or_default();
+            Some(ResolvedTarget::Namespace {
+                package: listed,
+                ns_path,
+            }) => {
+                let entries = baml_ide::list_namespace_items(
+                    &db,
+                    package,
+                    listed,
+                    &ns_path,
+                    listed_internals,
+                )
+                .unwrap_or_default();
                 if entries.is_empty() {
                     eprintln!("no symbols found in namespace");
                     return Ok(crate::ExitCode::Other);

@@ -11,15 +11,15 @@
 //! Collected today: pattern type ascriptions (`let x: T`, type patterns in
 //! match arms), array-pattern ascriptions, explicit expression-position type
 //! args (`f<int>(..)`, `Box<int> { .. }` turbofish), `.as<T>` upcast targets,
-//! match scrutinee annotations, lambda signature slots, and the static
-//! right-hand side of a `type T = …` binding (a runtime `unreflect(expr)`
-//! right-hand side is an ordinary body expression, not a type reference).
+//! match scrutinee annotations, lambda signature slots, and the bounds of a
+//! `let type T extends … = …` binding (its operand is an ordinary body
+//! expression, not a type reference).
 //! Class-destructure generic args join when pattern inference needs them.
 
 use std::sync::Arc;
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Pattern, Stmt, StmtId, TypeBindingValue};
+use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Pattern, Stmt, StmtId};
 use rustc_hash::FxHashMap;
 
 use crate::type_ref::{TypeRefBuilder, TypeRefId, TypeRefSourceMap, TypeRefStore};
@@ -62,10 +62,10 @@ pub struct BodyTypeRefs {
     /// and `Object` constructors), in written order. Never empty when
     /// present.
     pub expr_type_args: FxHashMap<ExprId, Box<[BodyTypeRefId]>>,
-    /// The STATIC right-hand sides of lexical `type T = ...` bindings. A
-    /// binding whose right-hand side is `unreflect(expr)` has no entry: its
-    /// operand is an expression in the body arena.
-    pub stmt_type_bindings: FxHashMap<StmtId, BodyTypeRefId>,
+    /// The written bounds of `let type T extends A & B = …` bindings, in
+    /// written order. Never empty when present: an unbounded binding has no
+    /// entry (its operand is an expression in the body arena).
+    pub stmt_type_binding_bounds: FxHashMap<StmtId, Box<[BodyTypeRefId]>>,
     /// Written annotations on match scrutinees (`match (value: T)`).
     pub match_scrutinee_types: FxHashMap<ExprId, BodyTypeRefId>,
     /// `.as<T>` upcast targets.
@@ -230,13 +230,16 @@ pub fn collect_body_type_refs(body: &ExprBody) -> (BodyTypeRefs, BodyTypeRefSour
     }
 
     for (stmt_id, stmt) in body.stmts.iter() {
-        if let Stmt::TypeBinding {
-            value: TypeBindingValue::Static(value),
-            ..
-        } = stmt
+        if let Stmt::TypeBinding { bounds, .. } = stmt
+            && !bounds.is_empty()
         {
-            refs.stmt_type_bindings
-                .insert(stmt_id, BodyTypeRefId(builder.lower(value)));
+            refs.stmt_type_binding_bounds.insert(
+                stmt_id,
+                bounds
+                    .iter()
+                    .map(|bound| BodyTypeRefId(builder.lower(bound)))
+                    .collect(),
+            );
         }
     }
 
@@ -256,7 +259,9 @@ mod tests {
     #[test]
     fn expression_type_arguments_preserve_order_and_identity() {
         let mut body = ExprBody::default();
-        let callee = body.exprs.alloc(Expr::Path(vec![Name::new("f")]));
+        let callee = body
+            .exprs
+            .alloc(Expr::Path(baml_base::Path::bare(Name::new("f"))));
         let int_span = TextRange::new(TextSize::from(10), TextSize::from(13));
         let string_span = TextRange::new(TextSize::from(15), TextSize::from(21));
         let call = body.exprs.alloc(Expr::Call {
@@ -282,41 +287,51 @@ mod tests {
     }
 
     #[test]
-    fn only_static_type_binding_right_hand_sides_are_type_references() {
+    fn only_type_binding_bounds_are_type_references() {
         let mut body = ExprBody::default();
-        let operand = body
+        let unbounded_operand = body
             .exprs
-            .alloc(Expr::Path(vec![Name::new("runtime_type")]));
-        let runtime = body.stmts.alloc(Stmt::TypeBinding {
+            .alloc(Expr::Path(baml_base::Path::bare(Name::new("runtime_type"))));
+        let unbounded = body.stmts.alloc(Stmt::TypeBinding {
             name: Name::new("R"),
-            value: TypeBindingValue::Runtime(operand),
+            operand: unbounded_operand,
+            bounds: Vec::new(),
+            else_branch: None,
         });
-        let static_span = TextRange::new(TextSize::from(30), TextSize::from(35));
-        let static_binding = body.stmts.alloc(Stmt::TypeBinding {
+        let bounded_operand = body
+            .exprs
+            .alloc(Expr::Path(baml_base::Path::bare(Name::new("runtime_type"))));
+        let first_span = TextRange::new(TextSize::from(30), TextSize::from(31));
+        let second_span = TextRange::new(TextSize::from(34), TextSize::from(35));
+        let bound = |name: &str, span| {
+            TypeExprKind::Path {
+                path: baml_base::Path::bare(Name::new(name)),
+                generic_args: Vec::new(),
+                associated_type_bindings: Vec::new(),
+            }
+            .at(span)
+        };
+        let bounded = body.stmts.alloc(Stmt::TypeBinding {
             name: Name::new("S"),
-            value: TypeBindingValue::Static(
-                TypeExprKind::List {
-                    inner: Box::new(TypeExprKind::Int.at(static_span)),
-                }
-                .at(static_span),
-            ),
+            operand: bounded_operand,
+            bounds: vec![bound("A", first_span), bound("B", second_span)],
+            else_branch: None,
         });
 
         let (refs, source_map) = collect_body_type_refs(&body);
         assert!(
-            !refs.stmt_type_bindings.contains_key(&runtime),
-            "a runtime operand is a body expression, never a type reference"
+            !refs.stmt_type_binding_bounds.contains_key(&unbounded),
+            "an unbounded binding has no type references; its operand is a body expression"
         );
-        let type_ref = refs
-            .stmt_type_bindings
-            .get(&static_binding)
-            .copied()
-            .expect("static binding type reference");
-        assert!(matches!(
-            refs.store.get(refs.raw_id(type_ref)).kind,
-            TypeRefKind::List { .. }
-        ));
-        assert_eq!(source_map.span(type_ref), static_span);
+        let slots = refs
+            .stmt_type_binding_bounds
+            .get(&bounded)
+            .expect("bounded binding type references");
+        let [first, second] = slots.as_ref() else {
+            panic!("expected two ordered bounds, got {slots:?}");
+        };
+        assert_eq!(source_map.span(*first), first_span);
+        assert_eq!(source_map.span(*second), second_span);
     }
 }
 

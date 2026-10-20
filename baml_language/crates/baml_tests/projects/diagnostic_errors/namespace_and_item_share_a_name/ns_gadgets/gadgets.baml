@@ -1,0 +1,3 @@
+function mk() -> string {
+    "namespace"
+}

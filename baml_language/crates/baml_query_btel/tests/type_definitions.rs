@@ -239,16 +239,16 @@ const RUNTIME: &str = r#"
 function Pick<T>(x: T) -> T { x }
 function Echo<T>(x: T) -> T { x }
 function main(n: int) -> int {
-    let b = reflect.class.builder("Person");
+    let b = reflect.Class.builder("Person");
     b.field("name", reflect.Type.of<string>());
     b.field("age", reflect.Type.of<int>());
     let person_t = b.build();
-    type Person = unreflect(person_t.as_type())
+    let type Person = person_t;
 
-    let o = reflect.class.builder("Person");
+    let o = reflect.Class.builder("Person");
     o.field("email", reflect.Type.of<string>());
     let other_t = o.build();
-    type OtherPerson = unreflect(other_t.as_type())
+    let type OtherPerson = other_t;
 
     let p = baml.json.from_string<Person>(`{"name":"ann","age":3}`);
     let echoed = Echo<Person>(p);
@@ -323,10 +323,10 @@ async fn runtime_classes_carry_their_definitions_and_identity() {
 const COLLECTED: &str = r#"
 function Use<T>(x: T) -> int { 1 }
 function MakeAndUse(i: int) -> int {
-    let b = reflect.class.builder("Temp");
+    let b = reflect.Class.builder("Temp");
     b.field("i", reflect.Type.of<int>());
     let t = b.build();
-    type Temp = unreflect(t.as_type())
+    let type Temp = t;
     Use<Temp[]>([])
 }
 function main(n: int) -> int {

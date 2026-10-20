@@ -5,7 +5,7 @@ expression: "render_labeled_cases(&[(\"narrow_ne_null_then_branch_is_non_nullabl
 === narrow_ne_null_then_branch_is_non_nullable ===
 function user.f(x: int | null) -> int throws never {
   { : never
-    if (x != null : bool) : void
+    if (x != null : bool) : null
       { : never
         return x : int
       }
@@ -18,7 +18,7 @@ block user.f {
 === narrow_ne_null_rhs_form ===
 function user.f(x: int | null) -> int throws never {
   { : never
-    if (null != x : bool) : void
+    if (null != x : bool) : null
       { : never
         return x : int
       }
@@ -49,7 +49,7 @@ block user.f {
 === narrow_truthiness_then_branch_non_null ===
 function user.f(x: int | null) -> int throws never {
   { : never
-    if (x : int | null) : void
+    if (x : int | null) : null
       { : never
         return x : int
       }
@@ -62,7 +62,7 @@ block user.f {
 === narrow_negated_eq_null_then_branch_non_null ===
 function user.f(x: int | null) -> int throws never {
   { : never
-    if (Not x == null : bool) : void
+    if (Not x == null : bool) : null
       { : never
         return x : int
       }

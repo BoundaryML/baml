@@ -14,11 +14,11 @@ interface DocAnchor {
 }
 
 function main() -> string {
-    let anchor = reflect.interface.implementation<DocAnchor>().field("value");
-    let minted = reflect.class.new(
+    let anchor = reflect.Interface.implementation<DocAnchor>().field("value");
+    let minted = reflect.Class.new(
         "Minted",
         {
-            "value": reflect.Type.of<string>().meta(
+            "value": string.type().meta(
                 description = "Minted field description",
                 docstring = "Minted field docs",
             ),
@@ -36,10 +36,10 @@ function main() -> string {
         },
         packages = { "app": app },
     );
-    let make_mounted = compiled.get_function<() -> DocAnchor>("root.make_mounted") ?? throw "missing make_mounted";
+    let make_mounted = compiled.get_function<() -> DocAnchor>("root.make_mounted");
     let mounted = reflect.Type.of_value(make_mounted());
 
-    `${reflect.Type.of<StaticDoc>().to_baml()}~~${reflect.Type.of<StaticState>().to_baml()}~~${ai.wire.render_output_format(reflect.Type.of<StaticDoc>())}~~${ai.wire.render_output_format(reflect.Type.of<StaticState>())}~~${minted.as_type().to_baml()}~~${ai.wire.render_output_format(minted.as_type())}~~${mounted.to_baml()}~~${ai.wire.render_output_format(mounted)}`
+    `${StaticDoc.type().to_baml()}~~${StaticState.type().to_baml()}~~${ai.wire.render_output_format(StaticDoc.type())}~~${ai.wire.render_output_format(StaticState.type())}~~${minted.to_baml()}~~${ai.wire.render_output_format(minted.as_type())}~~${mounted.to_baml()}~~${ai.wire.render_output_format(mounted)}`
 }
 
 test "docstrings_render_for_static_minted_and_mounted_types" {

@@ -268,7 +268,7 @@ test "a task spawned from a shielded defer is not born cancelled" {
 // callee's checkpoint must still be shielded.
 function push_after_sleep(log: Log, entry: string) -> void {
     sleep_ms(20n)
-    log.entries.push(entry)
+    log.entries.push(entry);
 }
 
 function callee_is_shielded_through_its_caller() -> string[] {

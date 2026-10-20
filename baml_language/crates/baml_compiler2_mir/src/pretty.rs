@@ -22,27 +22,29 @@
 
 use std::fmt::{self, Write};
 
+use baml_compiler2_hir_ty::render::Viewpoint;
+
 use crate::{
     AggregateKind, BasicBlock, BuiltinKind, Constant, IntrinsicOp, Local, LocalDecl, LogLevel,
     MirFunction, MirFunctionBody, MirFunctionKind, Operand, RuntimeTy, Rvalue, Statement,
     StatementKind, SwitchKey, Terminator, TyTemplate, TyTemplateInterface,
 };
 
-/// MIR's heads are identities; a dump names them as the program spells them.
-/// The one place a MIR type becomes text.
-struct Names<'a>(&'a baml_compiler2_hir::package::Spelling);
+/// MIR's heads are identities; a dump names them canonically
+/// ([`Viewpoint::wire_head`]). The one place a MIR type becomes text.
+struct Names<'a>(Viewpoint<'a>);
 
 impl<'a> Names<'a> {
     fn of(db: &'a dyn crate::Db) -> Self {
-        Self(baml_compiler2_hir::package::spelling(db))
+        Self(Viewpoint::canonical(db))
     }
 
     fn ty(&self, ty: &RuntimeTy) -> baml_type::RuntimeTy {
-        ty.map_heads(&mut |decl| self.0.wire(decl))
+        ty.map_heads(&mut |decl| self.0.wire_head(decl))
     }
 
     fn template(&self, template: &TyTemplate) -> baml_type::TyTemplate {
-        template.map_heads(&mut |decl| self.0.wire(decl))
+        template.map_heads(&mut |decl| self.0.wire_head(decl))
     }
 
     fn templates(&self, templates: &[TyTemplate]) -> String {
@@ -55,7 +57,7 @@ impl<'a> Names<'a> {
 
     fn interface(&self, interface: &TyTemplateInterface) -> baml_type::TyTemplateInterface {
         baml_type::TyTemplateInterface {
-            name: self.0.wire(&interface.name),
+            name: self.0.wire_head(&interface.name),
             generics: interface
                 .generics
                 .iter()
@@ -95,7 +97,7 @@ pub fn write_function(
             writeln!(
                 f,
                 "fn {} = builtin({kind_str})",
-                func.identity.link_name(db)
+                func.identity.display_name(db)
             )
         }
         MirFunctionKind::Bytecode(body) => write_bytecode_function(f, db, func, body),
@@ -110,7 +112,7 @@ fn write_bytecode_function(
     body: &MirFunctionBody<'_>,
 ) -> fmt::Result {
     // Function header
-    write!(f, "fn {}(", func.identity.link_name(db))?;
+    write!(f, "fn {}(", func.identity.display_name(db))?;
 
     // Parameters (_1 through _arity)
     for i in 1..=func.arity {
@@ -363,7 +365,7 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
                     (Some(name), _) => write!(f, "{name}: {target}")?,
                     (None, SwitchKey::Int(val)) => write!(f, "{val}: {target}")?,
                     (None, SwitchKey::Class(class)) => {
-                        write!(f, "{}: {target}", crate::class_link_name(db, *class))?;
+                        write!(f, "{}: {target}", crate::class_display_name(db, *class))?;
                     }
                 }
             }
@@ -533,17 +535,6 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             write_operand(f, db, context)?;
             write!(f, ";")
         }
-        Terminator::ThrowIfPanic {
-            value,
-            context,
-            otherwise,
-        } => {
-            write!(f, "throw_if_panic ")?;
-            write_operand(f, db, value)?;
-            write!(f, " with ")?;
-            write_operand(f, db, context)?;
-            write!(f, " -> {otherwise};")
-        }
         Terminator::ShortCircuit {
             operand,
             kind,
@@ -628,7 +619,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
                     class,
                     type_arg_templates,
                 } => {
-                    write!(f, "{}", crate::lower::class_link_name(db, *class))?;
+                    write!(f, "{}", crate::lower::class_display_name(db, *class))?;
                     if !type_arg_templates.is_empty() {
                         write!(f, "<{}>", Names::of(db).templates(type_arg_templates))?;
                     }
@@ -657,6 +648,11 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             write_operand(f, db, operand)?;
             write!(f, ", {})", Names::of(db).template(&test.template(db)))
         }
+        Rvalue::SatisfiesBound { ty, bound } => {
+            write!(f, "satisfies_bound(")?;
+            write_operand(f, db, ty)?;
+            write!(f, ", {})", Names::of(db).interface(bound))
+        }
         Rvalue::IsTypeTag { operand, tag } => {
             write!(f, "is_type_tag(")?;
             write_operand(f, db, operand)?;
@@ -684,7 +680,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             write!(
                 f,
                 "make_bound_method {}(",
-                crate::lower::function_link_name(db, *func)
+                crate::lower::function_display_name(db, *func)
             )?;
             write_operand(f, db, receiver)?;
             write!(f, ")")
@@ -735,9 +731,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
         Rvalue::LoadType(template) => {
             write!(f, "load_type({})", Names::of(db).template(template))
         }
-        Rvalue::CurrentPackage(package) => {
-            write!(f, "current_package({package})")
-        }
+        Rvalue::CurrentPackage => f.write_str("current_package"),
         Rvalue::MakeGenericFunction {
             func,
             type_arg_templates,
@@ -745,7 +739,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             write!(
                 f,
                 "make_generic_function {}<{}>",
-                crate::lower::function_link_name(db, *func),
+                crate::lower::function_display_name(db, *func),
                 Names::of(db).templates(type_arg_templates)
             )
         }
@@ -780,6 +774,7 @@ fn type_tag_name(tag: i64) -> std::borrow::Cow<'static, str> {
         t::TYPE => "TYPE",
         t::UINT8ARRAY => "UINT8ARRAY",
         t::BIGINT => "BIGINT",
+        t::PANIC => "PANIC",
         other => return std::borrow::Cow::Owned(other.to_string()),
     })
 }
@@ -805,14 +800,14 @@ fn write_constant(f: &mut impl Write, db: &dyn crate::Db, constant: &Constant<'_
             write!(
                 f,
                 "const fn {}",
-                crate::lower::function_link_name(db, *func)
+                crate::lower::function_display_name(db, *func)
             )
         }
         Constant::GlobalItem(binding) => {
             write!(
                 f,
                 "const item {}",
-                crate::lower::definition_link_name(
+                crate::lower::definition_display_name(
                     db,
                     baml_compiler2_hir::contributions::Definition::Let(*binding)
                 )
@@ -822,12 +817,15 @@ fn write_constant(f: &mut impl Write, db: &dyn crate::Db, constant: &Constant<'_
             let spelling = Names::of(db);
             let args: Vec<String> = type_args
                 .iter()
-                .map(|ty| ty.map_heads(&mut |decl| spelling.0.wire(decl)).to_string())
+                .map(|ty| {
+                    ty.map_heads(&mut |decl| spelling.0.wire_head(decl))
+                        .to_string()
+                })
                 .collect();
             write!(
                 f,
                 "const fn {}<{}>",
-                crate::lower::function_link_name(db, *func),
+                crate::lower::function_display_name(db, *func),
                 args.join(", ")
             )
         }
@@ -839,7 +837,7 @@ fn write_constant(f: &mut impl Write, db: &dyn crate::Db, constant: &Constant<'_
             write!(
                 f,
                 "const {}.{variant}",
-                crate::lower::enum_link_name(db, *enum_ref)
+                crate::lower::enum_display_name(db, *enum_ref)
             )
         }
     }

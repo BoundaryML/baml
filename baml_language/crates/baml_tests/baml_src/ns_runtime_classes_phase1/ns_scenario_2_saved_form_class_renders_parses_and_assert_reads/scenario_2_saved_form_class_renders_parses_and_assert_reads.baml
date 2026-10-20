@@ -20,20 +20,20 @@ class UnknownFieldKind {
     kind: string,
 }
 
-function NoteType(saved: SavedField[]) -> reflect.class.Type {
-    let fields: map<string, reflect.Type | reflect.WithMeta<reflect.Type>> = {};
+function NoteType(saved: SavedField[]) -> reflect.Class {
+    let fields: map<string, reflect.TypeView | reflect.WithMeta<reflect.Type>> = {};
     for (let field in saved) {
         let ty = match (field.kind) {
             "dropdown" => {
-                let members: reflect.Type[] = [];
+                let members: reflect.TypeView[] = [];
                 for (let option in field.options) {
-                    members.push(reflect.literal.new(option).as_type())
+                    members.push(reflect.Literal.new(option))
                 }
-                reflect.union.new(members).as_type()
+                reflect.Union.new(members).as_type()
             },
-            "bulleted_list" => reflect.Type.of<string>().array().as_type(),
-            "number" => reflect.Type.of<int>(),
-            "text" => reflect.Type.of<string>(),
+            "bulleted_list" => string.type().array().as_type(),
+            "number" => int.type(),
+            "text" => string.type(),
             _ => throw UnknownFieldKind { kind: field.kind },
         };
         let description = if (field.kind == "bulleted_list") {
@@ -43,7 +43,7 @@ function NoteType(saved: SavedField[]) -> reflect.class.Type {
         };
         fields.set(field.name, ty.meta(description = description))
     }
-    reflect.class.new("VisitNote", fields)
+    reflect.Class.new("VisitNote", fields)
 }
 
 class ScenarioResult {
@@ -74,12 +74,12 @@ function main() -> ScenarioResult {
             },
         ],
     );
-    type Note = unreflect(note_t.as_type())
+    let type Note = note_t;
     let prompt = ExtractNote@render_prompt<Note>("sample").text();
     let note = ExtractNote@parse<Note>(`{"height_cm": 183, "chief_complaint": "cough", "bullets": ["dry", "night"]}`);
-    let height = reflect.class.get_field<int>(note, "height_cm");
-    let complaint = reflect.class.get_field<string>(note, "chief_complaint");
-    let bullets = reflect.class.get_field<string[]>(note, "bullets");
+    let height = reflect.Class.get_field<int>(note, "height_cm");
+    let complaint = reflect.Class.get_field<string>(note, "chief_complaint");
+    let bullets = reflect.Class.get_field<string[]>(note, "bullets");
     return ScenarioResult {
         text: prompt + "\n<RESULT>" + height.to_string() + "|" + complaint + "|" + bullets[1],
         note: baml.json.from(note),

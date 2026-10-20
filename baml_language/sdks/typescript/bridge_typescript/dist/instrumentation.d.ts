@@ -11,6 +11,9 @@ type Body = (this: any, ...args: any[]) => any;
 type Display = {
     readonly name?: string;
 };
+/** Wrap a host function, capturing outputs and errors by default.
+ * Inputs require explicit options; pass trace.empty_span() for no value capture.
+ */
 export declare function instrument<F extends Body>(body: F): F;
 export declare function instrument<F extends Body>(options: unknown, body: F, display?: Display): F;
 export {};

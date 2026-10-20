@@ -58,6 +58,7 @@ const delay = async (delayMs: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, delayMs));
 };
 
+/** Retry a failed capture with exponential backoff, propagating the final failure. */
 export async function withRetries<T>(
   operation: (attempt: number) => Promise<T>,
   options: RetryOptions,
@@ -78,6 +79,7 @@ export async function withRetries<T>(
   throw new Error('unreachable');
 }
 
+/** Reject missing, loading, errored, empty, or hidden cards before starting the settle timer. */
 export function postHogCardsAreReady(cards: PostHogCardRenderState[]): boolean {
   return (
     cards.length > 0 &&
@@ -102,6 +104,7 @@ export function postHogCardsAreReady(cards: PostHogCardRenderState[]): boolean {
   );
 }
 
+/** Read the visible content and layout used to detect unfinished or changing insight cards. */
 async function postHogCardStates(
   page: Page,
 ): Promise<PostHogCardRenderState[]> {
@@ -129,26 +132,29 @@ async function postHogCardStates(
     );
 }
 
+/** Require visible, loaded cards whose contents and dimensions remain stable for 20 seconds. */
 async function waitForPostHogDashboard(page: Page): Promise<void> {
   const deadline = Date.now() + dashboardRenderTimeoutMs;
   let readySince: number | undefined;
-  let stableCardCount: number | undefined;
+  let stableCardState: string | undefined;
   let lastCards: PostHogCardRenderState[] = [];
 
   while (Date.now() < deadline) {
     lastCards = await postHogCardStates(page);
     if (postHogCardsAreReady(lastCards)) {
-      if (stableCardCount !== lastCards.length) {
-        stableCardCount = lastCards.length;
+      const cardState = JSON.stringify(lastCards);
+      if (stableCardState !== cardState) {
+        stableCardState = cardState;
         readySince = Date.now();
       } else if (
         readySince !== undefined &&
         Date.now() - readySince >= dashboardSettleTimeMs
       ) {
+        console.log(`PostHog dashboard settled with ${lastCards.length} cards`);
         return;
       }
     } else {
-      stableCardCount = undefined;
+      stableCardState = undefined;
       readySince = undefined;
     }
     await page.waitForTimeout(dashboardStatePollIntervalMs);
@@ -194,6 +200,7 @@ export function dashboardReportBlocks(
   ];
 }
 
+/** Capture the native charts and fully rendered embeds in a fresh browser. */
 async function captureDashboardOnce(dashboardUrl: string): Promise<Buffer> {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -262,6 +269,7 @@ async function captureDashboardOnce(dashboardUrl: string): Promise<Buffer> {
     }));
     const renderedNativeChart = [];
     if (hasNativeChart) {
+      await indexPage.evaluate(() => document.fonts.ready);
       const bounds = await nativeChart.boundingBox();
       if (!bounds)
         throw new Error('Native weekly metrics chart was not visible');
@@ -296,15 +304,16 @@ async function captureDashboardOnce(dashboardUrl: string): Promise<Buffer> {
             );
           }
           await waitForPostHogDashboard(reportPage);
+          await reportPage.evaluate(() => document.fonts.ready);
           const screenshot = Buffer.from(
-            await reportPage.screenshot({ type: 'png' }),
+            await reportPage.screenshot({ fullPage: true, type: 'png' }),
           );
           if ((await sharp(screenshot).stats()).entropy < 1) {
             throw new Error(
               `PostHog dashboard ${index + 1} screenshot was visually empty`,
             );
           }
-          return { input: screenshot, left: frame.left, top: frame.top };
+          return { ...frame, input: screenshot };
         } catch (error) {
           const details = pageErrors.length
             ? ` Browser errors: ${pageErrors.join(' | ')}`
@@ -318,22 +327,80 @@ async function captureDashboardOnce(dashboardUrl: string): Promise<Buffer> {
         }
       }),
     );
-    return await sharp({
-      create: {
-        background: '#ffffff',
-        channels: 4,
-        height: pageDimensions.height,
-        width: pageDimensions.width,
-      },
-    })
-      .composite([...renderedNativeChart, ...renderedEmbeds])
-      .png()
-      .toBuffer();
+    return await composeDashboardCapture(
+      pageDimensions,
+      renderedNativeChart,
+      renderedEmbeds,
+    );
   } finally {
     await browser.close();
   }
 }
 
+interface DashboardCapture {
+  input: Buffer;
+  left: number;
+  top: number;
+}
+
+/** Expand the canvas and shift captures below growing embeds while preserving shared rows. */
+export async function composeDashboardCapture(
+  pageDimensions: { height: number; width: number },
+  nativeCharts: DashboardCapture[],
+  embeds: (DashboardCapture & { height: number })[],
+): Promise<Buffer> {
+  const captures: DashboardCapture[] = [];
+  let height = pageDimensions.height;
+  let width = pageDimensions.width;
+  const growth: { bottom: number; offset: number }[] = [];
+  // Take the largest displacement above this point: parallel embeds grow their row once.
+  const offsetFor = (top: number) =>
+    growth.reduce(
+      (offset, item) =>
+        item.bottom <= top ? Math.max(offset, item.offset) : offset,
+      0,
+    );
+  for (const embed of [...embeds].sort((a, b) => a.top - b.top)) {
+    const dimensions = await sharp(embed.input).metadata();
+    if (!dimensions.height || !dimensions.width) {
+      throw new Error('Embedded dashboard screenshot has no dimensions');
+    }
+    const top = embed.top + offsetFor(embed.top);
+    captures.push({ input: embed.input, left: embed.left, top });
+    const bottom = embed.top + embed.height;
+    growth.push({ bottom, offset: top + dimensions.height - bottom });
+    height = Math.max(height, top + dimensions.height);
+    width = Math.max(width, embed.left + dimensions.width);
+  }
+  for (const chart of nativeCharts) {
+    const dimensions = await sharp(chart.input).metadata();
+    if (!dimensions.height || !dimensions.width) {
+      throw new Error('Native chart screenshot has no dimensions');
+    }
+    const top = chart.top + offsetFor(chart.top);
+    captures.push({ input: chart.input, left: chart.left, top });
+    height = Math.max(height, top + dimensions.height);
+    width = Math.max(width, chart.left + dimensions.width);
+  }
+  height = Math.max(
+    height,
+    pageDimensions.height + offsetFor(pageDimensions.height),
+  );
+  console.log(`Composing dashboard screenshot: ${width}x${height}`);
+  return await sharp({
+    create: {
+      background: '#ffffff',
+      channels: 4,
+      height,
+      width,
+    },
+  })
+    .composite(captures)
+    .png()
+    .toBuffer();
+}
+
+/** Retry the entire browser capture so failed renders cannot be uploaded to Slack. */
 export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
   return await withRetries(() => captureDashboardOnce(dashboardUrl), {
     attempts: captureAttempts,
@@ -347,6 +414,7 @@ export async function captureDashboard(dashboardUrl: string): Promise<Buffer> {
   });
 }
 
+/** Capture the live dashboard, save its artifact, and deliver the short report with the PNG. */
 export async function sendSlackDashboardReport(
   config: SlackDashboardReportConfig,
   now = new Date(),

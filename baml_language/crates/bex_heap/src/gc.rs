@@ -154,11 +154,12 @@ impl BexHeap {
     /// Returns `(GcStats, remapped_roots, forwarding_map)`.
     /// BEP-042: scan the given from-space generations for instances that died
     /// this collection (not in `forwarding`), are not already cleaned, and
-    /// whose class defines a `cleanup` finalizer. Returns their (old) HeapPtrs
-    /// — the keep-alive seeds for finalization.
+    /// whose class defines a `cleanup` finalizer. Returns each (old) instance
+    /// pointer with its class's finalizer — the keep-alive seeds for
+    /// finalization.
     ///
     /// Cheap: most objects are not instances, and most instances belong to
-    /// classes without `cleanup` (a single `has_cleanup` flag read). Only the
+    /// classes without `cleanup` (one `Class::cleanup` read). Only the
     /// dead-and-finalizable minority is collected.
     ///
     /// SAFETY: call only at a GC safepoint, after the root trace has populated
@@ -168,10 +169,13 @@ impl BexHeap {
         &self,
         forwarding: &HashMap<HeapPtr, HeapPtr>,
         gens: &[&ChunkedVec<Object>],
-    ) -> Vec<(HeapPtr, String)> {
+    ) -> Vec<(HeapPtr, HeapPtr)> {
         // Fast path: if no class defines `cleanup`, no instance can ever be
         // finalizable, so skip the O(heap) from-space walk on every collection.
-        if !self.has_finalizable_classes {
+        if !self
+            .has_finalizable_classes
+            .load(std::sync::atomic::Ordering::Acquire)
+        {
             return Vec::new();
         }
         let mut seeds = Vec::new();
@@ -199,16 +203,12 @@ impl BexHeap {
                 let Object::Class(class) = (unsafe { class_ptr.get() }) else {
                     continue;
                 };
-                if class.has_cleanup {
-                    // Resolve the `cleanup` function name here, while the class
-                    // is in hand: methods register as `{class_fqn}.cleanup`
-                    // (matching `make_to_json_callee`'s `{fqn}.to_json`). Only
-                    // emit sets `has_cleanup`, so the class is always declared.
-                    let qtn = class.name.declared().unwrap_or_else(|| {
-                        unreachable!("`has_cleanup` on an anonymous class: only emit sets it")
-                    });
-                    let cleanup_fn = format!("{}.cleanup", qtn.render_dotted(false));
-                    seeds.push((ptr, cleanup_fn));
+                // The finalizer is the class's own method, taken while the
+                // class is in hand. The instance keeps its class alive and the
+                // class its methods, so the closure copied from the seed
+                // carries the function along.
+                if let Some(cleanup) = class.cleanup() {
+                    seeds.push((ptr, cleanup));
                 }
             }
         }
@@ -216,7 +216,7 @@ impl BexHeap {
     }
 
     /// BEP-042 (major GC): keep alive every dead, not-yet-cleaned instance of a
-    /// `has_cleanup` class (and its transitive closure) by copying it into the
+    /// class with a finalizer (and its transitive closure) by copying it into the
     /// inactive space, and queue it for finalization. The copy loop mirrors the
     /// root trace in [`copy_collection`]; queued pointers are the post-copy
     /// locations, valid until the engine drains them at this same safepoint.
@@ -232,7 +232,14 @@ impl BexHeap {
         if seeds.is_empty() {
             return;
         }
-        let mut worklist: Vec<HeapPtr> = seeds.iter().map(|(ptr, _)| *ptr).collect();
+        // Both halves of a seed are kept alive explicitly: the finalizer is
+        // reachable from its instance through the class, but seeding it means
+        // the closure below places it in `forwarding` whatever generation the
+        // class sits in.
+        let mut worklist: Vec<HeapPtr> = seeds
+            .iter()
+            .flat_map(|(instance, cleanup)| [*instance, *cleanup])
+            .collect();
         while let Some(old_ptr) = worklist.pop() {
             if forwarding.contains_key(&old_ptr) {
                 continue;
@@ -246,9 +253,9 @@ impl BexHeap {
             let obj = unsafe { new_ptr.get() };
             self.add_references_to_worklist(obj, &mut worklist);
         }
-        for (old_ptr, cleanup_fn) in seeds {
-            // Every seed was copied above, so it is now in `forwarding`.
-            self.push_pending_finalizer(forwarding[&old_ptr], cleanup_fn);
+        for (instance, cleanup) in seeds {
+            // Both were seeded above, so both are now in `forwarding`.
+            self.push_pending_finalizer(forwarding[&instance], forwarding[&cleanup]);
         }
     }
 
@@ -268,7 +275,14 @@ impl BexHeap {
         if seeds.is_empty() {
             return;
         }
-        let mut worklist: Vec<HeapPtr> = seeds.iter().map(|(ptr, _)| *ptr).collect();
+        // Both halves of a seed are kept alive explicitly: the finalizer is
+        // reachable from its instance through the class, but seeding it means
+        // the closure below places it in `forwarding` whatever generation the
+        // class sits in.
+        let mut worklist: Vec<HeapPtr> = seeds
+            .iter()
+            .flat_map(|(instance, cleanup)| [*instance, *cleanup])
+            .collect();
         while let Some(old_ptr) = worklist.pop() {
             if forwarding.contains_key(&old_ptr) {
                 continue;
@@ -292,8 +306,10 @@ impl BexHeap {
                 }
             }
         }
-        for (old_ptr, cleanup_fn) in seeds {
-            self.push_pending_finalizer(forwarding[&old_ptr], cleanup_fn);
+        for (instance, cleanup) in seeds {
+            // Both were seeded above, so both are now in `forwarding` — at
+            // their own address if this collection did not move them.
+            self.push_pending_finalizer(forwarding[&instance], forwarding[&cleanup]);
         }
     }
 
@@ -748,8 +764,8 @@ impl BexHeap {
                 }
             }
             Object::Function(function) => {
-                if !function.runtime_package.as_ptr().is_null() {
-                    worklist.push(function.runtime_package);
+                if !function.owner.as_ptr().is_null() {
+                    worklist.push(function.owner);
                     worklist.extend(
                         function
                             .bytecode
@@ -1010,10 +1026,10 @@ impl BexHeap {
                     .collect();
             }
             Object::Function(function) => {
-                if let Some(&new_ptr) = forwarding.get(&function.runtime_package) {
-                    function.runtime_package = new_ptr;
+                if let Some(&new_ptr) = forwarding.get(&function.owner) {
+                    function.owner = new_ptr;
                 }
-                if !function.runtime_package.as_ptr().is_null() {
+                if !function.owner.as_ptr().is_null() {
                     for value in &mut function.bytecode.resolved_constants {
                         self.fixup_value(value, forwarding);
                     }
@@ -1341,12 +1357,12 @@ impl BexHeap {
                 }
             }
             Object::Function(function) => {
-                if !function.runtime_package.as_ptr().is_null()
-                    && self.generation_of(function.runtime_package).is_young()
+                if !function.owner.as_ptr().is_null()
+                    && self.generation_of(function.owner).is_young()
                 {
-                    worklist.push(function.runtime_package);
+                    worklist.push(function.owner);
                 }
-                if !function.runtime_package.as_ptr().is_null() {
+                if !function.owner.as_ptr().is_null() {
                     worklist.extend(
                         function
                             .bytecode
@@ -1829,9 +1845,7 @@ mod tests {
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
         let compile_time = vec![Object::Enum(Box::new(bex_vm_types::Enum {
-            name: baml_type::DeclarationName::Declared(baml_type::TypeName::local(
-                baml_type::Name::new("E"),
-            )),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("E")),
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
             variants: vec![bex_vm_types::EnumVariant {
                 name: "A".to_string(),
@@ -1875,9 +1889,7 @@ mod tests {
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
         let compile_time = vec![Object::Class(Box::new(bex_vm_types::Class {
-            name: baml_type::DeclarationName::Declared(baml_type::TypeName::local(
-                baml_type::Name::new("C"),
-            )),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("C")),
             fields: vec![bex_vm_types::ClassField {
                 name: "x".to_string(),
                 field_type: baml_type::RuntimeTy::Int,
@@ -1897,7 +1909,7 @@ mod tests {
             other: Default::default(),
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -2535,7 +2547,7 @@ mod tests {
 
     #[test]
     fn test_gc_traces_instance_class_and_fields() {
-        use baml_type::{Name, TypeName};
+        use baml_type::Name;
         use bex_vm_types::Class;
 
         let heap = BexHeap::new(vec![]);
@@ -2543,7 +2555,7 @@ mod tests {
 
         // Allocate a class (leaf), a string (leaf), then an instance referencing both
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("TestClass"))),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("TestClass")),
             fields: vec![],
             description: None,
             alias: None,
@@ -2551,7 +2563,7 @@ mod tests {
             other: Default::default(),
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -2579,12 +2591,12 @@ mod tests {
         let Object::Class(c) = (unsafe { inst.class.get() }) else {
             panic!("not class")
         };
-        assert_eq!(c.name.item_name().as_str(), "TestClass");
+        assert_eq!(c.path.name.as_str(), "TestClass");
     }
 
     #[test]
     fn test_gc_traces_variant_enum() {
-        use baml_type::{Name, TypeName};
+        use baml_type::Name;
         use bex_vm_types::Enum;
 
         let heap = BexHeap::new(vec![]);
@@ -2592,7 +2604,7 @@ mod tests {
 
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("Color"))),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Color")),
             variants: vec![],
             description: None,
             alias: None,
@@ -2615,7 +2627,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { v.enm.get() }) else {
             panic!("not enum")
         };
-        assert_eq!(e.name.item_name().as_str(), "Color");
+        assert_eq!(e.path.name.as_str(), "Color");
     }
 
     #[test]
@@ -2788,13 +2800,13 @@ mod tests {
 
     #[test]
     fn test_gc_leaf_class_preserved() {
-        use baml_type::{Name, TypeName};
+        use baml_type::Name;
         use bex_vm_types::Class;
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("MyClass"))),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("MyClass")),
             fields: vec![],
             description: None,
             alias: None,
@@ -2802,7 +2814,7 @@ mod tests {
             other: Default::default(),
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(42),
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -2813,20 +2825,20 @@ mod tests {
         let Object::Class(c) = (unsafe { new_roots[0].get() }) else {
             panic!("not class")
         };
-        assert_eq!(c.name.item_name().as_str(), "MyClass");
+        assert_eq!(c.path.name.as_str(), "MyClass");
         assert_eq!(c.type_tag, baml_type::typetag::TypeTag::from_i64(42));
     }
 
     #[test]
     fn test_gc_leaf_enum_preserved() {
-        use baml_type::{Name, TypeName};
+        use baml_type::Name;
         use bex_vm_types::Enum;
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
         let ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("Status"))),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Status")),
             variants: vec![],
             description: None,
             alias: None,
@@ -2840,7 +2852,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { new_roots[0].get() }) else {
             panic!("not enum")
         };
-        assert_eq!(e.name.item_name().as_str(), "Status");
+        assert_eq!(e.path.name.as_str(), "Status");
     }
 
     #[test]
@@ -2867,10 +2879,10 @@ mod tests {
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let type_name = bex_vm_types::DeclarationName::Anonymous(Name::new("Category"));
+        let type_name = bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Category"));
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
-            name: type_name.clone(),
+            path: type_name.clone(),
             variants: vec![EnumVariant {
                 name: "RED".to_string(),
                 description: Some("warm".to_string()),
@@ -2912,7 +2924,7 @@ mod tests {
         let Object::Enum(enm) = (unsafe { head.ptr().get() }) else {
             panic!("the head did not land on an enum")
         };
-        assert_eq!(enm.name.item_name(), type_name.item_name());
+        assert_eq!(enm.path, type_name);
         assert_eq!(enm.variants[0].name, "RED");
         assert_eq!(enm.variants[0].alias.as_deref(), Some("k7"));
     }
@@ -2925,10 +2937,10 @@ mod tests {
 
         let heap = BexHeap::new(vec![]);
         let mut tlab = Tlab::new(Arc::clone(&heap));
-        let type_name = bex_vm_types::DeclarationName::Anonymous(Name::new("VisitNote"));
+        let type_name = bex_vm_types::types::LocalName::new(Vec::new(), Name::new("VisitNote"));
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: type_name.clone(),
+            path: type_name.clone(),
             fields: vec![ClassField {
                 name: "height_cm".to_string(),
                 field_type: bex_vm_types::RuntimeTy::Int,
@@ -2948,7 +2960,7 @@ mod tests {
             other: Default::default(),
             stream_done: false,
             type_tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -2982,7 +2994,7 @@ mod tests {
         let Object::Class(class) = (unsafe { head.ptr().get() }) else {
             panic!("the head did not land on a class")
         };
-        assert_eq!(class.name.item_name(), type_name.item_name());
+        assert_eq!(class.path, type_name);
         assert_eq!(class.fields[0].name, "height_cm");
         assert_eq!(
             class.fields[0].description.as_deref(),
@@ -3323,7 +3335,7 @@ mod tests {
 
     #[test]
     fn test_tracing_and_fixup_consistency_all_variants() {
-        use baml_type::{Name, TypeName};
+        use baml_type::Name;
         use bex_vm_types::{
             Class, Enum,
             types::{Cell, Closure, Instance, Variant},
@@ -3370,7 +3382,7 @@ mod tests {
         // --- Container: Object::Instance ---
         // Instance requires a class pointer.
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("T"))),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("T")),
             fields: vec![],
             description: None,
             alias: None,
@@ -3378,7 +3390,7 @@ mod tests {
             other: Default::default(),
             stream_done: false,
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::anonymous(),
@@ -3393,7 +3405,7 @@ mod tests {
         // --- Container: Object::Variant ---
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("E"))),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("E")),
             variants: vec![],
             description: None,
             alias: None,
@@ -3501,7 +3513,7 @@ mod tests {
         let Object::Enum(e) = (unsafe { var.enm.get() }) else {
             panic!("variant.enm not Enum")
         };
-        assert_eq!(e.name.item_name().as_str(), "E");
+        assert_eq!(e.path.name.as_str(), "E");
     }
 
     /// A major collection reports exactly what an independent census of its
@@ -3516,7 +3528,7 @@ mod tests {
         let text = bex_str::BexStr::from("x".repeat(100_000));
         let clone_a = tlab.alloc_string(text.clone());
         let clone_b = tlab.alloc_string(text.clone());
-        let slice = tlab.alloc_string(text.substring(10, 5_000));
+        let slice = tlab.alloc_string(text.byte_slice(10..5_000));
         let rope = tlab.alloc_string(bex_str::BexStr::concat(
             text,
             bex_str::BexStr::from("y".repeat(1_000)),

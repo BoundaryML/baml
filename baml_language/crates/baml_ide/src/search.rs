@@ -336,14 +336,16 @@ fn ranked_candidates(
         db.unwind_if_revision_cancelled();
         let prefix = viewpoint
             .package_prefix(package)
-            .unwrap_or(baml_type::ADDRESSABLE_USER_PACKAGE);
+            .unwrap_or(std::borrow::Cow::Borrowed(
+                baml_type::ADDRESSABLE_USER_PACKAGE,
+            ));
         let items = package_items(db, package);
         for (ns_path, ns_items) in &items.namespaces {
             for (name, def) in ns_items.types.iter().chain(ns_items.values.iter()) {
                 if !is_searchable(db, name, *def) {
                     continue;
                 }
-                let path = dotted(prefix, ns_path, name.as_str());
+                let path = dotted(&prefix, ns_path, name.as_str());
                 collect_definition_candidates(db, *def, name, &path, &mut out);
             }
         }

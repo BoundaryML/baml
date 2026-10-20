@@ -178,3 +178,30 @@ function uncached_input_tokens(
         null => null,
     }
 }
+
+/// A client's turn from one model call of its own: `call`, which reported
+/// `usage` and answered as `resolved_model` (null when the response names no
+/// model). The client asked for `requested_model` (null when unknown).
+/// Streams finish through this too.
+function with_own_call(
+    turn: root.ModelTurn,
+    call: root.events.ModelCall,
+    usage: root.events.Usage?,
+    requested_model: string?,
+    resolved_model: string?,
+) -> root.ModelTurn {
+    call.usage = usage;
+    call.resolved_model
+        = root.events.ModelKey {
+            provider: call.resolved_model.provider,
+            model: resolved_model ?? requested_model ?? call.resolved_model.model,
+        };
+    root.ModelTurn {
+        ...turn,
+        resolved_model: call.resolved_model,
+        requested_model: requested_model,
+        calls: [call],
+        child_turns: [],
+        error: null,
+    }
+}

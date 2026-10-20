@@ -199,7 +199,6 @@ impl BexVm {
         match opcode {
             Some(OpCode::Throw) => RaiseKind::Throw,
             Some(OpCode::Rethrow) => RaiseKind::Rethrow,
-            Some(OpCode::ThrowIfPanic) => RaiseKind::PanicRethrow,
             Some(OpCode::Await) if thrown.throw_kind == ThrowKind::Rethrow => RaiseKind::Await,
             Some(OpCode::Await) => RaiseKind::AwaitCancelled,
             Some(

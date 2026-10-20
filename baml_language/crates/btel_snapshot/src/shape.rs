@@ -567,7 +567,7 @@ impl Shaper {
 /// the pass that finds the units. Measuring stops at the unit size.
 fn may_cut(graph: &Graph, root: SnapshotRoot, unit_bytes: u64, leaf_bytes: u64) -> bool {
     let large = |bytes: usize| bytes as u64 >= leaf_bytes;
-    if graph.strings.iter().any(|text| large(text.len()))
+    if graph.strings.iter().any(|text| large(text.byte_len()))
         || graph
             .bigints
             .iter()
@@ -1071,7 +1071,7 @@ impl Resolver for Edges<'_> {
         Reference::Local(0)
     }
     fn string(&mut self, id: StringId) -> Option<u32> {
-        let cut = self.s.strings[id.0 as usize].len() as u64 >= self.leaf_bytes;
+        let cut = self.s.strings[id.0 as usize].byte_len() as u64 >= self.leaf_bytes;
         self.strings[id.0 as usize] |= cut;
         cut.then_some(0)
     }
