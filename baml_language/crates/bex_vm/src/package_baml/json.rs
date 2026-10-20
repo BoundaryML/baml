@@ -2233,9 +2233,9 @@ impl Decoder {
         ty: &RealizedTy,
         root: Root,
     ) -> NativeCallResult {
-        match decode_one(vm, json, ty, root, "") {
+        match decode_one(vm, json, ty, root, &[]) {
             Ok(Decoded::Value(value)) => self.resume(vm, value),
-            Ok(Decoded::Open(container)) => match self.open(vm, container, "") {
+            Ok(Decoded::Open(container)) => match self.open(vm, container) {
                 Ok(()) => self.walk(vm),
                 Err(error) => NativeCallResult::Error(error),
             },
@@ -2253,32 +2253,16 @@ impl Decoder {
         }
     }
 
-    /// Enter `container`, found at `path`. A JSON object or array the walk
-    /// already has open is a value that contains itself: decoding it as a type
-    /// would never end.
-    fn open(
-        &mut self,
-        vm: &mut BexVm,
-        container: Container,
-        path: &str,
-    ) -> Result<(), VmRustFnError> {
+    /// Enter `container`, the next child of the innermost open one. A JSON
+    /// object or array the walk already has open is a value that contains
+    /// itself: decoding it as a type would never end.
+    fn open(&mut self, vm: &mut BexVm, container: Container) -> Result<(), VmRustFnError> {
         let source = container.source();
         if self.open.iter().any(|open| open.source() == source) {
-            return Err(raise_decode(vm, CYCLIC_JSON, path));
+            return Err(raise_decode_at(vm, CYCLIC_JSON, &self.open));
         }
         self.open.push(container);
         Ok(())
-    }
-
-    /// The path of the next child of the innermost container, from the
-    /// root: each open container's segment for the child it is on. The
-    /// innermost may have none left (it is about to finish); every outer one
-    /// is on the child that opened the next.
-    fn path(&self, vm: &BexVm) -> String {
-        self.open
-            .iter()
-            .filter_map(|container| container.segment(vm))
-            .collect()
     }
 
     /// `value` is the next child of the innermost container; with none open
@@ -2296,16 +2280,20 @@ impl Decoder {
     /// Decode children until one yields or the outermost container is done.
     fn walk(mut self, vm: &mut BexVm) -> NativeCallResult {
         loop {
-            let path = self.path(vm);
-            let container = self
+            let next = self
                 .open
-                .last_mut()
-                .unwrap_or_else(|| unreachable!("the walk runs inside an open container"));
-            match container.next() {
-                Some((json, ty)) => match decode_one(vm, json, &ty, Root::Dispatch, &path) {
-                    Ok(Decoded::Value(value)) => container.push(value),
+                .last()
+                .unwrap_or_else(|| unreachable!("the walk runs inside an open container"))
+                .next();
+            match next {
+                Some((json, ty)) => match decode_one(vm, json, &ty, Root::Dispatch, &self.open) {
+                    Ok(Decoded::Value(value)) => self
+                        .open
+                        .last_mut()
+                        .unwrap_or_else(|| unreachable!("the container was just read"))
+                        .push(value),
                     Ok(Decoded::Open(child)) => {
-                        if let Err(error) = self.open(vm, child, &path) {
+                        if let Err(error) = self.open(vm, child) {
                             return NativeCallResult::Error(error);
                         }
                     }
@@ -2359,9 +2347,29 @@ impl Continuation for Decoder {
     }
 }
 
-/// Decode `json` as `ty`, found at `path`, one level: its value if it decodes
-/// in place, the container to walk if it has children, or the `from_json`
-/// that builds it.
+/// The path of the value the walk is on, from the root: each of the `open`
+/// containers' segment for the child it is on, outermost first. The innermost
+/// may have none left (it is about to finish); every outer one is on the
+/// child that opened the next. Rendered only when an error names it.
+fn path_at(vm: &BexVm, open: &[Container]) -> String {
+    open.iter()
+        .filter_map(|container| container.segment(vm))
+        .collect()
+}
+
+/// A `DecodeError` at the value the walk is on inside the `open` containers.
+fn raise_decode_at(
+    vm: &mut BexVm,
+    message: impl Into<String>,
+    open: &[Container],
+) -> VmRustFnError {
+    let path = path_at(vm, open);
+    raise_decode(vm, message, &path)
+}
+
+/// Decode `json` as `ty`, the value the walk is on inside the `open`
+/// containers, one level: its value if it decodes in place, the container to
+/// walk if it has children, or the `from_json` that builds it.
 ///
 /// - a nullable union: `null` is `null`, anything else decodes as the
 ///   non-null payload;
@@ -2379,36 +2387,41 @@ fn decode_one(
     json: Value,
     ty: &RealizedTy,
     root: Root,
-    path: &str,
+    open: &[Container],
 ) -> Result<Decoded, VmRustFnError> {
     match ty {
         RealizedTy::Union(members) if members.iter().any(RealizedTy::is_null) => {
             if json.is_null() {
                 Ok(Decoded::Value(Value::NULL))
             } else {
-                decode_one(vm, json, &ty.strip_null(), Root::Dispatch, path)
+                decode_one(vm, json, &ty.strip_null(), Root::Dispatch, open)
             }
         }
         RealizedTy::Union(members) => {
             // Membership by shape: a provided `from_json` that throws unwinds
             // the whole walk, so a member cannot be tried through its rule
-            // and fallen through to the next.
-            let serde = leaf_serde(vm, json, path)?;
-            let member = members.iter().find(|member| {
-                let mut probe = path.to_string();
-                ty_serde_to_value(vm, &serde, member, &mut probe).is_ok()
-            });
+            // and fallen through to the next. A member that does not match
+            // is passed over without building its error; the one error is
+            // raised once none does.
+            check_json(vm, json, open)?;
+            let member = match discriminated_member(vm, members, json) {
+                Discriminated::Member(member) => json_matches(vm, json, member).then_some(member),
+                Discriminated::NoMember => None,
+                Discriminated::Undiscriminated => {
+                    members.iter().find(|member| json_matches(vm, json, member))
+                }
+            };
             match member {
-                Some(member) => decode_one(vm, json, &member.clone(), Root::Dispatch, path),
-                None => Err(raise_decode(vm, "no union member matched", path)),
+                Some(member) => decode_one(vm, json, &member.clone(), Root::Dispatch, open),
+                None => Err(raise_decode_at(vm, "no union member matched", open)),
             }
         }
-        RealizedTy::List(element) => open_list(vm, json, element, path).map(Decoded::Open),
-        RealizedTy::Map { key, value } => open_map(vm, json, key, value, path).map(Decoded::Open),
+        RealizedTy::List(element) => open_list(vm, json, element, open).map(Decoded::Open),
+        RealizedTy::Map { key, value } => open_map(vm, json, key, value, open).map(Decoded::Open),
         RealizedTy::Class(head, _) | RealizedTy::Interface(head, _, _)
             if vm.stdlib_heads().media_kind(*head).is_some() =>
         {
-            decode_leaf(vm, json, ty, path).map(Decoded::Value)
+            decode_leaf(vm, json, ty, open).map(Decoded::Value)
         }
         RealizedTy::Class(head, _) | RealizedTy::Interface(head, _, _) | RealizedTy::Enum(head) => {
             let provided = match root {
@@ -2424,48 +2437,658 @@ fn decode_one(
                 (
                     None,
                     RealizedTy::Class(_, type_args) | RealizedTy::Interface(_, type_args, _),
-                ) => open_class(vm, json, *head, type_args, path).map(Decoded::Open),
-                (None, _) => decode_leaf(vm, json, ty, path).map(Decoded::Value),
+                ) => open_class(vm, json, *head, type_args, open).map(Decoded::Open),
+                (None, _) => decode_leaf(vm, json, ty, open).map(Decoded::Value),
             }
         }
-        _ => decode_leaf(vm, json, ty, path).map(Decoded::Value),
+        _ => decode_leaf(vm, json, ty, open).map(Decoded::Value),
     }
 }
 
-/// The VM `json` value at `path` as `serde_json::Value`, for a leaf or a
-/// union candidate: a value that contains itself is a decode error at the
-/// place the walk met it again.
-fn leaf_serde(vm: &mut BexVm, json: Value, path: &str) -> Result<serde_json::Value, VmRustFnError> {
-    value_to_serde(vm, json).map_err(|e| raise_decode(vm, e.message, &format!("{path}{}", e.path)))
+// ─── Structural decoding in place ────────────────────────────────────────────
+//
+// A leaf and a union candidate used to be converted whole to
+// `serde_json::Value` and decoded through `ty_serde_to_value`, which builds a
+// `DecodeError` — a heap object with a message and a path — for every member
+// that fails. The walk below reads the VM `json` value in place instead:
+// [`Tok`] is the JSON token `value_to_serde` would make of it, [`json_matches`]
+// is `ty_serde_to_value(..).is_ok()` without the allocation, and
+// [`decode_leaf`] builds the value or the one error. What the conversion
+// refused — a value that contains itself, a map without string keys — is
+// refused first by [`check_json`], at the same place with the same path. The
+// types whose decoding IS the conversion (`json` and the opaque types, copied
+// whole) and media (a tagged object) still go through serde.
+
+/// Refuse what `value_to_serde` refuses in `json`: a JSON object or array
+/// that contains itself, or a map without string keys, as a decode error at
+/// the place the walk met it — the value's path, then the way down to it in
+/// the `[i]` / `["key"]` notation of the untyped conversion.
+fn check_json(vm: &mut BexVm, json: Value, open: &[Container]) -> Result<(), VmRustFnError> {
+    let mut active = Vec::new();
+    let mut inner = Vec::new();
+    match check_json_at(vm, json, &mut active, &mut inner) {
+        Ok(()) => Ok(()),
+        Err(message) => {
+            use std::fmt::Write;
+            let mut path = path_at(vm, open);
+            for segment in &inner {
+                match segment {
+                    Segment::Index(index) => {
+                        let _ = write!(path, "[{index}]");
+                    }
+                    Segment::Key(key) => match key.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
+                        Some(Object::String(key)) => {
+                            let _ = write!(path, "[{key:?}]");
+                        }
+                        _ => unreachable!("the key was read as a string"),
+                    },
+                }
+            }
+            Err(raise_decode(vm, message, &path))
+        }
+    }
 }
 
-/// Decode `json` at `path` as `ty` structurally, in place: convert the VM
-/// `json` value to `serde_json::Value` and run `ty_serde_to_value`. For the
-/// types that carry no `baml.FromJson` rule of their own.
+/// A step down from a JSON container: an array index or an object key (the
+/// key's string value, read back when the path is rendered).
+enum Segment {
+    Index(usize),
+    Key(Value),
+}
+
+/// [`check_json`]'s walk: `active` holds the containers it is inside, `inner`
+/// the way down to `json`, left where it is on an error.
+fn check_json_at(
+    vm: &BexVm,
+    json: Value,
+    active: &mut Vec<HeapPtr>,
+    inner: &mut Vec<Segment>,
+) -> Result<(), &'static str> {
+    let Some(ptr) = json.as_object_ptr() else {
+        return Ok(());
+    };
+    match vm.get_object(ptr) {
+        Object::Array(array) => {
+            if active.contains(&ptr) {
+                return Err(CYCLIC_JSON);
+            }
+            active.push(ptr);
+            let elements = array.lock();
+            for (index, element) in elements.iter().enumerate() {
+                inner.push(Segment::Index(index));
+                check_json_at(vm, *element, active, inner)?;
+                inner.pop();
+            }
+            active.pop();
+        }
+        Object::Map(map) => {
+            if active.contains(&ptr) {
+                return Err(CYCLIC_JSON);
+            }
+            // Every key is checked before any value is walked, as the
+            // conversion snapshots the entries.
+            if !baml_type::normalize::is_string_key(map.key_ty.as_ty(), vm) {
+                return Err(STRING_MAP_REQUIRED);
+            }
+            let entries = map.lock();
+            if !entries.keys().all(|key| string_tok(vm, *key).is_some()) {
+                return Err(STRING_MAP_REQUIRED);
+            }
+            active.push(ptr);
+            for (key, value) in entries.iter() {
+                inner.push(Segment::Key(*key));
+                check_json_at(vm, *value, active, inner)?;
+                inner.pop();
+            }
+            active.pop();
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// A VM `json` value as the JSON token `value_to_serde` makes of it, read in
+/// place: a non-finite float and any object with no JSON representation are
+/// `null`, an enum variant is its name.
+enum Tok<'a> {
+    Null,
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    Bigint(&'a num_bigint::BigInt),
+    Str(&'a str),
+    Array(&'a Array),
+    Object(&'a Map),
+}
+
+fn tok(vm: &BexVm, json: Value) -> Tok<'_> {
+    let ptr = match json.kind() {
+        ValueKind::Null | ValueKind::OmittedArg => return Tok::Null,
+        ValueKind::Bool(b) => return Tok::Bool(b),
+        ValueKind::Int(i) => return Tok::Int(i),
+        ValueKind::Object(ptr) => ptr,
+    };
+    match vm.get_object(ptr) {
+        Object::Float(f) if f.is_finite() => Tok::Float(*f),
+        Object::Float(_) => Tok::Null,
+        Object::String(s) => Tok::Str(s.as_str()),
+        Object::Bigint(b) => Tok::Bigint(b),
+        Object::Array(array) => Tok::Array(array),
+        Object::Map(map) => Tok::Object(map),
+        Object::Variant(var) => match vm.get_object(var.enm) {
+            Object::Enum(e) => e
+                .variants
+                .get(var.index)
+                .map_or(Tok::Null, |variant| Tok::Str(variant.name.as_str())),
+            _ => Tok::Null,
+        },
+        Object::Tombstone => Object::tombstone_reached(),
+        _ => Tok::Null,
+    }
+}
+
+/// `json` as a JSON string token, if it is one.
+fn string_tok(vm: &BexVm, json: Value) -> Option<&str> {
+    match tok(vm, json) {
+        Tok::Str(s) => Some(s),
+        _ => None,
+    }
+}
+
+impl Tok<'_> {
+    /// A JSON number token.
+    fn is_number(&self) -> bool {
+        matches!(self, Tok::Int(_) | Tok::Float(_) | Tok::Bigint(_))
+    }
+
+    /// `serde_json::Number::as_i64` of the token: the integral tokens that
+    /// fit. A float's text (`1.0`, `1e21`) never parses as an integer.
+    fn as_i64(&self) -> Option<i64> {
+        match self {
+            Tok::Int(i) => Some(*i),
+            Tok::Bigint(b) => i64::try_from(*b).ok(),
+            _ => None,
+        }
+    }
+
+    /// `serde_json::Number::as_f64` of the token: the number tokens, read as
+    /// a finite float.
+    #[allow(clippy::cast_precision_loss)] // `i64 as f64` rounds as parsing its text does
+    fn as_f64(&self) -> Option<f64> {
+        match self {
+            Tok::Int(i) => Some(*i as f64),
+            Tok::Float(f) => Some(*f),
+            Tok::Bigint(b) => b.to_string().parse::<f64>().ok().filter(|f| f.is_finite()),
+            _ => None,
+        }
+    }
+
+    /// [`parse_typed_json_bigint`] of the token: an integral number, or a
+    /// string of decimal digits.
+    fn typed_bigint(&self) -> Option<num_bigint::BigInt> {
+        match self {
+            Tok::Int(i) => Some((*i).into()),
+            // Allocated under the bit limit, so its text always parses back.
+            Tok::Bigint(b) => Some((*b).clone()),
+            Tok::Str(s) => parse_decimal_bigint(s),
+            _ => None,
+        }
+    }
+
+    /// Whether [`Self::typed_bigint`] would find one, without building it.
+    fn has_typed_bigint(&self) -> bool {
+        match self {
+            Tok::Int(_) | Tok::Bigint(_) => true,
+            Tok::Str(s) => parse_decimal_bigint(s).is_some(),
+            _ => false,
+        }
+    }
+}
+
+/// The value under `name` in the JSON object `entries`, if any.
+fn object_get(vm: &BexVm, entries: &bex_vm_types::types::MapData, name: &str) -> Option<Value> {
+    entries
+        .iter()
+        .find(|(key, _)| string_tok(vm, **key) == Some(name))
+        .map(|(_, value)| *value)
+}
+
+/// The index of `name` among the variants of the enum at `head`, if `head`
+/// is an enum that has it.
+fn enum_variant_index(vm: &BexVm, head: bex_vm_types::TypeHead, name: &str) -> Option<usize> {
+    match vm.get_object(head.ptr()) {
+        Object::Enum(e) => e.variants.iter().position(|variant| variant.name == name),
+        _ => None,
+    }
+}
+
+/// Whether `json` decodes as `ty` structurally — whether `ty_serde_to_value`
+/// succeeds on it — read in place, allocating nothing. The membership test a
+/// union chooses its member by: a candidate that would fail is passed over
+/// without its error being built. `json` has passed [`check_json`].
+fn json_matches(vm: &BexVm, json: Value, ty: &RealizedTy) -> bool {
+    let token = tok(vm, json);
+    match ty {
+        RealizedTy::Null => matches!(token, Tok::Null),
+        RealizedTy::Bool => matches!(token, Tok::Bool(_)),
+        RealizedTy::Int => token.as_i64().and_then(Value::try_int).is_some(),
+        RealizedTy::Bigint => token.has_typed_bigint(),
+        RealizedTy::Float => token.as_f64().is_some(),
+        RealizedTy::String => matches!(token, Tok::Str(_)),
+        RealizedTy::List(element) => match token {
+            Tok::Array(array) => array
+                .lock()
+                .iter()
+                .all(|item| json_matches(vm, *item, element)),
+            _ => false,
+        },
+        RealizedTy::Map { key, .. } if !baml_type::normalize::is_string_key(key.as_ty(), vm) => {
+            false
+        }
+        RealizedTy::Map { key, value } => match token {
+            Tok::Object(map) => map.lock().iter().all(|(written, item)| {
+                string_tok(vm, *written).is_some_and(|written| {
+                    baml_type::normalize::is_subtype(
+                        &baml_type::Ty::Literal(
+                            baml_type::Literal::String(written.to_string()),
+                            baml_type::Freshness::Regular,
+                        ),
+                        key.as_ty(),
+                        vm,
+                    )
+                }) && json_matches(vm, *item, value)
+            }),
+            _ => false,
+        },
+        RealizedTy::TypeAlias(_) => true,
+        RealizedTy::Class(head, type_args) => match vm.stdlib_heads().media_kind(*head) {
+            Some(kind) => media_matches(vm, &token, kind),
+            None => class_matches(vm, &token, *head, type_args),
+        },
+        RealizedTy::Interface(head, type_args, _) => class_matches(vm, &token, *head, type_args),
+        RealizedTy::Enum(head) => match token {
+            Tok::Str(s) => enum_variant_index(vm, *head, s).is_some(),
+            _ => false,
+        },
+        RealizedTy::EnumVariant(head, name) => match token {
+            Tok::Str(s) if s == name.as_str() => enum_variant_index(vm, *head, s).is_some(),
+            _ => false,
+        },
+        RealizedTy::Media(kind) => {
+            kind.wrapper_class()
+                .and_then(|wrapper| vm.lang_head(wrapper))
+                .is_some()
+                && media_matches(vm, &token, *kind)
+        }
+        RealizedTy::Uint8Array => false,
+        RealizedTy::Union(members) => members.iter().any(|member| json_matches(vm, json, member)),
+        RealizedTy::Literal(lit, _) => literal_matches(lit, &token),
+        RealizedTy::Resource | RealizedTy::PromptAst => false,
+        RealizedTy::Function { .. } | RealizedTy::Future(_, _) | RealizedTy::Unknown => true,
+        RealizedTy::Never | RealizedTy::RustType | RealizedTy::Type => false,
+    }
+}
+
+/// [`json_matches`] for a literal type: the `RealizedTy::Literal` arm of
+/// `ty_serde_to_value`, as a test.
+fn literal_matches(lit: &baml_type::Literal, token: &Tok<'_>) -> bool {
+    match (lit, token) {
+        (baml_type::Literal::Bool(b), Tok::Bool(jb)) => b == jb,
+        (baml_type::Literal::String(s), Tok::Str(js)) => s == js,
+        (baml_type::Literal::Int(expected), token) if token.is_number() => {
+            token.as_i64() == Some(*expected)
+        }
+        (baml_type::Literal::Float(s), token) if token.is_number() => {
+            matches!((s.parse::<f64>(), token.as_f64()), (Ok(expected), Some(actual)) if (expected - actual).abs() < f64::EPSILON)
+        }
+        (baml_type::Literal::Bigint(expected), token) => {
+            token.typed_bigint().as_ref() == Some(expected)
+        }
+        _ => false,
+    }
+}
+
+/// [`json_matches`] for the class or interface at `head`: a JSON object with
+/// every declared field decoding as its type, an absent optional field being
+/// `null`.
+fn class_matches(
+    vm: &BexVm,
+    token: &Tok<'_>,
+    head: bex_vm_types::TypeHead,
+    type_args: &[RealizedTy],
+) -> bool {
+    let Tok::Object(map) = token else {
+        return false;
+    };
+    let Object::Class(class) = vm.get_object(head.ptr()) else {
+        return false;
+    };
+    let entries = map.lock();
+    class.fields.iter().all(|field| {
+        let field_ty = vm.realize_field_ty(&field.field_template, type_args);
+        match object_get(vm, &entries, &field.name) {
+            Some(value) => json_matches(vm, value, &field_ty),
+            // `null` decodes as a nullable union through its `null` member.
+            None => field_ty.is_nullable_union(),
+        }
+    })
+}
+
+/// [`json_matches`] for media of `kind`: the tagged object `deserialize_media`
+/// reads — `kind` naming it, a `source` it knows, and a string `value`.
+fn media_matches(vm: &BexVm, token: &Tok<'_>, kind: MediaKind) -> bool {
+    let Tok::Object(map) = token else {
+        return false;
+    };
+    let entries = map.lock();
+    let string_field = |name: &str| object_get(vm, &entries, name).and_then(|v| string_tok(vm, v));
+    string_field("kind") == Some(kind.tag_str())
+        && matches!(string_field("source"), Some("url" | "base64" | "inline"))
+        && string_field("value").is_some()
+}
+
+/// Whether `ty` is a class decoded by its fields: not media, and declared.
+fn plain_class(vm: &BexVm, ty: &RealizedTy) -> Option<(bex_vm_types::TypeHead, Box<[RealizedTy]>)> {
+    match ty {
+        RealizedTy::Class(head, type_args)
+            if vm.stdlib_heads().media_kind(*head).is_none()
+                && matches!(vm.get_object(head.ptr()), Object::Class(_)) =>
+        {
+            Some((*head, type_args.clone()))
+        }
+        _ => None,
+    }
+}
+
+/// The string literal the class at `head` declares field `name` as, if it
+/// does.
+fn string_literal_field(
+    vm: &BexVm,
+    head: bex_vm_types::TypeHead,
+    type_args: &[RealizedTy],
+    name: &str,
+) -> Option<String> {
+    let Object::Class(class) = vm.get_object(head.ptr()) else {
+        return None;
+    };
+    let field = class.fields.iter().find(|field| field.name == name)?;
+    match vm.realize_field_ty(&field.field_template, type_args) {
+        RealizedTy::Literal(baml_type::Literal::String(value), _) => Some(value),
+        _ => None,
+    }
+}
+
+/// The member of a union of classes that the JSON object `json` names by
+/// its discriminant, when the union has one: a field every member declares
+/// as a string literal of its own (`tool: "search"` | `tool: "calc"` |
+/// `tool: "finish"`). Only the member whose literal is written can match, so
+/// it is the one probing in order would find, and no member — the written
+/// value is no member's, or absent — is what probing would find too. A union
+/// not of this shape, or `json` not an object, is undiscriminated: the
+/// members are probed in order.
+fn discriminated_member<'m>(
+    vm: &BexVm,
+    members: &'m [RealizedTy],
+    json: Value,
+) -> Discriminated<'m> {
+    let Tok::Object(map) = tok(vm, json) else {
+        return Discriminated::Undiscriminated;
+    };
+    let Some((first_head, first_args)) = members.first().and_then(|first| plain_class(vm, first))
+    else {
+        return Discriminated::Undiscriminated;
+    };
+    let Object::Class(first) = vm.get_object(first_head.ptr()) else {
+        return Discriminated::Undiscriminated;
+    };
+    'fields: for field in &first.fields {
+        let Some(first_value) = string_literal_field(vm, first_head, &first_args, &field.name)
+        else {
+            continue;
+        };
+        let mut values = vec![first_value];
+        for member in &members[1..] {
+            let Some((head, type_args)) = plain_class(vm, member) else {
+                return Discriminated::Undiscriminated;
+            };
+            let Some(value) = string_literal_field(vm, head, &type_args, &field.name) else {
+                continue 'fields;
+            };
+            if values.contains(&value) {
+                continue 'fields;
+            }
+            values.push(value);
+        }
+        let entries = map.lock();
+        let written = object_get(vm, &entries, &field.name).and_then(|v| string_tok(vm, v));
+        return match written.and_then(|written| values.iter().position(|value| value == written)) {
+            Some(index) => Discriminated::Member(&members[index]),
+            None => Discriminated::NoMember,
+        };
+    }
+    Discriminated::Undiscriminated
+}
+
+/// What a union's discriminant says about the member a JSON object is
+/// ([`discriminated_member`]).
+enum Discriminated<'m> {
+    /// The member whose literal is written.
+    Member(&'m RealizedTy),
+    /// The written value is no member's, or the field is absent.
+    NoMember,
+    /// The union has no discriminant, or the value is not an object.
+    Undiscriminated,
+}
+
+/// The VM `json` value the walk is on as `serde_json::Value`, for the leaf
+/// types decoded through serde: a value that contains itself is a decode
+/// error at the place the walk met it again.
+fn leaf_serde(
+    vm: &mut BexVm,
+    json: Value,
+    open: &[Container],
+) -> Result<serde_json::Value, VmRustFnError> {
+    value_to_serde(vm, json).map_err(|e| {
+        let path = format!("{}{}", path_at(vm, open), e.path);
+        raise_decode(vm, e.message, &path)
+    })
+}
+
+/// Decode `json`, the value the walk is on, as `ty` structurally, in place.
+/// For the types that carry no `baml.FromJson` rule of their own.
 fn decode_leaf(
     vm: &mut BexVm,
     json: Value,
     ty: &RealizedTy,
-    path: &str,
+    open: &[Container],
 ) -> Result<Value, VmRustFnError> {
-    let serde = leaf_serde(vm, json, path)?;
-    let mut path = path.to_string();
-    ty_serde_to_value(vm, &serde, ty, &mut path)
+    match ty {
+        RealizedTy::Null
+        | RealizedTy::Bool
+        | RealizedTy::Int
+        | RealizedTy::Bigint
+        | RealizedTy::Float
+        | RealizedTy::String
+        | RealizedTy::Enum(_)
+        | RealizedTy::EnumVariant(_, _)
+        | RealizedTy::Literal(_, _)
+        | RealizedTy::Uint8Array
+        | RealizedTy::Resource
+        | RealizedTy::PromptAst
+        | RealizedTy::Never
+        | RealizedTy::RustType
+        | RealizedTy::Type => {
+            check_json(vm, json, open)?;
+            let built = scalar_leaf(vm, json, ty);
+            match built {
+                Ok(Leaf::Value(value)) => Ok(value),
+                Ok(Leaf::Float(f)) => Ok(Value::object(vm.alloc_float(f))),
+                Ok(Leaf::Str(s)) => Ok(Value::object(vm.alloc_string(s))),
+                Ok(Leaf::Bigint(b)) => vm.try_alloc_bigint(Arc::new(b)).map_err(Into::into),
+                Ok(Leaf::Variant(enm, index)) => Ok(Value::object(vm.alloc_variant(enm, index))),
+                Err(message) => Err(raise_decode_at(vm, message, open)),
+            }
+        }
+        // `json` and the opaque types are the value copied whole, as the
+        // conversion copies it; media is read from its tagged object. The
+        // containers never reach here: they open.
+        RealizedTy::TypeAlias(_)
+        | RealizedTy::Function { .. }
+        | RealizedTy::Future(_, _)
+        | RealizedTy::Unknown
+        | RealizedTy::Media(_)
+        | RealizedTy::Class(_, _)
+        | RealizedTy::Interface(_, _, _)
+        | RealizedTy::List(_)
+        | RealizedTy::Map { .. }
+        | RealizedTy::Union(_) => {
+            let serde = leaf_serde(vm, json, open)?;
+            let mut path = path_at(vm, open);
+            ty_serde_to_value(vm, &serde, ty, &mut path)
+        }
+    }
 }
 
-/// The entries of the JSON object `json` at `path`: a string-keyed map and
-/// nothing else — `expected` names what was wanted when it is not an object.
+/// What a scalar leaf decodes to, before it is allocated.
+enum Leaf {
+    Value(Value),
+    Float(f64),
+    Str(bex_vm_types::BexStr),
+    Bigint(num_bigint::BigInt),
+    Variant(HeapPtr, usize),
+}
+
+/// The string `json` is, to allocate as a VM string: a string object's own
+/// text is shared, anything else (an enum variant's name) is copied.
+fn shared_str(vm: &BexVm, json: Value, text: &str) -> bex_vm_types::BexStr {
+    match json.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
+        Some(Object::String(s)) => s.clone(),
+        _ => bex_vm_types::BexStr::from(text),
+    }
+}
+
+/// The scalar arms of `ty_serde_to_value`, read from the VM `json` value in
+/// place: the leaf to allocate, or the error's message.
+fn scalar_leaf(vm: &BexVm, json: Value, ty: &RealizedTy) -> Result<Leaf, String> {
+    let token = tok(vm, json);
+    match ty {
+        RealizedTy::Null => match token {
+            Tok::Null => Ok(Leaf::Value(Value::NULL)),
+            _ => Err("expected null".to_string()),
+        },
+        RealizedTy::Bool => match token {
+            Tok::Bool(b) => Ok(Leaf::Value(Value::bool(b))),
+            _ => Err("expected boolean".to_string()),
+        },
+        RealizedTy::Int if token.is_number() => token
+            .as_i64()
+            .and_then(Value::try_int)
+            .map(Leaf::Value)
+            .ok_or_else(|| "expected integer in the BAML int range [-2^62, 2^62 - 1]".to_string()),
+        RealizedTy::Int => Err("expected integer".to_string()),
+        RealizedTy::Bigint => token
+            .typed_bigint()
+            .map(Leaf::Bigint)
+            .ok_or_else(|| "expected integral JSON number or numeric string".to_string()),
+        RealizedTy::Float => token
+            .as_f64()
+            .map(Leaf::Float)
+            .ok_or_else(|| "expected number".to_string()),
+        RealizedTy::String => match token {
+            Tok::Str(s) => Ok(Leaf::Str(shared_str(vm, json, s))),
+            _ => Err("expected string".to_string()),
+        },
+        RealizedTy::Enum(head) => match token {
+            Tok::Str(s) => enum_variant_leaf(vm, *head, s),
+            _ => Err("expected enum variant string".to_string()),
+        },
+        RealizedTy::EnumVariant(head, name) => match token {
+            Tok::Str(s) if s == name.as_str() => enum_variant_leaf(vm, *head, s),
+            _ => Err(format!("expected enum variant `{name}`")),
+        },
+        RealizedTy::Literal(lit, _) => match (lit, token) {
+            (baml_type::Literal::Bool(b), Tok::Bool(jb)) if *b == jb => {
+                Ok(Leaf::Value(Value::bool(jb)))
+            }
+            (baml_type::Literal::String(s), Tok::Str(js)) if s == js => {
+                Ok(Leaf::Str(shared_str(vm, json, js)))
+            }
+            (baml_type::Literal::Int(expected), token) if token.is_number() => {
+                match token.as_i64() {
+                    Some(actual) if *expected == actual => Ok(Leaf::Value(Value::int(actual))),
+                    _ => Err("literal int mismatch".to_string()),
+                }
+            }
+            (baml_type::Literal::Float(s), token) if token.is_number() => {
+                match (s.parse::<f64>(), token.as_f64()) {
+                    (Ok(expected), Some(actual)) if (expected - actual).abs() < f64::EPSILON => {
+                        Ok(Leaf::Float(actual))
+                    }
+                    _ => Err("literal float mismatch".to_string()),
+                }
+            }
+            (baml_type::Literal::Bigint(expected), token) => {
+                let actual = token
+                    .typed_bigint()
+                    .ok_or_else(|| "expected integral JSON number or numeric string".to_string())?;
+                if &actual != expected {
+                    return Err("literal bigint mismatch".to_string());
+                }
+                Ok(Leaf::Bigint(actual))
+            }
+            _ => Err("literal mismatch".to_string()),
+        },
+        RealizedTy::Uint8Array => Err(
+            "uint8array requires explicit encoding (use from_base64() or from_hex())".to_string(),
+        ),
+        RealizedTy::Resource | RealizedTy::PromptAst => {
+            Err("cannot deserialize opaque type".to_string())
+        }
+        RealizedTy::Never | RealizedTy::RustType | RealizedTy::Type => {
+            Err("cannot decode compiler-only type".to_string())
+        }
+        RealizedTy::TypeAlias(_)
+        | RealizedTy::Function { .. }
+        | RealizedTy::Future(_, _)
+        | RealizedTy::Unknown
+        | RealizedTy::Media(_)
+        | RealizedTy::Class(_, _)
+        | RealizedTy::Interface(_, _, _)
+        | RealizedTy::List(_)
+        | RealizedTy::Map { .. }
+        | RealizedTy::Union(_) => unreachable!("`decode_leaf` decodes these through serde"),
+    }
+}
+
+/// The variant `name` of the enum at `head`, with `deserialize_enum_variant`'s
+/// errors.
+fn enum_variant_leaf(vm: &BexVm, head: bex_vm_types::TypeHead, name: &str) -> Result<Leaf, String> {
+    let Object::Enum(e) = vm.get_object(head.ptr()) else {
+        let named = baml_type::HeadDisplay::head_display_name(&head);
+        return Err(format!("`{named}` is not an enum"));
+    };
+    match e.variants.iter().position(|variant| variant.name == name) {
+        Some(index) => Ok(Leaf::Variant(head.ptr(), index)),
+        None => {
+            let named = baml_type::HeadDisplay::head_display_name(&head);
+            Err(format!("unknown variant `{name}` for enum `{named}`"))
+        }
+    }
+}
+
+/// The entries of the JSON object `json`, the value the walk is on: a
+/// string-keyed map and nothing else — `expected` names what was wanted when it is not an object.
 fn json_object_entries(
     vm: &mut BexVm,
     json: Value,
     expected: impl FnOnce() -> String,
-    path: &str,
+    open: &[Container],
 ) -> Result<Vec<(bex_vm_types::BexStr, Value)>, VmRustFnError> {
     let entries = match json.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
         Some(Object::Map(map)) => string_map_entries(vm, map).map_err(str::to_owned),
         Some(_) | None => Err(expected()),
     };
-    entries.map_err(|message| raise_decode(vm, message, path))
+    entries.map_err(|message| raise_decode_at(vm, message, open))
 }
 
 /// The class at `head` (instantiated with `type_args`), opened over the JSON
@@ -2477,14 +3100,14 @@ fn open_class(
     json: Value,
     head: bex_vm_types::TypeHead,
     type_args: &[RealizedTy],
-    path: &str,
+    open: &[Container],
 ) -> Result<Container, VmRustFnError> {
     let named = baml_type::HeadDisplay::head_display_name(&head);
     let object: IndexMap<bex_vm_types::BexStr, Value> = json_object_entries(
         vm,
         json,
         || format!("expected JSON object for class `{named}`"),
-        path,
+        open,
     )?
     .into_iter()
     .collect();
@@ -2494,7 +3117,13 @@ fn open_class(
     let class = head.ptr();
     let class_fields = match vm.get_object(class) {
         Object::Class(class) => class.fields.clone(),
-        _ => return Err(raise_decode(vm, format!("`{named}` is not a class"), path)),
+        _ => {
+            return Err(raise_decode_at(
+                vm,
+                format!("`{named}` is not a class"),
+                open,
+            ));
+        }
     };
     let mut fields: Vec<(Value, RealizedTy)> = Vec::with_capacity(class_fields.len());
     for field in &class_fields {
@@ -2504,10 +3133,10 @@ fn open_class(
             // Optional (`T?` == `T | null`) fields may be absent → null.
             None if field_ty.is_nullable_union() => Value::NULL,
             None => {
-                return Err(raise_decode(
+                return Err(raise_decode_at(
                     vm,
                     format!("missing required field `{}`", field.name),
-                    path,
+                    open,
                 ));
             }
         };
@@ -2527,7 +3156,7 @@ fn open_list(
     vm: &mut BexVm,
     json: Value,
     element: &RealizedTy,
-    path: &str,
+    open: &[Container],
 ) -> Result<Container, VmRustFnError> {
     match json.as_object_ptr().map(|ptr| (ptr, vm.get_object(ptr))) {
         Some((source, Object::Array(array))) => {
@@ -2539,7 +3168,7 @@ fn open_list(
                 element: element.clone(),
             })
         }
-        Some(_) | None => Err(raise_decode(vm, "expected JSON array", path)),
+        Some(_) | None => Err(raise_decode_at(vm, "expected JSON array", open)),
     }
 }
 
@@ -2551,12 +3180,12 @@ fn open_map(
     json: Value,
     key: &RealizedTy,
     value: &RealizedTy,
-    path: &str,
+    open: &[Container],
 ) -> Result<Container, VmRustFnError> {
     if !baml_type::normalize::is_string_key(key.as_ty(), vm) {
-        return Err(raise_decode(vm, STRING_MAP_REQUIRED, path));
+        return Err(raise_decode_at(vm, STRING_MAP_REQUIRED, open));
     }
-    let entries = json_object_entries(vm, json, || "expected JSON object".to_string(), path)?;
+    let entries = json_object_entries(vm, json, || "expected JSON object".to_string(), open)?;
     let source = json
         .as_object_ptr()
         .unwrap_or_else(|| unreachable!("the entries were read from a JSON object"));
@@ -2569,10 +3198,10 @@ fn open_map(
             key.as_ty(),
             vm,
         ) {
-            return Err(raise_decode(
+            return Err(raise_decode_at(
                 vm,
                 "map key does not match declared key type",
-                path,
+                open,
             ));
         }
     }
