@@ -187,6 +187,143 @@ function Depth() -> void {
     baml.io.println(`${first}:${second}`);
 }
 
+function SumIter(it: baml.iter.Iterator<Item = int, Error = never>) -> int {
+    let total = 0;
+    for (let v in it) {
+        total += v;
+    }
+    total
+}
+
+// A plain loop walks the array by index; an iterator that escapes (passed
+// on, adapted, or consumed after the source grew) is the real object. Both
+// observe pushes to the source during iteration.
+function Iterators() -> void {
+    let xs = [1, 2, 3];
+    let plain = 0;
+    for (let v in xs) {
+        plain += v;
+    }
+    let passed = SumIter(xs.iter());
+    let chained = xs.iter().chain([4, 5]).map((v: int) -> int { v * 10 }).collect();
+    let chained_total = 0;
+    for (let v in chained) {
+        chained_total += v;
+    }
+    let late = xs.iter();
+    xs.push(4);
+    let lazy = SumIter(late);
+    let grown = [1, 2];
+    let seen = 0;
+    for (let v in grown) {
+        if (grown.length() < 5) {
+            grown.push(v + 10);
+        }
+        seen += v;
+    }
+    baml.io.println(
+        `${plain}:${passed}:${chained.length()}:${chained_total}:${lazy}:${grown.length()}:${seen}`,
+    );
+}
+
+function TypeName<T>() -> string {
+    reflect.Type.of<T>().to_string()
+}
+
+// A type bound at run time (`let type`) is passed on by generic calls, and
+// sibling bindings reuse one frame slot.
+function BoundTypes() -> void {
+    let type T = int.type();
+    let held = match (21) {
+        let n: T => Identity<T>(n) is int,
+        _ => false,
+    };
+    baml.io.println(`${TypeName<T>()}:${held}`);
+    let first: string = {
+        let type A = string.type();
+        TypeName<A>()
+    };
+    let second: string = {
+        let type B = Point.type();
+        TypeName<B>()
+    };
+    baml.io.println(`${first}:${second}`);
+}
+
+// A class declared at run time is bound as a type, parsed into and tested.
+function RuntimeClass() -> void {
+    let saved = reflect.Class.new("Saved", { "height": int.type(), "name": string.type() });
+    let type Saved = saved;
+    let text = {
+        let parsed = baml.sap.parse<Saved>(`{"height": 180, "name": "Ada"}`);
+        baml.json.to_string(parsed)
+    } catch (e, ctx) {
+        _ => "parse failed"
+    };
+    baml.io.println(text);
+    let again = baml.sap.parse_type(saved.as_type(), `{"height": 1, "name": "b"}`) catch (e, ctx) {
+        _ => null
+    };
+    baml.io.println(`${again is Saved}:${TypeName<Saved>()}`);
+}
+
+// `String.length`, `Range` and the iterator adapters carry `trace.hidden`
+// hooks; their compiled bodies resolve them as bytecode's prologue does.
+function Hidden() -> void {
+    let words = ["a", "bb", "ccc", ""];
+    let total = 0;
+    let i = 0;
+    while (i < words.length()) {
+        total += words[i].length();
+        i += 1;
+    }
+    let ranged = 0;
+    for (let k in baml.iter.Range.new(0, 5)) {
+        ranged += k;
+    }
+    let chained = [1, 2, 3, 4, 5, 6].iter().filter((x: int) -> bool {
+        x % 2 == 0
+    }).map((x: int) -> int {
+        x * 10
+    }).collect();
+    baml.io.println(`${total}:${ranged}:${chained}`);
+}
+
+class HookCounts {
+    hooks: int,
+    bodies: int,
+}
+
+function choose(counts: HookCounts, n: int, settings: trace.Settings) -> trace.Options? throws never {
+    counts.hooks += 1;
+    trace.hidden()
+}
+
+/// baml:$trace=choose
+function chosen(counts: HookCounts, n: int) -> int {
+    counts.bodies += 1;
+    n * 2
+}
+
+function failing_hook(counts: HookCounts, settings: trace.Settings) -> trace.Options? throws never {
+    counts.hooks += 1;
+    baml.sys.panic("hook failure")
+}
+
+/// baml:$trace=failing_hook
+function after_failure(counts: HookCounts) -> int {
+    counts.bodies += 1;
+    7
+}
+
+function Hooked() -> void {
+    let counts = HookCounts { hooks: 0, bodies: 0 };
+    let a = chosen(counts, 21);
+    let b = after_failure(counts);
+    let c = chosen(counts, 4);
+    baml.io.println(`${a}:${b}:${c}:${counts.bodies}`);
+}
+
 function Work(n: int) -> int {
     let total = 0;
     let i = 0;

@@ -19,7 +19,7 @@ use baml_compiler2_mir::{
 use crate::{
     admit::{Positions, ProgramIndex, Rejection},
     analysis::{
-        Analysis, Repr, array_iter_call, array_next_call, loops, reads_frame, realized_expr,
+        Analysis, Repr, array_iter_walk, array_next_call, loops, reads_frame, realized_expr,
         suspends_directly, template_blocker, user_callee,
     },
     render::{coerce, is_atom},
@@ -172,7 +172,8 @@ impl<'db> Generator<'_, 'db> {
             "#[inline]\npub fn {symbol}(vm: &mut BexVm, args: &[Value]) -> R<Value>"
         ));
         self.declare_locals(!self.loop_headers.is_empty());
-        if self.slots > 0 {
+        // The call path leaves the arguments in a hooked body's leading slots.
+        if self.slots > self.slot_base() {
             self.emit_line(&format!("vm.reserve_slots(depth, {});", self.slots));
         }
         if let Some(slot) = self.cause_slot {
@@ -185,6 +186,26 @@ impl<'db> Generator<'_, 'db> {
         self.emit_line("Ok(Value::NULL)");
         self.footer();
         Ok(self.assemble(prologue))
+    }
+
+    /// The first slot the body may write. A hook prologue reads the
+    /// arguments from the frame when it resolves, after the hook call has
+    /// spilled across its suspension, so a hooked body keeps them in their
+    /// leading slots.
+    fn slot_base(&self) -> usize {
+        let hooked = self.body.blocks.iter().any(|block| {
+            block.statements.iter().any(|statement| {
+                matches!(
+                    statement.kind,
+                    StatementKind::Intrinsic {
+                        op: baml_compiler2_mir::IntrinsicOp::ApplyTraceHook
+                            | baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(_),
+                        ..
+                    }
+                )
+            })
+        });
+        if hooked { self.arity() } else { 0 }
     }
 
     fn arity_locals(&self) -> usize {
@@ -351,23 +372,43 @@ impl<'db> Generator<'_, 'db> {
         let mut types = Vec::with_capacity(type_args.len());
         let mut primitive = true;
         for arg in type_args {
-            let local = match arg {
-                Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => local.0,
-                Operand::Constant(_) | Operand::Copy(_) | Operand::Move(_) => {
-                    return unsupported("call with a type argument that is not a type local");
-                }
-            };
-            if let Some(ty) = self.analysis.static_types.get(&local) {
-                primitive &= ty.primitive;
-                types.push(ty.code.clone());
-            } else if let Some(template) = self.analysis.frame_types.get(&local).cloned() {
-                primitive = false;
-                types.push(self.realized(&template)?);
-            } else {
-                return unsupported("call with a type argument known only at runtime");
-            }
+            let (code, static_primitive) = self.type_operand("call", arg)?;
+            primitive &= static_primitive.unwrap_or(false);
+            types.push(code);
         }
         Ok((types, primitive))
+    }
+
+    /// Realize one type operand of `what`; for a static type, whether it is
+    /// primitive. A type local is built from its template where the operand
+    /// is used; any other local holds a `reflect.Type` value, read there.
+    pub(super) fn type_operand(
+        &mut self,
+        what: &str,
+        operand: &Operand<'db>,
+    ) -> Gen<(String, Option<bool>)> {
+        let local = match operand {
+            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => *local,
+            Operand::Constant(_) | Operand::Copy(_) | Operand::Move(_) => {
+                return unsupported(format!("{what} with a type argument that is not a local"));
+            }
+        };
+        if let Some(ty) = self.analysis.static_types.get(&local.0) {
+            return Ok((ty.code.clone(), Some(ty.primitive)));
+        }
+        if let Some(template) = self.analysis.deferred_type(local.0).cloned() {
+            return Ok((self.realized(&template)?, None));
+        }
+        if self.analysis.array_iters.contains_key(&local.0) {
+            return unsupported(format!("{what} with an array iterator as a type argument"));
+        }
+        let value = coerce(&format!("l{}", local.0), self.repr(local), Repr::Value);
+        let name = format!("t{}", self.temps);
+        self.temps += 1;
+        self.pending.push(format!(
+            "let {name}: RealizedTy = vm.type_operand({value})?;"
+        ));
+        Ok((name, None))
     }
 
     fn prepare(&mut self) {
@@ -394,8 +435,9 @@ impl<'db> Generator<'_, 'db> {
         // declarations a hoisted type names, so a pausing body builds each
         // type where it is used.
         self.hoist_types = !binds_types && !self.pauses;
-        self.cause_slot = catches.then_some(0);
-        self.slots = usize::from(catches);
+        let base = self.slot_base();
+        self.cause_slot = catches.then_some(base);
+        self.slots = base + usize::from(catches);
         self.spill_base = self.slots;
         if !self.pauses {
             return;
@@ -792,7 +834,13 @@ impl<'db> Generator<'_, 'db> {
 
     /// Array iteration is inline; other virtual calls can suspend.
     pub(super) fn array_iteration(&self, terminator: &Terminator<'db>) -> bool {
-        array_iter_call(self.body, self.analysis.arity, terminator).is_some()
+        array_iter_walk(
+            self.body,
+            self.analysis.arity,
+            terminator,
+            &self.analysis.array_iters,
+        )
+        .is_some()
             || array_next_call(terminator, &self.analysis.array_iters).is_some()
     }
 

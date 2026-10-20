@@ -8,7 +8,7 @@ use baml_compiler2_mir::{
 use super::{Expr, Gen, Generator, YIELD_EVERY, pc_arg, unsupported};
 use crate::{
     admit::Rejection,
-    analysis::{Repr, array_iter_call, array_next_call},
+    analysis::{Repr, array_iter_walk, array_next_call},
     render::coerce,
     structure::Stmt,
 };
@@ -229,7 +229,40 @@ impl<'db> Generator<'_, 'db> {
                 )?;
                 self.emit_statement(&format!("{code};"));
             }
-            StatementKind::Intrinsic { .. } => return unsupported("compiler intrinsic"),
+            StatementKind::Intrinsic { op, args } => match op {
+                // The declaration's hook prologue resolves the hook the VM's
+                // call path left pending for this frame.
+                IntrinsicOp::BuiltinTraceHook(mode) => {
+                    let mode = match mode {
+                        baml_compiler2_mir::BuiltinTraceHook::Hidden => "Hidden",
+                        baml_compiler2_mir::BuiltinTraceHook::Timing => "Timing",
+                        baml_compiler2_mir::BuiltinTraceHook::Span => "Span",
+                        baml_compiler2_mir::BuiltinTraceHook::Rich => "Rich",
+                        baml_compiler2_mir::BuiltinTraceHook::EmptySpan => "EmptySpan",
+                    };
+                    let code = self.fallible(
+                        id,
+                        &format!(
+                            "vm.builtin_trace_hook(depth, bex_vm::compiled_rt::TraceHookMode::{mode})"
+                        ),
+                    )?;
+                    self.emit_statement(&format!("{code};"));
+                }
+                IntrinsicOp::ApplyTraceHook => {
+                    let [result] = args.as_slice() else {
+                        return Err(Rejection::Invalid(
+                            "`ApplyTraceHook` takes one operand".into(),
+                        ));
+                    };
+                    let result = self.value_operand(id, result)?;
+                    let code =
+                        self.fallible(id, &format!("vm.finish_trace_hook(depth, {result})"))?;
+                    self.emit_statement(&format!("{code};"));
+                }
+                IntrinsicOp::BindType(_) | IntrinsicOp::Log(_) => {
+                    return unsupported("compiler intrinsic");
+                }
+            },
             StatementKind::VirtualFieldStore {
                 iface,
                 receiver,
@@ -356,7 +389,12 @@ impl<'db> Generator<'_, 'db> {
         terminator: &Terminator<'db>,
         destination: &Place,
     ) -> Gen<()> {
-        if let Some((iter, array)) = array_iter_call(self.body, self.analysis.arity, terminator) {
+        if let Some((iter, array)) = array_iter_walk(
+            self.body,
+            self.analysis.arity,
+            terminator,
+            &self.analysis.array_iters,
+        ) {
             let array = coerce(&format!("l{array}"), self.repr(Local(array)), Repr::Value);
             self.emit_statement(&format!("l{iter} = {array}; i{iter} = 0;"));
         } else if let Some(iter) = array_next_call(terminator, &self.analysis.array_iters) {
@@ -392,9 +430,6 @@ impl<'db> Generator<'_, 'db> {
         let block = &self.body.blocks[id.0];
         match block.terminator.as_ref().expect("checked in Analysis") {
             Terminator::Return => {
-                if self.analysis.array_iters.contains_key(&0) {
-                    return unsupported("array iterator used as a value");
-                }
                 // Type locals have no runtime binding.
                 let result = if self.analysis.is_type_local(0) {
                     self.load(id, &Place::Local(Local(0)))?.code

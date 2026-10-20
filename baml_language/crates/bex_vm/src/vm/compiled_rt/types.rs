@@ -92,6 +92,12 @@ impl BexVm {
         self.satisfies_bound(value, bound).map_err(Box::new)
     }
 
+    /// The type a `reflect.Type` value denotes, read where a type argument
+    /// held as a value is used.
+    pub fn type_operand(&mut self, value: Value) -> Result<RealizedTy, Box<VmError>> {
+        Ok(self.type_operand_value(value).map_err(Box::new)?.ty)
+    }
+
     /// Bind a type value to a frame slot for subsequent template substitution.
     pub fn bind_type(&mut self, depth: usize, slot: u32, value: Value) -> Result<(), Box<VmError>> {
         let type_value = self.type_operand_value(value).map_err(Box::new)?;
@@ -143,6 +149,30 @@ impl BexVm {
             unreachable!("compiled code names classes by their class object");
         };
         RealizedTy::Class(TypeHead::new(class, declaration.type_tag), type_args)
+    }
+
+    /// The existential type of the interface `iface` at `type_args`, with
+    /// its associated types bound as `assoc` names them.
+    #[must_use]
+    pub fn interface_type_at(
+        &self,
+        iface: HeapPtr,
+        type_args: Box<[RealizedTy]>,
+        assoc: &[(&str, RealizedTy)],
+    ) -> RealizedTy {
+        let Object::Interface(declaration) = self.get_object(iface) else {
+            unreachable!("compiled code names interfaces by their interface object");
+        };
+        let mut assoc: Vec<(baml_type::Name, RealizedTy)> = assoc
+            .iter()
+            .map(|(name, ty)| (baml_type::Name::from(*name), ty.clone()))
+            .collect();
+        assoc.sort_by(|(left, _), (right, _)| left.cmp(right));
+        RealizedTy::Interface(
+            TypeHead::new(iface, declaration.type_tag),
+            type_args,
+            assoc.into_boxed_slice(),
+        )
     }
 
     /// The type of the enum `enm`'s values.
@@ -289,6 +319,44 @@ mod tests {
         let other = vm.static_type_value(depth, 1, RealizedTy::Int);
         assert_eq!(first.as_object_ptr(), again.as_object_ptr());
         assert_ne!(first.as_object_ptr(), other.as_object_ptr());
+    }
+
+    #[test]
+    fn type_operands_realize_type_values_only() {
+        let mut vm = vm_with_frame(&[]);
+        let depth = vm.frame_depth();
+        let value = vm.type_value(depth, None, RealizedTy::String);
+        assert_eq!(vm.type_operand(value).unwrap(), RealizedTy::String);
+        assert!(vm.type_operand(Value::int(1)).is_err());
+    }
+
+    #[test]
+    fn interface_types_are_built_from_their_declaration() {
+        let program = baml_test_support::compile_source(
+            "interface Named { name: string }\nfunction Main() -> int { 1 }",
+        );
+        let iface = (&program.objects)
+            .into_iter()
+            .position(|object| matches!(object, bex_vm_types::Object::Interface(_)))
+            .expect("the program declares an interface");
+        let vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+        let ptr = vm.heap.compile_time_ptr(iface);
+        let bex_vm_types::Object::Interface(declaration) = vm.get_object(ptr) else {
+            unreachable!()
+        };
+        let tag = declaration.type_tag;
+        let ty = vm.interface_type_at(
+            ptr,
+            Box::new([RealizedTy::Int]),
+            &[("Second", RealizedTy::String), ("First", RealizedTy::Bool)],
+        );
+        let RealizedTy::Interface(head, args, assoc) = ty else {
+            panic!("an interface type: {ty:?}")
+        };
+        assert_eq!(head.tag(), tag);
+        assert_eq!(&*args, &[RealizedTy::Int]);
+        let names: Vec<&str> = assoc.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, ["First", "Second"], "bound in name order");
     }
 
     #[test]

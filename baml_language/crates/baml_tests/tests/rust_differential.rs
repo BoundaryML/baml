@@ -18,6 +18,11 @@ const PROBES: &[&str] = &[
     "Allocation",
     "Logs",
     "Depth",
+    "Iterators",
+    "BoundTypes",
+    "RuntimeClass",
+    "Hidden",
+    "Hooked",
     "Spawns",
 ];
 

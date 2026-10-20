@@ -701,6 +701,104 @@ function has_spec(topic: string) -> bool {
     assert!(!body.contains("vm.call_compiled"), "{body}");
 }
 
+/// A declaration hook compiles as its bytecode prologue: a built-in mode
+/// resolves the hook the VM's call path left pending for the frame; a hook
+/// function gets its settings from the VM, runs on the VM's call path (it
+/// suppresses hooks under it and attributes it to the target's caller), and
+/// its decision is applied before the body. The stdlib's hidden functions
+/// (`String.length`, the iterators) compile, so their callers enter them
+/// directly.
+#[test]
+fn declaration_trace_hooks_compile() {
+    let module = compile(
+        r#"
+/// baml:$trace=trace.hidden
+function hidden(n: int) -> int { n + 1 }
+
+/// baml:$trace=trace.timing
+function timing(n: int) -> int { n + 2 }
+
+/// baml:$trace=trace.span
+function spanned(n: int) -> int { n + 3 }
+
+/// baml:$trace=trace.empty_span
+function empty(n: int) -> int { n + 4 }
+
+function decide(n: int, settings: trace.Settings) -> trace.Options? throws never {
+  trace.hidden()
+}
+
+/// baml:$trace=decide
+function hooked(n: int) -> int { n + 5 }
+
+function plain_hook() -> trace.Options throws never { trace.hidden() }
+
+/// baml:$trace=plain_hook
+function hooked_without_settings(n: int) -> int { n + 6 }
+
+function total(words: string[]) -> int {
+  let total = 0;
+  let i = 0;
+  while (i < words.length()) {
+    total += words[i].length();
+    i += 1;
+  }
+  for (let k in baml.iter.Range.new(0, 3)) { total += k; }
+  total
+}
+"#,
+    );
+    for (name, mode) in [
+        ("user.hidden", "Hidden"),
+        ("user.timing", "Timing"),
+        ("user.spanned", "Span"),
+        ("user.empty", "EmptySpan"),
+    ] {
+        let body = body_of(&module, name);
+        assert!(
+            body.contains(&format!(
+                "vm.builtin_trace_hook(depth, bex_vm::compiled_rt::TraceHookMode::{mode})?"
+            )),
+            "{body}"
+        );
+        assert!(!body.contains("vm.suspend("), "{body}");
+    }
+    for (name, with_settings) in [
+        ("user.hooked", true),
+        ("user.hooked_without_settings", false),
+    ] {
+        let body = body_of(&module, name);
+        assert!(
+            body.contains(&format!("vm.begin_trace_hook(depth, {with_settings})?")),
+            "{body}"
+        );
+        assert!(body.contains("vm.finish_trace_hook(depth, "), "{body}");
+        assert!(body.contains("vm.suspend(Step::Call {"), "{body}");
+        assert!(!body.contains("vm.call_compiled("), "{body}");
+    }
+    let admitted: Vec<&str> = module
+        .functions
+        .iter()
+        .map(|f| f.display.as_str())
+        .collect();
+    for name in [
+        "baml.String.length",
+        "baml.iter.Range.new",
+        "baml.<(baml.iter.Range as baml.iter.Iterator)>.next",
+        "baml.<(baml.iter.Range as baml.iter.Iterable)>.iter",
+    ] {
+        assert!(
+            admitted.contains(&name),
+            "{name} should compile; got {admitted:?}"
+        );
+    }
+    // `String.length` is entered directly; the `Range` dispatch runs in place.
+    let total = body_of(&module, "user.total");
+    assert!(total.contains(".call_compiled("), "{total}");
+    assert!(total.contains(".call_inline("), "{total}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
 /// An array's iterator that the function returns leaves the body, so it is
 /// the `ArrayIterator` the dispatch builds rather than the index walk a
 /// local loop compiles to: a caller's `next` resolves against it.
@@ -724,6 +822,90 @@ function first(xs: int[]) -> int {
         .collect::<String>();
     assert!(body.contains("vm.virtual_target("), "{body}");
     assert!(!body.contains("i0=0;"), "{body}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
+/// A loop that alone consumes an array's iterator walks the array by index:
+/// no `ArrayIterator` is built and no virtual call is dispatched.
+#[test]
+fn a_local_loop_over_an_array_is_an_index_walk() {
+    let module = compile(
+        r#"
+function total(xs: int[]) -> int {
+  let total = 0;
+  for (let v in xs) { total += v; }
+  total
+}
+"#,
+    );
+    let body = body_of(&module, "user.total")
+        .split_whitespace()
+        .collect::<String>();
+    assert!(body.contains("vm.load_array_element("), "{body}");
+    assert!(body.contains("vm.container_len("), "{body}");
+    assert!(!body.contains("vm.virtual_target("), "{body}");
+    assert!(!body.contains("ArrayIterator"), "{body}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
+/// An array's iterator used as a value (passed on, adapted, or consumed
+/// after the source changed) is the `ArrayIterator` the dispatch builds, so
+/// the function compiles with that call dispatched rather than being
+/// rejected. A loop in the same body that alone consumes its own iterator
+/// still walks by index.
+#[test]
+fn an_escaping_array_iterator_is_dispatched() {
+    let module = compile(
+        r#"
+function sum_of(it: baml.iter.Iterator<Item = int, Error = never>) -> int {
+  let total = 0;
+  for (let v in it) { total += v; }
+  total
+}
+
+function passed(xs: int[]) -> int {
+  sum_of(xs.iter())
+}
+
+function chained() -> int[] {
+  [1, 2].iter().chain([3, 4]).collect()
+}
+
+function lazy(xs: int[]) -> int {
+  let it = xs.iter();
+  xs.push(10);
+  sum_of(it)
+}
+
+function mixed(xs: int[]) -> int {
+  let total = 0;
+  for (let v in xs) { total += v; }
+  total + sum_of(xs.iter())
+}
+"#,
+    );
+    for name in ["user.passed", "user.chained", "user.lazy"] {
+        let body = body_of(&module, name)
+            .split_whitespace()
+            .collect::<String>();
+        assert!(body.contains("vm.virtual_target("), "{name}: {body}");
+        assert!(!body.contains("vm.container_len("), "{name}: {body}");
+        assert!(!body.contains("vm.load_array_element("), "{name}: {body}");
+    }
+    let body = body_of(&module, "user.mixed")
+        .split_whitespace()
+        .collect::<String>();
+    assert!(body.contains("vm.virtual_target("), "{body}");
+    assert!(body.contains("vm.container_len("), "{body}");
+    assert!(body.contains("vm.load_array_element("), "{body}");
+    assert!(
+        !module
+            .rejected
+            .iter()
+            .any(|(_, why)| matches!(why, Rejection::Unsupported(r) | Rejection::Invalid(r) if r == "array iterator used as a value")),
+        "{:?}",
+        module.rejected
+    );
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
 
@@ -1259,6 +1441,108 @@ fn a_derived_type_keeps_its_binding_past_a_sibling_rebinding() {
     let built = body.find("vm.type_value(").expect("the type is built");
     let rebound = body.rfind("vm.bind_type(").expect("the slot is rebound");
     assert!(built < rebound, "{body}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
+const RUNTIME_BOUND_ARGUMENTS: &str = r#"
+interface Stamper {
+    function stamp<U>(self, u: U) -> string throws never
+    function emboss<U>(u: U) -> string throws never
+}
+
+class Press {
+    implements Stamper {
+        function stamp<U>(self, u: U) -> string throws never {
+            "stamp " + reflect.Type.of<U>().to_string()
+        }
+        function emboss<U>(u: U) -> string throws never {
+            "emboss " + reflect.Type.of<U>().to_string()
+        }
+    }
+}
+
+function id<T>(x: T) -> T { x }
+
+function bound_call(t: reflect.Type, v: unknown) -> unknown {
+    let type T = t;
+    match (v) {
+        let x: T => id<T>(x),
+        _ => null,
+    }
+}
+
+function bound_dispatch(t: reflect.Type, v: unknown) -> string {
+    let p = Press {};
+    let type U = t;
+    match (v) {
+        let x: U => Stamper.stamp<U>(p, x) + (Press as Stamper).emboss<U>(x),
+        _ => "none",
+    }
+}
+"#;
+
+/// A type bound at run time (`let type T = t`) is read from the frame slot
+/// the binding wrote, at the call that passes it on, after the binding; the
+/// same for an interface dispatch and a virtual function value, which cannot
+/// use the site's receiver-only cache.
+#[test]
+fn runtime_bound_type_arguments_compile() {
+    let module = compile(RUNTIME_BOUND_ARGUMENTS);
+    let compact = |name: &str| {
+        body_of(&module, name)
+            .split_whitespace()
+            .collect::<String>()
+    };
+    let call = compact("user.bound_call");
+    let bound = call
+        .find("vm.bind_type(depth,0,")
+        .expect("the slot is bound");
+    let read = call
+        .rfind("vm.frame_type_arg(depth,0)?")
+        .expect("the type is read from the frame");
+    assert!(bound < read, "{call}");
+    assert!(call.contains("vm.call_compiled_with_types("), "{call}");
+    assert!(!call.contains("vm.type_operand("), "{call}");
+    let dispatch = compact("user.bound_dispatch");
+    assert!(dispatch.contains("vm.bind_type(depth,0,"), "{dispatch}");
+    assert!(
+        dispatch.contains("vm.virtual_target_uncached("),
+        "{dispatch}"
+    );
+    assert!(!dispatch.contains("staticS"), "{dispatch}");
+    assert!(dispatch.contains("vm.make_virtual_function("), "{dispatch}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
+const INTERFACE_ARGUMENTS: &str = r#"
+interface Speaker {
+    function speak(self) -> string throws never
+}
+
+class Tagged<T> {
+    name: string,
+}
+
+function tagged_speaker(text: string) -> string throws baml.errors.ParseError {
+    let parsed: unknown = baml.sap.parse<Tagged<Speaker>>(text);
+    match (parsed) {
+        let tagged: Tagged<Speaker> => tagged.name,
+        _ => "other",
+    }
+}
+"#;
+
+/// An interface type argument is built from the program's interface object,
+/// in a call's type arguments and in an instance test.
+#[test]
+fn interface_type_arguments_compile() {
+    let module = compile(INTERFACE_ARGUMENTS);
+    let body = body_of(&module, "user.tagged_speaker")
+        .split_whitespace()
+        .collect::<String>();
+    assert!(body.contains("vm.interface_type_at("), "{body}");
+    assert!(body.contains("vm.is_instance_of_at("), "{body}");
+    assert!(!body.contains("vm.frame_type_constant("), "{body}");
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
 

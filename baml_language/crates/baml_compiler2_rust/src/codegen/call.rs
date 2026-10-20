@@ -1,8 +1,7 @@
 //! Generates inline calls, suspension requests, and interface dispatch operands.
 
 use baml_compiler2_mir::{
-    BlockId, Constant, Operand, Place, TyTemplateInterface, decl_display_name,
-    function_display_name,
+    BlockId, Constant, Operand, TyTemplateInterface, decl_display_name, function_display_name,
 };
 use bex_vm_types::FunctionKind;
 
@@ -169,24 +168,9 @@ impl<'db> Generator<'_, 'db> {
         let mut types = Vec::with_capacity(operands.len());
         let mut fixed = true;
         for operand in operands {
-            let local = match operand {
-                Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => local.0,
-                _ => {
-                    return unsupported(format!(
-                        "{what} with a type argument that is not a type local"
-                    ));
-                }
-            };
-            if let Some(ty) = self.analysis.static_types.get(&local) {
-                types.push(ty.code.clone());
-            } else if let Some(template) = self.analysis.frame_types.get(&local).cloned() {
-                fixed = false;
-                types.push(self.realized(&template)?);
-            } else {
-                return unsupported(format!(
-                    "{what} with a type argument that is not a type local"
-                ));
-            }
+            let (code, primitive) = self.type_operand(what, operand)?;
+            fixed &= primitive.is_some();
+            types.push(code);
         }
         Ok((types, fixed))
     }

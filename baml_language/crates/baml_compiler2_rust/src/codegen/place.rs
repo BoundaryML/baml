@@ -19,7 +19,7 @@ impl<'db> Generator<'_, 'db> {
         match place {
             Place::Local(local) => {
                 // Frame-derived types are rebuilt per read; static types are cached per site.
-                if let Some(template) = self.analysis.frame_types.get(&local.0).cloned() {
+                if let Some(template) = self.analysis.deferred_type(local.0).cloned() {
                     let slot = match template {
                         baml_type::TyTemplate::TypeArgRef(slot) => format!("Some({slot})"),
                         _ => "None".to_string(),
@@ -44,8 +44,9 @@ impl<'db> Generator<'_, 'db> {
                         Repr::Value,
                     ));
                 }
+                // The analysis keeps only iterators the loop alone consumes.
                 if self.analysis.array_iters.contains_key(&local.0) {
-                    return unsupported("array iterator used as a value");
+                    return Err(Rejection::Invalid("array iterator used as a value".into()));
                 }
                 Ok(Expr::new(format!("l{}", local.0), self.repr(*local)))
             }

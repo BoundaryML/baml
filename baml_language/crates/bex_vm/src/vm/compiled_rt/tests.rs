@@ -8,7 +8,7 @@ use bex_vm_types::{FunctionKind, HeapPtr, Object, ObjectIndex, RootHaver, Value}
 
 use crate::{
     errors::VmError,
-    telemetry::{TelemetryPolicies, TelemetryState},
+    telemetry::{InvocationOutcome, SpanRecord, TelemetryPolicies, TelemetryState, TimingRecord},
     vm::{BexVm, Frame, VmExecState},
 };
 
@@ -17,8 +17,6 @@ use crate::{
 #[test]
 fn compiled_body_is_indistinguishable_from_bytecode() {
     use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
-
-    use crate::telemetry::{InvocationOutcome, SpanRecord, TimingRecord};
 
     static CALLS: AtomicUsize = AtomicUsize::new(0);
     static SAME: AtomicU32 = AtomicU32::new(0);
@@ -292,7 +290,9 @@ fn exec_with_compiled_bodies(
         let Object::Function(function) = &mut program.objects[ObjectIndex::from_raw(index)] else {
             unreachable!()
         };
-        function.compiled_body = Some(test_body(*body, 0));
+        // Generated bodies reserve at least their arguments' slots.
+        let slots = u32::try_from(function.arity).unwrap();
+        function.compiled_body = Some(test_body(*body, slots));
     }
     let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
     vm.telemetry = level.map(|level| {
@@ -680,19 +680,95 @@ fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+type NamedPath = (Option<String>, String);
+
+// Resolve run-specific IDs and discard clock readings before comparison.
+fn telemetry_records(vm: &BexVm) -> (Vec<(NamedPath, InvocationOutcome, bool)>, Vec<String>) {
+    use std::fmt::Write as _;
+
+    let telemetry = vm.telemetry.as_ref().unwrap();
+    let mut paths: HashMap<btel_types::CallPathId, NamedPath> = HashMap::new();
+    for event in telemetry.span_records() {
+        if let SpanRecord::CallPathDefined {
+            call_path,
+            visible_caller,
+            callee,
+            ..
+        } = event
+        {
+            let callee = vm.heap.function_metadata(vm.proof(), *callee).unwrap();
+            let caller =
+                visible_caller.map(|id| vm.heap.function_metadata(vm.proof(), id).unwrap().fqn);
+            paths.insert(*call_path, (caller, callee.fqn));
+        }
+    }
+    let timings = telemetry
+        .timing_records()
+        .iter()
+        .filter_map(|event| match event {
+            TimingRecord::FunctionTimingCompletion {
+                call_path,
+                outcome,
+                reentry,
+                ..
+            } => Some((paths[call_path].clone(), *outcome, *reentry)),
+            TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
+        })
+        .collect();
+    let mut ids: HashMap<u64, usize> = HashMap::new();
+    let spans = telemetry
+        .span_records()
+        .iter()
+        .filter(|event| !format!("{event:?}").starts_with("Thread"))
+        .map(|event| {
+            let mut out = String::new();
+            let text = format!("{event:?}");
+            let mut rest = text.as_str();
+            while let Some(open) = rest.find('(') {
+                let (head, tail) = rest.split_at(open + 1);
+                let name = head[..open]
+                    .rsplit(|c: char| !c.is_alphanumeric())
+                    .next()
+                    .unwrap();
+                let close = tail.find(')').unwrap_or(tail.len());
+                let (inner, after) = tail.split_at(close);
+                out.push_str(head);
+                match name {
+                    "TelemetryId" => {
+                        let raw: u64 = inner.parse().unwrap();
+                        let next = ids.len();
+                        let _ = write!(out, "#{}", ids.entry(raw).or_insert(next));
+                    }
+                    "CallPathId" => {
+                        let raw: u32 = inner.parse().unwrap();
+                        let path = paths.iter().find(|(id, _)| id.get() == raw);
+                        match path {
+                            Some((_, (caller, callee))) => {
+                                let _ = write!(out, "{caller:?}->{callee}");
+                            }
+                            None => out.push_str("root"),
+                        }
+                    }
+                    "ClockInstant" | "ClockDuration" => out.push('_'),
+                    _ => out.push_str(inner),
+                }
+                rest = after;
+            }
+            out.push_str(rest);
+            out
+        })
+        .collect();
+    (timings, spans)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn inline_observed_compiled_calls_record_as_the_call_path_does() {
-    use std::{
-        fmt::Write,
-        sync::atomic::{AtomicU32, Ordering},
-    };
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     use btel_settings::mode::AutoTelemetryLevel;
 
-    use crate::{
-        compiled_rt::FORCE_CALL_FUNNEL,
-        telemetry::{InvocationOutcome, SpanRecord, TimingRecord},
-    };
+    use crate::compiled_rt::FORCE_CALL_FUNNEL;
 
     static LEAF: AtomicU32 = AtomicU32::new(0);
     static MID: AtomicU32 = AtomicU32::new(0);
@@ -747,85 +823,6 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
         function Main() -> string { `${Safe(1)}|${Safe(-1)}|${Rec(3)}` }
     "#;
 
-    type NamedPath = (Option<String>, String);
-
-    // Resolve run-specific IDs and discard clock readings before comparison.
-    fn records(vm: &BexVm) -> (Vec<(NamedPath, InvocationOutcome, bool)>, Vec<String>) {
-        let telemetry = vm.telemetry.as_ref().unwrap();
-        let mut paths: HashMap<btel_types::CallPathId, NamedPath> = HashMap::new();
-        for event in telemetry.span_records() {
-            if let SpanRecord::CallPathDefined {
-                call_path,
-                visible_caller,
-                callee,
-                ..
-            } = event
-            {
-                let callee = vm.heap.function_metadata(vm.proof(), *callee).unwrap();
-                let caller =
-                    visible_caller.map(|id| vm.heap.function_metadata(vm.proof(), id).unwrap().fqn);
-                paths.insert(*call_path, (caller, callee.fqn));
-            }
-        }
-        let timings = telemetry
-            .timing_records()
-            .iter()
-            .filter_map(|event| match event {
-                TimingRecord::FunctionTimingCompletion {
-                    call_path,
-                    outcome,
-                    reentry,
-                    ..
-                } => Some((paths[call_path].clone(), *outcome, *reentry)),
-                TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
-            })
-            .collect();
-        let mut ids: HashMap<u64, usize> = HashMap::new();
-        let spans = telemetry
-            .span_records()
-            .iter()
-            .filter(|event| !format!("{event:?}").starts_with("Thread"))
-            .map(|event| {
-                let mut out = String::new();
-                let text = format!("{event:?}");
-                let mut rest = text.as_str();
-                while let Some(open) = rest.find('(') {
-                    let (head, tail) = rest.split_at(open + 1);
-                    let name = head[..open]
-                        .rsplit(|c: char| !c.is_alphanumeric())
-                        .next()
-                        .unwrap();
-                    let close = tail.find(')').unwrap_or(tail.len());
-                    let (inner, after) = tail.split_at(close);
-                    out.push_str(head);
-                    match name {
-                        "TelemetryId" => {
-                            let raw: u64 = inner.parse().unwrap();
-                            let next = ids.len();
-                            let _ = write!(out, "#{}", ids.entry(raw).or_insert(next));
-                        }
-                        "CallPathId" => {
-                            let raw: u32 = inner.parse().unwrap();
-                            let path = paths.iter().find(|(id, _)| id.get() == raw);
-                            match path {
-                                Some((_, (caller, callee))) => {
-                                    let _ = write!(out, "{caller:?}->{callee}");
-                                }
-                                None => out.push_str("root"),
-                            }
-                        }
-                        "ClockInstant" | "ClockDuration" => out.push('_'),
-                        _ => out.push_str(inner),
-                    }
-                    rest = after;
-                }
-                out.push_str(rest);
-                out
-            })
-            .collect();
-        (timings, spans)
-    }
-
     for level in [AutoTelemetryLevel::Medium, AutoTelemetryLevel::High] {
         let mut runs = Vec::new();
         for funnel in [true, false] {
@@ -848,7 +845,7 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
             );
             FORCE_CALL_FUNNEL.with(|force| force.set(false));
             assert_eq!(out, "4|-1|3", "level {level:?}, funnel {funnel}");
-            runs.push(records(&vm));
+            runs.push(telemetry_records(&vm));
         }
         let (funnel, inline) = (&runs[0], &runs[1]);
         assert_eq!(inline.0, funnel.0, "timing records at {level:?}");
@@ -1311,6 +1308,239 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
         };
         assert_eq!(head.ptr(), moved);
     }
+}
+
+/// A compiled body with a declaration hook resolves the hook the call path
+/// left pending as its bytecode prologue does: the built-in modes through
+/// `builtin_trace_hook`, a hook function through `begin_trace_hook`, a call on
+/// the VM's call path, and `finish_trace_hook`. The records match bytecode's
+/// whether the hooked callee is entered from bytecode or from a compiled
+/// caller, and a hook that panics falls back to an ordinary entry.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn compiled_trace_hooks_record_as_bytecode_does() {
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    use btel_settings::mode::AutoTelemetryLevel;
+
+    use crate::compiled_rt::{Step, TraceHookMode};
+
+    static HIDDEN: AtomicU32 = AtomicU32::new(0);
+    static TIMING: AtomicU32 = AtomicU32::new(0);
+    static SPAN: AtomicU32 = AtomicU32::new(0);
+    static EMPTY: AtomicU32 = AtomicU32::new(0);
+    static HOOKED: AtomicU32 = AtomicU32::new(0);
+    static FALLBACK: AtomicU32 = AtomicU32::new(0);
+    static DECIDE: AtomicU32 = AtomicU32::new(0);
+    static BOOM: AtomicU32 = AtomicU32::new(0);
+    fn object(vm: &BexVm, index: &AtomicU32) -> HeapPtr {
+        vm.idx_to_ptr(ObjectIndex::from_raw(index.load(Ordering::Relaxed) as usize))
+    }
+    fn mode(
+        vm: &mut BexVm,
+        n: Value,
+        mode: TraceHookMode,
+        add: i64,
+    ) -> Result<Value, Box<VmError>> {
+        let depth = vm.frame_depth();
+        vm.builtin_trace_hook(depth, mode)?;
+        Ok(Value::int(test_int(n) + add))
+    }
+    fn hidden(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        mode(vm, args[0], TraceHookMode::Hidden, 1)
+    }
+    fn timing(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        mode(vm, args[0], TraceHookMode::Timing, 2)
+    }
+    fn span(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        mode(vm, args[0], TraceHookMode::Span, 3)
+    }
+    fn empty(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        mode(vm, args[0], TraceHookMode::EmptySpan, 4)
+    }
+    // The prologue MIR lowers a declaration hook to: settings =
+    // TraceHookSettings; if settings != null { result = hook(n, settings);
+    // ApplyTraceHook(result) }.
+    fn with_hook(
+        vm: &mut BexVm,
+        n: Value,
+        hook: &AtomicU32,
+        add: i64,
+    ) -> Result<Value, Box<VmError>> {
+        let depth = vm.frame_depth();
+        let settings = vm.begin_trace_hook(depth, true)?;
+        if !settings.is_null() {
+            let callee = object(vm, hook);
+            vm.push_arg(n);
+            vm.push_arg(settings);
+            let result = vm.suspend(Step::Call { callee, argc: 2 })?;
+            vm.finish_trace_hook(depth, result)?;
+        }
+        Ok(Value::int(test_int(n) + add))
+    }
+    fn hooked(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        with_hook(vm, args[0], &DECIDE, 5)
+    }
+    fn fallback(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        with_hook(vm, args[0], &BOOM, 6)
+    }
+    fn mid(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        let n = args[0];
+        let mut total = 0;
+        for (index, body) in [
+            (&HIDDEN, hidden as crate::compiled_rt::CompiledFn),
+            (&TIMING, timing),
+            (&SPAN, span),
+            (&EMPTY, empty),
+            (&HOOKED, hooked),
+            (&FALLBACK, fallback),
+        ] {
+            let callee = object(vm, index);
+            total += test_int(vm.call_compiled(callee, body, &[n], 0)?);
+        }
+        Ok(Value::int(total))
+    }
+    const SOURCE: &str = r#"
+        /// baml:$trace=trace.hidden
+        function Hidden(n: int) -> int { n + 1 }
+        /// baml:$trace=trace.timing
+        function Timing(n: int) -> int { n + 2 }
+        /// baml:$trace=trace.span
+        function Span(n: int) -> int { n + 3 }
+        /// baml:$trace=trace.empty_span
+        function Empty(n: int) -> int { n + 4 }
+        function Decide(n: int, settings: trace.Settings) -> trace.Options? throws never {
+            trace.span(inputs = true).context(metadata = { "decided": "yes" })
+        }
+        /// baml:$trace=Decide
+        function Hooked(n: int) -> int { n + 5 }
+        function Boom(n: int, settings: trace.Settings) -> trace.Options? throws never {
+            baml.sys.panic("hook failure")
+        }
+        /// baml:$trace=Boom
+        function Fallback(n: int) -> int { n + 6 }
+        function Mid(n: int) -> int {
+            Hidden(n) + Timing(n) + Span(n) + Empty(n) + Hooked(n) + Fallback(n)
+        }
+        function Main() -> string {
+            `${Mid(1)}|${Hidden(2)}|${Timing(2)}|${Span(2)}|${Empty(2)}|${Hooked(2)}|${Fallback(2)}`
+        }
+    "#;
+    const BODIES: &[(&str, crate::compiled_rt::CompiledFn)] = &[
+        ("user.Hidden", hidden),
+        ("user.Timing", timing),
+        ("user.Span", span),
+        ("user.Empty", empty),
+        ("user.Hooked", hooked),
+        ("user.Fallback", fallback),
+        ("user.Mid", mid),
+    ];
+    const OBJECTS: &[(&str, &AtomicU32)] = &[
+        ("user.Hidden", &HIDDEN),
+        ("user.Timing", &TIMING),
+        ("user.Span", &SPAN),
+        ("user.Empty", &EMPTY),
+        ("user.Hooked", &HOOKED),
+        ("user.Fallback", &FALLBACK),
+        ("user.Decide", &DECIDE),
+        ("user.Boom", &BOOM),
+    ];
+    const EXPECTED: &str = "27|3|4|5|6|7|8";
+
+    for level in [
+        None,
+        Some(AutoTelemetryLevel::Medium),
+        Some(AutoTelemetryLevel::High),
+    ] {
+        let (out, bytecode) = exec_with_compiled_bodies(SOURCE, &[], OBJECTS, level);
+        assert_eq!(out, EXPECTED, "bytecode at {level:?}");
+        let (out, compiled) = exec_with_compiled_bodies(SOURCE, BODIES, OBJECTS, level);
+        assert_eq!(out, EXPECTED, "compiled at {level:?}");
+        assert!(bytecode.pending_trace_hooks.is_empty());
+        assert!(compiled.pending_trace_hooks.is_empty());
+        if level.is_none() {
+            continue;
+        }
+        let bytecode = telemetry_records(&bytecode);
+        let compiled = telemetry_records(&compiled);
+        assert_eq!(compiled.0, bytecode.0, "timing records at {level:?}");
+        // The hand-written `mid` passes no call instruction (PC 0); generated
+        // bodies pass theirs (see `a_compiled_call_passes_its_call_instruction`).
+        let without_mid_pcs = |spans: &[String]| -> Vec<String> {
+            spans
+                .iter()
+                .map(|span| {
+                    if !span.contains("Some(\"user.Mid\")->") {
+                        return span.clone();
+                    }
+                    let Some(at) = span.find("caller_pc: ") else {
+                        return span.clone();
+                    };
+                    let digits = span[at + 11..]
+                        .find(|c: char| !c.is_ascii_digit())
+                        .unwrap_or(span.len() - at - 11);
+                    format!("{}caller_pc: _{}", &span[..at], &span[at + 11 + digits..])
+                })
+                .collect()
+        };
+        assert_eq!(
+            without_mid_pcs(&compiled.1),
+            without_mid_pcs(&bytecode.1),
+            "span records at {level:?}"
+        );
+        // The modes took effect: hidden and timing callees complete no span,
+        // spans and the hook's decision do, and both hooks ran.
+        let spans = |pattern: &str| {
+            compiled
+                .1
+                .iter()
+                .filter(|span| span.starts_with("FunctionSpanCompletion") && span.contains(pattern))
+                .count()
+        };
+        assert_eq!(spans("->user.Hidden"), 0, "{:#?}", compiled.1);
+        assert_eq!(spans("->user.Timing"), 0, "{:#?}", compiled.1);
+        assert_eq!(spans("->user.Span"), 2, "{:#?}", compiled.1);
+        assert_eq!(spans("->user.Hooked"), 2, "{:#?}", compiled.1);
+        for callee in ["->user.Decide)", "->user.Boom)", "->user.Fallback)"] {
+            assert!(
+                compiled.1.iter().any(|span| span.contains(callee)),
+                "{callee}: {:#?}",
+                compiled.1
+            );
+        }
+    }
+}
+
+/// `Rich` has no source spelling, so its controls are checked against the
+/// opcode arm's directly.
+#[test]
+fn rich_mode_controls_match_the_opcode() {
+    use crate::compiled_rt::TraceHookMode;
+
+    let config = TraceHookMode::Rich.config();
+    assert_eq!(config.mode, Some(btel_types::InvocationMode::Span));
+    assert_eq!(
+        (config.inputs, config.output, config.error),
+        (Some(true), Some(true), Some(true))
+    );
+    let config = TraceHookMode::Span.config();
+    assert_eq!(
+        (config.inputs, config.output, config.error),
+        (None, Some(true), Some(true))
+    );
+    let config = TraceHookMode::EmptySpan.config();
+    assert_eq!(
+        (config.inputs, config.output, config.error),
+        (Some(false), Some(false), Some(false))
+    );
+    let config = TraceHookMode::Hidden.config();
+    assert_eq!(config.mode, Some(btel_types::InvocationMode::Hidden));
+    assert_eq!(
+        (config.inputs, config.output, config.error),
+        (None, None, None)
+    );
+    let config = TraceHookMode::Timing.config();
+    assert_eq!(config.mode, Some(btel_types::InvocationMode::Timing));
 }
 
 #[cfg(not(target_arch = "wasm32"))]

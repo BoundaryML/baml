@@ -71,6 +71,10 @@ pub(crate) struct Analysis {
     pub(crate) static_types: HashMap<usize, StaticTy>,
     /// Deferred type locals; empty when the body can rebind frame types.
     pub(crate) frame_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
+    /// Type locals of a body that binds frame types: read from the frame
+    /// where they are used, which their load's own block reaches with no
+    /// binding in between. Empty unless the body binds types.
+    pub(crate) runtime_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
     /// Direct suspension; admission propagates it through user calls.
     pub(crate) suspends: bool,
     /// Iterator local to array local for iteration compiled as an index walk.
@@ -95,6 +99,7 @@ impl Analysis {
         let TypeLocals {
             static_types,
             frame_types,
+            runtime_types,
         } = type_locals(index, body);
         let array_iters = array_iterators(body, mir.arity);
         let BodyFlow {
@@ -112,6 +117,7 @@ impl Analysis {
             user_callees,
             static_types,
             frame_types,
+            runtime_types,
             suspends,
             array_iters,
             loops,
@@ -125,7 +131,16 @@ impl Analysis {
 
     /// Type locals have no runtime `Value` binding.
     pub(crate) fn is_type_local(&self, i: usize) -> bool {
-        self.static_types.contains_key(&i) || self.frame_types.contains_key(&i)
+        self.static_types.contains_key(&i)
+            || self.frame_types.contains_key(&i)
+            || self.runtime_types.contains_key(&i)
+    }
+
+    /// The template of a type local read from the frame at its use.
+    pub(crate) fn deferred_type(&self, i: usize) -> Option<&baml_compiler2_mir::TyTemplate> {
+        self.frame_types
+            .get(&i)
+            .or_else(|| self.runtime_types.get(&i))
     }
 }
 
@@ -143,16 +158,20 @@ fn slot_reprs(body: &MirFunctionBody<'_>, values: &[Repr]) -> Vec<Repr> {
         .collect()
 }
 
+#[allow(clippy::struct_field_names)]
 struct TypeLocals {
     static_types: HashMap<usize, StaticTy>,
     frame_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
+    runtime_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
 }
 
 fn type_locals(index: &ProgramIndex, body: &MirFunctionBody<'_>) -> TypeLocals {
     let mut static_types = HashMap::new();
     let mut frame_types = HashMap::new();
-    for block in &body.blocks {
-        for statement in &block.statements {
+    // Where each frame-derived type is loaded, as (block, statement).
+    let mut loads: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+    for (b, block) in body.blocks.iter().enumerate() {
+        for (s, statement) in block.statements.iter().enumerate() {
             let StatementKind::Assign { destination, value } = &statement.kind else {
                 continue;
             };
@@ -165,6 +184,7 @@ fn type_locals(index: &ProgramIndex, body: &MirFunctionBody<'_>) -> TypeLocals {
                     static_types.insert(local.0, StaticTy { code, primitive });
                 } else {
                     frame_types.insert(local.0, template.clone());
+                    loads.entry(local.0).or_default().push((b, s));
                 }
             }
         }
@@ -197,7 +217,9 @@ fn type_locals(index: &ProgramIndex, body: &MirFunctionBody<'_>) -> TypeLocals {
     }
     static_types.retain(|local, _| !written.contains(local));
     frame_types.retain(|local, _| !written.contains(local));
-    // Frame types can change between a LoadType and its use.
+    // Frame types can change between a LoadType and its use. A type the
+    // body binds is read from the frame at the use instead, which is the
+    // load's own reading only while no binding comes between the two.
     let binds_types = body.blocks.iter().any(|block| {
         block.statements.iter().any(|statement| {
             matches!(
@@ -209,16 +231,83 @@ fn type_locals(index: &ProgramIndex, body: &MirFunctionBody<'_>) -> TypeLocals {
             )
         })
     });
+    let mut runtime_types = HashMap::new();
     if binds_types {
-        frame_types.clear();
+        for (local, template) in std::mem::take(&mut frame_types) {
+            if let [(block, statement)] = loads[&local].as_slice()
+                && read_only_after_load(body, local, *block, *statement)
+            {
+                runtime_types.insert(local, template);
+            }
+        }
     }
 
     TypeLocals {
         static_types,
         frame_types,
+        runtime_types,
     }
 }
 
+/// Whether every read of `local` follows its load at (`block`, `statement`)
+/// in that block, with no type binding between the load and the read.
+fn read_only_after_load(
+    body: &MirFunctionBody<'_>,
+    local: usize,
+    block: usize,
+    statement: usize,
+) -> bool {
+    for (b, candidate) in body.blocks.iter().enumerate() {
+        let mut bound = false;
+        for (s, kind) in candidate.statements.iter().enumerate() {
+            let after_load = b == block && s > statement;
+            let reads = match &kind.kind {
+                StatementKind::Assign { value, .. } => {
+                    let mut reads = false;
+                    baml_compiler2_mir::memory::walk_rvalue_places(value, &mut |place| {
+                        reads |= place_mentions(place, local);
+                    });
+                    reads
+                }
+                StatementKind::Intrinsic { op, args } => {
+                    if matches!(op, IntrinsicOp::BindType(_)) && after_load {
+                        bound = true;
+                    }
+                    args.iter().any(|arg| operand_mentions(arg, local))
+                }
+                StatementKind::VirtualFieldStore {
+                    receiver, value, ..
+                } => operand_mentions(receiver, local) || operand_mentions(value, local),
+                StatementKind::FreshCell { local: cell, .. } => {
+                    if cell.0 == local {
+                        return false;
+                    }
+                    false
+                }
+                StatementKind::Drop(_) | StatementKind::Nop => false,
+            };
+            if reads && (!after_load || bound) {
+                return false;
+            }
+        }
+        if candidate
+            .terminator
+            .as_ref()
+            .is_some_and(|terminator| terminator_mentions(terminator, local))
+            && (b != block || bound)
+        {
+            return false;
+        }
+    }
+    true
+}
+
+/// Array iterators a loop consumes in place, as iterator local to array
+/// local. The index walk stands in for the `ArrayIterator` only while the
+/// iterator local is nothing but the loop's `next` receiver: one that
+/// escapes (passed on, adapted, copied, captured, stored, reassigned) is the
+/// real object the dispatch builds, and its `iter` and `next` calls go
+/// through the VM like any other virtual call.
 fn array_iterators(body: &MirFunctionBody<'_>, arity: usize) -> BTreeMap<usize, usize> {
     let mut array_iters = BTreeMap::new();
     for block in &body.blocks {
@@ -228,8 +317,158 @@ fn array_iterators(body: &MirFunctionBody<'_>, arity: usize) -> BTreeMap<usize, 
             array_iters.insert(iter, array);
         }
     }
-
     array_iters
+        .retain(|&iter, _| !body.locals[iter].is_captured && !iter_escapes(body, arity, iter));
+    array_iters
+}
+
+/// Whether `iter` is mentioned anywhere but as the destination of its own
+/// `xs.iter()` call or the receiver of a `next` call.
+fn iter_escapes(body: &MirFunctionBody<'_>, arity: usize, iter: usize) -> bool {
+    body.blocks.iter().any(|block| {
+        block
+            .statements
+            .iter()
+            .any(|statement| statement_mentions(&statement.kind, iter))
+            || block.terminator.as_ref().is_some_and(|terminator| {
+                array_iter_call(body, arity, terminator).is_none_or(|(dest, _)| dest != iter)
+                    && array_next_shape(terminator) != Some(iter)
+                    && terminator_mentions(terminator, iter)
+            })
+    })
+}
+
+fn place_mentions(place: &Place, local: usize) -> bool {
+    match place {
+        Place::Local(l) => l.0 == local,
+        Place::Field { base, .. } => place_mentions(base, local),
+        Place::Index { base, index, .. } => index.0 == local || place_mentions(base, local),
+        Place::Capture(_) => false,
+        Place::Deref(cell) => cell.local().is_some_and(|l| l.0 == local),
+    }
+}
+
+fn operand_mentions(operand: &Operand<'_>, local: usize) -> bool {
+    match operand {
+        Operand::Copy(place) | Operand::Move(place) => place_mentions(place, local),
+        Operand::Constant(_) => false,
+    }
+}
+
+fn statement_mentions(statement: &StatementKind<'_>, local: usize) -> bool {
+    let operands = |operands: &[Operand<'_>]| operands.iter().any(|o| operand_mentions(o, local));
+    match statement {
+        StatementKind::Assign { destination, value } => {
+            place_mentions(destination, local)
+                || match value {
+                    Rvalue::Use(operand)
+                    | Rvalue::UnaryOp { operand, .. }
+                    | Rvalue::IsType { operand, .. }
+                    | Rvalue::IsTypeTag { operand, .. }
+                    | Rvalue::SatisfiesBound { ty: operand, .. }
+                    | Rvalue::MakeBoundMethod {
+                        receiver: operand, ..
+                    }
+                    | Rvalue::MakeVirtualBoundMethod {
+                        receiver: operand, ..
+                    }
+                    | Rvalue::VirtualFieldAccess {
+                        receiver: operand, ..
+                    }
+                    | Rvalue::MakeGenericFunctionFromValue { value: operand, .. } => {
+                        operand_mentions(operand, local)
+                    }
+                    Rvalue::BinaryOp { left, right, .. } => {
+                        operand_mentions(left, local) || operand_mentions(right, local)
+                    }
+                    Rvalue::Array(_, elements)
+                    | Rvalue::Aggregate {
+                        fields: elements, ..
+                    }
+                    | Rvalue::MakeClosure {
+                        captures: elements, ..
+                    }
+                    | Rvalue::MakeVirtualFunction {
+                        type_args: elements,
+                        ..
+                    } => operands(elements),
+                    Rvalue::Map(_, _, entries) => entries
+                        .iter()
+                        .any(|(k, v)| operand_mentions(k, local) || operand_mentions(v, local)),
+                    Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
+                        place_mentions(place, local)
+                    }
+                    Rvalue::TraceHookSettings { .. }
+                    | Rvalue::Uint8Array(_)
+                    | Rvalue::MakeGenericFunction { .. }
+                    | Rvalue::LoadType(_)
+                    | Rvalue::CurrentPackage => false,
+                }
+        }
+        // A drop ends the local without using its value.
+        StatementKind::Drop(_) | StatementKind::Nop => false,
+        StatementKind::FreshCell { local: l, .. } => l.0 == local,
+        StatementKind::Intrinsic { args, .. } => operands(args),
+        StatementKind::VirtualFieldStore {
+            receiver, value, ..
+        } => operand_mentions(receiver, local) || operand_mentions(value, local),
+    }
+}
+
+fn terminator_mentions(terminator: &Terminator<'_>, local: usize) -> bool {
+    let operands = |operands: &[Operand<'_>]| operands.iter().any(|o| operand_mentions(o, local));
+    match terminator {
+        Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => false,
+        Terminator::Branch { condition, .. } => operand_mentions(condition, local),
+        Terminator::NarrowBind {
+            source,
+            destination,
+            ..
+        } => operand_mentions(source, local) || destination.0 == local,
+        Terminator::Switch { discriminant, .. } => operand_mentions(discriminant, local),
+        Terminator::Call {
+            callee,
+            args,
+            destination,
+            ..
+        } => {
+            operand_mentions(callee, local) || operands(args) || place_mentions(destination, local)
+        }
+        Terminator::VirtualCall {
+            args, destination, ..
+        } => operands(args) || place_mentions(destination, local),
+        Terminator::SysOp {
+            callee,
+            args,
+            destination,
+            ..
+        } => {
+            operand_mentions(callee, local) || operands(args) || place_mentions(destination, local)
+        }
+        Terminator::Spawn { plan, future, .. } => {
+            operand_mentions(plan, local) || place_mentions(future, local)
+        }
+        Terminator::Await {
+            future,
+            destination,
+            ..
+        } => place_mentions(future, local) || place_mentions(destination, local),
+        Terminator::AwaitAny {
+            futures,
+            destination,
+            ..
+        } => operand_mentions(futures, local) || place_mentions(destination, local),
+        Terminator::Throw { value } => operand_mentions(value, local),
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
+            operand_mentions(value, local) || operand_mentions(context, local)
+        }
+        Terminator::ShortCircuit {
+            operand,
+            destination,
+            ..
+        } => operand_mentions(operand, local) || place_mentions(destination, local),
+    }
 }
 
 struct BodyFlow {
@@ -257,7 +496,7 @@ fn body_flow<'db>(
                 block.id
             )));
         };
-        let array_iteration = array_iter_call(body, arity, terminator).is_some()
+        let array_iteration = array_iter_walk(body, arity, terminator, array_iters).is_some()
             || array_next_call(terminator, array_iters).is_some();
         flows.push(flow_of(terminator));
         unwinds.push(block.unwind.map(|b| b.0));
@@ -401,11 +640,19 @@ pub(crate) fn array_iter_call(
     .then_some((iter.0, array.0))
 }
 
-/// `it.next()` on an array iterator, as the iterator local.
-pub(crate) fn array_next_call(
+/// An `xs.iter()` call compiled as an index walk: [`array_iter_call`] on an
+/// iterator in `array_iters`.
+pub(crate) fn array_iter_walk(
+    body: &MirFunctionBody<'_>,
+    arity: usize,
     terminator: &Terminator<'_>,
     array_iters: &BTreeMap<usize, usize>,
-) -> Option<usize> {
+) -> Option<(usize, usize)> {
+    array_iter_call(body, arity, terminator).filter(|(iter, _)| array_iters.contains_key(iter))
+}
+
+/// `it.next()` on a local, as that local.
+fn array_next_shape(terminator: &Terminator<'_>) -> Option<usize> {
     let Terminator::VirtualCall {
         has_trace: false,
         method,
@@ -421,7 +668,16 @@ pub(crate) fn array_next_call(
     else {
         return None;
     };
-    (method == "next" && array_iters.contains_key(&iter.0)).then_some(iter.0)
+    (method == "next").then_some(iter.0)
+}
+
+/// `it.next()` on an array iterator compiled as an index walk, as the
+/// iterator local.
+pub(crate) fn array_next_call(
+    terminator: &Terminator<'_>,
+    array_iters: &BTreeMap<usize, usize>,
+) -> Option<usize> {
+    array_next_shape(terminator).filter(|iter| array_iters.contains_key(iter))
 }
 
 fn flow_of(terminator: &Terminator<'_>) -> Flow {
@@ -481,6 +737,9 @@ pub(crate) fn suspends_directly<'db>(
         Terminator::Call {
             has_trace: true, ..
         } => true,
+        // The VM's call path runs a declaration hook: it suppresses hooks
+        // under it and attributes it to the target's caller.
+        terminator if hook_call(body, terminator) => true,
         Terminator::Call {
             callee,
             args,
@@ -509,6 +768,34 @@ pub(crate) fn suspends_directly<'db>(
         }
         _ => false,
     }
+}
+
+/// Whether `terminator` calls the body's declaration hook: its result is
+/// what `ApplyTraceHook` applies.
+pub(crate) fn hook_call(body: &MirFunctionBody<'_>, terminator: &Terminator<'_>) -> bool {
+    let Terminator::Call {
+        destination: Place::Local(result),
+        ..
+    } = terminator
+    else {
+        return false;
+    };
+    body.blocks
+        .iter()
+        .flat_map(|block| &block.statements)
+        .any(|statement| {
+            matches!(
+                &statement.kind,
+                StatementKind::Intrinsic {
+                    op: IntrinsicOp::ApplyTraceHook,
+                    args,
+                } if args.iter().any(|arg| matches!(
+                    arg,
+                    Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))
+                        if local == result
+                ))
+            )
+        })
 }
 
 pub(crate) fn user_callee<'db>(
@@ -760,6 +1047,18 @@ pub(crate) fn realized_expr(
             let object = index.enum_at(name).ok().flatten()?;
             format!("vm.enum_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
         }
+        TyTemplate::Interface(name, args, assoc) => {
+            let object = index.interface_at(name).ok().flatten()?;
+            let assoc = assoc
+                .iter()
+                .map(|(member, ty)| Some(format!("({:?}, {})", member.as_str(), part(ty)?)))
+                .collect::<Option<Vec<_>>>()?
+                .join(", ");
+            format!(
+                "vm.interface_type_at(vm.idx_to_ptr(ObjectIndex::from_raw({object})), Box::new([{}]), &[{assoc}])",
+                parts(args)?
+            )
+        }
         // The runtime boundary normalizes a literal's freshness to `Regular`.
         TyTemplate::Literal(literal, _) => {
             let literal = match literal {
@@ -806,7 +1105,13 @@ pub(crate) fn template_blocker(
                 }
                 return None;
             }
-            TyTemplate::Interface(..) => "an interface type",
+            TyTemplate::Interface(name, args, assoc) => {
+                if index.interface_at(name).ok().flatten().is_none() {
+                    return Some("an interface not in the program");
+                }
+                return parts(args)
+                    .or_else(|| assoc.iter().find_map(|(_, ty)| blocker_of(index, ty)));
+            }
             TyTemplate::Function { .. } => "a function type",
             TyTemplate::Future(..) => "a future type",
             TyTemplate::AssociatedTypeProjection { .. } => "a projection",
