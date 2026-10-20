@@ -1,9 +1,11 @@
 //! Native handlers for `baml.json` namespace:
-//! `parse`, `stringify`, `stringify_pretty`, `to_json`, `from_string<T>`.
+//! `parse`, `stringify`, `stringify_pretty`, `to_json`, `to_string`,
+//! `from_string<T>`, `from_json<T>`, `deserialize<T>`.
 //!
-//! `from_string<T>` reads its type-arg `T` from `vm.current_call_type_args()`,
-//! populated by the call-instruction handler from the leading `LoadType`
-//! operand. See `BexVm::pending_call_type_args`.
+//! `from_string<T>`, `from_json<T>` and `deserialize<T>` read their type-arg
+//! `T` from `vm.current_call_type_args()`, populated by the call-instruction
+//! handler from the leading `LoadType` operand. See
+//! `BexVm::pending_call_type_args`.
 
 // `path: &mut String` callees need ownership for `truncate` and `write!`.
 // Match arms that throw via the VM error helpers read clearer than
@@ -105,17 +107,44 @@ fn string_map_entries(
 // (no GC can move `pending`/`root` mid-render), unlike a value-kind walk that
 // allocated heap arrays/maps as it descended.
 
-/// Entry point for `baml._to_json_default`. Collects the
-/// override-bearing sub-values (pass 1), dispatches `to_json` on each in order
-/// (pass 2), then renders structurally splicing in the override results (pass 3).
+/// What the override-honoring `to_json` walk materializes its rendered
+/// `serde_json::Value` as once every override has run.
+#[derive(Clone, Copy)]
+enum ToJsonFinish {
+    /// A `json` value on the VM heap (`baml.json.to_json`, `baml.json.from`).
+    Json,
+    /// Compact JSON text (`baml.json.to_string`): the skeleton is serialized
+    /// straight from serde space, never materialized as a `json` value.
+    String,
+}
+
+/// Entry point for `baml._to_json_default` and `baml.json.to_json`. Collects
+/// the override-bearing sub-values (pass 1), dispatches `to_json` on each in
+/// order (pass 2), then renders structurally splicing in the override results
+/// (pass 3).
 pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) -> NativeCallResult {
+    render_to_json_as(vm, value, ToJsonFinish::Json)
+}
+
+/// Entry point for `baml.json.to_string`: the same three passes as
+/// [`render_to_json_honoring_overrides`], finishing as JSON text. Equivalent to
+/// `stringify(to_json(value))` — the `json` tree that composition built and
+/// immediately re-read is what this skips.
+pub(super) fn render_to_json_string_honoring_overrides(
+    vm: &mut BexVm,
+    value: Value,
+) -> NativeCallResult {
+    render_to_json_as(vm, value, ToJsonFinish::String)
+}
+
+fn render_to_json_as(vm: &mut BexVm, value: Value, finish: ToJsonFinish) -> NativeCallResult {
     let mut pending: Vec<HeapPtr> = Vec::new();
     if let Err(e) = collect_to_json_overrides(vm, value, &mut pending) {
         return NativeCallResult::Error(e.into());
     }
 
     let Some(&first_ptr) = pending.first() else {
-        return render_to_json_done(vm, value, &pending, &[]);
+        return render_to_json_done(vm, value, &pending, &[], finish);
     };
     match make_to_json_callee(vm, Value::object(first_ptr)) {
         Err(e) => NativeCallResult::Error(e.into()),
@@ -127,6 +156,7 @@ pub(super) fn render_to_json_honoring_overrides(vm: &mut BexVm, value: Value) ->
                 root: value,
                 pending,
                 results: Vec::new(),
+                finish,
             }),
         },
         // Pass 1 collected `first_ptr` as an override; pass 2 must agree.
@@ -211,18 +241,34 @@ fn is_media_instance(vm: &BexVm, inst: &Instance) -> bool {
 }
 
 /// Pass 3: render `root` structurally to a `serde_json::Value` (splicing the
-/// precomputed override `results` by pre-order position), then materialize the
-/// `json` value with a single `serde_to_value`.
+/// precomputed override `results` by pre-order position), then materialize it
+/// per `finish`: the `json` value with a single `serde_to_value`, or its
+/// compact text with a single `serde_json::to_string`.
+///
+/// The text is byte-identical to `stringify(to_json(root))`: every number the
+/// walk renders — an `int` as its decimal, a finite `float` through
+/// `Number::from_f64`, a non-finite one as `null`, a `bigint` as its decimal —
+/// reads back through `serde_to_value` and `value_to_serde` to the same text,
+/// and strings, arrays and objects (whose keys are distinct) round-trip as
+/// they are.
 fn render_to_json_done(
     vm: &mut BexVm,
     root: Value,
     pending: &[HeapPtr],
     results: &[serde_json::Value],
+    finish: ToJsonFinish,
 ) -> NativeCallResult {
     let mut counter = 0;
     let mut path = String::new();
     match render_to_serde(vm, root, pending, results, &mut counter, &mut path) {
-        Ok(serde) => NativeCallResult::Done(serde_to_value(vm, &serde)),
+        Ok(serde) => NativeCallResult::Done(match finish {
+            ToJsonFinish::Json => serde_to_value(vm, &serde),
+            ToJsonFinish::String => {
+                let text = serde_json::to_string(&serde)
+                    .unwrap_or_else(|e| unreachable!("JSON value failed to stringify: {e}"));
+                Value::object(vm.alloc_string(text))
+            }
+        }),
         Err(e) => NativeCallResult::Error(e),
     }
 }
@@ -396,6 +442,8 @@ struct ToJsonWalkContinuation {
     pending: Vec<HeapPtr>,
     /// Override results so far, as serde values (no heap roots to track).
     results: Vec<serde_json::Value>,
+    /// What the rendered skeleton becomes once every override has run.
+    finish: ToJsonFinish,
 }
 
 impl Continuation for ToJsonWalkContinuation {
@@ -424,7 +472,7 @@ impl Continuation for ToJsonWalkContinuation {
                 ),
             };
         }
-        render_to_json_done(vm, self.root, &self.pending, &self.results)
+        render_to_json_done(vm, self.root, &self.pending, &self.results, self.finish)
     }
 
     fn gc_roots(&self) -> Vec<HeapPtr> {
@@ -498,6 +546,26 @@ impl BamlNamespaceJson for PackageBamlImpl {
         render_to_json_honoring_overrides(vm, *v)
     }
 
+    fn to_string(vm: &mut BexVm, value: &Value) -> NativeCallResult {
+        // `stringify(to_json(value))` without the intermediate `json` tree:
+        // the same override-honoring walk, serialized from its serde skeleton.
+        render_to_json_string_honoring_overrides(vm, *value)
+    }
+
+    fn deserialize(vm: &mut BexVm, s: &bex_str::BexStr) -> NativeCallResult {
+        let ty = match vm.current_call_type_args().first().cloned() {
+            Some(t) => t,
+            None => {
+                return NativeCallResult::Error(VmRustFnError::InternalError(
+                    VmInternalError::MissingNativeFunction {
+                        name: "baml.json.deserialize: missing type argument".to_string(),
+                    },
+                ));
+            }
+        };
+        json_deserialize(vm, s.as_str(), &ty)
+    }
+
     fn from_json(vm: &mut BexVm, j: &Value) -> NativeCallResult {
         // `baml.json.from_json<T>` is now a thin alias for `baml.json.to<T>` (the
         // override-honoring decoder). Kept for back-compat / the `deserialize`
@@ -548,13 +616,179 @@ impl BamlNamespaceJson for PackageBamlImpl {
 ///
 /// On failure, throws a `baml.json.ParseError { message }` instance.
 pub fn json_parse(vm: &mut BexVm, s: &str) -> Result<Value, VmRustFnError> {
+    let parsed = parse_document(vm, s)?;
+    Ok(serde_to_value(vm, &parsed))
+}
+
+/// `s` as one JSON document in serde space: what `parse` reads before it
+/// materializes the `json` value. Throws `ParseError` for a syntax error and
+/// for an integral number outside the bigint limit, so every reader of text
+/// that goes through here (`parse`, `deserialize<T>`) raises the same errors.
+fn parse_document(vm: &mut BexVm, s: &str) -> Result<serde_json::Value, VmRustFnError> {
     let parsed: serde_json::Value = serde_json::from_str(s).map_err(|e| {
         let msg = e.to_string();
         VmRustFnError::thrown_fresh(throw_json_parse_error(vm, msg))
     })?;
     validate_json_bigint_bounds(&parsed)
         .map_err(|message| VmRustFnError::thrown_fresh(throw_json_parse_error(vm, message)))?;
-    Ok(serde_to_value(vm, &parsed))
+    Ok(parsed)
+}
+
+// ─── deserialize<T> (parse + override-honoring decode, fused) ────────────────
+//
+// `baml.json.deserialize<T>(s)` is `from_json<T>(parse(s))`: `parse` builds
+// the whole document as a tree of `json` maps and arrays on the VM heap, and
+// the decoder walks that tree once and discards it. When nothing in `T` can
+// observe the tree — no class, interface or enum reachable from `T` provides
+// a `baml.FromJson` override — the decoder's every leaf is `ty_serde_to_value`
+// over the leaf's serde form, so decoding `T` straight from the parsed serde
+// document is the same walk minus the tree. That is the fused path.
+//
+// Equivalence, case by case, for an override-free `T`:
+// - ParseError: both paths read the text with `parse_document`.
+// - the leaf serde values the decoder sees are `value_to_serde` of what
+//   `serde_to_value` built from the parsed document. That round trip is the
+//   identity except on two number spellings (`-0`, and a float that overflows
+//   `f64`), so a document containing either takes the two-pass path
+//   (`numbers_round_trip`).
+// - containers: the decoder's list, map and class openings check the same
+//   conditions as the structural arms (array/object shape, string keys, key
+//   literal membership, missing required field, absent optional as `null`)
+//   and build the same `Array`/`Map`/`Instance` (same element, key and value
+//   types, same field order, same entry order — `preserve_order` keeps the
+//   object's order and both paths insert in it).
+// - unions: a nullable union strips `null` and decodes the rest; any other
+//   union is decided by the first member that decodes structurally. The
+//   structural arm tries the members in order, so the member chosen and the
+//   value built are the same.
+// - a value the structural pass accepts is therefore one the decoder accepts,
+//   with the same result. Where the structural pass REJECTS, the decoder's
+//   error can differ in message and `path` (a missing field is reported at
+//   the class, `expected JSON array` against `expected array`, a nullable
+//   payload's own error against `no union member matched`), so a rejection
+//   is not reported: the two-pass path runs over the already-parsed document
+//   and raises the decoder's own error.
+//
+// A `T` that reaches an override, and a document whose numbers do not round
+// trip, take the two-pass path from the start.
+
+/// `baml.json.deserialize<T>`: decode the JSON text `s` as `ty`, honoring
+/// `baml.FromJson` at every depth. Throws `ParseError` for text that is not
+/// one JSON document and `DecodeError` where the document does not fit `ty`.
+pub fn json_deserialize(vm: &mut BexVm, s: &str, ty: &RealizedTy) -> NativeCallResult {
+    let parsed = match parse_document(vm, s) {
+        Ok(parsed) => parsed,
+        Err(error) => return NativeCallResult::Error(error),
+    };
+    match reaches_from_json_override(vm, ty) {
+        Ok(false) if numbers_round_trip(&parsed) => {
+            let mut path = String::new();
+            match ty_serde_to_value(vm, &parsed, ty, &mut path) {
+                Ok(value) => return NativeCallResult::Done(value),
+                // A rejection: the decoder reports it, in its own words.
+                Err(VmRustFnError::Thrown { .. }) => {}
+                Err(error) => return NativeCallResult::Error(error),
+            }
+        }
+        Ok(_) => {}
+        Err(error) => return NativeCallResult::Error(error),
+    }
+    let json = serde_to_value(vm, &parsed);
+    json_to_dispatch(vm, json, ty)
+}
+
+/// Whether every number in `parsed` reads back to the same text after
+/// `serde_to_value` then `value_to_serde` — the round trip the two-pass path
+/// puts every leaf through. An integral token is its own canonical decimal
+/// (JSON forbids leading zeros and `+`) except `-0`, which reads as the int
+/// `0`; a token with a fraction or exponent reads as an `f64` and comes back
+/// through `Number::from_f64`, which spells the same `f64` (its text may
+/// differ, but every typed arm reads it as the same number) unless the token
+/// overflowed, when it comes back as `null`.
+fn numbers_round_trip(parsed: &serde_json::Value) -> bool {
+    match parsed {
+        serde_json::Value::Number(number) => {
+            let text = number.as_str();
+            if text.bytes().any(|byte| matches!(byte, b'.' | b'e' | b'E')) {
+                number.as_f64().is_some()
+            } else {
+                text != "-0"
+            }
+        }
+        serde_json::Value::Array(items) => items.iter().all(numbers_round_trip),
+        serde_json::Value::Object(entries) => entries.values().all(numbers_round_trip),
+        serde_json::Value::Null | serde_json::Value::Bool(_) | serde_json::Value::String(_) => true,
+    }
+}
+
+/// The most declarations [`reaches_from_json_override`] visits before it
+/// gives up and answers `true`; a type graph larger than this (a generic
+/// class recursing at ever-new arguments) takes the two-pass path.
+const OVERRIDE_WALK_LIMIT: usize = 64;
+
+/// Whether decoding as `ty` can meet a `baml.FromJson` rule that PROVIDES
+/// `from_json`: the walk the decoder makes, over the types rather than a
+/// value. A class or interface is asked through `provided_from_json`, then
+/// its fields (realized against its type args); an enum is asked; a list,
+/// map or union descends; everything else — primitives, literals, media,
+/// aliases (opaque to the decoder too) — decodes structurally. A resolver
+/// error counts as reachable: the two-pass path raises it.
+fn reaches_from_json_override(vm: &mut BexVm, ty: &RealizedTy) -> Result<bool, VmRustFnError> {
+    let mut visited: Vec<RealizedTy> = Vec::new();
+    reaches_from_json_override_at(vm, ty, &mut visited)
+}
+
+fn reaches_from_json_override_at(
+    vm: &mut BexVm,
+    ty: &RealizedTy,
+    visited: &mut Vec<RealizedTy>,
+) -> Result<bool, VmRustFnError> {
+    match ty {
+        RealizedTy::Union(members) => {
+            for member in members {
+                if reaches_from_json_override_at(vm, member, visited)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+        RealizedTy::List(element) => reaches_from_json_override_at(vm, element, visited),
+        RealizedTy::Map { key, value } => Ok(reaches_from_json_override_at(vm, key, visited)?
+            || reaches_from_json_override_at(vm, value, visited)?),
+        RealizedTy::Class(head, _) | RealizedTy::Interface(head, _, _)
+            if vm.stdlib_heads().media_kind(*head).is_some() =>
+        {
+            Ok(false)
+        }
+        RealizedTy::Class(head, type_args) | RealizedTy::Interface(head, type_args, _) => {
+            if visited.contains(ty) {
+                return Ok(false);
+            }
+            if visited.len() >= OVERRIDE_WALK_LIMIT {
+                return Ok(true);
+            }
+            visited.push(ty.clone());
+            if provided_from_json(vm, *head, ty).is_some() {
+                return Ok(true);
+            }
+            let field_tys: Vec<RealizedTy> = match vm.get_object(head.ptr()) {
+                Object::Class(class) => class
+                    .fields
+                    .iter()
+                    .map(|field| vm.realize_field_ty(&field.field_template, type_args))
+                    .collect(),
+                _ => Vec::new(),
+            };
+            for field_ty in &field_tys {
+                if reaches_from_json_override_at(vm, field_ty, visited)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+        RealizedTy::Enum(head) => Ok(provided_from_json(vm, *head, ty).is_some()),
+        _ => Ok(false),
+    }
 }
 
 // ─── Error throwers ───────────────────────────────────────────────────────────
