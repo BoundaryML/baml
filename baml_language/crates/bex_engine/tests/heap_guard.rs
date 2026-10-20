@@ -16,7 +16,6 @@
 //!   holder and skip dropped ones.
 
 use std::{
-    collections::HashMap,
     future::Future,
     sync::{
         Arc,
@@ -26,7 +25,7 @@ use std::{
 };
 
 use bex_engine::HeapPermitManager;
-use bex_vm_types::{HeapPtr, RootHaver};
+use bex_vm_types::{ForwardingMap, HeapPtr, RootHaver};
 
 /// Minimal `RootHaver` fixture: pretends to hold a single `HeapPtr` root that
 /// can be observed and rewritten via the `RootHaver` trait.
@@ -52,7 +51,7 @@ impl RootHaver for TestHolder {
         self.collect_calls.fetch_add(1, Ordering::Relaxed);
         roots.push(self.root);
     }
-    fn forward_roots(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn forward_roots(&mut self, forwarding: &ForwardingMap) {
         self.forward_calls.fetch_add(1, Ordering::Relaxed);
         if let Some(&new_ptr) = forwarding.get(&self.root) {
             self.root = new_ptr;
@@ -201,7 +200,7 @@ async fn heap_guard_collects_and_forwards_roots_of_live_holders() {
     assert!(roots.contains(&ptr_a), "root from holder 1 missing");
     assert!(roots.contains(&ptr_b), "root from holder 2 missing");
 
-    let mut forwarding = HashMap::new();
+    let mut forwarding = ForwardingMap::default();
     forwarding.insert(ptr_b, ptr_b_new);
     guard.forward_roots(&forwarding);
 
@@ -245,7 +244,7 @@ async fn unit_permit_participates_in_park_as_no_op() {
             "()-backed permit must contribute zero roots"
         );
 
-        let forwarding = HashMap::new();
+        let forwarding = ForwardingMap::default();
         guard.forward_roots(&forwarding); // must be a no-op with no panic
     });
 

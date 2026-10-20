@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use baml_type::MediaKind;
-use bex_vm_types::{RealizedTy, TyTemplate};
+use bex_vm_types::{ForwardingMap, RealizedTy, TyTemplate};
 
 /// The runtime type of an untyped `json` value: the recursive `baml.json.json`
 /// alias (`null | bool | int | bigint | float | string | json[] | map<string, json>`).
@@ -47,8 +47,6 @@ where
     path.truncate(saved_len);
     r
 }
-
-use std::collections::HashMap;
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
@@ -483,7 +481,7 @@ impl Continuation for ToJsonWalkContinuation {
         roots
     }
 
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
         if let Some(ptr) = self.root.as_object_ptr()
             && let Some(&new_ptr) = forwarding.get(&ptr)
         {
@@ -2105,7 +2103,7 @@ impl Container {
     }
 
     /// Repoint everything [`Self::roots`] reported after a collection.
-    fn forward(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn forward(&mut self, forwarding: &ForwardingMap) {
         match self {
             Self::Class { source, .. } | Self::List { source, .. } | Self::Map { source, .. } => {
                 if let Some(moved) = forwarding.get(source) {
@@ -2114,8 +2112,11 @@ impl Container {
             }
         }
         self.values_mut(&mut |value| {
-            if let Some(moved) = value.as_object_ptr().and_then(|ptr| forwarding.get(&ptr)) {
-                *value = Value::object(*moved);
+            if let Some(moved) = value
+                .as_object_ptr()
+                .and_then(|ptr| forwarding.get(&ptr).copied())
+            {
+                *value = Value::object(moved);
             }
         });
         if let Self::Class { class, .. } = self
@@ -2340,7 +2341,7 @@ impl Continuation for Decoder {
         roots
     }
 
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
         for container in &mut self.open {
             container.forward(forwarding);
         }

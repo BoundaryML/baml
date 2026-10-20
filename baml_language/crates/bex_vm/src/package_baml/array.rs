@@ -1,7 +1,7 @@
-use std::{borrow::Cow, cmp::Ordering, collections::HashMap};
+use std::{borrow::Cow, cmp::Ordering};
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{HeapPtr, Object, ObjectType, types::Value};
+use bex_vm_types::{ForwardingMap, HeapPtr, Object, ObjectType, types::Value};
 use num_bigint::BigInt;
 
 use super::{ArrayView, BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl};
@@ -63,7 +63,7 @@ fn collect_value_roots(values: &[Value], roots: &mut Vec<HeapPtr>) {
     }
 }
 
-fn forward_values(values: &mut [Value], forwarding: &HashMap<HeapPtr, HeapPtr>) {
+fn forward_values(values: &mut [Value], forwarding: &ForwardingMap) {
     for v in values {
         if let Some(ptr) = v.as_object_ptr() {
             if let Some(&new) = forwarding.get(&ptr) {
@@ -73,7 +73,7 @@ fn forward_values(values: &mut [Value], forwarding: &HashMap<HeapPtr, HeapPtr>) 
     }
 }
 
-fn forward_ptr(ptr: &mut HeapPtr, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+fn forward_ptr(ptr: &mut HeapPtr, forwarding: &ForwardingMap) {
     if let Some(&new) = forwarding.get(ptr) {
         *ptr = new;
     }
@@ -383,7 +383,7 @@ macro_rules! gc_impl_array {
             $(collect_value_roots(&self.$values, &mut roots);)+
             roots
         }
-        fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
             forward_ptr(&mut self.$f_ptr, forwarding);
             $(forward_values(&mut self.$values, forwarding);)+
         }
@@ -394,7 +394,7 @@ macro_rules! gc_impl_array {
             $(collect_value_roots(&self.$values, &mut roots);)+
             roots
         }
-        fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
             $(forward_values(&mut self.$values, forwarding);)+
         }
     };
@@ -799,7 +799,7 @@ impl Continuation for SortByContinuation {
         roots
     }
 
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
         forward_ptr(&mut self.f_ptr, forwarding);
         forward_values(std::slice::from_mut(&mut self.receiver), forwarding);
         forward_values(&mut self.source, forwarding);

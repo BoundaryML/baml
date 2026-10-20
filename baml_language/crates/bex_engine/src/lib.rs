@@ -1033,7 +1033,7 @@ pub struct BexEngine {
     root_package: HeapPtr,
     /// The class that owns each method, from the classes' own method
     /// tables: what tells a callee's class-generic prefix from its own.
-    method_owners: HashMap<HeapPtr, HeapPtr>,
+    method_owners: rustc_hash::FxHashMap<HeapPtr, HeapPtr>,
     /// Resolved class names for instance allocation (`IndexMap` preserves definition order)
     resolved_class_names: indexmap::IndexMap<String, HeapPtr>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -1861,7 +1861,7 @@ impl BexEngine {
         // without re-resolving it.
         let packages = Arc::new(package_index);
         let root_package = packages.root();
-        let method_owners: HashMap<HeapPtr, HeapPtr> = packages
+        let method_owners: rustc_hash::FxHashMap<HeapPtr, HeapPtr> = packages
             .package_ptrs()
             .flat_map(|package_ptr| {
                 // SAFETY: the package index holds compile-time package objects.

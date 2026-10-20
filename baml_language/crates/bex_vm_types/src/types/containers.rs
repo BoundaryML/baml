@@ -1,6 +1,7 @@
 use std::{cell::UnsafeCell, collections::HashMap};
 
 use indexmap::IndexMap;
+use rustc_hash::FxBuildHasher;
 
 use crate::{AllocDebt, Value, lazy_biased_mutex::LazyBiasedMutex};
 
@@ -365,10 +366,19 @@ pub struct MapEpochChanged;
 
 /// Ordered entries indexed by hashes computed by the VM, never by Rust's
 /// pointer-based `Value` equality or hashing.
+///
+/// Both tables use the Fx multiply hash rather than `SipHash`: an entry id is a
+/// counter and a bucket key is the VM's own 64-bit hash of the key, which
+/// `map_string_hash` and the `Hash` driver compute with a fixed-key `SipHash`.
+/// Anyone able to force collisions against that fixed key already lands every
+/// colliding key in one `Vec<EntryId>` bucket, so a keyed outer hash would
+/// protect nothing; it only cost every map operation a `SipHash` round.
+/// `buckets` is never iterated, so its order is not observable; `entries`
+/// keeps insertion order whatever its hasher.
 #[derive(Clone, Debug, Default)]
 pub struct MapData {
-    entries: IndexMap<EntryId, MapEntry>,
-    buckets: HashMap<u64, Vec<EntryId>>,
+    entries: IndexMap<EntryId, MapEntry, FxBuildHasher>,
+    buckets: HashMap<u64, Vec<EntryId>, FxBuildHasher>,
     next_id: EntryId,
     // Only membership changes invalidate an in-flight key comparison.
     epoch: u64,

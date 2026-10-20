@@ -1,8 +1,8 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, PromptAst, PromptAstSimple,
+    ForwardingMap, HeapPtr, PromptAst, PromptAstSimple,
     types::{Object, Value},
 };
 
@@ -341,7 +341,7 @@ impl Continuation for PromptAssembly {
             .collect()
     }
 
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
         for value in self.parts.iter_mut().chain(&mut self.values) {
             if let Some(ptr) = value.as_object_ptr()
                 && let Some(&new_ptr) = forwarding.get(&ptr)

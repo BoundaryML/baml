@@ -21,9 +21,10 @@ use std::{
     },
 };
 
-use ::bex_vm_types::{Value, errors::StackFrame, types::FutureId};
+use ::bex_vm_types::{ForwardingMap, Value, errors::StackFrame, types::FutureId};
 use bex_external_types::{Handle, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object, WriteBarrier};
+use rustc_hash::FxHashMap;
 
 use crate::{
     HeapDebuggerConfig, HeapDebuggerState, card_table::CardTable, chunked_vec::ChunkedVec,
@@ -176,7 +177,7 @@ pub struct BexHeap {
     ///
     /// Uses `RwLock<HashMap>` instead of sharded_slab to allow in-place
     /// updates after GC moves objects.
-    pub(crate) handles: RwLock<HashMap<usize, HeapPtr>>,
+    pub(crate) handles: RwLock<FxHashMap<usize, HeapPtr>>,
 
     /// The live handle for each held object, so one object has one key.
     ///
@@ -197,7 +198,7 @@ pub struct BexHeap {
     /// for exactly that drop.
     ///
     /// [`HandleInner`]: bex_external_types::HandleInner
-    handles_by_ptr: RwLock<HashMap<HeapPtr, (usize, Weak<bex_external_types::HandleInner>)>>,
+    handles_by_ptr: RwLock<FxHashMap<HeapPtr, (usize, Weak<bex_external_types::HandleInner>)>>,
 
     /// Next handle key to allocate.
     next_handle_key: AtomicUsize,
@@ -229,6 +230,15 @@ pub struct BexHeap {
     /// entirely — programs that define no `cleanup` (the common case) pay no
     /// per-GC scan cost.
     pub(crate) has_finalizable_classes: AtomicBool,
+
+    /// BEP-042: every runtime instance whose class defines `cleanup`, by its
+    /// current address. The TLAB registers one as it allocates it (once
+    /// `has_finalizable_classes` is raised, which happens before any such
+    /// class can have an instance); a collection reads the list to find the
+    /// dead ones, then rewrites it through the forwarding map, dropping what
+    /// was not kept alive. So the per-collection finalizer scan costs the
+    /// number of finalizable instances, not the size of the heap.
+    pub(crate) finalizable_instances: parking_lot::Mutex<Vec<HeapPtr>>,
 
     /// TLAB chunk size for new allocations.
     tlab_size: usize,
@@ -362,12 +372,13 @@ impl BexHeap {
             inactive: UnsafeCell::new(ChunkedVec::new()),
             gen0_next_chunk: AtomicUsize::new(0),
             gen2_cards: UnsafeCell::new(CardTable::new()),
-            handles: RwLock::new(HashMap::new()),
-            handles_by_ptr: RwLock::new(HashMap::new()),
+            handles: RwLock::new(FxHashMap::default()),
+            handles_by_ptr: RwLock::new(FxHashMap::default()),
             next_handle_key: AtomicUsize::new(0),
             pending_finalizers: Mutex::new(Vec::new()),
             pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
             has_finalizable_classes: AtomicBool::new(has_finalizable_classes),
+            finalizable_instances: parking_lot::Mutex::new(Vec::new()),
             tlab_size,
             max_tlab_size: tlab_size,
             gc_policy: crate::gc_policy::AllocationBudget::new(),
@@ -643,6 +654,12 @@ impl BexHeap {
         let start = self.compile_time.as_ptr();
         let end = unsafe { start.add(self.compile_time.len()) };
         raw_ptr >= start && raw_ptr < end
+    }
+
+    /// The addresses the compile-time pool spans: first slot, one past the last.
+    pub(crate) fn compile_time_range(&self) -> std::ops::Range<usize> {
+        let start = self.compile_time.as_ptr() as usize;
+        start..start + self.compile_time.len() * size_of::<Object>()
     }
 
     /// Get a HeapPtr to a compile-time object by index.
@@ -1160,7 +1177,7 @@ impl BexHeap {
     /// relocated or identity-mapped). A missing entry means the caller broke
     /// the contract; we panic rather than silently invalidate and expose the
     /// caller to dangling pointers.
-    pub fn update_handles(&self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+    pub fn update_handles(&self, forwarding: &ForwardingMap) {
         // Validate every handle under a read lock first. A panic while the
         // write guard is held would poison the `RwLock` and then cascade into
         // a double-panic when the panicking `Handle`'s destructor tries to
@@ -1178,7 +1195,7 @@ impl BexHeap {
         // Safe to mutate now; every entry is guaranteed to be in `forwarding`.
         let mut handles = self.handles.write().expect("handles lock poisoned");
         for ptr in handles.values_mut() {
-            *ptr = forwarding[ptr];
+            *ptr = forwarding.forwarded(*ptr);
         }
         // The reverse index is keyed by the pointers that just moved, so it is
         // rebuilt rather than mutated in place. Keys are untouched: a handle's
@@ -1186,7 +1203,7 @@ impl BexHeap {
         let mut by_ptr = self.handles_by_ptr.write().expect("handles lock poisoned");
         *by_ptr = std::mem::take(&mut *by_ptr)
             .into_iter()
-            .map(|(ptr, entry)| (forwarding[&ptr], entry))
+            .map(|(ptr, entry)| (forwarding.forwarded(ptr), entry))
             .collect();
     }
 
@@ -1195,6 +1212,33 @@ impl BexHeap {
     /// from here on scans for finalizable instances.
     pub fn note_finalizable_class(&self) {
         self.has_finalizable_classes.store(true, Ordering::Release);
+    }
+
+    /// Whether a freshly allocated `obj` belongs on the finalizable-instance
+    /// list: it is an instance and its class defines `cleanup`.
+    ///
+    /// Read before the object is written to the heap, so the TLAB can list
+    /// the address it then hands out. The class is read in place, where the
+    /// mutator building the instance already holds it valid. Until some class
+    /// on the heap defines `cleanup` no instance is read at all.
+    #[inline]
+    pub(crate) fn finalizable(&self, obj: &Object) -> bool {
+        let Object::Instance(instance) = obj else {
+            return false;
+        };
+        if !self.has_finalizable_classes.load(Ordering::Acquire) || instance.class.is_null() {
+            return false;
+        }
+        // SAFETY: an instance is built from a class that is on the heap (the
+        // compile-time pool, or allocated by this mutator while it held its
+        // permit) and has not been collected: the mutator holds the class
+        // pointer across the allocation.
+        matches!(unsafe { instance.class.get() }, Object::Class(class) if class.cleanup.is_some())
+    }
+
+    /// Put the instance at `ptr`, just allocated, on the finalizable list.
+    pub(crate) fn list_finalizable(&self, ptr: HeapPtr) {
+        self.finalizable_instances.lock().push(ptr);
     }
 
     /// BEP-042: record an instance and its class's `cleanup` function (both by
