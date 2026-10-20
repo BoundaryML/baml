@@ -62,14 +62,17 @@ extension BamlHandle: BamlLeafEncodable {
         if let portableMedia {
             return BamlMedia.encodePortable(portableMedia)
         }
-        // Clone a fresh key for the wire; the engine drains it while
-        // this instance keeps its own.
-        var wireKey: UInt64 = 0
-        let status = BamlApi.handleClone(key, &wireKey)
-        precondition(
-            status == BAML_CFFI_STATUS_OK.rawValue,
-            "handle_clone failed with status \(status)"
-        )
+        // A host value is the engine's reference to this host's own object:
+        // its key goes as it is. An engine handle clones a fresh key for the
+        // wire; the engine drains it while this instance keeps its own.
+        var wireKey: UInt64 = key
+        if handleType != .hostValueCallable && handleType != .hostValueOpaque {
+            let status = BamlApi.handleClone(key, &wireKey)
+            precondition(
+                status == BAML_CFFI_STATUS_OK.rawValue,
+                "handle_clone failed with status \(status)"
+            )
+        }
         var handle = BamlBridge_Cffi_V1_BamlHandle()
         handle.key = wireKey
         handle.handleType = handleType

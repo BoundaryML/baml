@@ -111,7 +111,7 @@ impl WebHttp {
         map_output(
             self.host.call_registered_callable(
                 operation,
-                self.fetch.as_ref(),
+                &self.fetch,
                 &[request_value],
                 &IndexMap::new(),
             ),
@@ -490,7 +490,7 @@ impl IoNamespaceFs for WebFs {
         map_output(
             self.host.call_registered_callable(
                 SysOp::BamlFsRead,
-                self.read_file_sync.as_ref(),
+                &self.read_file_sync,
                 &[BexExternalValue::String(path.into())],
                 &IndexMap::new(),
             ),

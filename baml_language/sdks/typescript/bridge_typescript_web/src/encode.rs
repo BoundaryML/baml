@@ -24,7 +24,7 @@ use baml_sdkgen_types::ProgramDescriptor;
 use baml_type::{MediaKind, Name, RuntimeTy, TypeName};
 use bridge_cffi::handle_cffi;
 use bridge_ctypes::{
-    HANDLE_TABLE,
+    HANDLE_TABLE, HostKey, TableKey,
     baml_bridge::cffi::{BamlTy, CallFunctionArgs, InboundValue, call_function_args::CallTarget},
 };
 use bridge_encode::{
@@ -46,7 +46,7 @@ thread_local! {
     static ADAPTER: RefCell<Option<Object>> = const { RefCell::new(None) };
     /// The function type each registered host callable was bound to, by its
     /// host-value key. `sys_wasm` owns the callables themselves.
-    static SIGNATURES: RefCell<HashMap<u64, RuntimeTy>> = RefCell::new(HashMap::new());
+    static SIGNATURES: RefCell<HashMap<HostKey, RuntimeTy>> = RefCell::new(HashMap::new());
 }
 
 /// Install the program descriptor a generated SDK embeds in its typemap
@@ -293,7 +293,7 @@ pub(crate) fn error_message(error: &JsValue) -> String {
 }
 
 /// Forget the signature of a released host callable.
-pub(crate) fn forget_signature(key: u64) {
+pub(crate) fn forget_signature(key: HostKey) {
     SIGNATURES.with(|cell| cell.borrow_mut().remove(&key));
 }
 
@@ -314,7 +314,7 @@ fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, Func
             facts.function(name).cloned().unwrap_or_else(untyped),
         ),
         Some(CallTarget::FunctionHandle(key)) => {
-            let entry = HANDLE_TABLE.resolve(*key);
+            let entry = TableKey::new(*key).and_then(|key| HANDLE_TABLE.resolve(key));
             let signature = match entry.as_deref() {
                 Some(bridge_ctypes::CffiHandleTableEntry::Adt(
                     bex_project::BexExternalAdt::TaggedHeapHandle {
@@ -483,7 +483,7 @@ fn leaf_wire(kind: LeafKind, value: InboundValue) -> Result<LeafWire, JsValue> {
 }
 
 impl Host<Js<View<'_>>> for Cx {
-    fn register(&self, callable: &Js<View<'_>>, signature: &RuntimeTy) -> Result<u64, JsValue> {
+    fn register(&self, callable: &Js<View<'_>>, signature: &RuntimeTy) -> Result<HostKey, JsValue> {
         if self.sync {
             return Err(crate::errors::setup_error(
                 crate::errors::INVALID_ARGUMENT,
@@ -495,9 +495,10 @@ impl Host<Js<View<'_>>> for Cx {
         // owns the frame decoding and execution bookkeeping) and answers the
         // key.
         let key = self.adapter_call("dispatchFor", &callable.0.value)?;
-        let key: u64 = key
+        let key = key
             .as_string()
             .and_then(|key| key.parse().ok())
+            .and_then(HostKey::new)
             .ok_or_else(|| JsValue::from_str("dispatchFor did not answer a host-value key"))?;
         SIGNATURES.with(|cell| cell.borrow_mut().insert(key, signature.clone()));
         Ok(key)
@@ -513,11 +514,13 @@ impl Host<Js<View<'_>>> for Cx {
         let value = InboundValue::decode(bytes.as_slice())
             .map_err(|error| JsValue::from_str(&error.to_string()))?;
         let owner = match Reflect::get(&found, &JsValue::from_str("cloned"))?.as_string() {
-            Some(cloned) => {
-                Some(Owner::Handle(cloned.parse().map_err(|_| {
-                    JsValue::from_str("cloned handle key is not a uint64")
-                })?))
-            }
+            Some(cloned) => Some(Owner::Handle(
+                cloned
+                    .parse()
+                    .ok()
+                    .and_then(TableKey::new)
+                    .ok_or_else(|| JsValue::from_str("cloned handle key is not a live key"))?,
+            )),
             None => None,
         };
         Ok((leaf_wire(kind, value)?, owner))
@@ -526,12 +529,12 @@ impl Host<Js<View<'_>>> for Cx {
     fn release(&self, owner: Owner) {
         match owner {
             Owner::Callable(key) => {
-                sys_wasm::release_host_callable(key);
+                sys_wasm::release_host_callable(key.get());
                 forget_signature(key);
             }
             // Best effort: a key the engine never saw has no other owner.
             Owner::Handle(key) => {
-                let _ = handle_cffi::release_handle(key);
+                let _ = handle_cffi::release_handle(key.get());
             }
         }
     }

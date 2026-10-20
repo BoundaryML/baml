@@ -1,5 +1,7 @@
 //! Private host projections injected into the generated invocation facade.
-use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, baml_bridge::cffi::BamlHandleType};
+use bridge_ctypes::{
+    CffiHandleTableEntry, HANDLE_TABLE, TableKey, baml_bridge::cffi::BamlHandleType,
+};
 use napi::{
     bindgen_prelude::{Buffer, External, Function},
     threadsafe_function::ThreadsafeFunctionCallMode,
@@ -34,8 +36,8 @@ pub fn invocation_context(handle: Option<&BamlHandle>) -> napi::Result<Buffer> {
 
 #[napi(js_name = "_isInvocationCancelled")]
 pub fn is_invocation_cancelled(handle: &BamlHandle) -> napi::Result<bool> {
-    let entry = HANDLE_TABLE
-        .resolve(handle.key_u64())
+    let entry = TableKey::new(handle.key_u64())
+        .and_then(|key| HANDLE_TABLE.resolve(key))
         .ok_or_else(|| napi::Error::from_reason("invocation is no longer live"))?;
     let CffiHandleTableEntry::InvocationState(state) = &*entry else {
         return Err(napi::Error::from_reason("expected invocation state"));
@@ -57,8 +59,8 @@ pub fn watch_invocation_cancellation(
     handle: &BamlHandle,
     callback: Function<'_, (), ()>,
 ) -> napi::Result<External<CancellationWatch>> {
-    let entry = HANDLE_TABLE
-        .resolve(handle.key_u64())
+    let entry = TableKey::new(handle.key_u64())
+        .and_then(|key| HANDLE_TABLE.resolve(key))
         .ok_or_else(|| napi::Error::from_reason("invocation is no longer live"))?;
     let CffiHandleTableEntry::InvocationState(state) = &*entry else {
         return Err(napi::Error::from_reason("expected invocation state"));

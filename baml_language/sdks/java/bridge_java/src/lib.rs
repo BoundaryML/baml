@@ -23,7 +23,7 @@ use std::{
 
 use bex_project::{BexExternalAdt, MediaKind, MediaValue};
 use bridge_cffi::handle_cffi::media_kind_from_proto;
-use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE};
+use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, TableKey};
 use jni::{
     JNIEnv, JavaVM,
     objects::{GlobalRef, JByteArray, JClass, JObject, JString, JValue},
@@ -519,7 +519,9 @@ extern "C" fn host_dispatch_trampoline(request: *const u8, length: usize) {
         }
     };
     let cancel_bytes = prost::Message::encode_to_vec(&cancel);
-    let Some(state) = HANDLE_TABLE.clone_handle(wire.effective_state) else {
+    let Some(state) =
+        TableKey::new(wire.effective_state).and_then(|state| HANDLE_TABLE.clone_handle(state))
+    else {
         drop(bridge_ctypes::OwnedHostInvocation(wire));
         complete_host_call_bridge_failure(id);
         return;
@@ -528,7 +530,7 @@ extern "C" fn host_dispatch_trampoline(request: *const u8, length: usize) {
         .lock()
         .unwrap()
         .insert(id, bridge_ctypes::OwnedHostInvocation(wire));
-    if let Err(error) = dispatch_into_java(key, id, &args, state, &cancel_bytes) {
+    if let Err(error) = dispatch_into_java(key, id, &args, state.get(), &cancel_bytes) {
         eprintln!("bridge_java: host dispatch failed: {error}");
         HANDLE_TABLE.release(state);
         complete_host_call_bridge_failure(id);
@@ -697,7 +699,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeTraceSelection<'local>(
     match result {
         Ok(value) => value,
         Err(error) => {
-            if let Some(owner) = owner {
+            if let Some(owner) = owner.and_then(TableKey::new) {
                 HANDLE_TABLE.release(owner);
             }
             throw_runtime_exception(&mut env, &error.to_string());
@@ -795,7 +797,7 @@ fn optional_string_to_jstring<'local>(
 /// Resolve a live media row by key, or `None` when the key does not identify an
 /// `Adt(Media)` entry (invalid key or wrong handle kind).
 fn resolve_media(key: jlong) -> Option<Arc<MediaValue>> {
-    let entry = HANDLE_TABLE.resolve(key as u64)?;
+    let entry = HANDLE_TABLE.resolve(TableKey::new(key as u64)?)?;
     match &*entry {
         CffiHandleTableEntry::Adt(BexExternalAdt::Media(media)) => Some(media.clone()),
         _ => None,
@@ -864,7 +866,9 @@ fn media_from<'local>(
         Err(()) => return 0,
     };
     let media = make(media_kind, &value, mime.as_deref());
-    HANDLE_TABLE.insert(CffiHandleTableEntry::Adt(BexExternalAdt::Media(media))) as jlong
+    HANDLE_TABLE
+        .insert(CffiHandleTableEntry::Adt(BexExternalAdt::Media(media)))
+        .get() as jlong
 }
 
 /// `nativeMediaUrl(long key) -> String` (Java `null` when the media has no URL).
@@ -970,8 +974,8 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeHandleClone(
     _class: JClass<'_>,
     key: jlong,
 ) -> jlong {
-    match HANDLE_TABLE.clone_handle(key as u64) {
-        Some(new_key) => new_key as jlong,
+    match TableKey::new(key as u64).and_then(|key| HANDLE_TABLE.clone_handle(key)) {
+        Some(new_key) => new_key.get() as jlong,
         None => {
             throw_runtime_exception(
                 &mut env,
@@ -993,7 +997,9 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeHandleRelease(
     _class: JClass<'_>,
     key: jlong,
 ) {
-    let _ = HANDLE_TABLE.release(key as u64);
+    if let Some(key) = TableKey::new(key as u64) {
+        HANDLE_TABLE.release(key);
+    }
 }
 
 /// `nativeEnvSet(String name, String value)`. Mutate the **process**

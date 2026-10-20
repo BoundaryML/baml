@@ -33,7 +33,7 @@ pub use bex_external_value::{
     try_convert_rust_data,
 };
 pub use bex_resource_types::{
-    HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch, host_value,
+    HostKey, HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch, host_value,
 };
 pub use bex_str::BexStr;
 pub use bex_vm_types::{

@@ -94,8 +94,9 @@ async fn prepared_handle_call_survives_release_of_its_key() {
         ("arg0", 2),
     ))
     .unwrap();
-    assert!(HANDLE_TABLE.release(handle.key));
-    assert!(HANDLE_TABLE.resolve(handle.key).is_none());
+    let key = bridge_ctypes::TableKey::new(handle.key).expect("a live callable row");
+    assert!(HANDLE_TABLE.release(key));
+    assert!(HANDLE_TABLE.resolve(key).is_none());
 
     let bytes = bridge_cffi::execute_invocation(request).await;
     assert_eq!(ok_value(&bytes), baml_outbound_value::Value::IntValue(42));

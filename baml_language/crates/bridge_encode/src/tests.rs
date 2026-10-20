@@ -13,6 +13,7 @@ use baml_sdkgen_types::{
 };
 use baml_type::{Freshness, FunctionParamMode, Int63, Literal, MediaKind, TypeName};
 use bridge_ctypes::{
+    HostKey, TableKey,
     baml_bridge::cffi::{
         BamlHandle, BamlTyDef, BamlValueMedia, BamlValuePromptAst, baml_ty::Ty as WireTy,
         inbound_value::Value,
@@ -122,10 +123,18 @@ impl HostValue for Mock {
     }
 }
 
+fn host_key(key: u64) -> HostKey {
+    HostKey::new(key).expect("test keys are nonzero")
+}
+
+fn table_key(key: u64) -> TableKey {
+    TableKey::new(key).expect("test keys are nonzero")
+}
+
 /// A host that records every effect and can fail a registration on demand.
 #[derive(Default)]
 struct Recording {
-    registered: RefCell<Vec<(u64, RuntimeTy)>>,
+    registered: RefCell<Vec<(HostKey, RuntimeTy)>>,
     leaves: Cell<usize>,
     released: RefCell<Vec<Owner>>,
     /// Fail the n-th registration (1-based).
@@ -134,12 +143,12 @@ struct Recording {
 }
 
 impl Host<Mock> for Recording {
-    fn register(&self, _callable: &Mock, signature: &RuntimeTy) -> Result<u64, String> {
+    fn register(&self, _callable: &Mock, signature: &RuntimeTy) -> Result<HostKey, String> {
         let nth = self.registered.borrow().len() + 1;
         if self.fail_register_at.get() == Some(nth) {
             return Err("registration failed".to_string());
         }
-        let key = 100 + self.next_key.get();
+        let key = host_key(100 + self.next_key.get());
         self.next_key.set(self.next_key.get() + 1);
         self.registered.borrow_mut().push((key, signature.clone()));
         Ok(key)
@@ -153,7 +162,7 @@ impl Host<Mock> for Recording {
                     key: 9,
                     ..Default::default()
                 }),
-                Some(Owner::Handle(9)),
+                Some(Owner::Handle(table_key(9))),
             ),
             LeafKind::Media(_) => (LeafWire::Media(BamlValueMedia::default()), None),
             LeafKind::Prompt => (LeafWire::Prompt(BamlValuePromptAst::default()), None),
@@ -1308,7 +1317,10 @@ fn a_failed_commit_releases_what_it_created_and_a_dropped_guard_releases_all() {
     assert!(matches!(result, Err(Error::Commit(ref message)) if message == "registration failed"));
     assert_eq!(owners.created(), 1);
     drop(owners);
-    assert_eq!(*f.host.released.borrow(), vec![Owner::Callable(100)]);
+    assert_eq!(
+        *f.host.released.borrow(),
+        vec![Owner::Callable(host_key(100))]
+    );
     // A guard dropped without `keep` releases a shipped encode too: the
     // handle is judged by the engine, so it fits the function slot here.
     f.host.fail_register_at.set(None);
@@ -1325,7 +1337,11 @@ fn a_failed_commit_releases_what_it_created_and_a_dropped_guard_releases_all() {
     drop(owners);
     assert_eq!(
         *f.host.released.borrow(),
-        vec![Owner::Callable(100), Owner::Callable(101), Owner::Handle(9)]
+        vec![
+            Owner::Callable(host_key(100)),
+            Owner::Callable(host_key(101)),
+            Owner::Handle(table_key(9))
+        ]
     );
 }
 

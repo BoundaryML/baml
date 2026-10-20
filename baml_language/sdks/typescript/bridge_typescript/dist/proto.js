@@ -183,9 +183,18 @@ const LEAF_TYPE_VALUE = 6;
 function keyToDecimal(key) {
     return (BigInt.asUintN(32, BigInt(key.high)) << 32n | BigInt.asUintN(32, BigInt(key.low))).toString();
 }
+const HOST_VALUE_HANDLE_TYPES = new Set([
+    baml_bridge.cffi.v1.BamlHandleType.HOST_VALUE_CALLABLE,
+    baml_bridge.cffi.v1.BamlHandleType.HOST_VALUE_OPAQUE,
+]);
 function handleLeaf(handle) {
     const key = handle._cloneKeyForWire();
     const bytes = InboundValue.encode(InboundValue.create({ handle: { key, handleType: handle.handleType } })).finish();
+    // A host value is the engine's reference to the host's own object: its key
+    // goes as it is, nothing was cloned and nothing is owed if the call never
+    // goes out. An engine handle's clone is the bridge's to release.
+    if (HOST_VALUE_HANDLE_TYPES.has(handle.handleType))
+        return { bytes };
     return { bytes, cloned: keyToDecimal(key) };
 }
 /** The engine handle a runtime-owned value wraps, if it wraps one. */

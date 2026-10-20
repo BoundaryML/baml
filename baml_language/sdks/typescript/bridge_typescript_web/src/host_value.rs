@@ -26,6 +26,7 @@ pub fn register_web_host_value_release_callback(callback: js_sys::Function) -> b
         if let Some(key) = js_sys::BigInt::new(&key)
             .ok()
             .and_then(|key| u64::try_from(key).ok())
+            .and_then(bridge_ctypes::HostKey::new)
         {
             crate::encode::forget_signature(key);
         }
@@ -44,7 +45,9 @@ pub fn register_web_host_value_release_callback(callback: js_sys::Function) -> b
 #[wasm_bindgen(js_name = releaseWebHostCallable)]
 pub fn release_web_host_callable(key: u64) {
     sys_wasm::release_host_callable(key);
-    crate::encode::forget_signature(key);
+    if let Some(key) = bridge_ctypes::HostKey::new(key) {
+        crate::encode::forget_signature(key);
+    }
 }
 
 #[wasm_bindgen(js_name = completeWebHostCall)]

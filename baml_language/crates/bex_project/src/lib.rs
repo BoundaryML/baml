@@ -30,7 +30,7 @@ pub use bex_engine::{
     CallbackHostInvocation, HostCallSite, HostDefinition, HostInvocation, capture_callback_inputs,
 };
 pub use bex_external_types::{
-    BexExternalAdt, BexExternalValue, DynWitnessDef, Handle, HostReleaseFn, HostValueArc,
+    BexExternalAdt, BexExternalValue, DynWitnessDef, Handle, HostKey, HostReleaseFn, HostValueArc,
     HostValueKind, MediaKind, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
     PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeTy, TaggedHeapHandleKind,
     TypeDefRef, WeakHeapRef, host_release_dispatch, runtime_ty_structurally_equal,

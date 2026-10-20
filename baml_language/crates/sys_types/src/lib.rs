@@ -1186,7 +1186,7 @@ mod tests {
                 traceback: None,
                 language: None,
                 handle: bex_external_types::HostValueArc::new(
-                    1,
+                    bex_external_types::HostKey::new(1).expect("nonzero"),
                     bex_external_types::HostValueKind::Opaque,
                 ),
             },

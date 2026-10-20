@@ -11,7 +11,10 @@
 use std::borrow::Cow;
 
 use baml_type::{Int63, MediaKind, RuntimeTy, TypeName};
-use bridge_ctypes::baml_bridge::cffi::{BamlHandle, BamlTyDef, BamlValueMedia, BamlValuePromptAst};
+use bridge_ctypes::{
+    HostKey, TableKey,
+    baml_bridge::cffi::{BamlHandle, BamlTyDef, BamlValueMedia, BamlValuePromptAst},
+};
 use num_bigint::BigInt;
 
 use crate::rules::Rules;
@@ -112,10 +115,10 @@ pub enum LeafKind {
 /// it over. Released if the request never reaches the engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Owner {
-    /// A host callable registered under this key.
-    Callable(u64),
-    /// An engine handle cloned under this key.
-    Handle(u64),
+    /// A host callable the host registered under this key.
+    Callable(HostKey),
+    /// An engine reference the host cloned under this key.
+    Handle(TableKey),
 }
 
 /// A leaf as the wire carries it.
@@ -132,7 +135,7 @@ pub enum LeafWire {
 pub trait Host<V: HostValue> {
     /// Register `callable` as a host callable bound to `signature` (always a
     /// `RuntimeTy::Function`) and return its registry key.
-    fn register(&self, callable: &V, signature: &RuntimeTy) -> Result<u64, V::Error>;
+    fn register(&self, callable: &V, signature: &RuntimeTy) -> Result<HostKey, V::Error>;
 
     /// The wire form of a leaf, and the owner created for it if any (a
     /// handle clone).

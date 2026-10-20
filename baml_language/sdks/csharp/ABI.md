@@ -47,6 +47,17 @@ at run time, so a statement spells a non-recursive alias by its body. A host
 states a callback's open effect parameter as `unknown`. A handle's key is
 nonzero: key 0 names no slot and is refused.
 
+A handle's `handle_type` decides which of two reference tables its key names.
+`HOST_VALUE_CALLABLE` and `HOST_VALUE_OPAQUE` keys are the engine's references
+to objects the host registered, numbered by the host; every other key is the
+host's reference to an engine object, numbered by the engine. The two spaces
+may share numbers and are never compared. Each occurrence of an engine key
+transfers one reference, which the engine drains or, on a refusal anywhere in
+the request, releases; a host key is one registration however often it occurs,
+and keeps the kind it first arrived under: a key under two host kinds in one
+request, or under a kind other than the one the engine already holds for it,
+is refused. A host never clones or releases a host key through the handle API.
+
 A `type_definition` in `type_args` declares fresh runtime declarations for the
 call. One named like a declaration the program has is refused: a declaration's
 identity is itself, never its name, and the program's declarations are reached

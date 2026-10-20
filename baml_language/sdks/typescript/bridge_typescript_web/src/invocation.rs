@@ -1,5 +1,7 @@
 //! Private control projections shared with the native SDK adapters.
-use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, baml_bridge::cffi::BamlOutboundValue};
+use bridge_ctypes::{
+    CffiHandleTableEntry, HANDLE_TABLE, TableKey, baml_bridge::cffi::BamlOutboundValue,
+};
 use futures::future::{AbortHandle, Abortable};
 use prost::Message;
 use wasm_bindgen::prelude::*;
@@ -42,8 +44,8 @@ pub fn watch_invocation_cancellation(
     key: u64,
     callback: js_sys::Function,
 ) -> Result<CancellationWatch, JsValue> {
-    let entry = HANDLE_TABLE
-        .resolve(key)
+    let entry = TableKey::new(key)
+        .and_then(|key| HANDLE_TABLE.resolve(key))
         .ok_or_else(|| JsValue::from_str("invocation is no longer live"))?;
     let CffiHandleTableEntry::InvocationState(state) = &*entry else {
         return Err(JsValue::from_str("expected invocation state"));
@@ -65,8 +67,8 @@ pub fn watch_invocation_cancellation(
 
 #[wasm_bindgen(js_name = isInvocationCancelled)]
 pub fn is_invocation_cancelled(key: u64) -> Result<bool, JsValue> {
-    let entry = HANDLE_TABLE
-        .resolve(key)
+    let entry = TableKey::new(key)
+        .and_then(|key| HANDLE_TABLE.resolve(key))
         .ok_or_else(|| JsValue::from_str("invocation is no longer live"))?;
     let CffiHandleTableEntry::InvocationState(state) = &*entry else {
         return Err(JsValue::from_str("expected invocation state"));

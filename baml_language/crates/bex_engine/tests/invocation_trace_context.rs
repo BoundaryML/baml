@@ -48,7 +48,12 @@ fn captured(key: u64) -> (OwnedHostInvocation, InheritedInvocationState) {
         .unwrap()
         .remove(&key)
         .unwrap();
-    let entry = HANDLE_TABLE.resolve(frame.0.effective_state).unwrap();
+    let entry = HANDLE_TABLE
+        .resolve(
+            bridge_ctypes::TableKey::new(frame.0.effective_state)
+                .expect("a live frame names its state"),
+        )
+        .unwrap();
     let CffiHandleTableEntry::InvocationState(state) = &*entry else {
         panic!("effective_state must be a typed invocation-state handle")
     };
@@ -93,7 +98,10 @@ async fn retained_callback_context_and_ancestry_survive_parent_completion() {
         .call_function(
             "parent",
             vec![BexExternalValue::HostCallable {
-                handle: HostValueArc::new(1, HostValueKind::Callable),
+                handle: HostValueArc::new(
+                    bex_resource_types::HostKey::new(1).expect("nonzero"),
+                    HostValueKind::Callable,
+                ),
                 params: Box::new([baml_type::RuntimeFunctionParamTy::required(
                     None,
                     bex_engine::RuntimeTy::int(),

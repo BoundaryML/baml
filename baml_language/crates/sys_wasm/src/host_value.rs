@@ -73,7 +73,7 @@ use std::{
     sync::Arc,
 };
 
-use bex_project::{HostValueArc, HostValueKind, host_release_dispatch};
+use bex_project::{HostKey, HostValueArc, HostValueKind, host_release_dispatch};
 use bridge_ctypes::{
     CffiHandleTableOptions, HANDLE_TABLE, baml_bridge::cffi::InboundValue, inbound_to_external,
 };
@@ -100,7 +100,7 @@ use crate::send_wrapper::SendWrapper;
 /// What a dispatched host call keeps alive until it completes.
 struct HostExecution {
     /// The callable's key, so the completion can find what it was bound to.
-    key: u64,
+    key: HostKey,
     /// The invocation context, callable and arguments the call reads; held
     /// only so they outlive the dispatch.
     _retained: Box<dyn Send + Sync>,
@@ -113,7 +113,7 @@ thread_local! {
     /// the JS encoder; removed by [`host_release_callback`] when the Rust
     /// runtime drops the last clone of the corresponding `HostValueArc`. Keys
     /// are globally unique, so release-by-key is unambiguous across runtimes.
-    static CALLABLES: RefCell<HashMap<u64, SendWrapper<Function>>> = RefCell::new(HashMap::new());
+    static CALLABLES: RefCell<HashMap<HostKey, SendWrapper<Function>>> = RefCell::new(HashMap::new());
 
     /// Optional SDK callback used to release host-owned opaque values kept in
     /// a JS-side registry. Playground consumers do not need to install one.
@@ -175,14 +175,14 @@ struct InFlightHostCall {
     completion: CompletionHandle,
 }
 
-fn next_key() -> u64 {
+fn next_key() -> HostKey {
     NEXT_KEY.with(|cell| {
         let mut next = cell.borrow_mut();
         loop {
             let k = *next;
             *next = next.wrapping_add(1);
-            if k != 0 {
-                return k;
+            if let Some(key) = HostKey::new(k) {
+                return key;
             }
         }
     })
@@ -199,7 +199,7 @@ fn next_call_id() -> u32 {
 
 /// The key of the host callable an in-flight call `call_id` was dispatched
 /// to, or `None` once the call has completed or was never dispatched.
-pub fn host_callable_key_for_call(call_id: u32) -> Option<u64> {
+pub fn host_callable_key_for_call(call_id: u32) -> Option<HostKey> {
     EXECUTIONS.with(|cell| cell.borrow().get(&call_id).map(|execution| execution.key))
 }
 
@@ -312,25 +312,26 @@ pub fn register_host_callable(callable: Function) -> u64 {
     CALLABLES.with(|cell| {
         cell.borrow_mut().insert(key, SendWrapper::new(callable));
     });
-    key
+    key.get()
 }
 
 /// Retain an existing registered callable as an engine host value.
-#[allow(dead_code)]
 pub(crate) fn retain_host_callable(key: u64) -> Result<Arc<HostValueArc>, String> {
+    let key = HostKey::new(key).ok_or_else(|| "host callable key 0 names nothing".to_string())?;
     let registered = CALLABLES.with(|cell| cell.borrow().contains_key(&key));
     if !registered {
         return Err(format!("host callable key {key} is not registered"));
     }
     ensure_release_dispatch_installed();
-    Ok(HostValueArc::intern(key, HostValueKind::Callable))
+    HostValueArc::try_intern(key, HostValueKind::Callable)
+        .map_err(|_live| format!("host value key {key} is live as an opaque value"))
 }
 
 /// Mint a key for a JS-owned opaque value from the same keyspace used by
-/// callable host values. Both kinds share one engine handle table.
+/// callable host values: both are the engine's references to host objects.
 #[wasm_bindgen(js_name = mintHostValueKey)]
 pub fn mint_host_value_key() -> u64 {
-    next_key()
+    next_key().get()
 }
 
 /// Register the JS callback that releases opaque values from the SDK's local
@@ -351,9 +352,11 @@ pub fn register_host_value_release_callback(callback: Function) -> bool {
 /// Remove a callable that was registered but never transferred to the engine.
 #[wasm_bindgen(js_name = releaseHostCallable)]
 pub fn release_host_callable(key: u64) {
-    CALLABLES.with(|cell| {
-        cell.borrow_mut().remove(&key);
-    });
+    if let Some(key) = HostKey::new(key) {
+        CALLABLES.with(|cell| {
+            cell.borrow_mut().remove(&key);
+        });
+    }
 }
 
 #[doc(hidden)]
@@ -379,10 +382,13 @@ pub fn test_fire_host_release(key: u64) {
 #[doc(hidden)]
 pub async fn test_missing_host_callable_error(key: u64) -> String {
     let host = WasmHost::direct();
-    let callable = HostValueArc::new(key, HostValueKind::Callable);
+    let callable = HostValueArc::new(
+        HostKey::new(key).expect("test keys are nonzero"),
+        HostValueKind::Callable,
+    );
     let output = host.call_registered_callable(
         SysOp::BamlHostCallHostValue,
-        callable.as_ref(),
+        &callable,
         &[],
         &IndexMap::new(),
     );
@@ -400,13 +406,12 @@ pub async fn test_missing_host_callable_error(key: u64) -> String {
 pub fn test_sync_pending_host_callable_error(key: u64) -> String {
     with_web_sync_mode(|| {
         let host = WasmHost::direct();
-        let callable = HostValueArc::new(key, HostValueKind::Callable);
-        let output = host.call_registered_callable(
-            SysOp::BamlFsRead,
-            callable.as_ref(),
-            &[],
-            &IndexMap::new(),
+        let callable = HostValueArc::new(
+            HostKey::new(key).expect("test keys are nonzero"),
+            HostValueKind::Callable,
         );
+        let output =
+            host.call_registered_callable(SysOp::BamlFsRead, &callable, &[], &IndexMap::new());
         match output {
             SysOpOutput::Ready(Err(error)) => error.to_string(),
             SysOpOutput::Async(future) => match futures::executor::block_on(future) {
@@ -566,9 +571,11 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) -> bool {
 /// Keys are globally unique, so this removes exactly the right entry regardless
 /// of which runtime registered the callable.
 extern "C" fn host_release_callback(key: u64) {
-    CALLABLES.with(|cell| {
-        cell.borrow_mut().remove(&key);
-    });
+    if let Some(key) = HostKey::new(key) {
+        CALLABLES.with(|cell| {
+            cell.borrow_mut().remove(&key);
+        });
+    }
     HOST_VALUE_RELEASE_CALLBACK.with(|cell| {
         let callback = cell
             .borrow()
@@ -643,7 +650,7 @@ impl WasmHost {
     pub(crate) fn call_registered_callable(
         &self,
         originating_sysop: SysOp,
-        callable: &HostValueArc,
+        callable: &Arc<HostValueArc>,
         positional: &[BexExternalValue],
         optional: &IndexMap<String, BexExternalValue>,
     ) -> SysOpOutput<BexExternalValue> {
@@ -659,7 +666,7 @@ impl WasmHost {
     fn call_registered_callable_with_context(
         &self,
         originating_sysop: SysOp,
-        callable: &HostValueArc,
+        callable: &Arc<HostValueArc>,
         positional: &[BexExternalValue],
         optional: &IndexMap<String, BexExternalValue>,
         ctx: Option<&SysOpContext>,
@@ -720,9 +727,11 @@ impl WasmHost {
                     call_id,
                     HostExecution {
                         key: callable.key,
+                        // The callable outlives the dispatch: the engine's
+                        // reference is held here until the call exits.
                         _retained: Box::new((
                             ctx.cloned(),
-                            HostValueArc::intern(callable.key, callable.kind),
+                            Arc::clone(callable),
                             positional.to_vec(),
                             optional.clone(),
                         )),
@@ -761,7 +770,7 @@ impl WasmHost {
                     }
                 }
                 WasmHostDispatch::RuntimeCallback(host_dispatch) => {
-                    let key_js = JsValue::from(callable.key);
+                    let key_js = JsValue::from(callable.key.get());
                     if frame.is_some() {
                         host_dispatch.call1(&JsValue::NULL, &args_js.into())
                     } else {
@@ -866,7 +875,7 @@ impl io::IoNamespaceHost for WasmHost {
         // where it lands.
         self.call_registered_callable_with_context(
             SysOp::BamlHostCallHostValue,
-            host_arc.as_ref(),
+            &host_arc,
             &positional,
             &optional,
             Some(ctx),
@@ -952,15 +961,14 @@ mod tests {
         (call_id, result)
     }
 
-    /// Minted keys must be unique, monotonic, and never 0 (0 is the reserved
-    /// "invalid" sentinel). Globally-unique keys are what make release-by-key
-    /// routing unambiguous across runtimes.
+    /// Minted keys must be unique (a `HostKey` is nonzero by type).
+    /// Globally-unique keys are what make release-by-key routing unambiguous
+    /// across runtimes.
     #[test]
-    fn next_key_is_unique_and_nonzero() {
+    fn next_key_is_unique() {
         let mut seen = HashSet::new();
         for _ in 0..1000 {
             let k = next_key();
-            assert_ne!(k, 0, "minted key must never be the reserved 0");
             assert!(seen.insert(k), "minted key {k} was handed out twice");
         }
     }

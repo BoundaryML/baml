@@ -139,16 +139,17 @@ pub fn external_to_outbound(
             let ht = table_value.handle_type();
             let key = options.table.insert(table_value);
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
-                key,
+                key: key.get(),
                 handle_type: ht as i32,
                 ty: None,
             }))
         }
 
-        // Host-value handles do NOT live in HANDLE_TABLE. Encode directly using
-        // the host-side key; drop semantics are preserved by the Arc
-        // (HostValueArc::drop fires HostReleaseFn on last drop). A callable
-        // goes back to its host by key alone: the host has its own signature.
+        // A host value is the engine's reference to a host object, not a
+        // handle-table row: it goes back to its host by its own key, and the
+        // Arc keeps the release semantics (HostValueArc::drop fires
+        // HostReleaseFn on last drop). A callable goes back by key alone: the
+        // host has its own signature.
         BexExternalValue::HostValue(arc) | BexExternalValue::HostCallable { handle: arc, .. } => {
             use crate::baml_bridge::cffi::BamlHandleType;
             let ht = match arc.kind {
@@ -156,7 +157,7 @@ pub fn external_to_outbound(
                 bex_project::HostValueKind::Opaque => BamlHandleType::HostValueOpaque as i32,
             };
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
-                key: arc.key,
+                key: arc.key.get(),
                 handle_type: ht,
                 ty: None,
             }))
@@ -210,7 +211,7 @@ pub fn external_to_outbound(
             let ht = table_value.handle_type();
             let key = options.table.insert(table_value);
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
-                key,
+                key: key.get(),
                 handle_type: ht as i32,
                 ty,
             }))
@@ -769,7 +770,10 @@ mod tests {
 
     #[test]
     fn encode_outbound_host_value_callable() {
-        let arc = HostValueArc::new(42, HostValueKind::Callable);
+        let arc = HostValueArc::new(
+            bex_project::HostKey::new(42).unwrap(),
+            HostValueKind::Callable,
+        );
         let value = BexExternalValue::HostValue(arc);
         let options = CffiHandleTableOptions::for_in_process();
         let encoded = external_to_outbound(&value, &options).expect("encode succeeds");
@@ -781,14 +785,20 @@ mod tests {
         assert_eq!(handle.handle_type, BamlHandleType::HostValueCallable as i32);
         // Must not appear in the handle table.
         assert!(
-            options.table.resolve(42).is_none(),
+            options
+                .table
+                .resolve(crate::TableKey::new(42).unwrap())
+                .is_none(),
             "HOST_VALUE_CALLABLE must not be inserted into HANDLE_TABLE"
         );
     }
 
     #[test]
     fn encode_outbound_host_value_opaque() {
-        let arc = HostValueArc::new(42, HostValueKind::Opaque);
+        let arc = HostValueArc::new(
+            bex_project::HostKey::new(42).unwrap(),
+            HostValueKind::Opaque,
+        );
         let value = BexExternalValue::HostValue(arc);
         let options = CffiHandleTableOptions::for_in_process();
         let encoded = external_to_outbound(&value, &options).expect("encode succeeds");
@@ -800,14 +810,20 @@ mod tests {
         assert_eq!(handle.handle_type, BamlHandleType::HostValueOpaque as i32);
         // Like callables, opaque handles bypass the HANDLE_TABLE.
         assert!(
-            options.table.resolve(42).is_none(),
+            options
+                .table
+                .resolve(crate::TableKey::new(42).unwrap())
+                .is_none(),
             "HOST_VALUE_OPAQUE must not be inserted into HANDLE_TABLE"
         );
     }
 
     #[test]
     fn artifact_safe_host_value_callable_omits_key_instead_of_serializing_handle() {
-        let arc = HostValueArc::new(42, HostValueKind::Callable);
+        let arc = HostValueArc::new(
+            bex_project::HostKey::new(42).unwrap(),
+            HostValueKind::Callable,
+        );
         let value = BexExternalValue::HostValue(arc);
         let encoded =
             artifact_safe_external_to_outbound(&value).expect("artifact-safe encode succeeds");

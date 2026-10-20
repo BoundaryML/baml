@@ -102,7 +102,12 @@ async fn host_reentry_inherits_suppression_and_context_then_restores_selection()
             for phase in ["hook", "body"] {
                 let frame = rx.recv().await.unwrap();
                 assert_eq!(frame.0.host_environment, 41);
-                let entry = HANDLE_TABLE.resolve(frame.0.effective_state).unwrap();
+                let entry = HANDLE_TABLE
+                    .resolve(
+                        bridge_ctypes::TableKey::new(frame.0.effective_state)
+                            .expect("a live frame names its state"),
+                    )
+                    .unwrap();
                 let CffiHandleTableEntry::InvocationState(inherited) = &*entry else {
                     panic!("typed effective state")
                 };
@@ -134,7 +139,10 @@ async fn host_reentry_inherits_suppression_and_context_then_restores_selection()
             "target",
             vec![
                 BexExternalValue::HostCallable {
-                    handle: HostValueArc::new(1, HostValueKind::Callable),
+                    handle: HostValueArc::new(
+                        bex_resource_types::HostKey::new(1).expect("nonzero"),
+                        HostValueKind::Callable,
+                    ),
                     params: Box::new([baml_type::RuntimeFunctionParamTy::required(
                         None,
                         bex_engine::RuntimeTy::class("State"),

@@ -45,7 +45,17 @@ export declare class BamlHandle {
   get key(): HandleKey
   get handleType(): number
   clone(): BamlHandle
+  /**
+   * Clone this handle for inbound wire ownership. A host value is the
+   * engine's reference to the host's own object: its key goes as it is,
+   * nothing is cloned.
+   */
   _cloneKeyForWire(): HandleKey
+  /**
+   * Whether this handle is the engine's reference to a host object, as
+   * opposed to the host's reference to an engine object.
+   */
+  get isHostValue(): boolean
 }
 
 export declare class BamlImage {

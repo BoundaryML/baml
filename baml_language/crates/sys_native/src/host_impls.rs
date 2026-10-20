@@ -369,7 +369,7 @@ mod tests {
                     traceback: Some("at line 1".to_string()),
                     language: Some("python".to_string()),
                     handle: bex_resource_types::HostValueArc::new(
-                        42,
+                        bex_resource_types::HostKey::new(42).expect("nonzero"),
                         bex_resource_types::HostValueKind::Opaque,
                     ),
                 },

@@ -24,7 +24,7 @@ use baml_sdkgen_types::ProgramDescriptor;
 use baml_type::{MediaKind, Name, RuntimeTy, TypeName};
 use bridge_cffi::handle_cffi;
 use bridge_ctypes::{
-    HANDLE_TABLE,
+    HANDLE_TABLE, HostKey, TableKey,
     baml_bridge::cffi::{BamlTy, CallFunctionArgs, InboundValue, call_function_args::CallTarget},
 };
 use bridge_encode::{
@@ -250,7 +250,7 @@ fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, Func
             facts.function(name).cloned().unwrap_or_else(untyped),
         ),
         Some(CallTarget::FunctionHandle(key)) => {
-            let entry = HANDLE_TABLE.resolve(*key);
+            let entry = TableKey::new(*key).and_then(|key| HANDLE_TABLE.resolve(key));
             let signature = match entry.as_deref() {
                 Some(bridge_ctypes::CffiHandleTableEntry::Adt(
                     bex_project::BexExternalAdt::TaggedHeapHandle {
@@ -423,7 +423,11 @@ fn leaf_wire(kind: LeafKind, value: InboundValue) -> napi::Result<LeafWire> {
 }
 
 impl<'env> Host<Js<View<'_, 'env>>> for Cx<'env> {
-    fn register(&self, callable: &Js<View<'_, 'env>>, signature: &RuntimeTy) -> napi::Result<u64> {
+    fn register(
+        &self,
+        callable: &Js<View<'_, 'env>>,
+        signature: &RuntimeTy,
+    ) -> napi::Result<HostKey> {
         if self.sync {
             return Err(napi::Error::new(
                 Status::InvalidArg,
@@ -461,9 +465,11 @@ impl<'env> Host<Js<View<'_, 'env>>> for Cx<'env> {
         let value = InboundValue::decode(bytes.as_ref())
             .map_err(|error| napi::Error::new(Status::InvalidArg, error.to_string()))?;
         let owner = match found.get::<String>("cloned")? {
-            Some(cloned) => Some(Owner::Handle(cloned.parse().map_err(|_| {
-                napi::Error::new(Status::InvalidArg, "cloned handle key is not a uint64")
-            })?)),
+            Some(cloned) => Some(Owner::Handle(
+                cloned.parse().ok().and_then(TableKey::new).ok_or_else(|| {
+                    napi::Error::new(Status::InvalidArg, "cloned handle key is not a live key")
+                })?,
+            )),
             None => None,
         };
         Ok((leaf_wire(kind, value)?, owner))
@@ -474,7 +480,7 @@ impl<'env> Host<Js<View<'_, 'env>>> for Cx<'env> {
             Owner::Callable(key) => crate::host_value::release_registered(key),
             // Best effort: a key the engine never saw has no other owner.
             Owner::Handle(key) => {
-                let _ = handle_cffi::release_handle(key);
+                let _ = handle_cffi::release_handle(key.get());
             }
         }
     }

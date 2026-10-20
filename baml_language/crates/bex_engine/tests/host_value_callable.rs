@@ -318,7 +318,10 @@ fn complete_with_test_error(call_id: u32, class_name: &str, message: &str) {
     // test doesn't rehydrate, so the key value is arbitrary.
     fields.insert(
         "_handle".to_string(),
-        BexExternalValue::HostValue(HostValueArc::new(next_host_key(), HostValueKind::Opaque)),
+        BexExternalValue::HostValue(HostValueArc::new(
+            bex_resource_types::HostKey::new(next_host_key()).expect("nonzero"),
+            HostValueKind::Opaque,
+        )),
     );
     sys_native::host_dispatch::complete_with_throw(
         call_id,
@@ -364,7 +367,10 @@ where
     ensure_dispatch_registered();
     let key = next_host_key();
     table().lock().unwrap().insert(key, Arc::new(behaviour));
-    HostValueArc::new(key, HostValueKind::Callable)
+    HostValueArc::new(
+        bex_resource_types::HostKey::new(key).expect("nonzero"),
+        HostValueKind::Callable,
+    )
 }
 
 // ============================================================================
@@ -2042,7 +2048,7 @@ async fn host_callable_cancel_evicts_in_flight_entry() {
 
     // Behaviour: never complete — model a hung host.
     let arc = register_host_callable(|_items| FakeReturn::NeverComplete);
-    pending_call_ids().lock().unwrap().insert(arc.key, tx);
+    pending_call_ids().lock().unwrap().insert(arc.key.get(), tx);
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
@@ -2101,7 +2107,7 @@ async fn host_callable_cancel_evicts_in_flight_entry() {
     );
 
     // Tidy up the global channel slot so it does not dangle into other tests.
-    pending_call_ids().lock().unwrap().remove(&arc.key);
+    pending_call_ids().lock().unwrap().remove(&arc.key.get());
     drop(arc);
 }
 
@@ -2243,7 +2249,7 @@ async fn host_call_ret_ty_survives_gc_during_await() {
 
     // Park the host call (don't complete) so we can run a GC during the await.
     let arc = register_host_callable(|_items| FakeReturn::NeverComplete);
-    pending_call_ids().lock().unwrap().insert(arc.key, tx);
+    pending_call_ids().lock().unwrap().insert(arc.key.get(), tx);
 
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
@@ -2301,7 +2307,7 @@ async fn host_call_ret_ty_survives_gc_during_await() {
     // other wrong-return-type violation — `HostContractViolation` panic.
     assert_host_contract_violation_panic(&result);
 
-    pending_call_ids().lock().unwrap().remove(&arc.key);
+    pending_call_ids().lock().unwrap().remove(&arc.key.get());
     drop(arc);
 }
 

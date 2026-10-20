@@ -568,7 +568,10 @@ async fn j13_closure_typed_param_poisons_typevars_must_specify() {
         }
         function main() -> int { 0 }
     "#;
-    let f = int_callable(HostValueArc::new(1, HostValueKind::Callable));
+    let f = int_callable(HostValueArc::new(
+        bex_resource_types::HostKey::new(1).expect("nonzero"),
+        HostValueKind::Callable,
+    ));
     let err = call_infer(source, "apply", vec![f, BEV::Int(5)])
         .await
         .expect_err("T and R are closure-poisoned ⇒ must be specified explicitly");
@@ -587,7 +590,10 @@ async fn j13_closure_poisoned_typevars_succeed_when_specified() {
         }
         function main() -> int { 0 }
     "#;
-    let f = int_callable(HostValueArc::new(2, HostValueKind::Callable));
+    let f = int_callable(HostValueArc::new(
+        bex_resource_types::HostKey::new(2).expect("nonzero"),
+        HostValueKind::Callable,
+    ));
     let out = call_with_bindings(
         source,
         "apply",

@@ -32,7 +32,7 @@ use baml_sdkgen_types::ProgramDescriptor;
 use baml_type::{Int63, MediaKind, Name, RuntimeTy, TypeName};
 use bridge_cffi::handle_cffi;
 use bridge_ctypes::{
-    HANDLE_TABLE,
+    HANDLE_TABLE, HostKey, TableKey, WireHandle,
     baml_bridge::cffi::{
         BamlHandle, BamlTy, BamlTyDef, BamlValueMedia, BamlValuePromptAst, CallFunctionArgs,
         call_function_args::CallTarget,
@@ -222,7 +222,7 @@ fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, Func
             facts.function(name).cloned().unwrap_or_else(untyped),
         ),
         Some(CallTarget::FunctionHandle(key)) => {
-            let entry = HANDLE_TABLE.resolve(*key);
+            let entry = TableKey::new(*key).and_then(|key| HANDLE_TABLE.resolve(key));
             let signature = match entry.as_deref() {
                 Some(bridge_ctypes::CffiHandleTableEntry::Adt(
                     bex_project::BexExternalAdt::TaggedHeapHandle {
@@ -356,7 +356,7 @@ fn message_bytes(message: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
 }
 
 impl<'py> Host<PyValue<'_, 'py>> for Cx<'py> {
-    fn register(&self, callable: &PyValue<'_, 'py>, signature: &RuntimeTy) -> PyResult<u64> {
+    fn register(&self, callable: &PyValue<'_, 'py>, signature: &RuntimeTy) -> PyResult<HostKey> {
         let marker = PyModule::import(self.py, "baml_bridge._host_marker")?
             .getattr("marker_for")?
             .call1((&callable.obj,))?;
@@ -385,13 +385,24 @@ impl<'py> Host<PyValue<'_, 'py>> for Cx<'py> {
                     obj.call_method0("_to_pyhandle")?
                 };
                 let handle = handle.cast::<BamlPyHandle>()?.borrow();
-                let key = crate::py_handle::handle_clone(handle.handle_key, "inbound encode")?;
                 let handle_type = i32::try_from(handle.handle_type)
                     .map_err(|_| PyTypeError::new_err("handle type does not fit the wire"))?;
-                Ok((
-                    LeafWire::Handle(BamlHandle { key, handle_type }),
-                    Some(Owner::Handle(key)),
-                ))
+                let (key, owner) = match WireHandle::from_parts(handle.handle_key, handle_type)
+                    .map_err(|error| PyTypeError::new_err(error.to_string()))?
+                {
+                    // A host value is the engine's reference to the host's
+                    // own object: the key goes as it is, and nothing is
+                    // cloned or owed.
+                    WireHandle::Host(key, _) => (key.get(), None),
+                    WireHandle::Engine(_) => {
+                        let cloned =
+                            crate::py_handle::handle_clone(handle.handle_key, "inbound encode")?;
+                        let cloned = TableKey::new(cloned)
+                            .ok_or_else(|| PyTypeError::new_err("a cloned handle key is 0"))?;
+                        (cloned.get(), Some(Owner::Handle(cloned)))
+                    }
+                };
+                Ok((LeafWire::Handle(BamlHandle { key, handle_type }), owner))
             }
             LeafKind::Media(kind) => {
                 let payload: BamlValueMedia = match kind {
@@ -442,7 +453,7 @@ impl<'py> Host<PyValue<'_, 'py>> for Cx<'py> {
             Owner::Callable(key) => crate::host_value::release_registered(key),
             // Best effort: a key the engine never saw has no other owner.
             Owner::Handle(key) => {
-                let _ = handle_cffi::release_handle(key);
+                let _ = handle_cffi::release_handle(key.get());
             }
         }
     }

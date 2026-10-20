@@ -116,7 +116,7 @@ pub(crate) fn commit<V: HostValue, H: Host<V>>(
                     &facts.stated_form(signature.clone()),
                 )),
                 value: Some(Value::Handle(BamlHandle {
-                    key,
+                    key: key.get(),
                     handle_type: BamlHandleType::HostValueCallable as i32,
                 })),
             })

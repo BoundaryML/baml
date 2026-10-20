@@ -321,7 +321,10 @@ async fn an_opaque_host_value_is_rust_data() {
         function keep(x: unknown) -> unknown { x }
         function count(x: int) -> int { x }
     "#;
-    let opaque = BexExternalValue::HostValue(HostValueArc::new(7_001, HostValueKind::Opaque));
+    let opaque = BexExternalValue::HostValue(HostValueArc::new(
+        bex_resource_types::HostKey::new(7_001).expect("nonzero"),
+        HostValueKind::Opaque,
+    ));
     // `unknown` takes every value; the opaque value comes back as itself.
     assert_eq!(
         call(source, "keep", vec![opaque.clone()]).await.unwrap(),
@@ -347,7 +350,10 @@ async fn a_class_holding_native_data_cannot_be_built_by_a_host() {
         vec![],
         &[(
             "_data",
-            BexExternalValue::HostValue(HostValueArc::new(7_002, HostValueKind::Opaque)),
+            BexExternalValue::HostValue(HostValueArc::new(
+                bex_resource_types::HostKey::new(7_002).expect("nonzero"),
+                HostValueKind::Opaque,
+            )),
         )],
     );
     let message = refusal(call(source, "width", vec![forged]).await);
@@ -702,7 +708,10 @@ async fn a_host_callable_arrives_with_its_function_type() {
         function apply(f: (int) -> int, x: int) -> int { f(x) }
     "#;
     // A callable by key alone says nothing about what it takes or returns.
-    let bare = BexExternalValue::HostValue(HostValueArc::new(7_002, HostValueKind::Callable));
+    let bare = BexExternalValue::HostValue(HostValueArc::new(
+        bex_resource_types::HostKey::new(7_002).expect("nonzero"),
+        HostValueKind::Callable,
+    ));
     let message = refusal(call(source, "apply", vec![bare, BexExternalValue::Int(1)]).await);
     assert!(
         message.contains("a host callable arrives with the function type it inhabits"),
@@ -710,7 +719,10 @@ async fn a_host_callable_arrives_with_its_function_type() {
     );
     // One of another function type is a value of another type.
     let stringly = BexExternalValue::HostCallable {
-        handle: HostValueArc::new(7_003, HostValueKind::Callable),
+        handle: HostValueArc::new(
+            bex_resource_types::HostKey::new(7_003).expect("nonzero"),
+            HostValueKind::Callable,
+        ),
         params: Box::new([RuntimeFunctionParamTy::required(None, RuntimeTy::string())]),
         ret: Box::new(RuntimeTy::string()),
         throws: Box::new(RuntimeTy::unknown()),
@@ -722,7 +734,10 @@ async fn a_host_callable_arrives_with_its_function_type() {
     );
     // An optional parameter is addressed by name, so its type names it.
     let nameless = BexExternalValue::HostCallable {
-        handle: HostValueArc::new(7_004, HostValueKind::Callable),
+        handle: HostValueArc::new(
+            bex_resource_types::HostKey::new(7_004).expect("nonzero"),
+            HostValueKind::Callable,
+        ),
         params: Box::new([RuntimeFunctionParamTy::optional(None, RuntimeTy::int())]),
         ret: Box::new(RuntimeTy::int()),
         throws: Box::new(RuntimeTy::unknown()),

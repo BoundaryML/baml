@@ -9,17 +9,28 @@
 //! statement where the type is implied, a missing statement, a statement of
 //! another shape, or one that mentions a type variable is refused here: the
 //! engine builds exactly what the wire says and fills no hole from a slot.
+//!
+//! A handle on the wire is one of two references, decided once from its tag
+//! into a [`WireHandle`]: a host's reference to an engine object (a
+//! [`TableKey`], transferred per occurrence) or the engine's reference to a
+//! host object (a [`HostKey`], one registration however often it occurs). The
+//! two are different types with different owners, and nothing after the tag
+//! is read compares them.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    sync::Arc,
+};
 
 use bex_project::{
-    BexExternalAdt, BexExternalValue, MediaKind, MediaValue, PromptAst, PromptAstSimple, RuntimeTy,
+    BexExternalAdt, BexExternalValue, HostKey, HostValueArc, HostValueKind, MediaKind, MediaValue,
+    PromptAst, PromptAstSimple, RuntimeTy,
 };
 use indexmap::IndexMap;
 
 use crate::{
     baml_bridge::cffi::{
-        BamlHandleType, BamlValueMedia, BamlValuePromptAst, BamlValuePromptAstSimple,
+        BamlHandle, BamlHandleType, BamlValueMedia, BamlValuePromptAst, BamlValuePromptAstSimple,
         InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry, InboundMapValue,
         InboundValue, MediaTypeEnum, baml_value_media,
         baml_value_prompt_ast::Value as PromptAstVariant,
@@ -27,88 +38,223 @@ use crate::{
         inbound_value::Value as InboundValueVariant,
     },
     error::CtypesError,
-    handle_table::CffiHandleTable,
+    handle_table::{CffiHandleTable, TableKey},
 };
 
-/// Owns every remaining wire reference, including those after a malformed
-/// sibling. Recursive decoding shares this inventory, so drained references
-/// are never released a second time on an error. A key is one reference
-/// however often it occurs: a host registers each shipped handle once, and
-/// the release it owes is one per key. A key that occurs under two handle
-/// kinds names two different things with one identity and is refused.
-struct InboundOwners<'a> {
-    table: &'a CffiHandleTable,
-    handles: Vec<crate::baml_bridge::cffi::BamlHandle>,
-    conflict: Option<u64>,
+/// A handle as the wire names it, decided once from `(key, handle_type)`.
+///
+/// Engine keys and host keys are references in opposite directions with
+/// different owners (see [`CffiHandleTable`] and `bex_project::host_value`);
+/// a number means nothing without its space, so nothing after this point sees
+/// the bare `u64`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WireHandle {
+    /// A host's reference to an engine object. Each occurrence transfers one
+    /// reference, which the decoder drains.
+    Engine(TableKey),
+    /// The engine's reference to a host object the host registered. A key is
+    /// one registration however often it occurs; the decoder interns it.
+    Host(HostKey, HostValueKind),
 }
+
+impl WireHandle {
+    /// The reference a wire handle's `(key, handle_type)` names.
+    pub fn from_parts(key: u64, handle_type: i32) -> Result<Self, CtypesError> {
+        let kind = match BamlHandleType::try_from(handle_type) {
+            Ok(BamlHandleType::HostValueCallable) => Some(HostValueKind::Callable),
+            Ok(BamlHandleType::HostValueOpaque) => Some(HostValueKind::Opaque),
+            // Every other tag, known or not, names an engine object; the
+            // table decides whether the key is live and of a usable kind.
+            Ok(_) | Err(_) => None,
+        };
+        // Key 0 names no slot in either table. A host handle carrying it
+        // would reach the host as a callback frame whose callable identity
+        // the frame decoder refuses, and the call would never complete.
+        match kind {
+            Some(kind) => HostKey::new(key).map(|key| Self::Host(key, kind)),
+            None => TableKey::new(key).map(Self::Engine),
+        }
+        .ok_or(CtypesError::InvalidHandleKey(0))
+    }
+}
+
+impl TryFrom<&BamlHandle> for WireHandle {
+    type Error = CtypesError;
+
+    fn try_from(handle: &BamlHandle) -> Result<Self, CtypesError> {
+        Self::from_parts(handle.key, handle.handle_type)
+    }
+}
+
+impl TryFrom<&crate::baml_bridge::cffi::BamlOutboundHandle> for WireHandle {
+    type Error = CtypesError;
+
+    fn try_from(
+        handle: &crate::baml_bridge::cffi::BamlOutboundHandle,
+    ) -> Result<Self, CtypesError> {
+        Self::from_parts(handle.key, handle.handle_type)
+    }
+}
+
+/// The transfers a request carries that the engine has not yet taken over.
+///
+/// A request is decoded in two passes: [`Self::collect`] walks every value and
+/// records what decoding will consume, then decoding consumes it. Whatever is
+/// left when the journal drops — after a refusal anywhere in the request,
+/// including a malformed sibling — is released, so a request consumes
+/// everything it carried, on success and on every failure, and nothing is
+/// released twice. Each reference table keeps its own unit: an engine
+/// reference is transferred per occurrence, a host registration once per key
+/// however often the key occurs. One key arriving under two host kinds names
+/// two different things with one identity and is refused before anything is
+/// consumed.
+pub struct InboundOwners<'a> {
+    table: &'a CffiHandleTable,
+    /// Engine references not yet drained, counted per occurrence.
+    engine: HashMap<TableKey, usize>,
+    /// Host registrations not yet interned, with the kind each arrived under.
+    host: HashMap<HostKey, HostValueKind>,
+}
+
 impl<'a> InboundOwners<'a> {
-    fn new(table: &'a CffiHandleTable) -> Self {
+    pub fn new(table: &'a CffiHandleTable) -> Self {
         Self {
             table,
-            handles: Vec::new(),
-            conflict: None,
+            engine: HashMap::new(),
+            host: HashMap::new(),
         }
     }
-    /// Refuse the whole value when one key arrived under two handle kinds.
-    fn consistent(&self) -> Result<(), CtypesError> {
-        match self.conflict {
-            Some(key) => Err(CtypesError::HandleKindConflict(key)),
-            None => Ok(()),
-        }
+
+    /// Record every handle under `value` before anything is decoded. A
+    /// handle that cannot be recorded (key 0, a key under two host kinds) is
+    /// the request's refusal, reported once the whole value has been walked
+    /// so every other transfer is still journaled and released with it.
+    pub fn collect(&mut self, value: &InboundValue) -> Result<(), CtypesError> {
+        let mut first_fault = None;
+        self.walk(value, &mut first_fault);
+        first_fault.map_or(Ok(()), Err)
     }
-    fn collect(&mut self, value: &InboundValue) {
+
+    /// [`Self::collect`] over the values of map entries, class fields or
+    /// keyword arguments.
+    pub fn collect_entries(&mut self, entries: &[InboundMapEntry]) -> Result<(), CtypesError> {
+        let mut first_fault = None;
+        self.walk_entries(entries, &mut first_fault);
+        first_fault.map_or(Ok(()), Err)
+    }
+
+    fn walk(&mut self, value: &InboundValue, first_fault: &mut Option<CtypesError>) {
         match &value.value {
             Some(InboundValueVariant::Handle(handle)) => {
-                match self.handles.iter().find(|owned| owned.key == handle.key) {
-                    None => self.handles.push(*handle),
-                    Some(owned) if owned.handle_type == handle.handle_type => {}
-                    Some(_) => self.conflict = Some(handle.key),
+                if let Err(fault) = self.record(handle)
+                    && first_fault.is_none()
+                {
+                    *first_fault = Some(fault);
                 }
             }
             Some(InboundValueVariant::ListValue(list)) => {
                 for value in &list.values {
-                    self.collect(value);
+                    self.walk(value, first_fault);
                 }
             }
             Some(InboundValueVariant::MapValue(map)) => {
-                for entry in &map.entries {
-                    if let Some(value) = &entry.value {
-                        self.collect(value);
-                    }
-                }
+                self.walk_entries(&map.entries, first_fault);
             }
             Some(InboundValueVariant::ClassValue(class)) => {
-                for entry in &class.fields {
-                    if let Some(value) = &entry.value {
-                        self.collect(value);
-                    }
-                }
+                self.walk_entries(&class.fields, first_fault);
             }
-            _ => {}
+            Some(
+                InboundValueVariant::StringValue(_)
+                | InboundValueVariant::IntValue(_)
+                | InboundValueVariant::BigintValue(_)
+                | InboundValueVariant::FloatValue(_)
+                | InboundValueVariant::JsNumberValue(_)
+                | InboundValueVariant::BoolValue(_)
+                | InboundValueVariant::EnumValue(_)
+                | InboundValueVariant::Uint8arrayValue(_)
+                | InboundValueVariant::TyValue(_)
+                | InboundValueVariant::TyDefValue(_)
+                | InboundValueVariant::MediaValue(_)
+                | InboundValueVariant::PromptAstValue(_),
+            )
+            | None => {}
         }
     }
-    fn take(&mut self, handle: &crate::baml_bridge::cffi::BamlHandle) {
-        if let Some(index) = self
-            .handles
-            .iter()
-            .position(|owned| owned.key == handle.key)
-        {
-            self.handles.swap_remove(index);
+
+    fn walk_entries(&mut self, entries: &[InboundMapEntry], first_fault: &mut Option<CtypesError>) {
+        for value in entries.iter().filter_map(|entry| entry.value.as_ref()) {
+            self.walk(value, first_fault);
         }
+    }
+
+    fn record(&mut self, handle: &BamlHandle) -> Result<(), CtypesError> {
+        match WireHandle::try_from(handle)? {
+            WireHandle::Engine(key) => *self.engine.entry(key).or_insert(0) += 1,
+            WireHandle::Host(key, kind) => match self.host.entry(key) {
+                Entry::Vacant(slot) => {
+                    slot.insert(kind);
+                }
+                Entry::Occupied(slot) if *slot.get() == kind => {}
+                Entry::Occupied(_) => return Err(CtypesError::HandleKindConflict(key.get())),
+            },
+        }
+        Ok(())
+    }
+
+    /// One occurrence of `key` was drained into a value.
+    fn drained(&mut self, key: TableKey) {
+        if let Entry::Occupied(mut slot) = self.engine.entry(key) {
+            *slot.get_mut() -= 1;
+            if *slot.get() == 0 {
+                slot.remove();
+            }
+        }
+    }
+
+    /// `key` was interned into a value; the engine now holds the registration.
+    fn interned(&mut self, key: HostKey) {
+        self.host.remove(&key);
+    }
+
+    /// Decode one collected value.
+    pub fn decode(&mut self, value: InboundValue) -> Result<BexExternalValue, CtypesError> {
+        decode_inbound(value, self.table, self)
+    }
+
+    /// Decode collected keyword arguments into engine call arguments.
+    pub fn decode_entries(
+        &mut self,
+        entries: Vec<InboundMapEntry>,
+    ) -> Result<HashMap<String, BexExternalValue>, CtypesError> {
+        let mut result = HashMap::new();
+        for entry in entries {
+            let key = extract_string_key(&entry)?;
+            let value = entry
+                .value
+                .map(|value| self.decode(value))
+                .transpose()?
+                .unwrap_or(BexExternalValue::Null);
+            if result.insert(key.clone(), value).is_some() {
+                return Err(CtypesError::DuplicateKey(bounded(key)));
+            }
+        }
+        Ok(result)
     }
 }
+
 impl Drop for InboundOwners<'_> {
     fn drop(&mut self) {
-        for handle in self.handles.drain(..) {
-            let kind = match BamlHandleType::try_from(handle.handle_type) {
-                Ok(BamlHandleType::HostValueCallable) => Some(bex_project::HostValueKind::Callable),
-                Ok(BamlHandleType::HostValueOpaque) => Some(bex_project::HostValueKind::Opaque),
-                _ => None,
-            };
-            if let Some(kind) = kind {
-                drop(bex_project::HostValueArc::intern(handle.key, kind));
-            } else {
-                self.table.release(handle.key);
+        for (key, occurrences) in self.engine.drain() {
+            for _ in 0..occurrences {
+                self.table.release(key);
+            }
+        }
+        // A key never interned owes the host one release: a fresh identity
+        // dropped at once fires it. A key the engine already holds, under this
+        // kind or another, was never this request's to release.
+        for (key, kind) in self.host.drain() {
+            if let Ok(arc) = HostValueArc::try_intern(key, kind) {
+                drop(arc);
             }
         }
     }
@@ -117,14 +263,15 @@ impl Drop for InboundOwners<'_> {
 /// Decode a protobuf `InboundValue` into a `BexExternalValue` for use by the BEX engine.
 ///
 /// Handles are resolved via `handle_table`; an unknown key returns `InvalidHandleKey`.
+/// A value that is one of several in a request shares the request's
+/// [`InboundOwners`] instead.
 pub fn inbound_to_external(
     value: InboundValue,
     handle_table: &CffiHandleTable,
 ) -> Result<BexExternalValue, CtypesError> {
     let mut owners = InboundOwners::new(handle_table);
-    owners.collect(&value);
-    owners.consistent()?;
-    decode_inbound(value, handle_table, &mut owners)
+    owners.collect(&value)?;
+    owners.decode(value)
 }
 
 fn decode_inbound(
@@ -238,24 +385,8 @@ fn decode_inbound(
                 proto_prompt_ast_to_bex_prompt_ast(prompt)?,
             ))))
         }
-        InboundValueVariant::Handle(handle) => {
-            // Key 0 names no slot in any table. A host handle carrying it
-            // would reach the host as a callback frame whose callable identity
-            // the frame decoder refuses, and the call would never complete.
-            if handle.key == 0 {
-                return Err(CtypesError::InvalidHandleKey(0));
-            }
-            // HOST_VALUE_* keys do NOT live in HANDLE_TABLE. The host
-            // bridge owns the lookup; we construct the Arc stub here so
-            // last-drop fires the registered HostReleaseFn.
-            //
-            // Intern by key so repeated decodes of the same wire key
-            // (e.g. BAML returns a host callable, the host passes it
-            // back in) share one Arc identity. Otherwise each decode
-            // would mint an independent Arc with its own refcount and
-            // the first last-drop would fire HostReleaseFn, tearing the
-            // registry entry out from under the still-live other Arc.
-            if handle.handle_type == BamlHandleType::HostValueCallable as i32 {
+        InboundValueVariant::Handle(handle) => match WireHandle::try_from(&handle)? {
+            WireHandle::Host(key, HostValueKind::Callable) => {
                 // A callable has no type of its own on the wire: the host
                 // states the function type it inhabits.
                 let (params, ret, throws) =
@@ -269,48 +400,62 @@ fn decode_inbound(
                             return Err(shape("handle (callable)", "a function type", &other));
                         }
                     };
-                let arc = bex_project::HostValueArc::intern(
-                    handle.key,
-                    bex_project::HostValueKind::Callable,
-                );
-                owners.take(&handle);
-                return Ok(BexExternalValue::HostCallable {
-                    handle: arc,
+                let handle = intern_host_value(key, HostValueKind::Callable, owners)?;
+                Ok(BexExternalValue::HostCallable {
+                    handle,
                     params,
                     ret,
                     throws,
-                });
+                })
             }
-            implied(stated.as_ref(), "handle")?;
-            if handle.handle_type == BamlHandleType::HostValueOpaque as i32 {
-                let arc = bex_project::HostValueArc::intern(
-                    handle.key,
-                    bex_project::HostValueKind::Opaque,
-                );
-                owners.take(&handle);
-                return Ok(BexExternalValue::HostValue(arc));
+            WireHandle::Host(key, HostValueKind::Opaque) => {
+                implied(stated.as_ref(), "handle")?;
+                Ok(BexExternalValue::HostValue(intern_host_value(
+                    key,
+                    HostValueKind::Opaque,
+                    owners,
+                )?))
             }
-            // Internal invocation capabilities are control-channel data,
-            // not application values, even if the host forges their tag.
-            let pinned = handle_table
-                .resolve(handle.key)
-                .ok_or(CtypesError::InvalidHandleKey(handle.key))?;
-            if matches!(
-                &*pinned,
-                crate::CffiHandleTableEntry::InvocationState(_)
-                    | crate::CffiHandleTableEntry::TraceReservation(_)
-            ) {
-                return Err(CtypesError::InternalError(
-                    "invocation capabilities cannot be supplied as application values".into(),
-                ));
+            WireHandle::Engine(key) => {
+                implied(stated.as_ref(), "handle")?;
+                // Internal invocation capabilities are control-channel data,
+                // not application values, even if the host forges their tag.
+                let pinned = handle_table
+                    .resolve(key)
+                    .ok_or(CtypesError::InvalidHandleKey(key.get()))?;
+                if matches!(
+                    &*pinned,
+                    crate::CffiHandleTableEntry::InvocationState(_)
+                        | crate::CffiHandleTableEntry::TraceReservation(_)
+                ) {
+                    return Err(CtypesError::InternalError(
+                        "invocation capabilities cannot be supplied as application values".into(),
+                    ));
+                }
+                let value = handle_table
+                    .drain(key)
+                    .ok_or(CtypesError::InvalidHandleKey(key.get()))?;
+                owners.drained(key);
+                Ok(BexExternalValue::from((*value).clone()))
             }
-            let value = handle_table
-                .drain(handle.key)
-                .ok_or(CtypesError::InvalidHandleKey(handle.key))?;
-            owners.take(&handle);
-            Ok(BexExternalValue::from((*value).clone()))
-        }
+        },
     }
+}
+
+/// The engine's one identity for a host-registered value: repeated decodes of
+/// the same key (BAML returns a host callable, the host passes it back in)
+/// share one `Arc`, so the host is told to release exactly once, at the last
+/// drop anywhere in the process. A key live under another kind is refused;
+/// nothing is minted for it.
+fn intern_host_value(
+    key: HostKey,
+    kind: HostValueKind,
+    owners: &mut InboundOwners<'_>,
+) -> Result<Arc<HostValueArc>, CtypesError> {
+    let arc = HostValueArc::try_intern(key, kind)
+        .map_err(|_live| CtypesError::HandleKindConflict(key.get()))?;
+    owners.interned(key);
+    Ok(arc)
 }
 
 /// A node whose type the wire implies carries no statement.
@@ -534,30 +679,16 @@ fn extract_string_key(entry: &InboundMapEntry) -> Result<String, CtypesError> {
 }
 
 /// Decode protobuf kwargs into a `HashMap<String, BexExternalValue>` for engine call arguments.
+///
+/// Arguments that are part of a larger request share the request's
+/// [`InboundOwners`] instead.
 pub fn kwargs_to_bex_values(
     kwargs: Vec<InboundMapEntry>,
     handle_table: &CffiHandleTable,
 ) -> Result<HashMap<String, BexExternalValue>, CtypesError> {
     let mut owners = InboundOwners::new(handle_table);
-    for entry in &kwargs {
-        if let Some(value) = &entry.value {
-            owners.collect(value);
-        }
-    }
-    owners.consistent()?;
-    let mut result = HashMap::new();
-    for entry in kwargs {
-        let key = extract_string_key(&entry)?;
-        let value = entry
-            .value
-            .map(|v| decode_inbound(v, handle_table, &mut owners))
-            .transpose()?
-            .unwrap_or(BexExternalValue::Null);
-        if result.insert(key.clone(), value).is_some() {
-            return Err(CtypesError::DuplicateKey(bounded(key)));
-        }
-    }
-    Ok(result)
+    owners.collect_entries(&kwargs)?;
+    owners.decode_entries(kwargs)
 }
 
 #[cfg(test)]
@@ -572,14 +703,141 @@ mod tests {
         }
     }
 
-    fn owned_input(key: u64) -> InboundValue {
+    fn owned_input(key: TableKey) -> InboundValue {
         InboundValue {
             value: Some(InboundValueVariant::Handle(BamlHandle {
-                key,
+                key: key.get(),
                 handle_type: BamlHandleType::FunctionRef as i32,
             })),
             ..Default::default()
         }
+    }
+
+    /// A no-op heap for minting real engine-heap handles without a VM.
+    struct StubHeap;
+
+    impl bex_project::WeakHeapRef for StubHeap {
+        fn release_handle(&self, _slab_key: usize) {}
+
+        fn resolve_handle_ptr(&self, _slab_key: usize) -> Option<bex_project::HeapPtr> {
+            None
+        }
+    }
+
+    fn callable_ty() -> RuntimeTy {
+        RuntimeTy::Function {
+            params: Box::new([]),
+            ret: Box::new(RuntimeTy::int()),
+            throws: Box::new(RuntimeTy::Never),
+        }
+    }
+
+    fn host_input(key: u64, kind: BamlHandleType) -> InboundValue {
+        let value_type = match kind {
+            BamlHandleType::HostValueCallable => {
+                Some(crate::ty_encode::runtime_ty_to_proto_ty(&callable_ty()))
+            }
+            _ => None,
+        };
+        InboundValue {
+            value_type,
+            value: Some(InboundValueVariant::Handle(BamlHandle {
+                key,
+                handle_type: kind as i32,
+            })),
+        }
+    }
+
+    /// The engine table and a host registry number their references
+    /// independently, so one number is routinely two different references.
+    #[test]
+    fn an_engine_reference_and_a_host_registration_may_share_a_number() {
+        let table = CffiHandleTable::new();
+        let engine = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 3 });
+        let input = typed_input(
+            &RuntimeTy::list(RuntimeTy::unknown()),
+            InboundValueVariant::ListValue(InboundListValue {
+                values: vec![
+                    owned_input(engine),
+                    host_input(engine.get(), BamlHandleType::HostValueCallable),
+                ],
+            }),
+        );
+        let decoded = inbound_to_external(input, &table).expect("two references, one number");
+        let BexExternalValue::Array { items, .. } = decoded else {
+            panic!("expected a list, got {decoded:?}")
+        };
+        assert!(matches!(
+            items[0],
+            BexExternalValue::FunctionRef { global_index: 3 }
+        ));
+        let BexExternalValue::HostCallable { handle, .. } = &items[1] else {
+            panic!("expected a host callable, got {:?}", items[1])
+        };
+        assert_eq!(handle.key.get(), engine.get());
+        assert!(table.is_empty(), "the engine reference was drained");
+    }
+
+    /// Every occurrence of an engine key is one reference the host added, so
+    /// a refusal releases one per occurrence and a success drains one each.
+    #[test]
+    fn a_shared_engine_reference_is_released_once_per_occurrence() {
+        let table = CffiHandleTable::new();
+        let heap: Arc<dyn bex_project::WeakHeapRef> = Arc::new(StubHeap);
+        let twice = |slab: usize| {
+            let object = bex_project::Handle::new(slab, Arc::clone(&heap));
+            let key = table.insert(CffiHandleTableEntry::BexHeapHandle(object.clone()));
+            assert_eq!(
+                table.insert(CffiHandleTableEntry::BexHeapHandle(object)),
+                key,
+                "one object, one key"
+            );
+            assert_eq!(table.refcount(key), Some(2));
+            key
+        };
+        let key = twice(7);
+        let refused = typed_input(
+            &RuntimeTy::list(RuntimeTy::unknown()),
+            InboundValueVariant::ListValue(InboundListValue {
+                values: vec![
+                    owned_input(key),
+                    InboundValue {
+                        value: Some(InboundValueVariant::BigintValue("invalid".into())),
+                        ..Default::default()
+                    },
+                    owned_input(key),
+                ],
+            }),
+        );
+        assert!(inbound_to_external(refused, &table).is_err());
+        assert!(table.is_empty(), "both occurrences were released");
+
+        let key = twice(8);
+        let accepted = typed_input(
+            &RuntimeTy::list(RuntimeTy::unknown()),
+            InboundValueVariant::ListValue(InboundListValue {
+                values: vec![owned_input(key), owned_input(key)],
+            }),
+        );
+        assert!(inbound_to_external(accepted, &table).is_ok());
+        assert!(table.is_empty(), "both occurrences were drained");
+    }
+
+    /// A host key's kind is fixed while the engine holds it: a later decode
+    /// under the other kind is refused, and refusing it mints nothing.
+    #[test]
+    fn a_host_key_live_under_another_kind_is_refused_across_decodes() {
+        let table = CffiHandleTable::new();
+        let live = inbound_to_external(host_input(4242, BamlHandleType::HostValueOpaque), &table)
+            .expect("an opaque host value decodes");
+        let error =
+            inbound_to_external(host_input(4242, BamlHandleType::HostValueCallable), &table)
+                .expect_err("the key is live as an opaque value");
+        assert!(
+            matches!(error, CtypesError::HandleKindConflict(4242)),
+            "{error}"
+        );
+        drop(live);
     }
 
     #[test]
@@ -604,7 +862,14 @@ mod tests {
             })),
             ..Default::default()
         };
-        for input in [callable, opaque, owned_input(0)] {
+        let engine = InboundValue {
+            value: Some(InboundValueVariant::Handle(BamlHandle {
+                key: 0,
+                handle_type: BamlHandleType::FunctionRef as i32,
+            })),
+            ..Default::default()
+        };
+        for input in [callable, opaque, engine] {
             assert!(matches!(
                 inbound_to_external(input, &table),
                 Err(CtypesError::InvalidHandleKey(0))
@@ -1178,7 +1443,7 @@ mod tests {
         else {
             panic!("unexpected variant: {result:?}")
         };
-        assert_eq!(handle.key, 999);
+        assert_eq!(handle.key.get(), 999);
         assert_eq!(handle.kind, bex_project::HostValueKind::Callable);
         assert_eq!(
             RuntimeTy::Function {
@@ -1190,7 +1455,7 @@ mod tests {
         );
         // Key must NOT have been inserted into the handle table.
         assert!(
-            table.resolve(999).is_none(),
+            table.resolve(TableKey::new(999).unwrap()).is_none(),
             "HOST_VALUE_CALLABLE must not touch HANDLE_TABLE"
         );
     }
@@ -1251,14 +1516,14 @@ mod tests {
         let result = inbound_to_external(inbound, &table).expect("decode succeeds");
         match result {
             BexExternalValue::HostValue(arc) => {
-                assert_eq!(arc.key, 777);
+                assert_eq!(arc.key.get(), 777);
                 assert_eq!(arc.kind, bex_project::HostValueKind::Opaque);
             }
             other => panic!("unexpected variant: {other:?}"),
         }
         // Like callables, opaque handles bypass the HANDLE_TABLE.
         assert!(
-            table.resolve(777).is_none(),
+            table.resolve(TableKey::new(777).unwrap()).is_none(),
             "HOST_VALUE_OPAQUE must not touch HANDLE_TABLE"
         );
     }
@@ -1270,7 +1535,7 @@ mod tests {
         let inbound = InboundValue {
             value_type: None,
             value: Some(InboundValueVariant::Handle(BamlHandle {
-                key,
+                key: key.get(),
                 handle_type: 0,
             })),
         };

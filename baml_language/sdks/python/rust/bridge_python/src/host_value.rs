@@ -47,11 +47,14 @@ use std::{
 };
 
 use bridge_cffi::complete_host_call;
-use bridge_ctypes::baml_bridge::cffi::{
-    BamlHandle, BamlHandleType, BamlOutboundValue, BamlToHostCall, BamlTy, BamlTyClass,
-    InboundClassValue, InboundMapEntry, InboundValue, baml_outbound_value::Value as OutboundValue,
-    baml_ty::Ty as BamlTyVariant, inbound_map_entry::Key as InboundMapKey,
-    inbound_value::Value as InboundValueVariant,
+use bridge_ctypes::{
+    HostKey, WireHandle,
+    baml_bridge::cffi::{
+        BamlHandle, BamlHandleType, BamlOutboundValue, BamlToHostCall, BamlTy, BamlTyClass,
+        InboundClassValue, InboundMapEntry, InboundValue,
+        baml_outbound_value::Value as OutboundValue, baml_ty::Ty as BamlTyVariant,
+        inbound_map_entry::Key as InboundMapKey, inbound_value::Value as InboundValueVariant,
+    },
 };
 use bridge_encode::{BridgeFault, Completion};
 use prost::Message;
@@ -73,7 +76,7 @@ struct Registered {
 
 /// Process-wide table of Python objects that have been handed to BAML.
 ///
-/// The key is a freshly-allocated `u64` (never 0). Removal happens in
+/// The key is the engine's reference to the object (never 0). Removal happens in
 /// [`host_release_callback`] when Rust drops its last clone of the
 /// corresponding `HostValueArc`.
 static REGISTRY: LazyLock<bridge_ctypes::HostValueRegistry<Registered>> =
@@ -99,7 +102,7 @@ pub(crate) fn register_callable(
     callable: Py<PyAny>,
     marker_key: Option<u64>,
     signature: bex_project::RuntimeTy,
-) -> PyResult<u64> {
+) -> PyResult<HostKey> {
     let descriptor =
         bridge_cffi::host_instrumentation::registration_marker(marker_key.unwrap_or(0), "python")
             .map_err(crate::errors::bridge_error_to_sdk_panic)?;
@@ -130,7 +133,7 @@ pub fn _host_value_registry_len() -> usize {
 /// original Python object on round-trip. The table is shared with
 /// callable entries (keys are globally unique), and the same
 /// `host_release_callback` releases either kind on last-Arc-drop.
-fn register_host_opaque(value: Py<PyAny>) -> u64 {
+fn register_host_opaque(value: Py<PyAny>) -> HostKey {
     REGISTRY.insert(Registered {
         object: value,
         signature: None,
@@ -142,7 +145,7 @@ fn register_host_opaque(value: Py<PyAny>) -> u64 {
 /// Shared by the engine-driven release path ([`host_release_callback`]) and
 /// the encoder's rollback path ([`release_registered`]). Dropping the
 /// `Py<PyAny>` requires the GIL.
-fn drop_registry_entry(host_value_key: u64) {
+fn drop_registry_entry(host_value_key: HostKey) {
     bex_project::HostValueArc::discard_annotation(host_value_key);
     let popped: Option<Registered> = match REGISTRY.lock() {
         Ok(mut t) => t.remove(&host_value_key),
@@ -173,7 +176,9 @@ fn drop_registry_entry(host_value_key: u64) {
 /// Fires when the last Rust clone of the corresponding `HostValueArc` is
 /// dropped — see `bex_external_types::host_value::host_release_dispatch`.
 pub extern "C" fn host_release_callback(host_value_key: u64) {
-    drop_registry_entry(host_value_key);
+    if let Some(key) = HostKey::new(host_value_key) {
+        drop_registry_entry(key);
+    }
 }
 
 /// Look up the host-registered Python object referenced by a
@@ -217,7 +222,7 @@ pub fn lookup_host_value(
         }
     };
     table
-        .get(&handle.handle_key)
+        .get(&HostKey::new(handle.handle_key)?)
         .map(|entry| entry.object.clone_ref(py))
 }
 
@@ -229,7 +234,7 @@ pub fn lookup_host_value(
 /// and so never releases — that key. Without this the registry entry
 /// (holding a strong ref to the user callable) would leak for the life of
 /// the process.
-pub(crate) fn release_registered(host_value_key: u64) {
+pub(crate) fn release_registered(host_value_key: HostKey) {
     drop_registry_entry(host_value_key);
 }
 
@@ -360,7 +365,7 @@ fn dispatch_host_callable(
         let table = REGISTRY
             .lock()
             .map_err(|e| format!("host-callable registry mutex poisoned: {e}"))?;
-        match table.get(&host_value_key) {
+        match HostKey::new(host_value_key).and_then(|key| table.get(&key)) {
             Some(entry) => {
                 // The result is encoded against the slot's signature once the
                 // callable returns; keep it by callback id until then.
@@ -521,16 +526,14 @@ pub fn _register_host_call_execution(
 }
 
 /// Release wire owners of callbacks that never started, without materializing
-/// application classes or invoking Python validators. Host-owned keys are
-/// borrowed metadata and belong to the engine's HostValueArc, not HANDLE_TABLE.
+/// application classes or invoking Python validators. A host value is the
+/// engine's reference, not an owner of this frame's: nothing to release.
 pub(crate) fn discard_host_call_args(args: &[u8]) {
     fn discard(value: BamlOutboundValue) {
         match value.value {
             Some(OutboundValue::HandleValue(handle)) => {
-                if handle.handle_type != BamlHandleType::HostValueCallable as i32
-                    && handle.handle_type != BamlHandleType::HostValueOpaque as i32
-                {
-                    let _ = bridge_cffi::handle_cffi::release_handle(handle.key);
+                if let Ok(WireHandle::Engine(key)) = WireHandle::try_from(&handle) {
+                    let _ = bridge_cffi::handle_cffi::release_handle(key.get());
                 }
             }
             Some(OutboundValue::ListValue(list)) => {
@@ -687,7 +690,7 @@ fn build_host_callable_inbound(
     class_name: &str,
     message: &str,
     traceback: Option<&str>,
-    handle_key: u64,
+    handle_key: HostKey,
 ) -> InboundValue {
     fn string_field(key: &str, value: &str) -> InboundMapEntry {
         InboundMapEntry {
@@ -703,7 +706,7 @@ fn build_host_callable_inbound(
         value: Some(InboundValue {
             value_type: None,
             value: Some(InboundValueVariant::Handle(BamlHandle {
-                key: handle_key,
+                key: handle_key.get(),
                 handle_type: BamlHandleType::HostValueOpaque as i32,
             })),
         }),

@@ -46,8 +46,12 @@ use std::{
     sync::{Arc, LazyLock, Mutex, OnceLock},
 };
 
-use bridge_ctypes::baml_bridge::cffi::{
-    BamlHandleType, BamlOutboundValue, BamlToHostCall, baml_outbound_value::Value as OutboundValue,
+use bridge_ctypes::{
+    HostKey,
+    baml_bridge::cffi::{
+        BamlHandleType, BamlOutboundValue, BamlToHostCall,
+        baml_outbound_value::Value as OutboundValue,
+    },
 };
 use bridge_encode::{BridgeFault, Completion};
 use napi::{
@@ -291,7 +295,7 @@ pub(crate) fn register_callable(
     callable: Function<'_, DispatchArgs, ()>,
     marker_key: Option<u64>,
     signature: bex_project::RuntimeTy,
-) -> napi::Result<u64> {
+) -> napi::Result<HostKey> {
     let descriptor = bridge_cffi::host_instrumentation::registration_marker(
         marker_key.unwrap_or(0),
         "typescript",
@@ -417,7 +421,7 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: Buffer) {
 /// callable to become GC-eligible and unpinning the event loop. Shared by the
 /// engine-driven release path ([`host_release_callback`]) and the walker's
 /// rollback path (`release_registered`).
-fn drop_registry_entry(host_value_key: u64) {
+fn drop_registry_entry(host_value_key: HostKey) {
     bex_project::HostValueArc::discard_annotation(host_value_key);
     let popped: Option<Registered> = match REGISTRY.lock() {
         Ok(mut t) => t.remove(&host_value_key),
@@ -449,7 +453,9 @@ fn drop_registry_entry(host_value_key: u64) {
 /// TS-side host-value-map delete. Whichever one of the two registries actually
 /// held the entry cleans it up; the other is a benign no-op.
 pub extern "C" fn host_release_callback(host_value_key: u64) {
-    drop_registry_entry(host_value_key);
+    if let Some(key) = HostKey::new(host_value_key) {
+        drop_registry_entry(key);
+    }
     if let Some(tsfn) = HOST_VALUE_RELEASE_CALLBACK.get() {
         // Fire-and-forget: the TS callback removes the map entry on the
         // libuv loop. `QueueFull` would mean an enormous backlog of
@@ -523,7 +529,7 @@ static HOST_VALUE_RELEASE_CALLBACK: OnceLock<Arc<HostValueReleaseTsfn>> = OnceLo
 /// the value into its `Map<bigint, unknown>`.
 #[napi(js_name = "mintHostValueKey")]
 pub fn mint_host_value_key() -> HandleKey {
-    HandleKey::from_u64(REGISTRY.mint_key())
+    HandleKey::from_u64(REGISTRY.mint_key().get())
 }
 
 /// Install the TS-side release callback. First-call-wins; subsequent
@@ -574,7 +580,7 @@ pub fn register_host_value_release_callback(
 /// (and so never releases) that key. Without this, the registry entry — and
 /// its strong `weak::<false>` tsfn ref, which keeps the libuv loop alive —
 /// would leak for the life of the process.
-pub(crate) fn release_registered(key: u64) {
+pub(crate) fn release_registered(key: HostKey) {
     drop_registry_entry(key);
 }
 
@@ -672,15 +678,17 @@ fn dispatch_host_callable(
     // we drop the registry mutex before scheduling the JS call so a long
     // dispatch never blocks `register_callable` / `host_release_callback`.
     let tsfn: Option<Arc<DispatchTsfn>> = match REGISTRY.lock() {
-        Ok(t) => t.get(&host_value_key).map(|entry| {
-            // The result is encoded against the slot's signature once the
-            // callable returns; keep it by callback id until then.
-            CALLBACK_SIGNATURES
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .insert(call_id, entry.signature.clone());
-            Arc::clone(&entry.tsfn)
-        }),
+        Ok(t) => HostKey::new(host_value_key)
+            .and_then(|key| t.get(&key))
+            .map(|entry| {
+                // The result is encoded against the slot's signature once the
+                // callable returns; keep it by callback id until then.
+                CALLBACK_SIGNATURES
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(call_id, entry.signature.clone());
+                Arc::clone(&entry.tsfn)
+            }),
         Err(e) => {
             // Treat poisoning as a "no callable" condition for this
             // dispatch (the engine call must still complete), but log so
