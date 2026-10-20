@@ -604,27 +604,30 @@ fn release_into_java(host_value_key: u64) -> Result<(), String> {
     })
 }
 
-/// Complete an in-flight host call with an empty error payload, which
-/// `bridge_cffi::complete_host_call` maps to a `BridgeFailure` — the routing for
-/// a bridge-layer fault (missing callable, unreachable JVM).
+/// Complete an in-flight host call as a failure of the bridge's own (missing
+/// callable, unreachable JVM), which the engine surfaces as `SdkPanic`.
 fn complete_host_call_bridge_failure(call_id: u32) {
-    bridge_cffi::complete_host_call(call_id, 1, std::ptr::null(), 0);
+    use bridge_ctypes::baml_bridge::cffi::{HostCallCompletion, host_call_completion::Outcome};
+    let bytes = prost::Message::encode_to_vec(&HostCallCompletion {
+        outcome: Some(Outcome::BridgeFailure(
+            "the Java bridge could not run the host callable".to_string(),
+        )),
+    });
+    bridge_cffi::complete_host_call(call_id, bytes.as_ptr().cast(), bytes.len());
     HOST_FRAMES.lock().unwrap().remove(&call_id);
 }
 
-/// `baml_bridge.BamlFfi.nativeCompleteHostCall(long callId, boolean isError, byte[] content)`.
+/// `baml_bridge.BamlFfi.nativeCompleteHostCall(long callId, byte[] content)`.
 ///
-/// Forwards a completed host-callable result (or thrown value) to
-/// `bridge_cffi::complete_host_call`. `content` is a protobuf-encoded
-/// `InboundValue` (host→engine direction); an empty error payload is the
-/// bridge-failure signal. `complete_host_call` reads `content` synchronously, so
-/// the Java-owned array stays valid for the call.
+/// Forwards a completed host-callable call to `bridge_cffi::complete_host_call`.
+/// `content` is a protobuf-encoded `HostCallCompletion` (host→engine
+/// direction). `complete_host_call` reads `content` synchronously, so the
+/// Java-owned array stays valid for the call.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCompleteHostCall<'local>(
     env: JNIEnv<'local>,
     _class: JClass<'local>,
     call_id: jlong,
-    is_error: jboolean,
     content: JByteArray<'local>,
 ) {
     let bytes = match env.convert_byte_array(&content) {
@@ -637,12 +640,7 @@ pub extern "system" fn Java_baml_1bridge_BamlFfi_nativeCompleteHostCall<'local>(
             return;
         }
     };
-    bridge_cffi::complete_host_call(
-        call_id as u32,
-        i32::from(is_error != 0),
-        bytes.as_ptr() as *const i8,
-        bytes.len(),
-    );
+    bridge_cffi::complete_host_call(call_id as u32, bytes.as_ptr().cast(), bytes.len());
     HOST_FRAMES.lock().unwrap().remove(&(call_id as u32));
 }
 

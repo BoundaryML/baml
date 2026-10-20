@@ -49,11 +49,11 @@ use std::{
 use bridge_ctypes::{
     HostKey,
     baml_bridge::cffi::{
-        BamlHandleType, BamlOutboundValue, BamlToHostCall,
+        BamlHandleType, BamlOutboundValue, BamlToHostCall, HostCallCompletion,
         baml_outbound_value::Value as OutboundValue,
     },
 };
-use bridge_encode::{BridgeFault, Completion};
+use bridge_encode::{Completion, Encoded};
 use napi::{
     Env, Status,
     bindgen_prelude::{Buffer, External, FnArgs, Function, Unknown},
@@ -337,81 +337,77 @@ pub fn complete_host_call_value(
     // The outcome the engine sees, for the caller's instrumentation: a value
     // that completed the call as a panic is an error in the trace, whatever
     // the callable returned.
-    let outcome = match crate::encode::encode_result(&env, value, &ret) {
-        Completion::Wire(value) => {
-            complete_host_call_bytes(call_id, 0, &value.encode_to_vec());
-            "ok"
-        }
-        Completion::HostError(error) => return Err(error),
-        Completion::ContractViolation(error) => {
-            complete_host_call_bytes(
-                call_id,
-                1,
-                &bridge_encode::host_contract_violation(&error.to_string(), "nodejs")
-                    .encode_to_vec(),
-            );
-            "error"
-        }
-        Completion::BridgeFailure(fault) => {
-            let message = match fault {
-                BridgeFault::Value(error) => error.to_string(),
-                BridgeFault::Host(error) => error.to_string(),
-            };
-            complete_host_call_bytes(
-                call_id,
-                1,
-                &bridge_encode::sdk_panic(&message).encode_to_vec(),
-            );
-            "error"
-        }
+    let completion = crate::encode::encode_result(&env, value, &ret);
+    let outcome = match &completion {
+        Completion::Wire(_) => "ok",
+        Completion::HostError(_)
+        | Completion::ContractViolation(_)
+        | Completion::BridgeFailure(_) => "error",
     };
+    let wire = completion.into_wire(Encoded::Returned)?;
+    complete(call_id, &wire);
     Ok(outcome.to_string())
 }
 
 /// Complete an in-flight host call with a thrown BAML value (the `value` of
-/// a `BamlError`), encoded as the type it has: the engine's throw channel
-/// takes it with no declared slot and checks the throws contract after.
+/// a `BamlError`), encoded against the throws type of the slot the callable
+/// was bound to. A `baml.panics.*` value is a panic whatever the slot
+/// declares.
 ///
-/// Exposed to JS as `completeHostCallThrow(callId, value)`.
+/// Exposed to JS as `completeHostCallThrow(callId, value)`. An error raised
+/// while the value was read is raised here; the JS wrapper then completes the
+/// call with it as the host's own exception.
 #[napi(js_name = "completeHostCallThrow")]
 pub fn complete_host_call_throw(env: Env, call_id: u32, value: Unknown<'_>) -> napi::Result<()> {
-    drop(take_callback_signature(call_id));
-    let value = match crate::encode::encode_result(&env, value, &bex_project::RuntimeTy::Unknown) {
-        Completion::Wire(value) => value,
-        Completion::HostError(error) => return Err(error),
-        Completion::ContractViolation(error)
-        | Completion::BridgeFailure(BridgeFault::Value(error)) => {
-            return Err(napi::Error::new(
-                napi::Status::InvalidArg,
-                error.to_string(),
-            ));
-        }
-        Completion::BridgeFailure(BridgeFault::Host(error)) => return Err(error),
+    let throws = match take_callback_signature(call_id) {
+        Some(bex_project::RuntimeTy::Function { throws, .. }) => *throws,
+        Some(_) | None => bex_project::RuntimeTy::Unknown,
     };
-    complete_host_call_bytes(call_id, 1, &value.encode_to_vec());
+    let wire = crate::encode::encode_result(&env, value, &throws).into_wire(Encoded::Thrown)?;
+    complete(call_id, &wire);
     Ok(())
 }
 
-fn complete_host_call_bytes(call_id: u32, is_error: i32, bytes: &[u8]) {
-    bridge_cffi::complete_host_call(call_id, is_error, bytes.as_ptr() as *const i8, bytes.len());
+/// Complete an in-flight host call as the host's own exception: the engine
+/// builds the `baml.errors.HostCallable` whose `_handle` is `handle`, the
+/// JS-side registration of the error object.
+///
+/// Exposed to JS as `completeHostCallRaised(callId, className, message, stack, handle)`.
+#[napi(js_name = "completeHostCallRaised")]
+pub fn complete_host_call_raised(
+    call_id: u32,
+    class_name: String,
+    message: String,
+    stack: Option<String>,
+    handle: HandleKey,
+) -> napi::Result<()> {
+    drop(take_callback_signature(call_id));
+    let handle = HostKey::new(handle.to_u64()).ok_or_else(|| {
+        napi::Error::new(
+            Status::InvalidArg,
+            "a raised error must be registered first",
+        )
+    })?;
+    complete(
+        call_id,
+        &bridge_encode::raised(message, class_name, "nodejs", stack, handle),
+    );
+    Ok(())
 }
 
-/// Complete an in-flight host call from the JS dispatch wrapper.
+/// Complete an in-flight host call as a failure of the bridge's own: the
+/// engine surfaces it as `baml.panics.SdkPanic`, never as a catchable error.
 ///
-/// Exposed to JS as `completeHostCall(callId, isError, content)`. The JS
-/// dispatch wrapper invokes this after it has decoded `argsBytes`, called
-/// the user function, and encoded the result as an `InboundValue` (success
-/// is the value itself; an error is an `Instance` of
-/// `baml.errors.HostCallable` carrying the four metadata fields).
-///
-/// Forwards directly to the `bridge_cffi::complete_host_call` C entry point
-/// the engine uses for cross-language completion.
-#[napi(js_name = "completeHostCall")]
-pub fn complete_host_call(call_id: u32, is_error: i32, content: Buffer) {
-    // An opaque or last-resort completion: nothing is encoded against the
-    // signature, so the in-flight entry is just dropped.
+/// Exposed to JS as `completeHostCallBridgeFailure(callId, message)`.
+#[napi(js_name = "completeHostCallBridgeFailure")]
+pub fn complete_host_call_bridge_failure(call_id: u32, message: String) {
     drop(take_callback_signature(call_id));
-    complete_host_call_bytes(call_id, is_error, content.as_ref());
+    complete(call_id, &bridge_encode::bridge_failure(message));
+}
+
+fn complete(call_id: u32, completion: &HostCallCompletion) {
+    let bytes = completion.encode_to_vec();
+    bridge_cffi::complete_host_call(call_id, bytes.as_ptr() as *const i8, bytes.len());
 }
 
 /// Remove and drop the registry entry for `host_value_key` (if present).

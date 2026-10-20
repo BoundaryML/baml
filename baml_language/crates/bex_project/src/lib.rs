@@ -30,11 +30,12 @@ pub use bex_engine::{
     CallbackHostInvocation, HostCallSite, HostDefinition, HostInvocation, capture_callback_inputs,
 };
 pub use bex_external_types::{
-    BexExternalAdt, BexExternalValue, DynWitnessDef, Handle, HostKey, HostReleaseFn, HostValueArc,
-    HostValueKind, MediaKind, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
-    PortableEnumVariantDef, PortableMetadata, PortableTypeDef, RuntimeTy, TaggedHeapHandleKind,
-    TypeDefRef, WeakHeapRef, host_release_dispatch, runtime_ty_structurally_equal,
-    selected_arm_equal, try_convert_rust_data,
+    BexExternalAdt, BexExternalValue, DynWitnessDef, Handle, HostCallCompletion, HostException,
+    HostKey, HostOutcome, HostReleaseFn, HostValueArc, HostValueKind, MediaKind, PortableClassDef,
+    PortableClassFieldDef, PortableEnumDef, PortableEnumVariantDef, PortableMetadata,
+    PortableTypeDef, RuntimeTy, TaggedHeapHandleKind, TypeDefRef, WeakHeapRef,
+    host_release_dispatch, runtime_ty_structurally_equal, selected_arm_equal,
+    try_convert_rust_data,
 };
 pub use bex_vm_types::{
     BexRustData, HeapPtr, MediaContent, MediaValue, Meter, Program, PromptAst, PromptAstSimple,

@@ -81,6 +81,43 @@ struct InboundEnumValueDefaultTypeInternal {
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 InboundEnumValueDefaultTypeInternal _InboundEnumValue_default_instance_;
 
+inline constexpr HostException::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        message_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        class_name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        language_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        traceback_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        handle_{::uint64_t{0u}} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR HostException::HostException(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(HostException_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct HostExceptionDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR HostExceptionDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~HostExceptionDefaultTypeInternal() {}
+  union {
+    HostException _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 HostExceptionDefaultTypeInternal _HostException_default_instance_;
+
 inline constexpr CallAck::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : response_{},
@@ -351,6 +388,32 @@ struct InvocationOptionsDefaultTypeInternal {
 
 PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 InvocationOptionsDefaultTypeInternal _InvocationOptions_default_instance_;
+
+inline constexpr HostCallCompletion::Impl_::Impl_(
+    ::_pbi::ConstantInitialized) noexcept
+      : outcome_{},
+        _cached_size_{0},
+        _oneof_case_{} {}
+
+template <typename>
+PROTOBUF_CONSTEXPR HostCallCompletion::HostCallCompletion(::_pbi::ConstantInitialized)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(HostCallCompletion_class_data_.base()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(::_pbi::ConstantInitialized()) {
+}
+struct HostCallCompletionDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR HostCallCompletionDefaultTypeInternal() : _instance(::_pbi::ConstantInitialized{}) {}
+  ~HostCallCompletionDefaultTypeInternal() {}
+  union {
+    HostCallCompletion _instance;
+  };
+};
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 HostCallCompletionDefaultTypeInternal _HostCallCompletion_default_instance_;
 
 inline constexpr CallFunctionArgs::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
@@ -5622,6 +5685,886 @@ void CallAck::InternalSwap(CallAck* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_.response_, other->_impl_.response_);
   swap(_impl_._oneof_case_[0], other->_impl_._oneof_case_[0]);
+}
+
+// ===================================================================
+
+class HostCallCompletion::_Internal {
+ public:
+  static constexpr ::int32_t kOneofCaseOffset =
+      PROTOBUF_FIELD_OFFSET(::baml_bridge::cffi::v1::HostCallCompletion, _impl_._oneof_case_);
+};
+
+void HostCallCompletion::set_allocated_returned(::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE returned) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_outcome();
+  if (returned) {
+    ::google::protobuf::Arena* submessage_arena = returned->GetArena();
+    if (message_arena != submessage_arena) {
+      returned = ::google::protobuf::internal::GetOwnedMessage(message_arena, returned, submessage_arena);
+    }
+    set_has_returned();
+    _impl_.outcome_.returned_ = returned;
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.HostCallCompletion.returned)
+}
+void HostCallCompletion::set_allocated_thrown(::baml_bridge::cffi::v1::InboundValue* PROTOBUF_NULLABLE thrown) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_outcome();
+  if (thrown) {
+    ::google::protobuf::Arena* submessage_arena = thrown->GetArena();
+    if (message_arena != submessage_arena) {
+      thrown = ::google::protobuf::internal::GetOwnedMessage(message_arena, thrown, submessage_arena);
+    }
+    set_has_thrown();
+    _impl_.outcome_.thrown_ = thrown;
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.HostCallCompletion.thrown)
+}
+void HostCallCompletion::set_allocated_raised(::baml_bridge::cffi::v1::HostException* PROTOBUF_NULLABLE raised) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  clear_outcome();
+  if (raised) {
+    ::google::protobuf::Arena* submessage_arena = raised->GetArena();
+    if (message_arena != submessage_arena) {
+      raised = ::google::protobuf::internal::GetOwnedMessage(message_arena, raised, submessage_arena);
+    }
+    set_has_raised();
+    _impl_.outcome_.raised_ = raised;
+  }
+  // @@protoc_insertion_point(field_set_allocated:baml_bridge.cffi.v1.HostCallCompletion.raised)
+}
+HostCallCompletion::HostCallCompletion(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, HostCallCompletion_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:baml_bridge.cffi.v1.HostCallCompletion)
+}
+PROTOBUF_NDEBUG_INLINE HostCallCompletion::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    const ::baml_bridge::cffi::v1::HostCallCompletion& from_msg)
+      : outcome_{},
+        _cached_size_{0},
+        _oneof_case_{from._oneof_case_[0]} {}
+
+HostCallCompletion::HostCallCompletion(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const HostCallCompletion& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, HostCallCompletion_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  HostCallCompletion* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<std::string>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  switch (outcome_case()) {
+    case OUTCOME_NOT_SET:
+      break;
+      case kReturned:
+        _impl_.outcome_.returned_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.outcome_.returned_);
+        break;
+      case kThrown:
+        _impl_.outcome_.thrown_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.outcome_.thrown_);
+        break;
+      case kRaised:
+        _impl_.outcome_.raised_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.outcome_.raised_);
+        break;
+      case kContractViolation:
+        new (&_impl_.outcome_.contract_violation_) decltype(_impl_.outcome_.contract_violation_){arena, from._impl_.outcome_.contract_violation_};
+        break;
+      case kBridgeFailure:
+        new (&_impl_.outcome_.bridge_failure_) decltype(_impl_.outcome_.bridge_failure_){arena, from._impl_.outcome_.bridge_failure_};
+        break;
+  }
+
+  // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.HostCallCompletion)
+}
+PROTOBUF_NDEBUG_INLINE HostCallCompletion::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : outcome_{},
+        _cached_size_{0},
+        _oneof_case_{} {}
+
+inline void HostCallCompletion::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+HostCallCompletion::~HostCallCompletion() {
+  // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.HostCallCompletion)
+  SharedDtor(*this);
+}
+inline void HostCallCompletion::SharedDtor(MessageLite& self) {
+  HostCallCompletion& this_ = static_cast<HostCallCompletion&>(self);
+  this_._internal_metadata_.Delete<std::string>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  if (this_.has_outcome()) {
+    this_.clear_outcome();
+  }
+  this_._impl_.~Impl_();
+}
+
+void HostCallCompletion::clear_outcome() {
+// @@protoc_insertion_point(one_of_clear_start:baml_bridge.cffi.v1.HostCallCompletion)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  switch (outcome_case()) {
+    case kReturned: {
+      if (GetArena() == nullptr) {
+        delete _impl_.outcome_.returned_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        if (_impl_.outcome_.returned_ != nullptr) {
+          _impl_.outcome_.returned_->Clear();
+        }
+      }
+      break;
+    }
+    case kThrown: {
+      if (GetArena() == nullptr) {
+        delete _impl_.outcome_.thrown_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        if (_impl_.outcome_.thrown_ != nullptr) {
+          _impl_.outcome_.thrown_->Clear();
+        }
+      }
+      break;
+    }
+    case kRaised: {
+      if (GetArena() == nullptr) {
+        delete _impl_.outcome_.raised_;
+      } else if (::google::protobuf::internal::DebugHardenClearOneofMessageOnArena()) {
+        if (_impl_.outcome_.raised_ != nullptr) {
+          _impl_.outcome_.raised_->Clear();
+        }
+      }
+      break;
+    }
+    case kContractViolation: {
+      _impl_.outcome_.contract_violation_.Destroy();
+      break;
+    }
+    case kBridgeFailure: {
+      _impl_.outcome_.bridge_failure_.Destroy();
+      break;
+    }
+    case OUTCOME_NOT_SET: {
+      break;
+    }
+  }
+  _impl_._oneof_case_[0] = OUTCOME_NOT_SET;
+}
+
+
+inline void* PROTOBUF_NONNULL HostCallCompletion::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) HostCallCompletion(arena);
+}
+constexpr auto HostCallCompletion::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(HostCallCompletion),
+                                            alignof(HostCallCompletion));
+}
+constexpr auto HostCallCompletion::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataLite<39>{
+      {
+          &_HostCallCompletion_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &HostCallCompletion::MergeImpl,
+          ::google::protobuf::MessageLite::GetNewImpl<HostCallCompletion>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &HostCallCompletion::SharedDtor,
+          ::google::protobuf::MessageLite::GetClearImpl<HostCallCompletion>(), &HostCallCompletion::ByteSizeLong,
+              &HostCallCompletion::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(HostCallCompletion, _impl_._cached_size_),
+          true,
+      },
+      "baml_bridge.cffi.v1.HostCallCompletion",
+  };
+}
+
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataLite<39> HostCallCompletion_class_data_ =
+    HostCallCompletion::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+HostCallCompletion::GetClassData() const {
+  return HostCallCompletion_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<0, 5, 3, 79, 2>
+HostCallCompletion::_table_ = {
+  {
+    0,  // no _has_bits_
+    0, // no _extensions_
+    5, 0,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967264,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    5,  // num_field_entries
+    3,  // num_aux_entries
+    offsetof(decltype(_table_), aux_entries),
+    HostCallCompletion_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallbackLite,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::HostCallCompletion>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // .baml_bridge.cffi.v1.InboundValue returned = 1;
+    {PROTOBUF_FIELD_OFFSET(HostCallCompletion, _impl_.outcome_.returned_), _Internal::kOneofCaseOffset + 0, 0,
+    (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.InboundValue thrown = 2;
+    {PROTOBUF_FIELD_OFFSET(HostCallCompletion, _impl_.outcome_.thrown_), _Internal::kOneofCaseOffset + 0, 1,
+    (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // .baml_bridge.cffi.v1.HostException raised = 3;
+    {PROTOBUF_FIELD_OFFSET(HostCallCompletion, _impl_.outcome_.raised_), _Internal::kOneofCaseOffset + 0, 2,
+    (0 | ::_fl::kFcOneof | ::_fl::kMessage | ::_fl::kTvTable)},
+    // string contract_violation = 4;
+    {PROTOBUF_FIELD_OFFSET(HostCallCompletion, _impl_.outcome_.contract_violation_), _Internal::kOneofCaseOffset + 0, 0,
+    (0 | ::_fl::kFcOneof | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string bridge_failure = 5;
+    {PROTOBUF_FIELD_OFFSET(HostCallCompletion, _impl_.outcome_.bridge_failure_), _Internal::kOneofCaseOffset + 0, 0,
+    (0 | ::_fl::kFcOneof | ::_fl::kUtf8String | ::_fl::kRepAString)},
+  }},
+  {{
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundValue>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::InboundValue>()},
+      {::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::HostException>()},
+  }},
+  {{
+    "\46\0\0\0\22\16\0\0"
+    "baml_bridge.cffi.v1.HostCallCompletion"
+    "contract_violation"
+    "bridge_failure"
+  }},
+};
+PROTOBUF_NOINLINE void HostCallCompletion::Clear() {
+// @@protoc_insertion_point(message_clear_start:baml_bridge.cffi.v1.HostCallCompletion)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  clear_outcome();
+  _internal_metadata_.Clear<std::string>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL HostCallCompletion::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const HostCallCompletion& this_ = static_cast<const HostCallCompletion&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL HostCallCompletion::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const HostCallCompletion& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.HostCallCompletion)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  switch (this_.outcome_case()) {
+    case kReturned: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          1, *this_._impl_.outcome_.returned_, this_._impl_.outcome_.returned_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kThrown: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          2, *this_._impl_.outcome_.thrown_, this_._impl_.outcome_.thrown_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kRaised: {
+      target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+          3, *this_._impl_.outcome_.raised_, this_._impl_.outcome_.raised_->GetCachedSize(), target,
+          stream);
+      break;
+    }
+    case kContractViolation: {
+      const ::std::string& _s = this_._internal_contract_violation();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.HostCallCompletion.contract_violation");
+      target = stream->WriteStringMaybeAliased(4, _s, target);
+      break;
+    }
+    case kBridgeFailure: {
+      const ::std::string& _s = this_._internal_bridge_failure();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.HostCallCompletion.bridge_failure");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
+      break;
+    }
+    default:
+      break;
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(
+        this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
+        static_cast<int>(this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:baml_bridge.cffi.v1.HostCallCompletion)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t HostCallCompletion::ByteSizeLong(const MessageLite& base) {
+  const HostCallCompletion& this_ = static_cast<const HostCallCompletion&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t HostCallCompletion::ByteSizeLong() const {
+  const HostCallCompletion& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:baml_bridge.cffi.v1.HostCallCompletion)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  switch (this_.outcome_case()) {
+    // .baml_bridge.cffi.v1.InboundValue returned = 1;
+    case kReturned: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.outcome_.returned_);
+      break;
+    }
+    // .baml_bridge.cffi.v1.InboundValue thrown = 2;
+    case kThrown: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.outcome_.thrown_);
+      break;
+    }
+    // .baml_bridge.cffi.v1.HostException raised = 3;
+    case kRaised: {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.outcome_.raised_);
+      break;
+    }
+    // string contract_violation = 4;
+    case kContractViolation: {
+      total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                      this_._internal_contract_violation());
+      break;
+    }
+    // string bridge_failure = 5;
+    case kBridgeFailure: {
+      total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                      this_._internal_bridge_failure());
+      break;
+    }
+    case OUTCOME_NOT_SET: {
+      break;
+    }
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
+  }
+  this_._impl_._cached_size_.Set(::_pbi::ToCachedSize(total_size));
+  return total_size;
+}
+
+void HostCallCompletion::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<HostCallCompletion*>(&to_msg);
+  auto& from = static_cast<const HostCallCompletion&>(from_msg);
+  ::google::protobuf::Arena* arena = _this->GetArena();
+  // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.HostCallCompletion)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  if (const uint32_t oneof_from_case = from._impl_._oneof_case_[0]) {
+    const uint32_t oneof_to_case = _this->_impl_._oneof_case_[0];
+    const bool oneof_needs_init = oneof_to_case != oneof_from_case;
+    if (oneof_needs_init) {
+      if (oneof_to_case != 0) {
+        _this->clear_outcome();
+      }
+      _this->_impl_._oneof_case_[0] = oneof_from_case;
+    }
+
+    switch (oneof_from_case) {
+      case kReturned: {
+        if (oneof_needs_init) {
+          _this->_impl_.outcome_.returned_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.outcome_.returned_);
+        } else {
+          _this->_impl_.outcome_.returned_->CheckTypeAndMergeFrom(*from._impl_.outcome_.returned_);
+        }
+        break;
+      }
+      case kThrown: {
+        if (oneof_needs_init) {
+          _this->_impl_.outcome_.thrown_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.outcome_.thrown_);
+        } else {
+          _this->_impl_.outcome_.thrown_->CheckTypeAndMergeFrom(*from._impl_.outcome_.thrown_);
+        }
+        break;
+      }
+      case kRaised: {
+        if (oneof_needs_init) {
+          _this->_impl_.outcome_.raised_ = ::google::protobuf::MessageLite::CopyConstruct(arena, *from._impl_.outcome_.raised_);
+        } else {
+          _this->_impl_.outcome_.raised_->CheckTypeAndMergeFrom(*from._impl_.outcome_.raised_);
+        }
+        break;
+      }
+      case kContractViolation: {
+        if (oneof_needs_init) {
+          _this->_impl_.outcome_.contract_violation_.InitDefault();
+        }
+        _this->_impl_.outcome_.contract_violation_.Set(from._internal_contract_violation(), arena);
+        break;
+      }
+      case kBridgeFailure: {
+        if (oneof_needs_init) {
+          _this->_impl_.outcome_.bridge_failure_.InitDefault();
+        }
+        _this->_impl_.outcome_.bridge_failure_.Set(from._internal_bridge_failure(), arena);
+        break;
+      }
+      case OUTCOME_NOT_SET:
+        break;
+    }
+  }
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void HostCallCompletion::CopyFrom(const HostCallCompletion& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:baml_bridge.cffi.v1.HostCallCompletion)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void HostCallCompletion::InternalSwap(HostCallCompletion* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_.outcome_, other->_impl_.outcome_);
+  swap(_impl_._oneof_case_[0], other->_impl_._oneof_case_[0]);
+}
+
+// ===================================================================
+
+class HostException::_Internal {
+ public:
+  using HasBits =
+      decltype(::std::declval<HostException>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(HostException, _impl_._has_bits_);
+};
+
+HostException::HostException(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, HostException_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:baml_bridge.cffi.v1.HostException)
+}
+PROTOBUF_NDEBUG_INLINE HostException::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    const ::baml_bridge::cffi::v1::HostException& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        message_(arena, from.message_),
+        class_name_(arena, from.class_name_),
+        language_(arena, from.language_),
+        traceback_(arena, from.traceback_) {}
+
+HostException::HostException(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const HostException& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::MessageLite(arena, HostException_class_data_.base()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::MessageLite(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  HostException* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<std::string>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.handle_ = from._impl_.handle_;
+
+  // @@protoc_insertion_point(copy_constructor:baml_bridge.cffi.v1.HostException)
+}
+PROTOBUF_NDEBUG_INLINE HostException::Impl_::Impl_(
+    ::google::protobuf::internal::InternalVisibility visibility,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        message_(arena),
+        class_name_(arena),
+        language_(arena),
+        traceback_(arena) {}
+
+inline void HostException::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.handle_ = {};
+}
+HostException::~HostException() {
+  // @@protoc_insertion_point(destructor:baml_bridge.cffi.v1.HostException)
+  SharedDtor(*this);
+}
+inline void HostException::SharedDtor(MessageLite& self) {
+  HostException& this_ = static_cast<HostException&>(self);
+  this_._internal_metadata_.Delete<std::string>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.message_.Destroy();
+  this_._impl_.class_name_.Destroy();
+  this_._impl_.language_.Destroy();
+  this_._impl_.traceback_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+inline void* PROTOBUF_NONNULL HostException::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) HostException(arena);
+}
+constexpr auto HostException::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(HostException),
+                                            alignof(HostException));
+}
+constexpr auto HostException::InternalGenerateClassData_() {
+  return ::google::protobuf::internal::ClassDataLite<34>{
+      {
+          &_HostException_default_instance_._instance,
+          &_table_.header,
+          nullptr,  // OnDemandRegisterArenaDtor
+          nullptr,  // IsInitialized
+          &HostException::MergeImpl,
+          ::google::protobuf::MessageLite::GetNewImpl<HostException>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &HostException::SharedDtor,
+          ::google::protobuf::MessageLite::GetClearImpl<HostException>(), &HostException::ByteSizeLong,
+              &HostException::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(HostException, _impl_._cached_size_),
+          true,
+      },
+      "baml_bridge.cffi.v1.HostException",
+  };
+}
+
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::google::protobuf::internal::ClassDataLite<34> HostException_class_data_ =
+    HostException::InternalGenerateClassData_();
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+HostException::GetClassData() const {
+  return HostException_class_data_.base();
+}
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1
+const ::_pbi::TcParseTable<3, 5, 0, 76, 2>
+HostException::_table_ = {
+  {
+    PROTOBUF_FIELD_OFFSET(HostException, _impl_._has_bits_),
+    0, // no _extensions_
+    5, 56,  // max_field_number, fast_idx_mask
+    offsetof(decltype(_table_), field_lookup_table),
+    4294967264,  // skipmap
+    offsetof(decltype(_table_), field_entries),
+    5,  // num_field_entries
+    0,  // num_aux_entries
+    offsetof(decltype(_table_), field_names),  // no aux_entries
+    HostException_class_data_.base(),
+    nullptr,  // post_loop_handler
+    ::_pbi::TcParser::GenericFallbackLite,  // fallback
+    #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+    ::_pbi::TcParser::GetTable<::baml_bridge::cffi::v1::HostException>(),  // to_prefetch
+    #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+  }, {{
+    {::_pbi::TcParser::MiniParse, {}},
+    // string message = 1;
+    {::_pbi::TcParser::FastUS1,
+     {10, 0, 0, PROTOBUF_FIELD_OFFSET(HostException, _impl_.message_)}},
+    // string class_name = 2;
+    {::_pbi::TcParser::FastUS1,
+     {18, 1, 0, PROTOBUF_FIELD_OFFSET(HostException, _impl_.class_name_)}},
+    // string language = 3;
+    {::_pbi::TcParser::FastUS1,
+     {26, 2, 0, PROTOBUF_FIELD_OFFSET(HostException, _impl_.language_)}},
+    // optional string traceback = 4;
+    {::_pbi::TcParser::FastUS1,
+     {34, 3, 0, PROTOBUF_FIELD_OFFSET(HostException, _impl_.traceback_)}},
+    // uint64 handle = 5;
+    {::_pbi::TcParser::FastV64S1,
+     {40, 4, 0, PROTOBUF_FIELD_OFFSET(HostException, _impl_.handle_)}},
+    {::_pbi::TcParser::MiniParse, {}},
+    {::_pbi::TcParser::MiniParse, {}},
+  }}, {{
+    65535, 65535
+  }}, {{
+    // string message = 1;
+    {PROTOBUF_FIELD_OFFSET(HostException, _impl_.message_), _Internal::kHasBitsOffset + 0, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string class_name = 2;
+    {PROTOBUF_FIELD_OFFSET(HostException, _impl_.class_name_), _Internal::kHasBitsOffset + 1, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // string language = 3;
+    {PROTOBUF_FIELD_OFFSET(HostException, _impl_.language_), _Internal::kHasBitsOffset + 2, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // optional string traceback = 4;
+    {PROTOBUF_FIELD_OFFSET(HostException, _impl_.traceback_), _Internal::kHasBitsOffset + 3, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    // uint64 handle = 5;
+    {PROTOBUF_FIELD_OFFSET(HostException, _impl_.handle_), _Internal::kHasBitsOffset + 4, 0,
+    (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+  }},
+  // no aux_entries
+  {{
+    "\41\7\12\10\11\0\0\0"
+    "baml_bridge.cffi.v1.HostException"
+    "message"
+    "class_name"
+    "language"
+    "traceback"
+  }},
+};
+PROTOBUF_NOINLINE void HostException::Clear() {
+// @@protoc_insertion_point(message_clear_start:baml_bridge.cffi.v1.HostException)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if ((cached_has_bits & 0x0000000fu) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      _impl_.message_.ClearNonDefaultToEmpty();
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      _impl_.class_name_.ClearNonDefaultToEmpty();
+    }
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      _impl_.language_.ClearNonDefaultToEmpty();
+    }
+    if ((cached_has_bits & 0x00000008u) != 0) {
+      _impl_.traceback_.ClearNonDefaultToEmpty();
+    }
+  }
+  _impl_.handle_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<std::string>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL HostException::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const HostException& this_ = static_cast<const HostException&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL HostException::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const HostException& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(serialize_to_array_start:baml_bridge.cffi.v1.HostException)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  // string message = 1;
+  if ((this_._impl_._has_bits_[0] & 0x00000001u) != 0) {
+    if (!this_._internal_message().empty()) {
+      const ::std::string& _s = this_._internal_message();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.HostException.message");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // string class_name = 2;
+  if ((this_._impl_._has_bits_[0] & 0x00000002u) != 0) {
+    if (!this_._internal_class_name().empty()) {
+      const ::std::string& _s = this_._internal_class_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.HostException.class_name");
+      target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // string language = 3;
+  if ((this_._impl_._has_bits_[0] & 0x00000004u) != 0) {
+    if (!this_._internal_language().empty()) {
+      const ::std::string& _s = this_._internal_language();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.HostException.language");
+      target = stream->WriteStringMaybeAliased(3, _s, target);
+    }
+  }
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // optional string traceback = 4;
+  if ((cached_has_bits & 0x00000008u) != 0) {
+    const ::std::string& _s = this_._internal_traceback();
+    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+        _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "baml_bridge.cffi.v1.HostException.traceback");
+    target = stream->WriteStringMaybeAliased(4, _s, target);
+  }
+
+  // uint64 handle = 5;
+  if ((cached_has_bits & 0x00000010u) != 0) {
+    if (this_._internal_handle() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_handle(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target = stream->WriteRaw(
+        this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).data(),
+        static_cast<int>(this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size()), target);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:baml_bridge.cffi.v1.HostException)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t HostException::ByteSizeLong(const MessageLite& base) {
+  const HostException& this_ = static_cast<const HostException&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t HostException::ByteSizeLong() const {
+  const HostException& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:baml_bridge.cffi.v1.HostException)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x0000001fu) != 0) {
+    // string message = 1;
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!this_._internal_message().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_message());
+      }
+    }
+    // string class_name = 2;
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      if (!this_._internal_class_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_class_name());
+      }
+    }
+    // string language = 3;
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      if (!this_._internal_language().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_language());
+      }
+    }
+    // optional string traceback = 4;
+    if ((cached_has_bits & 0x00000008u) != 0) {
+      total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                      this_._internal_traceback());
+    }
+    // uint64 handle = 5;
+    if ((cached_has_bits & 0x00000010u) != 0) {
+      if (this_._internal_handle() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_handle());
+      }
+    }
+  }
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    total_size += this_._internal_metadata_.unknown_fields<std::string>(::google::protobuf::internal::GetEmptyString).size();
+  }
+  this_._impl_._cached_size_.Set(::_pbi::ToCachedSize(total_size));
+  return total_size;
+}
+
+void HostException::MergeImpl(::google::protobuf::MessageLite& to_msg, const ::google::protobuf::MessageLite& from_msg) {
+  auto* const _this = static_cast<HostException*>(&to_msg);
+  auto& from = static_cast<const HostException&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:baml_bridge.cffi.v1.HostException)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void) cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if ((cached_has_bits & 0x0000001fu) != 0) {
+    if ((cached_has_bits & 0x00000001u) != 0) {
+      if (!from._internal_message().empty()) {
+        _this->_internal_set_message(from._internal_message());
+      } else {
+        if (_this->_impl_.message_.IsDefault()) {
+          _this->_internal_set_message("");
+        }
+      }
+    }
+    if ((cached_has_bits & 0x00000002u) != 0) {
+      if (!from._internal_class_name().empty()) {
+        _this->_internal_set_class_name(from._internal_class_name());
+      } else {
+        if (_this->_impl_.class_name_.IsDefault()) {
+          _this->_internal_set_class_name("");
+        }
+      }
+    }
+    if ((cached_has_bits & 0x00000004u) != 0) {
+      if (!from._internal_language().empty()) {
+        _this->_internal_set_language(from._internal_language());
+      } else {
+        if (_this->_impl_.language_.IsDefault()) {
+          _this->_internal_set_language("");
+        }
+      }
+    }
+    if ((cached_has_bits & 0x00000008u) != 0) {
+      _this->_internal_set_traceback(from._internal_traceback());
+    }
+    if ((cached_has_bits & 0x00000010u) != 0) {
+      if (from._internal_handle() != 0) {
+        _this->_impl_.handle_ = from._impl_.handle_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<std::string>(from._internal_metadata_);
+}
+
+void HostException::CopyFrom(const HostException& from) {
+// @@protoc_insertion_point(class_specific_copy_from_start:baml_bridge.cffi.v1.HostException)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void HostException::InternalSwap(HostException* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.message_, &other->_impl_.message_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.class_name_, &other->_impl_.class_name_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.language_, &other->_impl_.language_, arena);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.traceback_, &other->_impl_.traceback_, arena);
+  swap(_impl_.handle_, other->_impl_.handle_);
 }
 
 // @@protoc_insertion_point(namespace_scope)

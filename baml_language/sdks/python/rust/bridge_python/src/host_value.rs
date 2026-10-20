@@ -18,24 +18,23 @@
 //!    completion on the originating SDK entry's application loop (async
 //!    entry) or a bridge-owned loop with copied application context (sync
 //!    entry). Synchronous callbacks run on the originating Python thread.
-//! 4. Encodes the result into `InboundValue` bytes against the return type
-//!    of the slot the callable was bound to, then calls
-//!    `bridge_cffi::complete_host_call(call_id, 0, ptr, len)`.
+//! 4. Encodes the result against the return type of the slot the callable
+//!    was bound to and completes the call with it
+//!    (`bridge_cffi::complete_host_call`, a `HostCallCompletion`).
 //! 5. On any Python exception, branches on the exception type:
-//!    - A `baml_bridge.errors.BamlError` carrying a codegenned BAML value
-//!      is unwrapped (`.value`) and encoded as that real BAML class
-//!      (preserves catch matching against user-declared throws).
+//!    - A `baml_bridge.errors.BamlError` or `BamlPanic` carrying a BAML
+//!      value is unwrapped (`.value`) and encoded against the slot's throws
+//!      type, so a BAML `catch (e: MyError)` matches it; a panic value is a
+//!      panic whatever the slot declares.
 //!    - Anything else (native `ValueError`, `KeyError`, ...) is registered
-//!      in the process-global host-value table and encoded as a
-//!      `baml.errors.HostCallable` Instance whose `_handle` field
-//!      references the original Python exception object so the BAML→host
-//!      decoder on the same runtime can rehydrate it on round-trip.
+//!      in the process-global host-value table and completes the call as
+//!      the host's own exception: the engine builds the
+//!      `baml.errors.HostCallable` whose `_handle` references the original
+//!      Python exception object, so the BAML→host decoder on the same
+//!      runtime can rehydrate it on round-trip.
 //!
-//!    The encoded `InboundValue` rides `complete_host_call(call_id, 1,
-//!    ptr, len)`; the engine's `materialize_host_throw` runs the
-//!    declared-throws contract check against the surrounding callable's
-//!    `E` and either re-injects the value as a catchable BAML throw or
-//!    escalates to a `HostContractViolation` panic.
+//!    The engine holds both to the callable's declared throws type and
+//!    builds every panic itself.
 //!
 //! When the engine drops the last Rust clone of the `HostValueArc`,
 //! [`host_release_callback`] fires and removes the registry entry — the
@@ -50,13 +49,11 @@ use bridge_cffi::complete_host_call;
 use bridge_ctypes::{
     HostKey, WireHandle,
     baml_bridge::cffi::{
-        BamlHandle, BamlHandleType, BamlOutboundValue, BamlToHostCall, BamlTy, BamlTyClass,
-        InboundClassValue, InboundMapEntry, InboundValue,
-        baml_outbound_value::Value as OutboundValue, baml_ty::Ty as BamlTyVariant,
-        inbound_map_entry::Key as InboundMapKey, inbound_value::Value as InboundValueVariant,
+        BamlHandleType, BamlOutboundValue, BamlToHostCall, HostCallCompletion,
+        baml_outbound_value::Value as OutboundValue,
     },
 };
-use bridge_encode::{BridgeFault, Completion};
+use bridge_encode::{BridgeFault, Completion, Encoded};
 use prost::Message;
 use pyo3::{
     Bound, Py, PyAny, PyResult, Python,
@@ -87,6 +84,10 @@ static REGISTRY: LazyLock<bridge_ctypes::HostValueRegistry<Registered>> =
 static CALLBACK_SIGNATURES: LazyLock<Mutex<HashMap<u32, Option<bex_project::RuntimeTy>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+// BUG: a completion whose call has no stored signature (or one that is not a
+// function type) is a bridge invariant violation; both completion paths
+// currently fall back to encoding against `unknown` instead of completing
+// the call as a bridge failure.
 fn take_callback_signature(call_id: u32) -> Option<bex_project::RuntimeTy> {
     CALLBACK_SIGNATURES
         .lock()
@@ -599,32 +600,22 @@ fn complete_with_value(py: Python<'_>, call_id: u32, value: &Bound<'_, PyAny>) {
         Some(bex_project::RuntimeTy::Function { ret, .. }) => *ret,
         Some(_) | None => bex_project::RuntimeTy::Unknown,
     };
-    let panic = |error: &bridge_encode::EncodeError, bytes: Vec<u8>| {
-        observe_dispatch_error(
-            call_id,
-            py,
-            &pyo3::exceptions::PyTypeError::new_err(error.to_string()),
-        );
-        complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
-    };
-    match crate::encode::encode_result(py, value, &ret) {
-        Completion::Wire(encoded) => {
+    let completion = crate::encode::encode_result(py, value, &ret);
+    // The outcome the engine sees, for the caller's instrumentation: a
+    // value that completes the call as a panic is an error in the trace,
+    // whatever the callable returned.
+    match &completion {
+        Completion::Wire(_) => {
             if let Some((owner, capture)) = observation {
                 owner.observe(btel_types::InvocationOutcome::Ok, capture);
             }
-            send_dispatch_success(call_id, &encoded.encode_to_vec());
         }
-        // The callable's own code raised while its result was read: the
-        // error it threw, as any exception a callable raises.
-        Completion::HostError(error) => send_dispatch_error_from_pyerr(call_id, py, &error),
-        // The host broke the callable's contract: a panic, as the engine's
-        // own return check reports it, not a catchable error.
-        Completion::ContractViolation(error) => panic(
-            &error,
-            bridge_encode::host_contract_violation(&error.to_string(), "python").encode_to_vec(),
+        Completion::HostError(_) => {}
+        Completion::ContractViolation(error) => observe_dispatch_error(
+            call_id,
+            py,
+            &pyo3::exceptions::PyTypeError::new_err(error.to_string()),
         ),
-        // The bridge could not carry a result the callable produced in good
-        // faith: the bridge's own panic.
         Completion::BridgeFailure(fault) => {
             let message = match fault {
                 BridgeFault::Value(error) => error.to_string(),
@@ -633,11 +624,15 @@ fn complete_with_value(py: Python<'_>, call_id: u32, value: &Bound<'_, PyAny>) {
             observe_dispatch_error(
                 call_id,
                 py,
-                &pyo3::exceptions::PyTypeError::new_err(message.clone()),
+                &pyo3::exceptions::PyTypeError::new_err(message),
             );
-            let bytes = bridge_encode::sdk_panic(&message).encode_to_vec();
-            complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
         }
+    }
+    match completion.into_wire(Encoded::Returned) {
+        Ok(wire) => complete(call_id, &wire),
+        // The callable's own code raised while its result was read: the
+        // error it threw, as any exception a callable raises.
+        Err(error) => send_dispatch_error_from_pyerr(call_id, py, &error),
     }
 }
 
@@ -669,75 +664,12 @@ fn decode_args<'py>(
     decoder.call1((bytes,))?.extract()
 }
 
-/// Send a `complete_host_call` success with the given `InboundValue`-encoded
-/// payload. `complete_host_call` is `extern "C"` but not `unsafe` — the
-/// invariants documented on its declaration (valid-for-length bytes) are
-/// satisfied by `bytes`'s slice contract.
-fn send_dispatch_success(call_id: u32, bytes: &[u8]) {
-    complete_host_call(call_id, 0, bytes.as_ptr() as *const i8, bytes.len());
-}
-
-/// Build an `InboundValue` carrying a `baml.errors.HostCallable` Instance.
-/// `handle_key` references the originating native exception in the
-/// process-global registry (set by [`register_host_opaque`]); the BAML
-/// class's `_handle` field carries it as a `BamlHandle` of type
-/// `HOST_VALUE_OPAQUE` so a same-host decoder can rehydrate the exact
-/// Python exception object on round-trip. The remaining
-/// `class_name` / `message` / `language` / `traceback` fields are
-/// metadata for debugging/printing/user convenience and do not
-/// participate in error matching or rehydration.
-fn build_host_callable_inbound(
-    class_name: &str,
-    message: &str,
-    traceback: Option<&str>,
-    handle_key: HostKey,
-) -> InboundValue {
-    fn string_field(key: &str, value: &str) -> InboundMapEntry {
-        InboundMapEntry {
-            key: Some(InboundMapKey::StringKey(key.to_string())),
-            value: Some(InboundValue {
-                value_type: None,
-                value: Some(InboundValueVariant::StringValue(value.to_string())),
-            }),
-        }
-    }
-    let handle_field = InboundMapEntry {
-        key: Some(InboundMapKey::StringKey("_handle".to_string())),
-        value: Some(InboundValue {
-            value_type: None,
-            value: Some(InboundValueVariant::Handle(BamlHandle {
-                key: handle_key.get(),
-                handle_type: BamlHandleType::HostValueOpaque as i32,
-            })),
-        }),
-    };
-    let mut fields = vec![
-        string_field("message", message),
-        string_field("class_name", class_name),
-        string_field("language", "python"),
-    ];
-    if let Some(tb) = traceback {
-        fields.push(string_field("traceback", tb));
-    } else {
-        // Nullable is still a required field. Synthetic cancellation errors
-        // (e.g. a task cancelled before first execution) have no traceback.
-        fields.push(InboundMapEntry {
-            key: Some(InboundMapKey::StringKey("traceback".to_owned())),
-            value: Some(InboundValue::default()),
-        });
-    }
-    fields.push(handle_field);
-    InboundValue {
-        value_type: Some(BamlTy {
-            ty: Some(BamlTyVariant::ClassTy(BamlTyClass {
-                name: "baml.errors.HostCallable".to_string(),
-                type_args: vec![],
-            })),
-        }),
-        value: Some(InboundValueVariant::ClassValue(InboundClassValue {
-            fields,
-        })),
-    }
+/// Complete `call_id` with what its callable did. `complete_host_call` is
+/// `extern "C"` but not `unsafe` — the invariants documented on its
+/// declaration (valid-for-length bytes) are satisfied by the slice contract.
+fn complete(call_id: u32, completion: &HostCallCompletion) {
+    let bytes = completion.encode_to_vec();
+    complete_host_call(call_id, bytes.as_ptr() as *const i8, bytes.len());
 }
 
 /// Complete an in-flight host call with `VmInternalError::BridgeFailure` —
@@ -761,31 +693,28 @@ pub(crate) fn send_dispatch_bridge_failure(call_id: u32, message: String) {
 }
 
 /// If `py_err` is a `baml_bridge.errors.BamlError` *or* `BamlPanic` carrying
-/// a codegenned BAML value, encode the unwrapped value (`e.value`) as an
-/// `InboundValue` — preserving its real BAML class identity so the BAML
-/// caller can `catch (e: MyError)` and read fields just like a BAML-thrown
-/// error. `BamlPanic.value` is normally a `baml.panics.*` class; the
-/// engine's namespace-based routing turns that back into a panic on the
-/// BAML side. (`BamlPanic` is a `BaseException`, not a `BamlError`
-/// subclass, so it must be checked separately.)
+/// a BAML value, the completion that throws the unwrapped value (`e.value`),
+/// encoded against the throws type of the slot the callable was bound to, so
+/// the BAML caller can `catch (e: MyError)` and read fields just like a
+/// BAML-thrown error. A `BamlPanic.value` is a `baml.panics.*` instance,
+/// which the engine throws as a panic whatever the slot declares.
+/// (`BamlPanic` is a `BaseException`, not a `BamlError` subclass, so it must
+/// be checked separately.)
 ///
 /// Returns `Ok(None)` for:
-/// - any other exception type — caller falls back to the opaque
-///   `baml.errors.HostCallable` path;
-/// - `BamlError(value=None)` / `BamlPanic(value=None)` — encoding `None`
-///   would emit BAML `null`, which fails contract check for any concrete
-///   `E` and produces a nonsensical `null` throw under `E=unknown`; the
-///   opaque path always produces a well-formed `HostCallable` instance the
-///   engine can route.
+/// - any other exception type — the caller completes the call as the host's
+///   own exception;
+/// - `BamlError(value=None)` / `BamlPanic(value=None)` — a bare wrapper
+///   carries no BAML value to throw.
 ///
-/// An `Err(_)` here (errors module missing, the value does not fit the
-/// slot's throws type) is also collapsed to the opaque path by the caller —
-/// the call always completes, even if the BAML-class identity is lost.
+/// An `Err(_)` here (errors module missing, the host's own exception while
+/// the value was read) is also collapsed to the host-exception path by the
+/// caller — the call always completes.
 fn try_encode_baml_error_throw(
     py: Python<'_>,
     call_id: u32,
     py_err: &pyo3::PyErr,
-) -> PyResult<Option<Vec<u8>>> {
+) -> PyResult<Option<HostCallCompletion>> {
     let errors_mod = match PyModule::import(py, "baml_bridge.errors") {
         Ok(m) => m,
         // Defensive: missing module would be a packaging bug. Fall through.
@@ -810,20 +739,13 @@ fn try_encode_baml_error_throw(
         // the caller will fall through to the opaque path.
         return Ok(None);
     }
-    // The engine's throw channel takes the value with no declared slot and
-    // checks the callable's throws contract afterwards, so the thrown value
-    // states what it is (its class in particular). Once the engine hydrates
-    // a throw against the declared throws type, encode against it here.
-    drop(take_callback_signature(call_id));
-    match crate::encode::encode_result(py, &inner, &bex_project::RuntimeTy::Unknown) {
-        Completion::Wire(value) => Ok(Some(value.encode_to_vec())),
-        Completion::HostError(error) => Err(error),
-        Completion::ContractViolation(error)
-        | Completion::BridgeFailure(BridgeFault::Value(error)) => {
-            Err(pyo3::exceptions::PyTypeError::new_err(error.to_string()))
-        }
-        Completion::BridgeFailure(BridgeFault::Host(error)) => Err(error),
-    }
+    let throws = match take_callback_signature(call_id) {
+        Some(bex_project::RuntimeTy::Function { throws, .. }) => *throws,
+        Some(_) | None => bex_project::RuntimeTy::Unknown,
+    };
+    crate::encode::encode_result(py, &inner, &throws)
+        .into_wire(Encoded::Thrown)
+        .map(Some)
 }
 
 /// Encode a Python exception as an `InboundValue` and send via
@@ -838,8 +760,8 @@ fn try_encode_baml_error_throw(
 fn send_dispatch_error_from_pyerr(call_id: u32, py: Python<'_>, py_err: &pyo3::PyErr) {
     observe_dispatch_error(call_id, py, py_err);
 
-    if let Ok(Some(bytes)) = try_encode_baml_error_throw(py, call_id, py_err) {
-        complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
+    if let Ok(Some(completion)) = try_encode_baml_error_throw(py, call_id, py_err) {
+        complete(call_id, &completion);
         return;
     }
     send_dispatch_error_opaque(call_id, py, py_err);
@@ -869,10 +791,11 @@ fn observe_dispatch_error(call_id: u32, py: Python<'_>, py_err: &pyo3::PyErr) {
     }
 }
 
-/// Complete `call_id` with a `baml.errors.HostCallable` instance carrying
-/// `py_err`'s metadata and a handle to the exception object itself.
+/// Complete `call_id` as the host's own exception: `py_err`'s identity and a
+/// handle to the exception object itself, from which the engine builds the
+/// `baml.errors.HostCallable`.
 fn send_dispatch_error_opaque(call_id: u32, py: Python<'_>, py_err: &pyo3::PyErr) {
-    // The opaque path encodes nothing against the signature.
+    // The host's own exception is encoded against nothing.
     drop(take_callback_signature(call_id));
 
     let class_name = py_err
@@ -888,11 +811,10 @@ fn send_dispatch_error_opaque(call_id: u32, py: Python<'_>, py_err: &pyo3::PyErr
     // resolve `_handle` back to the original `ValueError`/`KeyError`/...
     // object on round-trip.
     let handle_key = register_host_opaque(py_err.value(py).clone().unbind().into_any());
-
-    let bytes =
-        build_host_callable_inbound(&class_name, &message, traceback.as_deref(), handle_key)
-            .encode_to_vec();
-    complete_host_call(call_id, 1, bytes.as_ptr() as *const i8, bytes.len());
+    complete(
+        call_id,
+        &bridge_encode::raised(message, class_name, "python", traceback, handle_key),
+    );
 }
 
 /// Best-effort: format a Python traceback via the `traceback` stdlib

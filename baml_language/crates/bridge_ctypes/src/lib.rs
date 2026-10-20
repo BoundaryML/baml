@@ -10,8 +10,10 @@ mod wire_depth;
 pub use wire_depth::{
     ARGUMENT_DEPTH, RESULT_DEPTH, WIRE_NESTING_LIMIT, baml_ty_depth, inbound_value_depth,
 };
+mod host_call_completion;
 mod host_value_registry;
 mod invocation;
+pub use host_call_completion::decode_host_call_completion;
 pub use host_value_registry::HostValueRegistry;
 pub use invocation::{
     OwnedHostArguments, OwnedHostInvocation, build_host_invocation, release_outbound_references,

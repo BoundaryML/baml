@@ -1234,6 +1234,61 @@ pub mod call_ack {
         Error(::prost::alloc::string::String),
     }
 }
+// -----------------------------------------------------------------------------
+// Host callback completion — host language to engine
+// -----------------------------------------------------------------------------
+
+/// What a host completes a BAML→host callback with (`complete_host_call`). The
+/// host encodes a result against the callable's declared return type and a
+/// thrown BAML value against its declared throws type; the engine checks both
+/// and builds every panic itself. An exception of the host's own becomes a
+/// `baml.errors.HostCallable` the engine builds from `raised`. A payload with no
+/// outcome is a bridge failure.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct HostCallCompletion {
+    #[prost(oneof = "host_call_completion::Outcome", tags = "1, 2, 3, 4, 5")]
+    pub outcome: ::core::option::Option<host_call_completion::Outcome>,
+}
+/// Nested message and enum types in `HostCallCompletion`.
+pub mod host_call_completion {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Outcome {
+        /// The callable returned this value.
+        #[prost(message, tag = "1")]
+        Returned(super::InboundValue),
+        /// The callable threw this BAML value (a `baml.panics.*` instance is a
+        /// panic whatever the callable declares).
+        #[prost(message, tag = "2")]
+        Thrown(super::InboundValue),
+        /// The callable raised an exception of the host's own.
+        #[prost(message, tag = "3")]
+        Raised(super::HostException),
+        /// The host could not encode the result or thrown value against the
+        /// declared type: the callable broke its contract. The text says how.
+        #[prost(string, tag = "4")]
+        ContractViolation(::prost::alloc::string::String),
+        /// The bridge could not carry a value the callable produced in good faith,
+        /// or failed in its own machinery. The text says how.
+        #[prost(string, tag = "5")]
+        BridgeFailure(::prost::alloc::string::String),
+    }
+}
+/// An exception of the host's own that a callback raised.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct HostException {
+    #[prost(string, tag = "1")]
+    pub message: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub class_name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub language: ::prost::alloc::string::String,
+    #[prost(string, optional, tag = "4")]
+    pub traceback: ::core::option::Option<::prost::alloc::string::String>,
+    /// The host's registration of the exception object (a `HOST_VALUE_OPAQUE`
+    /// key), so the same host can recover it by identity when it comes back.
+    #[prost(uint64, tag = "5")]
+    pub handle: u64,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum TraceMode {

@@ -12,19 +12,20 @@
 //!
 //! A fallible closure's error takes one of two paths, matching the other
 //! bridges:
-//! - the declared BAML throws class (`E: BamlValue`) encodes as that real
+//! - the declared BAML throws class (`E: BamlValue`) is thrown as that real
 //!   class — a BAML `catch (e: MyError)` matches it structurally;
 //! - an arbitrary host error (`E: std::error::Error`) is registered here
-//!   as an opaque entry and rides as a `baml.errors.HostCallable`
-//!   instance whose `_handle` field references it. If BAML re-throws it
-//!   back out, it decodes as the normal throws member [`HostCallable`],
-//!   whose `_handle` resolves through the registry back to the original
-//!   value ([`HostCallable::downcast_ref`]) — the same-host round trip.
+//!   as an opaque entry and raised as the host's own exception; the engine
+//!   builds the `baml.errors.HostCallable` whose `_handle` references it.
+//!   If BAML re-throws it back out, it decodes as the normal throws member
+//!   [`HostCallable`], whose `_handle` resolves through the registry back
+//!   to the original value ([`HostCallable::downcast_ref`]) — the same-host
+//!   round trip.
 //!
 //! The engine releases registry entries through the release callback at
 //! its safepoints; bridge-layer faults (unknown key, malformed args, a
-//! panicking closure) complete with the empty-error payload, which the
-//! engine surfaces as an SDK panic rather than a catchable throw.
+//! panicking closure) complete as a bridge failure, which the engine
+//! surfaces as an SDK panic rather than a catchable throw.
 
 use std::{
     any::Any,
@@ -275,7 +276,10 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
         log::warn(&format!(
             "no host callable registered for key {host_value_key}"
         ));
-        complete_bridge_failure(call_id);
+        complete_bridge_failure(
+            call_id,
+            "no host callable is registered for the dispatched key",
+        );
         return;
     };
 
@@ -283,7 +287,7 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
         Ok(call) => call,
         Err(e) => {
             log::warn(&format!("malformed BamlToHostCall payload: {e}"));
-            complete_bridge_failure(call_id);
+            complete_bridge_failure(call_id, &format!("malformed BamlToHostCall payload: {e}"));
             return;
         }
     };
@@ -310,59 +314,82 @@ extern "C" fn host_dispatch_callback(args: *const u8, length: usize) {
             Ok(Ok(future)) => future,
             Ok(Err(message)) => {
                 log::warn(&format!("host callable argument decode failed: {message}"));
-                complete_bridge_failure(call_id);
+                complete_bridge_failure(
+                    call_id,
+                    &format!("host callable argument decode failed: {message}"),
+                );
                 return;
             }
             Err(join_error) => {
                 log::warn(&format!(
                     "host callable panicked during invocation: {join_error}"
                 ));
-                complete_bridge_failure(call_id);
+                complete_bridge_failure(
+                    call_id,
+                    &format!("host callable panicked during invocation: {join_error}"),
+                );
                 return;
             }
         };
         match handle.spawn(ASYNC_FRAME.scope(frame, future)).await {
-            Ok(Ok(value)) => complete(call_id, 0, &value.encode_to_vec()),
+            Ok(Ok(value)) => complete(
+                call_id,
+                wire::host_call_completion::Outcome::Returned(value),
+            ),
             Ok(Err(throw)) => complete_throw(call_id, throw),
             Err(join_error) => {
                 log::warn(&format!("host callable panicked: {join_error}"));
-                complete_bridge_failure(call_id);
+                complete_bridge_failure(call_id, &format!("host callable panicked: {join_error}"));
             }
         }
     });
 }
 
-fn complete(call_id: u32, is_error: i32, bytes: &[u8]) {
+fn complete(call_id: u32, outcome: wire::host_call_completion::Outcome) {
     let Ok(api) = capi::api() else {
         // Unreachable in practice: the engine just called us, so it is
         // loaded. Nothing to complete against if not.
         return;
     };
+    let bytes = wire::HostCallCompletion {
+        outcome: Some(outcome),
+    }
+    .encode_to_vec();
     // SAFETY: `bytes` is valid for its length for the duration of the
     // call; the engine copies before returning.
     #[expect(unsafe_code)]
     unsafe {
-        (api.complete_host_call)(call_id, is_error, bytes.as_ptr().cast(), bytes.len());
+        (api.complete_host_call)(call_id, bytes.as_ptr().cast(), bytes.len());
     }
 }
 
-/// The empty error payload is the ABI's bridge-failure signal: the engine
-/// surfaces it as an SDK panic, not a catchable throw.
-fn complete_bridge_failure(call_id: u32) {
-    complete(call_id, 1, &[]);
+/// A failure of the bridge's own: the engine surfaces it as an SDK panic,
+/// not a catchable throw.
+fn complete_bridge_failure(call_id: u32, message: &str) {
+    complete(
+        call_id,
+        wire::host_call_completion::Outcome::BridgeFailure(message.to_string()),
+    );
 }
 
 fn complete_throw(call_id: u32, throw: HostThrow) {
+    use wire::host_call_completion::Outcome;
     match throw {
-        HostThrow::Typed(value) => complete(call_id, 1, &value.encode_to_vec()),
+        HostThrow::Typed(value) => complete(call_id, Outcome::Thrown(value)),
         HostThrow::Opaque {
             class_name,
             message,
             original,
-        } => {
-            let value = encode_host_callable(&class_name, &message, original);
-            complete(call_id, 1, &value.encode_to_vec());
-        }
+        } => complete(
+            call_id,
+            Outcome::Raised(wire::HostException {
+                message,
+                class_name,
+                language: "rust".to_string(),
+                traceback: None,
+                handle: insert(original),
+            }),
+        ),
     }
 }
 

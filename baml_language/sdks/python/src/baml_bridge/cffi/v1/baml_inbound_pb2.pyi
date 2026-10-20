@@ -189,3 +189,31 @@ class CallAck(_message.Message):
     ERROR_FIELD_NUMBER: _ClassVar[int]
     error: str
     def __init__(self, error: _Optional[str] = ...) -> None: ...
+
+class HostCallCompletion(_message.Message):
+    __slots__ = ("returned", "thrown", "raised", "contract_violation", "bridge_failure")
+    RETURNED_FIELD_NUMBER: _ClassVar[int]
+    THROWN_FIELD_NUMBER: _ClassVar[int]
+    RAISED_FIELD_NUMBER: _ClassVar[int]
+    CONTRACT_VIOLATION_FIELD_NUMBER: _ClassVar[int]
+    BRIDGE_FAILURE_FIELD_NUMBER: _ClassVar[int]
+    returned: InboundValue
+    thrown: InboundValue
+    raised: HostException
+    contract_violation: str
+    bridge_failure: str
+    def __init__(self, returned: _Optional[_Union[InboundValue, _Mapping]] = ..., thrown: _Optional[_Union[InboundValue, _Mapping]] = ..., raised: _Optional[_Union[HostException, _Mapping]] = ..., contract_violation: _Optional[str] = ..., bridge_failure: _Optional[str] = ...) -> None: ...
+
+class HostException(_message.Message):
+    __slots__ = ("message", "class_name", "language", "traceback", "handle")
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    CLASS_NAME_FIELD_NUMBER: _ClassVar[int]
+    LANGUAGE_FIELD_NUMBER: _ClassVar[int]
+    TRACEBACK_FIELD_NUMBER: _ClassVar[int]
+    HANDLE_FIELD_NUMBER: _ClassVar[int]
+    message: str
+    class_name: str
+    language: str
+    traceback: str
+    handle: int
+    def __init__(self, message: _Optional[str] = ..., class_name: _Optional[str] = ..., language: _Optional[str] = ..., traceback: _Optional[str] = ..., handle: _Optional[int] = ...) -> None: ...

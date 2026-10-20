@@ -20,7 +20,7 @@ use crate::Buffer;
 /// Revision 4: a media value holds content, never a file path.
 /// `media_from_file` always fails and `media_file` is always absent;
 /// `media_name` and `media_from_file_content` are required.
-pub const BAML_API_V1_ABI_VERSION: u32 = 4;
+pub const BAML_API_V1_ABI_VERSION: u32 = 5;
 
 /// Valid `media_kind` values for media constructors.
 ///
@@ -117,8 +117,11 @@ pub type BamlRegisterHostReleaseCallbackFn = extern "C" fn(callback: BamlHostRel
 pub type BamlRegisterUnhandledSpawnErrorCallbackFn =
     extern "C" fn(callback: BamlUnhandledSpawnErrorCallback);
 pub type BamlShutdownRuntimeFn = extern "C" fn() -> Buffer;
-pub type BamlCompleteHostCallFn =
-    extern "C" fn(call_id: u32, is_error: i32, content: *const i8, length: usize);
+/// Completes a BAML→host callback with a protobuf-encoded `HostCallCompletion`:
+/// the callable's result or thrown value encoded against its declared types,
+/// an exception of the host's own, a broken contract, or a bridge failure.
+/// `content` is borrowed only for the call.
+pub type BamlCompleteHostCallFn = extern "C" fn(call_id: u32, content: *const i8, length: usize);
 pub type BamlHandleCloneFn = unsafe extern "C" fn(key: u64, out_key: *mut u64) -> BamlCffiStatus;
 pub type BamlHandleReleaseFn = unsafe extern "C" fn(key: u64) -> BamlCffiStatus;
 /// Construct media using a raw `BamlCffiMediaKind` value.
@@ -180,12 +183,13 @@ pub type BamlInvocationContextFn =
 /// An otherwise unexpected panic aborts the process rather than crossing into
 /// foreign frames. Likewise, host callbacks must not unwind or throw into Rust.
 ///
-/// V1 is append-only: existing fields may never be reordered or removed, and
-/// a field changes type or semantics only with a new ABI revision. New fields
-/// may only be appended. Before reading a field, consumers must verify that
-/// `struct_size` reaches the end of that field. `baml_api_v1_is_compatible`
-/// performs the check for the fields this revision requires. A larger unknown
-/// size is compatible; a truncated prefix is not.
+/// Fields are never reordered or removed, and a field changes type or
+/// semantics only with a new ABI revision, which every SDK in this repository
+/// requires exactly (`BAML_API_V1_ABI_VERSION`) and ships lockstep with. Within
+/// a revision new fields may only be appended. Before reading a field,
+/// consumers must verify that `struct_size` reaches the end of that field.
+/// `baml_api_v1_is_compatible` performs the check for the fields this revision
+/// requires. A larger unknown size is compatible; a truncated prefix is not.
 #[repr(C)]
 pub struct BamlApiV1 {
     /// Function-table ABI version. Always `BAML_API_V1_ABI_VERSION`.
@@ -386,7 +390,9 @@ mod tests {
 
     #[test]
     fn a_changed_contract_uses_a_new_abi_revision() {
-        assert_eq!(BAML_API_V1_ABI_VERSION, 4);
+        // Revision 5: `complete_host_call` takes a `HostCallCompletion` and
+        // no `is_error` flag.
+        assert_eq!(BAML_API_V1_ABI_VERSION, 5);
     }
 
     #[test]

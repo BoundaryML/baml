@@ -957,42 +957,63 @@ public final class ProtoWriter {
                 || value instanceof Runnable;
     }
 
+    // HostCallCompletion fields (baml_inbound.proto).
+    private static final int HCC_RETURNED = 1;
+    private static final int HCC_THROWN = 2;
+    private static final int HCC_RAISED = 3;
+    private static final int HCC_CONTRACT_VIOLATION = 4;
+    private static final int HCC_BRIDGE_FAILURE = 5;
+    // HostException fields.
+    private static final int HE_MESSAGE = 1;
+    private static final int HE_CLASS_NAME = 2;
+    private static final int HE_LANGUAGE = 3;
+    private static final int HE_TRACEBACK = 4;
+    private static final int HE_HANDLE = 5;
+
+    /** The completion for a callable that returned {@code inboundValue} (an encoded {@code InboundValue}). */
+    public static byte[] hostCallReturned(byte[] inboundValue) {
+        WireWriter w = new WireWriter();
+        w.writeMessage(HCC_RETURNED, inboundValue);
+        return w.toByteArray();
+    }
+
+    /** The completion for a callable that threw the BAML value {@code inboundValue}. */
+    public static byte[] hostCallThrown(byte[] inboundValue) {
+        WireWriter w = new WireWriter();
+        w.writeMessage(HCC_THROWN, inboundValue);
+        return w.toByteArray();
+    }
+
     /**
-     * Encode an {@code InboundValue} carrying a {@code baml.errors.HostCallable}
-     * instance for a native host exception thrown inside a callable (the opaque
-     * path, design point D). Fields: {@code message}, {@code class_name} (the
-     * Java simple name), {@code language} ({@code "java"}), and a hidden
-     * {@code _handle} = {@code Handle{key, HOST_VALUE_OPAQUE}} referencing the
-     * original {@code Throwable} in the Java-side registry — the outbound decoder
-     * rehydrates it by identity on same-runtime round trip
-     * ({@link ProtoReader}). Mirrors bridge_python's
-     * {@code build_host_callable_inbound} (host_value.rs).
+     * The completion for a callable that raised an exception of the host's own.
+     * {@code handleKey} is the Java registry's key for the {@link Throwable}, so the
+     * engine-built {@code baml.errors.HostCallable} rehydrates the same object by
+     * identity on round trip.
      */
-    public static byte[] encodeHostCallableError(
-            String className, String message, String traceback, long handleKey) {
-        WireWriter classBody = new WireWriter();
-        classBody.writeMessage(CLASS_FIELDS, stringFieldEntry("message", message));
-        classBody.writeMessage(CLASS_FIELDS, stringFieldEntry("class_name", className));
-        classBody.writeMessage(CLASS_FIELDS, stringFieldEntry("language", "java"));
-        // `traceback` is `string?` on the class but must be PRESENT on the wire
-        // (the engine rejects an Instance with a missing field). Always emit it.
-        classBody.writeMessage(CLASS_FIELDS, stringFieldEntry("traceback", traceback));
+    public static byte[] hostCallRaised(String className, String message, String traceback, long handleKey) {
+        WireWriter exception = new WireWriter();
+        exception.writeString(HE_MESSAGE, message);
+        exception.writeString(HE_CLASS_NAME, className);
+        exception.writeString(HE_LANGUAGE, "java");
+        if (traceback != null) exception.writeString(HE_TRACEBACK, traceback);
+        exception.writeInt64(HE_HANDLE, handleKey);
+        WireWriter w = new WireWriter();
+        w.writeMessage(HCC_RAISED, exception.toByteArray());
+        return w.toByteArray();
+    }
 
-        // The hidden `_handle` field: an InboundValue.handle{key, HOST_VALUE_OPAQUE}.
-        WireWriter handleMsg = new WireWriter();
-        handleMsg.writeInt64(HANDLE_KEY, handleKey);
-        handleMsg.writeInt64(HANDLE_TYPE, HOST_VALUE_OPAQUE);
-        WireWriter handleValue = new WireWriter();
-        handleValue.writeMessage(IV_HANDLE, handleMsg.toByteArray());
-        WireWriter handleEntry = new WireWriter();
-        handleEntry.writeString(MAP_ENTRY_STRING_KEY, "_handle");
-        handleEntry.writeMessage(MAP_ENTRY_VALUE, handleValue.toByteArray());
-        classBody.writeMessage(CLASS_FIELDS, handleEntry.toByteArray());
+    /** The completion for a value the callable produced that does not fit its declared type. */
+    public static byte[] hostCallContractViolation(String message) {
+        WireWriter w = new WireWriter();
+        w.writeString(HCC_CONTRACT_VIOLATION, message);
+        return w.toByteArray();
+    }
 
-        WireWriter iv = new WireWriter();
-        writeClassType(iv, HOST_CALLABLE_FQN, List.of());
-        iv.writeMessage(IV_CLASS, classBody.toByteArray());
-        return iv.toByteArray();
+    /** The completion for a failure of the bridge's own. */
+    public static byte[] hostCallBridgeFailure(String message) {
+        WireWriter w = new WireWriter();
+        w.writeString(HCC_BRIDGE_FAILURE, message);
+        return w.toByteArray();
     }
 
     /** One {@code InboundMapEntry} with a string key and a string value. */

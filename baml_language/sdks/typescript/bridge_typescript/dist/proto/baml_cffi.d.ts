@@ -1555,6 +1555,251 @@ export namespace baml_bridge {
                 public static getTypeUrl(typeUrlPrefix?: string): string;
             }
 
+            /** Properties of a HostCallCompletion. */
+            interface IHostCallCompletion {
+
+                /** HostCallCompletion returned */
+                returned?: (baml_bridge.cffi.v1.IInboundValue|null);
+
+                /** HostCallCompletion thrown */
+                thrown?: (baml_bridge.cffi.v1.IInboundValue|null);
+
+                /** HostCallCompletion raised */
+                raised?: (baml_bridge.cffi.v1.IHostException|null);
+
+                /** HostCallCompletion contractViolation */
+                contractViolation?: (string|null);
+
+                /** HostCallCompletion bridgeFailure */
+                bridgeFailure?: (string|null);
+            }
+
+            /** Represents a HostCallCompletion. */
+            class HostCallCompletion implements IHostCallCompletion {
+
+                /**
+                 * Constructs a new HostCallCompletion.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_bridge.cffi.v1.IHostCallCompletion);
+
+                /** HostCallCompletion returned. */
+                public returned?: (baml_bridge.cffi.v1.IInboundValue|null);
+
+                /** HostCallCompletion thrown. */
+                public thrown?: (baml_bridge.cffi.v1.IInboundValue|null);
+
+                /** HostCallCompletion raised. */
+                public raised?: (baml_bridge.cffi.v1.IHostException|null);
+
+                /** HostCallCompletion contractViolation. */
+                public contractViolation?: (string|null);
+
+                /** HostCallCompletion bridgeFailure. */
+                public bridgeFailure?: (string|null);
+
+                /** HostCallCompletion outcome. */
+                public outcome?: ("returned"|"thrown"|"raised"|"contractViolation"|"bridgeFailure");
+
+                /**
+                 * Creates a new HostCallCompletion instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns HostCallCompletion instance
+                 */
+                public static create(properties?: baml_bridge.cffi.v1.IHostCallCompletion): baml_bridge.cffi.v1.HostCallCompletion;
+
+                /**
+                 * Encodes the specified HostCallCompletion message. Does not implicitly {@link baml_bridge.cffi.v1.HostCallCompletion.verify|verify} messages.
+                 * @param message HostCallCompletion message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_bridge.cffi.v1.IHostCallCompletion, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified HostCallCompletion message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.HostCallCompletion.verify|verify} messages.
+                 * @param message HostCallCompletion message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_bridge.cffi.v1.IHostCallCompletion, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a HostCallCompletion message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns HostCallCompletion
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.HostCallCompletion;
+
+                /**
+                 * Decodes a HostCallCompletion message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns HostCallCompletion
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.HostCallCompletion;
+
+                /**
+                 * Verifies a HostCallCompletion message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a HostCallCompletion message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns HostCallCompletion
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.HostCallCompletion;
+
+                /**
+                 * Creates a plain object from a HostCallCompletion message. Also converts values to other types if specified.
+                 * @param message HostCallCompletion
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_bridge.cffi.v1.HostCallCompletion, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this HostCallCompletion to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for HostCallCompletion
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
+            /** Properties of a HostException. */
+            interface IHostException {
+
+                /** HostException message */
+                message?: (string|null);
+
+                /** HostException className */
+                className?: (string|null);
+
+                /** HostException language */
+                language?: (string|null);
+
+                /** HostException traceback */
+                traceback?: (string|null);
+
+                /** HostException handle */
+                handle?: (number|Long|null);
+            }
+
+            /** Represents a HostException. */
+            class HostException implements IHostException {
+
+                /**
+                 * Constructs a new HostException.
+                 * @param [properties] Properties to set
+                 */
+                constructor(properties?: baml_bridge.cffi.v1.IHostException);
+
+                /** HostException message. */
+                public message: string;
+
+                /** HostException className. */
+                public className: string;
+
+                /** HostException language. */
+                public language: string;
+
+                /** HostException traceback. */
+                public traceback?: (string|null);
+
+                /** HostException handle. */
+                public handle: (number|Long);
+
+                /**
+                 * Creates a new HostException instance using the specified properties.
+                 * @param [properties] Properties to set
+                 * @returns HostException instance
+                 */
+                public static create(properties?: baml_bridge.cffi.v1.IHostException): baml_bridge.cffi.v1.HostException;
+
+                /**
+                 * Encodes the specified HostException message. Does not implicitly {@link baml_bridge.cffi.v1.HostException.verify|verify} messages.
+                 * @param message HostException message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encode(message: baml_bridge.cffi.v1.IHostException, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Encodes the specified HostException message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.HostException.verify|verify} messages.
+                 * @param message HostException message or plain object to encode
+                 * @param [writer] Writer to encode to
+                 * @returns Writer
+                 */
+                public static encodeDelimited(message: baml_bridge.cffi.v1.IHostException, writer?: $protobuf.Writer): $protobuf.Writer;
+
+                /**
+                 * Decodes a HostException message from the specified reader or buffer.
+                 * @param reader Reader or buffer to decode from
+                 * @param [length] Message length if known beforehand
+                 * @returns HostException
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): baml_bridge.cffi.v1.HostException;
+
+                /**
+                 * Decodes a HostException message from the specified reader or buffer, length delimited.
+                 * @param reader Reader or buffer to decode from
+                 * @returns HostException
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): baml_bridge.cffi.v1.HostException;
+
+                /**
+                 * Verifies a HostException message.
+                 * @param message Plain object to verify
+                 * @returns `null` if valid, otherwise the reason why it is not
+                 */
+                public static verify(message: { [k: string]: any }): (string|null);
+
+                /**
+                 * Creates a HostException message from a plain object. Also converts values to their respective internal types.
+                 * @param object Plain object
+                 * @returns HostException
+                 */
+                public static fromObject(object: { [k: string]: any }): baml_bridge.cffi.v1.HostException;
+
+                /**
+                 * Creates a plain object from a HostException message. Also converts values to other types if specified.
+                 * @param message HostException
+                 * @param [options] Conversion options
+                 * @returns Plain object
+                 */
+                public static toObject(message: baml_bridge.cffi.v1.HostException, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+                /**
+                 * Converts this HostException to JSON.
+                 * @returns JSON object
+                 */
+                public toJSON(): { [k: string]: any };
+
+                /**
+                 * Gets the default type url for HostException
+                 * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns The default type url
+                 */
+                public static getTypeUrl(typeUrlPrefix?: string): string;
+            }
+
             /** BamlHandleType enum. */
             enum BamlHandleType {
                 HANDLE_UNSPECIFIED = 0,

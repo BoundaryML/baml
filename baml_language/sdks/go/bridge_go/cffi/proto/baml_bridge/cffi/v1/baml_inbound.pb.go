@@ -1321,6 +1321,225 @@ type CallAck_Error struct {
 
 func (*CallAck_Error) isCallAck_Response() {}
 
+// What a host completes a BAML→host callback with (`complete_host_call`). The
+// host encodes a result against the callable's declared return type and a
+// thrown BAML value against its declared throws type; the engine checks both
+// and builds every panic itself. An exception of the host's own becomes a
+// `baml.errors.HostCallable` the engine builds from `raised`. A payload with no
+// outcome is a bridge failure.
+type HostCallCompletion struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Types that are assignable to Outcome:
+	//
+	//	*HostCallCompletion_Returned
+	//	*HostCallCompletion_Thrown
+	//	*HostCallCompletion_Raised
+	//	*HostCallCompletion_ContractViolation
+	//	*HostCallCompletion_BridgeFailure
+	Outcome isHostCallCompletion_Outcome `protobuf_oneof:"outcome"`
+}
+
+func (x *HostCallCompletion) Reset() {
+	*x = HostCallCompletion{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[13]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *HostCallCompletion) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostCallCompletion) ProtoMessage() {}
+
+func (x *HostCallCompletion) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[13]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostCallCompletion.ProtoReflect.Descriptor instead.
+func (*HostCallCompletion) Descriptor() ([]byte, []int) {
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{13}
+}
+
+func (m *HostCallCompletion) GetOutcome() isHostCallCompletion_Outcome {
+	if m != nil {
+		return m.Outcome
+	}
+	return nil
+}
+
+func (x *HostCallCompletion) GetReturned() *InboundValue {
+	if x, ok := x.GetOutcome().(*HostCallCompletion_Returned); ok {
+		return x.Returned
+	}
+	return nil
+}
+
+func (x *HostCallCompletion) GetThrown() *InboundValue {
+	if x, ok := x.GetOutcome().(*HostCallCompletion_Thrown); ok {
+		return x.Thrown
+	}
+	return nil
+}
+
+func (x *HostCallCompletion) GetRaised() *HostException {
+	if x, ok := x.GetOutcome().(*HostCallCompletion_Raised); ok {
+		return x.Raised
+	}
+	return nil
+}
+
+func (x *HostCallCompletion) GetContractViolation() string {
+	if x, ok := x.GetOutcome().(*HostCallCompletion_ContractViolation); ok {
+		return x.ContractViolation
+	}
+	return ""
+}
+
+func (x *HostCallCompletion) GetBridgeFailure() string {
+	if x, ok := x.GetOutcome().(*HostCallCompletion_BridgeFailure); ok {
+		return x.BridgeFailure
+	}
+	return ""
+}
+
+type isHostCallCompletion_Outcome interface {
+	isHostCallCompletion_Outcome()
+}
+
+type HostCallCompletion_Returned struct {
+	// The callable returned this value.
+	Returned *InboundValue `protobuf:"bytes,1,opt,name=returned,proto3,oneof"`
+}
+
+type HostCallCompletion_Thrown struct {
+	// The callable threw this BAML value (a `baml.panics.*` instance is a
+	// panic whatever the callable declares).
+	Thrown *InboundValue `protobuf:"bytes,2,opt,name=thrown,proto3,oneof"`
+}
+
+type HostCallCompletion_Raised struct {
+	// The callable raised an exception of the host's own.
+	Raised *HostException `protobuf:"bytes,3,opt,name=raised,proto3,oneof"`
+}
+
+type HostCallCompletion_ContractViolation struct {
+	// The host could not encode the result or thrown value against the
+	// declared type: the callable broke its contract. The text says how.
+	ContractViolation string `protobuf:"bytes,4,opt,name=contract_violation,json=contractViolation,proto3,oneof"`
+}
+
+type HostCallCompletion_BridgeFailure struct {
+	// The bridge could not carry a value the callable produced in good faith,
+	// or failed in its own machinery. The text says how.
+	BridgeFailure string `protobuf:"bytes,5,opt,name=bridge_failure,json=bridgeFailure,proto3,oneof"`
+}
+
+func (*HostCallCompletion_Returned) isHostCallCompletion_Outcome() {}
+
+func (*HostCallCompletion_Thrown) isHostCallCompletion_Outcome() {}
+
+func (*HostCallCompletion_Raised) isHostCallCompletion_Outcome() {}
+
+func (*HostCallCompletion_ContractViolation) isHostCallCompletion_Outcome() {}
+
+func (*HostCallCompletion_BridgeFailure) isHostCallCompletion_Outcome() {}
+
+// An exception of the host's own that a callback raised.
+type HostException struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Message   string  `protobuf:"bytes,1,opt,name=message,proto3" json:"message,omitempty"`
+	ClassName string  `protobuf:"bytes,2,opt,name=class_name,json=className,proto3" json:"class_name,omitempty"`
+	Language  string  `protobuf:"bytes,3,opt,name=language,proto3" json:"language,omitempty"`
+	Traceback *string `protobuf:"bytes,4,opt,name=traceback,proto3,oneof" json:"traceback,omitempty"`
+	// The host's registration of the exception object (a `HOST_VALUE_OPAQUE`
+	// key), so the same host can recover it by identity when it comes back.
+	Handle uint64 `protobuf:"varint,5,opt,name=handle,proto3" json:"handle,omitempty"`
+}
+
+func (x *HostException) Reset() {
+	*x = HostException{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[14]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *HostException) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostException) ProtoMessage() {}
+
+func (x *HostException) ProtoReflect() protoreflect.Message {
+	mi := &file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[14]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostException.ProtoReflect.Descriptor instead.
+func (*HostException) Descriptor() ([]byte, []int) {
+	return file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *HostException) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *HostException) GetClassName() string {
+	if x != nil {
+		return x.ClassName
+	}
+	return ""
+}
+
+func (x *HostException) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+func (x *HostException) GetTraceback() string {
+	if x != nil && x.Traceback != nil {
+		return *x.Traceback
+	}
+	return ""
+}
+
+func (x *HostException) GetHandle() uint64 {
+	if x != nil {
+		return x.Handle
+	}
+	return 0
+}
+
 var File_baml_bridge_cffi_v1_baml_inbound_proto protoreflect.FileDescriptor
 
 var file_baml_bridge_cffi_v1_baml_inbound_proto_rawDesc = []byte{
@@ -1530,15 +1749,45 @@ var file_baml_bridge_cffi_v1_baml_inbound_proto_rawDesc = []byte{
 	0x07, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x22, 0x2d, 0x0a, 0x07, 0x43, 0x61, 0x6c, 0x6c,
 	0x41, 0x63, 0x6b, 0x12, 0x16, 0x0a, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x18, 0x01, 0x20, 0x01,
 	0x28, 0x09, 0x48, 0x00, 0x52, 0x05, 0x65, 0x72, 0x72, 0x6f, 0x72, 0x42, 0x0a, 0x0a, 0x08, 0x72,
-	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2a, 0x6a, 0x0a, 0x09, 0x54, 0x72, 0x61, 0x63, 0x65,
-	0x4d, 0x6f, 0x64, 0x65, 0x12, 0x1a, 0x0a, 0x16, 0x54, 0x52, 0x41, 0x43, 0x45, 0x5f, 0x4d, 0x4f,
-	0x44, 0x45, 0x5f, 0x55, 0x4e, 0x53, 0x50, 0x45, 0x43, 0x49, 0x46, 0x49, 0x45, 0x44, 0x10, 0x00,
-	0x12, 0x15, 0x0a, 0x11, 0x54, 0x52, 0x41, 0x43, 0x45, 0x5f, 0x4d, 0x4f, 0x44, 0x45, 0x5f, 0x48,
-	0x49, 0x44, 0x44, 0x45, 0x4e, 0x10, 0x01, 0x12, 0x15, 0x0a, 0x11, 0x54, 0x52, 0x41, 0x43, 0x45,
-	0x5f, 0x4d, 0x4f, 0x44, 0x45, 0x5f, 0x54, 0x49, 0x4d, 0x49, 0x4e, 0x47, 0x10, 0x02, 0x12, 0x13,
-	0x0a, 0x0f, 0x54, 0x52, 0x41, 0x43, 0x45, 0x5f, 0x4d, 0x4f, 0x44, 0x45, 0x5f, 0x53, 0x50, 0x41,
-	0x4e, 0x10, 0x03, 0x42, 0x0a, 0x48, 0x03, 0x5a, 0x06, 0x2e, 0x2f, 0x63, 0x66, 0x66, 0x69, 0x62,
-	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0xb5, 0x02, 0x0a, 0x12, 0x48, 0x6f, 0x73, 0x74,
+	0x43, 0x61, 0x6c, 0x6c, 0x43, 0x6f, 0x6d, 0x70, 0x6c, 0x65, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x3f,
+	0x0a, 0x08, 0x72, 0x65, 0x74, 0x75, 0x72, 0x6e, 0x65, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b,
+	0x32, 0x21, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63,
+	0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6e, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x56, 0x61,
+	0x6c, 0x75, 0x65, 0x48, 0x00, 0x52, 0x08, 0x72, 0x65, 0x74, 0x75, 0x72, 0x6e, 0x65, 0x64, 0x12,
+	0x3b, 0x0a, 0x06, 0x74, 0x68, 0x72, 0x6f, 0x77, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x21, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66,
+	0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e, 0x49, 0x6e, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x56, 0x61, 0x6c,
+	0x75, 0x65, 0x48, 0x00, 0x52, 0x06, 0x74, 0x68, 0x72, 0x6f, 0x77, 0x6e, 0x12, 0x3c, 0x0a, 0x06,
+	0x72, 0x61, 0x69, 0x73, 0x65, 0x64, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x22, 0x2e, 0x62,
+	0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e,
+	0x76, 0x31, 0x2e, 0x48, 0x6f, 0x73, 0x74, 0x45, 0x78, 0x63, 0x65, 0x70, 0x74, 0x69, 0x6f, 0x6e,
+	0x48, 0x00, 0x52, 0x06, 0x72, 0x61, 0x69, 0x73, 0x65, 0x64, 0x12, 0x2f, 0x0a, 0x12, 0x63, 0x6f,
+	0x6e, 0x74, 0x72, 0x61, 0x63, 0x74, 0x5f, 0x76, 0x69, 0x6f, 0x6c, 0x61, 0x74, 0x69, 0x6f, 0x6e,
+	0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x11, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x61,
+	0x63, 0x74, 0x56, 0x69, 0x6f, 0x6c, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x27, 0x0a, 0x0e, 0x62,
+	0x72, 0x69, 0x64, 0x67, 0x65, 0x5f, 0x66, 0x61, 0x69, 0x6c, 0x75, 0x72, 0x65, 0x18, 0x05, 0x20,
+	0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x0d, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x46, 0x61, 0x69,
+	0x6c, 0x75, 0x72, 0x65, 0x42, 0x09, 0x0a, 0x07, 0x6f, 0x75, 0x74, 0x63, 0x6f, 0x6d, 0x65, 0x22,
+	0xad, 0x01, 0x0a, 0x0d, 0x48, 0x6f, 0x73, 0x74, 0x45, 0x78, 0x63, 0x65, 0x70, 0x74, 0x69, 0x6f,
+	0x6e, 0x12, 0x18, 0x0a, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x07, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x12, 0x1d, 0x0a, 0x0a, 0x63,
+	0x6c, 0x61, 0x73, 0x73, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x09, 0x63, 0x6c, 0x61, 0x73, 0x73, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x6c, 0x61,
+	0x6e, 0x67, 0x75, 0x61, 0x67, 0x65, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6c, 0x61,
+	0x6e, 0x67, 0x75, 0x61, 0x67, 0x65, 0x12, 0x21, 0x0a, 0x09, 0x74, 0x72, 0x61, 0x63, 0x65, 0x62,
+	0x61, 0x63, 0x6b, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52, 0x09, 0x74, 0x72, 0x61,
+	0x63, 0x65, 0x62, 0x61, 0x63, 0x6b, 0x88, 0x01, 0x01, 0x12, 0x16, 0x0a, 0x06, 0x68, 0x61, 0x6e,
+	0x64, 0x6c, 0x65, 0x18, 0x05, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x68, 0x61, 0x6e, 0x64, 0x6c,
+	0x65, 0x42, 0x0c, 0x0a, 0x0a, 0x5f, 0x74, 0x72, 0x61, 0x63, 0x65, 0x62, 0x61, 0x63, 0x6b, 0x2a,
+	0x6a, 0x0a, 0x09, 0x54, 0x72, 0x61, 0x63, 0x65, 0x4d, 0x6f, 0x64, 0x65, 0x12, 0x1a, 0x0a, 0x16,
+	0x54, 0x52, 0x41, 0x43, 0x45, 0x5f, 0x4d, 0x4f, 0x44, 0x45, 0x5f, 0x55, 0x4e, 0x53, 0x50, 0x45,
+	0x43, 0x49, 0x46, 0x49, 0x45, 0x44, 0x10, 0x00, 0x12, 0x15, 0x0a, 0x11, 0x54, 0x52, 0x41, 0x43,
+	0x45, 0x5f, 0x4d, 0x4f, 0x44, 0x45, 0x5f, 0x48, 0x49, 0x44, 0x44, 0x45, 0x4e, 0x10, 0x01, 0x12,
+	0x15, 0x0a, 0x11, 0x54, 0x52, 0x41, 0x43, 0x45, 0x5f, 0x4d, 0x4f, 0x44, 0x45, 0x5f, 0x54, 0x49,
+	0x4d, 0x49, 0x4e, 0x47, 0x10, 0x02, 0x12, 0x13, 0x0a, 0x0f, 0x54, 0x52, 0x41, 0x43, 0x45, 0x5f,
+	0x4d, 0x4f, 0x44, 0x45, 0x5f, 0x53, 0x50, 0x41, 0x4e, 0x10, 0x03, 0x42, 0x0a, 0x48, 0x03, 0x5a,
+	0x06, 0x2e, 0x2f, 0x63, 0x66, 0x66, 0x69, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -1554,7 +1803,7 @@ func file_baml_bridge_cffi_v1_baml_inbound_proto_rawDescGZIP() []byte {
 }
 
 var file_baml_bridge_cffi_v1_baml_inbound_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_baml_bridge_cffi_v1_baml_inbound_proto_goTypes = []interface{}{
 	(TraceMode)(0),             // 0: baml_bridge.cffi.v1.TraceMode
 	(*InboundValue)(nil),       // 1: baml_bridge.cffi.v1.InboundValue
@@ -1570,31 +1819,33 @@ var file_baml_bridge_cffi_v1_baml_inbound_proto_goTypes = []interface{}{
 	(*TraceOptions)(nil),       // 11: baml_bridge.cffi.v1.TraceOptions
 	(*TraceMetadataValue)(nil), // 12: baml_bridge.cffi.v1.TraceMetadataValue
 	(*CallAck)(nil),            // 13: baml_bridge.cffi.v1.CallAck
-	nil,                        // 14: baml_bridge.cffi.v1.TraceOptions.MetadataEntry
-	(*BamlTy)(nil),             // 15: baml_bridge.cffi.v1.BamlTy
-	(*BamlHandle)(nil),         // 16: baml_bridge.cffi.v1.BamlHandle
-	(*BamlTyDef)(nil),          // 17: baml_bridge.cffi.v1.BamlTyDef
-	(*BamlValueMedia)(nil),     // 18: baml_bridge.cffi.v1.BamlValueMedia
-	(*BamlValuePromptAst)(nil), // 19: baml_bridge.cffi.v1.BamlValuePromptAst
+	(*HostCallCompletion)(nil), // 14: baml_bridge.cffi.v1.HostCallCompletion
+	(*HostException)(nil),      // 15: baml_bridge.cffi.v1.HostException
+	nil,                        // 16: baml_bridge.cffi.v1.TraceOptions.MetadataEntry
+	(*BamlTy)(nil),             // 17: baml_bridge.cffi.v1.BamlTy
+	(*BamlHandle)(nil),         // 18: baml_bridge.cffi.v1.BamlHandle
+	(*BamlTyDef)(nil),          // 19: baml_bridge.cffi.v1.BamlTyDef
+	(*BamlValueMedia)(nil),     // 20: baml_bridge.cffi.v1.BamlValueMedia
+	(*BamlValuePromptAst)(nil), // 21: baml_bridge.cffi.v1.BamlValuePromptAst
 }
 var file_baml_bridge_cffi_v1_baml_inbound_proto_depIdxs = []int32{
-	15, // 0: baml_bridge.cffi.v1.InboundValue.value_type:type_name -> baml_bridge.cffi.v1.BamlTy
+	17, // 0: baml_bridge.cffi.v1.InboundValue.value_type:type_name -> baml_bridge.cffi.v1.BamlTy
 	2,  // 1: baml_bridge.cffi.v1.InboundValue.list_value:type_name -> baml_bridge.cffi.v1.InboundListValue
 	3,  // 2: baml_bridge.cffi.v1.InboundValue.map_value:type_name -> baml_bridge.cffi.v1.InboundMapValue
 	5,  // 3: baml_bridge.cffi.v1.InboundValue.class_value:type_name -> baml_bridge.cffi.v1.InboundClassValue
 	6,  // 4: baml_bridge.cffi.v1.InboundValue.enum_value:type_name -> baml_bridge.cffi.v1.InboundEnumValue
-	16, // 5: baml_bridge.cffi.v1.InboundValue.handle:type_name -> baml_bridge.cffi.v1.BamlHandle
-	15, // 6: baml_bridge.cffi.v1.InboundValue.ty_value:type_name -> baml_bridge.cffi.v1.BamlTy
-	17, // 7: baml_bridge.cffi.v1.InboundValue.ty_def_value:type_name -> baml_bridge.cffi.v1.BamlTyDef
-	18, // 8: baml_bridge.cffi.v1.InboundValue.media_value:type_name -> baml_bridge.cffi.v1.BamlValueMedia
-	19, // 9: baml_bridge.cffi.v1.InboundValue.prompt_ast_value:type_name -> baml_bridge.cffi.v1.BamlValuePromptAst
+	18, // 5: baml_bridge.cffi.v1.InboundValue.handle:type_name -> baml_bridge.cffi.v1.BamlHandle
+	17, // 6: baml_bridge.cffi.v1.InboundValue.ty_value:type_name -> baml_bridge.cffi.v1.BamlTy
+	19, // 7: baml_bridge.cffi.v1.InboundValue.ty_def_value:type_name -> baml_bridge.cffi.v1.BamlTyDef
+	20, // 8: baml_bridge.cffi.v1.InboundValue.media_value:type_name -> baml_bridge.cffi.v1.BamlValueMedia
+	21, // 9: baml_bridge.cffi.v1.InboundValue.prompt_ast_value:type_name -> baml_bridge.cffi.v1.BamlValuePromptAst
 	1,  // 10: baml_bridge.cffi.v1.InboundListValue.values:type_name -> baml_bridge.cffi.v1.InboundValue
 	4,  // 11: baml_bridge.cffi.v1.InboundMapValue.entries:type_name -> baml_bridge.cffi.v1.InboundMapEntry
 	6,  // 12: baml_bridge.cffi.v1.InboundMapEntry.enum_key:type_name -> baml_bridge.cffi.v1.InboundEnumValue
 	1,  // 13: baml_bridge.cffi.v1.InboundMapEntry.value:type_name -> baml_bridge.cffi.v1.InboundValue
 	4,  // 14: baml_bridge.cffi.v1.InboundClassValue.fields:type_name -> baml_bridge.cffi.v1.InboundMapEntry
-	15, // 15: baml_bridge.cffi.v1.BamlTyArg.type_value:type_name -> baml_bridge.cffi.v1.BamlTy
-	17, // 16: baml_bridge.cffi.v1.BamlTyArg.type_definition:type_name -> baml_bridge.cffi.v1.BamlTyDef
+	17, // 15: baml_bridge.cffi.v1.BamlTyArg.type_value:type_name -> baml_bridge.cffi.v1.BamlTy
+	19, // 16: baml_bridge.cffi.v1.BamlTyArg.type_definition:type_name -> baml_bridge.cffi.v1.BamlTyDef
 	4,  // 17: baml_bridge.cffi.v1.CallFunctionArgs.kwargs:type_name -> baml_bridge.cffi.v1.InboundMapEntry
 	7,  // 18: baml_bridge.cffi.v1.CallFunctionArgs.type_args:type_name -> baml_bridge.cffi.v1.BamlTyArg
 	9,  // 19: baml_bridge.cffi.v1.CallFunctionArgs.invocation:type_name -> baml_bridge.cffi.v1.InvocationOptions
@@ -1602,13 +1853,16 @@ var file_baml_bridge_cffi_v1_baml_inbound_proto_depIdxs = []int32{
 	1,  // 21: baml_bridge.cffi.v1.InvocationOptions.cancel:type_name -> baml_bridge.cffi.v1.InboundValue
 	11, // 22: baml_bridge.cffi.v1.TraceSelection.options:type_name -> baml_bridge.cffi.v1.TraceOptions
 	0,  // 23: baml_bridge.cffi.v1.TraceOptions.mode:type_name -> baml_bridge.cffi.v1.TraceMode
-	14, // 24: baml_bridge.cffi.v1.TraceOptions.metadata:type_name -> baml_bridge.cffi.v1.TraceOptions.MetadataEntry
-	12, // 25: baml_bridge.cffi.v1.TraceOptions.MetadataEntry.value:type_name -> baml_bridge.cffi.v1.TraceMetadataValue
-	26, // [26:26] is the sub-list for method output_type
-	26, // [26:26] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	16, // 24: baml_bridge.cffi.v1.TraceOptions.metadata:type_name -> baml_bridge.cffi.v1.TraceOptions.MetadataEntry
+	1,  // 25: baml_bridge.cffi.v1.HostCallCompletion.returned:type_name -> baml_bridge.cffi.v1.InboundValue
+	1,  // 26: baml_bridge.cffi.v1.HostCallCompletion.thrown:type_name -> baml_bridge.cffi.v1.InboundValue
+	15, // 27: baml_bridge.cffi.v1.HostCallCompletion.raised:type_name -> baml_bridge.cffi.v1.HostException
+	12, // 28: baml_bridge.cffi.v1.TraceOptions.MetadataEntry.value:type_name -> baml_bridge.cffi.v1.TraceMetadataValue
+	29, // [29:29] is the sub-list for method output_type
+	29, // [29:29] is the sub-list for method input_type
+	29, // [29:29] is the sub-list for extension type_name
+	29, // [29:29] is the sub-list for extension extendee
+	0,  // [0:29] is the sub-list for field type_name
 }
 
 func init() { file_baml_bridge_cffi_v1_baml_inbound_proto_init() }
@@ -1776,6 +2030,30 @@ func file_baml_bridge_cffi_v1_baml_inbound_proto_init() {
 				return nil
 			}
 		}
+		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*HostCallCompletion); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*HostException); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[0].OneofWrappers = []interface{}{
 		(*InboundValue_StringValue)(nil),
@@ -1821,13 +2099,21 @@ func file_baml_bridge_cffi_v1_baml_inbound_proto_init() {
 	file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[12].OneofWrappers = []interface{}{
 		(*CallAck_Error)(nil),
 	}
+	file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[13].OneofWrappers = []interface{}{
+		(*HostCallCompletion_Returned)(nil),
+		(*HostCallCompletion_Thrown)(nil),
+		(*HostCallCompletion_Raised)(nil),
+		(*HostCallCompletion_ContractViolation)(nil),
+		(*HostCallCompletion_BridgeFailure)(nil),
+	}
+	file_baml_bridge_cffi_v1_baml_inbound_proto_msgTypes[14].OneofWrappers = []interface{}{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_baml_bridge_cffi_v1_baml_inbound_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

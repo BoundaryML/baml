@@ -3,7 +3,8 @@ import initWasm, {
   callFunctionSync as callWasmFunctionSync,
   cancelFunctionCall as cancelWasmFunctionCall,
   cloneHandle as cloneWasmHandle,
-  completeWebHostCall,
+  completeWebHostCallBridgeFailure,
+  completeWebHostCallRaised,
   completeWebHostCallThrow,
   completeWebHostCallValue,
   configureWebSysops,
@@ -517,9 +518,15 @@ function finishHostCall(callId: number): void {
     if (controls) releaseControlValue(controls);
     hostExecutions.delete(callId);
 }
-export function completeHostCall(callId: number, isError: number, content: Uint8Array): void {
-    try { completeWebHostCall(callId, isError, content); }
-    finally { finishHostCall(callId); }
+/** Complete a host call as the host's own exception; the engine builds the `baml.errors.HostCallable`. */
+export function completeHostCallRaised(callId: number, className: string, message: string, stack: string | undefined, handle: HandleKey): void {
+  try { completeWebHostCallRaised(callId, className, message, stack, keyToBigint(handle).toString()); }
+  finally { finishHostCall(callId); }
+}
+/** Complete a host call as a failure of the bridge's own (`baml.panics.SdkPanic`). */
+export function completeHostCallBridgeFailure(callId: number, message: string): void {
+  try { completeWebHostCallBridgeFailure(callId, message); }
+  finally { finishHostCall(callId); }
 }
 /**
  * Complete a host call with its result, encoded by the bridge against the

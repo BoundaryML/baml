@@ -2732,7 +2732,7 @@ internal static unsafe class Program
 
     private static BamlApiV1 CreateValidTable() => new()
     {
-        AbiVersion = 4,
+        AbiVersion = 5,
         StructSize = (nuint)sizeof(BamlApiV1),
         Version = &Version,
         InitializeRuntimeFromBlob = &Initialize,
@@ -2931,7 +2931,7 @@ internal static unsafe class Program
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void CompleteHostCall(uint callId, int isError, byte* content, nuint length)
+    private static void CompleteHostCall(uint callId, byte* content, nuint length)
     {
     }
 

@@ -4712,6 +4712,735 @@ export const baml_bridge = $root.baml_bridge = (() => {
                 return CallAck;
             })();
 
+            v1.HostCallCompletion = (function() {
+
+                /**
+                 * Properties of a HostCallCompletion.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface IHostCallCompletion
+                 * @property {baml_bridge.cffi.v1.IInboundValue|null} [returned] HostCallCompletion returned
+                 * @property {baml_bridge.cffi.v1.IInboundValue|null} [thrown] HostCallCompletion thrown
+                 * @property {baml_bridge.cffi.v1.IHostException|null} [raised] HostCallCompletion raised
+                 * @property {string|null} [contractViolation] HostCallCompletion contractViolation
+                 * @property {string|null} [bridgeFailure] HostCallCompletion bridgeFailure
+                 */
+
+                /**
+                 * Constructs a new HostCallCompletion.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a HostCallCompletion.
+                 * @implements IHostCallCompletion
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.IHostCallCompletion=} [properties] Properties to set
+                 */
+                function HostCallCompletion(properties) {
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * HostCallCompletion returned.
+                 * @member {baml_bridge.cffi.v1.IInboundValue|null|undefined} returned
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @instance
+                 */
+                HostCallCompletion.prototype.returned = null;
+
+                /**
+                 * HostCallCompletion thrown.
+                 * @member {baml_bridge.cffi.v1.IInboundValue|null|undefined} thrown
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @instance
+                 */
+                HostCallCompletion.prototype.thrown = null;
+
+                /**
+                 * HostCallCompletion raised.
+                 * @member {baml_bridge.cffi.v1.IHostException|null|undefined} raised
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @instance
+                 */
+                HostCallCompletion.prototype.raised = null;
+
+                /**
+                 * HostCallCompletion contractViolation.
+                 * @member {string|null|undefined} contractViolation
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @instance
+                 */
+                HostCallCompletion.prototype.contractViolation = null;
+
+                /**
+                 * HostCallCompletion bridgeFailure.
+                 * @member {string|null|undefined} bridgeFailure
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @instance
+                 */
+                HostCallCompletion.prototype.bridgeFailure = null;
+
+                // OneOf field names bound to virtual getters and setters
+                let $oneOfFields;
+
+                /**
+                 * HostCallCompletion outcome.
+                 * @member {"returned"|"thrown"|"raised"|"contractViolation"|"bridgeFailure"|undefined} outcome
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @instance
+                 */
+                Object.defineProperty(HostCallCompletion.prototype, "outcome", {
+                    get: $util.oneOfGetter($oneOfFields = ["returned", "thrown", "raised", "contractViolation", "bridgeFailure"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                /**
+                 * Creates a new HostCallCompletion instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IHostCallCompletion=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.HostCallCompletion} HostCallCompletion instance
+                 */
+                HostCallCompletion.create = function create(properties) {
+                    return new HostCallCompletion(properties);
+                };
+
+                /**
+                 * Encodes the specified HostCallCompletion message. Does not implicitly {@link baml_bridge.cffi.v1.HostCallCompletion.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IHostCallCompletion} message HostCallCompletion message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                HostCallCompletion.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.returned != null && Object.hasOwnProperty.call(message, "returned"))
+                        $root.baml_bridge.cffi.v1.InboundValue.encode(message.returned, writer.uint32(/* id 1, wireType 2 =*/10).fork(), q + 1).ldelim();
+                    if (message.thrown != null && Object.hasOwnProperty.call(message, "thrown"))
+                        $root.baml_bridge.cffi.v1.InboundValue.encode(message.thrown, writer.uint32(/* id 2, wireType 2 =*/18).fork(), q + 1).ldelim();
+                    if (message.raised != null && Object.hasOwnProperty.call(message, "raised"))
+                        $root.baml_bridge.cffi.v1.HostException.encode(message.raised, writer.uint32(/* id 3, wireType 2 =*/26).fork(), q + 1).ldelim();
+                    if (message.contractViolation != null && Object.hasOwnProperty.call(message, "contractViolation"))
+                        writer.uint32(/* id 4, wireType 2 =*/34).string(message.contractViolation);
+                    if (message.bridgeFailure != null && Object.hasOwnProperty.call(message, "bridgeFailure"))
+                        writer.uint32(/* id 5, wireType 2 =*/42).string(message.bridgeFailure);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified HostCallCompletion message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.HostCallCompletion.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IHostCallCompletion} message HostCallCompletion message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                HostCallCompletion.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a HostCallCompletion message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.HostCallCompletion} HostCallCompletion
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                HostCallCompletion.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.HostCallCompletion();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.returned = $root.baml_bridge.cffi.v1.InboundValue.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 2: {
+                                message.thrown = $root.baml_bridge.cffi.v1.InboundValue.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 3: {
+                                message.raised = $root.baml_bridge.cffi.v1.HostException.decode(reader, reader.uint32(), undefined, long + 1);
+                                break;
+                            }
+                        case 4: {
+                                message.contractViolation = reader.string();
+                                break;
+                            }
+                        case 5: {
+                                message.bridgeFailure = reader.string();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a HostCallCompletion message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.HostCallCompletion} HostCallCompletion
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                HostCallCompletion.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a HostCallCompletion message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                HostCallCompletion.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    let properties = {};
+                    if (message.returned != null && message.hasOwnProperty("returned")) {
+                        properties.outcome = 1;
+                        {
+                            let error = $root.baml_bridge.cffi.v1.InboundValue.verify(message.returned, long + 1);
+                            if (error)
+                                return "returned." + error;
+                        }
+                    }
+                    if (message.thrown != null && message.hasOwnProperty("thrown")) {
+                        if (properties.outcome === 1)
+                            return "outcome: multiple values";
+                        properties.outcome = 1;
+                        {
+                            let error = $root.baml_bridge.cffi.v1.InboundValue.verify(message.thrown, long + 1);
+                            if (error)
+                                return "thrown." + error;
+                        }
+                    }
+                    if (message.raised != null && message.hasOwnProperty("raised")) {
+                        if (properties.outcome === 1)
+                            return "outcome: multiple values";
+                        properties.outcome = 1;
+                        {
+                            let error = $root.baml_bridge.cffi.v1.HostException.verify(message.raised, long + 1);
+                            if (error)
+                                return "raised." + error;
+                        }
+                    }
+                    if (message.contractViolation != null && message.hasOwnProperty("contractViolation")) {
+                        if (properties.outcome === 1)
+                            return "outcome: multiple values";
+                        properties.outcome = 1;
+                        if (!$util.isString(message.contractViolation))
+                            return "contractViolation: string expected";
+                    }
+                    if (message.bridgeFailure != null && message.hasOwnProperty("bridgeFailure")) {
+                        if (properties.outcome === 1)
+                            return "outcome: multiple values";
+                        properties.outcome = 1;
+                        if (!$util.isString(message.bridgeFailure))
+                            return "bridgeFailure: string expected";
+                    }
+                    return null;
+                };
+
+                /**
+                 * Creates a HostCallCompletion message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.HostCallCompletion} HostCallCompletion
+                 */
+                HostCallCompletion.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.HostCallCompletion)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.HostCallCompletion: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.HostCallCompletion();
+                    if (object.returned != null) {
+                        if (!$util.isObject(object.returned))
+                            throw TypeError(".baml_bridge.cffi.v1.HostCallCompletion.returned: object expected");
+                        message.returned = $root.baml_bridge.cffi.v1.InboundValue.fromObject(object.returned, long + 1);
+                    }
+                    if (object.thrown != null) {
+                        if (!$util.isObject(object.thrown))
+                            throw TypeError(".baml_bridge.cffi.v1.HostCallCompletion.thrown: object expected");
+                        message.thrown = $root.baml_bridge.cffi.v1.InboundValue.fromObject(object.thrown, long + 1);
+                    }
+                    if (object.raised != null) {
+                        if (!$util.isObject(object.raised))
+                            throw TypeError(".baml_bridge.cffi.v1.HostCallCompletion.raised: object expected");
+                        message.raised = $root.baml_bridge.cffi.v1.HostException.fromObject(object.raised, long + 1);
+                    }
+                    if (object.contractViolation != null)
+                        message.contractViolation = String(object.contractViolation);
+                    if (object.bridgeFailure != null)
+                        message.bridgeFailure = String(object.bridgeFailure);
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a HostCallCompletion message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @static
+                 * @param {baml_bridge.cffi.v1.HostCallCompletion} message HostCallCompletion
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                HostCallCompletion.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (message.returned != null && message.hasOwnProperty("returned")) {
+                        object.returned = $root.baml_bridge.cffi.v1.InboundValue.toObject(message.returned, options, q + 1);
+                        if (options.oneofs)
+                            object.outcome = "returned";
+                    }
+                    if (message.thrown != null && message.hasOwnProperty("thrown")) {
+                        object.thrown = $root.baml_bridge.cffi.v1.InboundValue.toObject(message.thrown, options, q + 1);
+                        if (options.oneofs)
+                            object.outcome = "thrown";
+                    }
+                    if (message.raised != null && message.hasOwnProperty("raised")) {
+                        object.raised = $root.baml_bridge.cffi.v1.HostException.toObject(message.raised, options, q + 1);
+                        if (options.oneofs)
+                            object.outcome = "raised";
+                    }
+                    if (message.contractViolation != null && message.hasOwnProperty("contractViolation")) {
+                        object.contractViolation = message.contractViolation;
+                        if (options.oneofs)
+                            object.outcome = "contractViolation";
+                    }
+                    if (message.bridgeFailure != null && message.hasOwnProperty("bridgeFailure")) {
+                        object.bridgeFailure = message.bridgeFailure;
+                        if (options.oneofs)
+                            object.outcome = "bridgeFailure";
+                    }
+                    return object;
+                };
+
+                /**
+                 * Converts this HostCallCompletion to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                HostCallCompletion.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for HostCallCompletion
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.HostCallCompletion
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                HostCallCompletion.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.HostCallCompletion";
+                };
+
+                return HostCallCompletion;
+            })();
+
+            v1.HostException = (function() {
+
+                /**
+                 * Properties of a HostException.
+                 * @memberof baml_bridge.cffi.v1
+                 * @interface IHostException
+                 * @property {string|null} [message] HostException message
+                 * @property {string|null} [className] HostException className
+                 * @property {string|null} [language] HostException language
+                 * @property {string|null} [traceback] HostException traceback
+                 * @property {number|Long|null} [handle] HostException handle
+                 */
+
+                /**
+                 * Constructs a new HostException.
+                 * @memberof baml_bridge.cffi.v1
+                 * @classdesc Represents a HostException.
+                 * @implements IHostException
+                 * @constructor
+                 * @param {baml_bridge.cffi.v1.IHostException=} [properties] Properties to set
+                 */
+                function HostException(properties) {
+                    if (properties)
+                        for (let keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                            if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                                this[keys[i]] = properties[keys[i]];
+                }
+
+                /**
+                 * HostException message.
+                 * @member {string} message
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @instance
+                 */
+                HostException.prototype.message = "";
+
+                /**
+                 * HostException className.
+                 * @member {string} className
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @instance
+                 */
+                HostException.prototype.className = "";
+
+                /**
+                 * HostException language.
+                 * @member {string} language
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @instance
+                 */
+                HostException.prototype.language = "";
+
+                /**
+                 * HostException traceback.
+                 * @member {string|null|undefined} traceback
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @instance
+                 */
+                HostException.prototype.traceback = null;
+
+                /**
+                 * HostException handle.
+                 * @member {number|Long} handle
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @instance
+                 */
+                HostException.prototype.handle = $util.Long ? $util.Long.fromBits(0,0,true) : 0;
+
+                // OneOf field names bound to virtual getters and setters
+                let $oneOfFields;
+
+                // Virtual OneOf for proto3 optional field
+                Object.defineProperty(HostException.prototype, "_traceback", {
+                    get: $util.oneOfGetter($oneOfFields = ["traceback"]),
+                    set: $util.oneOfSetter($oneOfFields)
+                });
+
+                /**
+                 * Creates a new HostException instance using the specified properties.
+                 * @function create
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IHostException=} [properties] Properties to set
+                 * @returns {baml_bridge.cffi.v1.HostException} HostException instance
+                 */
+                HostException.create = function create(properties) {
+                    return new HostException(properties);
+                };
+
+                /**
+                 * Encodes the specified HostException message. Does not implicitly {@link baml_bridge.cffi.v1.HostException.verify|verify} messages.
+                 * @function encode
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IHostException} message HostException message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                HostException.encode = function encode(message, writer, q) {
+                    if (!writer)
+                        writer = $Writer.create();
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    if (message.message != null && Object.hasOwnProperty.call(message, "message"))
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.message);
+                    if (message.className != null && Object.hasOwnProperty.call(message, "className"))
+                        writer.uint32(/* id 2, wireType 2 =*/18).string(message.className);
+                    if (message.language != null && Object.hasOwnProperty.call(message, "language"))
+                        writer.uint32(/* id 3, wireType 2 =*/26).string(message.language);
+                    if (message.traceback != null && Object.hasOwnProperty.call(message, "traceback"))
+                        writer.uint32(/* id 4, wireType 2 =*/34).string(message.traceback);
+                    if (message.handle != null && Object.hasOwnProperty.call(message, "handle"))
+                        writer.uint32(/* id 5, wireType 0 =*/40).uint64(message.handle);
+                    return writer;
+                };
+
+                /**
+                 * Encodes the specified HostException message, length delimited. Does not implicitly {@link baml_bridge.cffi.v1.HostException.verify|verify} messages.
+                 * @function encodeDelimited
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @static
+                 * @param {baml_bridge.cffi.v1.IHostException} message HostException message or plain object to encode
+                 * @param {$protobuf.Writer} [writer] Writer to encode to
+                 * @returns {$protobuf.Writer} Writer
+                 */
+                HostException.encodeDelimited = function encodeDelimited(message, writer) {
+                    return this.encode(message, writer).ldelim();
+                };
+
+                /**
+                 * Decodes a HostException message from the specified reader or buffer.
+                 * @function decode
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @param {number} [length] Message length if known beforehand
+                 * @returns {baml_bridge.cffi.v1.HostException} HostException
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                HostException.decode = function decode(reader, length, error, long) {
+                    if (!(reader instanceof $Reader))
+                        reader = $Reader.create(reader);
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $Reader.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let end = length === undefined ? reader.len : reader.pos + length, message = new $root.baml_bridge.cffi.v1.HostException();
+                    while (reader.pos < end) {
+                        let tag = reader.uint32();
+                        if (tag === error)
+                            break;
+                        switch (tag >>> 3) {
+                        case 1: {
+                                message.message = reader.string();
+                                break;
+                            }
+                        case 2: {
+                                message.className = reader.string();
+                                break;
+                            }
+                        case 3: {
+                                message.language = reader.string();
+                                break;
+                            }
+                        case 4: {
+                                message.traceback = reader.string();
+                                break;
+                            }
+                        case 5: {
+                                message.handle = reader.uint64();
+                                break;
+                            }
+                        default:
+                            reader.skipType(tag & 7, long);
+                            break;
+                        }
+                    }
+                    return message;
+                };
+
+                /**
+                 * Decodes a HostException message from the specified reader or buffer, length delimited.
+                 * @function decodeDelimited
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @static
+                 * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+                 * @returns {baml_bridge.cffi.v1.HostException} HostException
+                 * @throws {Error} If the payload is not a reader or valid buffer
+                 * @throws {$protobuf.util.ProtocolError} If required fields are missing
+                 */
+                HostException.decodeDelimited = function decodeDelimited(reader) {
+                    if (!(reader instanceof $Reader))
+                        reader = new $Reader(reader);
+                    return this.decode(reader, reader.uint32());
+                };
+
+                /**
+                 * Verifies a HostException message.
+                 * @function verify
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @static
+                 * @param {Object.<string,*>} message Plain object to verify
+                 * @returns {string|null} `null` if valid, otherwise the reason why it is not
+                 */
+                HostException.verify = function verify(message, long) {
+                    if (typeof message !== "object" || message === null)
+                        return "object expected";
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        return "maximum nesting depth exceeded";
+                    let properties = {};
+                    if (message.message != null && message.hasOwnProperty("message"))
+                        if (!$util.isString(message.message))
+                            return "message: string expected";
+                    if (message.className != null && message.hasOwnProperty("className"))
+                        if (!$util.isString(message.className))
+                            return "className: string expected";
+                    if (message.language != null && message.hasOwnProperty("language"))
+                        if (!$util.isString(message.language))
+                            return "language: string expected";
+                    if (message.traceback != null && message.hasOwnProperty("traceback")) {
+                        properties._traceback = 1;
+                        if (!$util.isString(message.traceback))
+                            return "traceback: string expected";
+                    }
+                    if (message.handle != null && message.hasOwnProperty("handle"))
+                        if (!$util.isInteger(message.handle) && !(message.handle && $util.isInteger(message.handle.low) && $util.isInteger(message.handle.high)))
+                            return "handle: integer|Long expected";
+                    return null;
+                };
+
+                /**
+                 * Creates a HostException message from a plain object. Also converts values to their respective internal types.
+                 * @function fromObject
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @static
+                 * @param {Object.<string,*>} object Plain object
+                 * @returns {baml_bridge.cffi.v1.HostException} HostException
+                 */
+                HostException.fromObject = function fromObject(object, long) {
+                    if (object instanceof $root.baml_bridge.cffi.v1.HostException)
+                        return object;
+                    if (!$util.isObject(object))
+                        throw TypeError(".baml_bridge.cffi.v1.HostException: object expected");
+                    if (long === undefined)
+                        long = 0;
+                    if (long > $util.recursionLimit)
+                        throw Error("maximum nesting depth exceeded");
+                    let message = new $root.baml_bridge.cffi.v1.HostException();
+                    if (object.message != null)
+                        message.message = String(object.message);
+                    if (object.className != null)
+                        message.className = String(object.className);
+                    if (object.language != null)
+                        message.language = String(object.language);
+                    if (object.traceback != null)
+                        message.traceback = String(object.traceback);
+                    if (object.handle != null)
+                        if ($util.Long)
+                            message.handle = $util.Long.fromValue(object.handle, true);
+                        else if (typeof object.handle === "string")
+                            message.handle = parseInt(object.handle, 10);
+                        else if (typeof object.handle === "number")
+                            message.handle = object.handle;
+                        else if (typeof object.handle === "object")
+                            message.handle = new $util.LongBits(object.handle.low >>> 0, object.handle.high >>> 0).toNumber(true);
+                    return message;
+                };
+
+                /**
+                 * Creates a plain object from a HostException message. Also converts values to other types if specified.
+                 * @function toObject
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @static
+                 * @param {baml_bridge.cffi.v1.HostException} message HostException
+                 * @param {$protobuf.IConversionOptions} [options] Conversion options
+                 * @returns {Object.<string,*>} Plain object
+                 */
+                HostException.toObject = function toObject(message, options, q) {
+                    if (!options)
+                        options = {};
+                    if (q === undefined)
+                        q = 0;
+                    if (q > $util.recursionLimit)
+                        throw Error("max depth exceeded");
+                    let object = {};
+                    if (options.defaults) {
+                        object.message = "";
+                        object.className = "";
+                        object.language = "";
+                        if ($util.Long) {
+                            let long = new $util.Long(0, 0, true);
+                            object.handle = options.longs === String ? long.toString() : options.longs === Number ? long.toNumber() : typeof BigInt !== "undefined" && options.longs === BigInt ? long.toBigInt() : long;
+                        } else
+                            object.handle = options.longs === String ? "0" : typeof BigInt !== "undefined" && options.longs === BigInt ? BigInt("0") : 0;
+                    }
+                    if (message.message != null && message.hasOwnProperty("message"))
+                        object.message = message.message;
+                    if (message.className != null && message.hasOwnProperty("className"))
+                        object.className = message.className;
+                    if (message.language != null && message.hasOwnProperty("language"))
+                        object.language = message.language;
+                    if (message.traceback != null && message.hasOwnProperty("traceback")) {
+                        object.traceback = message.traceback;
+                        if (options.oneofs)
+                            object._traceback = "traceback";
+                    }
+                    if (message.handle != null && message.hasOwnProperty("handle"))
+                        if (typeof BigInt !== "undefined" && options.longs === BigInt)
+                            object.handle = typeof message.handle === "number" ? BigInt(message.handle) : $util.Long.fromBits(message.handle.low >>> 0, message.handle.high >>> 0, true).toBigInt();
+                        else if (typeof message.handle === "number")
+                            object.handle = options.longs === String ? String(message.handle) : message.handle;
+                        else
+                            object.handle = options.longs === String ? $util.Long.prototype.toString.call(message.handle) : options.longs === Number ? new $util.LongBits(message.handle.low >>> 0, message.handle.high >>> 0).toNumber(true) : message.handle;
+                    return object;
+                };
+
+                /**
+                 * Converts this HostException to JSON.
+                 * @function toJSON
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @instance
+                 * @returns {Object.<string,*>} JSON object
+                 */
+                HostException.prototype.toJSON = function toJSON() {
+                    return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+                };
+
+                /**
+                 * Gets the default type url for HostException
+                 * @function getTypeUrl
+                 * @memberof baml_bridge.cffi.v1.HostException
+                 * @static
+                 * @param {string} [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+                 * @returns {string} The default type url
+                 */
+                HostException.getTypeUrl = function getTypeUrl(typeUrlPrefix) {
+                    if (typeUrlPrefix === undefined) {
+                        typeUrlPrefix = "type.googleapis.com";
+                    }
+                    return typeUrlPrefix + "/baml_bridge.cffi.v1.HostException";
+                };
+
+                return HostException;
+            })();
+
             /**
              * BamlHandleType enum.
              * @name baml_bridge.cffi.v1.BamlHandleType

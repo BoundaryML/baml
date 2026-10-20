@@ -74,9 +74,7 @@ use std::{
 };
 
 use bex_project::{HostKey, HostValueArc, HostValueKind, host_release_dispatch};
-use bridge_ctypes::{
-    CffiHandleTableOptions, HANDLE_TABLE, baml_bridge::cffi::InboundValue, inbound_to_external,
-};
+use bridge_ctypes::{CffiHandleTableOptions, HANDLE_TABLE, decode_host_call_completion};
 use indexmap::IndexMap;
 use js_sys::Function;
 use prost::Message;
@@ -423,38 +421,25 @@ pub fn test_sync_pending_host_callable_error(key: u64) -> String {
     })
 }
 
-/// Complete an in-flight host call from JS.
+/// Complete an in-flight host call from the JS dispatch wrapper with a
+/// protobuf-encoded `HostCallCompletion`: the callable's result or thrown
+/// value encoded against its declared types, an exception of the host's own,
+/// a broken contract, or a bridge failure. The engine holds the values to the
+/// declared types and builds every panic itself.
 ///
-/// Exposed to JS as `completeHostCall(callId, isError, content)`.
-///
-/// On success (`is_error == 0`), `content` is a protobuf-encoded `InboundValue`
-/// (host→engine direction, no type metadata — engine re-validates against the
-/// declared return type).
-///
-/// On error (`is_error != 0`), `content` is a protobuf-encoded `InboundValue`
-/// representing the thrown value. The host bridge SDK wraps native exceptions
-/// in a synthetic `Instance` of class `baml.errors.HostCallable` carrying
-/// `message` / `class_name` / `language` / `traceback` fields; codegenned
-/// BAML errors flow through as their own `Instance` shape. The engine's
-/// `materialize_host_throw` runs the declared-throws contract check on the
-/// decoded value and either re-injects it as a catchable throw or escalates
-/// to a `HostContractViolation` panic.
-///
-/// `call_id` is globally unique, so it resolves the originating runtime's
-/// pending call unambiguously. Returns `true` when a live entry was removed and
-/// completed. An unknown ID returns `false` after a bounded warning, making a
-/// Promise settlement racing with cancellation an observable benign stale
-/// completion.
+/// Returns `true` when the id named an in-flight call. An unknown id is a
+/// late completion: its transfers are still consumed and released, and it
+/// returns `false` after a bounded warning, making a Promise settlement racing
+/// cancellation an observable benign stale completion.
 #[wasm_bindgen(js_name = completeHostCall)]
-pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) -> bool {
+pub fn complete_host_call(call_id: u32, content: &[u8]) -> bool {
     // Actual exit retires execution independently of waiter delivery.
     let _execution = EXECUTIONS.with(|cell| cell.borrow_mut().remove(&call_id));
     let completion = IN_FLIGHT.with(|cell| cell.borrow_mut().remove(&call_id));
+    let decoded = decode_host_call_completion(content, &HANDLE_TABLE);
     let Some(in_flight) = completion else {
         // Late payloads still transfer wire owners, including host-owned values.
-        if let Ok(inbound) = InboundValue::decode(content) {
-            drop(inbound_to_external(inbound, &HANDLE_TABLE));
-        }
+        drop(decoded);
         host_release_dispatch::drain();
         log::warn!("completeHostCall for unknown call id {call_id}");
         return false;
@@ -463,95 +448,7 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) -> bool {
         operation,
         completion,
     } = in_flight;
-
-    // Strict 0/1 contract: any other value is a bridge wire-protocol bug
-    // (an `i32` could carry uninitialised memory, a forgotten cast, or
-    // someone repurposing the flag) — surface it as `BridgeFailure` so the
-    // bug is loud, instead of silently aliasing into the throw branch.
-    if is_error != 0 && is_error != 1 {
-        completion.complete(Err(OpError::new(
-            operation,
-            sys_types::VmInternalError::BridgeFailure {
-                message: format!(
-                    "completeHostCall: invalid isError value {is_error}; \
-                     expected 0 (success) or 1 (error)"
-                ),
-            },
-        )));
-        return true;
-    }
-
-    if is_error == 0 {
-        // Success: decode InboundValue → BexExternalValue.
-        if content.is_empty() {
-            // No payload → Null return.
-            completion.complete(Ok(BexExternalValue::Null));
-            return true;
-        }
-        let inbound = match InboundValue::decode(content) {
-            Ok(v) => v,
-            Err(e) => {
-                completion.complete(Err(OpError::new(
-                    operation,
-                    sys_types::VmInternalError::BridgeFailure {
-                        message: format!("completeHostCall decode failure: {e}"),
-                    },
-                )));
-                return true;
-            }
-        };
-        match inbound_to_external(inbound, &HANDLE_TABLE) {
-            Ok(v) => completion.complete(Ok(v)),
-            Err(e) => completion.complete(Err(OpError::new(
-                operation,
-                sys_types::VmInternalError::BridgeFailure {
-                    message: format!("completeHostCall decode failure: {e}"),
-                },
-            ))),
-        }
-    } else {
-        // Throw: decode `InboundValue` → `BexExternalValue` → engine. The
-        // engine's `materialize_host_throw` runs the declared-throws
-        // contract check on the decoded value.
-        let mapped = if content.is_empty() {
-            // An empty throw payload is a host bridge bug, not a user
-            // contract violation: `is_error == 1` requires a protobuf-
-            // encoded `InboundValue`, and only the bridge itself decides
-            // what to send on the wire. A misbehaving bridge is an
-            // infrastructure fault — surface it as `BridgeFailure` (which
-            // codegens to `baml.panics.SdkPanic` on the host side), not as
-            // `HostContractViolation` (which would falsely accuse the
-            // user's callable of returning the wrong shape).
-            OpError::new(
-                operation,
-                sys_types::VmInternalError::BridgeFailure {
-                    message: "host bridge called completeHostCall(isError=1) \
-                              with no payload; expected a protobuf-encoded \
-                              InboundValue describing the thrown value"
-                        .to_string(),
-                },
-            )
-        } else {
-            match InboundValue::decode(content) {
-                Ok(inbound) => match inbound_to_external(inbound, &HANDLE_TABLE) {
-                    Ok(v) => OpError::host_thrown_value(operation, v),
-                    Err(e) => OpError::new(
-                        operation,
-                        sys_types::VmInternalError::BridgeFailure {
-                            message: format!("completeHostCall throw-payload decode failure: {e}"),
-                        },
-                    ),
-                },
-                Err(e) => OpError::new(
-                    operation,
-                    sys_types::VmInternalError::BridgeFailure {
-                        message: format!("completeHostCall throw-payload decode failure: {e}"),
-                    },
-                ),
-            }
-        };
-        completion.complete(Err(mapped));
-    }
+    completion.complete(OpError::from_completion(operation, decoded));
     true
 }
 
@@ -911,8 +808,8 @@ fn drain_pending_unvalidated(
         SysOpResult::Ready(Err(err)) => match err.payload {
             sys_types::OpErrorPayload::Vm(kind) => SysOpOutput::err(kind),
             // `SysOpResult::pending` always yields `Async`, so a Ready(Err)
-            // here can't actually originate from the host-throw path.
-            sys_types::OpErrorPayload::HostThrown(_) => {
+            // here can't actually originate from a thrown value.
+            sys_types::OpErrorPayload::Engine(_) | sys_types::OpErrorPayload::Host(_) => {
                 unreachable!("Ready(Err) is never produced for the host-callable sysop")
             }
         },
@@ -946,9 +843,20 @@ mod tests {
 
     use std::collections::HashSet;
 
-    use bridge_ctypes::baml_bridge::cffi::inbound_value::Value as InboundVariant;
+    use bridge_ctypes::baml_bridge::cffi::{
+        HostCallCompletion, InboundValue, host_call_completion::Outcome,
+        inbound_value::Value as InboundVariant,
+    };
 
     use super::*;
+
+    /// A completion whose callable returned `null`.
+    fn returned_null() -> Vec<u8> {
+        HostCallCompletion {
+            outcome: Some(Outcome::Returned(InboundValue::default())),
+        }
+        .encode_to_vec()
+    }
 
     fn insert_pending_call() -> (u32, SysOpResult) {
         let call_id = next_call_id();
@@ -1022,8 +930,8 @@ mod tests {
             panic!("pending() must produce an async result");
         };
 
-        // Complete A with an empty success payload (→ Null). B must stay pending.
-        complete_host_call(id_a, 0, &[]);
+        // Complete A with a null return. B must stay pending.
+        complete_host_call(id_a, &returned_null());
 
         // A's future is now resolved with Null; B's table entry is still present.
         let a = futures::executor::block_on(fut_a).expect("A completes successfully");
@@ -1040,7 +948,7 @@ mod tests {
         });
 
         // An unknown id is a silent no-op (stale completion / dropped runtime).
-        complete_host_call(u32::MAX, 0, &[]);
+        complete_host_call(u32::MAX, &returned_null());
 
         // B's future must still be pending (not yet polled to completion).
         let waker = futures::task::noop_waker();
@@ -1051,7 +959,7 @@ mod tests {
         );
 
         // Now complete B and confirm it resolves independently.
-        complete_host_call(id_b, 0, &[]);
+        complete_host_call(id_b, &returned_null());
         let b = futures::executor::block_on(fut_b).expect("B completes successfully");
         assert!(matches!(b, BexExternalValue::Null), "B resolved with Null");
     }
@@ -1102,7 +1010,7 @@ mod tests {
         };
 
         // Host completes normally — this removes-and-fires the handle.
-        complete_host_call(call_id, 0, &[]);
+        complete_host_call(call_id, &returned_null());
         assert!(
             !IN_FLIGHT.with(|c| c.borrow().contains_key(&call_id)),
             "completion must remove the in-flight entry"
@@ -1120,7 +1028,7 @@ mod tests {
     #[test]
     fn malformed_completion_is_bridge_failure_and_removes_entry() {
         let (call_id, result) = insert_pending_call();
-        complete_host_call(call_id, 0, &[0xff]);
+        complete_host_call(call_id, &[0xff]);
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
         let SysOpResult::Async(future) = result else {
@@ -1136,15 +1044,15 @@ mod tests {
     }
 
     #[test]
-    fn invalid_is_error_is_bridge_failure_and_removes_entry() {
+    fn a_completion_with_no_outcome_is_bridge_failure_and_removes_entry() {
         let (call_id, result) = insert_pending_call();
-        assert!(complete_host_call(call_id, 2, &[]));
+        assert!(complete_host_call(call_id, &[]));
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
         let SysOpResult::Async(future) = result else {
             panic!("pending() must produce an async result");
         };
-        let error = futures::executor::block_on(future).expect_err("invalid isError must fail");
+        let error = futures::executor::block_on(future).expect_err("no outcome must fail");
         assert!(matches!(
             error.payload,
             sys_types::OpErrorPayload::Vm(sys_types::VmRustFnError::InternalError(
@@ -1183,7 +1091,7 @@ mod tests {
             ))
         ));
 
-        assert!(complete_host_call(call_id, 0, &[]));
+        assert!(complete_host_call(call_id, &returned_null()));
         let SysOpResult::Async(first_future) = first_result else {
             panic!("pending() must produce an async result");
         };
@@ -1195,12 +1103,14 @@ mod tests {
     #[test]
     fn structured_user_error_removes_entry() {
         let (call_id, result) = insert_pending_call();
-        let payload = InboundValue {
-            value_type: None,
-            value: Some(InboundVariant::StringValue("boom".to_string())),
+        let payload = HostCallCompletion {
+            outcome: Some(Outcome::Thrown(InboundValue {
+                value_type: None,
+                value: Some(InboundVariant::StringValue("boom".to_string())),
+            })),
         }
         .encode_to_vec();
-        complete_host_call(call_id, 1, &payload);
+        complete_host_call(call_id, &payload);
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
         let SysOpResult::Async(future) = result else {
@@ -1209,7 +1119,7 @@ mod tests {
         let error = futures::executor::block_on(future).expect_err("throw must fail the sysop");
         assert!(matches!(
             error.payload,
-            sys_types::OpErrorPayload::HostThrown(ref value)
+            sys_types::OpErrorPayload::Host(sys_types::HostOutcome::Thrown(ref value))
                 if matches!(value.as_ref(), BexExternalValue::String(value) if value.as_str() == "boom")
         ));
     }
@@ -1217,8 +1127,8 @@ mod tests {
     #[test]
     fn duplicate_completion_is_a_noop_after_first_removal() {
         let (call_id, result) = insert_pending_call();
-        complete_host_call(call_id, 0, &[]);
-        complete_host_call(call_id, 0, &[0xff]);
+        complete_host_call(call_id, &returned_null());
+        complete_host_call(call_id, &[0xff]);
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
         let SysOpResult::Async(future) = result else {

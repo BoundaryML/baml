@@ -314,14 +314,15 @@ def test_host_throw_encode_failure_releases_capability_clone():
     def cb(_x: int):
         raise BamlError([handle, object()])
 
-    with pytest.raises(Exception):
+    # The thrown value cannot be encoded against the declared throws type, so
+    # the callable broke its contract: a `HostContractViolation` panic, and
+    # the capability clone the encoder took for `handle` is released on the
+    # way out rather than leaking with the refused value.
+    with pytest.raises(BamlPanic, match="HostContractViolation"):
         call_function_sync(rt, "ConsumeUnknownCb", {"callback": cb, "x": 1})
 
-    # The thrown value cannot be encoded, so the callback's native exception
-    # is registered as an opaque host value and re-raised with its identity.
-    # The engine's heap holds that registration until it collects the thrown
-    # `baml.errors.HostCallable` instance, and the exception's traceback
-    # keeps the dispatch frame (and its control handles) alive until then.
+    # The exception's traceback keeps the dispatch frame (and its control
+    # handles) alive until the collector runs.
     call_function_sync(rt, "Collect", {})
     gc.collect()
     assert _live_handle_count() == before

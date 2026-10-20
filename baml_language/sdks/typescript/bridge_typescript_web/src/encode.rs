@@ -28,8 +28,8 @@ use bridge_ctypes::{
     baml_bridge::cffi::{BamlTy, CallFunctionArgs, InboundValue, call_function_args::CallTarget},
 };
 use bridge_encode::{
-    BridgeFault, Completion, Error, Facts, FunctionSig, Host, LeafKind, LeafWire, Owner, Owners,
-    Param, Root, encode, encode_arguments,
+    Completion, Encoded, Error, Facts, FunctionSig, Host, LeafKind, LeafWire, Owner, Owners, Param,
+    Root, encode, encode_arguments,
     js::{Js, JsKind, JsView},
 };
 use js_sys::{Array, Function, Object, Reflect, Uint8Array};
@@ -164,66 +164,39 @@ pub(crate) fn encode_request(
 /// runtime's instrumentation.
 #[wasm_bindgen(js_name = completeWebHostCallValue)]
 pub fn complete_web_host_call_value(call_id: u32, value: JsValue) -> Result<String, JsValue> {
-    let key = sys_wasm::host_callable_key_for_call(call_id);
-    let ret = SIGNATURES.with(
-        |cell| match key.and_then(|key| cell.borrow().get(&key).cloned()) {
-            Some(RuntimeTy::Function { ret, .. }) => *ret,
-            Some(_) | None => RuntimeTy::Unknown,
-        },
-    );
-    let outcome = match encode_result(value, &ret) {
-        Completion::Wire(value) => {
-            sys_wasm::complete_host_call(call_id, 0, &value.encode_to_vec());
-            "ok"
-        }
-        Completion::HostError(error) => return Err(error),
-        // The host broke the callable's contract: a panic, as the engine's
-        // own return check reports it, not a catchable error.
-        Completion::ContractViolation(error) => {
-            sys_wasm::complete_host_call(
-                call_id,
-                1,
-                &bridge_encode::host_contract_violation(&error.to_string(), "web").encode_to_vec(),
-            );
-            "error"
-        }
-        Completion::BridgeFailure(fault) => {
-            let message = match fault {
-                BridgeFault::Value(error) => error.to_string(),
-                BridgeFault::Host(error) => error_message(&error),
-            };
-            sys_wasm::complete_host_call(
-                call_id,
-                1,
-                &bridge_encode::sdk_panic(&message).encode_to_vec(),
-            );
-            "error"
-        }
+    let ret = match signature_of_call(call_id) {
+        Some(RuntimeTy::Function { ret, .. }) => *ret,
+        Some(_) | None => RuntimeTy::Unknown,
     };
+    let completion = encode_result(value, &ret);
+    let outcome = match &completion {
+        Completion::Wire(_) => "ok",
+        Completion::HostError(_)
+        | Completion::ContractViolation(_)
+        | Completion::BridgeFailure(_) => "error",
+    };
+    let wire = completion.into_wire(Encoded::Returned)?;
+    sys_wasm::complete_host_call(call_id, &wire.encode_to_vec());
     Ok(outcome.to_string())
 }
 
-/// Complete an in-flight host call with a thrown BAML value, encoded as the
-/// type it has: the engine's throw channel takes it with no declared slot.
+/// Complete an in-flight host call with a thrown BAML value, encoded against
+/// the throws type of the slot the callable was bound to; a `baml.panics.*`
+/// value is a panic whatever the slot declares.
 #[wasm_bindgen(js_name = completeWebHostCallThrow)]
 pub fn complete_web_host_call_throw(call_id: u32, value: JsValue) -> Result<bool, JsValue> {
-    let value = match encode_result(value, &RuntimeTy::Unknown) {
-        Completion::Wire(value) => value,
-        Completion::HostError(error) => return Err(error),
-        Completion::ContractViolation(error)
-        | Completion::BridgeFailure(BridgeFault::Value(error)) => {
-            return Err(crate::errors::setup_error(
-                crate::errors::INVALID_ARGUMENT,
-                error.to_string(),
-            ));
-        }
-        Completion::BridgeFailure(BridgeFault::Host(error)) => return Err(error),
+    let throws = match signature_of_call(call_id) {
+        Some(RuntimeTy::Function { throws, .. }) => *throws,
+        Some(_) | None => RuntimeTy::Unknown,
     };
-    Ok(sys_wasm::complete_host_call(
-        call_id,
-        1,
-        &value.encode_to_vec(),
-    ))
+    let wire = encode_result(value, &throws).into_wire(Encoded::Thrown)?;
+    Ok(sys_wasm::complete_host_call(call_id, &wire.encode_to_vec()))
+}
+
+/// The function type the callable dispatched as `call_id` was bound to.
+fn signature_of_call(call_id: u32) -> Option<RuntimeTy> {
+    let key = sys_wasm::host_callable_key_for_call(call_id)?;
+    SIGNATURES.with(|cell| cell.borrow().get(&key).cloned())
 }
 
 /// Encode one JavaScript value as the bridge would send it where the program
@@ -278,18 +251,6 @@ fn raise(target: &str, error: Error<JsValue>) -> JsValue {
             format!("{target}: {error}"),
         ),
     }
-}
-
-/// The message of a JavaScript error, or the string it is.
-pub(crate) fn error_message(error: &JsValue) -> String {
-    error
-        .as_string()
-        .or_else(|| {
-            error
-                .dyn_ref::<js_sys::Error>()
-                .map(|error| String::from(error.message()))
-        })
-        .unwrap_or_else(|| "JavaScript error".to_string())
 }
 
 /// Forget the signature of a released host callable.

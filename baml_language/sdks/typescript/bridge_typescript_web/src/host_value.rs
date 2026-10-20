@@ -50,9 +50,35 @@ pub fn release_web_host_callable(key: u64) {
     }
 }
 
-#[wasm_bindgen(js_name = completeWebHostCall)]
-pub fn complete_web_host_call(call_id: u32, is_error: i32, content: &[u8]) -> bool {
-    sys_wasm::complete_host_call(call_id, is_error, content)
+/// Complete an in-flight host call as the host's own exception: the engine
+/// builds the `baml.errors.HostCallable` whose `_handle` is `handle`, the
+/// JS-side registration of the error object (a decimal host-value key).
+#[wasm_bindgen(js_name = completeWebHostCallRaised)]
+pub fn complete_web_host_call_raised(
+    call_id: u32,
+    class_name: String,
+    message: String,
+    stack: Option<String>,
+    handle: &str,
+) -> Result<bool, JsValue> {
+    let handle = handle
+        .parse()
+        .ok()
+        .and_then(bridge_ctypes::HostKey::new)
+        .ok_or_else(|| JsValue::from_str("a raised error must be registered first"))?;
+    let completion = bridge_encode::raised(message, class_name, "web", stack, handle);
+    Ok(sys_wasm::complete_host_call(
+        call_id,
+        &prost::Message::encode_to_vec(&completion),
+    ))
+}
+
+/// Complete an in-flight host call as a failure of the bridge's own, which
+/// the engine surfaces as `baml.panics.SdkPanic`.
+#[wasm_bindgen(js_name = completeWebHostCallBridgeFailure)]
+pub fn complete_web_host_call_bridge_failure(call_id: u32, message: String) -> bool {
+    let completion = bridge_encode::bridge_failure(message);
+    sys_wasm::complete_host_call(call_id, &prost::Message::encode_to_vec(&completion))
 }
 
 #[wasm_bindgen(js_name = _testWebHostCallableCount)]

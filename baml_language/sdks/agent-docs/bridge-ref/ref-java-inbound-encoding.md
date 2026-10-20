@@ -602,7 +602,7 @@ exercises are marked:
 | `enum_value` | `BexExternalValue::Variant { enum_name, variant_name }` | yes |
 | `ty_value` | `proto_ty_to_external(...)` — decodable | **no** (no Java encoder arm) |
 | `handle` with `HOST_VALUE_CALLABLE` (15) | `BexExternalValue::HostValue`; bypasses `HANDLE_TABLE` | yes (host callable — `registerHostCallable`, landed `202883518`) |
-| `handle` with `HOST_VALUE_OPAQUE` (16) | `BexExternalValue::HostValue`; bypasses `HANDLE_TABLE` | yes, on the throw-back path only (`encodeHostCallableError`'s hidden `_handle`) |
+| `handle` with `HOST_VALUE_OPAQUE` (16) | `BexExternalValue::HostValue`; bypasses `HANDLE_TABLE` | no — a raised exception's registration travels as `HostException.handle` in the `HostCallCompletion`, and the engine builds the `baml.errors.HostCallable` around it |
 | other `handle` | drains the key from `HANDLE_TABLE` and converts the entry | yes (media `_data`, bare handle, stream receiver) |
 
 The engine receives the decoded kwargs and the called function FQN. Any missing

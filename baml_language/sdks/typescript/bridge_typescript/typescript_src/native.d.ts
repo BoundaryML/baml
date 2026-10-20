@@ -255,25 +255,31 @@ export declare function _watchInvocationCancellation(handle: BamlHandle, callbac
 export declare function cancelFunctionCall(callId: string): boolean
 
 /**
- * Complete an in-flight host call from the JS dispatch wrapper.
+ * Complete an in-flight host call as a failure of the bridge's own: the
+ * engine surfaces it as `baml.panics.SdkPanic`, never as a catchable error.
  *
- * Exposed to JS as `completeHostCall(callId, isError, content)`. The JS
- * dispatch wrapper invokes this after it has decoded `argsBytes`, called
- * the user function, and encoded the result as an `InboundValue` (success
- * is the value itself; an error is an `Instance` of
- * `baml.errors.HostCallable` carrying the four metadata fields).
- *
- * Forwards directly to the `bridge_cffi::complete_host_call` C entry point
- * the engine uses for cross-language completion.
+ * Exposed to JS as `completeHostCallBridgeFailure(callId, message)`.
  */
-export declare function completeHostCall(callId: number, isError: number, content: Buffer): void
+export declare function completeHostCallBridgeFailure(callId: number, message: string): void
+
+/**
+ * Complete an in-flight host call as the host's own exception: the engine
+ * builds the `baml.errors.HostCallable` whose `_handle` is `handle`, the
+ * JS-side registration of the error object.
+ *
+ * Exposed to JS as `completeHostCallRaised(callId, className, message, stack, handle)`.
+ */
+export declare function completeHostCallRaised(callId: number, className: string, message: string, stack: string | undefined | null, handle: HandleKey): void
 
 /**
  * Complete an in-flight host call with a thrown BAML value (the `value` of
- * a `BamlError`), encoded as the type it has: the engine's throw channel
- * takes it with no declared slot and checks the throws contract after.
+ * a `BamlError`), encoded against the throws type of the slot the callable
+ * was bound to. A `baml.panics.*` value is a panic whatever the slot
+ * declares.
  *
- * Exposed to JS as `completeHostCallThrow(callId, value)`.
+ * Exposed to JS as `completeHostCallThrow(callId, value)`. An error raised
+ * while the value was read is raised here; the JS wrapper then completes the
+ * call with it as the host's own exception.
  */
 export declare function completeHostCallThrow(callId: number, value: unknown): void
 

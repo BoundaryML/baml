@@ -151,54 +151,48 @@ inline std::unordered_map<uint32_t, std::weak_ptr<callback_frame>>
 // Wire helpers
 // ---------------------------------------------------------------------------
 
-inline void complete_host_success(uint32_t call_id,
-                                  const std::string& inbound_bytes) {
+// Complete a BAML->host call with what the callable did. The engine holds a
+// returned or thrown value to the callable's declared types and builds every
+// panic itself; an exception of the host's own becomes the
+// baml.errors.HostCallable the engine builds from `raised`.
+inline void complete_host_call(uint32_t call_id,
+                               const pb::HostCallCompletion& completion) {
+  const std::string bytes = completion.SerializeAsString();
   api().complete_host_call(
-      call_id, 0, reinterpret_cast<const int8_t*>(inbound_bytes.data()),
-      inbound_bytes.size());
+      call_id, reinterpret_cast<const int8_t*>(bytes.data()), bytes.size());
 }
 
-inline void complete_host_error(uint32_t call_id,
-                                const std::string& inbound_bytes) {
-  api().complete_host_call(
-      call_id, 1, reinterpret_cast<const int8_t*>(inbound_bytes.data()),
-      inbound_bytes.size());
+inline void complete_returned(uint32_t call_id, const pb::InboundValue& value) {
+  pb::HostCallCompletion completion;
+  completion.mutable_returned()->CopyFrom(value);
+  complete_host_call(call_id, completion);
 }
 
-// Builds the InboundValue bytes of a baml.errors.HostCallable class value.
-// class_name / message / language are debugging metadata; _handle
-// (required on the wire) references the original exception in the
-// registry for same-process rehydration. traceback is declared nullable
-// but must be present, so it is sent as an explicit null (C++ has no
-// portable traceback).
-inline std::string build_host_callable_inbound(const std::string& class_name,
-                                               const std::string& message,
-                                               uint64_t handle_key) {
-  pb::InboundValue value_msg;
-  pb::InboundClassValue* cls = value_msg.mutable_class_value();
-  const auto string_field = [cls](const char* key, const std::string& v) {
-    pb::InboundMapEntry* field = cls->add_fields();
-    field->set_string_key(key);
-    field->mutable_value()->set_string_value(v);
-  };
-  string_field("message", message);
-  string_field("class_name", class_name);
-  string_field("language", "cpp");
-  {
-    pb::InboundMapEntry* field = cls->add_fields();
-    field->set_string_key("traceback");
-    field->mutable_value();  // present but empty InboundValue = explicit null
-  }
-  {
-    pb::InboundMapEntry* field = cls->add_fields();
-    field->set_string_key("_handle");
-    pb::BamlHandle* handle = field->mutable_value()->mutable_handle();
-    handle->set_key(handle_key);
-    handle->set_handle_type(pb::HOST_VALUE_OPAQUE);
-  }
-  value_msg.mutable_value_type()->mutable_class_ty()->set_name(
-      "baml.errors.HostCallable");
-  return value_msg.SerializeAsString();
+inline void complete_thrown(uint32_t call_id, const pb::InboundValue& value) {
+  pb::HostCallCompletion completion;
+  completion.mutable_thrown()->CopyFrom(value);
+  complete_host_call(call_id, completion);
+}
+
+// `handle_key` is the registry's key for the C++ exception, so the same
+// process recovers it by identity when the error comes back.
+inline void complete_raised(uint32_t call_id, const std::string& class_name,
+                            const std::string& message, uint64_t handle_key) {
+  pb::HostCallCompletion completion;
+  pb::HostException* raised = completion.mutable_raised();
+  raised->set_message(message);
+  raised->set_class_name(class_name);
+  raised->set_language("cpp");
+  raised->set_handle(handle_key);
+  complete_host_call(call_id, completion);
+}
+
+// A failure of the bridge's own, which the engine surfaces as SdkPanic.
+inline void complete_bridge_failure(uint32_t call_id,
+                                    const std::string& message) {
+  pb::HostCallCompletion completion;
+  completion.set_bridge_failure(message);
+  complete_host_call(call_id, completion);
 }
 
 // Re-encodes an outbound value as an InboundValue message: a received
@@ -467,11 +461,11 @@ void run_host_callable(const std::function<R(Ps...)>& fn,
           invoke_host_callable<R>(fn, staging, std::make_index_sequence<n>{});
       codec<R>::encode(result_msg, result);
     }
-    complete_host_success(call_id, result_msg.SerializeAsString());
+    complete_returned(call_id, result_msg);
   } catch (const host_throw_base& typed) {
     pb::InboundValue value_msg;
     typed.encode_value(value_msg);
-    complete_host_error(call_id, value_msg.SerializeAsString());
+    complete_thrown(call_id, value_msg);
   } catch (const error& e) {
     // A BAML-originated error rethrown through the callable: transcode
     // its payload so the class identity survives the round-trip.
@@ -482,30 +476,25 @@ void run_host_callable(const std::function<R(Ps...)>& fn,
                                    static_cast<int>(e.payload().size()))) {
           pb::InboundValue value_msg;
           transcode_outbound_to_inbound(value_msg, payload);
-          complete_host_error(call_id, value_msg.SerializeAsString());
+          complete_thrown(call_id, value_msg);
           return;
         }
       } catch (...) {
-        // Untranscodable payload: fall through to the opaque path.
+        // Untranscodable payload: the host's own exception, below.
       }
     }
     const uint64_t key =
         host_value_registry::instance().add_exception(std::current_exception());
-    complete_host_error(
-        call_id,
-        build_host_callable_inbound(exception_class_name(e), e.message(), key));
+    complete_raised(call_id, exception_class_name(e), e.message(), key);
   } catch (const std::exception& e) {
     const uint64_t key =
         host_value_registry::instance().add_exception(std::current_exception());
-    complete_host_error(call_id, build_host_callable_inbound(
-                                     exception_class_name(e), e.what(), key));
+    complete_raised(call_id, exception_class_name(e), e.what(), key);
   } catch (...) {
     const uint64_t key =
         host_value_registry::instance().add_exception(std::current_exception());
-    complete_host_error(
-        call_id,
-        build_host_callable_inbound(
-            "unknown", "host callable threw a non-std::exception value", key));
+    complete_raised(call_id, "unknown",
+                    "host callable threw a non-std::exception value", key);
   }
 }
 
@@ -583,17 +572,11 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* args,
   const uint64_t host_value_key = wire.host_value_key();
   const uint32_t call_id = wire.callback_id();
   std::shared_ptr<baml::detail::callback_frame> frame;
-  // Bridge-layer faults (not user exceptions) also complete through
-  // complete_host_call -- the C ABI's only completion channel -- as a
-  // HostCallable error whose _handle carries a synthesized baml::error
-  // (the wire shape requires a real handle).
+  // Bridge-layer faults (not user exceptions) complete through the C ABI's
+  // one completion channel as the bridge's own failure, which the engine
+  // surfaces as baml.panics.SdkPanic.
   const auto bridge_failure = [call_id](const std::string& message) {
-    const uint64_t key =
-        baml::detail::host_value_registry::instance().add_exception(
-            std::make_exception_ptr(baml::error(message)));
-    baml::detail::complete_host_error(
-        call_id, baml::detail::build_host_callable_inbound("BridgeFailure",
-                                                           message, key));
+    baml::detail::complete_bridge_failure(call_id, message);
   };
   // No C++ exception may cross the C ABI (bridge contract), and every
   // setup fault must still complete the call or the engine awaits forever:
@@ -630,7 +613,11 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* args,
       baml::detail::current_invocation_state = frame->state;
       try {
         if (frame->cancelled.load())
-          baml::detail::complete_host_error(call_id, "");
+          // The engine retired this call's waiter before the callable ran;
+          // the completion only reports the exit, as the engine's own
+          // discarded-before-execution path words it.
+          baml::detail::complete_bridge_failure(
+              call_id, "host callback was discarded before execution");
         else
           dispatcher(call_id, std::move(bytes));
       } catch (...) {
@@ -653,8 +640,9 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* args,
       }
       bridge_failure("host callable dispatch could not be spawned");
     } catch (...) {
-      // A value-less failure still reports actual host exit without allocating.
-      baml::detail::api().complete_host_call(call_id, 1, nullptr, 0);
+      // An empty payload carries no outcome, which the engine lands as a
+      // bridge failure: the exit is reported without allocating.
+      baml::detail::api().complete_host_call(call_id, nullptr, 0);
     }
   }
 }

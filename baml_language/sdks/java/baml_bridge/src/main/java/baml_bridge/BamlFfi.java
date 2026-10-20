@@ -206,7 +206,7 @@ public final class BamlFfi {
      * host callable finishes; unknown / cancelled call ids are ignored
      * engine-side.
      */
-    static native void nativeCompleteHostCall(long callId, boolean isError, byte[] content);
+    static native void nativeCompleteHostCall(long callId, byte[] content);
 
     // ---- Handle lifecycle + media (baml.media.*) ---------------------------
     // The JVM analog of bridge_python's media/handle FFI: media values are
@@ -782,13 +782,13 @@ public final class BamlFfi {
         HOST_FRAMES.put(callId, frame);
         try {
             HOST_DISPATCH_EXECUTOR.execute(() -> {
-                if (frame.cancelled.get()) { safeComplete(callId, true, EMPTY_PAYLOAD); return; }
+                if (frame.cancelled.get()) { safeComplete(callId, ProtoWriter.hostCallBridgeFailure("host call cancelled before it started")); return; }
                 baml_bridge.internal.InvocationFrames.CURRENT.set(frame.active);
                 try { runHostDispatch(hostValueKey, callId, bamlToHostCall); }
                 finally { baml_bridge.internal.InvocationFrames.CURRENT.remove(); }
             });
         } catch (Throwable t) {
-            safeComplete(callId, true, EMPTY_PAYLOAD);
+            safeComplete(callId, ProtoWriter.hostCallBridgeFailure("the Java bridge could not schedule the host call: " + t));
         }
     }
 
@@ -810,13 +810,14 @@ public final class BamlFfi {
         Object registered = HOST_VALUES.get(hostValueKey);
         if (registered == null) {
             // The engine dispatched a key the bridge no longer holds — a bridge
-            // fault, not a user exception → BridgeFailure (empty error payload).
-            safeComplete(callId, true, EMPTY_PAYLOAD);
+            // fault, not a user exception.
+            safeComplete(callId, ProtoWriter.hostCallBridgeFailure("no Java host callable is registered for the dispatched key"));
             return;
         }
         BamlTypedCallable typed = registered instanceof BamlTypedCallable t ? t : null;
         Object callable = typed != null ? typed.callable() : registered;
         BamlType returnDesc = typed != null ? typed.returnDesc() : null;
+        BamlType throwsDesc = typed != null ? typed.functionType().functionThrows() : null;
         Object result;
         try {
             ProtoReader.HostCallArgs args = typed != null
@@ -828,7 +829,7 @@ public final class BamlFfi {
                     : ProtoReader.decodeBamlToHostCall(bamlToHostCall);
             result = invokeHostCallable(callable, args);
         } catch (Throwable userError) {
-            completeHostError(callId, userError);
+            completeHostError(callId, userError, throwsDesc);
             return;
         }
         // Async detection at the VALUE level (design point C): await a returned
@@ -840,7 +841,7 @@ public final class BamlFfi {
             future.whenComplete(
                     (value, err) -> {
                         if (err != null) {
-                            completeHostError(callId, unwrapCompletion(err));
+                            completeHostError(callId, unwrapCompletion(err), throwsDesc);
                         } else {
                             completeHostSuccess(callId, value, returnDesc);
                         }
@@ -914,29 +915,34 @@ public final class BamlFfi {
                             : value;
             payload = ProtoWriter.encodeInboundValue(encodable);
         } catch (Throwable encodeError) {
-            // The callable returned a value the encoder can't map to a BAML value:
-            // a bridge fault (the declared return type should have matched).
-            safeComplete(callId, true, EMPTY_PAYLOAD);
+            // The callable returned a value that does not fit the return type it
+            // was bound to: the callable broke its contract.
+            safeComplete(callId, ProtoWriter.hostCallContractViolation(
+                    "the callable's return value does not inhabit its declared type: " + encodeError.getMessage()));
             return;
         }
-        safeComplete(callId, false, payload);
+        safeComplete(callId, ProtoWriter.hostCallReturned(payload));
     }
 
     /**
-     * Complete the call with a thrown value, via the three-way error branch
-     * (design points D + F):
+     * Complete the call with what the callable threw:
      *
      * <ul>
-     *   <li>A {@link BamlError} / {@link BamlPanic} wrapping a codegenned BAML
-     *       value → unwrap {@code .value()} and encode it as its real BAML class,
-     *       so BAML's typed {@code catch (e: ValidationError)} matches
-     *       structurally.
-     *   <li>Anything else → register the {@link Throwable} under a fresh key and
-     *       encode a {@code baml.errors.HostCallable} carrying {@code _handle}, so
-     *       the decoder rehydrates the SAME object by identity on round trip.
+     *   <li>A {@link BamlError} / {@link BamlPanic} wrapping a BAML value →
+     *       unwrap {@code .value()} and throw it, encoded against the throws type
+     *       the callable was bound to ({@code throwsDesc}, null for an untyped
+     *       callable), so BAML's typed {@code catch (e: ValidationError)} matches.
+     *       A panic value is a panic whatever the callable declares; a value that
+     *       does not fit the declared throws type is the callable's broken
+     *       contract.
+     *   <li>Anything else → the host's own exception: register the
+     *       {@link Throwable} under a fresh key and report its identity; the
+     *       engine builds the {@code baml.errors.HostCallable} whose
+     *       {@code _handle} lets the decoder rehydrate the SAME object by identity
+     *       on round trip.
      * </ul>
      */
-    private static void completeHostError(long callId, Throwable error) {
+    private static void completeHostError(long callId, Throwable error, BamlType throwsDesc) {
         Object unwrapped = null;
         if (error instanceof BamlError be) {
             unwrapped = be.value();
@@ -944,20 +950,22 @@ public final class BamlFfi {
             unwrapped = bp.value();
         }
         if (unwrapped != null) {
+            byte[] payload;
             try {
-                byte[] payload = ProtoWriter.encodeInboundValue(unwrapped);
-                safeComplete(callId, true, payload);
+                Object encodable = throwsDesc != null ? new BamlTypedValue(unwrapped, throwsDesc) : unwrapped;
+                payload = ProtoWriter.encodeInboundValue(encodable);
+            } catch (Throwable doesNotFit) {
+                safeComplete(callId, ProtoWriter.hostCallContractViolation(
+                        "the callable's thrown value does not inhabit its declared throws type: " + doesNotFit.getMessage()));
                 return;
-            } catch (Throwable notABamlValue) {
-                // Not encodable as a BAML value — fall through to the opaque path.
             }
+            safeComplete(callId, ProtoWriter.hostCallThrown(payload));
+            return;
         }
         long handleKey = registerHostOpaque(error);
         String className = error.getClass().getSimpleName();
         String message = error.getMessage() != null ? error.getMessage() : error.toString();
-        byte[] payload =
-                ProtoWriter.encodeHostCallableError(className, message, renderTraceback(error), handleKey);
-        safeComplete(callId, true, payload);
+        safeComplete(callId, ProtoWriter.hostCallRaised(className, message, renderTraceback(error), handleKey));
     }
 
     /** Render a throwable's stack trace as a string for the {@code HostCallable.traceback} field. */
@@ -981,9 +989,9 @@ public final class BamlFfi {
     }
 
     /** Complete a host call, swallowing any native-completion failure (nothing more to do). */
-    private static void safeComplete(long callId, boolean isError, byte[] content) {
+    private static void safeComplete(long callId, byte[] completion) {
         try {
-            nativeCompleteHostCall(callId, isError, content);
+            nativeCompleteHostCall(callId, completion);
         } catch (Throwable ignored) {
             // The native completion is written never to throw; if it somehow does,
             // the executor task must not propagate it.

@@ -24,21 +24,15 @@ func marshalHostDispatch(t *testing.T, args ...*cffi.BamlToHostArg) []byte {
 	return payload
 }
 
+// cleanupCompletedHostError releases the registration a raised exception
+// carries, as the engine does when it drops the baml.errors.HostCallable.
 func cleanupCompletedHostError(payload []byte) {
-	var inbound cffi.InboundValue
-	if proto.Unmarshal(payload, &inbound) != nil {
+	var completion cffi.HostCallCompletion
+	if proto.Unmarshal(payload, &completion) != nil {
 		return
 	}
-	class := inbound.GetClassValue()
-	if class == nil {
-		return
-	}
-	for _, field := range class.Fields {
-		if field != nil && field.GetStringKey() == "_handle" && field.GetValue() != nil {
-			if handle := field.GetValue().GetHandle(); handle != nil {
-				unregisterHostValue(handle.Key)
-			}
-		}
+	if raised := completion.GetRaised(); raised != nil && raised.Handle != 0 {
+		unregisterHostValue(raised.Handle)
 	}
 }
 
@@ -144,31 +138,27 @@ func TestNilHostCallableDoesNotRegister(t *testing.T) {
 func TestMalformedHostDispatchCompletesWithStructuredError(t *testing.T) {
 	previous := completeNativeHostCall
 	t.Cleanup(func() { completeNativeHostCall = previous })
-	type completion struct {
-		isError bool
-		payload []byte
-	}
-	completed := make(chan completion, 2)
-	completeNativeHostCall = func(_ uint32, isError bool, payload []byte) {
-		completed <- completion{isError: isError, payload: append([]byte(nil), payload...)}
+	completed := make(chan []byte, 2)
+	completeNativeHostCall = func(_ uint32, payload []byte) {
+		completed <- append([]byte(nil), payload...)
 	}
 
 	dispatchHostCall(999_999, 1, nil)
-	assertHostCallableFailure(t, <-completed)
+	assertBridgeFailure(t, <-completed)
 
 	key := registerHostValue(hostValue{callable: func(HostCallArguments) (Input, error) {
 		return String("unused"), nil
 	}})
 	t.Cleanup(func() { unregisterHostValue(key) })
 	dispatchHostCall(key, 2, []byte{0xff})
-	assertHostCallableFailure(t, <-completed)
+	assertBridgeFailure(t, <-completed)
 }
 
 func TestHostDispatchPartitionsRequiredAndOptionalArguments(t *testing.T) {
 	previous := completeNativeHostCall
 	t.Cleanup(func() { completeNativeHostCall = previous })
-	completed := make(chan bool, 1)
-	completeNativeHostCall = func(_ uint32, isError bool, _ []byte) { completed <- isError }
+	completed := make(chan []byte, 1)
+	completeNativeHostCall = func(_ uint32, payload []byte) { completed <- append([]byte(nil), payload...) }
 
 	observed := make(chan HostCallArguments, 1)
 	key := registerHostValue(hostValue{callable: func(arguments HostCallArguments) (Input, error) {
@@ -195,33 +185,29 @@ func TestHostDispatchPartitionsRequiredAndOptionalArguments(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("callback did not observe dispatched arguments")
 	}
-	if isError := <-completed; isError {
-		t.Fatal("valid required/optional dispatch completed with an error")
+	if completion := decodeCompletion(t, <-completed); completion.GetReturned() == nil {
+		t.Fatalf("valid required/optional dispatch did not complete with a returned value: %v", completion)
 	}
 }
 
-func assertHostCallableFailure(t *testing.T, completed struct {
-	isError bool
-	payload []byte
-}) {
+func decodeCompletion(t *testing.T, payload []byte) *cffi.HostCallCompletion {
 	t.Helper()
-	if !completed.isError {
-		t.Fatal("malformed host dispatch completed successfully")
+	var completion cffi.HostCallCompletion
+	if err := proto.Unmarshal(payload, &completion); err != nil {
+		t.Fatalf("decode host-call completion: %v", err)
 	}
-	var inbound cffi.InboundValue
-	if err := proto.Unmarshal(completed.payload, &inbound); err != nil {
-		t.Fatalf("decode host failure: %v", err)
+	return &completion
+}
+
+// A dispatch the bridge could not carry out (an unknown key, arguments it
+// cannot decode) is the bridge's own failure, never an exception of the
+// callable's.
+func assertBridgeFailure(t *testing.T, payload []byte) {
+	t.Helper()
+	completion := decodeCompletion(t, payload)
+	if strings.TrimSpace(completion.GetBridgeFailure()) == "" {
+		t.Fatalf("malformed host dispatch did not complete as a bridge failure: %v", completion)
 	}
-	class := inbound.GetClassValue()
-	if class == nil || inbound.GetValueType().GetClassTy().GetName() != "baml.errors.HostCallable" {
-		t.Fatalf("host failure class = %#v", class)
-	}
-	for _, field := range class.Fields {
-		if field.GetStringKey() == "message" && strings.TrimSpace(field.GetValue().GetStringValue()) != "" {
-			return
-		}
-	}
-	t.Fatal("host failure has no message")
 }
 
 func TestHostCallablePanicAndReturnedErrorCompleteOnce(t *testing.T) {
@@ -229,9 +215,12 @@ func TestHostCallablePanicAndReturnedErrorCompleteOnce(t *testing.T) {
 	previous := completeNativeHostCall
 	t.Cleanup(func() { completeNativeHostCall = previous })
 	completed := make(chan bool, 3)
-	completeNativeHostCall = func(_ uint32, isError bool, payload []byte) {
+	completeNativeHostCall = func(_ uint32, payload []byte) {
 		cleanupCompletedHostError(payload)
-		completed <- isError
+		// Decoded here rather than through the test's helper: the hook runs
+		// on the callable's goroutine, which may not fail the test.
+		var completion cffi.HostCallCompletion
+		completed <- proto.Unmarshal(payload, &completion) == nil && completion.GetRaised() != nil
 	}
 
 	runHostCall(1, func(HostCallArguments) (Input, error) { panic("boom") }, HostCallArguments{}, nil)
@@ -264,7 +253,7 @@ func TestRejectedHostDispatchReleasesEveryNativeHandleExactlyOnce(t *testing.T) 
 	released := installOutboundReleaseRecorder(t)
 	previous := completeNativeHostCall
 	completed := make(chan struct{}, 1)
-	completeNativeHostCall = func(_ uint32, _ bool, payload []byte) {
+	completeNativeHostCall = func(_ uint32, payload []byte) {
 		cleanupCompletedHostError(payload)
 		completed <- struct{}{}
 	}
@@ -353,7 +342,7 @@ func TestHostInvocationCarriesStateAndCancellationUntilActualExit(t *testing.T) 
 	previousComplete, previousRelease := completeNativeHostCall, releaseOutboundHandle
 	t.Cleanup(func() { completeNativeHostCall, releaseOutboundHandle = previousComplete, previousRelease })
 	completed := make(chan struct{}, 1)
-	completeNativeHostCall = func(_ uint32, _ bool, _ []byte) { completed <- struct{}{} }
+	completeNativeHostCall = func(_ uint32, _ []byte) { completed <- struct{}{} }
 	releaseOutboundHandle = func(uint64) {}
 	entered := make(chan HostCallArguments, 1)
 	exit := make(chan struct{})
@@ -416,7 +405,7 @@ func TestHostInvocationCapturedContextSurvivesNormalCompletion(t *testing.T) {
 	previousComplete, previousRelease := completeNativeHostCall, releaseOutboundHandle
 	t.Cleanup(func() { completeNativeHostCall, releaseOutboundHandle = previousComplete, previousRelease })
 	completed := make(chan struct{}, 1)
-	completeNativeHostCall = func(_ uint32, _ bool, _ []byte) { completed <- struct{}{} }
+	completeNativeHostCall = func(_ uint32, _ []byte) { completed <- struct{}{} }
 	releaseOutboundHandle = func(uint64) {}
 	captured := make(chan context.Context, 1)
 	key := registerHostValue(hostValue{callable: func(arguments HostCallArguments) (Input, error) {

@@ -68,7 +68,8 @@ A class with a `$rust_type` field holds native data only the runtime creates
 such an instance back as it received it, the field holding a handle to the
 runtime's data; a value of the host's own in that field is refused. The
 exception is `baml.errors.HostCallable`, whose payload is the host's own
-handle to the exception it raised and which the runtime only carries back.
+handle to the exception it raised: the runtime builds that class from a
+callback's `raised` outcome and only carries it back.
 
 Map keys, class field names and keyword-argument names cross the boundary as
 strings only. The decoder refuses an `int_key`, `bool_key` or `enum_key`
@@ -98,11 +99,23 @@ names the parameter and the path; a refusal from the decoder names the node:
 argument `items` of `Total`: at `.items[0].x`: Value of type 'int' does not match the declared type `float`
 ```
 
-A callback return or throw that does not inhabit the declared type is a
-`baml.panics.HostContractViolation`. A result the bridge could not carry (too
-deep for the wire, a handle that could not be cloned) is a
-`baml.panics.SdkPanic`; an exception the callback's own code raised while the
-result was read is that exception, as any the callback throws.
+A callback has one completion channel, `complete_host_call`, whose payload is
+a `HostCallCompletion` with one of five outcomes. The host encodes a `returned`
+value against the callable's declared return type and a `thrown` BAML value
+against its declared throws type; the engine holds each to that type, and a
+value that does not inhabit it is the callable's breach of contract, a
+`baml.panics.HostContractViolation`. A thrown `baml.panics.*` instance is a
+panic whatever the callable declares. An exception of the host's own is
+`raised` with its identity and the host's registration of the exception
+object; the engine builds the `baml.errors.HostCallable` around that handle,
+and holds it to the declared throws type the same way, so a host never builds
+that class itself. A `contract_violation` is a value the host already found
+not to fit its declared type. A `bridge_failure` (a value too deep for the
+wire, a handle that could not be cloned, a payload the engine could not
+decode) is the bridge's own and fatal to the call, a `baml.panics.SdkPanic`;
+so is a completion that carries no outcome. The same contract holds for the
+runtime's own operations: an error one throws outside its declared throws type
+is an internal error, never a catchable throw of an undeclared class.
 
 ### How the dynamic hosts state types
 

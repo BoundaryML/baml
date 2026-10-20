@@ -373,9 +373,9 @@ internal static class Program
 
         HostCompletion completion = await NextCompletion();
         Require(
-            completion.CallId == hostCallId && completion.IsError == 0,
+            completion.CallId == hostCallId && completion.Outcome.Returned is not null,
             "async host dispatch did not complete as success");
-        InboundValue result = InboundValue.Parser.ParseFrom(completion.Bytes);
+        InboundValue result = completion.Outcome.Returned;
         Require(
             result.StringValue == "12!",
             "host dispatch did not copy its borrowed argument buffer before returning");
@@ -437,12 +437,10 @@ internal static class Program
         Require(
             supplied.IsCancellationRequested
                 && completion.CallId == hostCallId
-                && completion.IsError == 1
+                && completion.Outcome.Raised is not null
                 && Completions.IsEmpty,
             "a canceled callback must report its actual exit exactly once");
-        InboundValue inbound = InboundValue.Parser.ParseFrom(completion.Bytes);
-        ulong exceptionKey = inbound.ClassValue.Fields
-            .Single(field => field.StringKey == "_handle").Value.Handle.Key;
+        ulong exceptionKey = completion.Outcome.Raised.Handle;
         HostValueRegistry.Shared.Release(exceptionKey);
 
         HostValueRegistry.Shared.Release(registration.Key);
@@ -493,8 +491,8 @@ internal static class Program
         Array.Sort(ids);
         Require(
             ids.SequenceEqual(new uint[] { 103, 104 })
-                && first.IsError == 0
-                && second.IsError == 0,
+                && first.Outcome.Returned is not null
+                && second.Outcome.Returned is not null,
             "reentrant callback dispatch did not complete independently");
 
         await WaitUntil(() => HostValueRegistry.Shared.InvocationCount == 0);
@@ -533,18 +531,15 @@ internal static class Program
 
         HostCompletion completion = await NextCompletion();
         Require(
-            completion.CallId == hostCallId && completion.IsError == 1,
+            completion.CallId == hostCallId && completion.Outcome.Raised is not null,
             "an unrelated callback exception was misclassified as cancellation");
-        InboundValue inbound = InboundValue.Parser.ParseFrom(completion.Bytes);
-        BamlBridge.Cffi.V1.BamlHandle exceptionHandle = inbound.ClassValue.Fields
-            .Single(field => field.StringKey == "_handle")
-            .Value.Handle;
+        HostException raised = completion.Outcome.Raised;
         Require(
-            exceptionHandle.HandleType == BamlHandleType.HostValueOpaque,
-            "callback exception did not carry an opaque rehydration handle");
+            raised.Handle != 0,
+            "callback exception did not carry its registration for rehydration");
 
-        HostValueRegistry.Shared.Release(exceptionHandle.Key);
-        BamlOutboundResult outbound = ToOutboundError(inbound);
+        HostValueRegistry.Shared.Release(raised.Handle);
+        BamlOutboundResult outbound = ToOutboundError(raised);
         Exception? restored = null;
         try
         {
@@ -587,34 +582,33 @@ internal static class Program
         return (builder.Build(), integer, text);
     }
 
-    private static BamlOutboundResult ToOutboundError(InboundValue inbound)
+    /// <summary>
+    /// The <c>baml.errors.HostCallable</c> the engine builds from a raised
+    /// exception, as it reaches the host when the throw escapes the call.
+    /// </summary>
+    private static BamlOutboundResult ToOutboundError(HostException raised)
     {
-        var value = new BamlValueClass { Name = inbound.ValueType.ClassTy.Name };
-        foreach (InboundMapEntry field in inbound.ClassValue.Fields)
-        {
-            BamlOutboundValue outbound = field.Value.ValueCase switch
+        var value = new BamlValueClass { Name = "baml.errors.HostCallable" };
+        void Field(string key, BamlOutboundValue outbound) =>
+            value.Fields.Add(new BamlOutboundMapEntry { Key = key, Value = outbound });
+        Field("message", new BamlOutboundValue { StringValue = raised.Message });
+        Field("class_name", new BamlOutboundValue { StringValue = raised.ClassName });
+        Field("language", new BamlOutboundValue { StringValue = raised.Language });
+        Field(
+            "traceback",
+            raised.HasTraceback
+                ? new BamlOutboundValue { StringValue = raised.Traceback }
+                : new BamlOutboundValue());
+        Field(
+            "_handle",
+            new BamlOutboundValue
             {
-                InboundValue.ValueOneofCase.StringValue =>
-                    new BamlOutboundValue { StringValue = field.Value.StringValue },
-                InboundValue.ValueOneofCase.Handle =>
-                    new BamlOutboundValue
-                    {
-                        HandleValue = new BamlOutboundHandle
-                        {
-                            Key = field.Value.Handle.Key,
-                            HandleType = field.Value.Handle.HandleType,
-                        },
-                    },
-                InboundValue.ValueOneofCase.None => new BamlOutboundValue(),
-                _ => throw new InvalidOperationException(
-                    $"unsupported HostCallable test field {field.Value.ValueCase}"),
-            };
-            value.Fields.Add(new BamlOutboundMapEntry
-            {
-                Key = field.StringKey,
-                Value = outbound,
+                HandleValue = new BamlOutboundHandle
+                {
+                    Key = raised.Handle,
+                    HandleType = BamlHandleType.HostValueOpaque,
+                },
             });
-        }
 
         return new BamlOutboundResult
         {
@@ -744,14 +738,13 @@ internal static class Program
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe void CompleteHostCall(
         uint callId,
-        int isError,
         byte* content,
         nuint length)
     {
         byte[] bytes = length == 0
             ? []
             : new ReadOnlySpan<byte>(content, checked((int)length)).ToArray();
-        Completions.Enqueue(new HostCompletion(callId, isError, bytes));
+        Completions.Enqueue(new HostCompletion(callId, bytes));
         Volatile.Read(ref completionSignal).TrySetResult();
     }
 
@@ -816,7 +809,7 @@ internal static class Program
             table = (BamlApiV1*)NativeMemory.AllocZeroed((nuint)sizeof(BamlApiV1));
             *table = new BamlApiV1
             {
-                AbiVersion = 4,
+                AbiVersion = 5,
                 StructSize = (nuint)sizeof(BamlApiV1),
                 RegisterCallback = &RegisterResult,
                 RegisterHostDispatchCallback = &RegisterHostDispatch,
@@ -833,5 +826,8 @@ internal static class Program
         public void Dispose() => NativeMemory.Free(table);
     }
 
-    private readonly record struct HostCompletion(uint CallId, int IsError, byte[] Bytes);
+    private readonly record struct HostCompletion(uint CallId, byte[] Bytes)
+    {
+        internal HostCallCompletion Outcome => HostCallCompletion.Parser.ParseFrom(Bytes);
+    }
 }

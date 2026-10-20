@@ -134,19 +134,18 @@ async fn smoke_generic_pattern_in_match_substitutes_t() {
 // ============================================================================
 
 /// Result of a fake host invocation.
-#[expect(
-    clippy::large_enum_variant,
-    reason = "test-only enum used as a one-shot return value; allocating a Box per call adds noise without buying anything"
-)]
 enum FakeReturn {
     /// Complete the call with this successful value.
     Ok(BexExternalValue),
     /// Complete the call with a `HostCallable` error.
     Err { class_name: String, message: String },
+    /// Complete the call by throwing this BAML value, as a host that caught
+    /// a BAML error or panic and rethrows it through its callback does.
+    Throw(BexExternalValue),
     /// Complete the call with a fatal `VmInternalError::BridgeFailure` —
-    /// models a host-bridge wire-protocol bug (e.g. `is_error=1` with an
-    /// empty payload, or an `is_error` outside `{0, 1}`). Must surface to
-    /// the engine as `EngineError::VmInternalError` /
+    /// models a fault in the bridge's own machinery (a completion payload
+    /// the engine cannot decode, a handle that could not be cloned). Must
+    /// surface to the engine as `EngineError::VmInternalError` /
     /// `TracedVmInternalError` rather than an `UnhandledThrow`.
     BridgeFailure { message: String },
     /// Do **not** complete the call — model a hung host. The dispatched
@@ -267,6 +266,12 @@ extern "C" fn global_dispatch(host_value_key: u64, call_id: u32, args: *const u8
         } => {
             complete_with_test_error(call_id, &class_name, &message);
         }
+        FakeReturn::Throw(value) => {
+            sys_native::host_dispatch::complete_with_outcome(
+                call_id,
+                sys_types::HostOutcome::Thrown(Box::new(value)),
+            );
+        }
         FakeReturn::BridgeFailure { message } => {
             sys_native::host_dispatch::complete_with_error(
                 call_id,
@@ -293,43 +298,23 @@ extern "C" fn global_dispatch(host_value_key: u64, call_id: u32, args: *const u8
 
 fn complete_with_test_error(call_id: u32, class_name: &str, message: &str) {
     // Mirror what a real bridge SDK does when surfacing a native host
-    // exception: build an `Instance` of `baml.errors.HostCallable`
-    // carrying the host class identity + traceback in its fields, then
-    // hand it to `host_dispatch::complete_with_throw`. The engine's
-    // `materialize_host_throw` then runs the throws-contract check +
-    // Value materialization + unwind injection.
-    let mut fields = IndexMap::new();
-    fields.insert(
-        "message".to_string(),
-        BexExternalValue::String(message.to_string().into()),
-    );
-    fields.insert(
-        "class_name".to_string(),
-        BexExternalValue::String(class_name.to_string().into()),
-    );
-    fields.insert(
-        "language".to_string(),
-        BexExternalValue::String("rust".to_string().into()),
-    );
-    fields.insert("traceback".to_string(), BexExternalValue::Null);
-    // The class's `_handle $rust_type` slot is required by the engine's
-    // structural check. Use a synthetic `HostValue(kind=Opaque)` handle
-    // so the BAML→host decoder has *something* to round-trip — the
-    // test doesn't rehydrate, so the key value is arbitrary.
-    fields.insert(
-        "_handle".to_string(),
-        BexExternalValue::HostValue(HostValueArc::new(
-            bex_resource_types::HostKey::new(next_host_key()).expect("nonzero"),
-            HostValueKind::Opaque,
-        )),
-    );
-    sys_native::host_dispatch::complete_with_throw(
+    // exception: complete the call with the exception's identity and the
+    // host's registration of it. The engine builds the
+    // `baml.errors.HostCallable`, holds it to the callable's declared throws
+    // type, and injects it as a throw. The test never rehydrates the
+    // registration, so its key is arbitrary.
+    sys_native::host_dispatch::complete_with_outcome(
         call_id,
-        BexExternalValue::Instance {
-            class_name: "baml.errors.HostCallable".to_string(),
-            type_args: vec![],
-            fields,
-        },
+        sys_types::HostOutcome::Raised(Box::new(sys_types::HostException {
+            message: message.to_string(),
+            class_name: class_name.to_string(),
+            language: "rust".to_string(),
+            traceback: None,
+            handle: HostValueArc::new(
+                bex_resource_types::HostKey::new(next_host_key()).expect("nonzero"),
+                HostValueKind::Opaque,
+            ),
+        })),
     );
 }
 
@@ -1130,6 +1115,50 @@ async fn host_callable_int_returned_for_float_is_a_contract_violation() {
 }
 
 // ============================================================================
+// Nested panic: a host that rethrows a BAML panic through its callback keeps
+// the panic. A `baml.panics.Exit` thrown by a callable whose slot declares
+// `throws never` is still the Exit, not a contract violation, and escaping
+// every handler it still terminates the program with its code.
+// ============================================================================
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_thrown_panic_stays_a_panic_whatever_the_callable_declares() {
+    let source = r#"
+        function run(f: () -> int throws never) -> int {
+            return f();
+        }
+    "#;
+
+    let exits = register_host_callable(|_items| {
+        FakeReturn::Throw(BexExternalValue::Instance {
+            class_name: "baml.panics.Exit".to_string(),
+            type_args: vec![],
+            fields: IndexMap::from([("code".to_string(), BexExternalValue::Int(3))]),
+        })
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "run",
+            vec![callable(&exits, &[], RuntimeTy::int(), RuntimeTy::Never)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    assert!(
+        matches!(result, Err(EngineError::Exit { code: 3 })),
+        "a host-thrown Exit panic surfaces as the Exit, got {result:?}"
+    );
+    drop(exits);
+}
+
+// ============================================================================
 // Wrong-return-type path: host returns String where int is declared.
 //         This is a typed-contract violation — surfaces as a
 //         `baml.panics.HostContractViolation`, not a catchable
@@ -1483,9 +1512,9 @@ async fn host_callable_wrong_generic_class_field_type_panics_as_host_contract_vi
 
 // ============================================================================
 // Bridge-wire-protocol bug: the host bridge synthesises
-//         `VmInternalError::BridgeFailure` (e.g. an empty
-//         `complete_host_call(is_error=1)` payload, or an `is_error` outside
-//         `{0, 1}`). This is *infrastructure*, not a user contract violation:
+//         `VmInternalError::BridgeFailure` (e.g. a completion payload the
+//         engine cannot decode, or one that carries no outcome). This is
+//         *infrastructure*, not a user contract violation:
 //         it must surface as a fatal `EngineError::VmInternalError` /
 //         `TracedVmInternalError`, NOT as an `UnhandledThrow` of
 //         `baml.panics.HostContractViolation` (which would falsely accuse

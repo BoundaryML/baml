@@ -280,6 +280,30 @@ pub enum VmInternalError {
     #[error("bridge failure: {message}")]
     BridgeFailure { message: String },
 
+    /// A runtime operation threw a value outside the throws type its stdlib
+    /// declaration states. The program's `throws` clauses are a contract the
+    /// runtime keeps (a caller that sees `throws never` catches nothing), so
+    /// an operation whose error escapes its own declaration is the
+    /// operation's bug, never a catchable throw of an undeclared class.
+    /// `detail` is the membership refusal, which names the value's class.
+    #[error(
+        "operation `{operation}` threw a value outside its declared throws type `{declared}`: {detail}"
+    )]
+    UndeclaredThrow {
+        operation: String,
+        declared: String,
+        detail: String,
+    },
+
+    /// A runtime operation received an argument whose object is not what
+    /// its declared type guarantees: a wrong receiver kind, a `_inner`
+    /// payload that is not the runtime's, an artifact already consumed. The
+    /// compiler admitted the call against the declaration, so the value was
+    /// forged or corrupted; the operation's fault to report, never a
+    /// catchable `InvalidArgument` for the program to handle.
+    #[error("malformed argument: {message}")]
+    MalformedArgument { message: String },
+
     /// A `VirtualCall` found no `implements` rule for the receiver's runtime
     /// concrete type and the call's interface. The type checker only emits a
     /// virtual call once it has proved the receiver implements the interface,

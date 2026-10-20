@@ -1,4 +1,4 @@
-import { _discardHostCallArgs, _hostInvocationFrame, _startHostCallExecution, completeHostCall, registerHostCallable, type BamlHandle } from './native.js';
+import { _discardHostCallArgs, _hostInvocationFrame, _startHostCallExecution, completeHostCallBridgeFailure, registerHostCallable, type BamlHandle } from './native.js';
 import type { BamlPanic } from './shared/errors.js';
 
 import { ExecutionContext } from './shared/execution_context.js';
@@ -26,7 +26,7 @@ export function runHostCallback(callId: number, args: Uint8Array, callback: () =
   if (!execution) return callback();
   if (_startHostCallExecution(execution) === null) {
     _discardHostCallArgs(args);
-    completeHostCall(callId, 1, new Uint8Array());
+    completeHostCallBridgeFailure(callId, 'the host call execution environment is no longer available');
     return;
   }
   const previous = currentFrame;

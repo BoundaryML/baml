@@ -308,15 +308,21 @@ async fn raw_invocation_and_callback_lifecycles() {
 
     // Late completion reports actual exit and releases its transferred value.
     let key = HANDLE_TABLE.insert(CffiHandleTableEntry::FunctionRef { global_index: 0 });
-    let late = InboundValue {
-        value: Some(Value::Handle(BamlHandle {
-            key: key.get(),
-            handle_type: BamlHandleType::FunctionRef as i32,
-        })),
-        ..Default::default()
+    let late = bridge_ctypes::baml_bridge::cffi::HostCallCompletion {
+        outcome: Some(
+            bridge_ctypes::baml_bridge::cffi::host_call_completion::Outcome::Returned(
+                InboundValue {
+                    value: Some(Value::Handle(BamlHandle {
+                        key: key.get(),
+                        handle_type: BamlHandleType::FunctionRef as i32,
+                    })),
+                    ..Default::default()
+                },
+            ),
+        ),
     }
     .encode_to_vec();
-    bridge_cffi::complete_host_call(frame.0.callback_id, 0, late.as_ptr().cast(), late.len());
+    bridge_cffi::complete_host_call(frame.0.callback_id, late.as_ptr().cast(), late.len());
     assert!(HANDLE_TABLE.resolve(key).is_none());
     assert!(sys_native::host_dispatch::execution_origin(frame.0.callback_id).is_none());
     let state = table_key(frame.0.effective_state);

@@ -174,7 +174,12 @@ internal static class HostCallableProtocol
         return Array.AsReadOnly(bound);
     }
 
-    internal static byte[] EncodeException(Exception exception, ulong key)
+    /// <summary>
+    /// The host's own exception as the engine builds <c>baml.errors.HostCallable</c>
+    /// from it. <paramref name="key"/> is the registry's key for the exception,
+    /// the engine-built class's <c>_handle</c>.
+    /// </summary>
+    internal static HostException Raised(Exception exception, ulong key)
     {
         ArgumentNullException.ThrowIfNull(exception);
         if (key == 0)
@@ -182,41 +187,19 @@ internal static class HostCallableProtocol
             throw new ArgumentOutOfRangeException(nameof(key));
         }
 
-        var value = new InboundValue
+        var raised = new HostException
         {
-            ValueType = new BamlTy
-            {
-                ClassTy = new BamlTyClass { Name = HostCallableIdentity },
-            },
-            ClassValue = new InboundClassValue(),
+            Message = exception.Message,
+            ClassName = exception.GetType().FullName ?? exception.GetType().Name,
+            Language = "C#",
+            Handle = key,
         };
-        value.ClassValue.Fields.Add(Field("message", String(exception.Message)));
-        value.ClassValue.Fields.Add(Field(
-            "class_name",
-            String(exception.GetType().FullName ?? exception.GetType().Name)));
-        value.ClassValue.Fields.Add(Field("language", String("C#")));
-        value.ClassValue.Fields.Add(Field(
-            "traceback",
-            exception.StackTrace is null ? new InboundValue() : String(exception.StackTrace)));
-        value.ClassValue.Fields.Add(Field(
-            "_handle",
-            new InboundValue
-            {
-                Handle = new global::BamlBridge.Cffi.V1.BamlHandle
-                {
-                    Key = key,
-                    HandleType = BamlHandleType.HostValueOpaque,
-                },
-            }));
-        byte[] bytes = value.ToByteArray();
-        if (bytes.Length == 0)
+        if (exception.StackTrace is { } traceback)
         {
-            throw new BamlProtocolException(
-                "The managed bridge could not encode a host callback exception.",
-                "The required HostCallable payload encoded to zero bytes.");
+            raised.Traceback = traceback;
         }
 
-        return bytes;
+        return raised;
     }
 
     internal static void ThrowIfHostCallbackError(BamlOutboundResult envelope)

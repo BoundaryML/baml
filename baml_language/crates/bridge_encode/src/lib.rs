@@ -40,7 +40,7 @@ use bridge_ctypes::{
 };
 
 mod commit;
-mod contract;
+mod completion;
 mod error;
 mod facts;
 mod host;
@@ -49,7 +49,7 @@ mod plan;
 mod read;
 mod rules;
 
-pub use contract::{host_contract_violation, sdk_panic};
+pub use completion::{Encoded, bridge_failure, raised};
 pub use error::{
     EncodeError, EncodeErrorKind, Error, FactsError, FaultKind, PathSegment, Root, UnfitKind,
 };

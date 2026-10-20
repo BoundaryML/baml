@@ -833,9 +833,9 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
             // (e.g. `call_host_value<T, E> ... throws E`) is a *dynamic* error
             // contract, not a fixed `SysOpErrorCategory`. The static category
             // list cannot represent a mix of "concrete X" + "dynamic E" — the
-            // dynamic component would be silently dropped, leaving
-            // `validate_sys_op_error` to wrongly reject any `E`-shaped throw
-            // as off-contract. Apply an all-or-nothing rule: if *any* throws
+            // dynamic component would be silently dropped, and a category
+            // check would wrongly reject any `E`-shaped throw as
+            // off-contract. Apply an all-or-nothing rule: if *any* throws
             // entry is generic, emit an empty list ("accept any category")
             // and defer the entire contract check to runtime. Concrete-only
             // contracts still emit a precise category list. (The `throws`

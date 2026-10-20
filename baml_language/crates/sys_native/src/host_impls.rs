@@ -53,12 +53,11 @@ impl io::IoNamespaceHost for NativeSysOps {
         // the returned value to it.
         _type_arg_0: RuntimeTy,
         // `type_arg_1` is the declared throws contract `E`. The contract
-        // check itself lives engine-side (in `BexEngine::materialize_host_throw`)
-        // because it needs heap access to convert the thrown
-        // `BexExternalValue` into a `Value` and inject a
-        // `HostContractViolation` panic on mismatch. This impl just
-        // forwards the throw via `OpError.host_thrown` (set by
-        // `host_dispatch::complete_with_throw` on the bridge side).
+        // check itself lives engine-side (in `BexEngine::land_host_outcome`)
+        // because it needs heap access to land the host's outcome as a
+        // `Value` and inject a `HostContractViolation` panic on mismatch.
+        // This impl just forwards the outcome as `OpErrorPayload::Host`
+        // (set by `host_dispatch::complete_with_outcome` on the bridge side).
         _type_arg_1: RuntimeTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
@@ -233,20 +232,18 @@ impl io::IoNamespaceHost for NativeSysOps {
             // reach here, so collapsing to a generic Vm payload is safe.
             SysOpResult::Ready(Err(err)) => match err.payload {
                 sys_types::OpErrorPayload::Vm(kind) => SysOpOutput::err(kind),
-                sys_types::OpErrorPayload::HostThrown(_) => {
+                sys_types::OpErrorPayload::Engine(_) | sys_types::OpErrorPayload::Host(_) => {
                     unreachable!("Ready(Err) is never produced for the host-callable sysop")
                 }
             },
             // Use `async_op_with_throw` (not `async_op`) so the future
-            // yields the full [`OpErrorBody`] (preserving a `HostThrown`
-            // payload through to the engine).
-            // host-throw path sets `host_thrown` to the decoded thrown
-            // `BexExternalValue` (via `host_dispatch::complete_with_throw`);
-            // the engine reads that field to run the unified contract
-            // check + `Value` materialisation. Routing through `async_op`
-            // (which threads through `OpErrorBody::from(VmRustFnError)`,
-            // defaulting `host_thrown` to `None`) would drop the thrown
-            // payload before the engine ever sees it.
+            // yields the full [`OpErrorBody`], preserving an
+            // `OpErrorPayload::Host` outcome (set by
+            // `host_dispatch::complete_with_outcome`) through to the
+            // engine, which lands it and runs the declared-throws check.
+            // Routing through `async_op` (which threads through
+            // `OpErrorBody::from(VmRustFnError)`, a `Vm` payload) would
+            // drop the host's outcome before the engine ever sees it.
             SysOpResult::Async(fut) => SysOpOutput::async_op_with_throw(async move {
                 // Move the guard into the future so it is dropped — and the
                 // in-flight entry evicted — if this future is cancelled. It is
@@ -302,8 +299,8 @@ mod tests {
             SysOpOutput::Ready(r) => r,
             SysOpOutput::Async(fut) => fut.await.map_err(|body| match body.payload {
                 sys_types::OpErrorPayload::Vm(kind) => kind,
-                sys_types::OpErrorPayload::HostThrown(_) => {
-                    panic!("expected a Vm payload, got a host-thrown value")
+                sys_types::OpErrorPayload::Engine(_) | sys_types::OpErrorPayload::Host(_) => {
+                    panic!("expected a Vm payload, got a thrown value")
                 }
             }),
         };
