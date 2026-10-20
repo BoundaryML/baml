@@ -1824,3 +1824,131 @@ fn test_finalizer_is_queued_when_its_runtime_class_was_evacuated() {
         );
     }
 }
+
+/// The finalizer list follows instances across collections: an instance that
+/// survives (moved, or promoted and then left in place) is still queued the
+/// collection it dies in, and one cleaned by hand is never queued.
+#[test]
+fn test_finalizable_instances_are_tracked_across_collections() {
+    for level in [CollectionLevel::Minor, CollectionLevel::Major] {
+        let heap = BexHeap::new(vec![
+            Object::String("cleanup".into()),
+            Object::Class(Box::new(class_with_cleanup(
+                "Static",
+                bex_vm_types::HeapPtr::null(),
+            ))),
+        ]);
+        let class = heap.compile_time_ptr(1);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let survivor = tlab.alloc_instance(class, Vec::new());
+        let cleaned = tlab.alloc_instance(class, Vec::new());
+        let Object::Instance(instance) = (unsafe { cleaned.get() }) else {
+            panic!("not an instance")
+        };
+        assert!(instance.cleaned.begin(), "a fresh instance is not cleaned");
+
+        // Both are rooted through two collections, so the list is rewritten
+        // through two forwarding maps (a minor one moves the survivor; a
+        // second minor one promotes it to Gen2, which a third leaves in place).
+        let (_, roots, _) =
+            unsafe { heap.collect_garbage_generational(&[survivor, cleaned], level) };
+        tlab.invalidate();
+        assert!(
+            heap.take_pending_finalizers().is_empty(),
+            "{level:?}: nothing died"
+        );
+        let (_, roots, _) = unsafe { heap.collect_garbage_generational(&roots, level) };
+        tlab.invalidate();
+        assert!(
+            heap.take_pending_finalizers().is_empty(),
+            "{level:?}: nothing died"
+        );
+
+        // Now both die. Only the uncleaned one is queued, at its latest address.
+        if level == CollectionLevel::Minor {
+            // Promoted twice, both sit in Gen2, which a minor collection
+            // leaves in place: neither dies yet.
+            assert_eq!(heap.generation_of(roots[0]), Generation::Gen2);
+            unsafe { heap.collect_garbage_generational(&[], level) };
+            tlab.invalidate();
+            assert!(
+                heap.take_pending_finalizers().is_empty(),
+                "Gen2 is not collected"
+            );
+        }
+        let (_, _, forwarding) =
+            unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Major) };
+        tlab.invalidate();
+        let pending = heap.take_pending_finalizers();
+        assert_eq!(
+            pending.len(),
+            1,
+            "{level:?}: the cleaned instance is not queued"
+        );
+        assert_eq!(
+            pending[0].0,
+            forwarding.forwarded(roots[0]),
+            "{level:?}: the survivor is queued where this collection kept it"
+        );
+        let Object::Instance(instance) = (unsafe { pending[0].0.get() }) else {
+            panic!("not an instance")
+        };
+        assert!(!instance.cleaned.is_cleaned());
+
+        // A finalized instance stays listed while it lives, and once it dies
+        // again it is not queued twice unless it is still uncleaned; the
+        // engine's `cleanup` call sets the latch, which this stands in for.
+        assert!(instance.cleaned.begin());
+        unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Major) };
+        tlab.invalidate();
+        assert!(
+            heap.take_pending_finalizers().is_empty(),
+            "{level:?}: cleaned, so not queued again"
+        );
+    }
+}
+
+/// Finalizers are queued in the order a walk over the collected spaces meets
+/// them — Gen0 before Gen1 before Gen2, slot order within each — not in the
+/// order the instances were allocated.
+#[test]
+fn test_finalizers_are_queued_in_from_space_order() {
+    let heap = BexHeap::new(vec![
+        Object::String("cleanup".into()),
+        Object::Class(Box::new(class_with_cleanup(
+            "Static",
+            bex_vm_types::HeapPtr::null(),
+        ))),
+    ]);
+    let class = heap.compile_time_ptr(1);
+    let mut tlab = Tlab::new(Arc::clone(&heap));
+
+    // `old` is allocated first and promoted to Gen1; `young` is allocated
+    // after it, in Gen0.
+    let old = tlab.alloc_instance(class, Vec::new());
+    let (_, roots, _) =
+        unsafe { heap.collect_garbage_generational(&[old], CollectionLevel::Minor) };
+    tlab.invalidate();
+    let old = roots[0];
+    assert_eq!(heap.generation_of(old), Generation::Gen1);
+    let young_first = tlab.alloc_instance(class, Vec::new());
+    let young_second = tlab.alloc_instance(class, Vec::new());
+    assert_eq!(heap.generation_of(young_first), Generation::Gen0);
+
+    let (_, _, forwarding) =
+        unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Major) };
+    tlab.invalidate();
+    let queued: Vec<_> = heap
+        .take_pending_finalizers()
+        .into_iter()
+        .map(|(instance, _)| instance)
+        .collect();
+    assert_eq!(
+        queued,
+        [young_first, young_second, old]
+            .map(|ptr| forwarding.forwarded(ptr))
+            .to_vec(),
+        "Gen0 instances in slot order, then the Gen1 one"
+    );
+}

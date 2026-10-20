@@ -152,26 +152,28 @@ impl BexHeap {
     /// and clears Gen0 and Gen1. After collection all survivors reside in Gen2.
     ///
     /// Returns `(GcStats, remapped_roots, forwarding_map)`.
-    /// BEP-042: scan the given from-space generations for instances that died
-    /// this collection (not in `forwarding`), are not already cleaned, and
-    /// whose class defines a `cleanup` finalizer. Returns each (old) instance
-    /// pointer with its class's finalizer — the keep-alive seeds for
-    /// finalization.
+    /// BEP-042: find the registered finalizable instances that died this
+    /// collection (not in `forwarding`) and are not already cleaned. Returns
+    /// each (old) instance pointer with its class's finalizer — the
+    /// keep-alive seeds for finalization — in the order a walk over the
+    /// collected from-spaces would meet them (Gen0, then Gen1, then Gen2 in
+    /// a major collection; slot order within each).
     ///
-    /// Cheap: most objects are not instances, and most instances belong to
-    /// classes without `cleanup` (one `Class::cleanup` read). Only the
-    /// dead-and-finalizable minority is collected.
+    /// Costs the number of finalizable instances, not the size of the heap:
+    /// the TLAB lists every instance of a class with `cleanup` as it
+    /// allocates it ([`BexHeap::finalizable`]), and [`forward_finalizable`]
+    /// rewrites the list after each collection. An instance of a generation this
+    /// collection leaves in place forwards to itself, so it is skipped like
+    /// any survivor.
     ///
     /// SAFETY: call only at a GC safepoint, after the root trace has populated
     /// `forwarding`, and before the space swap — the from-space objects must
     /// still be intact.
-    unsafe fn scan_dead_finalizers(
-        &self,
-        forwarding: &ForwardingMap,
-        gens: &[&ChunkedVec<Object>],
-    ) -> Vec<(HeapPtr, HeapPtr)> {
+    ///
+    /// [`forward_finalizable`]: Self::forward_finalizable
+    unsafe fn scan_dead_finalizers(&self, forwarding: &ForwardingMap) -> Vec<(HeapPtr, HeapPtr)> {
         // Fast path: if no class defines `cleanup`, no instance can ever be
-        // finalizable, so skip the O(heap) from-space walk on every collection.
+        // finalizable, so the list is empty.
         if !self
             .has_finalizable_classes
             .load(std::sync::atomic::Ordering::Acquire)
@@ -179,40 +181,57 @@ impl BexHeap {
             return Vec::new();
         }
         let mut seeds = Vec::new();
-        for space in gens {
-            for i in 0..space.len() {
-                // SAFETY: index in bounds; GC safepoint.
-                let ptr = unsafe { self.make_heap_ptr(space.get_ptr(i)) };
-                if forwarding.contains_key(&ptr) {
-                    continue; // reachable from roots → not dead
-                }
-                // SAFETY: from-space object is still intact pre-swap.
-                let Object::Instance(inst) = (unsafe { ptr.get() }) else {
-                    continue;
-                };
-                if inst.cleaned.is_cleaned() {
-                    continue; // explicit/`defer` already cleaned it — SuppressFinalize
-                }
-                // A runtime-created class is itself collectible, so this
-                // collection may already have evacuated it: read it where it
-                // lives now. A compile-time class, or one this collection does
-                // not move, is still at `inst.class`.
-                let class_ptr = forwarding.get(&inst.class).copied().unwrap_or(inst.class);
-                // SAFETY: a forwarded pointer names an initialized destination
-                // slot; an unforwarded one names a slot no evacuation touched.
-                let Object::Class(class) = (unsafe { class_ptr.get() }) else {
-                    continue;
-                };
-                // The finalizer is the class's own method, taken while the
-                // class is in hand. The instance keeps its class alive and the
-                // class its methods, so the closure copied from the seed
-                // carries the function along.
-                if let Some(cleanup) = class.cleanup() {
-                    seeds.push((ptr, cleanup));
-                }
+        for &ptr in self.finalizable_instances.lock().iter() {
+            if forwarding.contains_key(&ptr) {
+                continue; // reachable from roots → not dead
+            }
+            // SAFETY: a dead from-space object is still intact pre-swap.
+            let Object::Instance(inst) = (unsafe { ptr.get() }) else {
+                continue;
+            };
+            if inst.cleaned.is_cleaned() {
+                continue; // explicit/`defer` already cleaned it — SuppressFinalize
+            }
+            // A runtime-created class is itself collectible, so this
+            // collection may already have evacuated it: read it where it
+            // lives now. A compile-time class, or one this collection does
+            // not move, is still at `inst.class`.
+            let class_ptr = forwarding.get(&inst.class).copied().unwrap_or(inst.class);
+            // SAFETY: a forwarded pointer names an initialized destination
+            // slot; an unforwarded one names a slot no evacuation touched.
+            let Object::Class(class) = (unsafe { class_ptr.get() }) else {
+                continue;
+            };
+            // The finalizer is the class's own method, taken while the
+            // class is in hand. The instance keeps its class alive and the
+            // class its methods, so the closure copied from the seed
+            // carries the function along.
+            if let Some(cleanup) = class.cleanup() {
+                seeds.push((ptr, cleanup));
             }
         }
+        // The list is in allocation order; finalizers run in from-space slot
+        // order, as the walk this replaces produced them.
+        seeds.sort_by_key(|(ptr, _)| forwarding.position(*ptr));
         seeds
+    }
+
+    /// Rewrite the finalizable-instance list through `forwarding` once the
+    /// keep-alive pass has run: a listed instance is then either forwarded —
+    /// live, left in place, or kept alive for its finalizer — or dead for
+    /// good, and leaves the list.
+    ///
+    /// SAFETY: GC safepoint, after the keep-alive passes.
+    unsafe fn forward_finalizable(&self, forwarding: &ForwardingMap) {
+        self.finalizable_instances
+            .lock()
+            .retain_mut(|ptr| match forwarding.get(ptr) {
+                Some(moved) => {
+                    *ptr = *moved;
+                    true
+                }
+                None => false,
+            });
     }
 
     /// BEP-042 (major GC): keep alive every dead, not-yet-cleaned instance of a
@@ -223,12 +242,7 @@ impl BexHeap {
     ///
     /// SAFETY: GC safepoint, after the root trace, before the swap.
     unsafe fn keepalive_finalizers_major(&self, forwarding: &mut ForwardingMap) {
-        let seeds = unsafe {
-            self.scan_dead_finalizers(
-                forwarding,
-                &[self.gen0_ref(), self.gen1_ref(), self.gen2_ref()],
-            )
-        };
+        let seeds = unsafe { self.scan_dead_finalizers(forwarding) };
         if seeds.is_empty() {
             return;
         }
@@ -273,8 +287,7 @@ impl BexHeap {
         forwarding: &mut ForwardingMap,
         promoted_to_gen2: &mut usize,
     ) {
-        let seeds =
-            unsafe { self.scan_dead_finalizers(forwarding, &[self.gen0_ref(), self.gen1_ref()]) };
+        let seeds = unsafe { self.scan_dead_finalizers(forwarding) };
         if seeds.is_empty() {
             return;
         }
@@ -580,6 +593,12 @@ impl BexHeap {
         // SAFETY: GC safepoint; exclusive access.
         unsafe {
             self.keepalive_finalizers_major(&mut forwarding);
+        }
+
+        // Every listed instance is now forwarded or dead for good.
+        // SAFETY: GC safepoint; after the keep-alive passes.
+        unsafe {
+            self.forward_finalizable(&forwarding);
         }
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Keepalive);
@@ -1610,6 +1629,12 @@ impl BexHeap {
         // SAFETY: GC safepoint; exclusive access.
         unsafe {
             self.keepalive_finalizers_minor(&mut forwarding, &mut promoted_to_gen2);
+        }
+
+        // Every listed instance is now forwarded or dead for good.
+        // SAFETY: GC safepoint; after the keep-alive passes.
+        unsafe {
+            self.forward_finalizable(&forwarding);
         }
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Keepalive);

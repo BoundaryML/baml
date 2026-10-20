@@ -49,6 +49,9 @@ struct Range {
     /// is left in place.
     base: Option<usize>,
     tag: u8,
+    /// The range's position in the list handed to
+    /// [`with_ranges`](ForwardingMap::with_ranges), before sorting by address.
+    ordinal: usize,
 }
 
 enum Located {
@@ -60,12 +63,12 @@ enum Located {
 impl ForwardingMap {
     /// A map over `ranges`, which must be disjoint and aligned to object
     /// slots.
-    pub fn with_ranges(mut ranges: Vec<SlotRange>) -> Self {
-        ranges.sort_unstable_by_key(|range| range.start);
+    pub fn with_ranges(ranges: Vec<SlotRange>) -> Self {
         let mut slot_count = 0;
-        let ranges = ranges
+        let mut ranges = ranges
             .into_iter()
-            .map(|range| {
+            .enumerate()
+            .map(|(ordinal, range)| {
                 debug_assert!(range.start <= range.end);
                 let base = range.moving.then_some(slot_count);
                 if range.moving {
@@ -76,9 +79,11 @@ impl ForwardingMap {
                     end: range.end,
                     base,
                     tag: range.tag,
+                    ordinal,
                 }
             })
             .collect::<Vec<_>>();
+        ranges.sort_unstable_by_key(|range| range.start);
         debug_assert!(
             ranges.windows(2).all(|pair| pair[0].end <= pair[1].start),
             "forwarding ranges overlap"
@@ -115,6 +120,20 @@ impl ForwardingMap {
     #[inline]
     pub fn tag(&self, ptr: HeapPtr) -> Option<u8> {
         self.range(ptr).map(|range| range.tag)
+    }
+
+    /// Where `ptr` sits in the registered ranges: the position of its range
+    /// in the list given to [`with_ranges`](Self::with_ranges), then its slot
+    /// within that range. Sorting pointers by this visits them in the order a
+    /// walk over the ranges, as registered, would.
+    #[inline]
+    pub fn position(&self, ptr: HeapPtr) -> Option<(usize, usize)> {
+        self.range(ptr).map(|range| {
+            (
+                range.ordinal,
+                (ptr.as_ptr() as usize - range.start) / size_of::<Object>(),
+            )
+        })
     }
 
     /// Where the object at `ptr` is now: `ptr` itself in a range left in
@@ -355,6 +374,10 @@ mod forwarding_tests {
         assert_eq!(map.tag(ptr(11 * slot)), Some(0));
         assert_eq!(map.tag(ptr(1000 * slot)), Some(2));
         assert_eq!(map.tag(ptr(12 * slot)), None, "one past the range");
+        assert_eq!(map.position(ptr(11 * slot)), Some((1, 1)));
+        assert_eq!(map.position(ptr(1003 * slot)), Some((0, 3)));
+        assert_eq!(map.position(ptr(501 * slot)), Some((2, 1)));
+        assert_eq!(map.position(ptr(12 * slot)), None);
         let kept = ptr(501 * slot);
         assert!(map.contains_key(&kept));
         assert_eq!(map.get(&kept).copied(), Some(kept));

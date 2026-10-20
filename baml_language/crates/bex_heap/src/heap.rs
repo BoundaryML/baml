@@ -231,6 +231,15 @@ pub struct BexHeap {
     /// per-GC scan cost.
     pub(crate) has_finalizable_classes: AtomicBool,
 
+    /// BEP-042: every runtime instance whose class defines `cleanup`, by its
+    /// current address. The TLAB registers one as it allocates it (once
+    /// `has_finalizable_classes` is raised, which happens before any such
+    /// class can have an instance); a collection reads the list to find the
+    /// dead ones, then rewrites it through the forwarding map, dropping what
+    /// was not kept alive. So the per-collection finalizer scan costs the
+    /// number of finalizable instances, not the size of the heap.
+    pub(crate) finalizable_instances: parking_lot::Mutex<Vec<HeapPtr>>,
+
     /// TLAB chunk size for new allocations.
     tlab_size: usize,
     pub(crate) max_tlab_size: usize,
@@ -369,6 +378,7 @@ impl BexHeap {
             pending_finalizers: Mutex::new(Vec::new()),
             pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
             has_finalizable_classes: AtomicBool::new(has_finalizable_classes),
+            finalizable_instances: parking_lot::Mutex::new(Vec::new()),
             tlab_size,
             max_tlab_size: tlab_size,
             gc_policy: crate::gc_policy::AllocationBudget::new(),
@@ -1202,6 +1212,33 @@ impl BexHeap {
     /// from here on scans for finalizable instances.
     pub fn note_finalizable_class(&self) {
         self.has_finalizable_classes.store(true, Ordering::Release);
+    }
+
+    /// Whether a freshly allocated `obj` belongs on the finalizable-instance
+    /// list: it is an instance and its class defines `cleanup`.
+    ///
+    /// Read before the object is written to the heap, so the TLAB can list
+    /// the address it then hands out. The class is read in place, where the
+    /// mutator building the instance already holds it valid. Until some class
+    /// on the heap defines `cleanup` no instance is read at all.
+    #[inline]
+    pub(crate) fn finalizable(&self, obj: &Object) -> bool {
+        let Object::Instance(instance) = obj else {
+            return false;
+        };
+        if !self.has_finalizable_classes.load(Ordering::Acquire) || instance.class.is_null() {
+            return false;
+        }
+        // SAFETY: an instance is built from a class that is on the heap (the
+        // compile-time pool, or allocated by this mutator while it held its
+        // permit) and has not been collected: the mutator holds the class
+        // pointer across the allocation.
+        matches!(unsafe { instance.class.get() }, Object::Class(class) if class.cleanup.is_some())
+    }
+
+    /// Put the instance at `ptr`, just allocated, on the finalizable list.
+    pub(crate) fn list_finalizable(&self, ptr: HeapPtr) {
+        self.finalizable_instances.lock().push(ptr);
     }
 
     /// BEP-042: record an instance and its class's `cleanup` function (both by
