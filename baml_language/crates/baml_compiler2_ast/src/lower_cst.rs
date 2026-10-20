@@ -202,16 +202,18 @@ fn lower_file_with_path_and_test_owner_impl(
                 });
             }
             baml_compiler_syntax::SyntaxKind::LET_STMT => {
-                if is_session_submission {
-                    if let Some(let_item) =
-                        lower_expr_body::lower_session_let(&child, &mut diags, &mut env_var_refs)
-                    {
-                        items.push(Item::Let(let_item));
-                    }
+                let surface = if is_session_submission {
+                    lower_expr_body::TopLevelLetSurface::Session
                 } else {
-                    diags.push(LoweringDiagnostic::TopLevelLetNotSupported {
-                        span: child.span_range(),
-                    });
+                    lower_expr_body::TopLevelLetSurface::Source
+                };
+                if let Some(let_item) = lower_expr_body::lower_top_level_let(
+                    &child,
+                    surface,
+                    &mut diags,
+                    &mut env_var_refs,
+                ) {
+                    items.push(Item::Let(let_item));
                 }
             }
             baml_compiler_syntax::SyntaxKind::IMPLEMENTS_FOR => {
@@ -699,8 +701,10 @@ fn lower_client_value_def(
     );
     Some(Item::Let(crate::ast::LetDef {
         name: Name::new(name_token.text()),
+        type_annotation: None,
         initializer: Some((body, source_map)),
         origin: crate::ast::LetOrigin::Client,
+        docstring: crate::docstring::extract_docstring(node),
         span: node.span_range(),
         name_span: name_token.text_range(),
     }))
@@ -1953,6 +1957,12 @@ fn test_owner_from_path(path: Option<&std::path::Path>) -> String {
     }
 }
 
+/// The test initializer's collector parameter. Every test body is a lambda
+/// nested in the initializer, so this name is in scope there: it is spelled
+/// with a `$` no source identifier can contain, so a user function or global
+/// variable called `registry` stays reachable from the tests that use it.
+const TEST_REGISTRY_PARAM: &str = "$registry";
+
 /// The function is named `"$init_test_<sanitized_path>"` to avoid collisions
 /// when multiple files contain tests. The suffix is derived from the file path
 /// rather than its `FileId`: a `FileId` is a load-order index that shifts
@@ -1998,9 +2008,9 @@ fn synthesize_init_test_function(
     diags.extend(finish_diags);
     env_var_refs.extend(finish_env_refs);
 
-    // The single parameter: `registry: testing.TestCollector`
+    // The single parameter: `$registry: testing.TestCollector`
     let registry_param = Param {
-        name: Name::new("registry"),
+        name: Name::new(TEST_REGISTRY_PARAM),
         type_expr: Some(
             crate::ast::TypeExprKind::Path {
                 segments: vec![Name::new("testing"), Name::new("TestCollector")],
@@ -2061,9 +2071,12 @@ fn synthesize_register_call(
                 span,
             };
 
-            // registry.register_test_at(owner, ...)
+            // $registry.register_test_at(owner, ...)
             let method_call_target = ctx.alloc_expr(
-                Expr::Path(vec![Name::new("registry"), Name::new("register_test_at")]),
+                Expr::Path(vec![
+                    Name::new(TEST_REGISTRY_PARAM),
+                    Name::new("register_test_at"),
+                ]),
                 span,
             );
 
@@ -2132,10 +2145,10 @@ fn synthesize_register_call(
                 span,
             };
 
-            // registry.register_test_set_at(owner, ...)
+            // $registry.register_test_set_at(owner, ...)
             let method_call_target = ctx.alloc_expr(
                 Expr::Path(vec![
-                    Name::new("registry"),
+                    Name::new(TEST_REGISTRY_PARAM),
                     Name::new("register_test_set_at"),
                 ]),
                 span,

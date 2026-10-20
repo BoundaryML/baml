@@ -532,11 +532,24 @@ impl<'db> PackageRefs<'_, 'db> {
         })
     }
 
-    /// The global slot of a top-level `let`.
-    pub(crate) fn let_global<'a>(&mut self, binding: LetLoc<'a>) -> GlobalIndex
+    /// The global slot of a top-level `let`: its own slot in this package, or
+    /// an import of the slot its package's `$init` fills — by the binding's
+    /// path, whether a source `let` of another package or a served package's
+    /// exported row.
+    pub(crate) fn let_global<'a>(
+        &mut self,
+        binding: baml_compiler2_hir_ty::extern_loc::GlobalRef<'a>,
+    ) -> GlobalIndex
     where
         'db: 'a,
     {
+        let binding = match binding {
+            DeclRef::Source(binding) => binding,
+            DeclRef::External(binding) => {
+                let head = binding.head(self.db);
+                return self.import_global(head.root(), DeclPath::Let(item_path(head)));
+            }
+        };
         let root = file_package(self.db, binding.file(self.db)).root;
         if root == self.root {
             match self.own {

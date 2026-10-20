@@ -1059,6 +1059,10 @@ fn is_item_node(kind: SyntaxKind) -> bool {
             | SyntaxKind::RETRY_POLICY_DEF
             | SyntaxKind::TEMPLATE_STRING_DEF
             | SyntaxKind::TYPE_ALIAS_DEF
+            // A global variable (file-scope `let`) and a `client Name = …`
+            // declaration: top-level bindings.
+            | SyntaxKind::LET_STMT
+            | SyntaxKind::CLIENT_VALUE_DEF
     )
 }
 
@@ -1978,8 +1982,12 @@ fn find_dependencies(
                 collect_type_ref_deps(db, file, &alias.type_refs, id, &mut deps, &mut seen);
             }
         }
-        baml_compiler2_hir::contributions::Definition::Let(_) => {
-            // Lets don't have meaningful type dependencies for display.
+        baml_compiler2_hir::contributions::Definition::Let(let_loc) => {
+            // A global's written annotation names the types its value has.
+            let binding = baml_compiler2_hir::item_data::let_data(db, let_loc);
+            if let Some(id) = binding.annotation {
+                collect_type_ref_deps(db, file, &binding.type_refs, id, &mut deps, &mut seen);
+            }
         }
     }
 

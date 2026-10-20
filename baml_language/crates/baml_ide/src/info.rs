@@ -492,10 +492,10 @@ fn target_type_info(
     match target {
         SymbolTarget::Item(def) => Some(type_info_for_definition(db, viewer, def)),
         SymbolTarget::Local {
-            func,
-            func_scope,
+            owner,
+            owner_scope,
             binding,
-        } => local_target_type_info(db, func, func_scope, binding),
+        } => local_target_type_info(db, owner, owner_scope, binding),
         SymbolTarget::Field {
             class: DeclRef::Source(class),
             field_index,
@@ -643,13 +643,13 @@ fn target_type_info(
 /// `TypeInfo::LocalVar` for a local binding, from inference records.
 fn local_target_type_info(
     db: &dyn baml_compiler2_hir::Db,
-    func: baml_compiler2_hir::loc::FunctionLoc<'_>,
-    func_scope: baml_compiler2_hir::scope::FileScopeId,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'_>,
+    owner_scope: baml_compiler2_hir::scope::FileScopeId,
     binding: baml_compiler2_hir::semantic_index::BindingId,
 ) -> Option<TypeInfo> {
-    use baml_compiler2_hir::semantic_index::BindingKind;
+    use baml_compiler2_hir::{body::BodyOwnerId, semantic_index::BindingKind};
 
-    let file = func.file(db);
+    let file = owner.file(db);
     let index = baml_compiler2_hir::file_semantic_index(db, file);
     match binding.kind {
         BindingKind::Parameter(idx) => {
@@ -657,8 +657,26 @@ fn local_target_type_info(
             // generic arguments are preserved (`Lorem<int>`). A *lambda*
             // parameter's scope is not the function's own scope and its type
             // is not declared anywhere the firewall records — pending
-            // inference support, it renders as the inference hole.
-            if binding.scope != func_scope {
+            // inference support, it renders as the inference hole. A global
+            // initializer declares no parameters, so every parameter in one
+            // is a lambda's.
+            let func = match owner {
+                BodyOwnerId::Function(func) if binding.scope == owner_scope => func,
+                _ => {
+                    let bindings = &index.scope_bindings[binding.scope.index() as usize];
+                    let (name, _) = bindings
+                        .params
+                        .iter()
+                        .find(|(_, param_idx)| *param_idx == idx)?;
+                    return Some(TypeInfo::LocalVar {
+                        name: name.as_str().to_string(),
+                        ty: render::PENDING_INFERENCE.to_string(),
+                        is_let: false,
+                        owner: None,
+                    });
+                }
+            };
+            if binding.scope != owner_scope {
                 let bindings = &index.scope_bindings[binding.scope.index() as usize];
                 let (name, _) = bindings
                     .params
@@ -1331,9 +1349,21 @@ fn type_info_for_source_definition(
                 baml_compiler2_ast::ast::LetOrigin::Client => "client",
                 baml_compiler2_ast::ast::LetOrigin::Source => "let",
             };
-            TypeInfo::OtherItem {
-                name: data.name.as_str().to_string(),
-                kind,
+            // A global reads as the binding it is: its keyword, name, and the
+            // one type every reader sees (the annotation, or the widened
+            // initializer type).
+            let declaration = match baml_compiler2_hir_ty::globals::global_value_type(db, loc) {
+                Some(ty) => format!(
+                    "{kind} {}: {}",
+                    data.name,
+                    render::display_ty_for_file(db, loc.file(db), &ty)
+                ),
+                None => format!("{kind} {}", data.name),
+            };
+            TypeInfo::Symbol {
+                declaration,
+                owner: Some(owning_path(db, loc.file(db))),
+                docstring: data.docstring.clone(),
             }
         }
     }

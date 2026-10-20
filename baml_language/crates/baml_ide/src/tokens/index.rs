@@ -163,6 +163,37 @@ fn index_function(
         };
         let expr = &expr_body.exprs[expr_id];
         match expr {
+            // A namespace-qualified global (`settings.TIMEOUT`): the checker
+            // resolved it, so its qualifiers are namespaces and its last root
+            // segment the readonly binding, whether or not a bare-name or
+            // package-path lookup could spell it from here.
+            Expr::Path(segments)
+                if inference
+                    .global_roots
+                    .get(&expr_id)
+                    .is_some_and(|root| root.segments > 1) =>
+            {
+                let root = inference.global_roots[&expr_id];
+                let foreign = match root.binding {
+                    baml_compiler2_hir::loc::DeclRef::Source(binding) => {
+                        baml_compiler2_hir::file_package::file_package(db, binding.file(db)).root
+                            != baml_compiler2_hir::file_package::file_package(db, file).root
+                    }
+                    baml_compiler2_hir::loc::DeclRef::External(_) => true,
+                };
+                for k in 0..root.segments {
+                    let span = source_map.path_segment_span(expr_id, k);
+                    let class = if k + 1 == root.segments {
+                        (SemanticTokenType::Variable, ModifierSet::READONLY)
+                    } else {
+                        classify::namespace_class(foreign)
+                    };
+                    record(index, span, class);
+                }
+                if segments.len() > root.segments {
+                    index_path_tail(db, file, expr_id, segments, source_map, inference, index);
+                }
+            }
             Expr::Path(segments) if !segments.is_empty() => {
                 let seg_span = source_map.path_segment_span(expr_id, 0);
                 // For a generic-applied callee (`id<int>(...)`), segment 0's span
@@ -239,12 +270,17 @@ fn index_path_tail(
     // Per-segment member resolutions for local-rooted paths (`obj.a.b`).
     let members = inference.path_resolutions.get(&expr_id);
     let leaf = segments.len() - 1;
+    // A qualified global's root segments were classified by the caller.
+    let first_member = inference
+        .global_roots
+        .get(&expr_id)
+        .map_or(1, |root| root.segments.max(1));
 
-    for k in 1..segments.len() {
+    for k in first_member..segments.len() {
         let span = source_map.path_segment_span(expr_id, k);
         // 1. A recorded field/variant/method resolution wins.
         if let Some(res) = members
-            .and_then(|m| m.segments.get(k))
+            .and_then(|m| m.segment_at_written(k))
             .and_then(|s| s.resolution.as_ref())
         {
             record(index, span, classify::classify_member(res));

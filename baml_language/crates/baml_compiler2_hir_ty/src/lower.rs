@@ -2947,6 +2947,49 @@ pub fn resolve_class_fields<'db>(
         .collect()
 }
 
+/// The declared type of a top-level `let`: its written `: T`, or `None` for
+/// an unannotated binding, whose type is its initializer's.
+///
+/// Lowered in the file's namespace with an empty generic frame — a global is
+/// not generic — so every reader (the initializer's own check, each use site,
+/// the package interface) agrees on one type without inferring the
+/// initializer. That independence is what lets an annotated global break a
+/// cycle through its own initializer. Holes were refused at AST lowering.
+#[salsa::tracked(returns(ref))]
+pub fn let_declared_type<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    binding: baml_compiler2_hir::loc::LetLoc<'db>,
+) -> Option<baml_type::Ty> {
+    let data = baml_compiler2_hir::item_data::let_data(db, binding);
+    let annotation = data.annotation?;
+    let ctx = lower_ctx_for_file(db, binding.file(db));
+    Some(reject_holes(
+        &ctx.lower_type_ref(&data.type_refs, annotation),
+    ))
+}
+
+/// The check layer's walk over a global's annotation: the written type
+/// re-lowered with the sink (unresolved names, wrong arg counts) and judged
+/// for generic-argument well-formedness, exactly as a type alias's body is.
+pub fn let_lowering_diagnostics<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    binding: baml_compiler2_hir::loc::LetLoc<'db>,
+) -> Vec<(text_size::TextRange, crate::diagnostics::TirTypeError)> {
+    let data = baml_compiler2_hir::item_data::let_data(db, binding);
+    let Some(annotation) = data.annotation else {
+        return Vec::new();
+    };
+    let ctx = lower_ctx_for_file(db, binding.file(db));
+    let (lowered, diagnostics) = ctx.lower_type_ref_with_diagnostics(&data.type_refs, annotation);
+    let source_map = baml_compiler2_hir::item_data::let_source_map(db, binding);
+    let mut out = Vec::new();
+    extend_lowering_diagnostics(&mut out, &source_map.type_refs, diagnostics);
+    for error in crate::interfaces::type_generic_bound_errors(db, &FxHashMap::default(), &lowered) {
+        out.push((source_map.type_refs.span(annotation), error));
+    }
+    out
+}
+
 /// The check layer's TYPE-ALIAS diagnostic walk: the alias body re-lowered
 /// with the sink (unresolved names, wrong arg counts).
 pub fn type_alias_lowering_diagnostics<'db>(

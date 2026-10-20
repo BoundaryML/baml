@@ -2043,6 +2043,7 @@ mod tests {
             rows: PackageInterface::<baml_type::WireName> {
                 types: Default::default(),
                 functions: Default::default(),
+                values: Default::default(),
                 throw_sets: FunctionThrowSets {
                     direct: Default::default(),
                     transitive: Default::default(),

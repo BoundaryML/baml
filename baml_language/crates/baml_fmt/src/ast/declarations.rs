@@ -26,6 +26,8 @@ pub enum TopLevelDeclaration {
     TemplateString(TemplateStringDecl),
     TypeAlias(TypeAliasDecl),
     Generator(GeneratorDecl),
+    /// A global variable: a file-scope `let` (or `const`).
+    Let(super::LetStmt),
     Unknown(TextRange),
 }
 
@@ -57,6 +59,7 @@ impl FromCST for TopLevelDeclaration {
             SyntaxKind::GENERATOR_DEF => {
                 TopLevelDeclaration::Generator(GeneratorDecl::from_cst(elem)?)
             }
+            SyntaxKind::LET_STMT => TopLevelDeclaration::Let(super::LetStmt::from_cst(elem)?),
             _ => return Ok(TopLevelDeclaration::Unknown(elem.text_range())),
         };
         Ok(decl)
@@ -83,6 +86,7 @@ impl Printable for TopLevelDeclaration {
                 type_alias_decl.print(shape, printer)
             }
             TopLevelDeclaration::Generator(generator_decl) => generator_decl.print(shape, printer),
+            TopLevelDeclaration::Let(let_stmt) => let_stmt.print(shape, printer),
             TopLevelDeclaration::Unknown(range) => {
                 let text = &printer.input[*range];
                 printer.print_str(text.trim());
@@ -103,6 +107,7 @@ impl Printable for TopLevelDeclaration {
             TopLevelDeclaration::TemplateString(t) => t.leftmost_token(),
             TopLevelDeclaration::TypeAlias(t) => t.leftmost_token(),
             TopLevelDeclaration::Generator(g) => g.leftmost_token(),
+            TopLevelDeclaration::Let(l) => l.leftmost_token(),
             TopLevelDeclaration::Unknown(range) => *range,
         }
     }
@@ -119,6 +124,7 @@ impl Printable for TopLevelDeclaration {
             TopLevelDeclaration::TemplateString(t) => t.rightmost_token(),
             TopLevelDeclaration::TypeAlias(t) => t.rightmost_token(),
             TopLevelDeclaration::Generator(g) => g.rightmost_token(),
+            TopLevelDeclaration::Let(l) => l.rightmost_token(),
             TopLevelDeclaration::Unknown(range) => *range,
         }
     }

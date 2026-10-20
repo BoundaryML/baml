@@ -187,4 +187,4 @@ After GC, handles are updated via the forwarding map to point to new locations.
 1. **TLAB exclusivity**: Each VM's TLAB region is never accessed by other VMs
 2. **Safepoint GC**: Collection only runs when all old-epoch VMs are parked
 3. **ChunkedVec stability**: Growing never moves existing elements
-4. **No global mutable state**: BAML has no global variables
+4. **Frozen global slots**: global variables are written only by `$init`, then frozen into `SharedGlobals`, which the collector traces and forwards as a root holder. The heap values they hold are shared by every VM, and their mutation goes through the same synchronized containers (`LazyBiasedMutex` arrays/maps, atomic instance field slots) as values shared with a `spawn`ed task

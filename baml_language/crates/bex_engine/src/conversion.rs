@@ -2211,6 +2211,19 @@ impl BexEngine {
         permit: PermitProof<'_>,
         value: Value,
     ) -> BexExternalValue {
+        owned_external_value(&self.heap, permit, value)
+    }
+}
+
+/// [`BexEngine::vm_value_to_owned`] for a caller that holds the heap but not
+/// an engine — the `$init` run inside engine construction, which reports a
+/// failing initializer's thrown value before any engine exists.
+pub(crate) fn owned_external_value(
+    heap: &std::sync::Arc<::bex_heap::BexHeap>,
+    permit: PermitProof<'_>,
+    value: Value,
+) -> BexExternalValue {
+    {
         match value.kind() {
             ValueKind::OmittedArg => {
                 panic!("Cannot convert omitted argument sentinel to BexExternalValue")
@@ -2224,7 +2237,7 @@ impl BexEngine {
                     return v;
                 }
                 BexValue::HeapPtr(&ptr)
-                    .as_owned_for_trace(&self.heap, permit)
+                    .as_owned_for_trace(heap, permit)
                     .unwrap_or_else(|e| {
                         // Remaining errors here (InvalidHandle, TypeMismatch,
                         // FieldNotFound) indicate engine-level invariant

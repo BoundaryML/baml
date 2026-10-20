@@ -162,6 +162,7 @@ fn projected_interface(
     let mut interface = PackageInterface::<TypeName> {
         types: IndexMap::new(),
         functions: IndexMap::new(),
+        values: IndexMap::new(),
         throw_sets: baml_compiler2_hir_ty::package_interface::FunctionThrowSets::default(),
         namespaces: std::collections::BTreeSet::default(),
         impls: Vec::new(),

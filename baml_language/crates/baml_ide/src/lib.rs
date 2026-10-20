@@ -29,6 +29,8 @@ pub mod definition;
 pub mod describe;
 pub mod env_vars;
 pub mod export;
+#[cfg(test)]
+mod global_variable_tests;
 pub mod info;
 pub mod line_index;
 pub mod listing;

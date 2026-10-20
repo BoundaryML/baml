@@ -52,6 +52,12 @@ pub use runtime_compile::{
 };
 pub use type_head::TypeHead;
 
+/// The name prefix of the helper that evaluates one global's initializer:
+/// `$init_let.<package>.<namespace…>.<name>`. The compiler names each helper
+/// after the global it initializes, and the engine reads the name back off a
+/// failing `$init`'s stack to say which global failed.
+pub const INIT_LET_HELPER_PREFIX: &str = "$init_let.";
+
 // ── The runtime's instantiation of the `baml_type` family ────────────────────
 //
 // The runtime carries the *same* types the compiler does, at a different head:

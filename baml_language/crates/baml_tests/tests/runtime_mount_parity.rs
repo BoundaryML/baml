@@ -296,6 +296,7 @@ fn with_types_consumer_wire_contract_is_pinned() {
         rows: PackageInterface::<baml_type::WireName> {
             types: indexmap::IndexMap::new(),
             functions: indexmap::IndexMap::new(),
+            values: Default::default(),
             throw_sets: Default::default(),
             namespaces: Default::default(),
             impls: Vec::new(),

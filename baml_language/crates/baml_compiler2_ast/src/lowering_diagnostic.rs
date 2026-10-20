@@ -166,12 +166,22 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
-    /// A source-authored `let` appeared at file scope. Only compiler-synthesized
-    /// globals (such as clients and retry policies) are supported.
-    TopLevelLetNotSupported { span: TextRange },
+    /// A file-scope `let` that does not bind exactly one name: a destructure,
+    /// a wildcard, an alias chain, or a `let … else`. A global variable is one
+    /// named binding (optionally annotated with `: T`); `reason` says which
+    /// rule the declaration broke.
+    InvalidTopLevelLet {
+        reason: &'static str,
+        span: TextRange,
+    },
 
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
+
+    /// `const` introducing a global variable. Globals are immutable whichever
+    /// keyword declares them, so `const` adds nothing over `let` — and is
+    /// reserved for a future meaning.
+    TopLevelConstIntroducer { span: TextRange },
 
     /// `const` is reserved as future language surface and cannot be used as a
     /// binding name.
@@ -613,12 +623,12 @@ impl LoweringDiagnostic {
                 *span,
                 "type ascription not allowed here",
             ),
-            LoweringDiagnostic::TopLevelLetNotSupported { span } => (
+            LoweringDiagnostic::InvalidTopLevelLet { reason, span } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
-                "top-level `let` bindings are not supported".to_string(),
+                format!("invalid top-level `let`: {reason}"),
                 *span,
-                "move this binding into a function body",
+                "a global variable binds one name: `let NAME = value;` or `let NAME: Type = value;`",
             ),
             LoweringDiagnostic::ConstBindingIntroducer { span } => (
                 DiagnosticId::InvalidSyntax,
@@ -626,6 +636,15 @@ impl LoweringDiagnostic {
                 "`const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.".to_string(),
                 *span,
                 "`const` behaves like `let` for now",
+            ),
+            LoweringDiagnostic::TopLevelConstIntroducer { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Warning,
+                "`const` is treated like `let` here: every global variable is already immutable, \
+                 so declare it with `let`."
+                    .to_string(),
+                *span,
+                "`const` behaves like `let` for globals",
             ),
             LoweringDiagnostic::ReservedConstBindingName { span } => (
                 DiagnosticId::InvalidSyntax,

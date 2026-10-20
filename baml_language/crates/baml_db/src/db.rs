@@ -1684,6 +1684,7 @@ mod tests {
                 > {
                     types: std::iter::empty().collect(),
                     functions: std::iter::empty().collect(),
+                    values: indexmap::IndexMap::default(),
                     throw_sets:
                         baml_compiler2_hir_ty::package_interface::FunctionThrowSets::default(),
                     namespaces: std::collections::BTreeSet::default(),

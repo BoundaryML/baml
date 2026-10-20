@@ -936,6 +936,44 @@ pub enum TirTypeError {
         /// the initializer calls the sysop directly.
         via: Option<Name>,
     },
+    /// A top-level declaration's initializer reaches `spawn` or `await`.
+    /// `$init` runs on a path with no scheduler to launch a task onto or
+    /// suspend into, so either kills engine construction the way io does.
+    /// Detected by [`crate::init_io`].
+    InitSuspendNotAllowed {
+        /// The declaration's name.
+        declaration: Name,
+        /// `client Foo = …` (true) versus a plain top-level `let` (false).
+        is_client: bool,
+        /// The suspending operation: `"spawn"` or `"await"`.
+        operation: &'static str,
+        /// The first call hop from the initializer toward the operation.
+        /// `None` when the initializer performs it directly.
+        via: Option<Name>,
+    },
+    /// A top-level declaration's initializer can throw `thrown`, and nothing
+    /// in it catches the throw. An uncaught throw in `$init` stops the engine
+    /// from being created, so it must be handled where the value is made.
+    InitThrowNotHandled {
+        declaration: Name,
+        is_client: bool,
+        thrown: Ty,
+    },
+    /// An assignment targets a top-level binding. `$init` sets every global
+    /// once and requests then share it, so the binding is immutable; only
+    /// what it holds may change.
+    AssignmentToGlobal {
+        name: Name,
+        /// `client Foo = …` (true) versus a global variable (false).
+        is_client: bool,
+    },
+    /// A `return` at the top level of a global variable's initializer.
+    ReturnInGlobalInitializer { name: Name },
+    /// Global variables whose initializers need each other's values: no
+    /// order exists in which `$init` could evaluate them. `chain` is the
+    /// cycle as written, starting and ending at the reported global, with
+    /// every function it passes through (`a → helper → b → a`).
+    GlobalInitializationCycle { chain: Vec<Name> },
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2342,7 +2380,7 @@ impl TirTypeError {
                     sysop,
                     via,
                 } => {
-                    let kind = if *is_client { "client" } else { "declaration" };
+                    let kind = if *is_client { "client" } else { "global" };
                     let reach = match via {
                         Some(via) => {
                             format!("reaches `{sysop}`, which performs io, through `{via}`")
@@ -2355,6 +2393,74 @@ impl TirTypeError {
                      startup (`$init`), where io is unavailable; resolve at request time \
                      instead — e.g. `env.X`, a late-bound reference read only when the \
                      request is made"
+                    )
+                }
+                TirTypeError::InitSuspendNotAllowed {
+                    declaration,
+                    is_client,
+                    operation,
+                    via,
+                } => {
+                    let kind = if *is_client { "client" } else { "global" };
+                    let reach = match via {
+                        Some(via) => format!("reaches `{operation}` through `{via}`"),
+                        None => format!("uses `{operation}`"),
+                    };
+                    write!(
+                        f,
+                        "{kind} `{declaration}` {reach} — top-level declarations are evaluated \
+                     once at startup (`$init`), before anything can be scheduled or waited \
+                     on; compute the value synchronously, or move the concurrent work into \
+                     the function that needs it"
+                    )
+                }
+                TirTypeError::InitThrowNotHandled {
+                    declaration,
+                    is_client,
+                    thrown,
+                } => {
+                    let kind = if *is_client { "client" } else { "global" };
+                    write!(
+                        f,
+                        "{kind} `{declaration}` can throw `{}` while it is initialized — globals \
+                     are evaluated once, at startup, and an uncaught throw there stops the \
+                     program from starting; if that is not intended, handle it in the \
+                     initializer with `catch`",
+                        thrown.spell(vp)
+                    )
+                }
+                TirTypeError::AssignmentToGlobal { name, is_client } => {
+                    let kind = if *is_client {
+                        "client"
+                    } else {
+                        "global variable"
+                    };
+                    write!(
+                        f,
+                        "cannot assign to {kind} `{name}` — top-level bindings are set once, at \
+                     startup, and shared by every call, so they cannot be reassigned; \
+                     declare a local (`let x = {name};`) to work with a copy of the binding, \
+                     or change what it holds through its fields or elements"
+                    )
+                }
+                TirTypeError::ReturnInGlobalInitializer { name } => write!(
+                    f,
+                    "`return` is not allowed in the initializer of global `{name}` — an \
+                 initializer is an expression, not a function body; its value is its last \
+                 expression (move early exits into a helper function)"
+                ),
+                TirTypeError::GlobalInitializationCycle { chain } => {
+                    let first = chain.first().map(Name::as_str).unwrap_or_default();
+                    let path = chain
+                        .iter()
+                        .map(|name| format!("`{name}`"))
+                        .collect::<Vec<_>>()
+                        .join(" → ");
+                    write!(
+                        f,
+                        "initialization cycle: global `{first}` needs its own value to be \
+                     initialized ({path}) — globals are initialized once, at startup, in \
+                     dependency order, and no order can satisfy a cycle"
                     )
                 }
             }

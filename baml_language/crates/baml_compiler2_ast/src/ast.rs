@@ -1961,14 +1961,23 @@ pub struct TypeAliasDef {
     pub docstring: Option<String>,
 }
 
-/// A top-level let binding. Source `let` declarations and compiler-generated
-/// client bindings share the same `$init` pipeline.
+/// A top-level let binding: a global variable (`let NAME: T = expr;` at file
+/// scope), a compiler-generated client binding (`client Name = expr;`), or a
+/// Session submission's persisted root binding. All three share the `$init`
+/// pipeline: the initializer runs once, before any request, and the binding is
+/// immutable afterwards.
 /// Carries an optional `ExprBody` initializer that flows through TIR type-checking.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LetDef {
     pub name: Name,
+    /// The written `: T`, when the declaration has one. The binding's type is
+    /// this annotation, which the initializer is checked against; without one
+    /// it is the initializer's own (widened) type.
+    pub type_annotation: Option<TypeExpr>,
     pub initializer: Option<(ExprBody, AstSourceMap)>,
     pub origin: LetOrigin,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<String>,
     pub span: TextRange,
     pub name_span: TextRange,
 }

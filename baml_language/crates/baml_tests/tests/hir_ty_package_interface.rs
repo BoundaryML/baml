@@ -1896,6 +1896,7 @@ fn view_world(reexports: &[(&str, ReExport<TypeName>)]) -> Result<ProjectDatabas
     let mut interface = PackageInterface::<TypeName> {
         types: Default::default(),
         functions: Default::default(),
+        values: Default::default(),
         throw_sets: Default::default(),
         namespaces: [Vec::new()].into_iter().collect(),
         impls: Vec::new(),
@@ -2057,6 +2058,7 @@ fn a_blob_compiled_against_another_interface_is_refused_at_the_mount() {
         let mut rows = PackageInterface::<TypeName> {
             types: Default::default(),
             functions: Default::default(),
+            values: Default::default(),
             throw_sets: Default::default(),
             namespaces: [Vec::new()].into_iter().collect(),
             impls: Vec::new(),

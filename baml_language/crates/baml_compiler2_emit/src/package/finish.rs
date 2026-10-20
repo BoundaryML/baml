@@ -33,7 +33,6 @@ use crate::{
         impl_rule_target,
     },
     refs::{LocalTables, Own, PackageRefs, item_path},
-    topological_sort_lets,
 };
 
 /// Everything after the code pass: the backfills that needed the bodies
@@ -328,37 +327,26 @@ fn emit_tail<'db>(
         (index, slot)
     };
 
-    // The init part: one helper per `let` in dependency order, then `$init`.
-    let bindings: Vec<(String, LetLoc<'db>, SourceFile)> = lets
-        .iter()
-        .map(|&binding| {
-            (
-                definition_link_name(db, Definition::Let(binding)),
-                binding,
-                binding.file(db),
-            )
-        })
-        .collect();
-    let sorted = topological_sort_lets(db, &bindings)?;
+    // The init part: one helper per `let` in dependency order (see
+    // `baml_compiler2_hir_ty::globals`), then `$init`. A cycle is a reported
+    // compile error; its members are still placed, so emit never fails on one.
+    let sorted: Vec<(String, LetLoc<'db>)> =
+        baml_compiler2_hir_ty::globals::plan_global_init(db, lets)
+            .order
+            .into_iter()
+            .map(|binding| (definition_link_name(db, Definition::Let(binding)), binding))
+            .collect();
     let mut init = None;
     let mut initializers = Vec::new();
     if !sorted.is_empty() {
         let mut steps = Vec::with_capacity(sorted.len());
-        for (ordinal, (fq_name, binding, _)) in sorted.iter().enumerate() {
-            let helper = compile_let_helper(
-                db,
-                *binding,
-                ordinal,
-                &mut refs,
-                class_fields,
-                &mut objects,
-                0,
-                opt,
-            )?;
+        for (fq_name, binding) in &sorted {
+            let helper =
+                compile_let_helper(db, *binding, &mut refs, class_fields, &mut objects, 0, opt)?;
             let (_, helper_slot) = pool(&mut objects, &mut slot_objects, helper);
             match scope {
                 Scope::Package => {
-                    let target = refs.let_global(*binding);
+                    let target = refs.let_global(DeclRef::Source(*binding));
                     steps.push(InitStep {
                         helper: GlobalIndex::from_raw(helper_slot as usize),
                         target,

@@ -509,15 +509,19 @@ while:
     }
 
 let:
-  summary: "Binds a value to a name. Use `let` for all variable declarations."
+  summary: "Binds a value to a name. Use `let` for all variable declarations, local and global."
   syntax: |
     let name = "Alice"
     let count = items.length()
+  details: |
+    At file scope, `let` declares a global variable: `let MAX_RETRIES = 3;` or `let MAX_RETRIES: int = 3;`. A global is evaluated once, when the program starts, in dependency order, and is visible from every body in its namespace (elsewhere, write `namespace.NAME`). The binding cannot be reassigned, but what it holds is shared by every call: changing a global's fields or elements is visible to every reader. Its initializer cannot perform io, `spawn`, `await`, or `return`.
 
 const:
-  summary: "Declares a compile-time constant binding."
+  summary: "Binds a value to a name; currently the same as `let`."
   syntax: |
     const DEFAULT_LIMIT = 100
+  details: |
+    `const` is reserved for a future meaning and currently behaves exactly like `let`, so prefer `let`. At file scope it declares a global variable, which is immutable whichever keyword declares it.
 
 in:
   summary: "Used with `for` loops to iterate over a collection."

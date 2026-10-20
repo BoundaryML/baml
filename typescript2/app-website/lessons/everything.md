@@ -8,11 +8,19 @@ Variables store values that can be reused throughout your BAML code. Use `let` t
 // A global variable
 let poemSubject = "Math";
 
-// Another global variable
-let defaultPoem = ClaudePoem(poemSubject);
+// Another global variable, computed from the first
+let poemTitle = `An ode to ${poemSubject}`;
+
+// Use them from any function
+function DefaultPoem() -> string {
+    ClaudePoem(poemTitle)
+}
 ```
 
 Variables can store any value type and can reference function calls or other variables.
+A global variable is evaluated once, when your program starts, so its initializer can't
+make LLM calls or other I/O — do that in a function, as `DefaultPoem` does. A global
+can't be reassigned, but every function sees the same value.
 
 ---
 

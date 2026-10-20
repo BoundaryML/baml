@@ -58,6 +58,9 @@ pub type InterfaceRef<'db> = DeclRef<InterfaceLoc<'db>, ExternInterfaceLoc<'db>>
 /// name is a spelling device, never an identity — `TYPE_SYSTEM.md`), so the
 /// ref identifies the DECLARATION for enumeration and value reads only.
 pub type AliasRef<'db> = DeclRef<TypeAliasLoc<'db>, ExternTypeAliasLoc<'db>>;
+/// A top-level binding (a global variable or a client), wherever it is
+/// declared: in a package checked here, or in one served from its interface.
+pub type GlobalRef<'db> = DeclRef<baml_compiler2_hir::loc::LetLoc<'db>, ExternLetLoc<'db>>;
 /// An `implements` block, wherever it is declared.
 pub type ImplRef<'db> = DeclRef<ImplLoc<'db>, ExternImplLoc<'db>>;
 
@@ -180,6 +183,55 @@ pub struct ExternInterfaceLoc<'db> {
 pub struct ExternTypeAliasLoc<'db> {
     #[returns(ref)]
     pub head: DeclName,
+}
+
+/// The identity of an exported top-level binding row: a global variable or a
+/// client of a package served from its interface.
+#[salsa::interned]
+pub struct ExternLetLoc<'db> {
+    #[returns(ref)]
+    pub head: DeclName,
+}
+
+impl std::fmt::Debug for ExternLetLoc<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ExternLetLoc(..)")
+    }
+}
+
+/// The top-level binding `namespace.name` of a package served from its
+/// interface, if the package exports one there.
+pub fn mounted_let_named<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    root: SourceRoot,
+    namespace: &[Name],
+    name: &Name,
+) -> Option<ExternLetLoc<'db>> {
+    if !served(db, root) {
+        return None;
+    }
+    package_interface(db, root).lookup_value(namespace, name)?;
+    Some(ExternLetLoc::new(
+        db,
+        DeclName::in_root(root, namespace.to_vec(), name.clone()),
+    ))
+}
+
+/// The exported row an [`ExternLetLoc`] was minted from.
+pub fn extern_let_row<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    binding: ExternLetLoc<'db>,
+) -> &'db crate::package_interface::ExportedValue {
+    let head = binding.head(db);
+    package_interface(db, head.root())
+        .lookup_value(head.namespace(), head.name())
+        .unwrap_or_else(|| {
+            panic!(
+                "internal error: no exported value row for `{}`; an `ExternLetLoc` is minted \
+                 only from a row in the current revision's package interface",
+                head.name()
+            )
+        })
 }
 
 impl std::fmt::Debug for ExternClassLoc<'_> {

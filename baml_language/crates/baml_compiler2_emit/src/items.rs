@@ -1094,8 +1094,9 @@ fn synthesized_function(name: String, bytecode: Bytecode) -> Function {
     }
 }
 
-/// The zero-arg helper `$init_let_{ordinal}` that evaluates one top-level
-/// `let`'s initializer — the body `$init` calls before storing the result
+/// The zero-arg helper `$init_let.<global>` that evaluates one top-level
+/// `let`'s initializer. It is named after the binding it initializes, so a
+/// trace through a failing initializer names the global, not a position — the body `$init` calls before storing the result
 /// into the binding's slot. The initializer is lowered through MIR and
 /// compiled like any body; its lambda children are pooled into `objects`
 /// first. A binding without an initializer gets a helper that pushes `null`.
@@ -1105,11 +1106,9 @@ fn synthesized_function(name: String, bytecode: Bytecode) -> Function {
 ///
 /// The initializer failed to lower (an internal error, attributed to the
 /// `let`'s file).
-#[expect(clippy::too_many_arguments)]
 pub(crate) fn compile_let_helper<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     binding: LetLoc<'db>,
-    ordinal: usize,
     refs: &mut PackageRefs<'_, 'db>,
     class_fields: &ClassFieldSnapshot<'db>,
     objects: &mut ObjectPool,
@@ -1117,7 +1116,7 @@ pub(crate) fn compile_let_helper<'db>(
     opt: OptLevel,
 ) -> Result<Function, LoweringError> {
     let file = binding.file(db);
-    let name = format!("$init_let_{ordinal}");
+    let name = init_let_helper_name(&definition_link_name(db, Definition::Let(binding)));
     let lowered = lower_let_body(db, binding, opt).map_err(|error| {
         crate::internal_lowering_error(
             db,
@@ -1171,6 +1170,12 @@ pub(crate) fn compile_let_helper<'db>(
     Ok(helper)
 }
 
+/// The name of the helper that initializes the global `global` (its rendered,
+/// package-qualified name).
+pub(crate) fn init_let_helper_name(global: &str) -> String {
+    format!("{}{global}", bex_vm_types::INIT_LET_HELPER_PREFIX)
+}
+
 /// One `let` of a package's `$init`: the helper that evaluates its
 /// initializer and the binding's slot the result is stored into.
 pub(crate) struct InitStep {
@@ -1188,13 +1193,15 @@ pub(crate) fn build_init_function(steps: &[InitStep]) -> Function {
     let mut instructions: Vec<Instruction> = Vec::new();
     let mut meta: Vec<InstructionMeta> = Vec::new();
     let mut constants: Vec<ConstValue> = Vec::new();
-    for (ordinal, step) in steps.iter().enumerate() {
+    for step in steps {
         instructions.push(Instruction::Call {
             callee: step.helper,
             ntypeargs: 0,
         });
         meta.push(InstructionMeta {
-            operand: Some(OperandMeta::Callable(format!("$init_let_{ordinal}"))),
+            operand: Some(OperandMeta::Callable(init_let_helper_name(
+                &step.target_name,
+            ))),
         });
         instructions.push(Instruction::StoreGlobal(step.target));
         meta.push(InstructionMeta {

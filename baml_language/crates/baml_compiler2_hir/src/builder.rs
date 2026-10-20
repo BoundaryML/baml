@@ -1691,6 +1691,10 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_let(&mut self, l: &ast::LetDef) {
+        // A top-level binding is visible from every body in its namespace, so
+        // a global named like a desugar root would hide that package from all
+        // of them at once — the same hazard a local binding has, only wider.
+        self.reject_reserved_binding_name(&l.name, l.name_span);
         let local_id = self.item_tree.alloc_let(l);
         let loc = LetLoc::new(self.db, self.file, local_id);
         self.value_contributions.push((

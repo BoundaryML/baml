@@ -1289,7 +1289,7 @@ pub enum Constant<'db> {
     /// (an instance, a closure, ...), not a `Function` object. The only
     /// non-function item that is a value; a type declaration in value
     /// position is a checker error and never reaches here.
-    GlobalItem(baml_compiler2_hir::loc::LetLoc<'db>),
+    GlobalItem(baml_compiler2_hir_ty::extern_loc::GlobalRef<'db>),
     /// A generic function instantiated with concrete type arguments
     /// (`foo<int>` referenced as a value). Emitted as a pooled, interned
     /// `Object::GenericFunction` so identical instantiations share one object

@@ -1950,12 +1950,9 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 self.emit_pooled_function_value(*func, &[]);
             }
             Constant::GlobalItem(binding) => {
-                // A top-level `let` (a client, ...): read the value `$init`
-                // stored in its slot, unwrapped.
-                let name_str = baml_compiler2_mir::definition_link_name(
-                    self.db,
-                    baml_compiler2_hir::contributions::Definition::Let(*binding),
-                );
+                // A top-level `let` (a global variable, a client, ...): read
+                // the value `$init` stored in its slot, unwrapped.
+                let name_str = baml_compiler2_mir::global_link_name(self.db, *binding);
                 let global_idx = self.refs.let_global(*binding).raw();
                 let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(global_idx)));
                 self.set_operand(inst, OperandMeta::Global(name_str));

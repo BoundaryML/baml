@@ -2554,3 +2554,62 @@ interface /* keyword */ Named /* name */ <T> /* generics */ requires /* requires
         assert_eq!(format(&formatted, &options).unwrap(), formatted);
     }
 }
+
+#[cfg(test)]
+mod global_variable_tests {
+    //! Global variables: a file-scope `let` formats like a body-level one, and
+    //! a run of them keeps the grouping it was written with.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn normalizes_spacing_and_inserts_the_semicolon() {
+        assert_formats_to(
+            "let   MAX:int=3\nconst  NAME =  \"x\" ;\n",
+            "let MAX: int = 3;\nconst NAME = \"x\";\n",
+        );
+    }
+
+    #[test]
+    fn adjacent_globals_stay_grouped_and_blank_lines_collapse_to_one() {
+        assert_formats_to(
+            "let A = 1;\nlet B = 2;\n\n\n\nlet C = 3;\n",
+            "let A = 1;\nlet B = 2;\n\nlet C = 3;\n",
+        );
+    }
+
+    #[test]
+    fn other_items_are_still_separated_from_globals() {
+        assert_formats_to(
+            "let A = 1;\nfunction f() -> int { A }\nlet B = 2;\n",
+            "let A = 1;\n\nfunction f() -> int {\n    A\n}\n\nlet B = 2;\n",
+        );
+    }
+
+    #[test]
+    fn comments_stay_where_they_were_written() {
+        assert_formats_to(
+            "/// The limit.\nlet LIMIT = 3; // inline\n// about NEXT\nlet NEXT = LIMIT + 1;\n",
+            "/// The limit.\nlet LIMIT = 3; // inline\n// about NEXT\nlet NEXT = LIMIT + 1;\n",
+        );
+    }
+
+    #[test]
+    fn block_initializers_format_like_body_blocks() {
+        assert_formats_to(
+            "let TOTAL = { let a = 1; a + 2 };\n",
+            "let TOTAL = {\n    let a = 1;\n    a + 2\n};\n",
+        );
+    }
+}

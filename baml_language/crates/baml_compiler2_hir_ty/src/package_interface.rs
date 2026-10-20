@@ -74,6 +74,10 @@ pub struct PackageInterface<N: Head = DeclName> {
     pub types: IndexMap<Vec<Name>, IndexMap<Name, ExportedType<N>>>,
     /// All exported free functions: namespace path -> name -> `ExportedFunction`
     pub functions: IndexMap<Vec<Name>, IndexMap<Name, ExportedFunction<N>>>,
+    /// All exported top-level bindings — global variables and clients:
+    /// namespace path -> name -> `ExportedValue`. A consumer reads one by the
+    /// slot its package's `$init` filled.
+    pub values: IndexMap<Vec<Name>, IndexMap<Name, ExportedValue<N>>>,
     /// Throw sets for all functions in this package (transitive, fully inferred).
     pub throw_sets: FunctionThrowSets<N>,
     /// Complete namespace set, including namespaces whose only declaration is
@@ -171,6 +175,19 @@ impl<N: Head> PackageInterface<N> {
                         items
                             .iter()
                             .map(|(name, function)| Ok((name.clone(), function.try_map_heads(f)?)))
+                            .collect::<Result<IndexMap<_, _>, E>>()?,
+                    ))
+                })
+                .collect::<Result<IndexMap<_, _>, E>>()?,
+            values: self
+                .values
+                .iter()
+                .map(|(ns, items)| {
+                    Ok((
+                        ns.clone(),
+                        items
+                            .iter()
+                            .map(|(name, value)| Ok((name.clone(), value.try_map_heads(f)?)))
                             .collect::<Result<IndexMap<_, _>, E>>()?,
                     ))
                 })
@@ -412,6 +429,29 @@ pub enum ExportedImplOrigin<N: Head = DeclName> {
     OutOfBody,
 }
 
+/// A top-level binding exported from a package: a global variable or a
+/// client. Only its type crosses the boundary; its value lives in the slot the
+/// exporting package's `$init` fills, which a consumer imports by path.
+#[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct ExportedValue<N: Head = DeclName> {
+    pub name: Name,
+    /// The type every reader sees: the annotation, or the initializer's
+    /// widened type.
+    pub ty: Ty<N>,
+}
+
+impl<N: Head> ExportedValue<N> {
+    fn try_map_heads<M: Head, E>(
+        &self,
+        f: &mut impl FnMut(&N) -> Result<M, E>,
+    ) -> Result<ExportedValue<M>, E> {
+        Ok(ExportedValue {
+            name: self.name.clone(),
+            ty: self.ty.try_map_heads(f)?,
+        })
+    }
+}
+
 /// A function exported from a package (free function or method).
 #[derive(Debug, Clone, PartialEq, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ExportedFunction<N: Head = DeclName> {
@@ -465,6 +505,9 @@ pub struct FileInterfaceFragment {
     pub types: IndexMap<Name, ExportedType>,
     /// Free functions this file exports: name -> `ExportedFunction` (first wins).
     pub functions: IndexMap<Name, ExportedFunction>,
+    /// Top-level bindings this file exports: name -> `ExportedValue` (first
+    /// wins).
+    pub values: IndexMap<Name, ExportedValue>,
 }
 
 /// The only per-file interface data consumed across CLI process boundaries.
@@ -558,6 +601,11 @@ impl<N: Head> PackageInterface<N> {
     /// Look up a function by explicit namespace and item name.
     pub fn lookup_function(&self, namespace: &[Name], item: &Name) -> Option<&ExportedFunction<N>> {
         self.functions.get(namespace)?.get(item)
+    }
+
+    /// Look up an exported top-level binding by explicit namespace and name.
+    pub fn lookup_value(&self, namespace: &[Name], item: &Name) -> Option<&ExportedValue<N>> {
+        self.values.get(namespace)?.get(item)
     }
 
     /// The re-export at `namespace.item`, if the package exports one there.
@@ -1883,13 +1931,26 @@ pub fn file_interface_fragment(
     }
 
     let mut functions: IndexMap<Name, ExportedFunction> = IndexMap::new();
+    let mut values: IndexMap<Name, ExportedValue> = IndexMap::new();
     let mut claimed_values: FxHashSet<Name> = FxHashSet::default();
     for (name, contrib) in &contributions.values {
         if !claimed_values.insert(name.clone()) {
             continue;
         }
-        if let Definition::Function(func_loc) = contrib.definition {
-            functions.insert(name.clone(), lower_function_export(db, func_loc, name));
+        match contrib.definition {
+            Definition::Function(func_loc) => {
+                functions.insert(name.clone(), lower_function_export(db, func_loc, name));
+            }
+            Definition::Let(let_loc) => {
+                values.insert(
+                    name.clone(),
+                    ExportedValue {
+                        name: name.clone(),
+                        ty: crate::globals::global_value_type(db, let_loc).unwrap_or(Ty::Unknown),
+                    },
+                );
+            }
+            _ => {}
         }
     }
 
@@ -1897,6 +1958,7 @@ pub fn file_interface_fragment(
         ns_path,
         types,
         functions,
+        values,
     }
 }
 
@@ -2134,6 +2196,7 @@ fn fold_package_interface(
 
     let mut types: IndexMap<Vec<Name>, IndexMap<Name, ExportedType>> = IndexMap::new();
     let mut functions: IndexMap<Vec<Name>, IndexMap<Name, ExportedFunction>> = IndexMap::new();
+    let mut values: IndexMap<Vec<Name>, IndexMap<Name, ExportedValue>> = IndexMap::new();
 
     for (ns_path, ns_items) in &pkg_items.namespaces {
         for (name, def) in &ns_items.types {
@@ -2146,15 +2209,26 @@ fn fold_package_interface(
             }
         }
         for (name, def) in &ns_items.values {
-            let Definition::Function(func_loc) = def else {
-                continue;
-            };
-            let frag = file_interface_fragment(db, func_loc.file(db));
-            if let Some(exported) = frag.functions.get(name) {
-                functions
-                    .entry(ns_path.clone())
-                    .or_default()
-                    .insert(name.clone(), exported.clone());
+            match def {
+                Definition::Function(func_loc) => {
+                    let frag = file_interface_fragment(db, func_loc.file(db));
+                    if let Some(exported) = frag.functions.get(name) {
+                        functions
+                            .entry(ns_path.clone())
+                            .or_default()
+                            .insert(name.clone(), exported.clone());
+                    }
+                }
+                Definition::Let(let_loc) => {
+                    let frag = file_interface_fragment(db, let_loc.file(db));
+                    if let Some(exported) = frag.values.get(name) {
+                        values
+                            .entry(ns_path.clone())
+                            .or_default()
+                            .insert(name.clone(), exported.clone());
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -2163,6 +2237,7 @@ fn fold_package_interface(
     PackageInterface {
         types,
         functions,
+        values,
         throw_sets,
         namespaces: pkg_items.namespaces.keys().cloned().collect(),
         impls: exported_impls(db, pkg_id),

@@ -538,17 +538,59 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
                             .any(|i| tainted.contains(&(i as usize)))
                 }
             });
+            // The written `: T` is a declaration-level type, checked like a
+            // type alias body: unresolved names, argument counts, bounds.
+            let annotation = baml_compiler2_hir_ty::lower::let_lowering_diagnostics(db, let_loc);
             if tainted_decl {
+                for (range, error) in annotation {
+                    let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                        message: error.render(&vp),
+                        error,
+                        range,
+                        severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                        related: Vec::new(),
+                    };
+                    diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+                }
                 continue;
             }
-            for (range, error) in
-                baml_compiler2_hir_ty::init_io::let_init_io_diagnostics(db, let_loc)
+            // Effects `$init` cannot perform (E0163, E0182), a throw nothing
+            // catches (E0183), and initialization cycles (E0181). An effect
+            // error already explains a throw its io would raise, so the
+            // throw is reported only on its own.
+            let effects = baml_compiler2_hir_ty::init_io::let_init_io_diagnostics(db, let_loc);
+            let throws = if effects.is_empty() {
+                baml_compiler2_hir_ty::globals::let_init_throw_diagnostics(db, let_loc)
+            } else {
+                Vec::new()
+            };
+            let throws = throws.into_iter().map(|(range, error)| {
+                (
+                    range,
+                    error,
+                    baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Warning,
+                )
+            });
+            for (range, error, severity) in annotation
+                .into_iter()
+                .chain(effects)
+                .chain(baml_compiler2_hir_ty::globals::let_init_cycle_diagnostics(
+                    db, let_loc,
+                ))
+                .map(|(range, error)| {
+                    (
+                        range,
+                        error,
+                        baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                    )
+                })
+                .chain(throws)
             {
                 let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
                     message: error.render(&vp),
                     error,
                     range,
-                    severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                    severity,
                     related: Vec::new(),
                 };
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
@@ -2015,6 +2057,12 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::InterfaceProjectionBase { .. } => DiagnosticId::InterfaceProjectionBase,
         // `$init` effect rules.
         TirTypeError::InitIoNotAllowed { .. } => DiagnosticId::InitIoNotAllowed,
+        TirTypeError::InitSuspendNotAllowed { .. } => DiagnosticId::InitSuspendNotAllowed,
+        TirTypeError::InitThrowNotHandled { .. } => DiagnosticId::InitThrowNotHandled,
+        // Global variables.
+        TirTypeError::AssignmentToGlobal { .. } => DiagnosticId::AssignmentToGlobal,
+        TirTypeError::ReturnInGlobalInitializer { .. } => DiagnosticId::ReturnInGlobalInitializer,
+        TirTypeError::GlobalInitializationCycle { .. } => DiagnosticId::GlobalInitializationCycle,
         // Interface impl conformance (BEP-044, E0113–E0139): tir2 owns these and
         // check.rs surfaces them via `check_interfaces`.
         TirTypeError::MissingInterfaceMethod { .. } => DiagnosticId::MissingInterfaceMethod,

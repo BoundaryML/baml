@@ -174,6 +174,55 @@ pub fn file_annotations(
         );
     }
 
+    // Global variables: an unannotated global's type, as an unannotated local
+    // `let` gets one, and the hints inside its initializer — a body like a
+    // function's. A `client` declaration's type is its constructor's, so it
+    // gets the initializer's hints only.
+    for &let_loc in item_data::file_lets(db, file) {
+        let body = baml_compiler2_hir::body::let_body(db, let_loc);
+        let baml_compiler2_hir::body::LetBody::Expr(expr_body) = body.as_ref() else {
+            continue;
+        };
+        let Some(source_map) = baml_compiler2_hir::body::let_body_source_map(db, let_loc) else {
+            continue;
+        };
+        let Some(owner_scope) =
+            item_data::let_scope(db, let_loc).map(|scope| scope.file_scope_id(db))
+        else {
+            continue;
+        };
+        let data = item_data::let_data(db, let_loc);
+        let annotatable = matches!(data.origin, baml_compiler2_ast::LetOrigin::Source);
+        if annotatable
+            && data.annotation.is_none()
+            && !expr_body
+                .root_expr
+                .is_some_and(|root| initializer_makes_type_obvious(expr_body, root))
+            && let Some(ty) = baml_compiler2_hir_ty::globals::global_value_type(db, let_loc)
+            && !should_suppress_type(&ty)
+            && !type_repeats_binding_name(data.name.as_str(), &ty)
+        {
+            let name_span = item_data::let_source_map(db, let_loc).name_span;
+            out.push(InlineAnnotation {
+                offset: name_span.end(),
+                label: format!(": {}", display_ty_for_file(db, file, &ty)),
+                kind: AnnotationKind::Type,
+                padding_left: false,
+                padding_right: true,
+                target: type_definition(db, &ty),
+            });
+        }
+        process_body(
+            db,
+            file,
+            index,
+            owner_scope,
+            expr_body,
+            &source_map,
+            &mut out,
+        );
+    }
+
     // Sort by offset to ensure document order (required by LSP).
     out.sort_by_key(|h| h.offset);
     out
