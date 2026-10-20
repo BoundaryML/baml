@@ -4,7 +4,7 @@
 //! by regular `"..."` literals, BEP-049 backtick `` `...` `` literals, and
 //! `b"..."` byte string literals. Raw `r"..."` literals process no escapes.
 //!
-//! Recognized escapes (every flavor):
+//! Recognized escapes (every literal):
 //! - `\\`, `\"`, `\'`, `` \` ``, `\$`, `\/`
 //! - `\n`, `\t`, `\r`, `\b` (U+0008), `\f` (U+000C), `\0` (always NUL; BAML
 //!   has no octal escapes, so `\01` is NUL followed by `1`)
@@ -30,13 +30,13 @@ use std::fmt;
 /// Decode escapes for a regular `"..."` string literal body (i.e., the text
 /// between the surrounding quotes, with quotes already stripped).
 pub fn unescape_string_literal(input: &str) -> String {
-    decode_str(input, Flavor::Quote, &mut Vec::new())
+    decode_str(input, LiteralKind::Quoted, &mut Vec::new())
 }
 
 /// Decode escapes for a BEP-049 backtick string literal body (i.e., the text
 /// between the surrounding backtick runs, with delimiters already stripped).
 pub fn unescape_backtick_string_literal(input: &str) -> String {
-    decode_str(input, Flavor::Backtick, &mut Vec::new())
+    decode_str(input, LiteralKind::Backtick, &mut Vec::new())
 }
 
 /// Decode escapes for a `b"..."` byte string literal body (the text between
@@ -45,7 +45,7 @@ pub fn unescape_byte_string_literal(input: &str) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(input.len());
     scan(
         input,
-        Flavor::Bytes,
+        LiteralKind::Bytes,
         |piece| match piece {
             Piece::Char(c) => {
                 let mut buf = [0; 4];
@@ -63,7 +63,7 @@ pub fn unescape_byte_string_literal(input: &str) -> Vec<u8> {
 /// Offsets are byte offsets into `input`.
 pub fn string_literal_escape_issues(input: &str) -> Vec<EscapeIssue> {
     let mut issues = Vec::new();
-    scan(input, Flavor::Quote, |_| {}, &mut issues);
+    scan(input, LiteralKind::Quoted, |_| {}, &mut issues);
     issues
 }
 
@@ -71,7 +71,7 @@ pub fn string_literal_escape_issues(input: &str) -> Vec<EscapeIssue> {
 /// literal. Offsets are byte offsets into `input`.
 pub fn backtick_string_literal_escape_issues(input: &str) -> Vec<EscapeIssue> {
     let mut issues = Vec::new();
-    scan(input, Flavor::Backtick, |_| {}, &mut issues);
+    scan(input, LiteralKind::Backtick, |_| {}, &mut issues);
     issues
 }
 
@@ -79,7 +79,7 @@ pub fn backtick_string_literal_escape_issues(input: &str) -> Vec<EscapeIssue> {
 /// string literal body. Offsets are byte offsets into `input`.
 pub fn byte_string_literal_escape_issues(input: &str) -> Vec<EscapeIssue> {
     let mut issues = Vec::new();
-    scan(input, Flavor::Bytes, |_| {}, &mut issues);
+    scan(input, LiteralKind::Bytes, |_| {}, &mut issues);
     issues
 }
 
@@ -91,7 +91,23 @@ pub struct EscapeIssue {
     pub start: usize,
     /// Byte length of the offending sequence.
     pub len: usize,
+    /// The offending source text, `len` bytes from `start`.
+    pub text: String,
     pub kind: EscapeIssueKind,
+    /// The kind of literal the sequence appears in, so messages can quote it
+    /// in the same syntax.
+    pub literal: LiteralKind,
+}
+
+/// The kind of literal an [`EscapeIssue`] comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LiteralKind {
+    /// `"..."`
+    Quoted,
+    /// `` `...` ``
+    Backtick,
+    /// `b"..."`
+    Bytes,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,89 +164,114 @@ impl EscapeIssueKind {
     }
 }
 
-impl fmt::Display for EscapeIssueKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl LiteralKind {
+    /// `body` spelled as a literal of this kind, so a message quotes source
+    /// text in the same syntax the user wrote it in.
+    fn quote(self, body: &str) -> String {
         match self {
-            EscapeIssueKind::Unknown(c @ ('\n' | '\r')) => write!(
-                f,
-                "unknown escape sequence: `\\` followed by {}; BAML has no line continuations, so write `\\\\` for a literal backslash",
-                describe_char(*c)
-            ),
-            EscapeIssueKind::Unknown(c) if c.is_whitespace() || c.is_control() => write!(
-                f,
-                "unknown escape sequence: `\\` followed by {}; write `\\\\` for a literal backslash",
-                describe_char(*c)
-            ),
-            EscapeIssueKind::Unknown(c) => write!(
-                f,
-                "unknown escape sequence `\\{c}`; write `\\\\{c}` for a literal backslash"
-            ),
-            EscapeIssueKind::LongUnicode => write!(
-                f,
-                "`\\U` escapes are not supported; use `\\u{{...}}` for a Unicode code point"
-            ),
-            EscapeIssueKind::NamedUnicode => write!(
-                f,
-                "`\\N{{...}}` escapes are not supported; use `\\u{{...}}` for a Unicode code point"
-            ),
-            EscapeIssueKind::InvalidHex => {
-                write!(f, "invalid `\\x` escape: expected exactly two hex digits")
+            LiteralKind::Quoted => format!("\"{body}\""),
+            LiteralKind::Bytes => format!("b\"{body}\""),
+            LiteralKind::Backtick if body.contains('`') => format!("`` {body} ``"),
+            LiteralKind::Backtick => format!("`{body}`"),
+        }
+    }
+}
+
+impl fmt::Display for EscapeIssue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let q = |body: &str| self.literal.quote(body);
+        let text = q(&self.text);
+        match &self.kind {
+            EscapeIssueKind::Unknown(c) if c.is_whitespace() || c.is_control() => {
+                write!(
+                    f,
+                    "unknown escape sequence: {} followed by {} - did you mean {} (escaped backslash)?",
+                    q("\\"),
+                    describe_char(*c),
+                    q("\\\\"),
+                )?;
+                if matches!(c, '\n' | '\r') {
+                    write!(f, " BAML has no line continuations.")?;
+                }
+                Ok(())
             }
-            EscapeIssueKind::NonAsciiHex(b) => write!(
-                f,
-                "out of range `\\x{b:02X}` escape: `\\x` escapes in strings must be in the range `\\x00`-`\\x7F`; use `\\u{{...}}` for a non-ASCII character, or a byte string `b\"...\"` for raw bytes"
-            ),
-            EscapeIssueKind::InvalidUnicode(err) => match err {
-                UnicodeEscapeError::Malformed => write!(
+            EscapeIssueKind::Unknown(c) => {
+                write!(
                     f,
-                    "invalid `\\u` escape: expected four hex digits (`\\uHHHH`) or a braced code point (`\\u{{H...}}`)"
-                ),
-                UnicodeEscapeError::Unterminated => {
-                    write!(f, "invalid `\\u{{...}}` escape: missing closing `}}`")
+                    "unknown escape sequence {text} - did you mean {} (escaped backslash)",
+                    q(&format!("\\\\{c}")),
+                )?;
+                // Raw strings exist only in the `r"..."` form.
+                if self.literal == LiteralKind::Quoted {
+                    write!(f, " or r\"\\{c}\" (raw string)")?;
                 }
-                UnicodeEscapeError::InvalidChar(c) => write!(
-                    f,
-                    "invalid `\\u{{...}}` escape: {} is not a hex digit",
-                    describe_char(*c)
-                ),
-                UnicodeEscapeError::Empty => {
-                    write!(
-                        f,
-                        "invalid `\\u{{...}}` escape: expected at least one hex digit"
-                    )
-                }
-                UnicodeEscapeError::TooLong => {
-                    write!(
-                        f,
-                        "invalid `\\u{{...}}` escape: at most six hex digits are allowed"
-                    )
-                }
-                UnicodeEscapeError::MisplacedUnderscore => write!(
-                    f,
-                    "invalid `\\u{{...}}` escape: `_` is only allowed between hex digits"
-                ),
-            },
-            EscapeIssueKind::OutOfRange => {
-                write!(f, "invalid `\\u{{...}}` escape: value exceeds U+10FFFF")
+                write!(f, "?")
             }
+            EscapeIssueKind::LongUnicode | EscapeIssueKind::NamedUnicode => write!(
+                f,
+                "unsupported escape sequence {text} - use {} for a Unicode code point",
+                q("\\u{...}"),
+            ),
+            EscapeIssueKind::InvalidHex => write!(
+                f,
+                "invalid escape sequence {text} - {} must be followed by exactly two hex digits",
+                q("\\x"),
+            ),
+            EscapeIssueKind::NonAsciiHex(_) => write!(
+                f,
+                "out of range escape sequence {text} - {} escapes in strings only go up to {}; use {} for a non-ASCII character, or a byte string b\"...\" for raw bytes",
+                q("\\x"),
+                q("\\x7F"),
+                q("\\u{...}"),
+            ),
+            EscapeIssueKind::InvalidUnicode(err) => {
+                write!(f, "invalid escape sequence {text} - ")?;
+                match err {
+                    UnicodeEscapeError::Malformed => write!(
+                        f,
+                        "expected four hex digits ({}) or a braced code point ({})",
+                        q("\\uHHHH"),
+                        q("\\u{H...}"),
+                    ),
+                    UnicodeEscapeError::Unterminated => write!(f, "missing the closing brace"),
+                    UnicodeEscapeError::InvalidChar(c) => {
+                        write!(f, "{} is not a hex digit", describe_char(*c))
+                    }
+                    UnicodeEscapeError::Empty => write!(f, "expected at least one hex digit"),
+                    UnicodeEscapeError::TooLong => {
+                        write!(f, "at most six hex digits are allowed")
+                    }
+                    UnicodeEscapeError::MisplacedUnderscore => {
+                        write!(f, "underscores are only allowed between hex digits")
+                    }
+                }
+            }
+            EscapeIssueKind::OutOfRange => write!(
+                f,
+                "invalid escape sequence {text} - the value exceeds U+10FFFF"
+            ),
             EscapeIssueKind::LoneSurrogate(v) => write!(
                 f,
-                "invalid `\\u` escape: unpaired UTF-16 surrogate U+{v:04X}; a high surrogate (U+D800-U+DBFF) must be immediately followed by a low surrogate (U+DC00-U+DFFF)"
+                "invalid escape sequence {text} - unpaired UTF-16 surrogate U+{v:04X}; a high surrogate (U+D800-U+DBFF) must be immediately followed by a low surrogate (U+DC00-U+DFFF)"
             ),
             EscapeIssueKind::UnicodeInByteString { utf8 } => {
-                write!(f, "`\\u` escapes are not allowed in byte strings; ")?;
+                write!(
+                    f,
+                    "invalid escape sequence {text} - byte strings can't contain Unicode escapes; "
+                )?;
                 match utf8 {
-                    Some(bytes) => write!(f, "write the UTF-8 bytes `{}`", hex_bytes(bytes)),
-                    None => write!(f, "write the UTF-8 bytes with `\\xHH`"),
+                    Some(bytes) => {
+                        write!(f, "did you mean {} (UTF-8 bytes)?", q(&hex_bytes(bytes)))
+                    }
+                    None => write!(f, "write the UTF-8 bytes with {}", q("\\xHH")),
                 }
             }
             EscapeIssueKind::NonAsciiInByteString(c) => {
                 let mut buf = [0; 4];
                 write!(
                     f,
-                    "non-ASCII character {} in byte string; write its UTF-8 bytes `{}`",
-                    describe_char(*c),
-                    hex_bytes(c.encode_utf8(&mut buf).as_bytes())
+                    "non-ASCII character {text} in byte string - did you mean {} (UTF-8 bytes)?",
+                    q(&hex_bytes(c.encode_utf8(&mut buf).as_bytes())),
                 )
             }
         }
@@ -245,7 +286,7 @@ fn describe_char(c: char) -> String {
         '\t' => "a tab".to_string(),
         ' ' => "a space".to_string(),
         c if c.is_whitespace() || c.is_control() => format!("U+{:04X}", u32::from(c)),
-        c => format!("`{c}`"),
+        c => format!("'{c}'"),
     }
 }
 
@@ -257,13 +298,6 @@ fn hex_bytes(bytes: &[u8]) -> String {
     })
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-enum Flavor {
-    Quote,
-    Backtick,
-    Bytes,
-}
-
 /// One unit of decoded output.
 enum Piece<'a> {
     Char(char),
@@ -273,11 +307,11 @@ enum Piece<'a> {
     Verbatim(&'a str),
 }
 
-fn decode_str(input: &str, flavor: Flavor, issues: &mut Vec<EscapeIssue>) -> String {
+fn decode_str(input: &str, literal: LiteralKind, issues: &mut Vec<EscapeIssue>) -> String {
     let mut result = String::with_capacity(input.len());
     scan(
         input,
-        flavor,
+        literal,
         |piece| match piece {
             Piece::Char(c) => result.push(c),
             Piece::Byte(b) => result.push(char::from(b)),
@@ -290,7 +324,7 @@ fn decode_str(input: &str, flavor: Flavor, issues: &mut Vec<EscapeIssue>) -> Str
 
 fn scan<'a>(
     input: &'a str,
-    flavor: Flavor,
+    literal: LiteralKind,
     mut emit: impl FnMut(Piece<'a>),
     issues: &mut Vec<EscapeIssue>,
 ) {
@@ -300,7 +334,7 @@ fn scan<'a>(
             // BEP-049 §AA (TS parity): normalize line endings in backtick
             // literal text. `\r\n` → `\n`, lone `\r` → `\n`. Mirrors
             // typescript-go's scanner (scanner.go:1650-1660).
-            if flavor == Flavor::Backtick && c == '\r' {
+            if literal == LiteralKind::Backtick && c == '\r' {
                 i += if input[i + 1..].starts_with('\n') {
                     2
                 } else {
@@ -309,11 +343,13 @@ fn scan<'a>(
                 emit(Piece::Char('\n'));
                 continue;
             }
-            if flavor == Flavor::Bytes && !c.is_ascii() {
+            if literal == LiteralKind::Bytes && !c.is_ascii() {
                 issues.push(EscapeIssue {
                     start: i,
                     len: c.len_utf8(),
+                    text: c.to_string(),
                     kind: EscapeIssueKind::NonAsciiInByteString(c),
+                    literal,
                 });
             }
             emit(Piece::Char(c));
@@ -321,7 +357,7 @@ fn scan<'a>(
             continue;
         }
 
-        let len = match decode_escape(&input[i..], flavor) {
+        let len = match decode_escape(&input[i..], literal) {
             Ok((piece, len)) => {
                 emit(piece);
                 len
@@ -330,7 +366,9 @@ fn scan<'a>(
                 issues.push(EscapeIssue {
                     start: i,
                     len,
+                    text: input[i..i + len].to_string(),
                     kind,
+                    literal,
                 });
                 emit(Piece::Verbatim(&input[i..i + len]));
                 len
@@ -344,7 +382,7 @@ fn scan<'a>(
 /// decoded piece, or the issue, along with the byte length of the sequence.
 fn decode_escape(
     s: &str,
-    flavor: Flavor,
+    literal: LiteralKind,
 ) -> Result<(Piece<'static>, usize), (EscapeIssueKind, usize)> {
     let rest = &s[1..];
     let Some(c) = rest.chars().next() else {
@@ -372,7 +410,7 @@ fn decode_escape(
                 return Err((EscapeIssueKind::InvalidHex, 2 + digits));
             }
             let byte = u8::from_str_radix(&rest[1..3], 16).expect("validated hex");
-            if flavor == Flavor::Bytes {
+            if literal == LiteralKind::Bytes {
                 Ok((Piece::Byte(byte), 4))
             } else if byte.is_ascii() {
                 Ok((Piece::Char(char::from(byte)), 4))
@@ -382,7 +420,7 @@ fn decode_escape(
         }
         'u' => {
             let decoded = decode_unicode_escape(s);
-            if flavor == Flavor::Bytes {
+            if literal == LiteralKind::Bytes {
                 let len = match &decoded {
                     Ok((_, len)) | Err((_, len)) => *len,
                 };
@@ -629,8 +667,6 @@ mod tests {
             issue_spans(r"\N{GRINNING FACE}!"),
             vec![r"\N{GRINNING FACE}"]
         );
-        let message = EscapeIssueKind::LongUnicode.to_string();
-        assert!(message.contains(r"\u{...}"), "{message}");
     }
 
     #[test]
@@ -651,8 +687,6 @@ mod tests {
         assert_eq!(issue_spans(r"a\d+b\é"), vec![r"\d", r"\é"]);
         // Unknown escapes are kept verbatim by the lenient decoder.
         assert_eq!(unescape_string_literal(r"\d+"), r"\d+");
-        let message = EscapeIssueKind::Unknown('d').to_string();
-        assert!(message.contains(r"`\\d`"), "{message}");
     }
 
     #[test]
@@ -660,8 +694,6 @@ mod tests {
         assert_eq!(issue_kinds("a\\\nb"), vec![EscapeIssueKind::Unknown('\n')]);
         // The span stops at the backslash so it stays on one line.
         assert_eq!(issue_spans("a\\\nb"), vec!["\\"]);
-        let message = EscapeIssueKind::Unknown('\n').to_string();
-        assert!(message.contains("a newline"), "{message}");
     }
 
     #[test]
@@ -687,19 +719,25 @@ mod tests {
         assert_eq!(unescape_backtick_string_literal(r"a\`b"), "a`b");
         assert_eq!(unescape_backtick_string_literal(r"a\${x}b"), "a${x}b");
         assert_eq!(unescape_backtick_string_literal(r"\u{1F600}"), "😀");
+        let issues: Vec<_> = backtick_string_literal_escape_issues(r"\d \v")
+            .into_iter()
+            .map(|issue| (issue.start, issue.text, issue.kind, issue.literal))
+            .collect();
         assert_eq!(
-            backtick_string_literal_escape_issues(r"\d \v"),
+            issues,
             vec![
-                EscapeIssue {
-                    start: 0,
-                    len: 2,
-                    kind: EscapeIssueKind::Unknown('d')
-                },
-                EscapeIssue {
-                    start: 3,
-                    len: 2,
-                    kind: EscapeIssueKind::Unknown('v')
-                },
+                (
+                    0,
+                    r"\d".to_string(),
+                    EscapeIssueKind::Unknown('d'),
+                    LiteralKind::Backtick
+                ),
+                (
+                    3,
+                    r"\v".to_string(),
+                    EscapeIssueKind::Unknown('v'),
+                    LiteralKind::Backtick
+                ),
             ]
         );
     }
@@ -754,7 +792,6 @@ mod tests {
                 utf8: Some(vec![0xC3, 0xA9])
             }
         );
-        assert!(issues[0].kind.to_string().contains(r"`\xC3\xA9`"));
         assert_eq!(issues[0].len, r"\u{E9}".len());
         assert_eq!(
             byte_string_literal_escape_issues(r"\u{}")[0].kind,
@@ -763,10 +800,52 @@ mod tests {
         let issues = byte_string_literal_escape_issues("aé");
         assert_eq!(issues[0].kind, EscapeIssueKind::NonAsciiInByteString('é'));
         assert_eq!((issues[0].start, issues[0].len), (1, 2));
-        assert!(issues[0].kind.to_string().contains(r"`\xC3\xA9`"));
         assert_eq!(
             byte_string_literal_escape_issues(r"\d")[0].kind,
             EscapeIssueKind::Unknown('d')
+        );
+    }
+
+    fn message(issues: &[EscapeIssue]) -> String {
+        let [issue] = issues else {
+            panic!("expected one issue, got {issues:?}");
+        };
+        issue.to_string()
+    }
+
+    #[test]
+    fn messages_quote_in_the_literals_own_syntax() {
+        assert_eq!(
+            message(&string_literal_escape_issues(r"\d")),
+            r#"unknown escape sequence "\d" - did you mean "\\d" (escaped backslash) or r"\d" (raw string)?"#
+        );
+        assert_eq!(
+            message(&backtick_string_literal_escape_issues(r"\d")),
+            r#"unknown escape sequence `\d` - did you mean `\\d` (escaped backslash)?"#
+        );
+        assert_eq!(
+            message(&byte_string_literal_escape_issues(r"\d")),
+            r#"unknown escape sequence b"\d" - did you mean b"\\d" (escaped backslash)?"#
+        );
+        assert_eq!(
+            message(&string_literal_escape_issues("a\\\nb")),
+            r#"unknown escape sequence: "\" followed by a newline - did you mean "\\" (escaped backslash)? BAML has no line continuations."#
+        );
+        assert_eq!(
+            message(&string_literal_escape_issues(r"\U0001F600")),
+            r#"unsupported escape sequence "\U0001F600" - use "\u{...}" for a Unicode code point"#
+        );
+        assert_eq!(
+            message(&backtick_string_literal_escape_issues(r"\N{GRINNING FACE}")),
+            r#"unsupported escape sequence `\N{GRINNING FACE}` - use `\u{...}` for a Unicode code point"#
+        );
+        assert_eq!(
+            message(&byte_string_literal_escape_issues(r"\u{E9}")),
+            r#"invalid escape sequence b"\u{E9}" - byte strings can't contain Unicode escapes; did you mean b"\xC3\xA9" (UTF-8 bytes)?"#
+        );
+        assert_eq!(
+            message(&byte_string_literal_escape_issues("é")),
+            r#"non-ASCII character b"é" in byte string - did you mean b"\xC3\xA9" (UTF-8 bytes)?"#
         );
     }
 }

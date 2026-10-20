@@ -279,21 +279,21 @@ test "byte strings decode the string escapes" {
 test "unicode escapes in byte strings suggest UTF-8 bytes" {
     root.compiler.AssertHasMessage(
         { "main.baml": `function f() -> uint8array { b"\\u{E9}" }` },
-        "write the UTF-8 bytes `\\xC3\\xA9`",
+        "did you mean b\"\\xC3\\xA9\" (UTF-8 bytes)?",
     )
 }
 
 test "non-ASCII characters in byte strings suggest UTF-8 bytes" {
     root.compiler.AssertHasMessage(
         { "main.baml": `function f() -> uint8array { b"é" }` },
-        "write its UTF-8 bytes `\\xC3\\xA9`",
+        "non-ASCII character b\"é\" in byte string",
     )
 }
 
 test "unknown escapes in byte strings are compile errors" {
     root.compiler.AssertHasMessage(
         { "main.baml": `function f() -> uint8array { b"\\d" }` },
-        "write `\\\\d` for a literal backslash",
+        "did you mean b\"\\\\d\" (escaped backslash)?",
     );
     root.compiler.AssertHasCode({ "main.baml": `function f() -> uint8array { b"\\v" }` }, "E0109")
 }

@@ -315,10 +315,8 @@ fn check_string_escapes(root: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) 
     let mut report = |body_start: text_size::TextSize, issues: Vec<EscapeIssue>| {
         for issue in issues {
             let start = body_start + offset(issue.start);
-            diags.push(LoweringDiagnostic::InvalidStringEscape {
-                kind: issue.kind,
-                span: text_size::TextRange::new(start, start + offset(issue.len)),
-            });
+            let span = text_size::TextRange::new(start, start + offset(issue.len));
+            diags.push(LoweringDiagnostic::InvalidStringEscape { issue, span });
         }
     };
 

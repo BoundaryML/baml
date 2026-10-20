@@ -108,7 +108,7 @@ pub enum LoweringDiagnostic {
     /// malformed escape sequence, or a byte string contains a non-ASCII
     /// character.
     InvalidStringEscape {
-        kind: baml_base::escape::EscapeIssueKind,
+        issue: baml_base::escape::EscapeIssue,
         span: TextRange,
     },
 
@@ -449,12 +449,12 @@ impl LoweringDiagnostic {
                 *span,
                 "missing options",
             ),
-            LoweringDiagnostic::InvalidStringEscape { kind, span } => (
+            LoweringDiagnostic::InvalidStringEscape { issue, span } => (
                 DiagnosticId::InvalidStringEscape,
                 Severity::Error,
-                kind.to_string(),
+                issue.to_string(),
                 *span,
-                kind.label(),
+                issue.kind.label(),
             ),
             LoweringDiagnostic::InstanceofRemoved { span } => (
                 DiagnosticId::RemovedFeature,

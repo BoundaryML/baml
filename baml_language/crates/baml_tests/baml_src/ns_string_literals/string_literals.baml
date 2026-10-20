@@ -155,15 +155,15 @@ test "surrogate pairs combine in any form" {
 test "malformed hex and unicode escapes are compile errors" {
     root.compiler.AssertHasMessage(
         { "main.baml": `function f() -> string { "\\xE9" }` },
-        "out of range `\\xE9` escape",
+        "out of range escape sequence \"\\xE9\"",
     );
     root.compiler.AssertHasMessage(
         { "main.baml": `function f() -> string { "\\x4" }` },
-        "expected exactly two hex digits",
+        "must be followed by exactly two hex digits",
     );
     root.compiler.AssertHasMessage(
         { "main.baml": `function f() -> string { "\\u12" }` },
-        "invalid `\\u` escape",
+        "invalid escape sequence \"\\u12\"",
     );
     root.compiler.AssertHasMessage(
         { "main.baml": `function f() -> string { "\\u{110000}" }` },
@@ -171,11 +171,11 @@ test "malformed hex and unicode escapes are compile errors" {
     );
     root.compiler.AssertHasMessage(
         { "main.baml": `function f() -> string { "\\u{_41}" }` },
-        "`_` is only allowed between hex digits",
+        "underscores are only allowed between hex digits",
     );
     root.compiler.AssertHasMessage(
         { "main.baml": `function f() -> string { "\\u{41_}" }` },
-        "`_` is only allowed between hex digits",
+        "underscores are only allowed between hex digits",
     );
     root.compiler.AssertHasMessage(
         { "main.baml": "function f() -> string { `\\u{}` }" },
@@ -201,11 +201,11 @@ test "unpaired surrogates are compile errors" {
 test "Python unicode escapes are compile errors that suggest braced escapes" {
     root.compiler.AssertHasMessage(
         { "main.baml": `function f() -> string { "\\U0001F600" }` },
-        "`\\U` escapes are not supported; use `\\u{...}`",
+        "unsupported escape sequence \"\\U0001F600\" - use \"\\u{...}\"",
     );
     root.compiler.AssertHasMessage(
         { "main.baml": `function f() -> string { "\\N{GRINNING FACE}" }` },
-        "`\\N{...}` escapes are not supported; use `\\u{...}`",
+        "unsupported escape sequence \"\\N{GRINNING FACE}\" - use \"\\u{...}\"",
     )
 }
 
@@ -214,7 +214,7 @@ test "unknown escapes are compile errors that suggest a literal backslash" {
         { "main.baml": `function f() -> string { "\\d+" }` },
         root.compiler.ExactDiagnostic {
             code: "E0109",
-            message: "unknown escape sequence `\\d`; write `\\\\d` for a literal backslash: unknown escape",
+            message: "unknown escape sequence \"\\d\" - did you mean \"\\\\d\" (escaped backslash) or r\"\\d\" (raw string)?: unknown escape",
         },
     );
     for (let escape in ["\\v", "\\a", "\\e", "\\101", "\\q"]) {
@@ -226,7 +226,7 @@ test "unknown escapes are compile errors that suggest a literal backslash" {
 test "a backslash before a line break is not a line continuation" {
     root.compiler.AssertHasMessage(
         { "main.baml": "function f() -> string {\n  \"a\\\nb\"\n}" },
-        "`\\` followed by a newline",
+        "\"\\\" followed by a newline",
     );
     root.compiler.AssertHasMessage(
         { "main.baml": "function f() -> string {\n  `a\\\nb`\n}" },
