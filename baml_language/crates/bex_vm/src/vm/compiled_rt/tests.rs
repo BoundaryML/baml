@@ -1312,3 +1312,83 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
         assert_eq!(head.ptr(), moved);
     }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn fiber_stacks_are_pooled_once_their_bodies_complete() {
+    use smallvec::smallvec;
+
+    use crate::compiled_rt::{
+        Request, Step,
+        fiber::{Fiber, POOL_LIMIT, StackPool},
+    };
+
+    static POOL: StackPool = StackPool::new();
+
+    #[allow(clippy::unnecessary_wraps)]
+    fn done(_: &mut BexVm, _: &[Value]) -> Result<Value, Box<VmError>> {
+        Ok(Value::int(1))
+    }
+    fn parked(vm: &mut BexVm, _: &[Value]) -> Result<Value, Box<VmError>> {
+        vm.suspend(Step::Yield)
+    }
+
+    let program = baml_test_support::compile_source("function Main() -> int { 1 }");
+    let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+
+    // A body that returned leaves the fiber idle; dropping it pools the stack.
+    vm.compiled.fiber = Some(Fiber::with_pool(&POOL));
+    let floor = vm.compiled.fiber.as_ref().unwrap().floor();
+    assert!(matches!(
+        vm.enter_compiled(done, smallvec![]),
+        Request::Done(Ok(value)) if value == Value::int(1)
+    ));
+    assert_eq!(vm.compiled.fiber.as_ref().unwrap().bodies(), 0);
+    vm.compiled.fiber = None;
+    assert_eq!(POOL.len(), 1);
+
+    // The next fiber takes the pooled stack, and its floor is computed from it.
+    let fiber = Fiber::with_pool(&POOL);
+    assert_eq!(POOL.len(), 0);
+    assert_eq!(fiber.floor(), floor);
+    // A fiber never entered pools its stack too.
+    drop(fiber);
+    assert_eq!(POOL.len(), 1);
+
+    // A waiting body keeps frames on the stack, so the stack is unwound and
+    // unmapped rather than pooled.
+    vm.compiled.fiber = Some(Fiber::with_pool(&POOL));
+    assert_eq!(POOL.len(), 0);
+    assert!(matches!(
+        vm.enter_compiled(parked, smallvec![]),
+        Request::Step(Step::Yield)
+    ));
+    assert_eq!(vm.compiled.fiber.as_ref().unwrap().bodies(), 1);
+    vm.compiled.fiber = None;
+    assert_eq!(POOL.len(), 0);
+
+    // A nested body that returns leaves the outer one counted.
+    vm.compiled.fiber = Some(Fiber::with_pool(&POOL));
+    assert!(matches!(
+        vm.enter_compiled(parked, smallvec![]),
+        Request::Step(Step::Yield)
+    ));
+    assert!(matches!(
+        vm.enter_compiled(done, smallvec![]),
+        Request::Done(Ok(_))
+    ));
+    assert_eq!(vm.compiled.fiber.as_ref().unwrap().bodies(), 1);
+    assert!(matches!(
+        vm.resume_body(Ok(Value::NULL)),
+        Request::Done(Ok(value)) if value.is_null()
+    ));
+    assert_eq!(vm.compiled.fiber.as_ref().unwrap().bodies(), 0);
+    vm.compiled.fiber = None;
+    assert_eq!(POOL.len(), 1);
+
+    // The pool is bounded; stacks beyond the limit are unmapped.
+    let fibers: Vec<_> = (0..=POOL_LIMIT).map(|_| Fiber::with_pool(&POOL)).collect();
+    assert_eq!(POOL.len(), 0);
+    drop(fibers);
+    assert_eq!(POOL.len(), POOL_LIMIT);
+}
