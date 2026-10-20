@@ -208,7 +208,10 @@ use sha2::{Digest, Sha256};
 /// against the `PANIC` pseudo-tag (`baml_type::typetag::PANIC`), so the
 /// discriminants of every opcode declared after `TypeTag` shifted down by
 /// one.
-pub const FORMAT_VERSION: u32 = 22;
+///
+/// Version 23: `FunctionMeta::Llm` lost its `client` string and marks every
+/// LLM function, including one whose client is an expression.
+pub const FORMAT_VERSION: u32 = 23;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
