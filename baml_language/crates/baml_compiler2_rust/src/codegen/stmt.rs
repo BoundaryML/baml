@@ -8,7 +8,7 @@ use baml_compiler2_mir::{
 use super::{Expr, Gen, Generator, YIELD_EVERY, pc_arg, unsupported};
 use crate::{
     admit::Rejection,
-    analysis::{Repr, array_iter_call, array_next_call},
+    analysis::{Repr, array_iter_walk, array_next_call},
     render::coerce,
     structure::Stmt,
 };
@@ -356,7 +356,12 @@ impl<'db> Generator<'_, 'db> {
         terminator: &Terminator<'db>,
         destination: &Place,
     ) -> Gen<()> {
-        if let Some((iter, array)) = array_iter_call(self.body, self.analysis.arity, terminator) {
+        if let Some((iter, array)) = array_iter_walk(
+            self.body,
+            self.analysis.arity,
+            terminator,
+            &self.analysis.array_iters,
+        ) {
             let array = coerce(&format!("l{array}"), self.repr(Local(array)), Repr::Value);
             self.emit_statement(&format!("l{iter} = {array}; i{iter} = 0;"));
         } else if let Some(iter) = array_next_call(terminator, &self.analysis.array_iters) {
@@ -392,9 +397,6 @@ impl<'db> Generator<'_, 'db> {
         let block = &self.body.blocks[id.0];
         match block.terminator.as_ref().expect("checked in Analysis") {
             Terminator::Return => {
-                if self.analysis.array_iters.contains_key(&0) {
-                    return unsupported("array iterator used as a value");
-                }
                 // Type locals have no runtime binding.
                 let result = if self.analysis.is_type_local(0) {
                     self.load(id, &Place::Local(Local(0)))?.code

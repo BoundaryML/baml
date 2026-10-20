@@ -19,7 +19,7 @@ use baml_compiler2_mir::{
 use crate::{
     admit::{Positions, ProgramIndex, Rejection},
     analysis::{
-        Analysis, Repr, array_iter_call, array_next_call, loops, reads_frame, realized_expr,
+        Analysis, Repr, array_iter_walk, array_next_call, loops, reads_frame, realized_expr,
         suspends_directly, template_blocker, user_callee,
     },
     render::{coerce, is_atom},
@@ -792,7 +792,13 @@ impl<'db> Generator<'_, 'db> {
 
     /// Array iteration is inline; other virtual calls can suspend.
     pub(super) fn array_iteration(&self, terminator: &Terminator<'db>) -> bool {
-        array_iter_call(self.body, self.analysis.arity, terminator).is_some()
+        array_iter_walk(
+            self.body,
+            self.analysis.arity,
+            terminator,
+            &self.analysis.array_iters,
+        )
+        .is_some()
             || array_next_call(terminator, &self.analysis.array_iters).is_some()
     }
 

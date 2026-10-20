@@ -727,6 +727,90 @@ function first(xs: int[]) -> int {
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
 
+/// A loop that alone consumes an array's iterator walks the array by index:
+/// no `ArrayIterator` is built and no virtual call is dispatched.
+#[test]
+fn a_local_loop_over_an_array_is_an_index_walk() {
+    let module = compile(
+        r#"
+function total(xs: int[]) -> int {
+  let total = 0;
+  for (let v in xs) { total += v; }
+  total
+}
+"#,
+    );
+    let body = body_of(&module, "user.total")
+        .split_whitespace()
+        .collect::<String>();
+    assert!(body.contains("vm.load_array_element("), "{body}");
+    assert!(body.contains("vm.container_len("), "{body}");
+    assert!(!body.contains("vm.virtual_target("), "{body}");
+    assert!(!body.contains("ArrayIterator"), "{body}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
+/// An array's iterator used as a value (passed on, adapted, or consumed
+/// after the source changed) is the `ArrayIterator` the dispatch builds, so
+/// the function compiles with that call dispatched rather than being
+/// rejected. A loop in the same body that alone consumes its own iterator
+/// still walks by index.
+#[test]
+fn an_escaping_array_iterator_is_dispatched() {
+    let module = compile(
+        r#"
+function sum_of(it: baml.iter.Iterator<Item = int, Error = never>) -> int {
+  let total = 0;
+  for (let v in it) { total += v; }
+  total
+}
+
+function passed(xs: int[]) -> int {
+  sum_of(xs.iter())
+}
+
+function chained() -> int[] {
+  [1, 2].iter().chain([3, 4]).collect()
+}
+
+function lazy(xs: int[]) -> int {
+  let it = xs.iter();
+  xs.push(10);
+  sum_of(it)
+}
+
+function mixed(xs: int[]) -> int {
+  let total = 0;
+  for (let v in xs) { total += v; }
+  total + sum_of(xs.iter())
+}
+"#,
+    );
+    for name in ["user.passed", "user.chained", "user.lazy"] {
+        let body = body_of(&module, name)
+            .split_whitespace()
+            .collect::<String>();
+        assert!(body.contains("vm.virtual_target("), "{name}: {body}");
+        assert!(!body.contains("vm.container_len("), "{name}: {body}");
+        assert!(!body.contains("vm.load_array_element("), "{name}: {body}");
+    }
+    let body = body_of(&module, "user.mixed")
+        .split_whitespace()
+        .collect::<String>();
+    assert!(body.contains("vm.virtual_target("), "{body}");
+    assert!(body.contains("vm.container_len("), "{body}");
+    assert!(body.contains("vm.load_array_element("), "{body}");
+    assert!(
+        !module
+            .rejected
+            .iter()
+            .any(|(_, why)| matches!(why, Rejection::Unsupported(r) | Rejection::Invalid(r) if r == "array iterator used as a value")),
+        "{:?}",
+        module.rejected
+    );
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
 /// A namespace `Foo` with a function `m` and a class `Foo` with a method `m`
 /// render alike (`user.Foo.m`). The backend binds a function by its identity
 /// in the program, so each compiles against its own object, and the name the

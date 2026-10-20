@@ -44,8 +44,9 @@ impl<'db> Generator<'_, 'db> {
                         Repr::Value,
                     ));
                 }
+                // The analysis keeps only iterators the loop alone consumes.
                 if self.analysis.array_iters.contains_key(&local.0) {
-                    return unsupported("array iterator used as a value");
+                    return Err(Rejection::Invalid("array iterator used as a value".into()));
                 }
                 Ok(Expr::new(format!("l{}", local.0), self.repr(*local)))
             }

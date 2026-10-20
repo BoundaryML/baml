@@ -219,6 +219,12 @@ fn type_locals(index: &ProgramIndex, body: &MirFunctionBody<'_>) -> TypeLocals {
     }
 }
 
+/// Array iterators a loop consumes in place, as iterator local to array
+/// local. The index walk stands in for the `ArrayIterator` only while the
+/// iterator local is nothing but the loop's `next` receiver: one that
+/// escapes (passed on, adapted, copied, captured, stored, reassigned) is the
+/// real object the dispatch builds, and its `iter` and `next` calls go
+/// through the VM like any other virtual call.
 fn array_iterators(body: &MirFunctionBody<'_>, arity: usize) -> BTreeMap<usize, usize> {
     let mut array_iters = BTreeMap::new();
     for block in &body.blocks {
@@ -228,8 +234,158 @@ fn array_iterators(body: &MirFunctionBody<'_>, arity: usize) -> BTreeMap<usize, 
             array_iters.insert(iter, array);
         }
     }
-
     array_iters
+        .retain(|&iter, _| !body.locals[iter].is_captured && !iter_escapes(body, arity, iter));
+    array_iters
+}
+
+/// Whether `iter` is mentioned anywhere but as the destination of its own
+/// `xs.iter()` call or the receiver of a `next` call.
+fn iter_escapes(body: &MirFunctionBody<'_>, arity: usize, iter: usize) -> bool {
+    body.blocks.iter().any(|block| {
+        block
+            .statements
+            .iter()
+            .any(|statement| statement_mentions(&statement.kind, iter))
+            || block.terminator.as_ref().is_some_and(|terminator| {
+                array_iter_call(body, arity, terminator).is_none_or(|(dest, _)| dest != iter)
+                    && array_next_shape(terminator) != Some(iter)
+                    && terminator_mentions(terminator, iter)
+            })
+    })
+}
+
+fn place_mentions(place: &Place, local: usize) -> bool {
+    match place {
+        Place::Local(l) => l.0 == local,
+        Place::Field { base, .. } => place_mentions(base, local),
+        Place::Index { base, index, .. } => index.0 == local || place_mentions(base, local),
+        Place::Capture(_) => false,
+        Place::Deref(cell) => cell.local().is_some_and(|l| l.0 == local),
+    }
+}
+
+fn operand_mentions(operand: &Operand<'_>, local: usize) -> bool {
+    match operand {
+        Operand::Copy(place) | Operand::Move(place) => place_mentions(place, local),
+        Operand::Constant(_) => false,
+    }
+}
+
+fn statement_mentions(statement: &StatementKind<'_>, local: usize) -> bool {
+    let operands = |operands: &[Operand<'_>]| operands.iter().any(|o| operand_mentions(o, local));
+    match statement {
+        StatementKind::Assign { destination, value } => {
+            place_mentions(destination, local)
+                || match value {
+                    Rvalue::Use(operand)
+                    | Rvalue::UnaryOp { operand, .. }
+                    | Rvalue::IsType { operand, .. }
+                    | Rvalue::IsTypeTag { operand, .. }
+                    | Rvalue::SatisfiesBound { ty: operand, .. }
+                    | Rvalue::MakeBoundMethod {
+                        receiver: operand, ..
+                    }
+                    | Rvalue::MakeVirtualBoundMethod {
+                        receiver: operand, ..
+                    }
+                    | Rvalue::VirtualFieldAccess {
+                        receiver: operand, ..
+                    }
+                    | Rvalue::MakeGenericFunctionFromValue { value: operand, .. } => {
+                        operand_mentions(operand, local)
+                    }
+                    Rvalue::BinaryOp { left, right, .. } => {
+                        operand_mentions(left, local) || operand_mentions(right, local)
+                    }
+                    Rvalue::Array(_, elements)
+                    | Rvalue::Aggregate {
+                        fields: elements, ..
+                    }
+                    | Rvalue::MakeClosure {
+                        captures: elements, ..
+                    }
+                    | Rvalue::MakeVirtualFunction {
+                        type_args: elements,
+                        ..
+                    } => operands(elements),
+                    Rvalue::Map(_, _, entries) => entries
+                        .iter()
+                        .any(|(k, v)| operand_mentions(k, local) || operand_mentions(v, local)),
+                    Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
+                        place_mentions(place, local)
+                    }
+                    Rvalue::TraceHookSettings { .. }
+                    | Rvalue::Uint8Array(_)
+                    | Rvalue::MakeGenericFunction { .. }
+                    | Rvalue::LoadType(_)
+                    | Rvalue::CurrentPackage => false,
+                }
+        }
+        // A drop ends the local without using its value.
+        StatementKind::Drop(_) | StatementKind::Nop => false,
+        StatementKind::FreshCell { local: l, .. } => l.0 == local,
+        StatementKind::Intrinsic { args, .. } => operands(args),
+        StatementKind::VirtualFieldStore {
+            receiver, value, ..
+        } => operand_mentions(receiver, local) || operand_mentions(value, local),
+    }
+}
+
+fn terminator_mentions(terminator: &Terminator<'_>, local: usize) -> bool {
+    let operands = |operands: &[Operand<'_>]| operands.iter().any(|o| operand_mentions(o, local));
+    match terminator {
+        Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => false,
+        Terminator::Branch { condition, .. } => operand_mentions(condition, local),
+        Terminator::NarrowBind {
+            source,
+            destination,
+            ..
+        } => operand_mentions(source, local) || destination.0 == local,
+        Terminator::Switch { discriminant, .. } => operand_mentions(discriminant, local),
+        Terminator::Call {
+            callee,
+            args,
+            destination,
+            ..
+        } => {
+            operand_mentions(callee, local) || operands(args) || place_mentions(destination, local)
+        }
+        Terminator::VirtualCall {
+            args, destination, ..
+        } => operands(args) || place_mentions(destination, local),
+        Terminator::SysOp {
+            callee,
+            args,
+            destination,
+            ..
+        } => {
+            operand_mentions(callee, local) || operands(args) || place_mentions(destination, local)
+        }
+        Terminator::Spawn { plan, future, .. } => {
+            operand_mentions(plan, local) || place_mentions(future, local)
+        }
+        Terminator::Await {
+            future,
+            destination,
+            ..
+        } => place_mentions(future, local) || place_mentions(destination, local),
+        Terminator::AwaitAny {
+            futures,
+            destination,
+            ..
+        } => operand_mentions(futures, local) || place_mentions(destination, local),
+        Terminator::Throw { value } => operand_mentions(value, local),
+        Terminator::Rethrow { value, context }
+        | Terminator::ThrowIfPanic { value, context, .. } => {
+            operand_mentions(value, local) || operand_mentions(context, local)
+        }
+        Terminator::ShortCircuit {
+            operand,
+            destination,
+            ..
+        } => operand_mentions(operand, local) || place_mentions(destination, local),
+    }
 }
 
 struct BodyFlow {
@@ -257,7 +413,7 @@ fn body_flow<'db>(
                 block.id
             )));
         };
-        let array_iteration = array_iter_call(body, arity, terminator).is_some()
+        let array_iteration = array_iter_walk(body, arity, terminator, array_iters).is_some()
             || array_next_call(terminator, array_iters).is_some();
         flows.push(flow_of(terminator));
         unwinds.push(block.unwind.map(|b| b.0));
@@ -401,11 +557,19 @@ pub(crate) fn array_iter_call(
     .then_some((iter.0, array.0))
 }
 
-/// `it.next()` on an array iterator, as the iterator local.
-pub(crate) fn array_next_call(
+/// An `xs.iter()` call compiled as an index walk: [`array_iter_call`] on an
+/// iterator in `array_iters`.
+pub(crate) fn array_iter_walk(
+    body: &MirFunctionBody<'_>,
+    arity: usize,
     terminator: &Terminator<'_>,
     array_iters: &BTreeMap<usize, usize>,
-) -> Option<usize> {
+) -> Option<(usize, usize)> {
+    array_iter_call(body, arity, terminator).filter(|(iter, _)| array_iters.contains_key(iter))
+}
+
+/// `it.next()` on a local, as that local.
+fn array_next_shape(terminator: &Terminator<'_>) -> Option<usize> {
     let Terminator::VirtualCall {
         has_trace: false,
         method,
@@ -421,7 +585,16 @@ pub(crate) fn array_next_call(
     else {
         return None;
     };
-    (method == "next" && array_iters.contains_key(&iter.0)).then_some(iter.0)
+    (method == "next").then_some(iter.0)
+}
+
+/// `it.next()` on an array iterator compiled as an index walk, as the
+/// iterator local.
+pub(crate) fn array_next_call(
+    terminator: &Terminator<'_>,
+    array_iters: &BTreeMap<usize, usize>,
+) -> Option<usize> {
+    array_next_shape(terminator).filter(|iter| array_iters.contains_key(iter))
 }
 
 fn flow_of(terminator: &Terminator<'_>) -> Flow {

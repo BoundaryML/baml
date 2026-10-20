@@ -186,3 +186,42 @@ function Depth() -> void {
     let second = string.from(Sized(5));
     baml.io.println(`${first}:${second}`);
 }
+
+function SumIter(it: baml.iter.Iterator<Item = int, Error = never>) -> int {
+    let total = 0;
+    for (let v in it) {
+        total += v;
+    }
+    total
+}
+
+// A plain loop walks the array by index; an iterator that escapes (passed
+// on, adapted, or consumed after the source grew) is the real object. Both
+// observe pushes to the source during iteration.
+function Iterators() -> void {
+    let xs = [1, 2, 3];
+    let plain = 0;
+    for (let v in xs) {
+        plain += v;
+    }
+    let passed = SumIter(xs.iter());
+    let chained = xs.iter().chain([4, 5]).map((v: int) -> int { v * 10 }).collect();
+    let chained_total = 0;
+    for (let v in chained) {
+        chained_total += v;
+    }
+    let late = xs.iter();
+    xs.push(4);
+    let lazy = SumIter(late);
+    let grown = [1, 2];
+    let seen = 0;
+    for (let v in grown) {
+        if (grown.length() < 5) {
+            grown.push(v + 10);
+        }
+        seen += v;
+    }
+    baml.io.println(
+        `${plain}:${passed}:${chained.length()}:${chained_total}:${lazy}:${grown.length()}:${seen}`,
+    );
+}

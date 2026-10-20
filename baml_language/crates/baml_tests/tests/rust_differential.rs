@@ -18,6 +18,7 @@ const PROBES: &[&str] = &[
     "Allocation",
     "Logs",
     "Depth",
+    "Iterators",
 ];
 
 #[test]
