@@ -11,6 +11,8 @@ use std::sync::Arc;
 
 use baml_type::RuntimeTy;
 use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
+use bex_external_types::BexExternalAdt;
+use bex_vm_types::{MediaContent, MediaValue};
 use common::compile_for_engine;
 use indexmap::IndexMap;
 use sys_native::SysOpsExt;
@@ -33,6 +35,10 @@ const SOURCE: &str = r#"
     enum Weather { Happy }
     function happy_only(mood: Mood.Happy) -> int { 1 }
     function make_ids() -> int[] { [1, 2] }
+    class Label { n string }
+    function make_counter() -> Counter { Counter { n: 1 } }
+    function make_label() -> Label { Label { n: "one" } }
+    function pdf_mime(doc: pdf) -> string? { doc.mime_type() }
     function main() -> int { 0 }
 "#;
 
@@ -257,4 +263,45 @@ async fn enum_variant_param_requires_the_declared_member() {
         &["`happy_only`"],
     )
     .await;
+}
+
+#[tokio::test]
+async fn handle_to_another_class_is_rejected() {
+    let engine = engine();
+    let counter = call_on(&engine, "make_counter", vec![], false)
+        .await
+        .unwrap();
+    let label = call_on(&engine, "make_label", vec![], false).await.unwrap();
+    let out = call_on(&engine, "counter_plus", vec![counter], true)
+        .await
+        .unwrap();
+    assert_eq!(out, BexExternalValue::Int(2));
+    assert_mismatch(
+        call_on(&engine, "counter_plus", vec![label], true).await,
+        &["`handle`", "Counter"],
+    );
+}
+
+fn pdf() -> BexExternalValue {
+    BexExternalValue::Adt(BexExternalAdt::Media(Arc::new(MediaValue::new(
+        baml_type::MediaKind::Pdf,
+        MediaContent::Url {
+            url: "https://example.test/sample.pdf".to_string(),
+            base64_data: None,
+        },
+        Some("application/pdf".to_string()),
+    ))))
+}
+
+#[tokio::test]
+async fn media_and_class_slots_do_not_cross() {
+    let out = call("pdf_mime", vec![pdf()]).await.unwrap();
+    assert_eq!(out, BexExternalValue::String("application/pdf".into()));
+    assert_rejected("counter_plus", vec![pdf()], &["Counter"]).await;
+    let map = BexExternalValue::Map {
+        key_type: RuntimeTy::string(),
+        value_type: RuntimeTy::Unknown,
+        entries: IndexMap::from_iter([("_data".to_string(), pdf())]),
+    };
+    assert_rejected("pdf_mime", vec![map], &["`pdf_mime`"]).await;
 }

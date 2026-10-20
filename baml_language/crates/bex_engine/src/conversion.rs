@@ -1390,7 +1390,13 @@ impl BexEngine {
             runtime_named_objects,
         )?;
         if let Some((expected, carrier)) = landed_check
-            && !self.landed_kind_admitted(&holder.holder().vm, value, &expected)
+            && !self.landed_kind_admitted(
+                &holder.holder().vm,
+                holder.proof(),
+                InboundRuntimeOverlay::new(dynamic_classes, dynamic_enums, runtime_named_objects),
+                value,
+                &expected,
+            )
         {
             return Err(EngineError::TypeMismatch {
                 message: format!(
@@ -4333,13 +4339,15 @@ impl BexEngine {
             | RuntimeTy::Literal(..) => bex_external_types::validate_host_return(value, ty).is_ok(),
             RuntimeTy::List(_) => matches!(value, BexExternalValue::Array { .. }),
             RuntimeTy::Map { .. } => matches!(value, BexExternalValue::Map { .. }),
-            // A plain host object (`Map`) is promoted to an instance of the
-            // declared class during materialization; media arrives either as
-            // its ADT (opaque) or as the class-shaped wrapper.
-            RuntimeTy::Class(..) | RuntimeTy::Media(..) => matches!(
+            // Coercion promotes a plain host object (`Map`) to an instance of
+            // the declared class.
+            RuntimeTy::Class(..) => matches!(
                 value,
                 BexExternalValue::Instance { .. } | BexExternalValue::Map { .. }
             ),
+            // Media arrives as its ADT (opaque) or as the class-shaped wrapper,
+            // which coercion unwraps; nothing promotes a plain map to media.
+            RuntimeTy::Media(..) => matches!(value, BexExternalValue::Instance { .. }),
             // TypeScript string enums cross as their member's string value.
             // The VM type-checks enum operations on what lands, so admit it.
             RuntimeTy::Enum(_) => matches!(
@@ -4386,10 +4394,26 @@ impl BexEngine {
 
     /// Whether a landed opaque carrier ([`lands_opaque_object`]) — a resolved
     /// handle, a function reference, a reflected type, a media or prompt
-    /// wrapper — has a kind that can inhabit the declared slot `ty`. Such a
-    /// value's kind is known only once it has resolved to a VM value.
-    fn landed_kind_admitted(&self, vm: &BexVm, value: Value, ty: &RuntimeTy) -> bool {
+    /// wrapper — can inhabit the declared slot `ty`. Such a value's type is
+    /// known only once it has resolved to a VM value. Instances and variants
+    /// must be of the declared class or enum itself, resolved exactly as
+    /// materialization resolves wire names; a declaration that does not
+    /// resolve is left unchecked.
+    fn landed_kind_admitted(
+        &self,
+        vm: &BexVm,
+        permit: PermitProof<'_>,
+        overlay: InboundRuntimeOverlay<'_>,
+        value: Value,
+        ty: &RuntimeTy,
+    ) -> bool {
         let object = value.as_object_ptr().map(|ptr| vm.get_object(ptr));
+        let is_declaration = |ptr: HeapPtr, name: &baml_type::TypeName, kind| match self
+            .resolve_inbound_declaration(vm, permit, &name.to_string(), overlay, kind)
+        {
+            Ok(Some(declared)) => ptr == declared,
+            _ => true,
+        };
         kind_admitted_by_declared(ty, &self.inbound_alias_view, &mut |ty| match ty {
             RuntimeTy::Null => value.is_null(),
             RuntimeTy::Bool | RuntimeTy::Literal(Literal::Bool(_), _) => value.as_bool().is_some(),
@@ -4406,12 +4430,44 @@ impl BexEngine {
             RuntimeTy::Uint8Array => matches!(object, Some(Object::Uint8Array(_))),
             RuntimeTy::List(_) => matches!(object, Some(Object::Array(_))),
             RuntimeTy::Map { .. } => matches!(object, Some(Object::Map(_))),
-            RuntimeTy::Class(..) | RuntimeTy::Media(..) => {
-                matches!(object, Some(Object::Instance(_)))
-            }
-            RuntimeTy::Enum(_) | RuntimeTy::EnumVariant(..) => {
-                matches!(object, Some(Object::Variant(_)))
-            }
+            RuntimeTy::Class(type_name, _) => match object {
+                Some(Object::Instance(instance)) => {
+                    is_declaration(instance.class, type_name, InboundDeclarationKind::Class)
+                }
+                _ => false,
+            },
+            RuntimeTy::Media(expected_kind) => match object {
+                Some(Object::Instance(instance)) => match vm.get_object(instance.class) {
+                    Object::Class(class) => self
+                        .stdlib_heads
+                        .media_kind(bex_vm_types::TypeHead::new(instance.class, class.type_tag))
+                        .is_some_and(|kind| {
+                            *expected_kind == baml_type::MediaKind::Generic
+                                || kind == *expected_kind
+                        }),
+                    _ => false,
+                },
+                _ => false,
+            },
+            RuntimeTy::Enum(type_name) => match object {
+                Some(Object::Variant(variant)) => {
+                    is_declaration(variant.enm, type_name, InboundDeclarationKind::Enum)
+                }
+                _ => false,
+            },
+            RuntimeTy::EnumVariant(type_name, expected_variant) => match object {
+                Some(Object::Variant(variant)) => {
+                    let named = match vm.get_object(variant.enm) {
+                        Object::Enum(enm) => enm
+                            .variants
+                            .get(variant.index)
+                            .is_some_and(|v| v.name == expected_variant.as_str()),
+                        _ => false,
+                    };
+                    named && is_declaration(variant.enm, type_name, InboundDeclarationKind::Enum)
+                }
+                _ => false,
+            },
             RuntimeTy::Function { .. } => matches!(
                 object,
                 Some(
