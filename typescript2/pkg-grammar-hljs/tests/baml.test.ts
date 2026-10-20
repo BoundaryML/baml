@@ -104,6 +104,25 @@ describe("BAML highlight.js language", () => {
     expect(keywordSpans).toEqual(["function", "let", "let"]);
   });
 
+  it("highlights only the escapes the compiler accepts", () => {
+    const escapes = (code: string) =>
+      [...hljs.highlight(code, { language: "baml" }).value.matchAll(
+        /<span class="hljs-char escape_">([^<]*)<\/span>/g,
+      )].map((m) => m[1]);
+
+    expect(escapes(String.raw`"\n\x41\u{1F600}\d\xE9"`)).toEqual([
+      String.raw`\n`,
+      String.raw`\x41`,
+      String.raw`\u{1F600}`,
+    ]);
+    expect(escapes(String.raw`b"\xFF\u{E9}"`)).toEqual([String.raw`\xFF`]);
+    // Raw strings have no escapes, and `\"` does not close them.
+    const raw = hljs.highlight(String.raw`let p = r"\d\"x"; p`, { language: "baml" });
+    expect(raw.value).toContain(
+      '<span class="hljs-string">r&quot;\\d\\&quot;x&quot;</span>',
+    );
+  });
+
   it("tracks nested braces inside backtick ${...} interpolation", () => {
     const code = 'let msg = `result: ${if ok { "yes" } else { "no" }} done`;';
 

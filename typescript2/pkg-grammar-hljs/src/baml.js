@@ -17,10 +17,11 @@ grammar (typescript2/pkg-grammar/src/baml.ts).
 Notable BAML shapes this definition covers:
   - declaration blocks: class / enum / interface / function / client<llm> /
     generator / retry_policy / template_string / test / testset / type
-  - raw strings #"..."# (1-3 hash levels) with Jinja {{ ... }} / {% ... %} /
-    {# ... #} template markup inside
+  - deprecated hash strings #"..."# (1-3 hash levels) with Jinja {{ ... }} /
+    {% ... %} / {# ... #} template markup inside
   - backtick strings `...` (1-3 tick levels) with ${ ... } interpolation
-  - byte strings b"..." with \xHH escapes
+  - byte strings b"..." with \xHH escapes, raw strings r"..."
+  - string escapes, matching the compiler
   - attributes @name(...) and @@name(...) as meta
   - env.VAR environment references
   - int / float / bigint (42n) numeric literals
@@ -196,15 +197,38 @@ export default function baml(hljs) {
   // Longest opener first so ###" is not consumed as #" with leading hashes.
   const RAW_STRINGS = [rawString(3), rawString(2), rawString(1)];
 
-  // Byte string: b"..." with \xHH, \n, \t, \r, \0, \\, \" escapes.
+  // Escapes, matching the compiler (baml_base::escape). Every literal kind
+  // shares one set; strings add ASCII \xHH and \uHHHH / \u{H...}, byte strings
+  // take any \xHH. Any other backslash pair is a compile error: it is consumed
+  // without a scope (no `illegal`, see above) so it stays plain string text.
+  const STRING_ESCAPE = {
+    scope: 'char.escape',
+    match:
+      /\\(?:[ntr0bf"\\'/`$]|x[0-7][0-9A-Fa-f]|u(?:[0-9A-Fa-f]{4}|\{[0-9A-Fa-f](?:[0-9A-Fa-f_]*[0-9A-Fa-f])?\}))/,
+    relevance: 0
+  };
+  const BYTE_ESCAPE = {
+    scope: 'char.escape',
+    match: /\\(?:[ntr0bf"\\'/`$]|x[0-9A-Fa-f]{2})/,
+    relevance: 0
+  };
+  const OTHER_BACKSLASH = { match: /\\./, relevance: 0 };
+
+  // Byte string: b"...".
   const BYTE_STRING = {
     scope: 'string',
     begin: /\bb"/,
     end: /"/,
-    contains: [
-      { scope: 'char.escape', match: /\\x[0-9A-Fa-f]{2}|\\[ntr0"\\]/ },
-      hljs.BACKSLASH_ESCAPE
-    ]
+    contains: [BYTE_ESCAPE, OTHER_BACKSLASH]
+  };
+
+  // Raw string: r"...". The body is verbatim, but a backslash keeps the next
+  // character (including `"`) from closing the literal.
+  const RAW_QUOTED_STRING = {
+    scope: 'string',
+    begin: /\br"/,
+    end: /"/,
+    contains: [OTHER_BACKSLASH]
   };
 
   // Plain double-quoted string. Prompt bodies may also be plain quoted
@@ -213,7 +237,7 @@ export default function baml(hljs) {
     scope: 'string',
     begin: /"/,
     end: /"/,
-    contains: [hljs.BACKSLASH_ESCAPE, ...JINJA_MODES],
+    contains: [STRING_ESCAPE, OTHER_BACKSLASH, ...JINJA_MODES],
     relevance: 0
   };
 
@@ -238,14 +262,14 @@ export default function baml(hljs) {
   };
 
   // Backtick strings: `...`, ``...``, ```...``` (multi-tick delimiters let a
-  // shorter tick run appear as content). Escapes add \` and \$.
+  // shorter tick run appear as content). Same escapes as quoted strings.
   const backtickString = (ticks) => {
     const t = '`'.repeat(ticks);
     return {
       scope: 'string',
       begin: t,
       end: t,
-      contains: [{ scope: 'char.escape', match: /\\./, relevance: 0 }, SUBST]
+      contains: [STRING_ESCAPE, OTHER_BACKSLASH, SUBST]
     };
   };
   const BACKTICK_STRINGS = [backtickString(3), backtickString(2), backtickString(1)];
@@ -361,6 +385,7 @@ export default function baml(hljs) {
       hljs.C_BLOCK_COMMENT_MODE,
       ...RAW_STRINGS,
       BYTE_STRING,
+      RAW_QUOTED_STRING,
       ...BACKTICK_STRINGS,
       QUOTED_STRING,
       CLIENT_LLM_DECL,

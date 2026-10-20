@@ -335,7 +335,7 @@ contexts:
         1: punctuation.definition.string.end.baml
       pop: true
     - include: backtick-interpolation
-    - include: backtick-string-escape
+    - include: string-escape
   backtick-string-1:
     - match: '(?<!\`)(\`{1})(?!\`)'
       captures:
@@ -348,7 +348,7 @@ contexts:
         1: punctuation.definition.string.end.baml
       pop: true
     - include: backtick-interpolation
-    - include: backtick-string-escape
+    - include: string-escape
   backtick-string-2:
     - match: '(?<!\`)(\`{2})(?!\`)'
       captures:
@@ -361,7 +361,7 @@ contexts:
         1: punctuation.definition.string.end.baml
       pop: true
     - include: backtick-interpolation
-    - include: backtick-string-escape
+    - include: string-escape
   backtick-string-3:
     - match: '(?<!\`)(\`{3})(?!\`)'
       captures:
@@ -374,7 +374,7 @@ contexts:
         1: punctuation.definition.string.end.baml
       pop: true
     - include: backtick-interpolation
-    - include: backtick-string-escape
+    - include: string-escape
   backtick-string-4:
     - match: '(?<!\`)(\`{4})(?!\`)'
       captures:
@@ -387,7 +387,7 @@ contexts:
         1: punctuation.definition.string.end.baml
       pop: true
     - include: backtick-interpolation
-    - include: backtick-string-escape
+    - include: string-escape
   backtick-string-5:
     - match: '(?<!\`)(\`{5})(?!\`)'
       captures:
@@ -400,7 +400,7 @@ contexts:
         1: punctuation.definition.string.end.baml
       pop: true
     - include: backtick-interpolation
-    - include: backtick-string-escape
+    - include: string-escape
   backtick-string-6:
     - match: '(?<!\`)(\`{6})(?!\`)'
       captures:
@@ -413,7 +413,7 @@ contexts:
         1: punctuation.definition.string.end.baml
       pop: true
     - include: backtick-interpolation
-    - include: backtick-string-escape
+    - include: string-escape
   backtick-string-7:
     - match: '(?<!\`)(\`{7})(?!\`)'
       captures:
@@ -426,17 +426,12 @@ contexts:
         1: punctuation.definition.string.end.baml
       pop: true
     - include: backtick-interpolation
-    - include: backtick-string-escape
+    - include: string-escape
   backtick-string-8:
     - match: '(?<!\`)(\`{8})(?!\`)'
       captures:
         1: punctuation.definition.string.begin.baml
       push: backtick-string-8--body
-  backtick-string-escape:
-    - include: string-escape-control
-    - include: string-escape-quoted-delimiter
-    - include: backtick-string-escape-delimiter
-    - include: string-escape-unknown
   backtick-string-escape-delimiter:
     - match: '\\[`$]'
       scope: constant.character.escape.delimiter.baml
@@ -517,22 +512,17 @@ contexts:
       push: break-statement--body
   byte-string-escape:
     - include: byte-string-escape-hex
-    - include: byte-string-escape-control
+    - include: string-escape-control
     - include: string-escape-quoted-delimiter
-    - include: byte-string-escape-invalid-hex
+    - include: backtick-string-escape-delimiter
     - include: byte-string-escape-invalid
-  byte-string-escape-control:
-    - match: '\\[ntr0]'
-      scope: constant.character.escape.control.baml
+    - include: byte-string-non-ascii
   byte-string-escape-hex:
     - match: '\\x[0-9A-Fa-f]{2}'
       scope: constant.character.escape.hex.baml
   byte-string-escape-invalid:
-    - match: '\\.'
+    - match: '\\(?:x[0-9A-Fa-f]?|u(?:\{[^}"\\]*\}?|[0-9A-Fa-f]{0,4})|.|$)'
       scope: invalid.illegal.escape.baml
-  byte-string-escape-invalid-hex:
-    - match: '\\x(?:[0-9A-Fa-f]{0,1}(?=["\\]|$)|[0-9A-Fa-f]?[^0-9A-Fa-f"\\])'
-      scope: invalid.illegal.escape.hex.baml
   byte-string-literal--body:
     - meta_scope: string.quoted.binary.double.baml
     - match: '"'
@@ -545,6 +535,9 @@ contexts:
         1: storage.type.string.baml
         2: punctuation.definition.string.begin.baml
       push: byte-string-literal--body
+  byte-string-non-ascii:
+    - match: '[^\x00-\x7F]+'
+      scope: invalid.illegal.character.baml
   call-arguments--body:
     - meta_scope: meta.function-call.arguments.baml
     - match: '\)'
@@ -1546,6 +1539,7 @@ contexts:
       scope: comment.line.double-slash.baml
   literal:
     - include: byte-string-literal
+    - include: raw-quoted-string-literal
     - include: type-literal
   llm-client-field--body:
     - meta_scope: meta.field.llm.client.baml
@@ -1858,6 +1852,20 @@ contexts:
   primitive-type:
     - match: '\b(?:int|float|bigint|string|bool|image|audio|map|json|unknown|never|Self)\b'
       scope: support.type.primitive.baml
+  raw-quoted-string-escaped-char:
+    - match: '\\.'
+  raw-quoted-string-literal--body:
+    - meta_scope: string.quoted.raw.double.baml
+    - match: '"'
+      scope: punctuation.definition.string.end.baml
+      pop: true
+    - include: raw-quoted-string-escaped-char
+  raw-quoted-string-literal:
+    - match: '\b(r)(")'
+      captures:
+        1: storage.type.string.baml
+        2: punctuation.definition.string.begin.baml
+      push: raw-quoted-string-literal--body
   raw-string:
     - include: raw-string-8
     - include: raw-string-7
@@ -2040,16 +2048,25 @@ contexts:
   string-escape:
     - include: string-escape-control
     - include: string-escape-quoted-delimiter
-    - include: string-escape-unknown
+    - include: backtick-string-escape-delimiter
+    - include: string-escape-hex
+    - include: string-escape-unicode
+    - include: string-escape-invalid
   string-escape-control:
-    - match: '\\[ntr0bvf]'
+    - match: '\\[ntr0bf]'
       scope: constant.character.escape.control.baml
+  string-escape-hex:
+    - match: '\\x[0-7][0-9A-Fa-f]'
+      scope: constant.character.escape.hex.baml
+  string-escape-invalid:
+    - match: '\\(?:x[0-9A-Fa-f]{0,2}|u(?:\{[^}"\\]*\}?|[0-9A-Fa-f]{0,3})|.|$)'
+      scope: invalid.illegal.escape.baml
   string-escape-quoted-delimiter:
-    - match: '\\["\\]'
+    - match: '\\["\\''/]'
       scope: constant.character.escape.delimiter.baml
-  string-escape-unknown:
-    - match: '\\.'
-      scope: constant.character.escape.unknown.baml
+  string-escape-unicode:
+    - match: '\\u(?:[0-9A-Fa-f]{4}|\{[0-9A-Fa-f](?:[0-9A-Fa-f_]*[0-9A-Fa-f])?\})'
+      scope: constant.character.escape.unicode.baml
   string-literal--body:
     - meta_scope: string.quoted.double.baml
     - match: '"'
