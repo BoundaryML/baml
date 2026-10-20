@@ -1262,6 +1262,108 @@ fn a_derived_type_keeps_its_binding_past_a_sibling_rebinding() {
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
 
+const RUNTIME_BOUND_ARGUMENTS: &str = r#"
+interface Stamper {
+    function stamp<U>(self, u: U) -> string throws never
+    function emboss<U>(u: U) -> string throws never
+}
+
+class Press {
+    implements Stamper {
+        function stamp<U>(self, u: U) -> string throws never {
+            "stamp " + reflect.Type.of<U>().to_string()
+        }
+        function emboss<U>(u: U) -> string throws never {
+            "emboss " + reflect.Type.of<U>().to_string()
+        }
+    }
+}
+
+function id<T>(x: T) -> T { x }
+
+function bound_call(t: reflect.Type, v: unknown) -> unknown {
+    let type T = t;
+    match (v) {
+        let x: T => id<T>(x),
+        _ => null,
+    }
+}
+
+function bound_dispatch(t: reflect.Type, v: unknown) -> string {
+    let p = Press {};
+    let type U = t;
+    match (v) {
+        let x: U => Stamper.stamp<U>(p, x) + (Press as Stamper).emboss<U>(x),
+        _ => "none",
+    }
+}
+"#;
+
+/// A type bound at run time (`let type T = t`) is read from the frame slot
+/// the binding wrote, at the call that passes it on, after the binding; the
+/// same for an interface dispatch and a virtual function value, which cannot
+/// use the site's receiver-only cache.
+#[test]
+fn runtime_bound_type_arguments_compile() {
+    let module = compile(RUNTIME_BOUND_ARGUMENTS);
+    let compact = |name: &str| {
+        body_of(&module, name)
+            .split_whitespace()
+            .collect::<String>()
+    };
+    let call = compact("user.bound_call");
+    let bound = call
+        .find("vm.bind_type(depth,0,")
+        .expect("the slot is bound");
+    let read = call
+        .rfind("vm.frame_type_arg(depth,0)?")
+        .expect("the type is read from the frame");
+    assert!(bound < read, "{call}");
+    assert!(call.contains("vm.call_compiled_with_types("), "{call}");
+    assert!(!call.contains("vm.type_operand("), "{call}");
+    let dispatch = compact("user.bound_dispatch");
+    assert!(dispatch.contains("vm.bind_type(depth,0,"), "{dispatch}");
+    assert!(
+        dispatch.contains("vm.virtual_target_uncached("),
+        "{dispatch}"
+    );
+    assert!(!dispatch.contains("staticS"), "{dispatch}");
+    assert!(dispatch.contains("vm.make_virtual_function("), "{dispatch}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
+const INTERFACE_ARGUMENTS: &str = r#"
+interface Speaker {
+    function speak(self) -> string throws never
+}
+
+class Tagged<T> {
+    name: string,
+}
+
+function tagged_speaker(text: string) -> string throws baml.errors.ParseError {
+    let parsed: unknown = baml.sap.parse<Tagged<Speaker>>(text);
+    match (parsed) {
+        let tagged: Tagged<Speaker> => tagged.name,
+        _ => "other",
+    }
+}
+"#;
+
+/// An interface type argument is built from the program's interface object,
+/// in a call's type arguments and in an instance test.
+#[test]
+fn interface_type_arguments_compile() {
+    let module = compile(INTERFACE_ARGUMENTS);
+    let body = body_of(&module, "user.tagged_speaker")
+        .split_whitespace()
+        .collect::<String>();
+    assert!(body.contains("vm.interface_type_at("), "{body}");
+    assert!(body.contains("vm.is_instance_of_at("), "{body}");
+    assert!(!body.contains("vm.frame_type_constant("), "{body}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
 const GC_CHECKS: &str = r#"
 class Point {
   x: int

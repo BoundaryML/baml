@@ -71,6 +71,10 @@ pub(crate) struct Analysis {
     pub(crate) static_types: HashMap<usize, StaticTy>,
     /// Deferred type locals; empty when the body can rebind frame types.
     pub(crate) frame_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
+    /// Type locals of a body that binds frame types: read from the frame
+    /// where they are used, which their load's own block reaches with no
+    /// binding in between. Empty unless the body binds types.
+    pub(crate) runtime_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
     /// Direct suspension; admission propagates it through user calls.
     pub(crate) suspends: bool,
     /// Iterator local to array local for iteration compiled as an index walk.
@@ -95,6 +99,7 @@ impl Analysis {
         let TypeLocals {
             static_types,
             frame_types,
+            runtime_types,
         } = type_locals(index, body);
         let array_iters = array_iterators(body, mir.arity);
         let BodyFlow {
@@ -112,6 +117,7 @@ impl Analysis {
             user_callees,
             static_types,
             frame_types,
+            runtime_types,
             suspends,
             array_iters,
             loops,
@@ -125,7 +131,16 @@ impl Analysis {
 
     /// Type locals have no runtime `Value` binding.
     pub(crate) fn is_type_local(&self, i: usize) -> bool {
-        self.static_types.contains_key(&i) || self.frame_types.contains_key(&i)
+        self.static_types.contains_key(&i)
+            || self.frame_types.contains_key(&i)
+            || self.runtime_types.contains_key(&i)
+    }
+
+    /// The template of a type local read from the frame at its use.
+    pub(crate) fn deferred_type(&self, i: usize) -> Option<&baml_compiler2_mir::TyTemplate> {
+        self.frame_types
+            .get(&i)
+            .or_else(|| self.runtime_types.get(&i))
     }
 }
 
@@ -143,16 +158,20 @@ fn slot_reprs(body: &MirFunctionBody<'_>, values: &[Repr]) -> Vec<Repr> {
         .collect()
 }
 
+#[allow(clippy::struct_field_names)]
 struct TypeLocals {
     static_types: HashMap<usize, StaticTy>,
     frame_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
+    runtime_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
 }
 
 fn type_locals(index: &ProgramIndex, body: &MirFunctionBody<'_>) -> TypeLocals {
     let mut static_types = HashMap::new();
     let mut frame_types = HashMap::new();
-    for block in &body.blocks {
-        for statement in &block.statements {
+    // Where each frame-derived type is loaded, as (block, statement).
+    let mut loads: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+    for (b, block) in body.blocks.iter().enumerate() {
+        for (s, statement) in block.statements.iter().enumerate() {
             let StatementKind::Assign { destination, value } = &statement.kind else {
                 continue;
             };
@@ -165,6 +184,7 @@ fn type_locals(index: &ProgramIndex, body: &MirFunctionBody<'_>) -> TypeLocals {
                     static_types.insert(local.0, StaticTy { code, primitive });
                 } else {
                     frame_types.insert(local.0, template.clone());
+                    loads.entry(local.0).or_default().push((b, s));
                 }
             }
         }
@@ -197,7 +217,9 @@ fn type_locals(index: &ProgramIndex, body: &MirFunctionBody<'_>) -> TypeLocals {
     }
     static_types.retain(|local, _| !written.contains(local));
     frame_types.retain(|local, _| !written.contains(local));
-    // Frame types can change between a LoadType and its use.
+    // Frame types can change between a LoadType and its use. A type the
+    // body binds is read from the frame at the use instead, which is the
+    // load's own reading only while no binding comes between the two.
     let binds_types = body.blocks.iter().any(|block| {
         block.statements.iter().any(|statement| {
             matches!(
@@ -209,14 +231,124 @@ fn type_locals(index: &ProgramIndex, body: &MirFunctionBody<'_>) -> TypeLocals {
             )
         })
     });
+    let mut runtime_types = HashMap::new();
     if binds_types {
-        frame_types.clear();
+        for (local, template) in std::mem::take(&mut frame_types) {
+            if let [(block, statement)] = loads[&local].as_slice()
+                && read_only_after_load(body, local, *block, *statement)
+            {
+                runtime_types.insert(local, template);
+            }
+        }
     }
 
     TypeLocals {
         static_types,
         frame_types,
+        runtime_types,
     }
+}
+
+/// Whether every read of `local` follows its load at (`block`, `statement`)
+/// in that block, with no type binding between the load and the read.
+fn read_only_after_load(
+    body: &MirFunctionBody<'_>,
+    local: usize,
+    block: usize,
+    statement: usize,
+) -> bool {
+    for (b, candidate) in body.blocks.iter().enumerate() {
+        let mut bound = false;
+        for (s, kind) in candidate.statements.iter().enumerate() {
+            let after_load = b == block && s > statement;
+            let reads = match &kind.kind {
+                StatementKind::Assign { value, .. } => {
+                    let mut reads = false;
+                    baml_compiler2_mir::memory::walk_rvalue_places(value, &mut |place| {
+                        reads |= place_mentions(place, local);
+                    });
+                    reads
+                }
+                StatementKind::Intrinsic { op, args } => {
+                    if matches!(op, IntrinsicOp::BindType(_)) && after_load {
+                        bound = true;
+                    }
+                    args.iter().any(|arg| operand_mentions(arg, local))
+                }
+                StatementKind::VirtualFieldStore {
+                    receiver, value, ..
+                } => operand_mentions(receiver, local) || operand_mentions(value, local),
+                StatementKind::FreshCell { local: cell, .. } => {
+                    if cell.0 == local {
+                        return false;
+                    }
+                    false
+                }
+                StatementKind::Drop(_) | StatementKind::Nop => false,
+            };
+            if reads && (!after_load || bound) {
+                return false;
+            }
+        }
+        if terminator_mentions(candidate.terminator.as_ref(), local) && (b != block || bound) {
+            return false;
+        }
+    }
+    true
+}
+
+fn place_mentions(place: &Place, local: usize) -> bool {
+    match place {
+        Place::Local(l) | Place::Deref(CellId::Local(l)) => l.0 == local,
+        Place::Field { base, .. } => place_mentions(base, local),
+        Place::Index { base, index, .. } => index.0 == local || place_mentions(base, local),
+        Place::Capture(_) | Place::Deref(CellId::Capture(_)) => false,
+    }
+}
+
+fn operand_mentions(operand: &Operand<'_>, local: usize) -> bool {
+    match operand {
+        Operand::Copy(place) | Operand::Move(place) => place_mentions(place, local),
+        Operand::Constant(_) => false,
+    }
+}
+
+fn terminator_mentions(terminator: Option<&Terminator<'_>>, local: usize) -> bool {
+    let operands: Vec<&Operand<'_>> = match terminator {
+        None | Some(Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable) => {
+            Vec::new()
+        }
+        Some(
+            Terminator::Branch {
+                condition: operand, ..
+            }
+            | Terminator::NarrowBind {
+                source: operand, ..
+            }
+            | Terminator::Switch {
+                discriminant: operand,
+                ..
+            }
+            | Terminator::Spawn { plan: operand, .. }
+            | Terminator::AwaitAny {
+                futures: operand, ..
+            }
+            | Terminator::Throw { value: operand }
+            | Terminator::ShortCircuit { operand, .. },
+        ) => vec![operand],
+        Some(Terminator::Call { callee, args, .. } | Terminator::SysOp { callee, args, .. }) => {
+            std::iter::once(callee).chain(args).collect()
+        }
+        Some(Terminator::VirtualCall { args, .. }) => args.iter().collect(),
+        Some(Terminator::Await { future, .. }) => return place_mentions(future, local),
+        Some(
+            Terminator::Rethrow { value, context }
+            | Terminator::ThrowIfPanic { value, context, .. },
+        ) => vec![value, context],
+    };
+    operands
+        .into_iter()
+        .any(|operand| operand_mentions(operand, local))
 }
 
 fn array_iterators(body: &MirFunctionBody<'_>, arity: usize) -> BTreeMap<usize, usize> {
@@ -760,6 +892,18 @@ pub(crate) fn realized_expr(
             let object = index.enum_at(name).ok().flatten()?;
             format!("vm.enum_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
         }
+        TyTemplate::Interface(name, args, assoc) => {
+            let object = index.interface_at(name).ok().flatten()?;
+            let assoc = assoc
+                .iter()
+                .map(|(member, ty)| Some(format!("({:?}, {})", member.as_str(), part(ty)?)))
+                .collect::<Option<Vec<_>>>()?
+                .join(", ");
+            format!(
+                "vm.interface_type_at(vm.idx_to_ptr(ObjectIndex::from_raw({object})), Box::new([{}]), &[{assoc}])",
+                parts(args)?
+            )
+        }
         // The runtime boundary normalizes a literal's freshness to `Regular`.
         TyTemplate::Literal(literal, _) => {
             let literal = match literal {
@@ -806,7 +950,13 @@ pub(crate) fn template_blocker(
                 }
                 return None;
             }
-            TyTemplate::Interface(..) => "an interface type",
+            TyTemplate::Interface(name, args, assoc) => {
+                if index.interface_at(name).ok().flatten().is_none() {
+                    return Some("an interface not in the program");
+                }
+                return parts(args)
+                    .or_else(|| assoc.iter().find_map(|(_, ty)| blocker_of(index, ty)));
+            }
             TyTemplate::Function { .. } => "a function type",
             TyTemplate::Future(..) => "a future type",
             TyTemplate::AssociatedTypeProjection { .. } => "a projection",

@@ -351,23 +351,43 @@ impl<'db> Generator<'_, 'db> {
         let mut types = Vec::with_capacity(type_args.len());
         let mut primitive = true;
         for arg in type_args {
-            let local = match arg {
-                Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => local.0,
-                Operand::Constant(_) | Operand::Copy(_) | Operand::Move(_) => {
-                    return unsupported("call with a type argument that is not a type local");
-                }
-            };
-            if let Some(ty) = self.analysis.static_types.get(&local) {
-                primitive &= ty.primitive;
-                types.push(ty.code.clone());
-            } else if let Some(template) = self.analysis.frame_types.get(&local).cloned() {
-                primitive = false;
-                types.push(self.realized(&template)?);
-            } else {
-                return unsupported("call with a type argument known only at runtime");
-            }
+            let (code, static_primitive) = self.type_operand("call", arg)?;
+            primitive &= static_primitive.unwrap_or(false);
+            types.push(code);
         }
         Ok((types, primitive))
+    }
+
+    /// Realize one type operand of `what`; for a static type, whether it is
+    /// primitive. A type local is built from its template where the operand
+    /// is used; any other local holds a `reflect.Type` value, read there.
+    pub(super) fn type_operand(
+        &mut self,
+        what: &str,
+        operand: &Operand<'db>,
+    ) -> Gen<(String, Option<bool>)> {
+        let local = match operand {
+            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => *local,
+            Operand::Constant(_) | Operand::Copy(_) | Operand::Move(_) => {
+                return unsupported(format!("{what} with a type argument that is not a local"));
+            }
+        };
+        if let Some(ty) = self.analysis.static_types.get(&local.0) {
+            return Ok((ty.code.clone(), Some(ty.primitive)));
+        }
+        if let Some(template) = self.analysis.deferred_type(local.0).cloned() {
+            return Ok((self.realized(&template)?, None));
+        }
+        if self.analysis.array_iters.contains_key(&local.0) {
+            return unsupported(format!("{what} with an array iterator as a type argument"));
+        }
+        let value = coerce(&format!("l{}", local.0), self.repr(local), Repr::Value);
+        let name = format!("t{}", self.temps);
+        self.temps += 1;
+        self.pending.push(format!(
+            "let {name}: RealizedTy = vm.type_operand({value})?;"
+        ));
+        Ok((name, None))
     }
 
     fn prepare(&mut self) {
