@@ -29,34 +29,52 @@ const SOURCE: &str = r#"
     function counter_plus(counter: Counter) -> int { counter.n + 1 }
     function counters_plus(counters: Counter[]) -> int { counters[0].n + 1 }
     function entry_count(entries: map<string, int>) -> int { entries.length() }
+    enum Mood { Happy Sad }
+    enum Weather { Happy }
+    function happy_only(mood: Mood.Happy) -> int { 1 }
+    function make_ids() -> int[] { [1, 2] }
     function main() -> int { 0 }
 "#;
 
-async fn call(
-    function: &str,
-    args: Vec<BexExternalValue>,
-) -> Result<BexExternalValue, EngineError> {
+fn engine() -> Arc<BexEngine> {
     let snapshot = compile_for_engine(SOURCE);
-    let engine = Arc::new(
+    Arc::new(
         BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("Failed to create engine"),
-    );
+    )
+}
+
+async fn call_on(
+    engine: &Arc<BexEngine>,
+    function: &str,
+    args: Vec<BexExternalValue>,
+    copy_objects: bool,
+) -> Result<BexExternalValue, EngineError> {
     engine
         .call_function(
             function,
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
+            copy_objects,
         )
         .await
+}
+
+async fn call(
+    function: &str,
+    args: Vec<BexExternalValue>,
+) -> Result<BexExternalValue, EngineError> {
+    call_on(&engine(), function, args, true).await
 }
 
 /// Assert the call is rejected as a `TypeMismatch` whose message contains each
 /// of `needles`.
 async fn assert_rejected(function: &str, args: Vec<BexExternalValue>, needles: &[&str]) {
-    let err = call(function, args)
-        .await
-        .expect_err("a mistyped host argument must be rejected");
+    assert_mismatch(call(function, args).await, needles);
+}
+
+fn assert_mismatch(result: Result<BexExternalValue, EngineError>, needles: &[&str]) {
+    let err = result.expect_err("a mistyped host argument must be rejected");
     let EngineError::TypeMismatch { message } = &err else {
         panic!("expected TypeMismatch, got {err:?}");
     };
@@ -196,6 +214,47 @@ async fn class_param_checks_fields() {
         "counter_plus",
         vec![BexExternalValue::Int(1)],
         &["`counter_plus`"],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn heap_handle_is_checked_by_what_it_resolves_to() {
+    let engine = engine();
+    let ids = call_on(&engine, "make_ids", vec![], false).await.unwrap();
+    assert!(
+        matches!(ids, BexExternalValue::Handle(_)),
+        "expected a heap handle, got {ids:?}"
+    );
+    let out = call_on(&engine, "first_plus", vec![ids.clone()], true)
+        .await
+        .unwrap();
+    assert_eq!(out, BexExternalValue::Int(2));
+    assert_mismatch(
+        call_on(&engine, "plus", vec![ids], true).await,
+        &["`handle`", "`int`"],
+    );
+}
+
+#[tokio::test]
+async fn enum_variant_param_requires_the_declared_member() {
+    let out = call(
+        "happy_only",
+        vec![BexExternalValue::variant("Mood", "Happy")],
+    )
+    .await
+    .unwrap();
+    assert_eq!(out, BexExternalValue::Int(1));
+    assert_rejected(
+        "happy_only",
+        vec![BexExternalValue::variant("Mood", "Sad")],
+        &["`happy_only`"],
+    )
+    .await;
+    assert_rejected(
+        "happy_only",
+        vec![BexExternalValue::variant("Weather", "Happy")],
+        &["`happy_only`"],
     )
     .await;
 }

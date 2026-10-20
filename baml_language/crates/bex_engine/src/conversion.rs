@@ -1358,6 +1358,55 @@ impl BexEngine {
     fn convert_external_to_vm_value_with_ty_and_runtime(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
+        external: BexExternalValue,
+        expected_ty: Option<&RuntimeTy>,
+        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
+        dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
+        runtime_named_objects: Option<&indexmap::IndexMap<String, HeapPtr>>,
+    ) -> Result<Value, EngineError> {
+        // Never land a value whose kind contradicts its declared slot: the VM
+        // runs type-specialized code on it without re-checking (#5332). Plain
+        // host data is judged before it lands; an opaque carrier by what it
+        // lands as.
+        if let Some(expected) = expected_ty
+            && !self.inbound_kind_admitted(&external, expected)
+        {
+            return Err(EngineError::TypeMismatch {
+                message: format!(
+                    "host value of type `{}` does not match the declared type `{expected}`",
+                    external.type_name()
+                ),
+            });
+        }
+        let landed_check = expected_ty
+            .filter(|_| lands_opaque_object(&external))
+            .map(|expected| (expected.clone(), external.type_name()));
+        let value = self.materialize_external_node(
+            holder,
+            external,
+            expected_ty,
+            dynamic_classes,
+            dynamic_enums,
+            runtime_named_objects,
+        )?;
+        if let Some((expected, carrier)) = landed_check
+            && !self.landed_kind_admitted(&holder.holder().vm, value, &expected)
+        {
+            return Err(EngineError::TypeMismatch {
+                message: format!(
+                    "host `{carrier}` value does not match the declared type `{expected}`"
+                ),
+            });
+        }
+        Ok(value)
+    }
+
+    /// Materialize one external node against its declared type. Children
+    /// recurse through [`Self::convert_external_to_vm_value_with_ty_and_runtime`]
+    /// so each is kind-checked against its own declared type.
+    fn materialize_external_node(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
         mut external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
         dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
@@ -1395,18 +1444,6 @@ impl BexEngine {
             return Ok(Value::object(
                 holder.holder_mut().tlab_mut().alloc_rust_data(arc),
             ));
-        }
-        // Never land a value whose kind contradicts its declared slot: the VM
-        // runs type-specialized code on it without re-checking (#5332).
-        if let Some(expected) = expected_ty
-            && !inbound_kind_admitted(&external, expected, &self.inbound_alias_view)
-        {
-            return Err(EngineError::TypeMismatch {
-                message: format!(
-                    "host value of type `{}` does not match the declared type `{expected}`",
-                    external.type_name()
-                ),
-            });
         }
         // See through a user alias so a container's declared element/value
         // type still reaches its children (`type Ids = int[]`).
@@ -3670,30 +3707,26 @@ pub(crate) fn check_generic_arg(
     }
 }
 
-/// Whether a host value's *kind* can inhabit the declared slot `ty`.
+/// Whether a node whose shallow kind `leaf` judges can inhabit the declared
+/// slot `ty`: sees through user aliases and unions, then asks `leaf` about the
+/// concrete type it reaches. `json` admits any node; its consumers type-test.
 ///
 /// The VM trusts declared types: specialized opcodes (`AddInt`, typed field
 /// loads, ...) assume the compiler-proven operand type and skip dispatch, so a
 /// host value whose kind contradicts its slot (a `string` bound to an `int`
 /// parameter) is undefined behavior once it lands on the heap
-/// (BoundaryML/baml#5332). Materialization calls this at every node it lands —
+/// (BoundaryML/baml#5332). Materialization asks this at every node it lands —
 /// the argument itself, then each list element, map value and class field
-/// against its declared type — so the check is shallow here and deep overall.
-///
-/// Strict for plain host data against a concrete type; lenient wherever the
-/// shallow kind is not the value's identity or the type is not concrete:
-/// engine-minted and opaque carriers (handles, ADTs, host values), transient
-/// union carriers (materialization re-checks them against their selected
-/// type), `json`, type variables, and opaque type shapes.
-pub(crate) fn inbound_kind_admitted(
-    value: &BexExternalValue,
+/// against its declared type — so each check is shallow and the whole is deep.
+fn kind_admitted_by_declared(
     ty: &RuntimeTy,
     aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+    leaf: &mut impl FnMut(&RuntimeTy) -> bool,
 ) -> bool {
-    fn admitted(
-        value: &BexExternalValue,
+    fn walk(
         ty: &RuntimeTy,
         aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+        leaf: &mut impl FnMut(&RuntimeTy) -> bool,
         depth: usize,
     ) -> bool {
         // Alias expansion is the only recursion that does not consume type
@@ -3705,59 +3738,28 @@ pub(crate) fn inbound_kind_admitted(
             RuntimeTy::TypeAlias(name) if is_canonical_json_alias(name) => true,
             RuntimeTy::TypeAlias(name) => aliases
                 .get(name)
-                .is_none_or(|expanded| admitted(value, expanded, aliases, depth + 1)),
+                .is_none_or(|expanded| walk(expanded, aliases, leaf, depth + 1)),
             RuntimeTy::Union(members) => members
                 .iter()
-                .any(|member| admitted(value, member, aliases, depth + 1)),
-            RuntimeTy::Null
-            | RuntimeTy::Bool
-            | RuntimeTy::Int
-            | RuntimeTy::Float
-            | RuntimeTy::Bigint
-            | RuntimeTy::String
-            | RuntimeTy::Uint8Array
-            | RuntimeTy::Literal(..) => bex_external_types::validate_host_return(value, ty).is_ok(),
-            RuntimeTy::List(_) => matches!(value, BexExternalValue::Array { .. }),
-            RuntimeTy::Map { .. } => matches!(value, BexExternalValue::Map { .. }),
-            // A plain host object (`Map`) is promoted to an instance of the
-            // declared class during materialization; media arrives either as
-            // its ADT (opaque, above) or as the class-shaped wrapper.
-            RuntimeTy::Class(..) | RuntimeTy::Media(..) => matches!(
-                value,
-                BexExternalValue::Instance { .. } | BexExternalValue::Map { .. }
-            ),
-            // TypeScript string enums cross as their member's string value.
-            // The VM type-checks enum operations on what lands, so admit it.
-            RuntimeTy::Enum(_) | RuntimeTy::EnumVariant(..) => matches!(
-                value,
-                BexExternalValue::Variant { .. } | BexExternalValue::String(_)
-            ),
-            // Plain data is never callable.
-            RuntimeTy::Function { .. } => false,
-            _ => true,
+                .any(|member| walk(member, aliases, leaf, depth + 1)),
+            _ => leaf(ty),
         }
     }
+    walk(ty, aliases, leaf, 0)
+}
 
-    match value {
+/// Whether materializing `value` lands an existing or engine-minted object
+/// whose kind only the landed VM value reveals (see
+/// [`BexEngine::landed_kind_admitted`]). Plain host data is judged on the wire
+/// instead; host values and union carriers check their own slot.
+fn lands_opaque_object(value: &BexExternalValue) -> bool {
+    matches!(
+        value,
         BexExternalValue::Handle(_)
-        | BexExternalValue::Adt(_)
-        | BexExternalValue::HostValue(_)
-        | BexExternalValue::RustData(_)
-        | BexExternalValue::FunctionRef { .. }
-        | BexExternalValue::Union { .. } => true,
-        BexExternalValue::Null
-        | BexExternalValue::Int(_)
-        | BexExternalValue::Bigint(_)
-        | BexExternalValue::Float(_)
-        | BexExternalValue::JsNumber(_)
-        | BexExternalValue::Bool(_)
-        | BexExternalValue::String(_)
-        | BexExternalValue::Uint8Array(_)
-        | BexExternalValue::Array { .. }
-        | BexExternalValue::Map { .. }
-        | BexExternalValue::Instance { .. }
-        | BexExternalValue::Variant { .. } => admitted(value, ty, aliases, 0),
-    }
+            | BexExternalValue::Adt(_)
+            | BexExternalValue::RustData(_)
+            | BexExternalValue::FunctionRef { .. }
+    )
 }
 
 /// Whether an `Instance` value is admitted by `expected`, peeling `Union`
@@ -4292,14 +4294,146 @@ impl BexEngine {
         )
     }
 
-    /// [`inbound_kind_admitted`] for a host-call argument, as a mismatch
+    /// Whether a host value's shallow kind can inhabit the declared slot `ty`
+    /// (see [`kind_admitted_by_declared`]).
+    ///
+    /// Strict for plain host data against a concrete type. Opaque carriers are
+    /// admitted here and judged by what they land as
+    /// ([`Self::landed_kind_admitted`]); union carriers are re-checked against
+    /// their selected type when materialized.
+    pub(crate) fn inbound_kind_admitted(&self, value: &BexExternalValue, ty: &RuntimeTy) -> bool {
+        match value {
+            BexExternalValue::Handle(_)
+            | BexExternalValue::Adt(_)
+            | BexExternalValue::HostValue(_)
+            | BexExternalValue::RustData(_)
+            | BexExternalValue::FunctionRef { .. }
+            | BexExternalValue::Union { .. } => return true,
+            BexExternalValue::Null
+            | BexExternalValue::Int(_)
+            | BexExternalValue::Bigint(_)
+            | BexExternalValue::Float(_)
+            | BexExternalValue::JsNumber(_)
+            | BexExternalValue::Bool(_)
+            | BexExternalValue::String(_)
+            | BexExternalValue::Uint8Array(_)
+            | BexExternalValue::Array { .. }
+            | BexExternalValue::Map { .. }
+            | BexExternalValue::Instance { .. }
+            | BexExternalValue::Variant { .. } => {}
+        }
+        kind_admitted_by_declared(ty, &self.inbound_alias_view, &mut |ty| match ty {
+            RuntimeTy::Null
+            | RuntimeTy::Bool
+            | RuntimeTy::Int
+            | RuntimeTy::Float
+            | RuntimeTy::Bigint
+            | RuntimeTy::String
+            | RuntimeTy::Uint8Array
+            | RuntimeTy::Literal(..) => bex_external_types::validate_host_return(value, ty).is_ok(),
+            RuntimeTy::List(_) => matches!(value, BexExternalValue::Array { .. }),
+            RuntimeTy::Map { .. } => matches!(value, BexExternalValue::Map { .. }),
+            // A plain host object (`Map`) is promoted to an instance of the
+            // declared class during materialization; media arrives either as
+            // its ADT (opaque) or as the class-shaped wrapper.
+            RuntimeTy::Class(..) | RuntimeTy::Media(..) => matches!(
+                value,
+                BexExternalValue::Instance { .. } | BexExternalValue::Map { .. }
+            ),
+            // TypeScript string enums cross as their member's string value.
+            // The VM type-checks enum operations on what lands, so admit it.
+            RuntimeTy::Enum(_) => matches!(
+                value,
+                BexExternalValue::Variant { .. } | BexExternalValue::String(_)
+            ),
+            // A tagged variant must be exactly the declared member: unlike an
+            // `Enum` slot, coercion does not rebind its enum.
+            RuntimeTy::EnumVariant(type_name, expected_variant) => match value {
+                BexExternalValue::Variant {
+                    enum_name,
+                    variant_name,
+                } => {
+                    variant_name == expected_variant.as_str()
+                        && self.names_same_enum(enum_name, type_name)
+                }
+                BexExternalValue::String(_) => true,
+                _ => false,
+            },
+            // Plain data is never callable.
+            RuntimeTy::Function { .. } => false,
+            _ => true,
+        })
+    }
+
+    /// Whether a host enum spelling names the declared enum. An enum this
+    /// engine cannot resolve by name (e.g. a call-local dynamic enum) is left
+    /// to materialization, which reports unknown enums and variants.
+    fn names_same_enum(&self, external_name: &str, type_name: &baml_type::TypeName) -> bool {
+        if type_name_matches_external_name(external_name, type_name) {
+            return true;
+        }
+        let resolve = |name: &str| {
+            self.resolved_enum_names
+                .get(name)
+                .or_else(|| resolve_named_object(&self.resolved_enum_names, name))
+                .copied()
+        };
+        match (resolve(external_name), resolve(&type_name.to_string())) {
+            (Some(external), Some(declared)) => external == declared,
+            _ => true,
+        }
+    }
+
+    /// Whether a landed opaque carrier ([`lands_opaque_object`]) — a resolved
+    /// handle, a function reference, a reflected type, a media or prompt
+    /// wrapper — has a kind that can inhabit the declared slot `ty`. Such a
+    /// value's kind is known only once it has resolved to a VM value.
+    fn landed_kind_admitted(&self, vm: &BexVm, value: Value, ty: &RuntimeTy) -> bool {
+        let object = value.as_object_ptr().map(|ptr| vm.get_object(ptr));
+        kind_admitted_by_declared(ty, &self.inbound_alias_view, &mut |ty| match ty {
+            RuntimeTy::Null => value.is_null(),
+            RuntimeTy::Bool | RuntimeTy::Literal(Literal::Bool(_), _) => value.as_bool().is_some(),
+            RuntimeTy::Int | RuntimeTy::Literal(Literal::Int(_), _) => value.as_int().is_some(),
+            RuntimeTy::Float | RuntimeTy::Literal(Literal::Float(_), _) => {
+                matches!(object, Some(Object::Float(_)))
+            }
+            RuntimeTy::Bigint | RuntimeTy::Literal(Literal::Bigint(_), _) => {
+                matches!(object, Some(Object::Bigint(_)))
+            }
+            RuntimeTy::String | RuntimeTy::Literal(Literal::String(_), _) => {
+                matches!(object, Some(Object::String(_)))
+            }
+            RuntimeTy::Uint8Array => matches!(object, Some(Object::Uint8Array(_))),
+            RuntimeTy::List(_) => matches!(object, Some(Object::Array(_))),
+            RuntimeTy::Map { .. } => matches!(object, Some(Object::Map(_))),
+            RuntimeTy::Class(..) | RuntimeTy::Media(..) => {
+                matches!(object, Some(Object::Instance(_)))
+            }
+            RuntimeTy::Enum(_) | RuntimeTy::EnumVariant(..) => {
+                matches!(object, Some(Object::Variant(_)))
+            }
+            RuntimeTy::Function { .. } => matches!(
+                object,
+                Some(
+                    Object::Function(_)
+                        | Object::Closure(_)
+                        | Object::BoundMethod(_)
+                        | Object::GenericFunction(_)
+                        | Object::HostClosure(_)
+                )
+            ),
+            _ => true,
+        })
+    }
+
+    /// [`Self::inbound_kind_admitted`] for a host-call argument, as a mismatch
     /// `detail` the caller frames with the function and argument position.
     pub(crate) fn check_inbound_arg_kind(
         &self,
         value: &BexExternalValue,
         expected: &RuntimeTy,
     ) -> Result<(), String> {
-        if inbound_kind_admitted(value, expected, &self.inbound_alias_view) {
+        if self.inbound_kind_admitted(value, expected) {
             Ok(())
         } else {
             Err(format!(
