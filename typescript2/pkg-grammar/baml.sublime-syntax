@@ -2065,7 +2065,7 @@ contexts:
     - match: '\\["\\''/]'
       scope: constant.character.escape.delimiter.baml
   string-escape-unicode:
-    - match: '\\u(?:[0-9A-Fa-f]{4}|\{[0-9A-Fa-f](?:[0-9A-Fa-f_]*[0-9A-Fa-f])?\})'
+    - match: '\\u(?:[0-9A-Fa-f]{4}|\{[0-9A-Fa-f](?:_?[0-9A-Fa-f])*\})'
       scope: constant.character.escape.unicode.baml
   string-literal--body:
     - meta_scope: string.quoted.double.baml

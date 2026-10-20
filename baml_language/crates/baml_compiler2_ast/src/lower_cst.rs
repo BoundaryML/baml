@@ -339,8 +339,36 @@ fn check_string_escapes(root: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) 
             continue;
         };
         let body_start = node.text_range().start() + offset(open + 1);
-        report(body_start, check(body));
+        let mut issues = check(body);
+        if !accepts_raw_string(&node) {
+            for issue in &mut issues {
+                issue.suggest_raw_string = false;
+            }
+        }
+        report(body_start, issues);
     }
+}
+
+/// Whether an `r"..."` literal would parse where `node` is. Raw strings are
+/// expressions only, so suggesting one in a type, pattern, attribute, or
+/// config value would lead to a parse error.
+fn accepts_raw_string(node: &SyntaxNode) -> bool {
+    !node.ancestors().any(|ancestor| {
+        matches!(
+            ancestor.kind(),
+            SyntaxKind::TYPE_EXPR
+                | SyntaxKind::STRING_LITERAL_TYPE
+                | SyntaxKind::ATTRIBUTE
+                | SyntaxKind::BLOCK_ATTRIBUTE
+                | SyntaxKind::ATTRIBUTE_ARGS
+                | SyntaxKind::CONFIG_BLOCK
+                | SyntaxKind::CONFIG_ITEM
+                | SyntaxKind::CONFIG_VALUE
+                | SyntaxKind::MATCH_PATTERN
+                | SyntaxKind::CATCH_PATTERN
+                | SyntaxKind::PATTERN
+        )
+    })
 }
 
 /// The contiguous runs of literal text in a backtick string literal, between

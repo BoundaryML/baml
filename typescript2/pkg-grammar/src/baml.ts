@@ -279,7 +279,7 @@ const stringHexEscape: Rule = {
 const stringUnicodeEscape: Rule = {
   key: 'string-escape-unicode',
   scope: 'constant.character.escape.unicode.baml',
-  match: String.raw`\\u(?:[0-9A-Fa-f]{4}|\{[0-9A-Fa-f](?:[0-9A-Fa-f_]*[0-9A-Fa-f])?\})`,
+  match: String.raw`\\u(?:[0-9A-Fa-f]{4}|\{[0-9A-Fa-f](?:_?[0-9A-Fa-f])*\})`,
 };
 
 // Unknown escapes (`\d`, `\v`, `\U...`, octal, `\x80`, ...) and a backslash at

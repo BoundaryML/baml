@@ -4043,7 +4043,7 @@
     },
     "string-escape-unicode": {
       "name": "constant.character.escape.unicode.baml",
-      "match": "\\\\u(?:[0-9A-Fa-f]{4}|\\{[0-9A-Fa-f](?:[0-9A-Fa-f_]*[0-9A-Fa-f])?\\})"
+      "match": "\\\\u(?:[0-9A-Fa-f]{4}|\\{[0-9A-Fa-f](?:_?[0-9A-Fa-f])*\\})"
     },
     "string-literal": {
       "name": "string.quoted.double.baml",

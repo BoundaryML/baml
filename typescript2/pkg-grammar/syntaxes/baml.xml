@@ -240,7 +240,7 @@
       <context name="StringEscapes" attribute="String" lineEndContext="#stay">
         <RegExpr attribute="Escape" context="#stay" String="\\[ntr0bf&quot;\\'/`$]"/>
         <RegExpr attribute="Escape" context="#stay" String="\\x[0-7][0-9A-Fa-f]"/>
-        <RegExpr attribute="Escape" context="#stay" String="\\u(?:[0-9A-Fa-f]{4}|\{[0-9A-Fa-f](?:[0-9A-Fa-f_]*[0-9A-Fa-f])?\})"/>
+        <RegExpr attribute="Escape" context="#stay" String="\\u(?:[0-9A-Fa-f]{4}|\{[0-9A-Fa-f](?:_?[0-9A-Fa-f])*\})"/>
         <RegExpr attribute="Invalid Escape" context="#stay" String="\\(?:x[0-9A-Fa-f]{0,2}|u(?:\{[^}&quot;\\]*\}?|[0-9A-Fa-f]{0,3})|.|$)"/>
       </context>
 

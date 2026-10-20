@@ -47,6 +47,7 @@ export default function baml(hljs) {
     // as a keyword plus trailing junk (keywords themselves contain no `-`/`$`,
     // so real keywords still match exactly).
     $pattern: /\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*/,
+    built_in: ['env', 'root', 'baml'],
     keyword: [
       // top-level declaration keywords (lexer TokenKind)
       'class',
@@ -91,7 +92,7 @@ export default function baml(hljs) {
       'dynamic',
       // contextual keywords (`x.as<T>`, `spawn ... with`, `test ... with`)
       'as',
-      'with'
+      'with',
     ],
     literal: ['true', 'false', 'null'],
     type: [
@@ -106,16 +107,16 @@ export default function baml(hljs) {
       'json',
       'unknown',
       'never',
-      'Self'
+      'Self',
     ],
-    built_in: ['env', 'root', 'baml'],
-    'variable.language': ['self', '_']
+    'variable.language': ['self', '_'],
   };
 
   // --- Jinja template markup (inside prompt / template_string bodies) -------
 
   const JINJA_KEYWORDS = {
     $pattern: /[A-Za-z_][A-Za-z0-9_]*/,
+    built_in: ['ctx', 'env', '_'],
     keyword: [
       'for',
       'endfor',
@@ -133,48 +134,47 @@ export default function baml(hljs) {
       'macro',
       'endmacro',
       'raw',
-      'endraw'
+      'endraw',
     ],
     literal: ['true', 'false', 'null'],
-    built_in: ['ctx', 'env', '_']
   };
 
   const JINJA_INNER_STRING = {
     scope: 'string',
     variants: [
       { begin: /"/, end: /"/ },
-      { begin: /'/, end: /'/ }
-    ]
+      { begin: /'/, end: /'/ },
+    ],
   };
 
   const JINJA_NUMBER = {
-    scope: 'number',
     match: /\b\d+(?:\.\d+)?\b/,
-    relevance: 0
+    relevance: 0,
+    scope: 'number',
   };
 
   const JINJA_COMMENT = {
-    scope: 'comment',
     begin: /\{#/,
-    end: /#\}/
+    end: /#\}/,
+    scope: 'comment',
   };
 
   // {{ expression }}
   const JINJA_EXPRESSION = {
-    scope: 'template-variable',
     begin: /\{\{/,
+    contains: [JINJA_INNER_STRING, JINJA_NUMBER],
     end: /\}\}/,
     keywords: JINJA_KEYWORDS,
-    contains: [JINJA_INNER_STRING, JINJA_NUMBER]
+    scope: 'template-variable',
   };
 
   // {% statement %}
   const JINJA_TAG = {
-    scope: 'template-tag',
     begin: /\{%/,
+    contains: [JINJA_INNER_STRING, JINJA_NUMBER],
     end: /%\}/,
     keywords: JINJA_KEYWORDS,
-    contains: [JINJA_INNER_STRING, JINJA_NUMBER]
+    scope: 'template-tag',
   };
 
   const JINJA_MODES = [JINJA_COMMENT, JINJA_TAG, JINJA_EXPRESSION];
@@ -187,11 +187,11 @@ export default function baml(hljs) {
   const rawString = (hashes) => {
     const h = '#'.repeat(hashes);
     return {
-      scope: 'string',
       begin: h + '"',
-      end: '"' + h,
       contains: JINJA_MODES,
-      relevance: 5
+      end: '"' + h,
+      relevance: 5,
+      scope: 'string',
     };
   };
   // Longest opener first so ###" is not consumed as #" with leading hashes.
@@ -202,43 +202,43 @@ export default function baml(hljs) {
   // take any \xHH. Any other backslash pair is a compile error: it is consumed
   // without a scope (no `illegal`, see above) so it stays plain string text.
   const STRING_ESCAPE = {
-    scope: 'char.escape',
     match:
-      /\\(?:[ntr0bf"\\'/`$]|x[0-7][0-9A-Fa-f]|u(?:[0-9A-Fa-f]{4}|\{[0-9A-Fa-f](?:[0-9A-Fa-f_]*[0-9A-Fa-f])?\}))/,
-    relevance: 0
+      /\\(?:[ntr0bf"\\'/`$]|x[0-7][0-9A-Fa-f]|u(?:[0-9A-Fa-f]{4}|\{[0-9A-Fa-f](?:_?[0-9A-Fa-f])*\}))/,
+    relevance: 0,
+    scope: 'char.escape',
   };
   const BYTE_ESCAPE = {
-    scope: 'char.escape',
     match: /\\(?:[ntr0bf"\\'/`$]|x[0-9A-Fa-f]{2})/,
-    relevance: 0
+    relevance: 0,
+    scope: 'char.escape',
   };
   const OTHER_BACKSLASH = { match: /\\./, relevance: 0 };
 
   // Byte string: b"...".
   const BYTE_STRING = {
-    scope: 'string',
     begin: /\bb"/,
+    contains: [BYTE_ESCAPE, OTHER_BACKSLASH],
     end: /"/,
-    contains: [BYTE_ESCAPE, OTHER_BACKSLASH]
+    scope: 'string',
   };
 
   // Raw string: r"...". The body is verbatim, but a backslash keeps the next
   // character (including `"`) from closing the literal.
   const RAW_QUOTED_STRING = {
-    scope: 'string',
     begin: /\br"/,
+    contains: [OTHER_BACKSLASH],
     end: /"/,
-    contains: [OTHER_BACKSLASH]
+    scope: 'string',
   };
 
   // Plain double-quoted string. Prompt bodies may also be plain quoted
   // strings, so Jinja markup is recognized here too (harmless elsewhere).
   const QUOTED_STRING = {
-    scope: 'string',
     begin: /"/,
-    end: /"/,
     contains: [STRING_ESCAPE, OTHER_BACKSLASH, ...JINJA_MODES],
-    relevance: 0
+    end: /"/,
+    relevance: 0,
+    scope: 'string',
   };
 
   // ${ ... } interpolation inside backtick strings. The interpolated
@@ -248,17 +248,17 @@ export default function baml(hljs) {
   // modes they reference exist).
   const NESTED_BRACES = {
     begin: /\{/,
+    contains: [],
     end: /\}/,
     keywords: KEYWORDS,
-    contains: []
   };
 
   const SUBST = {
-    scope: 'subst',
     begin: /\$\{/,
+    contains: [],
     end: /\}/,
     keywords: KEYWORDS,
-    contains: []
+    scope: 'subst',
   };
 
   // Backtick strings: `...`, ``...``, ```...``` (multi-tick delimiters let a
@@ -266,27 +266,31 @@ export default function baml(hljs) {
   const backtickString = (ticks) => {
     const t = '`'.repeat(ticks);
     return {
-      scope: 'string',
       begin: t,
+      contains: [STRING_ESCAPE, OTHER_BACKSLASH, SUBST],
       end: t,
-      contains: [STRING_ESCAPE, OTHER_BACKSLASH, SUBST]
+      scope: 'string',
     };
   };
-  const BACKTICK_STRINGS = [backtickString(3), backtickString(2), backtickString(1)];
+  const BACKTICK_STRINGS = [
+    backtickString(3),
+    backtickString(2),
+    backtickString(1),
+  ];
 
   // --- Numbers -----------------------------------------------------------------
 
   // bigint (42n) before float (1.5, 1e10, 1.5e-3) before integer, mirroring the
   // lexer's ordering. No leading-dot floats in BAML (`.5` is not a float).
   const NUMBER = {
-    scope: 'number',
     relevance: 0,
+    scope: 'number',
     variants: [
       { match: /\b\d+n/ },
       { match: /\b\d+(?:\.\d+)?[eE][+-]?\d+/ },
       { match: /\b\d+\.\d+/ },
-      { match: /\b\d+\b/ }
-    ]
+      { match: /\b\d+\b/ },
+    ],
   };
 
   // --- Attributes ----------------------------------------------------------------
@@ -296,16 +300,22 @@ export default function baml(hljs) {
   const ATTRIBUTE = {
     scope: 'meta',
     variants: [
-      { match: /@@\$?[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*/, relevance: 5 },
-      { match: /@\$?[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*/, relevance: 0 }
-    ]
+      {
+        match: /@@\$?[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*/,
+        relevance: 5,
+      },
+      {
+        match: /@\$?[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*/,
+        relevance: 0,
+      },
+    ],
   };
 
   // --- env.VAR references ------------------------------------------------------
 
   const ENV_VAR = {
     match: [/\benv\b/, /\./, IDENT],
-    scope: { 1: 'built_in', 3: 'variable.constant' }
+    scope: { 1: 'built_in', 3: 'variable.constant' },
   };
 
   // --- Declarations (titles) -----------------------------------------------------
@@ -313,51 +323,51 @@ export default function baml(hljs) {
   // client<llm> Name { ... }  — the single strongest BAML signal.
   const CLIENT_LLM_DECL = {
     match: [/\bclient\b/, /\s*<\s*/, IDENT, /\s*>\s*/, IDENT],
+    relevance: 10,
     scope: { 1: 'keyword', 3: 'type', 5: 'title.class' },
-    relevance: 10
   };
 
   // client Name { ... } (no <llm> type argument)
   const CLIENT_DECL = {
     match: [/\bclient\b/, /\s+/, IDENT, /(?=\s*\{)/],
-    scope: { 1: 'keyword', 3: 'title.class' }
+    scope: { 1: 'keyword', 3: 'title.class' },
   };
 
   // class / enum / interface Name
   const TYPE_DECL = {
     match: [/\b(?:class|enum|interface)\b/, /\s+/, IDENT],
-    scope: { 1: 'keyword', 3: 'title.class' }
+    scope: { 1: 'keyword', 3: 'title.class' },
   };
 
   // type Alias = ... (also `type Item` associated types in interfaces)
   const TYPE_ALIAS_DECL = {
     match: [/\btype\b/, /\s+/, IDENT],
-    scope: { 1: 'keyword', 3: 'title.class' }
+    scope: { 1: 'keyword', 3: 'title.class' },
   };
 
   // function Name(...) -> Ret
   const FUNCTION_DECL = {
     match: [/\bfunction\b/, /\s+/, IDENT],
-    scope: { 1: 'keyword', 3: 'title.function' }
+    scope: { 1: 'keyword', 3: 'title.function' },
   };
 
   // template_string Name(...) #"..."#
   const TEMPLATE_STRING_DECL = {
     match: [/\btemplate_string\b/, /\s+/, IDENT],
+    relevance: 10,
     scope: { 1: 'keyword', 3: 'title.function' },
-    relevance: 10
   };
 
   // retry_policy / generator / testset / test Name { ... }
   const NAMED_BLOCK_DECL = {
     match: [/\b(?:retry_policy|generator|testset|test)\b/, /\s+/, IDENT],
-    scope: { 1: 'keyword', 3: 'title' }
+    scope: { 1: 'keyword', 3: 'title' },
   };
 
   const ARROW = {
-    scope: 'operator',
     match: /->|=>/,
-    relevance: 0
+    relevance: 0,
+    scope: 'operator',
   };
 
   // Shared contents of an interpolated expression. The list includes
@@ -370,16 +380,14 @@ export default function baml(hljs) {
     QUOTED_STRING,
     NUMBER,
     ENV_VAR,
-    NESTED_BRACES
+    NESTED_BRACES,
   ];
 
   NESTED_BRACES.contains = INTERPOLATION_CONTAINS;
   SUBST.contains = INTERPOLATION_CONTAINS;
 
   return {
-    name: 'BAML',
     aliases: ['baml'],
-    keywords: KEYWORDS,
     contains: [
       hljs.C_LINE_COMMENT_MODE,
       hljs.C_BLOCK_COMMENT_MODE,
@@ -398,7 +406,9 @@ export default function baml(hljs) {
       ATTRIBUTE,
       ENV_VAR,
       NUMBER,
-      ARROW
-    ]
+      ARROW,
+    ],
+    keywords: KEYWORDS,
+    name: 'BAML',
   };
 }

@@ -2082,6 +2082,33 @@ function main() -> string {
     }
 
     #[test]
+    fn raw_string_hint_only_where_raw_strings_parse() {
+        let source = r#"
+class C {
+  a string @description("\d")
+}
+
+type T = "\d" | "ok"
+
+function main() -> string {
+  "\d"
+}
+"#;
+        let root = parse(source);
+        let (_items, diags, _env_var_refs) = lower_file(&root);
+        let hints: Vec<bool> = diags
+            .iter()
+            .map(|diag| match diag {
+                crate::LoweringDiagnostic::InvalidStringEscape { issue, .. } => {
+                    issue.to_string().contains("raw string")
+                }
+                other => panic!("unexpected diagnostic: {other:#?}"),
+            })
+            .collect();
+        assert_eq!(hints, vec![false, false, true]);
+    }
+
+    #[test]
     fn raw_string_literals_keep_backslashes() {
         let source = r#"
 function main() -> string {

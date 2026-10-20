@@ -97,6 +97,10 @@ pub struct EscapeIssue {
     /// The kind of literal the sequence appears in, so messages can quote it
     /// in the same syntax.
     pub literal: LiteralKind,
+    /// Whether an unknown escape's message also suggests a raw `r"..."`
+    /// string. Starts true for quoted literals; the caller clears it where
+    /// raw strings aren't accepted (types, patterns, attributes, ...).
+    pub suggest_raw_string: bool,
 }
 
 /// The kind of literal an [`EscapeIssue`] comes from.
@@ -201,8 +205,7 @@ impl fmt::Display for EscapeIssue {
                     "unknown escape sequence {text} - did you mean {} (escaped backslash)",
                     q(&format!("\\\\{c}")),
                 )?;
-                // Raw strings exist only in the `r"..."` form.
-                if self.literal == LiteralKind::Quoted {
+                if self.suggest_raw_string {
                     write!(f, " or r\"\\{c}\" (raw string)")?;
                 }
                 write!(f, "?")
@@ -350,6 +353,7 @@ fn scan<'a>(
                     text: c.to_string(),
                     kind: EscapeIssueKind::NonAsciiInByteString(c),
                     literal,
+                    suggest_raw_string: literal == LiteralKind::Quoted,
                 });
             }
             emit(Piece::Char(c));
@@ -369,6 +373,7 @@ fn scan<'a>(
                     text: input[i..i + len].to_string(),
                     kind,
                     literal,
+                    suggest_raw_string: literal == LiteralKind::Quoted,
                 });
                 emit(Piece::Verbatim(&input[i..i + len]));
                 len
@@ -505,7 +510,7 @@ fn unicode_escape_value(s: &str) -> Result<(u32, usize), (EscapeIssueKind, usize
     if body.is_empty() {
         return invalid(UnicodeEscapeError::Empty, len);
     }
-    if body.starts_with('_') || body.ends_with('_') {
+    if body.starts_with('_') || body.ends_with('_') || body.contains("__") {
         return invalid(UnicodeEscapeError::MisplacedUnderscore, len);
     }
     let digits: String = body.chars().filter(|&c| c != '_').collect();
@@ -646,6 +651,7 @@ mod tests {
         assert_eq!(issue_kinds(r"\u{0000041}"), vec![invalid(TooLong)]);
         assert_eq!(issue_kinds(r"\u{_41}"), vec![invalid(MisplacedUnderscore)]);
         assert_eq!(issue_kinds(r"\u{41_}"), vec![invalid(MisplacedUnderscore)]);
+        assert_eq!(issue_kinds(r"\u{1__F}"), vec![invalid(MisplacedUnderscore)]);
         assert_eq!(
             issue_kinds(r"\u{110000}"),
             vec![EscapeIssueKind::OutOfRange]
