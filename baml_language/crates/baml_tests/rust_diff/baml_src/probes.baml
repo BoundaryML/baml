@@ -186,3 +186,34 @@ function Depth() -> void {
     let second = string.from(Sized(5));
     baml.io.println(`${first}:${second}`);
 }
+
+function Work(n: int) -> int {
+    let total = 0;
+    let i = 0;
+    while (i < n) {
+        total += i;
+        i += 1;
+    }
+    total
+}
+
+// Many short tasks, each on its own VM, run a compiled body to completion:
+// the fiber stacks they release are reused by the tasks that follow.
+function Spawns() -> void {
+    let total = 0;
+    let round = 0;
+    while (round < 20) {
+        let tasks: baml.future.Future<int, never>[] = [];
+        let i = 0;
+        while (i < 100) {
+            let n = i;
+            tasks.push(spawn { Work(n) });
+            i += 1;
+        }
+        for (let task in tasks) {
+            total += await task;
+        }
+        round += 1;
+    }
+    baml.io.println(`${total}`);
+}
