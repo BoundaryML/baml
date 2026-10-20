@@ -162,7 +162,7 @@ ast_node!(PromptField, PROMPT_FIELD);
 ast_node!(ToolsField, TOOLS_FIELD);
 ast_node!(SpecExpr, SPEC_EXPR);
 ast_node!(ClientValueDef, CLIENT_VALUE_DEF);
-ast_node!(HashStringLiteral, HASH_STRING_LITERAL);
+ast_node!(HashStringLiteral, DEPRECATED_HASH_STRING_LITERAL);
 ast_node!(StringLiteral, STRING_LITERAL);
 ast_node!(BacktickStringLiteral, BACKTICK_STRING_LITERAL);
 ast_node!(BacktickText, BACKTICK_TEXT);
@@ -2352,7 +2352,7 @@ impl ConfigItem {
                     let has_string_literal = element.descendants().any(|node| {
                         matches!(
                             node.kind(),
-                            SyntaxKind::STRING_LITERAL | SyntaxKind::HASH_STRING_LITERAL
+                            SyntaxKind::STRING_LITERAL | SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
                         )
                     });
 
@@ -2618,7 +2618,7 @@ impl BlockExpr {
                         // (BEP-034). Without this it was silently dropped and
                         // the block had no value ("missing value").
                         | SyntaxKind::LAMBDA_EXPR
-                        | SyntaxKind::HASH_STRING_LITERAL
+                        | SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
                         | SyntaxKind::RAW_STRING_LITERAL
                         | SyntaxKind::BYTE_STRING_LITERAL
                         | SyntaxKind::BACKTICK_STRING_LITERAL
@@ -2634,7 +2634,7 @@ impl BlockExpr {
                         | SyntaxKind::INTEGER_LITERAL
                         | SyntaxKind::FLOAT_LITERAL
                         | SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::HASH_STRING_LITERAL
+                        | SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
                         // Boolean / null literals are re-lexed contextual keywords.
                         | SyntaxKind::KW_TRUE
                         | SyntaxKind::KW_FALSE

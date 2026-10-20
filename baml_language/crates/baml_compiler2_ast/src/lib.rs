@@ -1122,7 +1122,7 @@ function legacy() -> string {
         let root = SyntaxNode::new_root(green);
         assert!(
             root.descendants()
-                .any(|node| node.kind() == SyntaxKind::HASH_STRING_LITERAL),
+                .any(|node| node.kind() == SyntaxKind::DEPRECATED_HASH_STRING_LITERAL),
             "the parser must retain the hash string CST for error recovery"
         );
         let (items, _diags, _env_var_refs) = lower_file(&root);

@@ -737,7 +737,7 @@ pub struct HashString {
 impl FromCST for HashString {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::HASH_STRING_LITERAL)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::DEPRECATED_HASH_STRING_LITERAL)?;
 
         // Find the opening hash token to strip preceding trivia
         let start = node
@@ -756,7 +756,7 @@ impl Token for HashString {
 }
 impl KnownKind for HashString {
     fn kind() -> SyntaxKind {
-        SyntaxKind::HASH_STRING_LITERAL
+        SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
     }
 }
 impl Printable for HashString {

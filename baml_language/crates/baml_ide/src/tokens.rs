@@ -569,7 +569,7 @@ impl Walk<'_> {
                 string_with_escapes(node, out);
             }
             // Raw / unquoted strings do not process escapes.
-            SyntaxKind::HASH_STRING_LITERAL
+            SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
             | SyntaxKind::RAW_STRING_LITERAL
             | SyntaxKind::UNQUOTED_STRING => {
                 emit_node(node, SemanticTokenType::String, out);

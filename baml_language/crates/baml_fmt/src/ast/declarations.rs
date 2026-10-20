@@ -1109,7 +1109,7 @@ pub enum StringLiteralValue {
 impl FromCST for StringLiteralValue {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
-            SyntaxKind::HASH_STRING_LITERAL => Ok(StringLiteralValue::HashString(
+            SyntaxKind::DEPRECATED_HASH_STRING_LITERAL => Ok(StringLiteralValue::HashString(
                 t::HashString::from_cst(elem)?,
             )),
             SyntaxKind::STRING_LITERAL => {
@@ -1119,8 +1119,9 @@ impl FromCST for StringLiteralValue {
                 t::BacktickString::from_cst(elem)?,
             )),
             found => Err(StrongAstError::UnexpectedKindDesc {
-                expected_desc: "STRING_LITERAL, HASH_STRING_LITERAL, or BACKTICK_STRING_LITERAL"
-                    .into(),
+                expected_desc:
+                    "STRING_LITERAL, DEPRECATED_HASH_STRING_LITERAL, or BACKTICK_STRING_LITERAL"
+                        .into(),
                 found,
                 at: elem.text_range(),
             }),

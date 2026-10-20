@@ -466,7 +466,7 @@ impl FromCST for AttributeArg {
                 let string = t::QuotedString::from_cst(elem)?;
                 Ok(AttributeArg::QuotedString(string))
             }
-            SyntaxKind::HASH_STRING_LITERAL => {
+            SyntaxKind::DEPRECATED_HASH_STRING_LITERAL => {
                 let string = t::HashString::from_cst(elem)?;
                 Ok(AttributeArg::HashString(string))
             }
@@ -497,7 +497,7 @@ impl FromCST for AttributeArg {
             }
             found => Err(StrongAstError::UnexpectedKindDesc {
                 expected_desc:
-                    "STRING_LITERAL, HASH_STRING_LITERAL, BACKTICK_STRING_LITERAL, EXPR, or UNQUOTED_STRING"
+                    "STRING_LITERAL, DEPRECATED_HASH_STRING_LITERAL, BACKTICK_STRING_LITERAL, EXPR, or UNQUOTED_STRING"
                         .into(),
                 found,
                 at: elem.text_range(),

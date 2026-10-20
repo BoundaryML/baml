@@ -2254,12 +2254,12 @@ impl<'a> Parser<'a> {
             return false;
         }
 
-        // before starting the HASH_STRING_LITERAL node, handle all leading trivia
+        // before starting the DEPRECATED_HASH_STRING_LITERAL node, handle all leading trivia
         while self.eat_trivia() {}
 
         let start_span = self.current().map(|token| token.span).unwrap_or_default();
 
-        self.with_node(SyntaxKind::HASH_STRING_LITERAL, |p| {
+        self.with_node(SyntaxKind::DEPRECATED_HASH_STRING_LITERAL, |p| {
             // Consume opening hashes
             for _ in 0..opening_hashes {
                 p.bump(); // #

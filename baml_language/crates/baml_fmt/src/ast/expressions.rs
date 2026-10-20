@@ -214,7 +214,7 @@ impl FromCST for Expression {
             SyntaxKind::OBJECT_LITERAL => {
                 ObjectInitializer::from_cst(elem).map(Expression::ObjectInitializer)?
             }
-            SyntaxKind::HASH_STRING_LITERAL => {
+            SyntaxKind::DEPRECATED_HASH_STRING_LITERAL => {
                 t::HashString::from_cst(elem).map(Expression::HashString)?
             }
             SyntaxKind::BACKTICK_STRING_LITERAL => {
