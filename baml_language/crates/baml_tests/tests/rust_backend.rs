@@ -184,27 +184,19 @@ fn compute_shaped_functions_are_admitted_and_the_rest_stay_bytecode() {
             "{name} should compile; got {admitted:?}"
         );
     }
-    // A function that calls bytecode (`main` builds strings through stdlib
-    // BAML; `calls_rejected` calls a function left as bytecode) compiles as
-    // a resumable body that suspends on those calls.
-    let resumable = |name: &str| {
-        module
-            .functions
-            .iter()
-            .find(|f| f.display == name)
-            .unwrap_or_else(|| panic!("{name} should compile"))
-            .resumable
-    };
-    assert!(resumable("user.main"));
-    assert!(resumable("user.calls_rejected"));
-    assert!(!resumable("user.fib"));
-    assert!(!resumable("user.sum"));
-
-    // A function passing a closure to a callback-running builtin compiles
-    // as a resumable body (the builtin suspends it); its lambda compiles on
-    // its own.
-    assert!(resumable("user.uses_closure"));
-    assert!(!resumable("user.<lambda(uses_closure, 0)>"));
+    for name in ["user.main", "user.calls_rejected", "user.uses_closure"] {
+        assert!(
+            admitted.contains(&name),
+            "{name} should compile; got {admitted:?}"
+        );
+    }
+    let uses_closure = body_of(&module, "user.uses_closure");
+    assert!(uses_closure.contains("vm.suspend("), "{uses_closure}");
+    for name in ["user.fib", "user.<lambda(uses_closure, 0)>"] {
+        let body = body_of(&module, name);
+        assert!(!body.contains("vm.suspend("), "{body}");
+        assert!(!body.contains("vm.should_yield()"), "{body}");
+    }
     // A generic function compiles too: one body for every instantiation.
     assert!(admitted.contains(&"user.generic"), "{admitted:?}");
     assert!(
@@ -240,16 +232,11 @@ fn generated_module_is_well_formed_rust() {
         // Compacted like the source: an impl body's name has spaces in it
         // (`<(ai.Prompt as baml.ToString)>.to_string`).
         let entry: String = format!(
-            "CompiledEntry{{object:{},name:{:?},arity:{},body:CompiledFn::{}({}),\
+            "CompiledEntry{{object:{},name:{:?},arity:{},body:{},\
              slots:{},cause_slot:{:?},",
             function.object,
             function.name,
             function.arity,
-            if function.resumable {
-                "Resumable"
-            } else {
-                "Inline"
-            },
             function.symbol,
             function.slots,
             function.cause_slot,
@@ -401,23 +388,6 @@ function area(s: Circle | Square | Tri | Hex) -> int {
 function here() -> reflect.Package { reflect.Package.current() }
 "#,
     );
-    let resumable = |name: &str| {
-        module
-            .functions
-            .iter()
-            .find(|f| f.name == name)
-            .unwrap_or_else(|| {
-                panic!(
-                    "{name} should compile; rejected: {:?}",
-                    module
-                        .rejected
-                        .iter()
-                        .filter(|(n, _)| n.starts_with("user."))
-                        .collect::<Vec<_>>()
-                )
-            })
-            .resumable
-    };
     let compact = |name: &str| {
         body_of(&module, name)
             .split_whitespace()
@@ -428,8 +398,8 @@ function here() -> reflect.Package { reflect.Package.current() }
     // a direct builtin call (no suspension). Any other key hashes through its
     // `baml.Hash` implementation, which runs BAML code, so an int-keyed map's
     // operations suspend.
-    assert!(!resumable("user.words"));
-    assert!(resumable("user.squares"));
+    assert!(!compact("user.words").contains("vm.suspend(Step::Call"));
+    assert!(compact("user.squares").contains("vm.suspend(Step::Call"));
     let words = compact("user.words");
     assert!(
         words.contains("vm.new_map(RealizedTy::String,RealizedTy::Int)"),
@@ -437,7 +407,7 @@ function here() -> reflect.Package { reflect.Package.current() }
     );
     assert!(words.contains("vm.call_builtin(builtin_"), "{words}");
     // A class-keyed map may run a user `hash`/`eq`: its index suspends.
-    assert!(resumable("user.keyed"));
+    assert!(compact("user.keyed").contains("vm.suspend("));
 
     let green = compact("user.green");
     assert!(
@@ -550,9 +520,8 @@ function describe(x: int) -> string { x.to_string() }
 "#;
 
 /// An interface method call on a receiver whose implementation is not known
-/// at compile time resolves it at run time, through the VM, so the function
-/// compiles as a resumable body that requests the call; interface fields and
-/// method values resolve inline.
+/// at compile time resolves it at run time, through the VM, and can suspend
+/// to request the call; interface fields and method values resolve inline.
 #[test]
 fn interface_dispatch_compiles_as_a_runtime_resolved_call() {
     let module = compile(INTERFACES);
@@ -563,15 +532,13 @@ fn interface_dispatch_compiles_as_a_runtime_resolved_call() {
         "user.rename",
         "user.describe",
     ] {
-        let function = module
-            .functions
-            .iter()
-            .find(|f| f.display == name)
-            .unwrap_or_else(|| panic!("{name} should compile; rejected: {:?}", module.rejected));
+        let body = body_of(&module, name)
+            .split_whitespace()
+            .collect::<String>();
         // Only the calls suspend; a method value, a field and a call on a
         // primitive (devirtualized by MIR) resolve in place.
         assert_eq!(
-            function.resumable,
+            body.contains("vm.suspend(Step::Call"),
             name == "user.total" || name == "user.scaled",
             "{name}"
         );
@@ -599,14 +566,17 @@ fn interface_dispatch_compiles_as_a_runtime_resolved_call() {
     assert!(total.contains("staticS"), "{total}");
     assert!(total.contains("vm.virtual_target(&S"), "{total}");
     assert!(
-        total.contains("=vm.call_inline(callee,&[") && total.contains("ifletSome(v)=r"),
+        total.contains("matchvm.call_inline(callee,&[") && total.contains("Ok(Some(v))=>Ok(v)"),
         "{total}"
     );
     assert!(
         total.contains("vm.push_virtual_args(callee,Some(&[None]),&["),
         "{total}"
     );
-    assert!(total.contains("Step::Call{callee,argc}"), "{total}");
+    assert!(
+        total.contains("vm.suspend(Step::Call{callee,argc})"),
+        "{total}"
+    );
     let rename = compact("user.rename");
     assert!(rename.contains("vm.virtual_store_field("), "{rename}");
     assert!(rename.contains("vm.virtual_load_field("), "{rename}");
@@ -726,37 +696,9 @@ function has_spec(topic: string) -> bool {
 }
 "#,
     );
-    let resumable = module
-        .functions
-        .iter()
-        .find(|f| f.display == "user.has_spec")
-        .expect("user.has_spec should compile")
-        .resumable;
-    assert!(resumable);
     let body = body_of(&module, "user.has_spec");
+    assert!(body.contains("vm.suspend("), "{body}");
     assert!(!body.contains("vm.call_compiled"), "{body}");
-}
-
-/// A resumable body's arguments arrive in slots `0..arity` while local `i`
-/// keeps slot `i`: its start reads every argument before it writes any slot,
-/// or writing local 1 would overwrite argument 2 before it is read.
-#[test]
-fn resumable_start_reads_every_argument_before_writing_a_slot() {
-    let module = compile(
-        r#"
-function dur() -> baml.time.Duration { baml.time.Duration.from_milliseconds(1) }
-function two(a: int, b: int) -> int { baml.sys.sleep(dur()); a * 10 + b }
-"#,
-    );
-    let body = body_of(&module, "user.two");
-    let start = body
-        .split("Resume::Start =>")
-        .nth(1)
-        .and_then(|rest| rest.split("bb =").next())
-        .expect("a resumable body starts");
-    let last_read = start.rfind("vm.slot(").expect("arguments are read");
-    let first_write = start.find("vm.set_slot(").unwrap_or(usize::MAX);
-    assert!(last_read < first_write, "{start}");
 }
 
 /// An array's iterator that the function returns leaves the body, so it is
@@ -842,8 +784,8 @@ fn functions_whose_names_render_alike_compile_to_their_own_objects() {
 }
 
 /// Generic functions compile polymorphically: one body per function that
-/// reads `T` off its frame (`vm.frame_type_arg`) and builds every type it
-/// derives from it once on entry, for its `is T` tests, `T[]` arrays,
+/// reads `T` off its frame (`vm.frame_type_arg`) and builds the types it
+/// derives from it for its `is T` tests, `T[]` arrays,
 /// generic class instances, nested generic calls, and generic function
 /// values; a fully concrete `foo<int>` is the program's pooled object.
 #[test]
@@ -960,7 +902,10 @@ function bound(t: reflect.Type) -> bool { type U = unreflect(t); reflect.Type.of
     assert!(!bound.contains("letty0:"), "{bound}");
     // Reflecting `T` passes the frame's type to the builtin.
     let is_int_t = compact("user.is_int_t");
-    assert!(is_int_t.contains("ty0.clone()"), "{is_int_t}");
+    assert!(
+        is_int_t.contains("vm.frame_type_arg(depth,0)?"),
+        "{is_int_t}"
+    );
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
 
@@ -1150,10 +1095,10 @@ fn closures_compile() {
         )),
         "{cap_local}"
     );
-    // A call through the closure: direct when its body is compiled and
-    // inline, through the VM otherwise.
+    // A call through the closure: direct when its body is compiled,
+    // through the VM otherwise.
     assert!(
-        cap_local.contains("vm.closure_inline_body(callee,1)"),
+        cap_local.contains("vm.closure_compiled_body(callee,1)"),
         "{cap_local}"
     );
     assert!(
@@ -1161,7 +1106,7 @@ fn closures_compile() {
         "{cap_local}"
     );
     assert!(
-        cap_local.contains("Step::Call{callee,argc:1}"),
+        cap_local.contains("vm.suspend(Step::Call{callee,argc:1})"),
         "{cap_local}"
     );
     // The lambda reads and writes the capture's cell off its frame, and
@@ -1174,8 +1119,7 @@ fn closures_compile() {
     // A captured parameter is wrapped at entry.
     let cap_param = compact("user.cap_param");
     assert!(
-        cap_param.contains("letmutl1:Value=vm.new_cell(args[0]);")
-            || cap_param.contains("l1=vm.new_cell(arg);"),
+        cap_param.contains("letmutl1:Value=vm.new_cell(args[0]);"),
         "{cap_param}"
     );
     // A loop header's binding is carried into the next iteration's cell.
@@ -1348,11 +1292,10 @@ function main() -> int {
 }
 "#;
 
-/// An allocating loop checks for a collection at its header and a loop that
-/// only computes scalars does not; a call to a function that may collect
-/// roots the caller's live values on the VM stack for its duration.
+/// Loops poll at their headers; a call to a function that may suspend roots
+/// the caller's live values on the VM stack for its duration.
 #[test]
-fn compiled_code_collects_where_it_allocates() {
+fn compiled_code_polls_and_roots_where_it_may_suspend() {
     let module = compile(GC_CHECKS);
     let compact = |name: &str| {
         body_of(&module, name)
@@ -1360,10 +1303,19 @@ fn compiled_code_collects_where_it_allocates() {
             .collect::<String>()
     };
     let sum_to = compact("user.sum_to");
-    assert!(!sum_to.contains("vm.gc_due()"), "{sum_to}");
+    assert!(sum_to.contains("vm.should_yield()"), "{sum_to}");
+    assert!(sum_to.contains("vm.suspend(Step::Yield)"), "{sum_to}");
+    assert!(!sum_to.contains("vm.set_slot("), "{sum_to}");
     let build = compact("user.build");
-    assert!(build.contains("vm.gc_due()"), "{build}");
-    assert!(build.contains("vm.collect_here(&mutlive)"), "{build}");
+    assert!(
+        build.contains("iterations=iterations.wrapping_add(1);"),
+        "{build}"
+    );
+    assert!(
+        build.contains("iterations%16==0&&vm.should_yield()"),
+        "{build}"
+    );
+    assert!(build.contains("vm.suspend(Step::Yield)"), "{build}");
     let keep = compact("user.keep");
     assert!(keep.contains("vm.set_slot(depth,0,l1);"), "{keep}");
     assert!(keep.contains("l1=vm.slot(depth,0);"), "{keep}");

@@ -170,3 +170,19 @@ function Logs() -> void {
     log.warn("differential warning");
     baml.io.println("logged");
 }
+
+function Sized(n: int) -> int {
+    let s = "";
+    for (let i = 0; i < n; i += 1) {
+        s = s + "x";
+    };
+    s.length()
+}
+
+// A callee suspends and returns; its caller then enters another compiled
+// body at the same frame depth, which suspends again.
+function Depth() -> void {
+    let first = string.from(Sized(3));
+    let second = string.from(Sized(5));
+    baml.io.println(`${first}:${second}`);
+}

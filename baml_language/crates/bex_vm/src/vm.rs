@@ -10,7 +10,7 @@
 //! - Single-threaded execution: Each VM instance runs on one thread at a time
 //! - TLAB exclusivity: VMs have exclusive write access to their allocation regions
 //! - Controlled mutation: Only VM-owned runtime objects can be mutated, and only via `&mut self`
-//! - GC coordination: Other VMs yield; compiled code may collect in place with rooted state.
+//! - GC coordination: Garbage collection only runs when VMs are at safepoints (yielded)
 
 #![allow(unsafe_code)]
 
@@ -21,7 +21,7 @@ use btel_types::context::{Context, ContextPatch};
 use smallvec::SmallVec;
 
 use crate::{
-    compiled_rt::{CompiledBodies, CompiledFn, Step},
+    compiled_rt::{CompiledBodies, Step},
     telemetry::{
         CallTypeArgs, ClockDuration, ClockInstant, FrameTelemetry, InvocationOutcome,
         TelemetryState,
@@ -7626,17 +7626,20 @@ impl BexVm {
                 *function = callee;
 
                 // Trace-hooked callees must run their bytecode prologue first.
-                let native = if hooked {
+                let compiled = if hooked {
                     None
                 } else {
                     crate::compiled_rt::compiled_fn(callee)
                 };
-                match native {
+                match compiled {
                     None => {
                         let new_len = self.stack.len() + callee.real_local_count;
                         self.stack.resize(new_len, Value::NULL);
                     }
-                    Some(CompiledFn::Inline(body)) => {
+                    // A compiled caller is on the fiber already, so its callee
+                    // runs in place; from bytecode the loop enters the fiber
+                    // through the stub.
+                    Some(body) if self.compiled.on_fiber => {
                         // Keep arguments rooted on the stack until `finish_bytecode_frame`.
                         let args: SmallVec<[Value; 4]> = (0..arg_count)
                             .map(|i| {
@@ -7651,7 +7654,7 @@ impl BexVm {
                         if passes_type_args {
                             self.bind_passed_type_args(*frame_idx);
                         }
-                        let outcome = self.with_stack_room(|vm| body(vm, &args));
+                        let outcome = self.stack_room().and_then(|()| body(self, &args));
                         self.settle();
                         match outcome {
                             Ok(value) => {
@@ -7668,7 +7671,7 @@ impl BexVm {
                             Err(error) => return Err(*error),
                         }
                     }
-                    Some(CompiledFn::Resumable(_)) => {
+                    Some(_) => {
                         let start = crate::compiled_rt::stub_start(callee)
                             .expect("a compiled function has a stub");
                         if let Frame::Bytecode(frame) = &mut self.frames[*frame_idx] {
@@ -8516,7 +8519,6 @@ impl BexVm {
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
         // Execution may migrate between threads with different stack bounds.
-        self.compiled.stack_floor = crate::compiled_rt::stack_floor();
         #[cfg(not(target_arch = "wasm32"))]
         self.stop_disabled_telemetry();
         #[cfg(not(target_arch = "wasm32"))]
@@ -9727,6 +9729,9 @@ impl BexVm {
                     // across dispatch, so recover it from the parked frame.
                     OpCode::ResumeCompiled => {
                         let outcome = self.resume_compiled(frame_idx, function);
+                        // The fiber may have replaced the frame at this depth
+                        // with another function's, so the cached code follows.
+                        *code = &function.bytecode.compact.as_ref().unwrap().code;
                         if let Some(Frame::Bytecode(frame)) = self.frames.get(*frame_idx) {
                             *pc = frame.instruction_ptr;
                         }

@@ -96,10 +96,6 @@ impl<T: RootHaver> ActiveHeapPermit<T> {
     pub async fn renew(self) -> Self {
         self.release().acquire().await
     }
-    #[inline]
-    pub fn cell_id(&self) -> usize {
-        Arc::as_ptr(&self.state.holder).cast::<()>() as usize
-    }
 }
 impl<T: RootHaver> HeapPermit<T> for ActiveHeapPermit<T> {
     fn holder(&self) -> &T {
@@ -247,17 +243,6 @@ impl HeapPermitManager {
             _permits: permits,
         }
     }
-
-    /// The caller must hold one active permit and exclude its cell from the guard's root operations.
-    pub fn try_park_others(&self) -> Option<HeapGuard<'_>> {
-        let permits = self.active.try_acquire_many(MAX_PERMITS - 1).ok()?;
-        let mut guard = self.holders.try_lock().ok()?;
-        guard.retain(|holder| holder.strong_count() > 0);
-        Some(HeapGuard {
-            guard,
-            _permits: permits,
-        })
-    }
 }
 
 /// Guard for exclusive access to the heap. Gotten from [`HeapPermitManager::request_park`].
@@ -292,32 +277,6 @@ impl RootHaver for HeapGuard<'_> {
     }
 }
 impl HeapGuard<'_> {
-    pub fn collect_roots_except(&self, skip: usize, roots: &mut Vec<HeapPtr>) {
-        for permit_holder in self.guard.iter() {
-            if Weak::as_ptr(permit_holder).cast::<()>() as usize == skip {
-                continue;
-            }
-            if let Some(permit_holder) = permit_holder.upgrade() {
-                let ptr = permit_holder.get();
-                // SAFETY: every other permit holder is parked.
-                let root_haver = unsafe { &*ptr };
-                root_haver.collect_roots(roots);
-            }
-        }
-    }
-    pub fn forward_roots_except(&mut self, skip: usize, roots: &HashMap<HeapPtr, HeapPtr>) {
-        for permit_holder in self.guard.iter() {
-            if Weak::as_ptr(permit_holder).cast::<()>() as usize == skip {
-                continue;
-            }
-            if let Some(permit_holder) = permit_holder.upgrade() {
-                let ptr = permit_holder.get();
-                // SAFETY: every other permit holder is parked.
-                let root_haver = unsafe { &mut *ptr };
-                root_haver.forward_roots(roots);
-            }
-        }
-    }
     /// Gets the number of inactive permits when the heap guard was created.
     ///
     /// This means if a permit was dropped after parking, it will still be counted.

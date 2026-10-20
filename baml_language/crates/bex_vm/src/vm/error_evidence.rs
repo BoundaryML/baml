@@ -709,7 +709,7 @@ mod tests {
         use bex_vm_types::{Value, errors::VmThrown};
 
         use super::{Frame, RaiseEntry, RaiseKind};
-        use crate::compiled_rt::{CompiledAt, CompiledEntry, CompiledFn, stub, stub_start};
+        use crate::compiled_rt::{CompiledAt, CompiledEntry, stub, stub_start};
 
         let mut program = baml_test_support::compile_source("function Main() -> int { 0 }");
         let entry = program.rendered_callables()["user.Main"].object;
@@ -721,7 +721,7 @@ mod tests {
                 object: 0,
                 name: "user.Main",
                 arity: 0,
-                body: CompiledFn::Resumable(|_, _| unreachable!()),
+                body: |_, _| unreachable!(),
                 slots: 0,
                 cause_slot: None,
             }

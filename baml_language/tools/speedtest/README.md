@@ -14,6 +14,7 @@ scripts/speedtest run --kpi                    # the KPI suite (kpis.toml), ever
 scripts/speedtest run                          # every workload, VM + references, 5 trials
 scripts/speedtest run --filter richards        # workloads whose id or name contains "richards"
 scripts/speedtest run --rows vm-off,node       # only these rows
+scripts/speedtest run --rows vm-off,rust-off,node --kpi --build-jobs 2   # the VM against `baml pack --rust`, two packs at a time
 scripts/speedtest run --out bench-report       # also copy the bundle to ./bench-report (e.g. a CI artifact)
 scripts/speedtest list                         # every workload
 scripts/speedtest compare canary my-branch     # per-workload deltas between two saved baselines

@@ -278,7 +278,7 @@ sha1 = "0.10"
 smallvec = { version = "1.15", features = [ "const_generics" ] }
 sqlparser = "0.62.0"
 smol_str = { version = "0.3", features = [ "serde", "borsh" ] }
-stacker = "0.1.25"
+corosensei = "0.3.4"
 strsim = { version = "0.11.1" }
 syn = { version = "2", features = [ "full" ] }
 tar = "0.4"

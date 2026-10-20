@@ -43,13 +43,13 @@ def _value(metric, cell, build, row):
     if metric == "binary_kib":
         if not row.is_baml:
             return NO_BINARY
-        if row.key != PRIMARY:
+        if row.telemetry != "off":
             return SAME_AS_OFF
         return {"median": build["bytes"] / 1024} if build.get("status") == "ok" else {"note": "pack failed"}
     if metric == "build_s":
         if not row.is_baml:
             return NO_BUILD
-        if row.key != PRIMARY:
+        if row.telemetry != "off":
             return SAME_AS_OFF
         return {"median": build["seconds"]} if build.get("status") == "ok" else {"note": "pack failed"}
     if cell["status"] == "failed":
@@ -80,7 +80,7 @@ def build(data, workloads, row_list):
             if not w:
                 continue
             cells, b = summary[w["id"]], builds.get(w["id"], {})
-            values = {r.key: _value(k["metric"], cells[r.key], b, r) for r in present}
+            values = {r.key: _value(k["metric"], cells[r.key], b.get(r.backend, {}), r) for r in present}
             p = values.get(PRIMARY) or {}
             headline = {}
             for ref in refs:

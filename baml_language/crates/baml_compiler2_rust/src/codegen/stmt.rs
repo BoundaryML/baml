@@ -110,7 +110,7 @@ impl<'db> Generator<'_, 'db> {
         // A leaf can have several predecessors, so its entry PC is unknown.
         self.current_mark = None;
         let pcs = self.positions.block(id.0).cloned().unwrap_or_default();
-        self.loop_check(id, pcs.start);
+        self.loop_check(id, pcs.start)?;
         self.update_cause(id);
         for (index, statement) in self.body.blocks[id.0].statements.iter().enumerate() {
             let pc = pcs.statements.get(index).copied().flatten();
@@ -121,29 +121,21 @@ impl<'db> Generator<'_, 'db> {
         self.leaf_terminator(id)
     }
 
-    fn loop_check(&mut self, id: BlockId, pc: Option<usize>) {
-        if self.suspends && self.loop_headers.contains(&id.0) {
-            let point = self.yield_point(id.0);
-            let point_slot = self.point_slot;
-            self.emit_line("iterations = iterations.wrapping_add(1);");
-            self.emit_line(&format!(
-                "if iterations % {YIELD_EVERY} == 0 && vm.should_yield() {{"
-            ));
-            self.save(self.saved(|i| self.live_in[id.0][i]));
-            self.emit_line(&format!(
-                "vm.set_slot(depth, {point_slot}, Value::int({point}));"
-            ));
-            let at = pc_arg(pc);
-            self.emit_line(&format!("vm.note_pc(depth, {at});"));
-            self.emit_line("return Ok(Step::Yield);");
-            self.emit_line("}");
-        } else if self.gc_checks.loops && self.loop_headers.contains(&id.0) {
-            self.emit_line("iterations = iterations.wrapping_add(1);");
-            self.gc_check(
-                id,
-                &format!("iterations % {YIELD_EVERY} == 0 && vm.gc_due()"),
-            );
+    /// Poll at a loop back edge so the engine can collect, park or cancel.
+    fn loop_check(&mut self, id: BlockId, pc: Option<usize>) -> Gen<()> {
+        if !self.pauses || !self.loop_headers.contains(&id.0) {
+            return Ok(());
         }
+        let live = self.header_locals(id.0);
+        let at = pc_arg(pc);
+        let request = format!("{{ vm.note_pc(depth, {at}); vm.suspend(Step::Yield) }}");
+        let call = self.rooted(&live, &request);
+        let code = self.fallible(id, &call)?;
+        self.emit_line("iterations = iterations.wrapping_add(1);");
+        self.emit_line(&format!(
+            "if iterations % {YIELD_EVERY} == 0 && vm.should_yield() {{ {code}; }}"
+        ));
+        Ok(())
     }
 
     // Errors raised in this block inherit the active handler context.
@@ -291,8 +283,12 @@ impl<'db> Generator<'_, 'db> {
                 let code = coerce(&discriminant.code, discriminant.repr, Repr::Int);
                 self.emit_statement(&format!("d{} = {code};", id.0));
             }
-            terminator @ Terminator::Call { .. } if self.call_suspends(terminator) => {}
-            terminator @ Terminator::VirtualCall { .. } if !self.array_iteration(terminator) => {}
+            terminator @ Terminator::Call { .. } if self.call_suspends(terminator) => {
+                self.suspension(id)?;
+            }
+            terminator @ Terminator::VirtualCall { .. } if !self.array_iteration(terminator) => {
+                self.suspension(id)?;
+            }
             Terminator::Call {
                 callee,
                 args,
@@ -334,7 +330,7 @@ impl<'db> Generator<'_, 'db> {
             Terminator::SysOp { .. }
             | Terminator::Spawn { .. }
             | Terminator::Await { .. }
-            | Terminator::AwaitAny { .. } => {}
+            | Terminator::AwaitAny { .. } => self.suspension(id)?,
             // A wildcard catch must propagate panics with their context.
             Terminator::ThrowIfPanic { value, context, .. } => {
                 let value = self.value_operand(id, value)?;
@@ -405,11 +401,7 @@ impl<'db> Generator<'_, 'db> {
                 } else {
                     coerce("l0", self.repr(Local(0)), Repr::Value)
                 };
-                if self.suspends {
-                    self.emit_statement(&format!("return Ok(Step::Return({result}));"));
-                } else {
-                    self.emit_statement(&format!("return Ok({result});"));
-                }
+                self.emit_statement(&format!("return Ok({result});"));
             }
             Terminator::Throw { value } => {
                 let value = self.value_operand(id, value)?;
@@ -484,17 +476,12 @@ impl<'db> Generator<'_, 'db> {
         ));
         self.emit_line(&value);
         self.emit_line(&context);
-        if self.suspends {
-            let jump = self.jump_to(handler.0);
-            self.emit_line(&jump);
-        } else {
-            let structured = self
-                .structured
-                .as_ref()
-                .expect("an inline body is structured before its leaves are emitted");
-            let jumps = structured.unwind_jumps[block.0].clone();
-            self.stmts(&jumps)?;
-        }
+        let structured = self
+            .structured
+            .as_ref()
+            .expect("a body is structured before its leaves are emitted");
+        let jumps = structured.unwind_jumps[block.0].clone();
+        self.stmts(&jumps)?;
         out.push_str(&self.out);
         self.out = saved;
         Ok(out)

@@ -2,7 +2,7 @@
 
 use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::Function};
 
-use super::{InlineBody, stack_address};
+use super::{CompiledFn, Step};
 use crate::{
     errors::{VmError, VmInternalError, VmPanic},
     indexable::EvalStackTrait,
@@ -128,30 +128,11 @@ impl BexVm {
         Some(value)
     }
 
-    /// Check whether a resumable body should yield at a loop back edge.
+    /// Whether a loop should suspend with [`Step::Yield`] at this back edge: the
+    /// interpreter's own poll, forced under `BAML_GC_STRESS=1`.
     #[inline]
     pub fn should_yield(&mut self) -> bool {
-        self.should_early_yield()
-    }
-
-    /// Check whether collection may be due, always returning true under `BAML_GC_STRESS=1`.
-    #[inline]
-    pub fn gc_due(&mut self) -> bool {
         super::gc_stress() || self.should_early_yield()
-    }
-
-    /// Attempt collection with `live` rooted and update any moved values.
-    #[cold]
-    #[inline(never)]
-    pub fn collect_here(&mut self, live: &mut [Value]) {
-        let Some(collector) = self.compiled.collector.clone() else {
-            return;
-        };
-        let base = self.stack.len();
-        self.stack.extend(live.iter().copied());
-        collector.collect_in_place(self);
-        live.copy_from_slice(&self.stack.0[base..base + live.len()]);
-        self.stack.truncate(base);
     }
 
     /// Return the frame depth to pass to [`Self::catch`].
@@ -207,7 +188,7 @@ impl BexVm {
         Ok(())
     }
 
-    /// Record a log event and queue it for the engine because compiled bodies cannot suspend mid-statement.
+    /// Record a log event and suspend until the engine has delivered it.
     pub fn log_event(
         &mut self,
         level: super::LogLevel,
@@ -232,13 +213,13 @@ impl BexVm {
                 .map(Self::event_source_location_for_line_entry),
             _ => None,
         };
-        self.compiled.pending_logs.push(super::PendingLog {
+        self.suspend(Step::Log {
             level,
             event_name: name,
             data,
             source_location,
-        });
-        Ok(())
+        })
+        .map(drop)
     }
 
     /// Call a compiled body with a VM frame, retaining the frame on error for unwinding.
@@ -246,7 +227,7 @@ impl BexVm {
     pub fn call_compiled(
         &mut self,
         callee: HeapPtr,
-        body: InlineBody,
+        body: CompiledFn,
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
@@ -256,14 +237,15 @@ impl BexVm {
                 self.panic_to_exception_value(VmPanic::StackOverflow),
             )));
         }
-        self.with_stack_room(|vm| vm.call_compiled_here(callee, body, args))
+        self.stack_room()?;
+        self.call_compiled_here(callee, body, args)
     }
 
     #[inline]
     fn call_compiled_here(
         &mut self,
         callee: HeapPtr,
-        body: InlineBody,
+        body: CompiledFn,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         if self.telemetry.is_some() {
@@ -287,7 +269,7 @@ impl BexVm {
     pub fn call_compiled_with_types(
         &mut self,
         callee: HeapPtr,
-        body: InlineBody,
+        body: CompiledFn,
         type_args: &[RealizedTy],
         args: &[Value],
         pc: u32,
@@ -298,14 +280,15 @@ impl BexVm {
                 self.panic_to_exception_value(VmPanic::StackOverflow),
             )));
         }
-        self.with_stack_room(|vm| vm.call_compiled_with_types_here(callee, body, type_args, args))
+        self.stack_room()?;
+        self.call_compiled_with_types_here(callee, body, type_args, args)
     }
 
     #[inline]
     fn call_compiled_with_types_here(
         &mut self,
         callee: HeapPtr,
-        body: InlineBody,
+        body: CompiledFn,
         type_args: &[RealizedTy],
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
@@ -357,41 +340,12 @@ impl BexVm {
         }
     }
 
-    /// Run a compiled body with enough Rust stack space to reach the VM frame limit.
-    #[inline]
-    pub(crate) fn with_stack_room<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        if stack_address() < self.compiled.stack_floor {
-            return self.on_fresh_segment(f);
-        }
-        f(self)
-    }
-
-    /// Run on a fresh stack segment and restore the previous floor on return.
-    #[cold]
-    #[inline(never)]
-    fn on_fresh_segment<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let floor = self.compiled.stack_floor;
-            let result = stacker::grow(super::STACK_SEGMENT, || {
-                self.compiled.stack_floor = super::stack_floor();
-                f(self)
-            });
-            self.compiled.stack_floor = floor;
-            result
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            f(self)
-        }
-    }
-
     #[cold]
     #[inline(never)]
     fn call_compiled_cold(
         &mut self,
         callee: HeapPtr,
-        body: InlineBody,
+        body: CompiledFn,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         self.call_compiled_observed(callee, body, args)
@@ -403,7 +357,7 @@ impl BexVm {
     pub(super) fn call_compiled_observed(
         &mut self,
         callee: HeapPtr,
-        body: InlineBody,
+        body: CompiledFn,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
         // SAFETY: the callee lives in the compile-time heap, which is never
@@ -555,77 +509,6 @@ mod tests {
     fn vm() -> BexVm {
         let program = baml_test_support::compile_source("function Main() -> int { 1 }");
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap()
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    #[test]
-    #[allow(unsafe_code, clippy::disallowed_methods)]
-    fn compiled_body_survives_gc_stress() {
-        use bex_heap::CollectionLevel;
-        use bex_vm_types::{RootHaver, Value};
-
-        use crate::compiled_rt::{CompiledCollector, CompiledFn};
-
-        const CHILD: &str = "BAML_COMPILED_GC_STRESS_TEST_CHILD";
-        struct Collector;
-        impl CompiledCollector for Collector {
-            fn collect_in_place(&self, vm: &mut BexVm) -> bool {
-                let mut roots = Vec::new();
-                vm.collect_roots(&mut roots);
-                // SAFETY: this test owns the heap's only VM, and `collect_here`
-                // roots the compiled body's live values before collection.
-                let (_, _, forwarding) = unsafe {
-                    vm.heap
-                        .collect_garbage_generational(&roots, CollectionLevel::Major)
-                };
-                vm.forward_roots(&forwarding);
-                true
-            }
-        }
-
-        #[allow(clippy::unnecessary_wraps, reason = "matches the compiled body ABI")]
-        fn body(vm: &mut BexVm, _: &[Value]) -> Result<Value, Box<crate::errors::VmError>> {
-            vm.compiled.collector = Some(Arc::new(Collector));
-            let mut live = [vm.string_value("still live")];
-            for _ in 0..3 {
-                assert!(vm.gc_due(), "stress must collect at every compiled check");
-                let before = live[0];
-                vm.collect_here(&mut live);
-                assert_ne!(live[0], before, "the live value must actually move");
-                assert_eq!(vm.as_string(&live[0]).unwrap().as_str(), "still live");
-            }
-            Ok(live[0])
-        }
-
-        if std::env::var_os(CHILD).is_none() {
-            let output = std::process::Command::new(std::env::current_exe().unwrap())
-                .args([
-                    "--exact",
-                    "compiled_rt::call::tests::compiled_body_survives_gc_stress",
-                    "--nocapture",
-                ])
-                .env(CHILD, "1")
-                .env("BAML_GC_STRESS", "1")
-                .output()
-                .expect("run GC stress in a fresh process for its cached environment flag");
-            assert!(
-                output.status.success(),
-                "{}\n{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr),
-            );
-            return;
-        }
-
-        assert_eq!(
-            crate::compiled_rt::tests::run_with_compiled_bodies(
-                "function Main() -> string { \"still live\" }",
-                &[("user.Main", CompiledFn::Inline(body))],
-                &[],
-                false,
-            ),
-            "still live",
-        );
     }
 
     #[test]

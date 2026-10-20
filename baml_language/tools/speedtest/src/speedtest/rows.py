@@ -1,9 +1,8 @@
 """Rows: the implementations a workload is measured as.
 
 Every chart draws every row of the run, grouped by family, so a missing
-measurement is visible rather than silently absent. Adding an implementation
-(for example a natively compiled BAML backend) is one more Row whose kind the
-runner knows how to build and invoke.
+measurement is visible rather than silently absent. A BAML row names the
+backend its executable is packed with and the telemetry level it runs at.
 """
 
 import shutil
@@ -22,6 +21,7 @@ class Row:
     family: str
     kind: str                       # "baml" | "python" | "node" | "bun"
     telemetry: str | None = None    # BAML_TELEMETRY for BAML rows
+    backend: str = "bytecode"       # what `baml pack` emits: "bytecode" | "rust"
 
     @property
     def is_baml(self):
@@ -46,6 +46,8 @@ class Row:
 
 ROWS = [Row(f"vm-{lvl}", f"VM({lvl})", "BAML VM", "baml", lvl)
         for lvl in TELEMETRY_LEVELS] + [
+    Row(f"rust-{lvl}", f"Rust({lvl})", "BAML Rust", "baml", lvl, "rust")
+    for lvl in TELEMETRY_LEVELS] + [
     Row("node", "Node", "references", "node"),
     Row("bun", "Bun", "references", "bun"),
     Row("python", "Python", "references", "python"),
@@ -65,10 +67,13 @@ def toolchain_version(kind):
 
 
 def resolve(keys, telemetry=False):
-    """Rows for ``keys`` (default set when empty), plus every telemetry level when asked."""
+    """Rows for ``keys`` (default set when empty), plus every telemetry level of
+    each BAML backend among them when asked."""
     keys = list(keys or DEFAULT)
     if telemetry:
-        keys = [r.key for r in ROWS if r.is_baml] + [k for k in keys if not BY_KEY.get(k, ROWS[0]).is_baml]
+        backends = {BY_KEY[k].backend for k in keys if k in BY_KEY and BY_KEY[k].is_baml}
+        keys = [r.key for r in ROWS if r.is_baml and r.backend in backends] + [
+            k for k in keys if not BY_KEY.get(k, ROWS[0]).is_baml]
     unknown = [k for k in keys if k not in BY_KEY]
     if unknown:
         raise SystemExit(f"unknown rows: {', '.join(unknown)} (known: {', '.join(BY_KEY)})")
