@@ -13846,6 +13846,21 @@ impl<'db> LoweringContext<'db> {
         success: BlockId,
         failure: BlockId,
     ) -> Lowered<()> {
+        self.lower_pattern_test_with_catch_policy(scrutinee, pat_id, success, failure, false)
+    }
+
+    /// Catch wildcard filtering follows alternatives and binding wrappers of
+    /// the caught value, but not patterns on its projected fields/elements.
+    /// In particular, `PanicType | _` must still test its named alternative
+    /// when the wildcard rejects a panic.
+    fn lower_pattern_test_with_catch_policy(
+        &mut self,
+        scrutinee: Local,
+        pat_id: AstPatId,
+        success: BlockId,
+        failure: BlockId,
+        wildcard_skips_panics: bool,
+    ) -> Lowered<()> {
         let scrutinee = if self.atomic_pattern_test {
             let snapshot = self.builder.temp(self.builder.local_ty(scrutinee));
             self.builder.assign(
@@ -13872,7 +13887,13 @@ impl<'db> LoweringContext<'db> {
         {
             let saved = self.atomic_pattern_test;
             self.atomic_pattern_test = true;
-            self.lower_pattern_test(scrutinee, *sp, success, failure)?;
+            self.lower_pattern_test_with_catch_policy(
+                scrutinee,
+                *sp,
+                success,
+                failure,
+                wildcard_skips_panics,
+            )?;
             self.atomic_pattern_test = saved;
             return Ok(());
         }
@@ -13900,6 +13921,7 @@ impl<'db> LoweringContext<'db> {
 
         match &pat {
             AstPattern::Wildcard => {
+                self.emit_catch_wildcard_entry(scrutinee, wildcard_skips_panics, failure);
                 self.builder.goto(success);
             }
             AstPattern::Bind { .. } => {
@@ -13915,6 +13937,7 @@ impl<'db> LoweringContext<'db> {
                 // resolve against the frame, so the catch arm could silently
                 // rethrow. (Panic fall-through for catch arms is handled
                 // separately by `emit_catch_wildcard_entry`.)
+                self.emit_catch_wildcard_entry(scrutinee, wildcard_skips_panics, failure);
                 self.builder.goto(success);
             }
             // OLD's Pattern::Type covered structural shape tests; OLD's
@@ -14052,7 +14075,13 @@ impl<'db> LoweringContext<'db> {
                     } else {
                         failure
                     };
-                    self.lower_pattern_test(scrutinee, sub_pat, success, next)?;
+                    self.lower_pattern_test_with_catch_policy(
+                        scrutinee,
+                        sub_pat,
+                        success,
+                        next,
+                        wildcard_skips_panics,
+                    )?;
                     if i + 1 < n {
                         self.builder.set_current_block(next);
                     }
@@ -14843,8 +14872,13 @@ impl LoweringContext<'_> {
             // Try remaining arms in this handler. An unmatched value rethrows
             // through this clause's own exception region to an outer catch.
             let bb_arm_next = self.builder.create_block();
-            self.emit_catch_wildcard_entry(error_local, skips_panics, bb_arm_next);
-            self.lower_pattern_test(error_local, arm.pattern, body_block, bb_arm_next)?;
+            self.lower_pattern_test_with_catch_policy(
+                error_local,
+                arm.pattern,
+                body_block,
+                bb_arm_next,
+                skips_panics,
+            )?;
             self.builder.set_current_block(bb_arm_next);
         }
 

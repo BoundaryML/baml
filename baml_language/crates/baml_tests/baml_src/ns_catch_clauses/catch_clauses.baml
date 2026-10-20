@@ -499,3 +499,48 @@ function cc_arm_defer_before_next_handler() -> string {
 test "a throwing arm runs its defer before the next catch handler" {
     assert.equal(cc_arm_defer_before_next_handler(), "cleanup|next handler")
 }
+
+function cc_or_pattern_source(n: int) -> string {
+    match (n) {
+        0 => throw "ordinary error",
+        1 => cc_index_panic().to_string(),
+        _ => baml.sys.panic("another panic"),
+    }
+}
+
+function cc_named_panic_or_wildcard(n: int) -> string throws never {
+    cc_or_pattern_source(n) catch (e) {
+        baml.panics.IndexOutOfBounds | _ => "accepted",
+    } catch (outer) {
+        baml.panics.Panic => "propagated",
+    }
+}
+
+function cc_wildcard_or_named_panic(n: int) -> string throws never {
+    cc_or_pattern_source(n) catch_all (e) {
+        _ | baml.panics.IndexOutOfBounds => "accepted",
+    } catch (outer) {
+        baml.panics.Panic => "propagated",
+    }
+}
+
+test "catch Or-pattern wildcards skip panics without skipping named alternatives" {
+    assert.equal(cc_named_panic_or_wildcard(0), "accepted");
+    assert.equal(cc_named_panic_or_wildcard(1), "accepted");
+    assert.equal(cc_named_panic_or_wildcard(2), "propagated");
+    assert.equal(cc_wildcard_or_named_panic(0), "accepted");
+    assert.equal(cc_wildcard_or_named_panic(1), "accepted");
+    assert.equal(cc_wildcard_or_named_panic(2), "propagated")
+}
+
+function cc_boundary_or_wildcard(n: int) -> string throws never {
+    cc_or_pattern_source(n) catch_all_panics (e) {
+        baml.panics.IndexOutOfBounds | _ => "accepted",
+    }
+}
+
+test "catch_all_panics Or-pattern wildcards still receive every panic" {
+    assert.equal(cc_boundary_or_wildcard(0), "accepted");
+    assert.equal(cc_boundary_or_wildcard(1), "accepted");
+    assert.equal(cc_boundary_or_wildcard(2), "accepted")
+}

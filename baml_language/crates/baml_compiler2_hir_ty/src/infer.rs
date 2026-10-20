@@ -10828,6 +10828,9 @@ impl<'db> InferenceContext<'db> {
         let clause_facts = facts.clone();
         // The panics this clause's arms trap, for a clause that must
         // cover them all.
+        // A nested catch's own handlers may raise fresh panics even when
+        // they trap every panic from their base. Without inferred panic
+        // effects, each boundary must cover the full panic family itself.
         let mut trapped_panics: Vec<Ty> = Vec::new();
         let mut traps_every_panic = false;
         let clause_binding_ty = if facts.is_empty() {

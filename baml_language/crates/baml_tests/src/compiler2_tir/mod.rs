@@ -528,6 +528,9 @@ pub(crate) mod support {
                 let base_desc = expr_desc_rich(*base, body, inference);
                 let base_ty = expr_ty(vp, inference, *base);
                 writeln!(output, "{pad}catch ({base_desc} : {base_ty}) : {ty}").ok();
+                if matches!(body.exprs[*base], Expr::Catch { .. }) {
+                    render_expr(vp, *base, body, inference, indent + 2, output);
+                }
                 let kind = clause.kind.keyword();
                 let binding = pat_desc(clause.binding, body);
                 writeln!(output, "{pad}  {kind} ({binding})").ok();
