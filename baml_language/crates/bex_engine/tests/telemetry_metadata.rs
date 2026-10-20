@@ -67,9 +67,7 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
             )
         {
             // Exercise real input capture without network/LLM calls.
-            f.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
-                client: "test".into(),
-            });
+            f.body_meta = Some(bex_vm_types::FunctionMeta::Llm);
         }
     }
     let recording = TelemetryRecording::local_files(root.path(), RecordingConfig::default());

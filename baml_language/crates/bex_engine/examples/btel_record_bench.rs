@@ -144,9 +144,7 @@ async fn main() {
                 .is_some_and(|declared| declared == "capture")
         {
             // Real VM input/output capture without network/LLM noise.
-            function.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
-                client: "benchmark".into(),
-            });
+            function.body_meta = Some(bex_vm_types::FunctionMeta::Llm);
         }
     }
     let startup = Instant::now();
