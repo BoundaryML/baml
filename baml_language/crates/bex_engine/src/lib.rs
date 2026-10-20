@@ -3576,6 +3576,13 @@ impl BexEngine {
                             message: friendly_arg_type_mismatch(function_name, idx, &detail),
                         })?;
                     }
+                    // Every call, generic or not: materialization rejects a
+                    // mistyped node anywhere in the value, but report the
+                    // argument itself with the function name and position.
+                    self.check_inbound_arg_kind(&coerced, &param_types[idx])
+                        .map_err(|detail| EngineError::TypeMismatch {
+                            message: friendly_arg_type_mismatch(function_name, idx, &detail),
+                        })?;
                     Ok(BexCallArg::Provided(Box::new(coerced)))
                 }
                 BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
@@ -4158,9 +4165,15 @@ impl BexEngine {
             .enumerate()
             .map(|(idx, arg)| match param_types.get(idx + self_offset) {
                 Some(ty) => match arg {
-                    BexCallArg::Provided(value) => self
-                        .coerce_inbound_arg(*value, ty)
-                        .map(|value| BexCallArg::Provided(Box::new(value))),
+                    BexCallArg::Provided(value) => {
+                        let value = self.coerce_inbound_arg(*value, ty)?;
+                        self.check_inbound_arg_kind(&value, ty).map_err(|detail| {
+                            EngineError::TypeMismatch {
+                                message: format!("callable argument {} {detail}", idx + 1),
+                            }
+                        })?;
+                        Ok(BexCallArg::Provided(Box::new(value)))
+                    }
                     BexCallArg::OmittedDefault => Ok(BexCallArg::OmittedDefault),
                 },
                 None => Ok(arg),
