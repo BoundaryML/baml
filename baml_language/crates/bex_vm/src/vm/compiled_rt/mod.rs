@@ -6,8 +6,8 @@ mod cell;
 mod fiber;
 mod frame;
 pub(crate) use frame::attach_compiled_bodies;
-pub use frame::{CompiledBodies, CompiledBodyTable, FramePosition};
-pub use state::CompiledState;
+pub use frame::{CompiledBodies, CompiledBodyTable};
+pub(crate) use state::CompiledState;
 pub(crate) use state::SavedCallTypes;
 mod heap;
 mod program;
@@ -34,11 +34,8 @@ pub use baml_type::Freshness;
 use bex_vm_types::{HeapPtr, Value, types::Function};
 /// Severity of a log emitted by generated code.
 pub use btel_records::LogLevel;
-#[cfg(test)]
-pub(crate) use call::FORCE_CALL_FUNNEL;
 pub(crate) use fiber::{Fiber, Request};
 pub use trace::TraceHookMode;
-pub use r#virtual::VirtualSite;
 
 use crate::{
     errors::{ThrowKind, VmError, VmInternalError, VmThrown},
@@ -112,7 +109,7 @@ pub(crate) mod stub {
     use bex_vm_types::bytecode::OpCode;
 
     /// Resume stubs appended to compiled functions for calls, yields, awaits, and spawns.
-    pub(crate) const CODE: [OpCode; 9] = [
+    pub(crate) const CODE: [OpCode; 10] = [
         OpCode::ResumeCompiled, // START
         OpCode::ResumeCompiled, // AFTER_CALL
         OpCode::ResumeCompiled, // AFTER_YIELD
@@ -122,16 +119,19 @@ pub(crate) mod stub {
         OpCode::ResumeCompiled,
         OpCode::Spawn, // SPAWN
         OpCode::ResumeCompiled,
+        OpCode::ResumeCompiled, // AFTER_LOG
     ];
     /// Entry point for a body that has not started.
     pub(crate) const START: usize = 0;
     /// Call resume point, where the stack holds the result or an error is delivered.
     pub(crate) const AFTER_CALL: usize = 1;
-    /// Suspended on a yield.
+    /// Suspended on a yield; the engine pushes nothing.
     pub(crate) const AFTER_YIELD: usize = 2;
     pub(crate) const AWAIT: usize = 3;
     pub(crate) const AWAIT_ANY: usize = 5;
     pub(crate) const SPAWN: usize = 7;
+    /// Suspended on a log; the engine pushes a null to discard on resume.
+    pub(crate) const AFTER_LOG: usize = 9;
 
     const _: () = {
         assert!(matches!(CODE[START], OpCode::ResumeCompiled));
@@ -143,6 +143,7 @@ pub(crate) mod stub {
         assert!(matches!(CODE[AWAIT + 1], OpCode::ResumeCompiled));
         assert!(matches!(CODE[AWAIT_ANY + 1], OpCode::ResumeCompiled));
         assert!(matches!(CODE[SPAWN + 1], OpCode::ResumeCompiled));
+        assert!(matches!(CODE[AFTER_LOG], OpCode::ResumeCompiled));
     };
 }
 
@@ -194,17 +195,6 @@ pub fn rethrow(value: Value, context: Value) -> Box<VmError> {
         throw_kind: ThrowKind::Rethrow,
         context: (!context.is_null()).then_some(context),
     }))
-}
-
-/// Control reached a block the checker proved unreachable.
-#[must_use]
-pub fn unreachable() -> Box<VmError> {
-    Box::new(
-        VmInternalError::CompiledBody {
-            message: "compiled body reached an unreachable block".to_string(),
-        }
-        .into(),
-    )
 }
 
 /// The runtime type tag of a value, as `TypeTag` and `IsTypeTag` read it.

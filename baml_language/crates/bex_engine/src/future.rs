@@ -44,7 +44,7 @@ use ::bex_heap::{
     HeapPermit, HeapPermitManager, InactiveHeapPermit, PermitProof, Tlab, TlabHolder,
 };
 use ::bex_vm_types::{
-    ForwardingMap, FutureRead, HeapPtr, Object, ObjectType, RootHaver, SessionEvalLease, Value,
+    FutureRead, HeapPtr, Object, ObjectType, RootHaver, SessionEvalLease, Value,
     errors::StackFrame,
     types::{FutureId, FutureInternalError, FutureType},
 };
@@ -614,7 +614,7 @@ impl RootHaver for FutureManagerInner {
             future.collect_roots(roots);
         }
     }
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         // Drop the cached TLAB cursor — GC has swapped semispaces and our
         // `alloc_ptr`/`alloc_limit` now point into a region the heap will
         // hand out as a fresh chunk. The next `alloc_future` must refill
@@ -694,7 +694,7 @@ impl RootHaver for FutureWork {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         roots.push(self.future);
     }
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         if let Some(new_result) = roots.get(&self.future) {
             self.future = *new_result;
         }

@@ -526,8 +526,7 @@ impl<'db> Generator<'_, 'db> {
                 let future = self.load(block, future)?;
                 let future = self.value_arg(&future);
                 self.emit_statement(&format!("let operand = {future};"));
-                let suspend = self.suspend_expr(block, "Step::Await(operand)", &[]);
-                format!("match vm.ready(operand) {{ Some(v) => Ok(v), None => {suspend} }}")
+                self.suspend_expr(block, "Step::Await(operand)", &[])
             }
             Terminator::AwaitAny { futures, .. } => {
                 let futures = self.value_operand(block, futures)?;

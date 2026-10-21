@@ -6,10 +6,10 @@
 //! B adds child threads and routes child completions through
 //! `settles_future`.
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use ::bex_heap::{Tlab, TlabHolder};
-use ::bex_vm_types::{ForwardingMap, HeapPtr, RootHaver, types::FutureId};
+use ::bex_vm_types::{HeapPtr, RootHaver, types::FutureId};
 use bex_vm::BexVm;
 use bex_vm_types::cancellation::{CancellationObserver, CancellationSource};
 use tokio_util::sync::CancellationToken;
@@ -204,20 +204,14 @@ impl BexThread {
     /// Whether the VM is inside a `defer` body, at any depth of the call
     /// stack. Each bytecode frame's function carries the PC ranges of its
     /// `defer` bodies (`Bytecode::shield_table`); the innermost frame is
-    /// at `cur_pc`, and an outer frame is at its call instruction: the
-    /// saved instruction pointer is the end of that instruction, and the
-    /// block the call continues to may already lie outside the body
-    /// (`defer { f() }` continues after it), so the call itself decides.
+    /// at `cur_pc`, and an outer frame is at its call instruction (see
+    /// `BexVm::frame_pc`): the block the call continues to may already lie
+    /// outside the body (`defer { f() }` continues after it), so the call
+    /// itself decides.
     /// A callee is shielded through its caller, so unwinding needs no
     /// bookkeeping.
     pub fn vm_thread_is_shielded(&self) -> bool {
-        // `cur_pc` is valid only for the innermost bytecode frame.
-        let innermost = self
-            .vm
-            .frames
-            .iter()
-            .rposition(|frame| matches!(frame, bex_vm::Frame::Bytecode(_)))
-            .filter(|&index| !self.vm.frame_is_compiled(index));
+        let live = self.vm.live_bytecode_frame();
         self.vm
             .frames
             .iter()
@@ -227,26 +221,8 @@ impl BexThread {
                 let bex_vm::Frame::Bytecode(frame) = frame else {
                     return false;
                 };
-                let pc = match self.vm.frame_position(index) {
-                    None => return false,
-                    // A compiled caller records its call instruction before entering the callee.
-                    Some(
-                        bex_vm::FramePosition::CompiledRunning
-                        | bex_vm::FramePosition::CompiledStub(_),
-                    ) => match self.vm.compiled_pc(index) {
-                        Some(pc) => pc,
-                        None => return false,
-                    },
-                    Some(bex_vm::FramePosition::Bytecode(_)) if Some(index) == innermost => {
-                        self.vm.cur_pc
-                    }
-                    Some(bex_vm::FramePosition::Bytecode(next)) => {
-                        next.checked_sub(1).unwrap_or_else(|| {
-                            unreachable!(
-                                "an outer bytecode frame has executed its call instruction"
-                            )
-                        })
-                    }
+                let Some(pc) = self.vm.frame_pc(index, live) else {
+                    return false;
                 };
                 let function = self.frame_function(frame.function);
                 match &function.bytecode.compact {
@@ -278,7 +254,7 @@ impl RootHaver for BexThread {
         self.vm.collect_roots(roots);
     }
 
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.vm.forward_roots(roots);
     }
 }

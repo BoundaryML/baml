@@ -60,7 +60,7 @@ fn compiled_bodies_disabled(value: Option<&str>) -> bool {
 fn compiled_bodies_from_env(
     compiled_bodies: Option<bex_engine::CompiledBodies>,
 ) -> Option<bex_engine::CompiledBodies> {
-    let value = std::env::var("BAML_COMPILED_BODIES").ok();
+    let value = baml_env::raw_var("BAML_COMPILED_BODIES");
     if compiled_bodies_disabled(value.as_deref()) {
         None
     } else {

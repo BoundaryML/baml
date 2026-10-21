@@ -16,10 +16,7 @@
 //! below the waiting one, so nesting on the fiber always mirrors the VM's
 //! frame stack.
 //!
-//! Every VM that runs compiled code has its own fiber, and a program that
-//! spawns many short tasks makes many VMs. Their stacks come from a process-wide
-//! pool: a fiber dropped with no body on it hands its stack back, and the next
-//! fiber takes it instead of mapping a fresh one.
+//! Every VM that runs compiled code has its own fiber, mapped on first use.
 //!
 //! Compiled bodies are packed for native hosts only. Targets without stack
 //! switching (wasm, Windows on aarch64) build the VM with a fiber that is never
@@ -31,10 +28,17 @@ use bex_vm_types::Value;
 use smallvec::SmallVec;
 
 use super::{CompiledFn, Step};
-use crate::{errors::VmError, vm::BexVm};
+use crate::{
+    errors::{VmError, VmInternalError},
+    vm::BexVm,
+};
 
 /// What the VM sends into the fiber. The VM pointer is passed on every message
 /// because the fiber only touches the VM while the VM is driving it.
+///
+/// The VM must not move while a body is parked on its fiber: a parked body
+/// still holds the `&mut BexVm` it was entered with, and [`BexVm::suspend`]
+/// asserts that every later message names the same VM.
 #[cfg_attr(
     any(target_arch = "wasm32", all(windows, target_arch = "aarch64")),
     allow(dead_code)
@@ -51,8 +55,7 @@ pub(crate) enum Message {
         vm: NonNull<BexVm>,
         outcome: Result<Value, Box<VmError>>,
     },
-    /// Leave the fiber. Sent only with no body on it, so the coroutine returns
-    /// and its stack can be reused.
+    /// Leave the fiber. Sent only with no body on it, so the coroutine returns.
     Stop,
 }
 
@@ -69,10 +72,39 @@ pub(crate) enum Request {
 }
 
 impl BexVm {
-    /// Drive the fiber with `message` until it suspends or its body returns.
-    pub(crate) fn fiber_resume(&mut self, message: Message) -> Request {
-        let fiber = self.compiled.fiber.get_or_insert_with(Fiber::new);
-        let request = fiber.resume(message);
+    /// Drive the fiber with the message `message` builds until it suspends or
+    /// its body returns.
+    ///
+    /// The fiber is moved out of `self` while it runs: the body on it holds
+    /// the only `&mut BexVm`, so nothing on this side may stay borrowed from
+    /// the VM across the switch.
+    pub(crate) fn fiber_resume(
+        &mut self,
+        message: impl FnOnce(NonNull<BexVm>) -> Message,
+    ) -> Request {
+        debug_assert!(
+            !self.compiled.on_fiber,
+            "only the VM's own stack drives the fiber"
+        );
+        let mut fiber = match self.compiled.fiber.take() {
+            Some(fiber) => fiber,
+            None => match Fiber::new() {
+                Ok(fiber) => {
+                    self.compiled.fiber_floor = fiber.floor();
+                    fiber
+                }
+                Err(error) => {
+                    return Request::Done(Err(Box::new(
+                        VmInternalError::CompiledBody {
+                            message: format!("could not map a stack for compiled code: {error}"),
+                        }
+                        .into(),
+                    )));
+                }
+            },
+        };
+        let request = fiber.resume(message(NonNull::from(&mut *self)));
+        self.compiled.fiber = Some(fiber);
         self.compiled.on_fiber = false;
         request
     }
@@ -82,32 +114,22 @@ impl BexVm {
         body: CompiledFn,
         args: SmallVec<[Value; 4]>,
     ) -> Request {
-        let vm = NonNull::from(&mut *self);
-        self.fiber_resume(Message::Enter { vm, body, args })
+        self.fiber_resume(|vm| Message::Enter { vm, body, args })
     }
 
     pub(crate) fn resume_body(&mut self, outcome: Result<Value, Box<VmError>>) -> Request {
-        let vm = NonNull::from(&mut *self);
-        self.fiber_resume(Message::Resume { vm, outcome })
+        self.fiber_resume(|vm| Message::Resume { vm, outcome })
     }
 }
 
 #[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
 pub(crate) use stackful::{Fiber, YielderPtr};
-#[cfg(all(
-    test,
-    not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64")))
-))]
-pub(crate) use stackful::{POOL_LIMIT, StackPool};
 #[cfg(any(target_arch = "wasm32", all(windows, target_arch = "aarch64")))]
 pub(crate) use stackless::{Fiber, YielderPtr};
 
 #[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
 mod stackful {
-    use std::{
-        ptr::NonNull,
-        sync::{Mutex, PoisonError},
-    };
+    use std::ptr::NonNull;
 
     use bex_vm_types::Value;
     use corosensei::{
@@ -122,6 +144,11 @@ mod stackful {
         vm::BexVm,
     };
 
+    // corosensei unwinds a fiber's stack to drop a parked coroutine and
+    // forwards panics across the switch; neither works under `panic = "abort"`.
+    #[cfg(panic = "abort")]
+    compile_error!("compiled bodies run on corosensei fibers, which need `panic = \"unwind\"`");
+
     /// Address space per fiber; the OS commits pages as they are touched. The
     /// VM's frame limit bounds how much is ever used.
     const STACK_SIZE: usize = 4 << 20;
@@ -130,49 +157,8 @@ mod stackful {
     /// and unwinding.
     const STACK_RED_ZONE: usize = 256 << 10;
 
-    /// Idle stacks kept mapped; any beyond this many are unmapped.
-    pub(crate) const POOL_LIMIT: usize = 64;
-
-    /// Stacks of fibers dropped with no body on them, for the fibers that
-    /// come next. Mapping and unmapping a stack per VM is measurable system
-    /// time in a program that spawns many short tasks.
-    ///
-    /// A pooled stack holds no frames: the fiber that returns it has made its
-    /// coroutine return first (see [`Fiber::drop`]). The pages keep whatever
-    /// the last fiber wrote, which the next coroutine overwrites as it runs.
-    pub(crate) struct StackPool(Mutex<Vec<DefaultStack>>);
-
-    static POOL: StackPool = StackPool::new();
-
-    impl StackPool {
-        pub(crate) const fn new() -> Self {
-            Self(Mutex::new(Vec::new()))
-        }
-
-        /// A pooled stack, or a freshly mapped one.
-        fn take(&self) -> DefaultStack {
-            let pooled = self.0.lock().unwrap_or_else(PoisonError::into_inner).pop();
-            pooled.unwrap_or_else(|| DefaultStack::new(STACK_SIZE).expect("map a fiber stack"))
-        }
-
-        /// Keep `stack` for the next fiber, or unmap it when the pool is full.
-        fn put(&self, stack: DefaultStack) {
-            let mut stacks = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-            if stacks.len() < POOL_LIMIT {
-                stacks.push(stack);
-            }
-            // Otherwise `stack` is unmapped on return, after the lock is released.
-        }
-
-        #[cfg(test)]
-        pub(crate) fn len(&self) -> usize {
-            self.0.lock().unwrap_or_else(PoisonError::into_inner).len()
-        }
-    }
-
     pub(crate) struct Fiber {
-        /// Taken only by `drop`, which needs the coroutine by value.
-        coroutine: Option<Coroutine<Message, Request, ()>>,
+        coroutine: Coroutine<Message, Request, ()>,
         /// Lowest address a compiled callee may start at; see [`BexVm::stack_room`].
         floor: usize,
         /// Bodies running or waiting on the fiber. Each [`Message::Enter`]
@@ -180,25 +166,21 @@ mod stackful {
         /// coroutine is parked in its top-level loop (or has never started)
         /// and the stack holds no frame of ours.
         bodies: usize,
-        /// Where the stack goes when the fiber is dropped idle.
-        pool: &'static StackPool,
     }
 
-    // SAFETY: while suspended, the fiber's stack holds only frames of compiled
-    // bodies, VM code and builtins, whose locals are `Value`s and other `Send`
-    // data; nothing thread-bound is held across `suspend`. The VM itself moves
-    // between threads between `exec` calls, and the fiber moves with it.
+    // SAFETY: a fiber is only resumed by the thread that owns its VM, and
+    // moves between threads with the VM between `exec` calls. That is sound
+    // only because nothing on a parked fiber's stack is thread-bound: the
+    // frames there are generated bodies, VM code and non-yielding builtins,
+    // and none of them holds a thread-local reference, a lock guard, an `Rc`
+    // or other `!Send` value across `BexVm::suspend`. Generated code keeps
+    // only `Value`s and scalars live across a suspension.
     #[allow(unsafe_code)]
     unsafe impl Send for Fiber {}
 
     impl Fiber {
-        pub(crate) fn new() -> Self {
-            Self::with_pool(&POOL)
-        }
-
-        /// A fiber whose stack comes from, and returns to, `pool`.
-        pub(crate) fn with_pool(pool: &'static StackPool) -> Self {
-            let stack = pool.take();
+        pub(crate) fn new() -> std::io::Result<Self> {
+            let stack = DefaultStack::new(STACK_SIZE)?;
             let floor = stack.limit().get() + STACK_RED_ZONE;
             let coroutine = Coroutine::with_stack(stack, |yielder, mut message| {
                 loop {
@@ -209,15 +191,17 @@ mod stackful {
                             unreachable!("a fiber with no body running is resumed with one to run")
                         }
                     };
-                    message = yielder.suspend(Request::Done(run(yielder, vm, body, &args)));
+                    // SAFETY: the VM is parked in `Fiber::resume` and touches
+                    // nothing until the fiber suspends; see `Message`.
+                    let vm = unsafe { &mut *vm.as_ptr() };
+                    message = yielder.suspend(Request::Done(run(vm, yielder, body, &args)));
                 }
             });
-            Self {
-                coroutine: Some(coroutine),
+            Ok(Self {
+                coroutine,
                 floor,
                 bodies: 0,
-                pool,
-            }
+            })
         }
 
         pub(crate) fn resume(&mut self, message: Message) -> Request {
@@ -228,11 +212,7 @@ mod stackful {
             if matches!(message, Message::Enter { .. }) {
                 self.bodies += 1;
             }
-            let coroutine = self
-                .coroutine
-                .as_mut()
-                .expect("a fiber keeps its coroutine until it is dropped");
-            match coroutine.resume(message) {
+            match self.coroutine.resume(message) {
                 CoroutineResult::Yield(request) => {
                     if matches!(request, Request::Done(_)) {
                         self.bodies -= 1;
@@ -243,12 +223,7 @@ mod stackful {
             }
         }
 
-        #[cfg(test)]
-        pub(crate) fn bodies(&self) -> usize {
-            self.bodies
-        }
-
-        #[cfg(test)]
+        /// Lowest address a compiled callee may start at; see [`BexVm::stack_room`].
         pub(crate) fn floor(&self) -> usize {
             self.floor
         }
@@ -256,39 +231,34 @@ mod stackful {
 
     impl Drop for Fiber {
         fn drop(&mut self) {
-            let Some(mut coroutine) = self.coroutine.take() else {
-                return;
-            };
             // A waiting body keeps frames on the stack: dropping the coroutine
-            // unwinds them, and the stack is unmapped with it. A panic in
-            // flight gets the same, with no stack switch during unwinding.
-            if self.bodies != 0 || std::thread::panicking() {
+            // unwinds them. A panic in flight gets the same, with no stack
+            // switch during unwinding. A coroutine that never ran holds nothing.
+            if self.bodies != 0 || std::thread::panicking() || !self.coroutine.started() {
                 return;
             }
-            // The coroutine is parked in its top-level loop, or has never run:
-            // either way `Stop` makes it return at once, and a returned
-            // coroutine gives up its stack with nothing on it.
-            match coroutine.resume(Message::Stop) {
+            // The coroutine is parked in its top-level loop: `Stop` makes it
+            // return at once, which is cheaper than the forced unwind that
+            // dropping it suspended would take.
+            match self.coroutine.resume(Message::Stop) {
                 CoroutineResult::Return(()) => {}
                 CoroutineResult::Yield(_) => unreachable!("a stopped fiber returns"),
             }
-            self.pool.put(coroutine.into_stack());
         }
     }
 
-    /// Run `body` on the fiber with the VM driving.
-    #[allow(unsafe_code)]
+    /// Run `body` on the fiber with the VM driving. A body entered from
+    /// bytecode nests below the bodies already waiting on the fiber, so it
+    /// checks for stack room as a direct compiled call does.
     fn run(
+        vm: &mut BexVm,
         yielder: &Yielder<Message, Request>,
-        vm: NonNull<BexVm>,
         body: CompiledFn,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
-        // SAFETY: the VM is parked in `Fiber::resume` and touches nothing until
-        // the fiber suspends; its address is stable while its fiber exists.
-        let vm = unsafe { &mut *vm.as_ptr() };
         vm.compiled.yielder = Some(YielderPtr(yielder.into()));
         vm.compiled.on_fiber = true;
+        vm.stack_room()?;
         body(vm, args)
     }
 
@@ -324,16 +294,25 @@ mod stackful {
                 self.compiled.on_fiber = false;
                 // SAFETY: a yielder lives as long as its fiber, and this body is on it.
                 let message = unsafe { yielder.0.as_ref() }.suspend(request);
+                let vm = match &message {
+                    Message::Resume { vm, .. } | Message::Enter { vm, .. } => *vm,
+                    Message::Stop => unreachable!("a fiber is stopped only with no body on it"),
+                };
+                // A parked body's `&mut BexVm` must still name the VM driving it.
+                assert_eq!(
+                    vm.as_ptr(),
+                    std::ptr::from_mut(self),
+                    "a VM moved while a compiled body was parked on its fiber"
+                );
                 match message {
-                    Message::Resume { vm, outcome } => {
-                        // SAFETY: as in `run`.
-                        unsafe { &mut *vm.as_ptr() }.compiled.on_fiber = true;
+                    Message::Resume { outcome, .. } => {
+                        self.compiled.on_fiber = true;
                         return outcome;
                     }
-                    Message::Enter { vm, body, args } => {
+                    Message::Enter { body, args, .. } => {
                         // SAFETY: see above.
                         let yielder = unsafe { yielder.0.as_ref() };
-                        request = Request::Done(run(yielder, vm, body, &args));
+                        request = Request::Done(run(self, yielder, body, &args));
                     }
                     Message::Stop => unreachable!("a fiber is stopped only with no body on it"),
                 }
@@ -343,8 +322,7 @@ mod stackful {
         /// Whether the fiber has room for a compiled callee, or the error to raise.
         #[inline]
         pub(crate) fn stack_room(&mut self) -> Result<(), Box<VmError>> {
-            let floor = self.compiled.fiber.as_ref().map_or(0, |fiber| fiber.floor);
-            if stack_address() >= floor {
+            if stack_address() >= self.compiled.fiber_floor {
                 return Ok(());
             }
             Err(Box::new(VmError::thrown_fresh(
@@ -368,7 +346,11 @@ mod stackless {
     // The signatures match the stackful fiber's.
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
     impl Fiber {
-        pub(crate) fn new() -> Self {
+        pub(crate) fn new() -> std::io::Result<Self> {
+            unreachable!("{NEVER}")
+        }
+
+        pub(crate) fn floor(&self) -> usize {
             unreachable!("{NEVER}")
         }
 

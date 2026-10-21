@@ -44,16 +44,10 @@ impl<'db> Generator<'_, 'db> {
                 // A generic callee's frame starts with the call's type
                 // arguments (a plain function carries none of its own).
                 let site = self.site_pc(block);
-                let call = if types.is_empty() {
-                    format!(
-                        "vm.call_compiled(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, {args}, {site})"
-                    )
-                } else {
-                    format!(
-                        "vm.call_compiled_with_types(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, &[{}], {args}, {site})",
-                        types.join(", ")
-                    )
-                };
+                let call = format!(
+                    "vm.call_compiled(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, &[{}], {args}, {site})",
+                    types.join(", ")
+                );
                 if self.pausing.contains(&object) {
                     self.rooted_call(block, &call)
                 } else {
@@ -198,9 +192,8 @@ impl<'db> Generator<'_, 'db> {
     }
 
     /// An `R<Value>` expression for an interface method call: bind `callee` to
-    /// the method's implementation for the receiver through the site's inline
-    /// cache (a `static` of this body, which also pushes the call's type
-    /// arguments); a compiled implementation with a matching arity runs in
+    /// the method's implementation for the receiver through the interpreter's
+    /// resolver and cache (which also pushes the call's type arguments); a compiled implementation with a matching arity runs in
     /// place, anything else is requested from the VM with the value arguments
     /// laid over its slots. `args` are the method's type arguments then its
     /// value arguments in declared order; `self_arg` indexes the receiver
@@ -217,9 +210,9 @@ impl<'db> Generator<'_, 'db> {
         self_arg: usize,
         layout: Option<&baml_type::CallLayout>,
     ) -> Gen<String> {
-        let (iface, iface_args, iface_fixed) = self.interface_operands(iface)?;
+        let (iface, iface_args, _) = self.interface_operands(iface)?;
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
-        let (types, types_fixed) = self.type_operands("interface method call", type_args)?;
+        let (types, _) = self.type_operands("interface method call", type_args)?;
         let values = self.arg_values(block, args)?;
         let Some(receiver) = values.get(self_arg) else {
             return Err(Rejection::Invalid(format!(
@@ -243,25 +236,16 @@ impl<'db> Generator<'_, 'db> {
                 format!("Some(&[{}])", slots.join(", "))
             },
         );
-        // The receiver-only cache is valid only for a static instantiation.
-        if iface_fixed && types_fixed {
-            let site = format!("S{}", block.0);
-            self.emit_statement(&format!(
-                    "static {site}: bex_vm::compiled_rt::VirtualSite = bex_vm::compiled_rt::VirtualSite::new();"
-                ),
-            );
-            self.emit_statement(&format!(
-                    "let callee = vm.virtual_target(&{site}, {receiver}, {iface}, {iface_args}, {method:?}, &[{}])?;",
-                    types.join(", ")
-                ),
-            );
-        } else {
-            self.emit_statement(&format!(
-                    "let callee = vm.virtual_target_uncached({receiver}, {iface}, {iface_args}, {method:?}, &[{}])?;",
-                    types.join(", ")
-                ),
-            );
-        }
+        // A known site shares the interpreter's cache for its `VirtualCall`.
+        let cache_site = self
+            .positions
+            .block(block.0)
+            .and_then(|pcs| pcs.terminator)
+            .map_or_else(|| "None".to_string(), |pc| format!("Some({pc})"));
+        self.emit_statement(&format!(
+            "let callee = vm.virtual_target({receiver}, {iface}, {iface_args}, {method:?}, &[{}], {cache_site})?;",
+            types.join(", ")
+        ));
         let site = self.site_pc(block);
         let values = values.join(", ");
         let suspend = format!(

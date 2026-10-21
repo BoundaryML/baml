@@ -42,7 +42,7 @@ pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
 pub use media::{MediaContent, MediaValue};
 pub use meter::{AllocDebt, Meter};
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
-pub use roots::{ForwardingMap, PermitProof, RootHaver, SlotRange, WriteBarrier};
+pub use roots::{PermitProof, RootHaver, WriteBarrier};
 pub use runtime_compile::{
     MountHead, RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
     RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails, RuntimeDiagnosticHighlight,
@@ -255,15 +255,6 @@ impl EarlyYieldCheck {
     pub fn tick(&mut self) -> bool {
         self.counter -= 1;
         self.counter == 0
-    }
-
-    /// Whether the next [`Self::tick`] elapses: a caller that must not poll
-    /// yet (compiled code taking an `await` fast path) leaves that tick to the
-    /// instruction that can yield.
-    #[inline]
-    #[must_use]
-    pub fn is_due(&self) -> bool {
-        self.counter <= 1
     }
 
     /// Make the next [`Self::tick`] elapse, so the flags are polled at the

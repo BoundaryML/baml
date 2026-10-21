@@ -1032,7 +1032,7 @@ pub struct BexEngine {
     root_package: HeapPtr,
     /// The class that owns each method, from the classes' own method
     /// tables: what tells a callee's class-generic prefix from its own.
-    method_owners: rustc_hash::FxHashMap<HeapPtr, HeapPtr>,
+    method_owners: HashMap<HeapPtr, HeapPtr>,
     /// Resolved class names for instance allocation (`IndexMap` preserves definition order)
     resolved_class_names: indexmap::IndexMap<String, HeapPtr>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -1860,7 +1860,7 @@ impl BexEngine {
         // without re-resolving it.
         let packages = Arc::new(package_index);
         let root_package = packages.root();
-        let method_owners: rustc_hash::FxHashMap<HeapPtr, HeapPtr> = packages
+        let method_owners: HashMap<HeapPtr, HeapPtr> = packages
             .package_ptrs()
             .flat_map(|package_ptr| {
                 // SAFETY: the package index holds compile-time package objects.
@@ -4787,11 +4787,6 @@ impl BexEngine {
         }
     }
 
-    /// Heuristic-driven GC check that does **not** require the caller to
-    /// hold an active heap permit. Use this when the caller is already in a
-    /// permit-released state (e.g., the engine's `Await` branch waiting on
-    /// a `SetOnce`) — calling [`Self::gc_safepoint`] there would do an
-    /// extra release-and-reacquire pair around the heuristic for nothing.
     /// The heap's own heuristic, or a major collection at every safepoint under
     /// `BAML_GC_STRESS=1`.
     fn collection_due(&self) -> Option<bex_heap::CollectionLevel> {
@@ -4801,6 +4796,11 @@ impl BexEngine {
         self.heap.should_collect()
     }
 
+    /// Heuristic-driven GC check that does **not** require the caller to
+    /// hold an active heap permit. Use this when the caller is already in a
+    /// permit-released state (e.g., the engine's `Await` branch waiting on
+    /// a `SetOnce`) — calling [`Self::gc_safepoint`] there would do an
+    /// extra release-and-reacquire pair around the heuristic for nothing.
     async fn maybe_collect_garbage(self: &Arc<Self>) {
         let i_am_checking = self
             .checking_gc

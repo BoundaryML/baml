@@ -1,13 +1,18 @@
-use bex_vm_types::{ForwardingMap, HeapPtr, RealizedTy, RootHaver, Value, types::TypeValue};
+use std::collections::HashMap;
+
+use bex_vm_types::{HeapPtr, RealizedTy, RootHaver, Value, types::TypeValue};
 
 use super::{Fiber, fiber::YielderPtr};
 use crate::errors::VmError;
 
 /// VM state that only compiled code uses.
 #[derive(Default)]
-pub struct CompiledState {
+pub(crate) struct CompiledState {
     /// The stack compiled bodies run on, mapped on first use.
     pub(crate) fiber: Option<Fiber>,
+    /// The fiber's [`Fiber::floor`], kept here so `stack_room` reads it while
+    /// the fiber is out of `self` running a body.
+    pub(crate) fiber_floor: usize,
     /// How a body on the fiber switches back to the VM.
     #[cfg_attr(
         any(target_arch = "wasm32", all(windows, target_arch = "aarch64")),
@@ -23,8 +28,6 @@ pub struct CompiledState {
     pub(crate) call_type_args: Vec<RealizedTy>,
     /// Pending type arguments preserved across nested compiled calls.
     pub(crate) saved_call_types: Vec<SavedCallTypes>,
-    /// Spare frame type-argument vectors, reused across generic calls.
-    pub(crate) type_arg_pool: Vec<Vec<RealizedTy>>,
     /// An error the unwinder delivered to a suspended compiled body.
     pub(crate) delivery: Option<Box<VmError>>,
 }
@@ -74,7 +77,7 @@ impl RootHaver for CompiledState {
         }
     }
 
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         let forward_ty = |ty: &mut RealizedTy| {
             ty.visit_heads_mut(&mut |head| {
                 if head.is_resolved()

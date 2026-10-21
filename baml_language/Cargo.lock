@@ -1116,6 +1116,7 @@ name = "baml_pack_host"
 version = "0.0.0-beta"
 dependencies = [
  "baml_artifact",
+ "baml_env",
  "baml_exec",
  "bex_engine",
  "bex_events",
@@ -1487,7 +1488,6 @@ dependencies = [
  "indexmap",
  "num-bigint",
  "parking_lot",
- "rustc-hash 2.1.2",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -1649,7 +1649,6 @@ dependencies = [
  "hex",
  "indexmap",
  "num-bigint",
- "rustc-hash 2.1.2",
  "serde_json",
  "sha2",
  "thiserror 2.0.18",

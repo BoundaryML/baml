@@ -18,7 +18,6 @@ use std::{collections::HashMap, sync::Arc};
 
 use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use btel_types::context::{Context, ContextPatch};
-use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 use crate::{
@@ -95,7 +94,7 @@ macro_rules! verifier_unreachable {
 
 use ::bex_heap::TlabHolder;
 use ::bex_vm_types::{
-    EarlyYieldCheck, ForwardingMap, RootHaver,
+    EarlyYieldCheck, RootHaver,
     types::{ErrorClass, FutureId},
 };
 use ::core::any::TypeId;
@@ -226,7 +225,7 @@ fn append_passed_type_args(
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct StaticVirtualCallKey {
+pub(crate) struct StaticVirtualCallKey {
     caller_function_addr: usize,
     call_pc: usize,
     receiver: StaticVirtualReceiverKey,
@@ -244,7 +243,7 @@ struct StaticVirtualCallKey {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-enum StaticVirtualReceiverKey {
+pub(crate) enum StaticVirtualReceiverKey {
     /// Static program classes have immutable, program-unique tags. Generic
     /// arguments remain part of identity; the overwhelmingly common
     /// non-generic case clones an empty box without allocating.
@@ -258,7 +257,7 @@ enum StaticVirtualReceiverKey {
 }
 
 #[derive(Clone, Debug)]
-struct StaticVirtualCallTarget {
+pub(crate) struct StaticVirtualCallTarget {
     callee: HeapPtr,
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
 }
@@ -388,7 +387,7 @@ impl RootHaver for BytecodeFrame {
             });
         }
     }
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.function = roots.get(&self.function).copied().unwrap_or(self.function);
         for ty in &mut self.type_args {
             ty.visit_heads_mut(&mut |head| {
@@ -432,7 +431,7 @@ impl RootHaver for NativeFrame {
         roots.push(self.function);
         roots.extend_from_slice(&self.continuation.gc_roots());
     }
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.function = roots.get(&self.function).copied().unwrap_or(self.function);
         self.continuation.apply_forwarding(roots);
     }
@@ -471,7 +470,6 @@ pub(crate) mod tests {
         bytecode::Bytecode,
         types::{BoundMethod, Closure, Function, FunctionOrigin, TypeValue, type_tags},
     };
-    use rustc_hash::FxHashMap;
 
     use super::{
         BexVm, Frame, FrameTypeMetadata, TakenTypeArgs, VmExecState,
@@ -527,9 +525,8 @@ pub(crate) mod tests {
             pending_call_type_values: Vec::new(),
             compiled: super::compiled_rt::CompiledState::default(),
             pending_call_passes_type_args: false,
-            static_load_type_cache: FxHashMap::default(),
-            static_virtual_call_cache: FxHashMap::default(),
-            impl_rule_cache: std::cell::RefCell::default(),
+            static_load_type_cache: HashMap::new(),
+            static_virtual_call_cache: HashMap::new(),
             telemetry: Some(TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
@@ -775,7 +772,7 @@ pub(crate) mod tests {
             fn gc_roots(&self) -> Vec<HeapPtr> {
                 vec![self.0]
             }
-            fn apply_forwarding(&mut self, roots: &bex_vm_types::ForwardingMap) {
+            fn apply_forwarding(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
                 self.0 = roots.get(&self.0).copied().unwrap_or(self.0);
             }
         }
@@ -1480,7 +1477,7 @@ impl RootHaver for Frame {
             Frame::Native(f) => f.collect_roots(roots),
         }
     }
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         match self {
             Frame::Bytecode(f) => f.forward_roots(roots),
             Frame::Native(f) => f.forward_roots(roots),
@@ -1774,7 +1771,7 @@ pub struct BexVm {
     pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
     pending_call_type_values: Vec<Option<TypeValue>>,
     /// State only compiled code uses.
-    pub compiled: compiled_rt::CompiledState,
+    pub(crate) compiled: compiled_rt::CompiledState,
     /// Set by a call that passes type arguments, for its callee's entry
     /// only: telemetry records the frame's type arguments before the call's
     /// writeback appends `pending_call_type_args` to the new frame.
@@ -1783,22 +1780,13 @@ pub struct BexVm {
     /// Created-once immutable type objects for fully realized `LoadType`
     /// constants in static functions. The compact numeric key keeps the
     /// per-iteration lookup cheaper than re-hashing the full realized type.
-    /// Entries are explicit VM GC roots. Fx-hashed: the key is a function
-    /// address and a site index, nothing a program chooses, and the map is
-    /// only ever iterated to rebuild itself or to list its values as roots.
-    static_load_type_cache: FxHashMap<(usize, TypeValueSite), HeapPtr>,
+    /// Entries are explicit VM GC roots.
+    static_load_type_cache: HashMap<(usize, TypeValueSite), HeapPtr>,
     /// Monomorphic static virtual-call results keyed by caller site and the
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
     /// dynamic builder registration remain live on every dynamic dispatch.
-    static_virtual_call_cache: FxHashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
-    /// Memoized impl-rule selections
-    /// ([`ImplResolver::resolve_implements_rule`](crate::package_baml::ImplResolver::resolve_implements_rule)),
-    /// keyed on the question and the resolver's world, dropped whenever the
-    /// shared rule-world epoch moves or a collection runs. Interior
-    /// mutability because the resolver holds `&BexVm`; a VM runs on one
-    /// thread at a time, so no lock. See `ImplRuleCache`.
-    pub(crate) impl_rule_cache: std::cell::RefCell<crate::package_baml::ImplRuleCache>,
+    static_virtual_call_cache: HashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
 }
 
 /// VM execution state.
@@ -2529,9 +2517,8 @@ impl BexVm {
             pending_call_type_values: Vec::new(),
             compiled: compiled_rt::CompiledState::default(),
             pending_call_passes_type_args: false,
-            static_load_type_cache: FxHashMap::default(),
-            static_virtual_call_cache: FxHashMap::default(),
-            impl_rule_cache: std::cell::RefCell::default(),
+            static_load_type_cache: HashMap::new(),
+            static_virtual_call_cache: HashMap::new(),
             telemetry,
             trace_scope,
             manual_activations: Vec::new(),
@@ -6439,12 +6426,7 @@ impl BexVm {
     fn capture_stack_trace(&self) -> Vec<StackFrame> {
         // The innermost (topmost) bytecode frame's live PC lives in `cur_pc`;
         // outer frames recorded their call-site PC in `faulting_pc` at call time.
-        let top_bc = self
-            .frames
-            .iter()
-            .rposition(|frame| matches!(frame, Frame::Bytecode(_)))
-            // `cur_pc` is only live when the innermost frame runs bytecode.
-            .filter(|&idx| self.compiled_at(idx).is_none());
+        let top_bc = self.live_bytecode_frame();
         self.frames
             .iter()
             .enumerate()
@@ -6458,14 +6440,8 @@ impl BexVm {
                 }
                 let func = self.get_object(frame.function()).as_callable().ok()?;
                 match frame {
-                    Frame::Bytecode(frame) => {
-                        let pc = if self.compiled_at(idx).is_some() {
-                            self.compiled_pc(idx).unwrap_or(0)
-                        } else if Some(idx) == top_bc {
-                            self.cur_pc
-                        } else {
-                            frame.faulting_pc
-                        };
+                    Frame::Bytecode(_) => {
+                        let pc = self.frame_pc(idx, top_bc).unwrap_or(0);
                         let error_line = if let Some(compact) = &func.bytecode.compact {
                             compact.source_line_for_pc(pc)
                         } else {
@@ -7694,9 +7670,6 @@ impl BexVm {
                         self.settle();
                         match outcome {
                             Ok(value) => {
-                                if passes_type_args {
-                                    self.recycle_frame_type_args(*frame_idx);
-                                }
                                 self.stack.push(value);
                                 if let Some(state) =
                                     self.finish_bytecode_frame(frame_idx, function, value)?
@@ -7817,8 +7790,7 @@ impl BexVm {
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
         // The caller's slice may borrow a frame, so copy before entering the callee.
-        let mut pending_type_args = self.pooled_type_args();
-        pending_type_args.extend_from_slice(options.type_args);
+        let pending_type_args = options.type_args.to_vec();
         self.save_call_types();
         self.pending_call_type_args = pending_type_args;
         self.pending_call_type_values = options.type_values.to_vec();
@@ -7852,8 +7824,7 @@ impl BexVm {
                 &self.pending_call_type_values,
             );
         }
-        let pending_type_args = self.restore_call_types();
-        self.recycle_type_args(pending_type_args);
+        let _ = self.restore_call_types();
         result
     }
 
@@ -8571,7 +8542,6 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
-        // Execution may migrate between threads with different stack bounds.
         #[cfg(not(target_arch = "wasm32"))]
         self.stop_disabled_telemetry();
         #[cfg(not(target_arch = "wasm32"))]
@@ -11751,7 +11721,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // so they're already included in the stack iteration above.
     }
 
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         // The GC has reset the heap's TLAB cursor (`gen0_next_chunk`) and
         // swapped semispaces, so this VM's cached `alloc_ptr`/`alloc_limit`
         // now point into a region the heap will hand out to other VMs as a
@@ -11818,9 +11788,6 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 self.static_virtual_call_cache.insert(key, target);
             }
         }
-        // Every memoized impl selection names heap objects by address; the
-        // collection may have moved or freed them.
-        self.impl_rule_cache.get_mut().clear();
         for transfer in &mut self.context_transfers {
             for value in [&mut transfer.handling, &mut transfer.target] {
                 if let Some(ptr) = value.as_object_ptr()

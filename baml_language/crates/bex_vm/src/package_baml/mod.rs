@@ -44,7 +44,7 @@ mod prompt;
 mod random;
 mod regex;
 pub(crate) mod resolve;
-pub(crate) use resolve::{ImplResolver, ImplRuleCache};
+pub(crate) use resolve::ImplResolver;
 pub(crate) mod root;
 mod sap;
 mod spawn;
@@ -61,9 +61,11 @@ mod uint8array;
 mod unknown_error;
 mod yaml;
 
+use std::collections::HashMap;
+
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    ArrayReadGuard, ForwardingMap, HeapPtr, MapReadGuard,
+    ArrayReadGuard, HeapPtr, MapReadGuard,
     types::{Instance, Object, Type, Value},
 };
 use indexmap::IndexMap;
@@ -126,7 +128,7 @@ pub trait Continuation: Send {
     fn gc_roots(&self) -> Vec<HeapPtr>;
 
     /// Update all `HeapPtr` values after GC moves objects (forwarding).
-    fn apply_forwarding(&mut self, forwarding: &ForwardingMap);
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>);
 }
 
 pub(super) fn chain(
@@ -171,7 +173,7 @@ impl Continuation for ChainedContinuation {
         roots
     }
 
-    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         self.inner.apply_forwarding(forwarding);
         self.next.apply_forwarding(forwarding);
     }
@@ -189,7 +191,7 @@ impl Continuation for PassThroughContinuation {
     fn gc_roots(&self) -> Vec<HeapPtr> {
         Vec::new()
     }
-    fn apply_forwarding(&mut self, _forwarding: &ForwardingMap) {}
+    fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
 }
 
 /// A typed view of an array receiver: its declared element type alongside the

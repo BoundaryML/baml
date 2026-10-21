@@ -174,9 +174,6 @@ mod enabled {
             profile.post_gc = finished_at - self.released_at;
             profile.total = finished_at - self.start;
             tracing::debug!(target: "bex_gc", reason = reason, level = ?stats.level,
-            live = stats.live_count, collected = stats.collected_count,
-            promoted_to_gen1 = stats.promoted_to_gen1, promoted_to_gen2 = stats.promoted_to_gen2,
-            live_payload_bytes = ?stats.live_payload_bytes,
             budget = ?heap.gc_budget(), profile = ?profile, "GC cycle");
         }
     }

@@ -29,7 +29,7 @@ use std::{
 use baml_type::normalize::TypeContext;
 use bex_str::BexStr;
 use bex_vm_types::{
-    ForwardingMap, HeapPtr, RealizedTy, ValueKind,
+    HeapPtr, RealizedTy, ValueKind,
     errors::VmInternalError,
     types::{LockedContainer, LockedReadGuard, Object, Type, Value},
 };
@@ -683,7 +683,7 @@ impl Continuation for EqualsDriver {
         roots
     }
 
-    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         let fwd = |p: HeapPtr| forwarding.get(&p).copied().unwrap_or(p);
         for (a, b) in &mut self.stack {
             if let Some(p) = a.as_object_ptr() {
@@ -719,7 +719,7 @@ impl MapEntryComparison {
         }
     }
 
-    fn forward(&mut self, forwarding: &ForwardingMap) {
+    fn forward(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         let forward = |value: &mut Value| {
             if let Some(ptr) = value.as_object_ptr() {
                 *value = Value::object(forwarding.get(&ptr).copied().unwrap_or(ptr));
@@ -743,7 +743,7 @@ impl MapKeyBranch {
         }
     }
 
-    fn forward(&mut self, forwarding: &ForwardingMap) {
+    fn forward(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         self.entry.forward(forwarding);
         for entry in &mut self.map_entries {
             entry.forward(forwarding);

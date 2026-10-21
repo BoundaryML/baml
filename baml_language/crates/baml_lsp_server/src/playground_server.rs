@@ -2733,7 +2733,11 @@ mod tests {
     impl RootHaver for EmptyRoots {
         fn collect_roots(&self, _roots: &mut Vec<bex_vm_types::HeapPtr>) {}
 
-        fn forward_roots(&mut self, _forward: &bex_vm_types::ForwardingMap) {}
+        fn forward_roots(
+            &mut self,
+            _forward: &std::collections::HashMap<bex_vm_types::HeapPtr, bex_vm_types::HeapPtr>,
+        ) {
+        }
     }
 
     impl TlabHolder for EmptyRoots {

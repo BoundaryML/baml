@@ -1,9 +1,5 @@
-//! Interface dispatch with a per-site cache for static implementations.
-
-use std::sync::{
-    OnceLock,
-    atomic::{AtomicU64, Ordering},
-};
+//! Interface dispatch through the interpreter's resolver and its per-site
+//! cache of static implementations.
 
 use bex_vm_types::{
     HeapPtr, Object, ObjectType, RealizedTy, TypeHead, Value,
@@ -13,140 +9,37 @@ use bex_vm_types::{
 use crate::{
     errors::{VmError, VmInternalError},
     package_baml::ImplResolver,
-    vm::BexVm,
+    vm::{BexVm, StaticVirtualCallKey, StaticVirtualCallTarget},
 };
 
-/// An atomic cache of a virtual call site's last receiver tag and callee.
-pub struct VirtualSite {
-    /// `FILLED | HAS_FRAME? | receiver tag << 32 | callee object index`.
-    entry: AtomicU64,
-    // Cached type heads belong to one immutable program image and never move.
-    frame: OnceLock<SiteFrame>,
-}
-
-struct SiteFrame {
-    receiver: u32,
-    /// The compile-time image the heads in `type_args` point into.
-    image: usize,
-    type_args: Box<[RealizedTy]>,
-}
-
-const FILLED: u64 = 1 << 63;
-const HAS_FRAME: u64 = 1 << 62;
-// Declared and primitive receiver tags fit below the two flag bits.
-const TAG_LIMIT: u64 = 1 << 30;
-
-impl VirtualSite {
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {
-            entry: AtomicU64::new(0),
-            frame: OnceLock::new(),
-        }
-    }
-
-    /// Return whether the site has cached a target.
-    #[must_use]
-    pub fn is_filled(&self) -> bool {
-        self.entry.load(Ordering::Relaxed) & FILLED != 0
-    }
-
-    fn get(&self, tag: u32, image: usize) -> Option<(u32, &[RealizedTy])> {
-        let word = self.entry.load(Ordering::Acquire);
-        if word & FILLED == 0 || (word >> 32) & (TAG_LIMIT - 1) != u64::from(tag) {
-            return None;
-        }
-        #[allow(clippy::cast_possible_truncation)]
-        let callee = word as u32;
-        if word & HAS_FRAME == 0 {
-            return Some((callee, &[]));
-        }
-        let frame = self.frame.get()?;
-        (frame.receiver == tag && frame.image == image).then_some((callee, &*frame.type_args))
-    }
-
-    fn set(&self, tag: u32, callee: u32, image: usize, type_args: &[RealizedTy]) {
-        let mut word = FILLED | (u64::from(tag) << 32) | u64::from(callee);
-        if !type_args.is_empty() {
-            // The first receiver owns the frame slot for the site's lifetime.
-            let _ = self.frame.set(SiteFrame {
-                receiver: tag,
-                image,
-                type_args: type_args.into(),
-            });
-            if self
-                .frame
-                .get()
-                .is_none_or(|frame| frame.receiver != tag || frame.image != image)
-            {
-                return;
-            }
-            word |= HAS_FRAME;
-        }
-        self.entry.store(word, Ordering::Release);
-    }
-}
-
-impl Default for VirtualSite {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl BexVm {
-    /// Resolve a cached interface method and push implementation and method type arguments.
+    /// Resolve an interface method for `receiver` and push the
+    /// implementation's then the method's type arguments for the next call.
+    /// `site` is the call's bytecode instruction index, when known; a known
+    /// site shares the interpreter's cache entry for the same `VirtualCall`.
     pub fn virtual_target(
         &mut self,
-        site: &VirtualSite,
         receiver: Value,
         iface: HeapPtr,
         iface_args: &[RealizedTy],
         method: &str,
         method_type_args: &[RealizedTy],
+        site: Option<u32>,
     ) -> Result<HeapPtr, Box<VmError>> {
-        self.virtual_target_in(
-            Some(site),
-            receiver,
-            iface,
-            iface_args,
-            method,
-            method_type_args,
-        )
-    }
-
-    /// Resolve without caching when the site's type arguments can vary.
-    pub fn virtual_target_uncached(
-        &mut self,
-        receiver: Value,
-        iface: HeapPtr,
-        iface_args: &[RealizedTy],
-        method: &str,
-        method_type_args: &[RealizedTy],
-    ) -> Result<HeapPtr, Box<VmError>> {
-        self.virtual_target_in(None, receiver, iface, iface_args, method, method_type_args)
-    }
-
-    fn virtual_target_in(
-        &mut self,
-        site: Option<&VirtualSite>,
-        receiver: Value,
-        iface: HeapPtr,
-        iface_args: &[RealizedTy],
-        method: &str,
-        method_type_args: &[RealizedTy],
-    ) -> Result<HeapPtr, Box<VmError>> {
-        // The receiver tag must fully determine the implementation.
-        let key = site.and(self.site_key(receiver));
-        if let (Some(site), Some(tag)) = (site, key)
-            && let Some((callee, frame)) = site.get(tag, self.image())
+        let head = self.interface_head(iface)?;
+        let key = site.and_then(|site| self.virtual_call_key(receiver, head, iface_args, site));
+        if let Some(target) = key
+            .as_ref()
+            .and_then(|key| self.static_virtual_call_cache.get(key))
         {
-            self.compiled.call_type_args.extend_from_slice(frame);
+            self.compiled
+                .call_type_args
+                .extend_from_slice(&target.frame_type_args);
             self.compiled
                 .call_type_args
                 .extend_from_slice(method_type_args);
-            return Ok(self.heap.compile_time_ptr(callee as usize));
+            return Ok(target.callee);
         }
-        let head = self.interface_head(iface)?;
         let self_ty = self.dispatch_self_ty(receiver)?;
         let resolver = ImplResolver::for_value(self, receiver);
         let implementation = resolver
@@ -157,16 +50,49 @@ impl BexVm {
         let (callee, frame) = resolver.implementation_method(&implementation, method)?;
         // Later-loaded implementations can replace structural defaults.
         if implementation.is_static()
-            && let (Some(site), Some(tag)) = (site, key)
-            && let Some(index) = self.compile_time_index(callee)
+            && let Some(key) = key
         {
-            site.set(tag, index, self.image(), &frame);
+            self.static_virtual_call_cache.insert(
+                key,
+                StaticVirtualCallTarget {
+                    callee,
+                    frame_type_args: frame.clone(),
+                },
+            );
         }
         self.compiled.call_type_args.extend(frame);
         self.compiled
             .call_type_args
             .extend_from_slice(method_type_args);
         Ok(callee)
+    }
+
+    /// The interpreter's cache key for the virtual call at bytecode
+    /// instruction `site` of the innermost (compiled) frame.
+    fn virtual_call_key(
+        &self,
+        receiver: Value,
+        interface_head: TypeHead,
+        iface_args: &[RealizedTy],
+        site: u32,
+    ) -> Option<StaticVirtualCallKey> {
+        let top = self.frames.len().checked_sub(1)?;
+        // SAFETY: a compiled frame's function lives in the compile-time heap;
+        // see `load_function`.
+        #[allow(unsafe_code)]
+        let function = unsafe { self.load_function(top) }.ok()?;
+        let call_pc = function
+            .bytecode
+            .compact
+            .as_ref()?
+            .offset_of(site as usize)?;
+        Some(StaticVirtualCallKey {
+            caller_function_addr: std::ptr::from_ref(function) as usize,
+            call_pc,
+            receiver: self.static_virtual_receiver_key(receiver)?,
+            interface_head,
+            interface_args: iface_args.into(),
+        })
     }
 
     /// Call an eligible inline callee, leaving its frame on error for the unwinder.
@@ -187,7 +113,7 @@ impl BexVm {
             return Ok(None);
         }
         match super::compiled_fn(function) {
-            Some(body) => self.call_compiled(callee, body, args, pc).map(Some),
+            Some(body) => self.call_compiled(callee, body, &[], args, pc).map(Some),
             None => Ok(None),
         }
     }
@@ -378,40 +304,6 @@ impl BexVm {
                 .into()
             })
     }
-
-    fn site_key(&self, receiver: Value) -> Option<u32> {
-        let tag = match receiver.as_object_ptr() {
-            None => crate::vm::value_type_tag(receiver),
-            Some(ptr) => match self.get_object(ptr) {
-                Object::Float(_) | Object::String(_) => crate::vm::value_type_tag(receiver),
-                Object::Instance(instance)
-                    if instance.class_type_args.is_empty()
-                        && self.heap.is_compile_time_ptr(instance.class) =>
-                {
-                    match self.get_object(instance.class) {
-                        Object::Class(class) => class.type_tag.as_i64(),
-                        _ => return None,
-                    }
-                }
-                _ => return None,
-            },
-        };
-        u32::try_from(tag)
-            .ok()
-            .filter(|&tag| u64::from(tag) < TAG_LIMIT)
-    }
-
-    fn compile_time_index(&self, ptr: HeapPtr) -> Option<u32> {
-        if !self.heap.is_compile_time_ptr(ptr) {
-            return None;
-        }
-        let offset = (ptr.as_ptr() as usize).checked_sub(self.image())?;
-        u32::try_from(offset / std::mem::size_of::<Object>()).ok()
-    }
-
-    fn image(&self) -> usize {
-        self.heap.compile_time_ptr(0).as_ptr() as usize
-    }
 }
 
 // Resolve the callee with implementation type arguments followed by method arguments.
@@ -441,7 +333,6 @@ mod tests {
 
     use bex_vm_types::{ObjectIndex, RealizedTy, Value};
 
-    use super::VirtualSite;
     use crate::{
         compiled_rt::Step,
         errors::VmError,
@@ -460,14 +351,13 @@ mod tests {
     fn dispatch(
         vm: &mut BexVm,
         args: &[Value],
-        site: &VirtualSite,
         iface: &AtomicU32,
         iface_args: &[RealizedTy],
         method: &str,
     ) -> Out {
         let receiver = args[0];
         let iface = vm.idx_to_ptr(object(iface));
-        let callee = vm.virtual_target(site, receiver, iface, iface_args, method, &[])?;
+        let callee = vm.virtual_target(receiver, iface, iface_args, method, &[], Some(0))?;
         let argc = vm.push_virtual_args(callee, None, &[receiver])?;
         vm.suspend(Step::Call { callee, argc })
     }
@@ -475,9 +365,8 @@ mod tests {
     #[test]
     fn explicit_implementations_dispatch_and_cache() {
         static SHAPE: AtomicU32 = AtomicU32::new(0);
-        static SITE: VirtualSite = VirtualSite::new();
         fn total(vm: &mut BexVm, args: &[Value]) -> Out {
-            dispatch(vm, args, &SITE, &SHAPE, &[], "area")
+            dispatch(vm, args, &SHAPE, &[], "area")
         }
         const SOURCE: &str = r#"
             interface Shape { function area(self) -> int throws never }
@@ -509,14 +398,12 @@ mod tests {
                 telemetry,
             );
             assert_eq!(out, "4|6|9|-1", "telemetry: {telemetry}");
-            assert!(SITE.is_filled());
         }
     }
 
     #[test]
     fn inline_implementations_run_in_place() {
         static SHAPE: AtomicU32 = AtomicU32::new(0);
-        static SITE: VirtualSite = VirtualSite::new();
         static IN_PLACE: AtomicU32 = AtomicU32::new(0);
         fn square_area(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
             IN_PLACE.fetch_add(1, Ordering::Relaxed);
@@ -526,7 +413,7 @@ mod tests {
         fn total(vm: &mut BexVm, args: &[Value]) -> Out {
             let receiver = args[0];
             let iface = vm.idx_to_ptr(object(&SHAPE));
-            let callee = vm.virtual_target(&SITE, receiver, iface, &[], "area", &[])?;
+            let callee = vm.virtual_target(receiver, iface, &[], "area", &[], Some(0))?;
             if let Some(value) = vm.call_inline(callee, &[receiver], 0)? {
                 return Ok(value);
             }
@@ -568,9 +455,8 @@ mod tests {
     #[test]
     fn adopted_defaults_carry_their_frame_through_the_cache() {
         static GREETER: AtomicU32 = AtomicU32::new(0);
-        static SITE: VirtualSite = VirtualSite::new();
         fn greet(vm: &mut BexVm, args: &[Value]) -> Out {
-            dispatch(vm, args, &SITE, &GREETER, &[], "greet")
+            dispatch(vm, args, &GREETER, &[], "greet")
         }
         const SOURCE: &str = r#"
             interface Greeter {
@@ -587,15 +473,13 @@ mod tests {
             false,
         );
         assert_eq!(out, "hello from Adopts|hello from Adopts");
-        assert!(SITE.is_filled());
     }
 
     #[test]
     fn structural_defaults_resolve_without_caching() {
         static TO_STRING: AtomicU32 = AtomicU32::new(0);
-        static SITE: VirtualSite = VirtualSite::new();
         fn show(vm: &mut BexVm, args: &[Value]) -> Out {
-            dispatch(vm, args, &SITE, &TO_STRING, &[], "to_string")
+            dispatch(vm, args, &TO_STRING, &[], "to_string")
         }
         const SOURCE: &str = r#"
             class Plain { x int }
@@ -611,15 +495,13 @@ mod tests {
         );
         assert_eq!(out, expected);
         assert!(out.contains("Plain"), "{out}");
-        assert!(!SITE.is_filled());
     }
 
     #[test]
     fn generic_interfaces_dispatch_on_their_instantiation() {
         static CONV: AtomicU32 = AtomicU32::new(0);
-        static SITE: VirtualSite = VirtualSite::new();
         fn describe(vm: &mut BexVm, args: &[Value]) -> Out {
-            dispatch(vm, args, &SITE, &CONV, &[RealizedTy::Int], "describe")
+            dispatch(vm, args, &CONV, &[RealizedTy::Int], "describe")
         }
         const SOURCE: &str = r#"
             interface Conv<T> { function describe(self) -> string throws never }
