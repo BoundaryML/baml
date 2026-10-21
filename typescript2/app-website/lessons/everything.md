@@ -32,8 +32,13 @@ You can specify a variable's type. This improves your code readability and impro
 quality of error messages.
 
 ```baml
-let name: string = "Bammy";
-let r: int | string = someComplicatedFunction();
+// A global variable with a type annotation
+const name: string = "Bammy";
+
+function Example() {
+    // A local variable with a type annotation
+    let r: int | string = someComplicatedFunction();
+}
 ```
 
 ---
