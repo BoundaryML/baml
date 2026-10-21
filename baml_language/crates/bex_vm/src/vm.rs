@@ -16,10 +16,9 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use rustc_hash::FxHashMap;
-
 use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use btel_types::context::{Context, ContextPatch};
+use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 use crate::{
@@ -465,8 +464,6 @@ pub(crate) mod tests {
     use std::sync::atomic::AtomicBool;
     use std::{collections::HashMap, sync::Arc};
 
-    use rustc_hash::FxHashMap;
-
     use bex_heap::{BexHeap, CollectionLevel, Tlab};
     use bex_vm_types::{
         EarlyYieldCheck, FunctionKind, GlobalPool, HeapPtr, Object, ObjectIndex, RootHaver, Value,
@@ -474,6 +471,7 @@ pub(crate) mod tests {
         bytecode::Bytecode,
         types::{BoundMethod, Closure, Function, FunctionOrigin, TypeValue, type_tags},
     };
+    use rustc_hash::FxHashMap;
 
     use super::{
         BexVm, Frame, FrameTypeMetadata, TakenTypeArgs, VmExecState,
