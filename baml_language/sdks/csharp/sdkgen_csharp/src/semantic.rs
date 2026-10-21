@@ -239,6 +239,8 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         "trace.SpanId" | "trace.Options" | "trace.ReservedSpan"
         | "baml.spawn.Limit"
         | "baml.spawn.CancelToken"
+        | "baml.sync.Lock"
+        | "baml.sync.Guard"
         | "baml.http.Response"
         | "baml.http.SseStream"
         | "baml.http.Server"
@@ -310,7 +312,7 @@ fn is_public_resource_stdlib_function(name: &Name) -> bool {
         && name.namespace().first().is_some_and(|namespace| {
             matches!(
                 namespace.as_str(),
-                "csv" | "fs" | "glob" | "http" | "net" | "spawn"
+                "csv" | "fs" | "glob" | "http" | "net" | "spawn" | "sync"
             )
         })
 }
