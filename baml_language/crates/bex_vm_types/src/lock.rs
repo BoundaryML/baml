@@ -5,8 +5,8 @@
 //! across helper calls and worker threads, and a spawned child, being another
 //! task, waits like anyone else.
 //!
-//! State is one word, [`LockInner::state`]: the holder's task id (0 while
-//! free), plus [`HAS_WAITERS`] while the queue may be non-empty. Taking a free
+//! State is one word, `LockInner::state`: the holder's task id (0 while
+//! free), plus `HAS_WAITERS` while the queue may be non-empty. Taking a free
 //! lock is one compare-and-swap, re-entry one load and an increment, and a
 //! release with nobody waiting one compare-and-swap; only contention touches
 //! the queue's mutex.
@@ -35,11 +35,12 @@ use std::{
 
 use tokio::sync::Notify;
 
-/// Set in [`LockInner::state`] while any task may be queued. Only ever set on
+/// Set in `LockInner::state` while any task may be queued. Only ever set on
 /// a held lock: a free lock has nobody waiting.
 const HAS_WAITERS: u64 = 1 << 63;
 
-/// The largest task id a lock can record; the top bit is [`HAS_WAITERS`].
+/// The largest task id a lock can record; the top bit marks a lock with
+/// waiters.
 pub const MAX_TASK_ID: u64 = HAS_WAITERS - 1;
 
 const WAITING: u8 = 0;
