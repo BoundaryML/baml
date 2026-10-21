@@ -922,6 +922,79 @@ mod tests {
     }
 
     #[test]
+    fn same_named_union_arms_are_qualified_by_namespace_until_unique() {
+        let errors = name("baml", &["errors"], "ParseError");
+        let json = name("baml", &["json"], "ParseError");
+        let root = name("user", &[], "ParseError");
+        let item = name("user", &[], "Item");
+        let f = name("user", &[], "f");
+        let mut function = unary_fn(
+            &f,
+            Ty::Union(Box::new([
+                Ty::Class(root.clone(), Box::new([])),
+                Ty::Class(item.clone(), Box::new([])),
+            ])),
+            Ty::String,
+        );
+        function.throws = Some(Ty::Union(Box::new([
+            Ty::Class(errors.clone(), Box::new([])),
+            Ty::Class(json.clone(), Box::new([])),
+            Ty::Class(root.clone(), Box::new([])),
+        ])));
+        let pool = SymbolPool::from([
+            (errors.clone(), generic_class(&errors, &[], vec![])),
+            (json.clone(), generic_class(&json, &[], vec![])),
+            (root.clone(), generic_class(&root, &[], vec![])),
+            (item.clone(), generic_class(&item, &[], vec![])),
+            (f, Symbol::Function(function)),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        // Only clashing arms are qualified, and only as far as needed: the
+        // root `ParseError` has no namespace to add and keeps its short name.
+        assert!(
+            lib.contains(
+                "pubenumErrorsParseErrorOrJsonParseErrorOrParseError{\
+                 ErrorsParseError(crate::baml::errors::ParseError),\
+                 JsonParseError(crate::baml::json::ParseError),\
+                 ParseError(crate::ParseError),"
+            ),
+            "{lib}"
+        );
+        // A union without a clash keeps short names.
+        assert!(lib.contains("pubenumParseErrorOrItem{"), "{lib}");
+    }
+
+    #[test]
+    fn union_arms_still_clashing_when_fully_qualified_skip_fail_closed() {
+        // `a_b` and `aB` both render as the `AB` prefix.
+        let snake = name("user", &["a_b"], "Foo");
+        let camel = name("user", &["aB"], "Foo");
+        let f = name("user", &[], "f");
+        let union = Ty::Union(Box::new([
+            Ty::Class(snake.clone(), Box::new([])),
+            Ty::Class(camel.clone(), Box::new([])),
+        ]));
+        let pool = SymbolPool::from([
+            (snake.clone(), generic_class(&snake, &[], vec![])),
+            (camel.clone(), generic_class(&camel, &[], vec![])),
+            (f.clone(), Symbol::Function(unary_fn(&f, union, Ty::String))),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert_eq!(generated.warnings.len(), 1, "{:?}", generated.warnings);
+        assert!(
+            generated.warnings[0]
+                .reason
+                .contains("duplicate variant name `ABFoo`, even when qualified by namespace"),
+            "{}",
+            generated.warnings[0].reason
+        );
+    }
+
+    #[test]
     fn throwing_functions_carry_an_errors_doc_section() {
         let e = name("user", &[], "ParseError");
         let f = name("user", &[], "load");

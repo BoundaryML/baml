@@ -16,11 +16,11 @@
 //! SDK cannot represent (non-string literals) make the whole shape
 //! unsupported, fail-closed.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use baml_sdkgen_types::{Symbol, SymbolPool, Ty};
 
-use crate::{analyze::Analysis, routing};
+use crate::{analyze::Analysis, idents, routing};
 
 /// The synthesized enums for one generation run, keyed by the leaf they
 /// are emitted in (renamed module path) and their null-stripped arms.
@@ -244,7 +244,6 @@ fn register_unions_in(ty: &Ty, leaf: &[String], analysis: &Analysis, registry: &
 pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
     let mut has_bare_string_arm = false;
     let mut has_string_literal_arm = false;
-    let mut seen = HashSet::new();
     for arm in arms {
         match arm {
             Ty::Literal(baml_base::Literal::String(_), ..) => has_string_literal_arm = true,
@@ -257,16 +256,9 @@ pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
             Ty::String => has_bare_string_arm = true,
             _ => {}
         }
-        let Some(variant) = variant_name(arm) else {
-            return Some(format!("unsupported union arm: {arm}"));
-        };
-        // Duplicate variant names (two `Bar` classes from different
-        // namespaces) would not compile — fail closed.
-        if !seen.insert(variant.clone()) {
-            return Some(format!(
-                "union arms produce a duplicate variant name `{variant}`"
-            ));
-        }
+    }
+    if let Err(reason) = variant_names(arms) {
+        return Some(reason);
     }
     // A bare `string` arm makes string-literal arms indistinguishable on
     // the wire (trial order would decide, i.e. guess) — fail closed.
@@ -288,8 +280,9 @@ fn synthesize(arms: &[Ty], analysis: &Analysis) -> Option<UnionEnum> {
     if shape_error(arms).is_some() {
         return None;
     }
+    let variants = variant_names(arms).ok()?;
     let mut built = Vec::new();
-    for arm in arms {
+    for (arm, variant) in arms.iter().zip(variants) {
         let kind = match arm {
             Ty::Literal(baml_base::Literal::String(value), ..) => {
                 UnionArmKind::StringLiteral(value.clone())
@@ -299,10 +292,7 @@ fn synthesize(arms: &[Ty], analysis: &Analysis) -> Option<UnionEnum> {
             }
             _ => return None,
         };
-        built.push(UnionArm {
-            variant: variant_name(arm)?,
-            kind,
-        });
+        built.push(UnionArm { variant, kind });
     }
     let rust_name = built
         .iter()
@@ -389,9 +379,62 @@ pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
     }
 }
 
+/// The variant names for a null-stripped arm list, in arm order.
+///
+/// Each arm starts with its short name (`ParseError`). Arms whose names
+/// clash are qualified with one more enclosing namespace segment at a time
+/// (`ErrorsParseError`, `JsonParseError`) until every name is unique; arms
+/// that still clash once fully qualified would not compile, so the shape
+/// fails closed.
+fn variant_names(arms: &[Ty]) -> Result<Vec<String>, String> {
+    let mut depths = vec![0; arms.len()];
+    loop {
+        let names = arms
+            .iter()
+            .zip(&depths)
+            .map(|(arm, &depth)| {
+                variant_name(arm, depth).ok_or_else(|| format!("unsupported union arm: {arm}"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut indices_by_name: HashMap<&str, Vec<usize>> = HashMap::new();
+        for (index, name) in names.iter().enumerate() {
+            indices_by_name.entry(name).or_default().push(index);
+        }
+        let clashing: Vec<usize> = indices_by_name
+            .values()
+            .filter(|indices| indices.len() > 1)
+            .flatten()
+            .copied()
+            .collect();
+        if clashing.is_empty() {
+            return Ok(names);
+        }
+        let mut qualified_further = false;
+        for index in clashing {
+            if variant_name(&arms[index], depths[index] + 1).as_ref() != Some(&names[index]) {
+                depths[index] += 1;
+                qualified_further = true;
+            }
+        }
+        if !qualified_further {
+            let mut seen = HashSet::new();
+            let duplicate = names
+                .iter()
+                .find(|name| !seen.insert(name.as_str()))
+                .expect("a clash has a repeated name");
+            return Err(format!(
+                "union arms produce a duplicate variant name `{duplicate}`, even \
+                 when qualified by namespace"
+            ));
+        }
+    }
+}
+
 /// The variant name for an arm, or `None` when no identifier-safe name
-/// can be derived.
-fn variant_name(arm: &Ty) -> Option<String> {
+/// can be derived. Nominal types are prefixed with their innermost
+/// `qualify` namespace segments (`qualify = 1` turns
+/// `baml.json.ParseError` into `JsonParseError`).
+fn variant_name(arm: &Ty, qualify: usize) -> Option<String> {
     match arm {
         Ty::Int => Some("Int".to_string()),
         Ty::Bigint => Some("Bigint".to_string()),
@@ -400,13 +443,18 @@ fn variant_name(arm: &Ty) -> Option<String> {
         Ty::Bool => Some("Bool".to_string()),
         Ty::Uint8Array => Some("Uint8Array".to_string()),
         Ty::Class(name, _) | Ty::Enum(name) | Ty::EnumVariant(name, _) | Ty::TypeAlias(name) => {
-            Some(name.name().to_string())
+            let segments = baml_sdkgen_types::namespace_segments(name);
+            let prefix: String = segments[segments.len().saturating_sub(qualify)..]
+                .iter()
+                .map(|segment| idents::pascal_case(segment))
+                .collect();
+            Some(format!("{prefix}{}", name.name()))
         }
         // A `TypeVar` arm's variant is named after the type parameter
         // (`T | string` → `TOrString { T(T), String(String) }`).
         Ty::TypeVar(var) => Some(var.as_str().to_string()),
-        Ty::List(inner) => Some(format!("{}List", variant_name(inner)?)),
-        Ty::Map { key: _, value, .. } => Some(format!("{}Map", variant_name(value)?)),
+        Ty::List(inner) => Some(format!("{}List", variant_name(inner, qualify)?)),
+        Ty::Map { key: _, value, .. } => Some(format!("{}Map", variant_name(value, qualify)?)),
         Ty::Literal(baml_base::Literal::String(value), ..) => {
             let mut chars = value.chars();
             let first = chars.next()?;
@@ -423,7 +471,7 @@ fn variant_name(arm: &Ty) -> Option<String> {
             // Only reachable for the degenerate single-arm nested case.
             let (arms, _) = strip_null(items);
             match arms.as_slice() {
-                [only] => variant_name(only),
+                [only] => variant_name(only, qualify),
                 _ => None,
             }
         }
