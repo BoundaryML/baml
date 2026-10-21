@@ -12,7 +12,8 @@
 //!
 //! What `reflect` cannot set is left as a comment: a runtime class's own
 //! metadata, `@skip` and the streaming flags, and a field type that names a
-//! class of its own group other than through lists, optionals and unions.
+//! class of its own group other than through lists, optionals and unions
+//! whose first arm names it.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -369,18 +370,16 @@ impl Code<'_> {
             TyTemplate::List(item) if names_member(item) => {
                 Some(format!("{}.array()", self.pending(group, item)?))
             }
+            // A union's arms are hashed in order, and `union` puts its
+            // receiver first and `optional` puts null last: only a union
+            // whose first arm names a member keeps its order.
             TyTemplate::Union(parts) if names_member(ty) => {
-                let (first, rest) = parts.iter().position(names_member).map(|at| {
-                    let rest: Vec<_> = parts
-                        .iter()
-                        .enumerate()
-                        .filter(|(i, _)| *i != at)
-                        .map(|(_, part)| part)
-                        .collect();
-                    (&parts[at], rest)
-                })?;
+                let (first, rest) = parts.split_first()?;
+                if !names_member(first) {
+                    return None;
+                }
                 let first = self.pending(group, first)?;
-                if let [TyTemplate::Null] = rest.as_slice() {
+                if let [TyTemplate::Null] = rest {
                     return Some(format!("{first}.optional()"));
                 }
                 let rest = rest
@@ -554,6 +553,60 @@ fn unsettable_field(skip: bool, stream_done: bool, must_exist: bool, out: &mut S
             out,
             " // recorded with {}, which reflect can't set",
             flags.join(" and ")
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use btel_snapshot::DecodedSnapshot;
+
+    use super::*;
+    use crate::{
+        cas::CasUnavailable,
+        value::span::{BlobSource, Examine},
+    };
+
+    struct NoBlobs;
+    impl BlobSource for NoBlobs {
+        fn load(&self, _: CasId) -> Result<Arc<DecodedSnapshot>, CasUnavailable> {
+            Err(CasUnavailable::Missing)
+        }
+    }
+
+    /// A recursive union keeps its order only when its first arm is the
+    /// recursive one; any other order can't be built, so it is not.
+    #[test]
+    fn a_recursive_union_is_built_only_in_its_recorded_order() {
+        let span = Span::load(&NoBlobs, std::iter::empty(), Examine::Structure, 0, 0);
+        let group = CasId::from_bytes([0; 16]);
+        let code = Code {
+            span: &span,
+            order: Vec::new(),
+            seen: HashSet::new(),
+            names: HashMap::from([(DefinitionRef { group, member: 0 }, "Node".to_owned())]),
+            taken: HashSet::new(),
+            unnamed: Vec::new(),
+        };
+        let node = || TyTemplate::Class(DefinitionHead::Member(0), Box::new([]));
+        let union = |parts: Vec<DefinitionType>| TyTemplate::Union(parts.into_boxed_slice());
+        assert_eq!(
+            code.pending(group, &union(vec![node(), TyTemplate::String])),
+            Some("Node_builder.type().union([reflect.Type.of<string>()])".to_owned())
+        );
+        assert_eq!(
+            code.pending(group, &union(vec![node(), TyTemplate::Null])),
+            Some("Node_builder.type().optional()".to_owned())
+        );
+        assert_eq!(
+            code.pending(group, &union(vec![TyTemplate::String, node()])),
+            None
+        );
+        assert_eq!(
+            code.pending(group, &union(vec![TyTemplate::Null, node()])),
+            None
         );
     }
 }
